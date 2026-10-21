@@ -9,12 +9,12 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import QPoint, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QComboBox  # noqa: E402
 
 from paper_daily.desktop.main import LIGHT, Paper  # noqa: E402
-from paper_daily.desktop.queue_view import QueuePage  # noqa: E402
+from paper_daily.desktop.queue_view import MARK_W, PIN_W, QueuePage  # noqa: E402
 
 
 def _paper(i):
@@ -201,3 +201,26 @@ def test_the_batch_actions_appear_only_once_a_paper_is_ticked(page):
     shown = [b.text() for b in page._batch_buttons if not b.isHidden()]
     assert "置頂" in shown and "標記已讀" in shown and "從清單移除" in shown
     assert page.sel_label.text().startswith("已勾選 1 篇")
+
+
+def _row_point(page, row, x):
+    rect = page.view.visualRect(page.model.index(row))
+    return QPoint(x, rect.center().y())
+
+
+@pytest.mark.parametrize("zone", ["tick", "pin"])
+def test_quick_clicks_on_the_tick_box_or_pin_never_open_the_paper(page, zone):
+    # Ticking boxes fast, or re-ticking the paper opened last, used to reach the
+    # list's own click handling and open the paper as well.
+    page, win = page
+    viewport = page.view.viewport()
+    x = MARK_W // 2 if zone == "tick" else viewport.width() - PIN_W // 2
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=_row_point(page, 1, 300))
+    assert win.opened == ["p1"]
+    point = _row_point(page, 1, x)
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=point)
+    QTest.mouseDClick(viewport, Qt.MouseButton.LeftButton, pos=point)
+    assert win.opened == ["p1"]
+    if zone == "tick":
+        # Each press counts, a double click's second one too: ticked, off, on.
+        assert win.marked == ["p1"]

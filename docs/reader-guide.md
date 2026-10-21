@@ -126,7 +126,8 @@ queue one the nightly job handed you is tagged 已送出.
 list acts on everything ticked on screen: 全選, 清除勾選, 置頂 / 取消置頂, 標記已讀 /
 未讀, 分析 (analyse just those), 從清單移除 (one confirmation for all of them), and
 帶出門, which builds the phone page from the ticked papers across every list. Ticks
-are remembered between launches.
+are remembered between launches. Clicks on the tick box or the 置頂 box never open the
+paper, however fast they come; click anywhere else on the row to open it.
 
 **置頂** holds papers above the rest whatever the sort, each queue and list keeping its
 own. The 置頂 box at the right end of every row turns it on and off, or tick several

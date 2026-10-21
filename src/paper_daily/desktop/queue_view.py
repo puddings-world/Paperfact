@@ -549,21 +549,26 @@ class QueuePage(QWidget):
     def eventFilter(self, obj, event) -> bool:
         """A press in the tick strip marks the row; everywhere else opens it.
 
-        Consuming the press is what keeps `clicked` from firing underneath, so the
-        two gestures stay distinct rather than both happening.
+        The view never sees a press, release or double click in the tick strip or
+        the pin: it still remembers the last row it opened, so a release there would
+        emit `clicked` for that row, and a fast second tick also arrives as a double
+        click that it turns into a press of its own. That second tick comes as an
+        ordinary press too, so only presses toggle.
         """
-        in_strip = (
+        mouse = (
             obj is self.view.viewport()
-            and event.type() == QEvent.Type.MouseButtonPress
+            and event.type()
+            in (
+                QEvent.Type.MouseButtonPress,
+                QEvent.Type.MouseButtonRelease,
+                QEvent.Type.MouseButtonDblClick,
+            )
             and event.button() == Qt.MouseButton.LeftButton
-            and event.position().x() < MARK_W
         )
-        in_pin = (
-            obj is self.view.viewport()
-            and event.type() == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-            and event.position().x() > self.view.viewport().width() - PIN_W
-        )
+        in_strip = mouse and event.position().x() < MARK_W
+        in_pin = mouse and event.position().x() > self.view.viewport().width() - PIN_W
+        if (in_strip or in_pin) and event.type() != QEvent.Type.MouseButtonPress:
+            return True
         if (
             obj is self.search
             and event.type() == QEvent.Type.KeyPress
