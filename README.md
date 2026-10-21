@@ -39,9 +39,10 @@ Claude or Codex for the personal-account workflow for now.
 
 ## Start here
 
-**Preview-stage software.** Installer builds exist, but no downloadable release is
-published yet. For the current colleague trial, use a source checkout with repository
-access. [Release status and remaining checks →](docs/release-readiness.md)
+**Preview-stage software.** Download the Windows, macOS or Linux installer from the
+[latest release](https://github.com/puddings-world/Paperfact/releases/latest) (builds are
+unsigned, so your system warns on first launch), or run from source:
+[release status and remaining checks →](docs/release-readiness.md)
 
 ```powershell
 git clone https://github.com/puddings-world/Paperfact.git

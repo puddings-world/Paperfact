@@ -8,7 +8,7 @@ provider works for every account.
 
 | Area | Evidence | Remaining work |
 |---|---|---|
-| Repository | Private; no published release; initial AGPL-3.0-or-later license selected | Finish publication review and binary acceptance |
+| Repository | Public since 2026-10-21 with a fresh history; v0.1.0 published as a preview; AGPL-3.0-or-later | Binary acceptance on clean machines |
 | Installer pipeline | The three-platform Release workflow passed for commit `0248274` | Build and test the final candidate; newer AI/settings work is not in that run |
 | Current source | Beta branch includes AI routing, account UI, bundle transfer, consent and packaging checks | Verify the candidate commit and artifacts before tagging |
 | Independent workspaces | Fixture tests cover install/import/read/own-AI/export boundaries | A colleague should complete the journey with their own real account |
