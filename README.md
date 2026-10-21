@@ -40,7 +40,7 @@ Claude or Codex for the personal-account workflow for now.
 ## Start here
 
 **Preview-stage software.** Download the Windows, macOS or Linux installer from the
-[latest release](https://github.com/puddings-world/Paperfact/releases/latest) (builds are
+[releases page](https://github.com/puddings-world/Paperfact/releases) (builds are
 unsigned, so your system warns on first launch), or run from source:
 [release status and remaining checks →](docs/release-readiness.md)
 
