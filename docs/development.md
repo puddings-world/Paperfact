@@ -128,6 +128,19 @@ On macOS/Linux, use `.venv/bin/python scripts/check.py`. This checks Ruff, all
 Python tests, and all JavaScript tests; a failure stops the check with a nonzero
 exit status. Node.js is required even when changing only desktop code.
 
+The check starts with a privacy scan of every file a commit could pick up (tracked,
+plus new files that are not ignored). It fails on common credential shapes
+(Anthropic, OpenAI, GitHub, Google, Slack and AWS keys, private key blocks) and on
+your own identifiers, listed comma-separated as `PAPERFACT_PRIVATE_TERMS` in the
+ignored `.env`, so the check itself never publishes them:
+
+```
+PAPERFACT_PRIVATE_TERMS=you@example.org,your-username
+```
+
+A finding is reported as `path:line: kind`, never with the matched text. Binary
+files are skipped, so check screenshots by eye before adding them.
+
 Desktop action tests use isolated databases and simulated provider responses.
 `tests/test_ui_stress.py` exercises repeated clicks during list creation/export,
 AI login/usage work, background AI failures/retries, subprocess startup failures,

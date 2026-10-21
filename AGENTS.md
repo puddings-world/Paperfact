@@ -14,7 +14,9 @@ Run the full check before declaring a change complete, committing, or pushing:
 .\.venv\Scripts\python.exe scripts/check.py
 ```
 
-Use `.venv/bin/python scripts/check.py` on macOS/Linux. This runs Ruff, all Python
+Use `.venv/bin/python scripts/check.py` on macOS/Linux. This first scans every
+committable file for credentials and for the maintainer's own identifiers
+(`PAPERFACT_PRIVATE_TERMS` in the ignored `.env`), then runs Ruff, all Python
 tests (including desktop stress scenarios), and all frontend tests. Do not skip,
 delete, or weaken an existing test to pass a change without user-approved behavior
 changes. Report exact test counts and any live-only checks not performed.
