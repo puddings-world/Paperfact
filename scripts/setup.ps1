@@ -7,7 +7,9 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 }
 
-uv venv --python 3.11
+# A run cut off while creating it leaves a .venv with no Python, which uv then
+# refuses to reuse; recreate it in that case, and keep a working one as it is.
+if (-not (Test-Path .venv\Scripts\python.exe)) { uv venv --clear --python 3.11 }
 Write-Host "Installing dependencies (the desktop reader pulls ~1 GB of Qt; this takes a few minutes)..."
 uv sync --extra dev --extra app
 Write-Host "AI profiles can be configured in the reader with AI settings; see docs/architecture.md."

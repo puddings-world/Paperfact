@@ -8,7 +8,9 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-uv venv --python 3.11
+# A run cut off while creating it leaves a .venv with no Python, which uv then
+# refuses to reuse; recreate it in that case, and keep a working one as it is.
+[ -x .venv/bin/python ] || uv venv --clear --python 3.11
 echo "Installing dependencies (the desktop reader pulls ~1 GB of Qt; this takes a few minutes)..."
 uv sync --extra dev --extra app
 echo "AI profiles can be configured in the reader with AI settings; see docs/architecture.md."
