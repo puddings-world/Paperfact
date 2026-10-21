@@ -1,0 +1,170 @@
+# Builds the installable app on Windows, macOS and Linux.
+#
+# A pushed vX.Y.Z tag (scripts/release.py makes one) builds all three and opens a
+# DRAFT release with them attached. The draft's notes are what the app's update
+# banner shows, so they are rewritten for readers before the draft is published;
+# nothing reaches users until then. See docs/releasing.md.
+#
+# Run by hand (Actions > Release > Run workflow) it builds and photographs all three
+# without releasing anything: the way to see a layout change on every platform.
+#
+# Build names (must match updates.ASSET_SUFFIX):
+#   Paperfact-X.Y.Z-windows-x64-setup.exe
+#   Paperfact-X.Y.Z-macos-arm64.dmg
+#   Paperfact-X.Y.Z-linux-x86_64.AppImage
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+          # The oldest supported runner: an AppImage runs on systems at least as new
+          # as the one it was built on.
+          - os: ubuntu-22.04
+            name: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    env:
+      # The reports print Chinese; a Windows runner's console is cp1252.
+      PYTHONIOENCODING: utf-8
+      # Linux runs the windows on a virtual X display: Qt WebEngine crashes with
+      # no display at all (the offscreen platform) on a runner without a GPU.
+      QT_QPA_PLATFORM: ${{ matrix.name == 'linux' && 'xcb' || 'offscreen' }}
+      DISPLAY_WRAPPER: ${{ matrix.name == 'linux' && 'xvfb-run -a -s "-screen 0 1920x1080x24"' || '' }}
+      # The Linux runner has no GPU, and Chromium's GPU process crashes the app when
+      # it tries to start one there; a desktop with a graphics driver needs no flag.
+      QTWEBENGINE_CHROMIUM_FLAGS: ${{ matrix.name == 'linux' && '--disable-gpu' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Libraries Qt needs on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libnss3 libxcomposite1 libxdamage1 libxrandr2 \
+            libxtst6 libasound2 libfontconfig1 libdbus-1-3 file xvfb \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0
+
+      - name: Inno Setup on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ISCC -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Environment
+        run: uv sync --extra app --extra dev --extra build
+
+      - name: Fonts and web assets
+        run: |
+          uv run python -m paper_daily fonts
+          uv run python -m paper_daily web-assets
+
+      - name: Tests
+        run: uv run python scripts/check.py
+
+      - name: Screenshots
+        run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/screenshots.py shots --demo
+
+      - name: Build
+        run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/build_app.py
+
+      - name: Verify frozen research workflow
+        shell: bash
+        run: |
+          built=dist/Paperfact
+          if [ "${{ runner.os }}" = "macOS" ]; then built=dist/Paperfact.app; fi
+          ${{ env.DISPLAY_WRAPPER }} uv run python scripts/verify_built_app.py "$built" build/frozen-acceptance
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-${{ matrix.name }}
+          path: build/frozen-acceptance/*.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: provenance-${{ matrix.name }}
+          path: |
+            build/build-info.json
+            build/frozen-acceptance/report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.name }}
+          path: |
+            shots/*.png
+            shots/report.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.name }}
+          path: |
+            dist/Paperfact-*-windows-x64-setup.exe
+            dist/Paperfact-*-macos-arm64.dmg
+            dist/Paperfact-*-linux-x86_64.AppImage
+          if-no-files-found: error
+
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: build-*
+          path: dist
+          merge-multiple: true
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          previous=$(git tag --list 'v*.*.*' --sort=-v:refname | grep -v -x "$TAG" | head -n 1)
+          git archive --format=zip --prefix=Paperfact/ --output="dist/Paperfact-${TAG#v}-source.zip" "$TAG"
+          {
+            echo "<!-- The first lines below are what the app's update banner shows."
+            echo "     Rewrite them for readers, then publish. -->"
+            echo
+            echo "## 這一版"
+            echo
+            echo "- （寫給使用者看的重點）"
+            echo
+            echo "## Changes"
+            echo
+            git log --format='- %s' ${previous:+$previous..}"$TAG"
+          } > notes.md
+          gh release create "$TAG" dist/* --draft --title "Paperfact ${TAG#v}" --notes-file notes.md

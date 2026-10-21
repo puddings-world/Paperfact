@@ -1,0 +1,13 @@
+Paperfact
+Copyright (C) 2026 Paperfact contributors
+
+Paperfact's original code and documentation are licensed under the GNU Affero
+General Public License, version 3 or (at your option) any later version.
+See LICENSE for the complete terms. This software comes without warranty.
+
+Source and build instructions: https://github.com/puddings-world/Paperfact
+Each distributed binary must be accompanied by access to its corresponding source.
+
+Third-party libraries, fonts, papers, figures and user research retain their own
+licenses. The Paperfact license grants no additional rights to imported documents,
+provider accounts, model outputs or third-party services. See THIRD_PARTY_NOTICES.md.

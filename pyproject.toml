@@ -1,0 +1,56 @@
+[project]
+name = "paperfact"
+# The one place the version lives: src/paper_daily/__init__.py (see docs/releasing.md).
+dynamic = ["version"]
+description = "A desktop research workspace for papers, reading lists, notes, and AI"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "licensing/*.txt"]
+dependencies = [
+    "httpx>=0.27",
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+# Turning the app into an installer (scripts/build_app.py).
+build = ["pyinstaller>=6.10"]
+# The desktop reader. pyside6-addons is a ~1 GB download and carries Qt's native PDF
+# view; without it the reader falls back to rendering pages with PyMuPDF, which looks
+# the same but cannot select text.
+app = [
+    "pyside6-essentials>=6.7",
+    "pyside6-addons>=6.7",
+    # Markdown with math and fenced blocks for the web-rendered reading views.
+    "markdown-it-py>=3",
+    "mdit-py-plugins>=0.4",
+]
+
+[project.scripts]
+paperfact = "paper_daily.cli:main"
+paper-daily = "paper_daily.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/paper_daily/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paper_daily"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixtures are markup captured verbatim from the live sites; rewrapping them
+# would change what is being tested.
+"tests/test_parsers.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,47 @@
+# Downloaded by `fonts` (see src/paper_daily/fonts.py)
+fonts/
+# Downloaded by `web-assets` (see src/paper_daily/web_assets.py)
+vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+# Generated release screenshots include a disposable research workspace.
+/shots/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Env
+.env
+.env.local
+/src/paper_daily/google-client.json
+
+# Local maintainer planning; public consent/privacy controls stay in the app.
+/admin.md
+
+# Claude
+.claude/cache/
+.claude/debug/
+
+# paper-daily local data (DB, PDFs, extracted text, daily briefs)
+/data/
+!/data/.gitkeep
+
+# Generated icon (rebuilt by scripts/make_icon.py)
+/assets/paper-daily.ico

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>__DECK_TITLE__ · Paperfact</title>
+<style>
+:root{color-scheme:light;--ink:#172238;--accent:#2356bd;--muted:#5a687e}
+*{box-sizing:border-box}
+body{margin:0;background:#e9edf3;color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif}
+button{font:inherit;background:white;border:1px solid #bbc6d6;border-radius:4px;padding:7px 12px;cursor:pointer;color:var(--ink)}
+button:focus-visible,a:focus-visible{outline:3px solid #6495e8;outline-offset:3px}
+.toolbar{position:sticky;top:0;z-index:10;background:#f9fbff;border-bottom:1px solid #ccd5e2;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-weight:700;color:var(--accent);margin-right:auto}
+.status{font-size:14px}
+.cover{max-width:1200px;margin:20px auto;padding:0 20px}
+.cover h2{font-size:21px;margin-bottom:5px}
+.cover p{color:var(--muted);font-size:14px}
+.coverage{font-size:14px;color:#775009;background:#fff7e4;padding:14px;margin:16px auto;max-width:1160px}
+.coverage li{margin:5px 0}
+.slide{width:min(1200px,96vw);margin:22px auto}
+.canvas{background:#fff;aspect-ratio:16/9;padding:3.6% 4.4% 2.4%;display:flex;flex-direction:column;box-shadow:0 8px 28px #13233d14;overflow:hidden}
+.section{font-size:clamp(12px,1.5vw,18px);color:var(--accent);margin-bottom:8px}
+h1{font-size:clamp(23px,3.1vw,38px);font-weight:650;line-height:1.25;margin:0 0 16px;overflow-wrap:anywhere}
+.takeaway{font-size:clamp(17px,2.1vw,26px);line-height:1.4;color:var(--accent);margin-bottom:18px}
+main{flex:1;min-height:0;display:flex;align-items:flex-start}
+main ul{margin:0;padding-left:1.2em;font-size:clamp(17px,2.25vw,28px);line-height:1.48;width:100%}
+main li{margin-bottom:.45em;overflow-wrap:anywhere}
+main.with-figure{gap:28px}
+.with-figure ul{width:44%;font-size:clamp(15px,1.8vw,22px)}
+figure{margin:0;width:56%;height:100%;display:flex;flex-direction:column;align-items:center}
+figure img{max-width:100%;height:calc(100% - 38px);min-height:0;object-fit:contain}
+figcaption{font-size:clamp(10px,1.1vw,14px);color:var(--muted);line-height:1.3;max-height:38px;overflow:hidden;margin-top:6px}
+footer{display:flex;gap:15px;justify-content:space-between;align-items:flex-end;border-top:1px solid #dbe3ee;padding-top:10px;margin-top:16px;color:var(--muted);font-size:clamp(9px,1vw,12px);line-height:1.3}
+.evidence{max-width:90%}a{color:inherit}.number{white-space:nowrap}
+.speaker-notes{display:none;background:#f8faff;border-top:1px solid #dbe3ee;padding:20px 30px;font-size:17px;line-height:1.7}
+.speaker-notes h3{font-size:16px;color:var(--accent);margin:5px 0}
+.speaker-notes p{margin-top:5px;overflow-wrap:anywhere}
+body.notes .speaker-notes{display:block}
+body.present .cover,body.present .coverage{display:none}
+body.present .slide{display:none;margin:16px auto;width:min(1200px,calc((100vh - 90px)*16/9),96vw)}
+body.present .slide.active{display:block}
+body.present.notes .slide{width:min(1200px,96vw)}
+.overflow{outline:4px solid #cf6818}
+.overflow-message{display:none;color:#944200}
+body.has-overflow .overflow-message{display:inline}
+@media(max-width:700px){.canvas{aspect-ratio:auto;min-height:360px;padding:24px}h1{font-size:25px}main ul{font-size:18px}.with-figure ul{font-size:16px}main.with-figure{flex-direction:column}.with-figure ul,figure{width:100%}figure img{max-height:240px;height:auto}footer{font-size:10px}.speaker-notes{padding:16px}.slide{width:96vw}}
+@page{size:320mm 180mm;margin:0}
+@media print{
+  .toolbar,.cover,.coverage{display:none!important}
+  body{background:white}
+  .slide,body.present .slide{display:block!important;width:320mm;margin:0;break-after:page}
+  .slide:last-child{break-after:auto}
+  .canvas{width:320mm;height:180mm;aspect-ratio:auto;box-shadow:none;padding:12mm 14mm 8mm;overflow:visible}
+  h1{font-size:28pt}.section{font-size:12pt}.takeaway{font-size:20pt}
+  main ul{font-size:21pt}.with-figure ul{font-size:17pt}footer,figcaption{font-size:9pt}
+  .speaker-notes{display:none!important}.overflow{outline:none}
+}
+.free-canvas{position:relative;container-type:inline-size;padding:0!important;aspect-ratio:16/9!important;min-height:0!important;border-left:6px solid #2356bd}
+.free-canvas main{position:absolute;inset:0;display:block}
+.canvas-object{position:absolute;white-space:pre-wrap;overflow:hidden;overflow-wrap:anywhere;line-height:normal;margin:0;object-fit:contain;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif}
+.canvas-footer{position:absolute;left:4.66%;bottom:3%;font-size:1.16cqw;color:#68788f;max-width:90%;white-space:nowrap;overflow:hidden}
+.canvas-table{border-collapse:collapse;table-layout:fixed;white-space:normal;color:#172238}
+.canvas-table th,.canvas-table td{border:1px solid #c9d2e0;padding:.15em .4em;text-align:left;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.canvas-table th{background:#eef2f9;font-weight:700}
+</style>
+</head>
+<body>
+<nav class="toolbar" aria-label="簡報控制">
+<span class="brand">Paperfact</span>
+<button id="previous">上一頁</button><span id="position" class="status"></span><button id="next">下一頁</button>
+<button id="present">播放</button><button id="notes" aria-pressed="false">講者備註</button>
+<button id="print">列印／PDF</button>
+<span class="overflow-message">部分頁面文字過多，請回到 Paperfact 編輯後再列印。</span>
+</nav>
+<div class="cover"><h2>__DECK_TITLE__</h2><p>__PAPER_TITLE__</p><p>__MODE__ · 約 __MINUTES__ 分鐘 · ← → 換頁 · N 顯示備註 · Esc 返回總覽</p></div>
+__COVERAGE__
+__SLIDES__
+<script>
+(() => {
+  const slides = [...document.querySelectorAll(".slide")];
+  let index = 0;
+  const position = document.getElementById("position");
+  function show(next) {
+    index = Math.max(0, Math.min(slides.length - 1, next));
+    slides.forEach((s, i) => s.classList.toggle("active", i === index));
+    position.textContent = (index + 1) + " / " + slides.length;
+    document.getElementById("previous").disabled = index === 0;
+    document.getElementById("next").disabled = index === slides.length - 1;
+    if (!document.body.classList.contains("present")) slides[index].scrollIntoView({block:"start"});
+  }
+  function toggleNotes() {
+    const visible = document.body.classList.toggle("notes");
+    document.getElementById("notes").setAttribute("aria-pressed", String(visible));
+  }
+  document.getElementById("previous").onclick = () => show(index - 1);
+  document.getElementById("next").onclick = () => show(index + 1);
+  document.getElementById("notes").onclick = toggleNotes;
+  document.getElementById("present").onclick = () => {
+    const active = document.body.classList.toggle("present");
+    document.getElementById("present").textContent = active ? "總覽" : "播放";
+    show(index);
+  };
+  document.getElementById("print").onclick = () => window.print();
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.target.closest("input,textarea,[contenteditable='true']")) return;
+    if (event.key === "ArrowRight" || event.key === "PageDown") { event.preventDefault(); show(index + 1); }
+    if (event.key === "ArrowLeft" || event.key === "PageUp") { event.preventDefault(); show(index - 1); }
+    if (event.key.toLowerCase() === "n") toggleNotes();
+    if (event.key === "Escape") {
+      document.body.classList.remove("present");
+      document.getElementById("present").textContent = "播放";
+    }
+  });
+  function checkFit() {
+    let overflow = false;
+    for (const slide of slides) {
+      const main = slide.querySelector("main");
+      const canvas = slide.querySelector(".canvas");
+      if (!canvas.getBoundingClientRect().width) continue;
+      const bad = main.scrollHeight > main.clientHeight + 3 || canvas.scrollHeight > canvas.clientHeight + 3;
+      canvas.classList.toggle("overflow", bad);
+      overflow = overflow || bad;
+    }
+    document.body.classList.toggle("has-overflow", overflow);
+  }
+  window.addEventListener("resize", checkFit);
+  window.addEventListener("load", checkFit);
+  if (document.fonts) document.fonts.ready.then(checkFit);
+  slides.forEach((s,i) => s.classList.toggle("active",i === 0));
+  position.textContent = "1 / " + slides.length;
+  document.getElementById("previous").disabled = true;
+  document.getElementById("next").disabled = slides.length <= 1;
+})();
+</script>
+</body>
+</html>

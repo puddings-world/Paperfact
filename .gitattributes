@@ -1,0 +1,2 @@
+# Shell scripts run on macOS and Linux, where a CR after "bash" breaks the shebang.
+*.sh text eol=lf

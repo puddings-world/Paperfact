@@ -1,0 +1,57 @@
+{
+  "models": [
+    {
+      "value": "default",
+      "displayName": "Default (recommended)",
+      "description": "Opus 5.5 · Best for everyday, complex tasks"
+    },
+    {
+      "value": "opus",
+      "displayName": "Opus 5.5"
+    },
+    {
+      "value": "fable",
+      "displayName": "Fable 5.1"
+    },
+    {
+      "value": "sonnet",
+      "displayName": "Sonnet 5.5"
+    },
+    {
+      "value": "haiku",
+      "displayName": "Haiku 5.5"
+    },
+    {
+      "value": "claude-haiku-4-5-20251001",
+      "displayName": "Haiku 4.5"
+    },
+    {
+      "value": "claude-sonnet-5",
+      "displayName": "Sonnet 5"
+    },
+    {
+      "value": "claude-opus-5",
+      "displayName": "Opus 5"
+    },
+    {
+      "value": "claude-fable-5",
+      "displayName": "Fable 5"
+    },
+    {
+      "value": "claude-opus-4-8",
+      "displayName": "Opus 4.8"
+    },
+    {
+      "value": "claude-opus-4-7",
+      "displayName": "Opus 4.7"
+    },
+    {
+      "value": "claude-opus-4-6",
+      "displayName": "Opus 4.6"
+    },
+    {
+      "value": "claude-sonnet-4-6",
+      "displayName": "Sonnet 4.6"
+    }
+  ]
+}

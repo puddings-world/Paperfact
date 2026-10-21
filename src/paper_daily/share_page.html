@@ -1,0 +1,274 @@
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<style>
+/* Layout: a reading report. Sticky contents rail on wide screens, one ~70ch column
+   everywhere; notes are sticky-note slips (amber = written, blue = kept answer),
+   reference cards carry a verdict tab, as in the desktop reader. */
+:root {
+  --ground: #f4f6f4;
+  --surface: #ffffff;
+  --ink: #1b2320;
+  --muted: #55605a;
+  --faint: #89928d;
+  --rule: #dce2de;
+  --accent: #1f5fa8;
+  --accent-soft: #e2ebf7;
+  --note: #f7ebc2;
+  --note-ink: #6f4d0e;
+  --must: #a4471d;
+  --must-soft: #f6e3d9;
+  --shadow: 0 1px 0 rgba(27, 35, 32, .06), 0 6px 18px -12px rgba(27, 35, 32, .25);
+
+  --display: "Noto Serif TC", "Songti TC", "PMingLiU", Georgia, serif;
+  --body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2.1rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #121614;
+    --surface: #1a201d;
+    --ink: #e3e9e5;
+    --muted: #a7b1ab;
+    --faint: #75807a;
+    --rule: #2b332f;
+    --accent: #7fb0e8;
+    --accent-soft: #1d2a3a;
+    --note: #3a3220;
+    --note-ink: #f0d58e;
+    --must: #f0a07a;
+    --must-soft: #3a2519;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #121614;
+  --surface: #1a201d;
+  --ink: #e3e9e5;
+  --muted: #a7b1ab;
+  --faint: #75807a;
+  --rule: #2b332f;
+  --accent: #7fb0e8;
+  --accent-soft: #1d2a3a;
+  --note: #3a3220;
+  --note-ink: #f0d58e;
+  --must: #f0a07a;
+  --must-soft: #3a2519;
+  --shadow: none;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 var(--step-0)/1.8 var(--body);
+  padding-inline: 18px;
+  padding-block: 0;
+}
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 48px;
+  padding-block: 40px 96px;
+}
+@media (min-width: 1100px) {
+  .shell { grid-template-columns: 250px minmax(0, 1fr); }
+}
+
+/* ---- contents ---- */
+nav.toc { font-size: .86rem; line-height: 1.5; }
+nav.toc details { border-block: 1px solid var(--rule); padding-block: 8px; }
+nav.toc summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+nav.toc ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+nav.toc li.paper { margin-top: 10px; font-weight: 700; }
+nav.toc li.sub { padding-left: 12px; }
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover, nav.toc a.here { color: var(--accent); }
+@media (min-width: 1100px) {
+  nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start;
+            max-height: calc(100vh - 48px); overflow-y: auto; }
+  nav.toc details { border: 0; padding: 0; }
+  nav.toc summary { list-style: none; pointer-events: none; font-family: var(--mono);
+                    font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+  nav.toc summary::-webkit-details-marker { display: none; }
+}
+
+/* ---- article ---- */
+article { max-width: 70ch; min-width: 0; }
+article h1, article h2, article h3 { font-family: var(--display); text-wrap: balance; line-height: 1.3; }
+article h1 { font-size: var(--step-3); margin: 0 0 .4em; }
+article h2 {
+  font-size: var(--step-2);
+  margin: 2.6em 0 .3em;
+  padding-top: 1.4em;
+  border-top: 2px solid var(--ink);
+}
+article h3 {
+  font-size: var(--step-1);
+  margin: 2.2em 0 .6em;
+  color: var(--accent);
+}
+article h4 { font-size: 1.02rem; margin: 1.8em 0 .4em; }
+article h5, article h6 { font-size: .95rem; margin: 1.4em 0 .3em; color: var(--muted); }
+article p, article ul, article ol { margin: 0 0 1em; }
+article a { color: var(--accent); text-underline-offset: 3px; }
+article small { color: var(--faint); font-size: .82rem; }
+article hr { border: 0; border-top: 1px solid var(--rule); margin: 2.4em 0; }
+article code { font-family: var(--mono); font-size: .88em; background: var(--surface);
+               border: 1px solid var(--rule); border-radius: 3px; padding: 0 .3em; }
+article pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+              padding: 12px 14px; overflow-x: auto; line-height: 1.55; }
+article pre code { border: 0; padding: 0; background: none; }
+article blockquote {
+  margin: 0 0 1em;
+  padding: .2em 0 .2em 1em;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+}
+.byline { font-family: var(--mono); font-size: .8rem; color: var(--faint); margin-top: -.2em; }
+.provenance { font-size: .82rem; color: var(--faint); border-left: 3px solid var(--accent); padding-left: .8em; }
+
+.table-wrap { overflow-x: auto; margin: 0 0 1.4em; }
+article table { border-collapse: collapse; font-size: .9rem; min-width: 100%; }
+article th, article td { text-align: left; vertical-align: top; padding: .5em .8em;
+                         border-bottom: 1px solid var(--rule); }
+article th { font-weight: 700; border-bottom: 2px solid var(--ink); white-space: nowrap; }
+article td:first-child { color: var(--muted); white-space: nowrap; }
+article td { font-variant-numeric: tabular-nums; }
+
+details { margin: 0 0 1.2em; }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+details[open] > summary { margin-bottom: .8em; }
+
+/* ---- notes: slips of paper ---- */
+.note {
+  background: var(--note);
+  color: var(--ink);
+  padding: 14px 16px 4px;
+  margin: 0 0 14px;
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+}
+.note.ask { background: var(--accent-soft); }
+.note .note-meta { font-family: var(--mono); font-size: .74rem; color: var(--note-ink);
+                   letter-spacing: .03em; margin-bottom: .5em; }
+.note.ask .note-meta { color: var(--accent); }
+.note blockquote { border-left-color: currentColor; color: var(--ink); opacity: .78; font-size: .93rem; }
+
+/* ---- figures ---- */
+.figures p { display: grid; gap: 6px; margin-bottom: 1.8em; }
+.figures img {
+  max-width: 100%;
+  height: auto;
+  background: #ffffff;
+  border: 1px solid var(--rule);
+  cursor: zoom-in;
+}
+dialog.zoom { border: 0; padding: 0; background: transparent; max-width: 96vw; max-height: 94vh; }
+dialog.zoom::backdrop { background: rgba(10, 14, 12, .82); }
+dialog.zoom img { display: block; max-width: 96vw; max-height: 94vh; background: #ffffff; cursor: zoom-out; }
+
+/* ---- reference cards ---- */
+.cite {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 12px 16px 2px;
+  margin: 0 0 12px;
+  font-size: .93rem;
+}
+.cite p { margin-bottom: .6em; }
+.cite .cite-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: .3em; }
+.cite .verdict { font-size: .74rem; font-weight: 700; padding: 1px 8px; border-radius: 3px;
+                 background: var(--ground); color: var(--muted); }
+.cite.must .verdict { background: var(--must-soft); color: var(--must); }
+.cite.worth .verdict { background: var(--accent-soft); color: var(--accent); }
+.cite .key { font-family: var(--mono); font-size: .76rem; color: var(--faint); }
+.cite blockquote { font-size: .86rem; }
+
+a:focus-visible, summary:focus-visible, img:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+/* Formulas, algorithms and diagrams (see typeset.js). */
+.math-block { margin: .3em 0 1.1em; overflow-x: auto; overflow-y: hidden; }
+figure.algo { margin: 0 0 1.2em; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+figure.algo figcaption { padding: 6px 12px; font-weight: 600; border-bottom: 1px solid var(--rule); background: var(--surface); }
+figure.algo pre { margin: 0; border: 0; border-radius: 0; counter-reset: line; }
+figure.algo .ln { display: block; padding-left: 3em; text-indent: -3em; }
+figure.algo .ln::before { counter-increment: line; content: counter(line); display: inline-block;
+  width: 2.2em; margin-right: .8em; text-align: right; opacity: .55; text-indent: 0; }
+figure.algo .kw { font-weight: 700; color: var(--accent); }
+figure.algo .cm { font-style: italic; opacity: .7; }
+.diagram { margin: 0 0 1.2em; text-align: center; overflow-x: auto; }
+.diagram svg { max-width: 100%; height: auto; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+
+<div class="shell">
+  <nav class="toc" aria-label="目錄">
+    <details id="toc-box" open>
+      <summary>目錄</summary>
+      <ol id="toc"></ol>
+    </details>
+  </nav>
+  <article id="doc">
+    <noscript>這一頁需要 JavaScript 才能排版。</noscript>
+  </article>
+</div>
+<dialog class="zoom" id="zoom"><img alt=""></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>/*__TYPESET__*/</script>
+<script>
+const DRAFT = /*__DRAFT__*/null;
+
+const doc = document.getElementById("doc");
+const lifted = Typeset.protect(DRAFT || "");
+doc.innerHTML = Typeset.restore(marked.parse(lifted.text, { gfm: true }), lifted.math);
+Typeset.blocks(doc);
+
+for (const t of doc.querySelectorAll("table")) {
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  t.replaceWith(wrap);
+  wrap.appendChild(t);
+}
+
+// Contents: one entry per paper, with its sections under it.
+const toc = document.getElementById("toc");
+let n = 0;
+for (const h of doc.querySelectorAll("h2, h3")) {
+  h.id = h.id || `s${++n}`;
+  const li = document.createElement("li");
+  li.className = h.tagName === "H2" ? "paper" : "sub";
+  const a = document.createElement("a");
+  a.href = `#${h.id}`;
+  a.textContent = h.textContent;
+  li.appendChild(a);
+  toc.appendChild(li);
+}
+if (window.matchMedia("(max-width: 1099px)").matches) {
+  document.getElementById("toc-box").open = false;
+}
+
+const zoom = document.getElementById("zoom");
+doc.addEventListener("click", (e) => {
+  const img = e.target.closest(".figures img");
+  if (!img) return;
+  zoom.querySelector("img").src = img.src;
+  zoom.querySelector("img").alt = img.alt;
+  zoom.showModal();
+});
+zoom.addEventListener("click", () => zoom.close());
+</script>

@@ -1,0 +1,729 @@
+<title>Paperfact</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground:      #fbfbfd;
+    --surface:     #ffffff;
+    --surface-sunk:#f2f3f7;
+    --ink:         #14161c;
+    --ink-muted:   #5a6170;
+    --ink-faint:   #868ca0;
+    --border:      #e3e5ec;
+    --border-firm: #cdd1dd;
+    --accent:      #2f5bd8;
+    --accent-soft: #eaeffc;
+    --award:       #b4531a;
+    --award-soft:  #fbeee4;
+    --done:        #2f7d55;
+    --done-soft:   #e6f3ea;
+
+    --serif: "Spectral", Georgia, "Times New Roman", serif;
+    --sans:  "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+    --step--1: .8125rem;
+    --step-0:  .9375rem;
+    --step-1:  1.0625rem;
+    --step-2:  1.375rem;
+    --step-3:  1.6875rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101218; --surface:#171a22; --surface-sunk:#0b0d12;
+      --ink:#e6e8ef; --ink-muted:#9aa1b1; --ink-faint:#6f7789;
+      --border:#262a35; --border-firm:#383f4e;
+      --accent:#7b9bff; --accent-soft:#1b2440;
+      --award:#e8934f; --award-soft:#2e2013;
+      --done:#67c08d; --done-soft:#132a1e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101218; --surface:#171a22; --surface-sunk:#0b0d12;
+    --ink:#e6e8ef; --ink-muted:#9aa1b1; --ink-faint:#6f7789;
+    --border:#262a35; --border-firm:#383f4e;
+    --accent:#7b9bff; --accent-soft:#1b2440;
+    --award:#e8934f; --award-soft:#2e2013;
+    --done:#67c08d; --done-soft:#132a1e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 400 var(--step-0)/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 1px solid var(--border); background: var(--surface);
+    padding-block: 12px; padding-inline: clamp(16px, 3vw, 28px);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .wordmark { font: 600 var(--step-1)/1 var(--serif); letter-spacing: -.01em; margin: 0; }
+  .progress { font: 500 var(--step--1)/1 var(--mono); color: var(--ink-muted); letter-spacing: .02em; }
+  .masthead .spacer { flex: 1 1 auto; }
+
+  .btn {
+    font: 500 var(--step--1) var(--sans);
+    padding: 8px 14px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--border-firm); background: var(--surface); color: var(--ink);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { border-color: transparent; background: none; color: var(--ink-muted); }
+  .btn.ghost:hover { color: var(--accent); }
+
+  /* ---------- queue view ---------- */
+  .queue-wrap { padding-block: 22px 60px; padding-inline: clamp(16px, 3vw, 28px); }
+  .queue-head { display: grid; gap: 14px; margin-bottom: 18px; }
+  .queue-head h2 { margin: 0; font: 600 var(--step-2)/1.25 var(--serif); letter-spacing: -.01em; }
+  .queue-head p { margin: 0; color: var(--ink-muted); max-width: 68ch; font-size: var(--step--1); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input#search {
+    flex: 1 1 240px; min-width: 0;
+    font: 400 var(--step-0) var(--sans); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border-firm); border-radius: 8px; padding: 9px 12px;
+  }
+  .chip {
+    font: 500 var(--step--1) var(--sans);
+    border: 1px solid var(--border-firm); background: var(--surface); color: var(--ink-muted);
+    border-radius: 20px; padding: 6px 13px; cursor: pointer; white-space: nowrap;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  .qlist { display: grid; gap: 0; border-top: 1px solid var(--border); }
+  .qrow {
+    display: grid; grid-template-columns: 3.2rem 1fr auto; gap: 4px 14px;
+    align-items: baseline;
+    padding: 12px 8px; border-bottom: 1px solid var(--border);
+    cursor: pointer; background: none; border-left: 0; border-right: 0; border-top: 0;
+    text-align: left; width: 100%; color: inherit; font: inherit;
+  }
+  .qrow:hover { background: var(--surface); }
+  .qrow .pos { font: 500 var(--step--1) var(--mono); color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .qrow .t { font: 400 var(--step-0)/1.45 var(--serif); font-size: var(--step-1); }
+  .qrow .meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 5px; }
+  .qrow .who { grid-column: 2; color: var(--ink-faint); font-size: var(--step--1); margin-top: 2px; }
+  .qrow .side { grid-column: 3; grid-row: 1 / span 3; align-self: center; display: flex; gap: 6px; }
+  .qrow.is-read .t { color: var(--ink-muted); }
+
+  .tag {
+    font: 500 .72rem/1 var(--mono); letter-spacing: .02em;
+    padding: 4px 7px; border-radius: 4px;
+    background: var(--surface-sunk); color: var(--ink-muted); border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .tag.venue { color: var(--ink); border-color: var(--border-firm); }
+  .tag.award { color: var(--award); background: var(--award-soft); border-color: currentColor; }
+  .tag.canon { color: var(--accent); background: var(--accent-soft); border-color: currentColor; }
+  .tag.read  { color: var(--done); background: var(--done-soft); border-color: currentColor; }
+  .tag.has-text { color: var(--ink-faint); }
+
+  .more { display: flex; justify-content: center; padding-top: 18px; }
+
+  /* ---------- reader ---------- */
+  .identity {
+    padding-block: 18px 14px; padding-inline: clamp(16px, 3vw, 28px);
+    border-bottom: 1px solid var(--border); background: var(--surface);
+    display: grid; gap: 9px;
+  }
+  .paper-title {
+    margin: 0; font: 600 var(--step-3)/1.22 var(--serif);
+    letter-spacing: -.015em; text-wrap: balance; max-width: 36ch;
+  }
+  .byline { margin: 0; font-size: var(--step--1); color: var(--ink-muted); max-width: 80ch; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .facts a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  .desk {
+    display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+    gap: 1px; background: var(--border); min-height: 62vh;
+  }
+  .pane { background: var(--ground); min-width: 0; display: flex; flex-direction: column; }
+  .pane-head {
+    display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+    padding: 7px clamp(12px, 2vw, 18px);
+    border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .tab {
+    font: 500 var(--step--1) var(--sans); color: var(--ink-muted);
+    background: none; border: 0; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .tab:hover { color: var(--ink); background: var(--surface-sunk); }
+  .tab[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
+  .pane-head .spacer { flex: 1 1 auto; }
+  .pane-note { font: 400 var(--step--1) var(--mono); color: var(--ink-faint); }
+  .pane-body { flex: 1 1 auto; overflow: auto; padding: clamp(16px, 2.2vw, 28px); max-height: 78vh; }
+
+  .rawtext {
+    font: 400 var(--step--1)/1.75 var(--mono); white-space: pre-wrap;
+    color: var(--ink-muted); max-width: 92ch; margin: 0;
+  }
+
+  .prose { max-width: 66ch; font-family: var(--serif); font-size: var(--step-1); }
+  .prose h2 { font: 600 var(--step-2)/1.3 var(--serif); margin: 1.8em 0 .45em; text-wrap: balance; }
+  .prose h2:first-child { margin-top: 0; }
+  .prose h3 { font: 600 var(--step-1)/1.35 var(--sans); margin: 1.4em 0 .35em; }
+  .prose p { margin: 0 0 1em; }
+  .prose ul, .prose ol { margin: 0 0 1em; padding-left: 1.3em; }
+  .prose li { margin-bottom: .35em; }
+  .prose code {
+    font: 400 .88em var(--mono); background: var(--surface-sunk);
+    border: 1px solid var(--border); border-radius: 4px; padding: .1em .35em;
+  }
+  .prose pre {
+    font: 400 var(--step--1)/1.6 var(--mono); background: var(--surface-sunk);
+    border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-x: auto;
+  }
+  .prose pre code { background: none; border: 0; padding: 0; }
+  .prose blockquote {
+    margin: 0 0 1em; padding-left: 14px; border-left: 2px solid var(--accent);
+    color: var(--ink-muted); font-style: italic;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  textarea#noteBody {
+    width: 100%; min-height: 200px; resize: vertical;
+    font: 400 var(--step-0)/1.7 var(--sans); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border-firm); border-radius: 8px; padding: 13px;
+  }
+  .status { font: 400 var(--step--1) var(--mono); color: var(--ink-faint); }
+  .note-entry { border-top: 1px solid var(--border); padding-top: 10px; font-size: var(--step--1); }
+  .note-entry time { font: 500 var(--step--1) var(--mono); color: var(--ink-faint); display: block; margin-bottom: 4px; }
+  .note-entry p { margin: 0; white-space: pre-wrap; }
+
+  .seedrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seed {
+    font: 400 var(--step--1) var(--sans); border: 1px dashed var(--border-firm);
+    background: none; color: var(--ink-muted); border-radius: 20px;
+    padding: 5px 12px; cursor: pointer; text-align: left;
+  }
+  .seed:hover { color: var(--accent); border-color: var(--accent); border-style: solid; }
+  input#askBox {
+    width: 100%; font: 400 var(--step-0) var(--sans); color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border-firm);
+    border-radius: 8px; padding: 11px 13px;
+  }
+  .answer { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
+  .answer .q { font: 500 var(--step-0) var(--sans); margin: 0 0 8px; }
+
+  .empty { color: var(--ink-muted); font-size: var(--step-0); max-width: 54ch; }
+  .empty code { font-family: var(--mono); font-size: .9em; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 900px) {
+    .desk { grid-template-columns: 1fr; }
+    .paper-title { max-width: none; }
+    .pane-body { max-height: none; }
+    .qrow { grid-template-columns: 2.4rem 1fr; }
+    .qrow .side { grid-column: 2; grid-row: auto; margin-top: 6px; }
+  }
+</style>
+
+<header class="masthead">
+  <h1 class="wordmark">Paperfact</h1>
+  <span class="progress" id="progress">—</span>
+  <span class="spacer"></span>
+  <button class="btn ghost" id="backBtn" hidden>← Queue</button>
+  <button class="btn primary" id="nextBtn">下一篇</button>
+</header>
+
+<!-- ============ queue view ============ -->
+<section class="queue-wrap" id="queueView">
+  <div class="queue-head">
+    <h2>Reading queue</h2>
+    <p id="queueBlurb">Newest conference year first, most important inside each year. Pick any
+      paper to read it now, or take the next one.</p>
+    <div class="controls">
+      <input id="search" type="search" placeholder="Search title or author…" autocomplete="off">
+      <button class="chip" id="fUnread" aria-pressed="false">Unread only</button>
+      <button class="chip" id="fAward" aria-pressed="false">Oral / spotlight</button>
+      <button class="chip" id="fPrinciple" aria-pressed="false">Principle</button>
+      <button class="chip" id="fText" aria-pressed="false">Text ready</button>
+    </div>
+  </div>
+  <div class="qlist" id="qlist"></div>
+  <div class="more"><button class="btn" id="moreBtn" hidden>Show more</button></div>
+</section>
+
+<!-- ============ reader view ============ -->
+<div id="readerView" hidden>
+  <section class="identity">
+    <h2 class="paper-title" id="paperTitle"></h2>
+    <p class="byline" id="paperByline"></p>
+    <div class="facts" id="paperFacts"></div>
+  </section>
+
+  <main class="desk">
+    <section class="pane" aria-label="Paper source">
+      <div class="pane-head">
+        <button class="tab" id="tabText" role="tab" aria-selected="true">原文</button>
+        <button class="tab" id="tabAbs" role="tab" aria-selected="false">摘要</button>
+        <span class="spacer"></span>
+        <span class="pane-note" id="sourceNote"></span>
+      </div>
+      <div class="pane-body" id="sourceBody"></div>
+    </section>
+
+    <section class="pane" aria-label="Discussion">
+      <div class="pane-head">
+        <button class="tab" id="tabDive" role="tab" aria-selected="true">深度講解</button>
+        <button class="tab" id="tabNotes" role="tab" aria-selected="false">筆記</button>
+        <button class="tab" id="tabAsk" role="tab" aria-selected="false">問 AI</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="readToggle">標記已讀</button>
+      </div>
+      <div class="pane-body" id="deskBody"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const el = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // A compact Markdown renderer for the subset the deep dives emit. A CDN parser
+  // would be one more thing that can fail silently behind the artifact CSP.
+  function md(src) {
+    const lines = String(src || "").replace(/\r/g, "").split("\n");
+    const out = []; let para = [], list = null, fence = null;
+    const inline = (t) => esc(t)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+    const flushP = () => { if (para.length) { out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } };
+    const flushL = () => { if (list) { out.push(`</${list}>`); list = null; } };
+
+    for (const raw of lines) {
+      if (/^```/.test(raw)) {
+        if (fence === null) { flushP(); flushL(); fence = []; }
+        else { out.push("<pre><code>" + esc(fence.join("\n")) + "</code></pre>"); fence = null; }
+        continue;
+      }
+      if (fence !== null) { fence.push(raw); continue; }
+      const line = raw.trimEnd();
+      if (!line.trim()) { flushP(); flushL(); continue; }
+      const h = line.match(/^(#{1,4})\s+(.*)$/);
+      if (h) { flushP(); flushL(); const lv = Math.min(h[1].length + 1, 4); out.push(`<h${lv}>${inline(h[2])}</h${lv}>`); continue; }
+      const ol = line.match(/^\s*\d+[.)]\s+(.*)$/), ul = line.match(/^\s*[-*+]\s+(.*)$/);
+      if (ol || ul) {
+        flushP(); const want = ol ? "ol" : "ul";
+        if (list !== want) { flushL(); out.push(`<${want}>`); list = want; }
+        out.push("<li>" + inline((ol || ul)[1]) + "</li>"); continue;
+      }
+      if (/^>\s?/.test(line)) { flushP(); flushL(); out.push("<blockquote>" + inline(line.replace(/^>\s?/, "")) + "</blockquote>"); continue; }
+      flushL(); para.push(line.trim());
+    }
+    flushP(); flushL();
+    if (fence !== null) out.push("<pre><code>" + esc(fence.join("\n")) + "</code></pre>");
+    return out.join("\n");
+  }
+
+  // ---- state -------------------------------------------------------------
+  let db = null, sample = null;
+  let papers = [];                 // the synced queue, in reading order
+  let readMap = {};                // paperId -> ISO date
+  let detailCache = new Map();     // paperId -> {fullText, deepDive}
+  let current = null;              // the paper open in the reader
+  const view = { tab: "text", desk: "dive", limit: 60, filters: {} };
+  let saveTimer = null, asking = false;
+
+  const isRead = (p) => Boolean(readMap[p.id]);
+  const hasText = (p) => Boolean(p.hasText || (detailCache.get(p.id) || {}).fullText);
+
+  // ---- queue view --------------------------------------------------------
+  function matches(p) {
+    const f = view.filters;
+    if (f.unread && isRead(p)) return false;
+    if (f.award && !p.award) return false;
+    if (f.principle && p.paperType !== "principle") return false;
+    if (f.text && !hasText(p)) return false;
+    const q = (f.q || "").trim().toLowerCase();
+    if (!q) return true;
+    return (p.title || "").toLowerCase().includes(q)
+      || (p.authors || []).join(" ").toLowerCase().includes(q);
+  }
+
+  function tagsFor(p) {
+    const t = [`<span class="tag venue">${esc(p.venue)} ${esc(p.year)}</span>`];
+    if (p.award) t.push(`<span class="tag award">${esc(p.award)}</span>`);
+    if (p.isCanon) t.push('<span class="tag canon">canon</span>');
+    if (p.paperType) t.push(`<span class="tag">${esc(p.paperType)}</span>`);
+    if (typeof p.citations === "number" && p.citations > 0)
+      t.push(`<span class="tag">${p.citations.toLocaleString()} cites</span>`);
+    if (p.role === "companion") t.push('<span class="tag">lineage</span>');
+    return t.join("");
+  }
+
+  function renderQueue() {
+    const list = el("qlist");
+    const shown = papers.filter(matches);
+    const slice = shown.slice(0, view.limit);
+    if (!papers.length) {
+      list.innerHTML = `<p class="empty" style="padding:18px 0">The queue has not been synced yet.
+        Run <code>paperfact sync-queue</code> and push <code>data/queue-sync.json</code>
+        into this page's store as <code>queue/upcoming</code>.</p>`;
+      el("moreBtn").hidden = true;
+      return;
+    }
+    list.innerHTML = slice.map((p) => {
+      const pos = papers.indexOf(p) + 1;
+      const who = (p.authors || []).slice(0, 4).join(" · ")
+        + ((p.authors || []).length > 4 ? " · …" : "");
+      return `<button class="qrow${isRead(p) ? " is-read" : ""}" data-id="${esc(p.id)}">
+        <span class="pos">${pos}</span>
+        <span class="t">${esc(p.title)}</span>
+        <span class="side">${isRead(p) ? '<span class="tag read">read</span>' : ""}${
+          hasText(p) ? '<span class="tag has-text">text</span>' : ""}</span>
+        <span class="meta">${tagsFor(p)}</span>
+        ${who ? `<span class="who">${esc(who)}</span>` : ""}
+      </button>`;
+    }).join("");
+    list.querySelectorAll(".qrow").forEach((b) =>
+      b.addEventListener("click", () => openPaper(b.dataset.id)));
+    el("moreBtn").hidden = shown.length <= view.limit;
+    el("moreBtn").textContent = `Show more (${shown.length - view.limit} left)`;
+  }
+
+  function renderProgress() {
+    const done = papers.filter(isRead).length;
+    el("progress").textContent = papers.length
+      ? `${done} read · ${papers.length - done} queued`
+      : "—";
+  }
+
+  // ---- reader ------------------------------------------------------------
+  async function openPaper(id) {
+    const p = papers.find((x) => x.id === id);
+    if (!p) return;
+    current = p;
+    el("queueView").hidden = true;
+    el("readerView").hidden = false;
+    el("backBtn").hidden = false;
+    window.scrollTo(0, 0);
+    document.title = `${p.title} · Paperfact`;
+
+    renderIdentity();
+    el("sourceBody").innerHTML = '<p class="empty">Loading…</p>';
+    renderDesk();
+    await loadDetail(p.id);
+    renderSource();
+    renderDesk();
+  }
+
+  function closePaper() {
+    current = null;
+    el("readerView").hidden = true;
+    el("queueView").hidden = false;
+    el("backBtn").hidden = true;
+    document.title = "Paperfact";
+    renderQueue();
+    renderProgress();
+  }
+
+  async function loadDetail(id) {
+    if (detailCache.has(id)) return detailCache.get(id);
+    let d = {};
+    if (db) {
+      try {
+        const snap = await db.doc(`papers/${id}`).get();
+        if (snap.exists) d = snap.data() || {};
+      } catch { /* leave empty and render the abstract */ }
+    }
+    detailCache.set(id, d);
+    return d;
+  }
+
+  function renderIdentity() {
+    const p = current;
+    el("paperTitle").textContent = p.title || "Untitled";
+    const a = p.authors || [];
+    el("paperByline").textContent = a.length ? a.join(" · ") : "Authors not on record";
+    const facts = [tagsFor(p)];
+    if (p.reason) facts.push(`<span class="tag">${esc(p.reason)}</span>`);
+    if (p.pageUrl) facts.push(`<span class="tag"><a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">paper page</a></span>`);
+    if (p.pdfUrl) facts.push(`<span class="tag"><a href="${esc(p.pdfUrl)}" target="_blank" rel="noopener">PDF</a></span>`);
+    if (p.arxivId) facts.push(`<span class="tag"><a href="https://arxiv.org/abs/${esc(p.arxivId)}" target="_blank" rel="noopener">arXiv ${esc(p.arxivId)}</a></span>`);
+    el("paperFacts").innerHTML = facts.join("");
+    el("readToggle").textContent = isRead(current) ? "已讀 ✓" : "標記已讀";
+  }
+
+  function renderSource() {
+    const p = current, d = detailCache.get(p.id) || {};
+    el("tabText").setAttribute("aria-selected", String(view.tab === "text"));
+    el("tabAbs").setAttribute("aria-selected", String(view.tab === "abs"));
+    const body = el("sourceBody"), note = el("sourceNote");
+
+    if (view.tab === "abs") {
+      body.innerHTML = p.abstract
+        ? `<article class="prose"><p>${esc(p.abstract)}</p></article>`
+        : '<p class="empty">No abstract on record for this paper.</p>';
+      note.textContent = "";
+      return;
+    }
+    const text = d.fullText;
+    if (text) {
+      body.innerHTML = `<pre class="rawtext">${esc(text)}</pre>`;
+      note.textContent = `${text.length.toLocaleString()} chars`;
+    } else {
+      body.innerHTML = `<p class="empty">The full text has not been pushed for this paper yet.
+        Run <code>paperfact prefetch</code> locally and sync it, and the original will
+        scroll here.${p.pdfUrl ? ` For now, the <a href="${esc(p.pdfUrl)}" target="_blank" rel="noopener">PDF is here</a>.` : ""}</p>`;
+      note.textContent = "no text yet";
+    }
+  }
+
+  function renderDesk() {
+    const body = el("deskBody");
+    el("tabDive").setAttribute("aria-selected", String(view.desk === "dive"));
+    el("tabNotes").setAttribute("aria-selected", String(view.desk === "notes"));
+    el("tabAsk").setAttribute("aria-selected", String(view.desk === "ask"));
+    if (view.desk === "dive") return renderDive(body);
+    if (view.desk === "notes") return renderNotes(body);
+    return renderAsk(body);
+  }
+
+  function renderDive(body) {
+    const d = detailCache.get(current.id) || {};
+    if (d.deepDive) {
+      body.innerHTML = `<article class="prose">${md(d.deepDive)}</article>`;
+    } else {
+      body.innerHTML = `${current.abstract ? `<article class="prose"><h2>Abstract</h2><p>${esc(current.abstract)}</p></article>` : ""}
+        <p class="empty" style="margin-top:20px">No deep dive written for this paper yet.
+        The nightly run writes one for the paper it delivers; for any other paper, open it
+        in Claude Code with <code>/paper-more</code>, or just ask about it on the next tab.</p>`;
+    }
+  }
+
+  function renderNotes(body) {
+    body.innerHTML = `
+      <div class="stack">
+        <span class="status" id="noteHint">${db ? "Notes are saved to this page and follow you across devices." : "The shared store is unavailable — notes stay in this browser."}</span>
+        <textarea id="noteBody" placeholder="What did you conclude? What still does not add up?"></textarea>
+        <div class="row">
+          <button class="btn primary" id="noteSave">Save note</button>
+          <button class="btn" id="noteCopy">Copy all as Markdown</button>
+          <span class="status" id="noteSaved"></span>
+        </div>
+        <div class="stack" id="noteLog"></div>
+      </div>`;
+    el("noteBody").value = localDraft() || "";
+    el("noteBody").addEventListener("input", () => {
+      setLocalDraft(el("noteBody").value);
+      clearTimeout(saveTimer);
+      el("noteSaved").textContent = "unsaved";
+      saveTimer = setTimeout(saveNote, 2500);
+    });
+    el("noteSave").addEventListener("click", saveNote);
+    el("noteCopy").addEventListener("click", copyNotes);
+    loadNotes();
+  }
+
+  function renderAsk(body) {
+    if (!sample) {
+      body.innerHTML = `<p class="empty">Asking AI is not available in this view.
+        The text, the deep dive and your notes still work.</p>`;
+      return;
+    }
+    body.innerHTML = `
+      <div class="stack">
+        <div class="seedrow">
+          <button class="seed" data-q="這篇的核心洞見用一句話說是什麼?為什麼它在當時是不顯然的?">核心洞見是什麼</button>
+          <button class="seed" data-q="這篇的實驗有哪些沒有證明到的地方?一個嚴格的審稿人會從哪裡切入?">審稿人會攻擊哪裡</button>
+          <button class="seed" data-q="這個方法和它的前作差在哪?具體是哪一個設計選擇造成差異?">和前作差在哪</button>
+          <button class="seed" data-q="如果要把這篇的想法用在別的領域,哪個假設會最先壞掉?">哪個假設最先壞掉</button>
+          <button class="seed" data-q="請把這篇的關鍵推導一步一步寫出來,用純文字 Unicode 數學符號。">關鍵推導逐步展開</button>
+        </div>
+        <input id="askBox" placeholder="Ask about this paper…" autocomplete="off">
+        <div class="row">
+          <button class="btn primary" id="askGo">Ask</button>
+          <span class="status" id="askStatus"></span>
+        </div>
+        <div id="askOut"></div>
+      </div>`;
+    body.querySelectorAll(".seed").forEach((b) =>
+      b.addEventListener("click", () => { el("askBox").value = b.dataset.q; ask(); }));
+    el("askGo").addEventListener("click", ask);
+    el("askBox").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+  }
+
+  // ---- notes -------------------------------------------------------------
+  const draftKey = () => `paper-desk-draft:${current ? current.id : "none"}`;
+  function localDraft() { try { return localStorage.getItem(draftKey()); } catch { return null; } }
+  function setLocalDraft(v) { try { localStorage.setItem(draftKey(), v); } catch { /* private mode */ } }
+
+  async function loadNotes() {
+    const log = el("noteLog");
+    if (!db || !current || !log) return;
+    try {
+      const snap = await db.collection(`notes/${current.id}/entries`)
+        .orderBy("at", "desc").limit(50).get();
+      log.innerHTML = snap.docs.map((doc) => {
+        const n = doc.data() || {};
+        return `<div class="note-entry"><time>${esc((n.at || "").slice(0, 16).replace("T", " "))}</time><p>${esc(n.text || "")}</p></div>`;
+      }).join("");
+    } catch { /* keep the editor usable if the store refuses */ }
+  }
+
+  async function saveNote() {
+    clearTimeout(saveTimer);
+    const box = el("noteBody"); if (!box || !current) return;
+    const text = box.value.trim(); if (!text) return;
+    const stamp = el("noteSaved");
+    if (!db) { if (stamp) stamp.textContent = "kept in this browser only"; return; }
+    try {
+      await db.collection(`notes/${current.id}/entries`).add({
+        text, at: new Date().toISOString(),
+        paperTitle: current.title || null, venue: current.venue, year: current.year,
+      });
+      box.value = ""; setLocalDraft("");
+      if (stamp) stamp.textContent = "saved";
+      loadNotes();
+    } catch (e) {
+      if (stamp) stamp.textContent = e && e.code === "not_granted" ? "read-only view" : "could not save";
+    }
+  }
+
+  async function copyNotes() {
+    let text = `# ${current.title}\n${current.venue} ${current.year}\n\n`;
+    if (db) {
+      try {
+        const snap = await db.collection(`notes/${current.id}/entries`).orderBy("at", "asc").limit(200).get();
+        text += snap.docs.map((d) => {
+          const n = d.data() || {};
+          return `## ${(n.at || "").slice(0, 16).replace("T", " ")}\n${n.text || ""}`;
+        }).join("\n\n");
+      } catch { /* fall through to the draft */ }
+    }
+    const draft = el("noteBody") ? el("noteBody").value.trim() : "";
+    if (draft) text += `\n\n## draft\n${draft}`;
+    try { await navigator.clipboard.writeText(text); el("noteSaved").textContent = "copied"; }
+    catch { el("noteSaved").textContent = "clipboard blocked"; }
+  }
+
+  // ---- read state --------------------------------------------------------
+  async function toggleRead() {
+    if (!current) return;
+    if (isRead(current)) delete readMap[current.id];
+    else readMap[current.id] = new Date().toISOString();
+    el("readToggle").textContent = isRead(current) ? "已讀 ✓" : "標記已讀";
+    renderProgress();
+    if (!db) return;
+    try { await db.doc("state/progress").set({ read: readMap, updatedAt: new Date().toISOString() }); }
+    catch { /* a read-only viewer keeps it for this session only */ }
+  }
+
+  function nextUnread() {
+    const p = papers.find((x) => !isRead(x));
+    if (!p) { el("progress").textContent = "queue finished — sync more"; return; }
+    openPaper(p.id);
+  }
+
+// Paperfact capability bridge: the embedding host supplies its own account/session.
+async function useCapability(name) {
+  try {
+    if (typeof window.paperfact?.use === "function") {
+      return await window.paperfact.use(name);
+    }
+    return await window.claude?.use?.(name) ?? null;
+  } catch {
+    return null;
+  }
+}
+// End Paperfact capability bridge.
+
+  // ---- ask ---------------------------------------------------------------
+  async function ask() {
+    if (asking || !sample || !current) return;
+    const q = el("askBox").value.trim(); if (!q) return;
+    asking = true; el("askGo").disabled = true; el("askStatus").textContent = "Thinking…";
+
+    const d = detailCache.get(current.id) || {};
+    const context = [
+      `Title: ${current.title}`,
+      `Venue: ${current.venue} ${current.year}${current.award ? " (" + current.award + ")" : ""}`,
+      current.abstract ? `Abstract: ${current.abstract}` : "",
+      d.fullText ? `Paper text (may be truncated):\n${d.fullText.slice(0, 45000)}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const out = document.createElement("div");
+    out.className = "answer";
+    out.innerHTML = `<p class="q">${esc(q)}</p><article class="prose"></article>`;
+    el("askOut").prepend(out);
+    const target = out.querySelector(".prose");
+
+    try {
+      const res = await sample(
+        "你是一位嚴謹的研究討論夥伴。以下是一篇論文的內容,回答讀者的問題。\n" +
+        "規則:用繁體中文回答,技術名詞保留英文;數學一律用 Unicode 純文字,絕不使用 LaTeX;" +
+        "只根據下面提供的內容作答,內容不足以回答就直說,不要編造數字。\n\n" +
+        `${context}\n\n讀者的問題:${q}`,
+        { onText: ({ text }) => { target.innerHTML = md(text); } }
+      );
+      target.innerHTML = md(res.text);
+      el("askStatus").textContent = res.truncated ? "answer was cut short" : "";
+      el("askBox").value = "";
+    } catch (e) {
+      const code = e && e.code;
+      target.innerHTML = `<p>${
+        code === "rate_limited" ? "Too many questions at once — give it a moment."
+        : code === "not_granted" ? "Asking AI was declined for this page."
+        : "That question did not go through. Try again."}</p>`;
+      el("askStatus").textContent = "";
+    } finally { asking = false; el("askGo").disabled = false; }
+  }
+
+  // ---- wiring ------------------------------------------------------------
+  el("nextBtn").addEventListener("click", nextUnread);
+  el("backBtn").addEventListener("click", closePaper);
+  el("readToggle").addEventListener("click", toggleRead);
+  el("tabText").addEventListener("click", () => { view.tab = "text"; renderSource(); });
+  el("tabAbs").addEventListener("click", () => { view.tab = "abs"; renderSource(); });
+  el("tabDive").addEventListener("click", () => { view.desk = "dive"; renderDesk(); });
+  el("tabNotes").addEventListener("click", () => { view.desk = "notes"; renderDesk(); });
+  el("tabAsk").addEventListener("click", () => { view.desk = "ask"; renderDesk(); });
+  el("moreBtn").addEventListener("click", () => { view.limit += 60; renderQueue(); });
+  el("search").addEventListener("input", (e) => {
+    view.filters.q = e.target.value; view.limit = 60; renderQueue();
+  });
+  for (const [id, key] of [["fUnread", "unread"], ["fAward", "award"],
+                           ["fPrinciple", "principle"], ["fText", "text"]]) {
+    el(id).addEventListener("click", () => {
+      view.filters[key] = !view.filters[key];
+      el(id).setAttribute("aria-pressed", String(Boolean(view.filters[key])));
+      view.limit = 60; renderQueue();
+    });
+  }
+
+  renderQueue();
+  renderProgress();
+
+  (async () => {
+    [db, sample] = await Promise.all([useCapability("db"), useCapability("sample")]);
+    if (!db) { renderQueue(); return; }
+
+    try {
+      const q = await db.doc("queue/upcoming").get();
+      if (q.exists) papers = (q.data() || {}).papers || [];
+    } catch { /* render the empty-state instructions */ }
+    try {
+      const pr = await db.doc("state/progress").get();
+      if (pr.exists) readMap = (pr.data() || {}).read || {};
+    } catch { /* nothing read yet */ }
+
+    renderQueue();
+    renderProgress();
+  })();
+})();
+</script>

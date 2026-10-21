@@ -1,0 +1,2339 @@
+<meta charset="utf-8">
+<title>Paperfact 帶出門</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: one reading column, slim sticky header, thumb-reachable tab bar.
+   Colour comes from the operating theatre these papers were recorded in:
+   drape teal carries the interface, amber marks only what the reader adds. */
+:root {
+  --ground: #f6f8f9;
+  --surface: #ffffff;
+  --sunk: #eef2f4;
+  --ink: #0f1a1f;
+  --muted: #55676f;
+  --faint: #8798a0;
+  --rule: #dde5e8;
+  --firm: #c5d2d7;
+  --accent: #0c7a73;
+  --accent-soft: #e2f1ef;
+  --mark: #a8571a;
+  --mark-soft: #fbeee2;
+  --font-read: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", Consolas, monospace;
+  --col: 34em;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0b1316;
+    --surface: #111b1f;
+    --sunk: #162328;
+    --ink: #e4edf0;
+    --muted: #9bacb3;
+    --faint: #70848c;
+    --rule: #1e2d33;
+    --firm: #31454c;
+    --accent: #4fd3c5;
+    --accent-soft: #11302e;
+    --mark: #e0a05c;
+    --mark-soft: #2e2113;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0b1316;
+  --surface: #111b1f;
+  --sunk: #162328;
+  --ink: #e4edf0;
+  --muted: #9bacb3;
+  --faint: #70848c;
+  --rule: #1e2d33;
+  --firm: #31454c;
+  --accent: #4fd3c5;
+  --accent-soft: #11302e;
+  --mark: #e0a05c;
+  --mark-soft: #2e2113;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-read);
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---- header ---------------------------------------------------------- */
+.bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 20;
+  background: color-mix(in srgb, var(--ground) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+.bar-inner {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 8px 16px 7px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.switch {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  background: var(--sunk);
+  border-radius: 8px;
+  padding: 3px;
+}
+.switch button {
+  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.switch button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.meter { height: 2px; background: var(--rule); }
+.meter > i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+/* ---- reading column -------------------------------------------------- */
+main {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 18px 16px 112px;
+}
+.title {
+  font-family: var(--font-read);
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.26;
+  text-wrap: balance;
+  margin: 2px 0 8px;
+}
+.byline {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.stamp {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+  margin-bottom: 22px;
+}
+h2.sec {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 34px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  scroll-margin-top: 70px;
+}
+h2.sec:first-of-type { border-top: 0; padding-top: 0; margin-top: 18px; }
+
+p.para {
+  font-size: 17px;
+  line-height: 1.75;
+  margin: 0 0 15px;
+  cursor: pointer;
+  position: relative;
+  padding-left: 11px;
+  margin-left: -11px;
+  border-left: 2px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+p.para.open { border-left-color: var(--accent); background: var(--accent-soft); }
+p.para.has-note { border-left-color: var(--mark); }
+p.para.has-note.open { background: var(--mark-soft); }
+
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 26px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.jump button {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--sunk);
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.figref {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed currentColor;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ---- per-paragraph tools --------------------------------------------- */
+.tools { display: flex; gap: 8px; margin: -6px 0 16px; flex-wrap: wrap; }
+.tools button, .sheet button.act {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--firm);
+  border-radius: 999px;
+  padding: 6px 13px;
+  cursor: pointer;
+}
+.tools button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.composer { margin: -4px 0 18px; display: flex; flex-direction: column; gap: 8px; }
+.composer textarea {
+  font-family: var(--font-read);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--firm);
+  border-radius: 10px;
+  padding: 11px 12px;
+  min-height: 92px;
+  resize: vertical;
+  width: 100%;
+}
+.answer {
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--ink);
+  background: var(--sunk);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  margin: -4px 0 18px;
+  white-space: pre-wrap;
+}
+.answer .who {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+/* ---- figures --------------------------------------------------------- */
+figure { margin: 22px 0; }
+figure img {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+  display: block;
+}
+figcaption {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin-top: 8px;
+}
+figcaption b { color: var(--accent); font-weight: 600; }
+
+/* ---- dive ------------------------------------------------------------ */
+.dive h3 {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 30px 0 10px;
+  padding-top: 13px;
+  border-top: 1px solid var(--rule);
+}
+.dive h3:first-child { border-top: 0; padding-top: 0; margin-top: 10px; }
+.dive p { font-size: 16.5px; line-height: 1.78; margin: 0 0 14px; }
+.dive li { font-size: 16.5px; line-height: 1.7; margin-bottom: 7px; }
+.dive pre {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  line-height: 1.35;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+.dive code { font-family: var(--font-data); font-size: 0.92em; background: var(--sunk); }
+.dive h4 {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 22px 0 8px;
+}
+.dive h2.part {
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 10px 0 12px;
+}
+.dive hr { border: 0; border-top: 1px solid var(--rule); margin: 26px 0; }
+.dive hr.part { border-top: 2px solid var(--firm); margin: 36px 0 18px; }
+.dive blockquote {
+  margin: 0 0 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--firm);
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.7;
+}
+/* A results table is wider than a phone; it scrolls on its own rather than the page. */
+.tablewrap { overflow-x: auto; margin: 0 0 16px; -webkit-overflow-scrolling: touch; }
+.dive table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  min-width: 100%;
+}
+.dive th, .dive td {
+  text-align: left;
+  vertical-align: top;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.dive th { font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--firm); }
+.dive td:first-child, .dive th:first-child { white-space: normal; min-width: 7em; }
+figure.inline { margin: 6px 0 18px; }
+figure.inline img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fff;
+  cursor: zoom-in;
+}
+figure.inline figcaption {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* ---- slides ---------------------------------------------------------- */
+.deck + .deck { margin-top: 36px; padding-top: 24px; border-top: 2px solid var(--firm); }
+.deckhead .mode {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-bottom: 8px;
+}
+.deckhead h2 { font-size: 21px; line-height: 1.3; margin: 0 0 6px; }
+.deckhead .meta { font-family: var(--font-ui); font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.deckhead .open {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 8px 14px;
+  text-decoration: none;
+  margin-bottom: 14px;
+}
+.slidecard {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 14px 16px 12px;
+  margin-bottom: 14px;
+}
+.slidecard .num {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  margin-bottom: 4px;
+}
+.slidecard h3 { font-family: var(--font-ui); font-size: 17px; line-height: 1.35; margin: 0 0 8px; }
+.slidecard .take { font-size: 15px; line-height: 1.6; color: var(--accent); margin: 0 0 8px; }
+.slidecard ul { margin: 0 0 8px; padding-left: 20px; }
+.slidecard li { font-size: 15px; line-height: 1.6; margin-bottom: 4px; }
+.slidecard details.notes { margin-top: 6px; }
+.slidecard table { border-collapse: collapse; font-family: var(--font-ui); font-size: 13px; min-width: 100%; }
+.slidecard th, .slidecard td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.slidecard th { font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--firm); }
+.slidecard details.notes summary {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.slidecard details.notes p { font-size: 14.5px; line-height: 1.7; color: var(--ink); margin: 8px 0 0; }
+
+/* ---- the survey panel ------------------------------------------------ */
+.survey-btn {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+dialog.panel {
+  width: 100%;
+  max-width: var(--col);
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--ground);
+  color: var(--ink);
+  padding: 0 16px 48px;
+  overflow-y: auto;
+}
+.panelhead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 8px;
+  background: color-mix(in srgb, var(--ground) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 6px;
+}
+.panelhead .pills { flex: 1; display: flex; gap: 6px; overflow-x: auto; }
+.panelhead .pills button {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--sunk);
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.panelhead .pills button[aria-pressed="true"] { color: var(--surface); background: var(--ink); }
+#surveyclose {
+  font-size: 16px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* ---- lineage --------------------------------------------------------- */
+.edge {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+}
+button.edge { cursor: pointer; border-color: var(--firm); }
+.edge .et { font-size: 15.5px; line-height: 1.45; color: var(--ink); }
+.edge .em {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--faint);
+  margin-top: 5px;
+}
+.edge .em .star { color: var(--mark); }
+.edge .em .here { color: var(--accent); }
+h3.lin {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 26px 0 11px;
+}
+h3.lin:first-child { margin-top: 12px; }
+
+/* ---- citations ------------------------------------------------------- */
+.cite {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 13px 14px;
+  margin-bottom: 11px;
+}
+.cite.skip { background: none; padding: 10px 12px; opacity: 0.72; }
+.cite-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+.pill {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.pill.must { background: var(--mark); color: #fff; }
+.pill.worth { background: var(--accent); color: #fff; }
+.pill.maybe { background: var(--sunk); color: var(--muted); }
+.pill.skip { background: none; color: var(--faint); border: 1px solid var(--rule); }
+.refno {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--faint);
+  margin-left: auto;
+}
+.cite .ref-title {
+  font-family: var(--font-read);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 5px;
+}
+.cite.skip .ref-title { font-size: 14.5px; font-weight: 400; }
+.cite .ref-meta {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--faint);
+  margin-bottom: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+}
+.cite .ref-meta .guess { color: var(--mark); }
+.cite .ref-meta a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+.cite dl { margin: 0; }
+.cite dt {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-top: 9px;
+}
+.cite dd { font-size: 15px; line-height: 1.65; margin: 3px 0 0; }
+.cite blockquote {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 7px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+}
+
+/* ---- notes ----------------------------------------------------------- */
+.note {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--mark);
+  border-radius: 0 10px 10px 0;
+  padding: 13px 14px;
+  margin-bottom: 13px;
+}
+.note .where {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 7px;
+}
+.note blockquote {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 9px;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+}
+.note .body { font-size: 16px; line-height: 1.7; white-space: pre-wrap; }
+.note .del {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--faint);
+  background: none;
+  border: 0;
+  padding: 6px 0 0;
+  cursor: pointer;
+}
+
+.hint {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  background: var(--sunk);
+  border-radius: 10px;
+  padding: 13px 14px;
+  margin-bottom: 20px;
+}
+.hint b { color: var(--ink); font-weight: 600; }
+
+/* ---- pdf viewer ------------------------------------------------------ */
+/* The page is the document, so it gets the whole screen: no reading column, no
+   margins of ours competing with the publisher's. */
+main.wide { max-width: none; padding: 0 0 104px; }
+.pdfhead {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 45px);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--ground) 93%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--muted);
+}
+.pdfhead .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdfhead button {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--firm);
+  border-radius: 7px;
+  padding: 4px 9px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.pdfhead button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pagejump {
+  display: none;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 9px 12px;
+  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
+}
+.pagejump.open { display: flex; }
+.pagejump button {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.pages { padding: 10px 0 0; overflow-x: auto; }
+.pdfpage {
+  position: relative;
+  margin: 0 auto 10px;
+  background: #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  scroll-margin-top: 96px;
+}
+.pdfpage canvas { display: block; width: 100%; height: 100%; }
+.pdfpage .no {
+  position: absolute;
+  right: 7px;
+  bottom: 5px;
+  font-family: var(--font-data);
+  font-size: 9.5px;
+  color: #aab;
+  pointer-events: none;
+}
+
+/* pdf.js positions every glyph run itself; this layer only has to sit exactly on
+   top of the canvas and be invisible but selectable. */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+}
+.textLayer span, .textLayer br {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+/* Whatever the host does to stop stray selection on an embedded page, the text
+   layer is the one thing here that exists to be selected. */
+.pdfpage, .textLayer, .textLayer span {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+.textLayer ::selection { background: rgba(12, 122, 115, 0.38); color: transparent; }
+.textLayer br::selection { background: transparent; }
+/* A passage a note points back to. The layer's text is transparent, so the
+   highlight is the only thing drawn. */
+.textLayer span.hit { background: rgba(232, 168, 40, 0.42); border-radius: 2px; }
+
+p.story { font-size: 15.5px; line-height: 1.75; margin: 0 0 14px; }
+ol.reading { margin: 0 0 20px; padding-left: 22px; }
+ol.reading li { margin-bottom: 10px; line-height: 1.5; }
+
+.goto {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 6px 12px 0 0;
+  cursor: pointer;
+}
+.note .foot { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
+.note.desk { border-left-color: var(--firm); }
+.note.ask { border-left-color: var(--accent); }
+.note .q { font-family: var(--font-ui); font-size: 13.5px; color: var(--accent); margin: 0 0 6px; }
+.askbox { display: grid; gap: 8px; margin: 0 0 22px; }
+.askbox textarea { min-height: 64px; }
+.askbox .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.askbox .row span { font-family: var(--font-ui); font-size: 12px; color: var(--faint); }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+  transform: translateX(-50%);
+  max-width: min(92vw, 420px);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--surface);
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 10px 14px;
+  z-index: 40;
+}
+
+.selbar {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--firm);
+  border-radius: 999px;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.24);
+}
+.selbar button {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.selbar button.primary { background: var(--accent); color: #fff; }
+
+/* The answer cannot go next to the text the way it does on the desktop: the text
+   layer is absolutely positioned over a canvas. It gets its own sheet instead. */
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(46px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  max-height: 58vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-top: 1px solid var(--firm);
+  box-shadow: 0 -6px 26px rgba(0, 0, 0, 0.2);
+  padding: 12px 16px 16px;
+}
+.sheet .who {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 7px;
+}
+.sheet .q {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  border-left: 2px solid var(--firm);
+  padding-left: 10px;
+  margin-bottom: 11px;
+  max-height: 6.4em;
+  overflow: hidden;
+}
+.sheet .a {
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.sheet .tools { margin: 12px 0 0; }
+.sheet textarea {
+  font-family: var(--font-read);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--ground);
+  border: 1px solid var(--firm);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 86px;
+  width: 100%;
+  resize: vertical;
+}
+
+/* ---- tab bar --------------------------------------------------------------- */
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--rule);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tabs button {
+  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 11px 2px 12px;
+  cursor: pointer;
+  border-top: 2px solid transparent;
+  margin-top: -1px;
+}
+.tabs button[aria-pressed="true"] { color: var(--accent); border-top-color: var(--accent); }
+.tabs .count {
+  font-family: var(--font-data);
+  font-size: 10px;
+  color: var(--mark);
+  margin-left: 3px;
+}
+
+dialog {
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  max-width: min(94vw, 740px);
+  width: 94vw;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.62); }
+dialog .pad { padding: 14px; }
+dialog img { width: 100%; border-radius: 6px; background: #fff; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Formulas, algorithms and diagrams (see typeset.js). */
+.math-block { margin: .3em 0 1.1em; overflow-x: auto; overflow-y: hidden; }
+figure.algo { margin: 0 0 1.2em; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+figure.algo figcaption { padding: 6px 12px; font-weight: 600; border-bottom: 1px solid var(--rule); background: var(--sunk); }
+figure.algo pre { margin: 0; border: 0; border-radius: 0; counter-reset: line; }
+figure.algo .ln { display: block; padding-left: 3em; text-indent: -3em; }
+figure.algo .ln::before { counter-increment: line; content: counter(line); display: inline-block;
+  width: 2.2em; margin-right: .8em; text-align: right; opacity: .55; text-indent: 0; }
+figure.algo .kw { font-weight: 700; color: var(--accent); }
+figure.algo .cm { font-style: italic; opacity: .7; }
+.diagram { margin: 0 0 1.2em; text-align: center; overflow-x: auto; }
+.diagram svg { max-width: 100%; height: auto; }
+</style>
+<link rel="stylesheet" href="lib/katex/katex.min.css">
+
+<div class="bar">
+  <div class="bar-inner">
+    <div class="switch" id="papers"></div>
+    <button class="survey-btn" id="surveybtn" hidden>綜覽</button>
+  </div>
+  <div class="meter"><i id="meter"></i></div>
+</div>
+
+<main id="view"></main>
+
+<nav class="tabs" id="tabs"></nav>
+
+<div class="selbar" id="selbar" hidden></div>
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<dialog id="figbox"><div class="pad"><img id="figimg" alt=""><figcaption id="figcap"></figcaption><button class="goto" id="figgoto">↩ 在原文中看</button></div></dialog>
+
+<dialog id="surveybox" class="panel">
+  <div class="panelhead"><div class="pills" id="surveypills"></div><button id="surveyclose" aria-label="關閉">✕</button></div>
+  <div class="dive" id="surveybody"></div>
+</dialog>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/katex/katex.min.js"></script>
+<script src="lib/mermaid.min.js"></script>
+<script>/*__TYPESET__*/</script>
+
+<script>
+const PAPERS = /*__PAPERS__*/null;
+const SURVEYS = /*__SURVEYS__*/null || [];
+const VIEWS = [["pdf", "原文"], ["dive", "講解"], ["cites", "引用"], ["slides", "簡報"], ["notes", "筆記"]];
+const VERDICTS = { "必讀": ["must", 0], "值得": ["worth", 1], "參考": ["maybe", 2] };
+
+const state = {
+  paper: 0,
+  view: "pdf",
+  notes: [],        // {id, paper, section, anchor, quote, body, kind, question, created}
+  db: null,
+  sample: null,
+  user: null,
+  me: null,
+  storage: "local", // or "cloud"
+  canWrite: null,   // null: the platform has not said; a refused write decides
+  isOwner: false,
+  citeOrder: "verdict", // or "number"
+  citeSide: "refs",     // or "later"
+  survey: 0,            // which list's survey the 綜覽 panel shows
+};
+
+const view = document.getElementById("view");
+const tabsEl = document.getElementById("tabs");
+const papersEl = document.getElementById("papers");
+const meter = document.getElementById("meter");
+
+/* ---- small helpers ---------------------------------------------------- */
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const key = (p, i) => `${PAPERS[p].id}#${i}`;
+
+function localNotes() {
+  try { return JSON.parse(localStorage.getItem("pocket.notes") || "[]"); }
+  catch { return []; }
+}
+function saveLocal() {
+  try { localStorage.setItem("pocket.notes", JSON.stringify(state.notes)); } catch (e) { /* private mode */ }
+}
+
+/* Figure and table mentions become taps: on a phone, scrolling back to find
+   Figure 3 loses your place in the sentence that sent you there. */
+// "Fig. 1" in a Nature paper and "Figure 1" elsewhere name the same thing.
+function figKey(label) {
+  const m = String(label).toLowerCase().match(/(figure|fig|table)\D*(\d+)/);
+  if (!m) return "";
+  return `${m[1] === "fig" ? "figure" : m[1]} ${m[2]}`;
+}
+
+function linkFigures(text, paperIndex) {
+  const labels = new Set(PAPERS[paperIndex].figures.map((f) => figKey(f.label)));
+  return esc(text).replace(/\b(Fig(?:ure)?\.?|Table)\s*(\d+)/g, (whole, word, num) => {
+    const label = figKey(`${word} ${num}`);
+    if (!labels.has(label)) return whole;
+    return `<button class="figref" data-fig="${label}">${whole}</button>`;
+  });
+}
+
+/* ---- markdown, what a dive and a close reading emit --------------------- */
+/* A line of its own saying [[Figure 3]] is where the close reading discusses that
+   figure, and the paper's own rendering of it goes there. */
+const MARKER = /^\s*\[\[\s*((?:figure|fig\.?|table)\s*\d+[a-z]?)\s*\]\]\s*$/i;
+
+function stripLabel(caption) {
+  return String(caption || "").replace(/^(Figure|Fig\.?|Table)\s+\d+[a-z]?\s*[:.]?\s*/i, "");
+}
+
+function inlineFigure(f, attr) {
+  return `<figure class="inline"><img src="${f.src}" alt="${esc(f.label)}" loading="lazy" ${attr}>`
+    + `<figcaption><b>${esc(f.label)}</b>${f.page ? ` · p${f.page}` : ""} — ${esc(stripLabel(f.caption))}</figcaption></figure>`;
+}
+
+function tableHtml(rows, pi) {
+  const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const body = rows.map(cells).filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c)));
+  if (!body.length) return "";
+  const [head, ...rest] = body;
+  const tr = (r, tag) => `<tr>${r.map((c) => `<${tag}>${inline(c, pi)}</${tag}>`).join("")}</tr>`;
+  return `<div class="tablewrap"><table><thead>${tr(head, "th")}</thead>`
+    + `<tbody>${rest.map((r) => tr(r, "td")).join("")}</tbody></table></div>`;
+}
+
+function rowsTable(rows, header) {
+  if (!rows || !rows.length) return "";
+  const tr = (r, tag) => `<tr>${r.map((c) => `<${tag}>${esc(c)}</${tag}>`).join("")}</tr>`;
+  const [first, ...rest] = rows;
+  const head = header ? `<thead>${tr(first, "th")}</thead>` : "";
+  const body = (header ? rest : rows).map((r) => tr(r, "td")).join("");
+  return `<div class="tablewrap"><table>${head}<tbody>${body}</tbody></table></div>`;
+}
+
+function md(src, pi) {
+  const lifted = Typeset.protect(src);
+  const lines = lifted.text.split("\n");
+  const figures = pi == null ? [] : PAPERS[pi].figures;
+  const shown = new Set();
+  const out = [];
+  let para = [], list = null, fence = null, table = null, fenceAttrs = "";
+  const flushP = () => { if (para.length) { out.push(`<p>${inline(para.join(" "), pi)}</p>`); para = []; } };
+  const flushL = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const flushT = () => { if (table) { out.push(tableHtml(table, pi)); table = null; } };
+  for (const raw of lines) {
+    if (raw.startsWith("```")) {
+      if (fence === null) {
+        flushP(); flushL(); flushT(); fence = [];
+        const info = raw.slice(3).trim().match(/^(\S*)\s*(.*)$/);
+        fenceAttrs = ` data-lang="${esc(info[1])}" data-title="${esc(info[2])}"`;
+      }
+      else { out.push(`<pre${fenceAttrs}>${esc(fence.join("\n"))}</pre>`); fence = null; }
+      continue;
+    }
+    if (fence !== null) { fence.push(raw); continue; }
+    const line = raw.trimEnd();
+    if (line.trim().startsWith("|") && line.split("|").length >= 3) {
+      flushP(); flushL();
+      (table = table || []).push(line);
+      continue;
+    }
+    flushT();
+    if (!line.trim()) { flushP(); flushL(); continue; }
+    const mark = line.match(MARKER);
+    if (mark) {
+      flushP(); flushL();
+      const key = figKey(mark[1]);
+      const f = figures.find((x) => figKey(x.label) === key);
+      if (f && !shown.has(key)) { shown.add(key); out.push(inlineFigure(f, `data-fig="${key}"`)); }
+      continue;
+    }
+    if (/^-{3,}$/.test(line.trim())) { flushP(); flushL(); out.push("<hr>"); continue; }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {
+      flushP(); flushL();
+      out.push(h[1].length >= 3 ? `<h4>${inline(h[2], pi)}</h4>` : `<h3>${inline(h[2], pi)}</h3>`);
+      continue;
+    }
+    const q = line.match(/^>\s?(.*)$/);
+    if (q) { flushP(); flushL(); out.push(`<blockquote>${inline(q[1], pi)}</blockquote>`); continue; }
+    const li = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+    if (li) {
+      flushP();
+      const want = /^\s*\d/.test(line) ? "ol" : "ul";
+      if (list !== want) { flushL(); out.push(`<${want}>`); list = want; }
+      out.push(`<li>${inline(li[1], pi)}</li>`);
+      continue;
+    }
+    flushL();
+    para.push(line.trim());
+  }
+  flushP(); flushL(); flushT();
+  if (fence !== null) out.push(`<pre>${esc(fence.join("\n"))}</pre>`);
+  return Typeset.restore(out.join(""), lifted.math);
+}
+function inline(t, pi) {
+  return (pi == null ? esc(t) : linkFigures(t, pi))
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<i>$2</i>");
+}
+
+async function fillNames() {
+  if (!state.user) return;
+  const marks = [...document.querySelectorAll("[data-by]")];
+  if (!marks.length) return;
+  const ids = [...new Set(marks.map((el) => el.dataset.by))];
+  let profiles = {};
+  try { profiles = await state.user.profiles(ids); } catch (e) { return; }
+  for (const el of marks) {
+    const hit = profiles[el.dataset.by];
+    el.textContent = (hit && hit.name) || "某位讀者";
+  }
+}
+
+/* ---- rendering -------------------------------------------------------- */
+function renderChrome() {
+  papersEl.innerHTML = PAPERS.map((p, i) => {
+    const short = p.title.split(/[:—–]/)[0].replace(/\s+Dataset.*$/i, "").trim();
+    return `<button data-paper="${i}" aria-pressed="${i === state.paper}">${esc(short)}</button>`;
+  }).join("");
+
+  tabsEl.innerHTML = VIEWS.map(([id, label]) => {
+    const p = PAPERS[state.paper];
+    let n = 0;
+    if (id === "notes") n = state.notes.filter((x) => x.paper === p.id).length;
+    else if (id === "slides") n = (p.decks || []).length;
+    else if (id === "cites") n = (p.cites || []).filter((c) => VERDICTS[c.verdict] && VERDICTS[c.verdict][1] <= 1).length;
+    const badge = n ? `<span class="count">${n}</span>` : "";
+    return `<button data-view="${id}" aria-pressed="${id === state.view}">${label}${badge}</button>`;
+  }).join("");
+  document.getElementById("surveybtn").hidden = !SURVEYS.length;
+}
+
+/* ---- pdf viewer ------------------------------------------------------- */
+/* The paper's own PDF, not a reconstruction of it. Extraction is how the pipeline
+   reads a paper; it is not how a person should. Here the layout, the figures and
+   their captions are the publisher's, and the text layer is only there so a finger
+   can land on three words and ask about them. */
+const pdf = { doc: null, id: null, zoom: 1, token: 0, sel: null, page: 1, count: 0, ratio: 1.3 };
+
+const ZOOMS = [1, 1.5, 2.2, 3];
+
+function pageKey(id) { return `pocket.page.${id}`; }
+
+function savedPage(id) {
+  try { return Number(localStorage.getItem(pageKey(id)) || 1) || 1; } catch (e) { return 1; }
+}
+
+function pdfWidth() {
+  const host = document.getElementById("pages");
+  return Math.max(260, (host ? host.clientWidth : window.innerWidth) - 16);
+}
+
+function renderPdf() {
+  const p = PAPERS[state.paper];
+  pdf.token += 1;
+  closeSheet();
+
+  // Three of the fifteen are behind a publisher's paywall, so there is no PDF to
+  // show. Saying so beats a title over an empty page; the dive is still written.
+  if (!p.pdf) {
+    view.className = "";
+    view.innerHTML = `
+      <h1 class="title">${esc(p.title)}</h1>
+      <div class="byline">${esc(p.authors.slice(0, 6).join(" · "))}${p.authors.length > 6 ? " · …" : ""}</div>
+      <div class="stamp">${esc(p.venue)} ${p.year}${p.doi ? " · " + esc(p.doi) : ""}</div>`
+      + `<div class="hint">抓不到這篇的原文 PDF(出版社沒有開放取用),`
+      + `所以這裡沒有可讀的全文。<b>深度講解</b>和<b>引用</b>分頁仍然有內容${p.doi ? `,`
+      + `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" rel="noopener">`
+      + `出版社頁面在這裡</a>` : ""}。</div>`
+      + (p.abstract ? `<h2 class="sec">摘要</h2><p class="para" data-i="0" data-sec="摘要">`
+          + `${linkFigures(p.abstract, state.paper)}</p>` : "");
+    return;
+  }
+
+  view.className = "wide";
+  view.innerHTML = `
+    <div class="pdfhead">
+      <button data-pdf="prev" aria-label="上一頁">‹</button>
+      <button data-pdf="jump" id="pagemark">—</button>
+      <button data-pdf="next" aria-label="下一頁">›</button>
+      <span class="name">${esc(p.title.split(/[:—–]/)[0].trim())}</span>
+      <button data-pdf="trans" id="transbtn" hidden>譯</button>
+      <button data-pdf="zoom">${pdf.zoom.toFixed(1).replace(/\.0$/, "")}×</button>
+    </div>
+    <div class="pagejump" id="pagejump"></div>
+    <div class="pages" id="pages"><div class="hint" style="margin:16px">載入 PDF…</div></div>`;
+  openPdf(p, pdf.token);
+}
+
+async function openPdf(p, token) {
+  const host = document.getElementById("pages");
+  if (typeof pdfjsLib === "undefined") {
+    host.innerHTML = `<div class="hint" style="margin:16px">PDF 元件沒有載入。</div>`;
+    return;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
+
+  if (pdf.id !== p.id || !pdf.doc) {
+    if (pdf.doc) { try { pdf.doc.destroy(); } catch (e) { /* already gone */ } }
+    pdf.doc = null;
+    pdf.id = p.id;
+    try {
+      pdf.doc = await pdfjsLib.getDocument({ url: p.pdf }).promise;
+    } catch (err) {
+      if (token !== pdf.token) return;
+      host.innerHTML = `<div class="hint" style="margin:16px">PDF 開不起來:`
+        + `${esc((err && err.message) || "未知錯誤")}</div>`;
+      return;
+    }
+  }
+  if (token !== pdf.token) return;
+
+  pdf.count = pdf.doc.numPages;
+  pdf.page = Math.min(Math.max(savedPage(p.id), 1), pdf.count);
+  document.getElementById("pagejump").innerHTML = Array.from(
+    { length: pdf.count }, (_, i) => `<button data-page="${i + 1}">${i + 1}</button>`
+  ).join("");
+  showPage(token);
+}
+
+async function showPage(token) {
+  const host = document.getElementById("pages");
+  if (!host || !pdf.doc) return;
+  const n = pdf.page;
+  markPage();
+  try { localStorage.setItem(pageKey(pdf.id), String(n)); } catch (e) { /* ignore */ }
+
+  const width = Math.round(pdfWidth() * pdf.zoom);
+  host.innerHTML = `<div class="pdfpage" style="width:${width}px;`
+    + `height:${Math.round(width * pdf.ratio)}px"><canvas></canvas>`
+    + `<div class="textLayer"></div><span class="no">${n} / ${pdf.count}</span></div>`;
+
+  const el = host.firstElementChild;
+  try {
+    const page = await pdf.doc.getPage(n);
+    if (token !== pdf.token || pdf.page !== n) return;
+
+    const base = page.getViewport({ scale: 1 });
+    pdf.ratio = base.height / base.width;
+    const vp = page.getViewport({ scale: width / base.width });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const canvas = el.querySelector("canvas");
+    canvas.width = Math.floor(vp.width * dpr);
+    canvas.height = Math.floor(vp.height * dpr);
+    el.style.height = Math.round(vp.height) + "px";
+
+    await page.render({
+      canvasContext: canvas.getContext("2d", { alpha: false }),
+      viewport: vp,
+      transform: dpr === 1 ? null : [dpr, 0, 0, dpr, 0, 0],
+    }).promise;
+    if (token !== pdf.token || pdf.page !== n) return;
+
+    const layer = el.querySelector(".textLayer");
+    layer.style.setProperty("--scale-factor", String(vp.scale));
+    const content = await page.getTextContent();
+    if (token !== pdf.token || pdf.page !== n) return;
+    pdf.text = content.items.map((it) => it.str + (it.hasEOL ? "\n" : "")).join("");
+    showTransBtn();
+    await pdfjsLib.renderTextLayer({
+      textContentSource: content,
+      container: layer,
+      viewport: vp,
+      textDivs: [],
+    }).promise;
+    if (pdf.pendingQuote && token === pdf.token) {
+      const quote = pdf.pendingQuote;
+      pdf.pendingQuote = null;
+      if (!highlightQuote(layer, quote)) {
+        // The page a note remembers can be stale: the paper may now be read from
+        // another PDF, or the note was written against a paragraph, not a page.
+        const m = await findQuotePage(quote);
+        if (m && m !== n && token === pdf.token) {
+          pdf.pendingQuote = quote;
+          pdf.page = 0;
+          goPage(m);
+        } else {
+          toast(`第 ${n} 頁找不到那一段文字,可能跨到下一頁了。`);
+        }
+      }
+    }
+  } catch (err) {
+    host.innerHTML = `<div class="hint" style="margin:16px">這一頁畫不出來:`
+      + `${esc((err && err.message) || "未知錯誤")}</div>`;
+  }
+}
+
+/* The page a quoted passage is printed on, searching the whole paper. */
+async function findQuotePage(quote) {
+  const norm = (t) => t.replace(/\s+/g, "").replace(/[\u00ad\u2010-\u2014-]/g, "").toLowerCase();
+  const want = norm(String(quote).replace(/^>\s?/gm, ""));
+  if (want.length < 4 || !pdf.doc) return 0;
+  const pages = [];
+  for (let i = 1; i <= pdf.doc.numPages; i += 1) {
+    const content = await (await pdf.doc.getPage(i)).getTextContent();
+    pages.push(norm(content.items.map((it) => it.str).join("")));
+  }
+  for (const n of [want.length, 80, 40, 20]) {
+    if (n > want.length) continue;
+    const at = pages.findIndex((text) => text.includes(want.slice(0, n)));
+    if (at >= 0) return at + 1;
+  }
+  return 0;
+}
+
+/* Find a quoted passage in the drawn text layer and mark it.
+
+   Notes remember the words, not pdf.js's span numbering, because notes written at
+   the desk index words with PyMuPDF and the two never agree on where a run starts.
+   Comparing with all whitespace removed survives both ways of splitting lines. */
+function highlightQuote(layer, quote) {
+  const spans = [...layer.querySelectorAll("span")].filter((el) => !el.querySelector("span"));
+  const norm = (t) => t.replace(/\s+/g, "").replace(/[\u00ad\u2010-\u2014-]/g, "").toLowerCase();
+  let flat = "";
+  const owner = [];
+  spans.forEach((el, i) => {
+    const t = norm(el.textContent || "");
+    flat += t;
+    for (let k = 0; k < t.length; k += 1) owner.push(i);
+  });
+  const want = norm(String(quote).replace(/^>\s?/gm, ""));
+  if (want.length < 4) return false;
+  let at = -1;
+  let len = want.length;
+  for (const n of [want.length, 80, 40, 20]) {
+    if (n > want.length) continue;
+    at = flat.indexOf(want.slice(0, n));
+    if (at >= 0) { len = Math.min(want.length, flat.length - at); break; }
+  }
+  if (at < 0) return false;
+  const hit = new Set(owner.slice(at, at + len));
+  let first = null;
+  spans.forEach((el, i) => {
+    if (hit.has(i)) { el.classList.add("hit"); first = first || el; }
+  });
+  if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+  return true;
+}
+
+let toastTimer = null;
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 3800);
+}
+
+/* Open a paper's PDF on a page and mark a passage there: the note, the figure or
+   the answer that sent the reader back. */
+function gotoPassage(paperId, page, quote) {
+  const idx = PAPERS.findIndex((x) => x.id === paperId);
+  if (idx < 0 || !PAPERS[idx].pdf) { toast("這篇沒有可讀的原文 PDF。"); return; }
+  const n = Number(page) || 0;
+  if (n > 0) { try { localStorage.setItem(pageKey(paperId), String(n)); } catch (e) { /* ignore */ } }
+  pdf.pendingQuote = quote || null;
+  closeSheet();
+  const sameDoc = state.view === "pdf" && state.paper === idx && pdf.id === paperId && pdf.doc;
+  state.paper = idx;
+  if (sameDoc && n > 0) {
+    pdf.page = 0;
+    goPage(n);
+  } else {
+    state.view = "pdf";
+    render();
+  }
+}
+
+/* A note keeps its passage on its leading "> " lines when it was written at the
+   desk; one written here keeps it in `quote`. */
+function splitDesk(body) {
+  const lines = String(body || "").split("\n");
+  let n = 0;
+  while (n < lines.length && lines[n].startsWith(">")) n += 1;
+  return {
+    quote: lines.slice(0, n).map((l) => l.replace(/^>\s?/, "")).join(" ").trim(),
+    thought: lines.slice(n).join("\n").trim(),
+  };
+}
+
+function showTransBtn() {
+  const tb = document.getElementById("transbtn");
+  if (tb) tb.hidden = !state.sample || (pdf.text || "").trim().length < 40;
+}
+
+function goPage(n) {
+  const want = Math.min(Math.max(n, 1), pdf.count || 1);
+  if (want === pdf.page) return;
+  pdf.page = want;
+  closeSheet();
+  selbar.hidden = true;
+  pdf.token += 1;
+  showPage(pdf.token);
+  window.scrollTo(0, 0);
+}
+
+function markPage() {
+  const mark = document.getElementById("pagemark");
+  if (mark) mark.textContent = `${pdf.page} / ${pdf.count}`;
+}
+
+function setZoom(next) {
+  pdf.zoom = next;
+  const btn = document.querySelector('[data-pdf="zoom"]');
+  if (btn) btn.textContent = `${pdf.zoom.toFixed(1).replace(/\.0$/, "")}×`;
+  pdf.token += 1;
+  showPage(pdf.token);
+}
+
+/* A flick turns the page, but only at 1x: zoomed in, a horizontal drag is how you
+   get to the other column. */
+let swipe = null;
+document.addEventListener("pointerdown", (ev) => {
+  swipe = state.view === "pdf" && pdf.zoom === 1 && ev.target.closest(".pdfpage")
+    ? { x: ev.clientX, y: ev.clientY, t: Date.now() }
+    : null;
+});
+document.addEventListener("pointerup", (ev) => {
+  if (!swipe) return;
+  const dx = ev.clientX - swipe.x;
+  const dy = ev.clientY - swipe.y;
+  swipe = null;
+  if (Math.abs(dx) < 70 || Math.abs(dy) > 60) return;
+  if (!window.getSelection().isCollapsed) return;
+  goPage(pdf.page + (dx < 0 ? 1 : -1));
+});
+
+document.addEventListener("keydown", (ev) => {
+  if (state.view !== "pdf" || ev.target.tagName === "TEXTAREA") return;
+  if (ev.key === "ArrowRight" || ev.key === "PageDown") goPage(pdf.page + 1);
+  else if (ev.key === "ArrowLeft" || ev.key === "PageUp") goPage(pdf.page - 1);
+});
+
+/* ---- selection -------------------------------------------------------- */
+/* The desktop reader lets you drag over any few words and ask about exactly those.
+   This is that, on a text layer: the bar follows the selection instead of the
+   paragraph, because in a PDF there are no paragraphs to attach it to. */
+const selbar = document.getElementById("selbar");
+let selTimer = null;
+
+function selectionIn(sel) {
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+  const node = sel.anchorNode;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  if (!el || !el.closest(".textLayer")) return null;
+  const text = sel.toString().replace(/\s+/g, " ").trim();
+  if (text.length < 2) return null;
+  const page = el.closest(".pdfpage");
+  return { text, page: page ? Number(page.dataset.page) : 0, rect: sel.getRangeAt(0).getBoundingClientRect() };
+}
+
+function updateSelbar() {
+  const hit = state.view === "pdf" ? selectionIn(window.getSelection()) : null;
+  if (!hit) { selbar.hidden = true; pdf.sel = null; return; }
+  pdf.sel = hit;
+  selbar.innerHTML = state.sample
+    ? `<button data-sel="trans" class="primary">翻譯</button>`
+      + `<button data-sel="explain">講解</button><button data-sel="ask">問</button>`
+      + `<button data-sel="note">筆記</button>`
+    : `<button data-sel="note" class="primary">寫筆記</button>`;
+  selbar.hidden = false;
+  const w = selbar.offsetWidth;
+  const h = selbar.offsetHeight;
+  const left = Math.max(8, Math.min(hit.rect.left + hit.rect.width / 2 - w / 2, window.innerWidth - w - 8));
+  const above = hit.rect.top - h - 12;
+  selbar.style.left = `${left}px`;
+  selbar.style.top = `${above > 56 ? above : hit.rect.bottom + 12}px`;
+}
+
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(updateSelbar, 180);
+});
+
+/* ---- the answer sheet ------------------------------------------------- */
+const sheet = document.getElementById("sheet");
+
+function openSheet(quote, body, tools) {
+  sheet.innerHTML = `<span class="who">AI</span>`
+    + `<div class="q">${esc(quote)}</div><div class="a" id="sheet-a">${esc(body)}</div>`
+    + `<div class="tools">${tools || `<button class="act" data-act="sheet-close">關閉</button>`}</div>`;
+  sheet.hidden = false;
+}
+
+function closeSheet() { sheet.hidden = true; sheet.innerHTML = ""; }
+
+function clearSelection() {
+  selbar.hidden = true;
+  const sel = window.getSelection();
+  if (sel) sel.removeAllRanges();
+}
+
+const PROMPTS = {
+  trans: (p, s) => [
+    `論文:${p.title}(${p.venue} ${p.year})`,
+    `以下是第 ${s.page} 頁的一段原文:`,
+    "",
+    s.text,
+    "",
+    "請翻成繁體中文。技術名詞保留英文,必要時加括號說明。",
+    "數學一律用 Unicode 純文字(例如 σ = C:ε),絕不使用 LaTeX。",
+    "這段文字是從 PDF 複製的,斷行和連字號請自行修復。只給譯文,不要前言或說明。",
+  ].join("\n"),
+  explain: (p, s) => [
+    `論文:${p.title}(${p.venue} ${p.year})`,
+    `以下是第 ${s.page} 頁的一段原文:`,
+    "",
+    s.text,
+    "",
+    "請用繁體中文解釋這一段在說什麼,技術名詞保留英文,數學一律用 Unicode 純文字,",
+    "絕不使用 LaTeX。說明它為什麼重要,以及它和這篇論文整體主張的關係。",
+    "只根據這一段和你對這篇論文的理解作答,不確定就說不確定,不要編造數字。",
+    "三到五句話,不要前言。",
+  ].join("\n"),
+};
+
+async function askPage() {
+  const p = PAPERS[state.paper];
+  const body = (pdf.text || "").trim().slice(0, 6000);
+  if (!body || !state.sample) return;
+  clearSelection();
+  openSheet(`第 ${pdf.page} 頁全文`, "翻譯中…");
+  const target = document.getElementById("sheet-a");
+  try {
+    const res = await state.sample(PROMPTS.trans(p, { page: pdf.page, text: body }), {
+      modelTier: "default",
+      onText: ({ text }) => { target.textContent = text; },
+    });
+    target.textContent = res.text;
+  } catch (err) {
+    target.textContent = err && err.code === "not_granted"
+      ? "這個瀏覽器沒有授權問 AI。"
+      : `問不到:${(err && err.message) || "未知錯誤"}`;
+  }
+}
+
+async function askSelection(mode) {
+  const p = PAPERS[state.paper];
+  const s = pdf.sel;
+  if (!s) return;
+  clearSelection();
+  openSheet(s.text, mode === "trans" ? "翻譯中…" : "讀這一段…");
+  const target = document.getElementById("sheet-a");
+
+  try {
+    const res = await state.sample(PROMPTS[mode](p, s), {
+      modelTier: "default",
+      onText: ({ text }) => { target.textContent = text; },
+    });
+    target.textContent = res.text;
+    await addNote({
+      paper: p.id,
+      section: `第 ${s.page} 頁`,
+      anchor: s.page,
+      quote: s.text.slice(0, 400),
+      question: mode === "trans" ? "翻譯" : "這一段在說什麼?",
+      body: res.text,
+      kind: "ask",
+      by: state.me,
+    });
+  } catch (err) {
+    target.textContent = err && err.code === "not_granted"
+      ? "這個瀏覽器沒有授權問 AI。可以改用「筆記」。"
+      : `問不到:${(err && err.message) || "未知錯誤"}`;
+  }
+}
+
+/* A question of the reader's own about the selected passage. Asked, it is kept as
+   a shared note like any other answer. */
+function composeQuestion() {
+  const s = pdf.sel;
+  if (!s) return;
+  clearSelection();
+  openSheet(
+    s.text,
+    "",
+    `<button class="act" data-act="sheet-ask">問 AI</button>`
+      + `<button class="act" data-act="sheet-close">取消</button>`
+  );
+  const a = document.getElementById("sheet-a");
+  a.innerHTML = `<textarea id="sheet-input" placeholder="對這段想問什麼?"></textarea>`;
+  a.querySelector("textarea").focus();
+}
+
+async function askOwn() {
+  const s = pdf.sel;
+  const question = (document.getElementById("sheet-input").value || "").trim();
+  if (!s || !question || !state.sample) return;
+  const p = PAPERS[state.paper];
+  openSheet(s.text, "讀這一段…");
+  const target = document.getElementById("sheet-a");
+  try {
+    const res = await state.sample([
+      `論文:${p.title}(${p.venue} ${p.year})`,
+      `以下是第 ${s.page} 頁的一段原文:`,
+      "",
+      s.text,
+      "",
+      `讀者的問題:${question}`,
+      "",
+      "請用繁體中文回答,技術名詞保留英文,數學一律用 Unicode 純文字,絕不使用 LaTeX。",
+      "只根據這一段和你對這篇論文的理解作答,不確定就說不確定,不要編造數字。",
+    ].join("\n"), {
+      modelTier: "default",
+      onText: ({ text }) => { target.textContent = text; },
+    });
+    target.textContent = res.text;
+    await addNote({
+      paper: p.id,
+      section: `第 ${s.page} 頁`,
+      anchor: s.page,
+      quote: s.text.slice(0, 400),
+      question,
+      body: res.text,
+      kind: "ask",
+      by: state.me,
+    });
+  } catch (err) {
+    target.textContent = err && err.code === "not_granted"
+      ? "這個瀏覽器沒有授權問 AI。"
+      : `問不到:${(err && err.message) || "未知錯誤"}`;
+  }
+}
+
+function noteSelection() {
+  const s = pdf.sel;
+  if (!s) return;
+  clearSelection();
+  openSheet(
+    s.text,
+    "",
+    `<button class="act" data-act="sheet-save">存筆記</button>`
+      + `<button class="act" data-act="sheet-close">取消</button>`
+  );
+  const a = document.getElementById("sheet-a");
+  a.innerHTML = `<textarea id="sheet-input" placeholder="寫下你對這一段的理解、疑問或要追的線索…"></textarea>`;
+  a.querySelector("textarea").focus();
+}
+
+function renderDive() {
+  const p = PAPERS[state.paper];
+  if (!p.dive) { view.innerHTML = `<div class="hint">這篇還沒有深度講解。</div>`; return; }
+  const close = p.close
+    ? `<hr class="part"><h2 class="part">逐節精讀</h2>`
+      + `<div class="hint">方法與實驗逐節講解。講到哪張圖表,原圖就放在那裡,點圖可以放大。</div>`
+      + md(p.close, state.paper)
+    : `<div class="hint">逐節精讀還沒寫。在電腦上分析完這篇再重建帶出門頁面就會帶上。</div>`;
+  view.innerHTML = `<div class="dive">${md(p.dive, state.paper)}${close}</div>`;
+  Typeset.blocks(view);
+}
+
+/* ---- slides: to read on the way, not to edit ------------------------------ */
+function renderSlides() {
+  const p = PAPERS[state.paper];
+  const decks = p.decks || [];
+  if (!decks.length) {
+    view.innerHTML = `<div class="hint">這篇還沒有簡報。在電腦上的「簡報」分頁生成後,重建帶出門頁面就會帶上。</div>`;
+    return;
+  }
+  view.innerHTML = decks.map((d, di) => {
+    const slides = d.slides.map((s, si) => {
+      const fig = s.figure ? inlineFigure(s.figure, `data-deckfig="${di}:${si}"`) : "";
+      const tables = (s.tables || []).map((t) => rowsTable(t.rows, t.header)).join("");
+      const bullets = s.bullets.length ? `<ul>${s.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
+      const notes = s.notes
+        ? `<details class="notes"><summary>講者備註</summary><p>${esc(s.notes).replace(/\n/g, "<br>")}</p></details>`
+        : "";
+      return `<article class="slidecard"><div class="num">${si + 1} / ${d.slides.length}`
+        + `${s.section ? " · " + esc(s.section) : ""}</div><h3>${esc(s.title)}</h3>`
+        + `${s.takeaway ? `<p class="take">${esc(s.takeaway)}</p>` : ""}${bullets}${tables}${fig}${notes}</article>`;
+    }).join("");
+    return `<section class="deck"><div class="deckhead"><span class="mode">${esc(d.label)}</span>`
+      + `<h2>${esc(d.title)}</h2><div class="meta">${d.slides.length} 頁 · ${d.minutes} 分鐘 · ${esc(d.audience)}`
+      + `${d.edited ? " · 手動修改過" : ""}</div>`
+      + `<a class="open" href="${d.href}" target="_blank" rel="noopener">開啟排版好的簡報 ↗</a></div>`
+      + `<div class="hint">這裡是簡報的文字版,方便路上看;要改內容,回電腦上的「簡報」分頁。</div>`
+      + slides + `</section>`;
+  }).join("");
+}
+
+/* ---- the survey of the list these papers came from ------------------------ */
+function renderSurvey() {
+  const s = SURVEYS[state.survey];
+  if (!s) return;
+  document.getElementById("surveypills").innerHTML = SURVEYS.map((x, i) =>
+    `<button data-survey="${i}" aria-pressed="${i === state.survey}">${esc(x.name)}</button>`
+  ).join("");
+  const when = (s.written_at || "").slice(0, 10);
+  document.getElementById("surveybody").innerHTML =
+    `<h2 class="part">清單綜覽 · ${esc(s.name)}</h2>`
+    + `<div class="hint">依清單 ${s.papers_total} 篇撰寫於 ${esc(when)};這份頁面帶了其中 ${s.papers.length} 篇。</div>`
+    + md(s.body, null);
+}
+
+/* Each entry answers one question: should I read this one too. So the default order
+   is that answer, and paper order is for following a superscript you just met. */
+function renderCites() {
+  const p = PAPERS[state.paper];
+  const rows = (p.cites || []).slice();
+  const later = ((p.context || {}).followups || []).length;
+  const side = `<div class="jump">`
+    + `<button data-side="refs"${state.citeSide === "refs" ? ' style="color:var(--surface);background:var(--ink)"' : ""}>參考文獻 ${rows.length}</button>`
+    + `<button data-side="later"${state.citeSide === "later" ? ' style="color:var(--surface);background:var(--ink)"' : ""}>後續研究 ${later}</button>`
+    + `</div>`;
+  if (state.citeSide === "later") {
+    view.innerHTML = storyHtml() + side + laterHtml();
+    return;
+  }
+  if (!rows.length) {
+    view.innerHTML = storyHtml() + side + `<div class="hint">這篇還沒有引用解析。</div>`;
+    return;
+  }
+  const rank = (c) => (VERDICTS[c.verdict] ? VERDICTS[c.verdict][1] : 3);
+  if (state.citeOrder === "verdict") {
+    rows.sort((a, b) =>
+      rank(a) - rank(b)
+      || (a.basis === "title") - (b.basis === "title")
+      || (b.influential || 0) - (a.influential || 0)
+      || (b.citations || 0) - (a.citations || 0));
+  } else {
+    const num = (c) => (/^\d+$/.test(c.key) ? Number(c.key) : 1e6);
+    rows.sort((a, b) => num(a) - num(b) || String(a.key).localeCompare(String(b.key)));
+  }
+
+  const quoted = rows.filter((c) => c.basis !== "title").length;
+  const worth = rows.filter((c) => rank(c) <= 1).length;
+  const on = (o) => (state.citeOrder === o ? ' style="color:var(--ink);background:var(--accent-soft)"' : "");
+  const head = `<div class="hint"><b>${rows.length}</b> 筆參考文獻 · ${quoted} 筆讀得到引用句,`
+    + `${rows.length - quoted} 筆只能從標題判斷 · 其中 <b>${worth}</b> 筆值得往下讀</div>`
+    + `<div class="jump">`
+    + `<button data-order="verdict"${on("verdict")}>值得讀的排前面</button>`
+    + `<button data-order="number"${on("number")}>照論文編號</button>`
+    + `</div>`;
+
+  view.innerHTML = storyHtml() + side + head + rows.map((c) => {
+    const cls = VERDICTS[c.verdict] ? VERDICTS[c.verdict][0] : "skip";
+    const meta = [];
+    if (c.year) meta.push(esc(String(c.year)));
+    if (c.venue) meta.push(esc(c.venue));
+    if (c.citations) meta.push(`${c.citations.toLocaleString()} cites`);
+    if (c.influential) meta.push("influential");
+    if (c.basis === "title") meta.push(`<span class="guess">文中未抓到引用句</span>`);
+    if (c.doi) meta.push(`<a href="https://doi.org/${encodeURIComponent(c.doi)}" target="_blank" rel="noopener">原文</a>`);
+    const fields = cls === "skip"
+      ? [["與原文的關係", c.purpose]]
+      : [["與原文的關係", c.purpose], ["這篇在做什麼", c.gist], ["判斷", c.why]];
+    const body = fields.filter(([, v]) => v)
+      .map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+    const quotes = cls === "skip" ? "" : (c.contexts || [])
+      .map((q) => `<blockquote>${esc(q)}</blockquote>`).join("");
+    return `<div class="cite ${cls}">
+      <div class="cite-top">
+        <span class="pill ${cls}">${esc(c.verdict || "略過")}</span>
+        <span class="refno">[${esc(c.key)}]</span>
+      </div>
+      <p class="ref-title">${esc(c.title || "(此筆沒有解析出標題)")}</p>
+      <div class="ref-meta">${meta.join(" · ")}</div>
+      <dl>${body}</dl>
+      ${quotes}
+    </div>`;
+  }).join("");
+}
+
+/* An edge between two papers in this page is a jump, which the desktop cannot do:
+   there the same link moves the paper to the front of the queue instead. */
+function storyHtml() {
+  const p = PAPERS[state.paper];
+  const c = p.context || {};
+  const o = c.overview;
+  if (!o) {
+    return `<div class="hint"><b>研究脈絡</b> · 還沒整理。在桌面 app 的「引用」分頁按「整理研究脈絡」,`
+      + `下次重建這一頁就會帶過來。</div>`;
+  }
+  const reading = (o.reading || []).map((x, i) =>
+    `<li><span class="em">[${esc(x.direction || "")}]</span> <b>${esc(x.title)}</b>`
+    + `<div class="em" style="color:var(--muted)">${esc(x.why || "")}</div></li>`).join("");
+  return `<h3 class="lin">研究脈絡</h3><p class="story">${esc(o.summary)}</p>`
+    + (reading ? `<h3 class="lin">接下來必讀</h3><ol class="reading">${reading}</ol>` : "");
+}
+
+function laterHtml() {
+  const p = PAPERS[state.paper];
+  const c = p.context || {};
+  const here = new Map(PAPERS.map((x, i) => [x.id, i]));
+  const RANK = { "必讀": 0, "值得": 1, "參考": 2, "略過": 3 };
+  const rows = (c.followups || []).slice();
+  if (state.citeOrder === "number") rows.sort((a, b) => (b.citations || 0) - (a.citations || 0));
+  else rows.sort((a, b) => (RANK[a.verdict] ?? 4) - (RANK[b.verdict] ?? 4) || (b.citations || 0) - (a.citations || 0));
+  if (!rows.length) {
+    return `<div class="hint">${c.checked ? "目前沒有論文引用它(OpenAlex 與 Semantic Scholar 都查過)。" : "還沒查整個領域的後續研究。"}</div>`;
+  }
+  return rows.map((r) => {
+    const cls = VERDICTS[r.verdict] ? VERDICTS[r.verdict][0] : "skip";
+    const meta = [r.year || "", esc(r.venue || ""),
+      r.citations ? `${Number(r.citations).toLocaleString()} cites` : ""].filter(Boolean);
+    const idx = r.id === undefined ? undefined : here.get(r.id);
+    if (idx !== undefined) meta.push(`<button class="figref" data-paper="${idx}">在這份頁面裡</button>`);
+    else if (r.doi) meta.push(`<a href="https://doi.org/${encodeURIComponent(r.doi)}" target="_blank" rel="noopener">原文</a>`);
+    const fields = [["與原文的關係", r.relation], ["判斷", r.why]].filter(([, v]) => v)
+      .map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
+    return `<div class="cite ${cls}">
+      <div class="cite-top"><span class="pill ${cls}">${esc(r.verdict || "略過")}</span></div>
+      <p class="ref-title">${esc(r.title)}</p>
+      <div class="ref-meta">${meta.join(" · ")}</div>
+      <dl>${fields}</dl>
+      ${r.context ? `<blockquote>它引用原文的句子:${esc(r.context)}</blockquote>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function notesFor(p) {
+  return state.notes.filter((x) => x.paper === p.id)
+    .sort((a, b) => (Number(a.anchor) || 1e9) - (Number(b.anchor) || 1e9)
+      || String(a.created || "").localeCompare(String(b.created || "")));
+}
+
+function noteCard(x) {
+  // Notes from before the PDF viewer anchored to a paragraph number, not a page;
+  // only a note labelled with its page can be sent back to one.
+  const page = /^第 \d+ 頁/.test(x.section || "") ? Number(x.anchor) || 0 : 0;
+  const mine = !x.by || x.by === state.me || state.isOwner;
+  const where = [
+    x.kind === "ask" ? "問 AI" : "筆記",
+    page ? `第 ${page} 頁` : (x.section || ""),
+    x.created ? esc(String(x.created).slice(0, 10)) : "",
+  ].filter(Boolean).join(" · ");
+  const by = x.by ? ` · <span data-by="${esc(x.by)}">…</span>` : "";
+  const back = page && x.quote
+    ? `<button class="goto" data-goto="${esc(x.id)}">↩ 回原文</button>` : "";
+  const del = mine ? `<button class="del" data-del="${esc(x.id)}">刪除</button>` : "";
+  return `<div class="note ${x.kind === "ask" ? "ask" : ""}">
+      <div class="where">${where}${by}</div>
+      ${x.quote ? `<blockquote>${esc(x.quote)}</blockquote>` : ""}
+      ${x.question ? `<div class="q">${esc(x.question)}</div>` : ""}
+      <div class="body">${esc(x.body)}</div>
+      <div class="foot">${back}${del}</div>
+    </div>`;
+}
+
+function deskCard(n, i) {
+  const { quote, thought } = splitDesk(n.body);
+  const back = n.page && quote
+    ? `<button class="goto" data-goto-desk="${i}">↩ 回原文</button>` : "";
+  return `<div class="note desk">
+      <div class="where">桌面筆記${n.page ? " · 第 " + n.page + " 頁" : ""}${n.created ? " · " + esc(n.created.slice(0, 10)) : ""}</div>
+      ${quote ? `<blockquote>${esc(quote)}</blockquote>` : ""}
+      <div class="body">${esc(thought)}</div>
+      <div class="foot">${back}</div>
+    </div>`;
+}
+
+function renderNoteList() {
+  const host = document.getElementById("notelist");
+  if (!host) return;
+  const p = PAPERS[state.paper];
+  const shared = notesFor(p);
+  const desk = (p.desk_notes || []).map(deskCard).join("");
+  const empty = !shared.length && !desk
+    ? `<div class="hint">還沒有人寫筆記。在「原文」分頁框選一段,就能翻譯、講解或寫筆記,大家都看得到。</div>`
+    : "";
+  host.innerHTML = empty + desk + shared.map(noteCard).join("");
+  queueMicrotask(fillNames);
+}
+
+function renderNotes() {
+  const p = PAPERS[state.paper];
+  let where;
+  if (state.storage !== "cloud") {
+    where = "目前只存在這台裝置的瀏覽器裡(沒有登入,或這個檢視沒有開共享資料)。";
+  } else if (state.canWrite === false) {
+    where = "你目前只能讀。要一起寫筆記,請頁面擁有者在 Share 把你設為 Contributor。";
+  } else {
+    where = "筆記和問答存在這份頁面上,打開這個連結的人都看得到,也會帶回擁有者的桌面 app。";
+  }
+  const ask = state.sample ? `
+    <div class="askbox">
+      <textarea id="askall" placeholder="問這篇論文的任何問題…答案會存成大家都看得到的筆記"></textarea>
+      <div class="row"><button class="primary" data-askall="1">問 AI</button>
+      <span>使用目前連接的 AI 服務</span></div>
+    </div>` : "";
+  view.innerHTML = `<div class="hint"><b>${notesFor(p).length + (p.desk_notes || []).length}</b> 則 · ${where}</div>`
+    + ask + `<div id="notelist"></div>`;
+  renderNoteList();
+}
+
+function render() {
+  renderChrome();
+  if (state.view === "pdf") { renderPdf(); return; }
+  view.className = "";
+  if (state.view === "dive") renderDive();
+  else if (state.view === "cites") renderCites();
+  else if (state.view === "slides") renderSlides();
+  else renderNotes();
+  restoreScroll();
+}
+
+/* ---- scroll memory ---------------------------------------------------- */
+const scrollKey = () => `pocket.pos.${PAPERS[state.paper].id}.${state.view}`;
+let scrollTimer = null;
+function restoreScroll() {
+  let y = 0;
+  try { y = Number(localStorage.getItem(scrollKey()) || 0); } catch (e) { y = 0; }
+  window.scrollTo(0, y);
+  updateMeter();
+}
+window.addEventListener("scroll", () => {
+  updateMeter();
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => {
+    try { localStorage.setItem(scrollKey(), String(window.scrollY)); } catch (e) { /* ignore */ }
+  }, 250);
+}, { passive: true });
+
+function updateMeter() {
+  const h = document.documentElement.scrollHeight - window.innerHeight;
+  meter.style.width = h > 40 ? `${Math.min(100, (window.scrollY / h) * 100)}%` : "0%";
+}
+
+/* ---- whole-paper questions -------------------------------------------- */
+/* The page carries the PDF, so the paper's full text is one pass of pdf.js away;
+   no extracted copy has to travel with it. */
+const fullText = {};
+async function paperText(p) {
+  if (fullText[p.id]) return fullText[p.id];
+  if (!p.pdf || typeof pdfjsLib === "undefined") return "";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
+  const doc = (pdf.id === p.id && pdf.doc) ? pdf.doc : await pdfjsLib.getDocument({ url: p.pdf }).promise;
+  const parts = [];
+  for (let i = 1; i <= doc.numPages; i += 1) {
+    const c = await (await doc.getPage(i)).getTextContent();
+    parts.push(`[第 ${i} 頁]\n` + c.items.map((it) => it.str + (it.hasEOL ? "\n" : "")).join(""));
+  }
+  if (doc !== pdf.doc) doc.destroy();
+  fullText[p.id] = parts.join("\n\n");
+  return fullText[p.id];
+}
+
+async function askWhole() {
+  const box = document.getElementById("askall");
+  const question = (box && box.value || "").trim();
+  if (!question || !state.sample) return;
+  const p = PAPERS[state.paper];
+  openSheet(question, "讀這篇論文…");
+  const target = document.getElementById("sheet-a");
+  try {
+    const text = await paperText(p);
+    const prompt = [
+      `論文:${p.title}(${p.venue} ${p.year})`,
+      "",
+      "摘要:", p.abstract || "(無)",
+      "",
+      "全文(依頁標示):", text.slice(0, 60000) || "(沒有可讀的全文)",
+      "",
+      `問題:${question}`,
+      "",
+      "請用繁體中文回答,技術名詞保留英文。數學一律用 Unicode 純文字(例如 Dice = 2·|A∩B| / (|A|+|B|)),",
+      "絕不使用 LaTeX。只根據這篇論文作答,引用數字時註明第幾頁;文中沒有的就說沒有,不要編造。",
+    ].join("\n");
+    const res = await state.sample(prompt, {
+      modelTier: "default",
+      onText: ({ text: t }) => { target.textContent = t; },
+    });
+    target.textContent = res.text;
+    if (box) box.value = "";
+    await addNote({
+      paper: p.id,
+      section: "整篇",
+      anchor: 0,
+      quote: "",
+      question,
+      body: res.text,
+      kind: "ask",
+      by: state.me,
+    });
+  } catch (err) {
+    target.textContent = err && err.code === "not_granted"
+      ? "這個瀏覽器沒有授權問 AI。"
+      : `問不到:${(err && err.message) || "未知錯誤"}`;
+  }
+}
+
+/* ---- notes ------------------------------------------------------------ */
+async function addNote(entry) {
+  const note = { id: `n${Date.now()}${Math.random().toString(36).slice(2, 6)}`, created: new Date().toISOString(), ...entry };
+  state.notes.push(note);
+  saveLocal();
+  if (state.view === "pdf") renderChrome(); else render();
+  if (state.db && state.canWrite !== false) {
+    try { await state.db.collection("notes").doc(note.id).set(note); }
+    catch (e) {
+      // A view-only reader's write is refused this way; say so once and stop
+      // offering what cannot be kept.
+      if (e && e.code === "invalid_argument") {
+        state.canWrite = false;
+        toast("這則筆記只存在你的瀏覽器:你目前只能讀這份頁面。要一起寫,請擁有者把你設為 Contributor。");
+      } else {
+        toast("筆記暫時沒存上去,先留在這台裝置,下次開頁面會再送一次。");
+      }
+    }
+  }
+}
+
+async function removeNote(id) {
+  const note = state.notes.find((x) => x.id === id);
+  if (note && note.by && note.by !== state.me && !state.isOwner) return;
+  state.notes = state.notes.filter((x) => x.id !== id);
+  saveLocal();
+  if (state.view === "pdf") renderChrome(); else render();
+  if (state.db) {
+    try { await state.db.collection("notes").doc(id).delete(); } catch (e) { /* ignore */ }
+  }
+}
+
+/* ---- paragraph tools -------------------------------------------------- */
+function closeTools() {
+  document.querySelectorAll(".tools, .composer").forEach((el) => el.remove());
+  document.querySelectorAll("p.para.open").forEach((el) => el.classList.remove("open"));
+}
+
+function openTools(para) {
+  const wasOpen = para.classList.contains("open");
+  closeTools();
+  if (wasOpen) return;
+  para.classList.add("open");
+  const row = document.createElement("div");
+  row.className = "tools";
+  row.innerHTML = `<button data-act="note">寫筆記</button>${state.sample ? `<button data-act="ask" class="primary">問這段</button>` : ""}`;
+  para.after(row);
+}
+
+function openComposer(para) {
+  const box = document.createElement("div");
+  box.className = "composer";
+  box.innerHTML = `
+    <textarea id="note-input" placeholder="寫下你對這一段的理解、疑問或要追的線索…"></textarea>
+    <div class="tools" style="margin:0">
+      <button class="primary" data-act="save">存筆記</button>
+      <button data-act="cancel">取消</button>
+    </div>`;
+  para.nextElementSibling.replaceWith(box);
+  box.querySelector("textarea").focus();
+}
+
+async function askAbout(para) {
+  const p = PAPERS[state.paper];
+  const quote = para.textContent.trim();
+  const panel = document.createElement("div");
+  panel.className = "answer";
+  panel.innerHTML = `<span class="who">AI</span><span id="ans">讀這一段…</span>`;
+  para.nextElementSibling.replaceWith(panel);
+  const target = panel.querySelector("#ans");
+
+  const prompt = [
+    `論文:${p.title}(${p.venue} ${p.year})`,
+    `段落所屬章節:${para.dataset.sec}`,
+    "",
+    "以下是論文原文的一段:",
+    quote,
+    "",
+    "請用繁體中文解釋這一段在說什麼,技術名詞保留英文,數學一律用 Unicode 純文字,",
+    "絕不使用 LaTeX。說明它為什麼重要、以及它和這篇論文整體主張的關係。",
+    "只根據這一段和你對這篇論文的理解作答,不確定就說不確定,不要編造數字。",
+    "三到五句話,不要前言。",
+  ].join("\n");
+
+  try {
+    const res = await state.sample(prompt, {
+      modelTier: "default",
+      onText: ({ text }) => { target.textContent = text; },
+    });
+    target.textContent = res.text;
+    await addNote({
+      paper: p.id,
+      section: para.dataset.sec,
+      anchor: Number(para.dataset.i),
+      quote: quote.slice(0, 400),
+      question: "這一段在說什麼?",
+      body: res.text,
+      kind: "ask",
+      by: state.me,
+    });
+  } catch (err) {
+    target.textContent = err && err.code === "not_granted"
+      ? "這個瀏覽器沒有授權問 AI。可以改用「寫筆記」。"
+      : `問不到:${(err && err.message) || "未知錯誤"}`;
+  }
+}
+
+/* ---- events ----------------------------------------------------------- */
+document.addEventListener("click", (ev) => {
+  const paperBtn = ev.target.closest("[data-paper]");
+  if (paperBtn) {
+    state.paper = Number(paperBtn.dataset.paper);
+    closeTools();
+    closeSheet();
+    render();
+    return;
+  }
+  const tab = ev.target.closest("[data-view]");
+  if (tab) { state.view = tab.dataset.view; closeTools(); closeSheet(); render(); return; }
+
+  const sel = ev.target.closest("[data-sel]");
+  if (sel) {
+    if (sel.dataset.sel === "note") noteSelection();
+    else if (sel.dataset.sel === "ask") composeQuestion();
+    else askSelection(sel.dataset.sel);
+    return;
+  }
+
+  const pdfBtn = ev.target.closest("[data-pdf]");
+  if (pdfBtn) {
+    const what = pdfBtn.dataset.pdf;
+    if (what === "zoom") setZoom(ZOOMS[(ZOOMS.indexOf(pdf.zoom) + 1) % ZOOMS.length]);
+    else if (what === "trans") askPage();
+    else if (what === "next") goPage(pdf.page + 1);
+    else if (what === "prev") goPage(pdf.page - 1);
+    else document.getElementById("pagejump").classList.toggle("open");
+    return;
+  }
+
+  const pageBtn = ev.target.closest("#pagejump [data-page]");
+  if (pageBtn) {
+    document.getElementById("pagejump").classList.remove("open");
+    goPage(Number(pageBtn.dataset.page));
+    return;
+  }
+
+  const sheetBtn = ev.target.closest('.sheet [data-act]');
+  if (sheetBtn && sheetBtn.dataset.act === "sheet-ask") { askOwn(); return; }
+  if (sheetBtn) {
+    if (sheetBtn.dataset.act === "sheet-save") {
+      const body = (document.getElementById("sheet-input").value || "").trim();
+      const quote = sheet.querySelector(".q").textContent;
+      if (body) {
+        addNote({
+          paper: PAPERS[state.paper].id,
+          section: pdf.sel ? `第 ${pdf.sel.page} 頁` : "",
+          anchor: pdf.sel ? pdf.sel.page : 0,
+          quote: quote.slice(0, 400),
+          body,
+          kind: "note",
+          by: state.me,
+        });
+      }
+    }
+    closeSheet();
+    return;
+  }
+
+  if (ev.target.closest("#surveybtn")) {
+    renderSurvey();
+    document.getElementById("surveybox").showModal();
+    return;
+  }
+  if (ev.target.closest("#surveyclose")) { document.getElementById("surveybox").close(); return; }
+  const pill = ev.target.closest("[data-survey]");
+  if (pill) { state.survey = Number(pill.dataset.survey); renderSurvey(); return; }
+
+  const deckFig = ev.target.closest("[data-deckfig]");
+  if (deckFig) {
+    const [di, si] = deckFig.dataset.deckfig.split(":").map(Number);
+    const f = (((PAPERS[state.paper].decks || [])[di] || {}).slides || [])[si]?.figure;
+    if (f) {
+      document.getElementById("figimg").src = f.src;
+      document.getElementById("figcap").innerHTML =
+        `<b>${esc(f.label)}</b>${f.page ? ` · p${f.page}` : ""} — ${esc(stripLabel(f.caption))}`;
+      const box = document.getElementById("figbox");
+      box._fig = f.page ? f : null;
+      document.getElementById("figgoto").textContent = `↩ 在原文第 ${f.page} 頁看`;
+      document.getElementById("figgoto").hidden = !(f.page && PAPERS[state.paper].pdf);
+      box.showModal();
+    }
+    return;
+  }
+
+  const fig = ev.target.closest("[data-fig]");
+  if (fig) {
+    const want = fig.dataset.fig;
+    const f = PAPERS[state.paper].figures.find((x) => figKey(x.label) === want);
+    if (f) {
+      document.getElementById("figimg").src = f.src;
+      document.getElementById("figcap").innerHTML =
+        `<b>${esc(f.label)}</b> · p${f.page} — ${esc(f.caption.replace(/^(Figure|Table)\s+\d+\s*[:.]\s*/i, ""))}`;
+      const box = document.getElementById("figbox");
+      box._fig = f;
+      document.getElementById("figgoto").textContent = `↩ 在原文第 ${f.page} 頁看`;
+      document.getElementById("figgoto").hidden = !PAPERS[state.paper].pdf;
+      box.showModal();
+    }
+    return;
+  }
+
+  const sideBtn = ev.target.closest("[data-side]");
+  if (sideBtn) { state.citeSide = sideBtn.dataset.side; render(); return; }
+
+  const order = ev.target.closest("[data-order]");
+  if (order) { state.citeOrder = order.dataset.order; render(); return; }
+
+  const jumpBtn = ev.target.closest("[data-jump]");
+  if (jumpBtn) {
+    const target = document.getElementById(jumpBtn.dataset.jump);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  const del = ev.target.closest("[data-del]");
+  if (del) { removeNote(del.dataset.del); return; }
+
+  const back = ev.target.closest("[data-goto]");
+  if (back) {
+    const x = state.notes.find((n) => n.id === back.dataset.goto);
+    if (x) gotoPassage(x.paper, x.anchor, x.quote);
+    return;
+  }
+  const backDesk = ev.target.closest("[data-goto-desk]");
+  if (backDesk) {
+    const p = PAPERS[state.paper];
+    const n = (p.desk_notes || [])[Number(backDesk.dataset.gotoDesk)];
+    if (n) gotoPassage(p.id, n.page, splitDesk(n.body).quote);
+    return;
+  }
+  if (ev.target.closest("[data-askall]")) { askWhole(); return; }
+  if (ev.target.id === "figgoto") {
+    const box = document.getElementById("figbox");
+    box.close();
+    const f = box._fig;
+    if (f) gotoPassage(PAPERS[state.paper].id, f.page, f.caption.split(/\s+/).slice(0, 12).join(" "));
+    return;
+  }
+
+  const act = ev.target.closest("[data-act]");
+  if (act) {
+    const para = document.querySelector("p.para.open");
+    if (!para) return;
+    if (act.dataset.act === "note") openComposer(para);
+    else if (act.dataset.act === "ask") askAbout(para);
+    else if (act.dataset.act === "cancel") closeTools();
+    else if (act.dataset.act === "save") {
+      const body = (document.getElementById("note-input").value || "").trim();
+      if (!body) { closeTools(); return; }
+      addNote({
+        paper: PAPERS[state.paper].id,
+        section: para.dataset.sec,
+        anchor: Number(para.dataset.i),
+        quote: para.textContent.trim().slice(0, 400),
+        body,
+        kind: "note",
+        by: state.me,
+      });
+    }
+    return;
+  }
+
+  const para = ev.target.closest("p.para");
+  if (para) { openTools(para); return; }
+  if (!ev.target.closest(".composer, .answer")) closeTools();
+});
+
+selbar.addEventListener("pointerdown", (ev) => ev.preventDefault());
+
+document.getElementById("figbox").addEventListener("click", (ev) => {
+  if (ev.target.id === "figbox") ev.target.close();
+});
+
+// Paperfact capability bridge: the embedding host supplies its own account/session.
+async function useCapability(name) {
+  try {
+    if (typeof window.paperfact?.use === "function") {
+      return await window.paperfact.use(name);
+    }
+    return await window.claude?.use?.(name) ?? null;
+  } catch {
+    return null;
+  }
+}
+// End Paperfact capability bridge.
+
+/* ---- boot ------------------------------------------------------------- */
+state.notes = localNotes();
+render();
+
+(async () => {
+  const db = await useCapability("db");
+  if (db) {
+    state.db = db;
+    state.storage = "cloud";
+    // Subscribed once, so a note someone else writes appears without a reload.
+    let first = true;
+    db.collection("notes").onSnapshot(async (snap) => {
+      const cloud = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const seen = new Set(cloud.map((x) => x.id));
+      // Anything written while signed out, or before this page could reach the
+      // store, is pushed up once rather than dropped.
+      const stray = first ? state.notes.filter((x) => !seen.has(x.id)) : [];
+      first = false;
+      state.notes = cloud.concat(stray);
+      saveLocal();
+      renderChrome();
+      if (state.view === "notes") {
+        if (document.getElementById("notelist")) renderNoteList(); else render();
+      }
+      if (state.canWrite === false) return;
+      for (const note of stray) {
+        try { await db.collection("notes").doc(note.id).set(note); }
+        catch (e) { if (e && e.code === "invalid_argument") { state.canWrite = false; break; } }
+      }
+    }, () => { /* keep what is on screen; the local copy still renders */ });
+  }
+})();
+
+(async () => {
+  const user = await useCapability("user");
+  if (user) {
+    state.user = user;
+    try { state.me = await user.id(); } catch (e) { /* unattributed notes still save */ }
+    try { state.isOwner = await user.isOwner(); } catch (e) { /* stays false */ }
+    try { state.canWrite = await user.can("data.write"); } catch (e) { /* null: let a write decide */ }
+    if (state.view === "notes") render();
+    fillNames();
+  }
+})();
+
+(async () => {
+  const sample = await useCapability("sample");
+  // The permission resolves well after the first page has been drawn, so the
+  // controls that need it are revealed here rather than at render time.
+  if (sample) { state.sample = sample; renderChrome(); showTransBtn(); }
+})();
+</script>

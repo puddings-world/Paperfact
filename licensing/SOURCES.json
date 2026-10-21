@@ -1,0 +1,42 @@
+[
+  {
+    "file": "LICENSE",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/AGPL-3.0-or-later.txt",
+    "sha256": "d8a6cc31abc16b6748c7a21f21611f5a1ec33f67d22ca23d7da1c19b95496bee"
+  },
+  {
+    "file": "licensing/LGPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/LGPL-3.0-only.txt",
+    "sha256": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1"
+  },
+  {
+    "file": "licensing/GPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/GPL-3.0-only.txt",
+    "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+  },
+  {
+    "file": "licensing/NotoSansTC-OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/3be1884c48c3e45b52ecc725676a08f87776373e/ofl/notosanstc/OFL.txt",
+    "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9"
+  },
+  {
+    "file": "licensing/JetBrainsMono-OFL.txt",
+    "url": "https://raw.githubusercontent.com/google/fonts/6e4b84c976cadb3c49a40fd9a1c203e4f7fcf2da/ofl/jetbrainsmono/OFL.txt",
+    "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+  },
+  {
+    "file": "licensing/KaTeX-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KaTeX/KaTeX/v0.16.11/LICENSE",
+    "sha256": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3"
+  },
+  {
+    "file": "licensing/Mermaid-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/mermaid-js/mermaid/v10.9.1/LICENSE",
+    "sha256": "ec9fb67dcb25eccc416ed56e1aab819222c805a2a4bfe4cb19e7556bf2ffde80"
+  },
+  {
+    "file": "licensing/highlightjs-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/highlightjs/highlight.js/11.10.0/LICENSE",
+    "sha256": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490"
+  }
+]
