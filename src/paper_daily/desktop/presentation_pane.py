@@ -148,7 +148,10 @@ class PresentationPane(QWidget):
         self.history_button.setToolTip("還原重新產生前的整份簡報；逐次手動修改請用「復原」。")
         self.history_button.clicked.connect(self._restore_history)
         self.toolbar.addWidget(self.history_button)
-        self.export_button = QPushButton("匯出")
+        self.export_button = QPushButton("匯出簡報…")
+        self.export_button.setToolTip(
+            "匯出目前這份簡報，預設為 PDF；可選 HTML、講稿或可編輯格式。"
+            "分享整份研究清單請用上方「研究資料」。")
         self.export_button.clicked.connect(self._export)
         self.toolbar.addWidget(self.export_button)
         self.google_button = QToolButton()
@@ -169,7 +172,7 @@ class PresentationPane(QWidget):
         self.include_notes = QCheckBox("其他格式含講者備註", self)
         self.include_notes.setChecked(True)
         self.include_notes.hide()
-        export_options = self.toolbar.addAction("匯出選項")
+        export_options = self.toolbar.addAction("簡報匯出選項")
         export_menu = QMenu(self)
         notes_action = export_menu.addAction("HTML／ODP 含講者備註")
         notes_action.setCheckable(True)
@@ -1639,6 +1642,7 @@ class PresentationPane(QWidget):
             self.status.setText("簡報已保存至原論文，切回該論文與版本即可查看。")
 
     def _failed(self, reason: str) -> None:
+        self.runner.activity.finish(False)
         self._generating = False
         self._update_controls()
         self.status.setText(f"簡報未生成，已保存的版本未變動：{reason}")
@@ -1884,12 +1888,20 @@ class PresentationPane(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(dest.resolve())))
 
     def _export_pdf(self, dest: Path) -> None:
+        if self.busy or self.deck is None:
+            return
         try:
             from paper_daily.desktop.presentation_pdf import PdfExport
         except ImportError:
             self.status.setText("PDF 匯出需要 Qt GUI；可先匯出 HTML 再從瀏覽器列印 PDF。")
             return
+        from paper_daily.desktop.activity import begin
+
+        self._pdf_activity = begin(self, "匯出 PDF 投影片", key=f"slides-pdf:{self.paper_id}")
+        if not self._pdf_activity.accepted:
+            return
         job = PdfExport(self)
+        job.progress.connect(self._pdf_progress)
         self._pdf_job = job
         job.finished.connect(self._pdf_finished)
         job.failed.connect(self._pdf_failed)
@@ -1897,7 +1909,12 @@ class PresentationPane(QWidget):
         self.status.setText("正在匯出 PDF 投影片；講者備註請另外匯出 HTML 或 Markdown。")
         job.start(self.deck, dest)
 
+    def _pdf_progress(self, done, total):
+        self._pdf_activity.update(dict(stage=f"已繪製 {done}/{total} 頁",
+                                       completed=done, total=total))
+
     def _pdf_finished(self, filename: str) -> None:
+        self._pdf_activity.finish(message="PDF 已匯出")
         job, self._pdf_job = self._pdf_job, None
         self._update_controls()
         self.status.setText(f"PDF 已匯出：{Path(filename).name}")
@@ -1905,6 +1922,7 @@ class PresentationPane(QWidget):
             job.deleteLater()
 
     def _pdf_failed(self, reason: str) -> None:
+        self._pdf_activity.finish(False, "PDF 未匯出，請查看簡報區的原因")
         job, self._pdf_job = self._pdf_job, None
         self._update_controls()
         self.status.setText(f"PDF 未匯出：{reason}")
@@ -1981,7 +1999,12 @@ class PresentationPane(QWidget):
                     return None, str(exc)
                 return None, f"Google 連線失敗：{type(exc).__name__}"
 
-        self.runner.start("", self._google_done, self._google_failed, call=upload)
+        previous_label = getattr(self.runner, "activity_label", None)
+        self.runner.activity_label = "建立 Google Slides"
+        try:
+            self.runner.start("", self._google_done, self._google_failed, call=upload)
+        finally:
+            self.runner.activity_label = previous_label
 
     def _google_done(self, result: str) -> None:
         data = json.loads(result)

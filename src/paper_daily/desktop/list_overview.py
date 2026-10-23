@@ -191,8 +191,14 @@ class ListOverview(QWidget):
         titles.addWidget(self.summary)
         header.addLayout(titles, 1)
         self.import_button = QPushButton("匯入研究資料包…")
+        self.import_button.setToolTip("開啟資料包並預覽；沿用包內清單名稱與內容。")
         self.import_button.clicked.connect(window._import_bundle)
         header.addWidget(self.import_button, 0, Qt.AlignmentFlag.AlignBottom)
+        self.export_button = QPushButton("匯出選取清單…")
+        self.export_button.setEnabled(False)
+        self.export_button.setToolTip("請先選擇清單。")
+        self.export_button.clicked.connect(self.export_selected)
+        header.addWidget(self.export_button, 0, Qt.AlignmentFlag.AlignBottom)
         self.create_button = QPushButton("＋ 建立清單")
         self.create_button.setObjectName("primary")
         self.create_button.clicked.connect(window._import_list)
@@ -288,10 +294,6 @@ class ListOverview(QWidget):
         self.rename_button.setEnabled(False)
         self.rename_button.clicked.connect(self.rename_selected)
         row.addWidget(self.rename_button)
-        self.export_button = QPushButton("匯出資料包…")
-        self.export_button.setEnabled(False)
-        self.export_button.clicked.connect(self.export_selected)
-        row.addWidget(self.export_button)
         detail.addLayout(row)
         body.addWidget(self.actions)
         layout.addWidget(self.body, 1)
@@ -384,7 +386,7 @@ class ListOverview(QWidget):
         self.up_next.setText(up_next_html(lists.up_next(list_id, 6) if list_id else [],
                                           self.win.pal))
         self.export_button.setToolTip(
-            f"匯出「{name}」當前已儲存的內容，包含已下載 PDF、分析、圖表與置頂。"
+            f"匯出「{name}」整份清單的研究資料包：已下載 PDF、分析、筆記及簡報等已儲存內容。"
             if list_id else "請先選擇清單。"
         )
 

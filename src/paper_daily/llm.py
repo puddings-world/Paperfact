@@ -294,6 +294,9 @@ def complete_result(
 
     feedback.safe_record("ai.started", task, backend=cfg.backend, model=cfg.model,
                          input_chars=len(prompt), node_id=request_id)
+    from paper_daily.work_progress import report
+
+    report(f"等待 {cfg.backend} / {cfg.effective_model} 回覆")
     start = time.monotonic()
     try:
         result = provider.complete(request, cfg, _post)
@@ -301,6 +304,7 @@ def complete_result(
         feedback.safe_record("ai.completed", task, backend=cfg.backend, model=cfg.model,
                              success=False, node_id=request_id)
         return Completion(None, f"Invalid AI endpoint: {exc}", request_id=request_id)
+    report("已收到模型回覆，正在核對與整理內容")
     result = replace(
         result,
         request_id=request_id,

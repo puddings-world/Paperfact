@@ -105,6 +105,10 @@ class AnalysisBar(QWidget):
             state = analyze.status(conn, self.paper_id)
             failures = {s: analyze.failed(conn, self.paper_id, s) or "" for s in state}
         mine = self.win.analysis_running(self.paper_id)
+        activity = getattr(self.win, "_analysis_activity", None)
+        if mine and activity is not None:
+            activity.update(dict(completed=sum(bool(v) for v in state.values()),
+                                 total=len(state), paper_id=self.paper_id))
         # Idle work on the papers ahead can include this one, so any job is watched.
         busy = self.win.analysis_running()
         new = [s for s, ok in state.items() if ok and self._state and not self._state.get(s)]

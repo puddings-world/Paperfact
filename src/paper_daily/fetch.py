@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import tempfile
+import threading
 from pathlib import Path
 
 from paper_daily.config import PDF_DIR, TEXT_DIR, ensure_dirs
@@ -60,8 +62,15 @@ def pdf_candidates(row: sqlite3.Row) -> list[str]:
 
 def ensure_pdf(row: sqlite3.Row) -> Path | None:
     """Download the PDF if we do not have it. Returns the local path, or None."""
+    from paper_daily.pdf_downloads import paper_lock
+
     ensure_dirs()
     dest = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
+    with paper_lock(dest, threading.Event()):
+        return _ensure_pdf_locked(row, dest)
+
+
+def _ensure_pdf_locked(row, dest):
     if dest.exists() and dest.stat().st_size > 1024:
         return dest
 
@@ -71,7 +80,16 @@ def ensure_pdf(row: sqlite3.Row) -> Path | None:
         except Exception:
             continue
         if blob[:5] == b"%PDF-":
-            dest.write_bytes(blob)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=dest.parent,
+                                                 suffix=".part", delete=False) as f:
+                    temporary = Path(f.name)
+                    f.write(blob)
+                temporary.replace(dest)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
             return dest
     return None
 

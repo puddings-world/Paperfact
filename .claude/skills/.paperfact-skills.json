@@ -1,4 +1,6 @@
 {
+  "agentic-job-progress/SKILL.md": "4ce4f62b3ee795d9abc3312536e48072bef10ddce7ca39ea7e9b125e2bc30b14",
+  "agentic-job-progress/references/evidence.md": "782db170366c8d99a75bf1bbd8a499724d9e6b317942b7028a4952cbbe21120b",
   "agentic-pattern-harvest/SKILL.md": "975e9183adbd26d43de3d720dcbae0e2a4da9bf0409ed50dbd48e3d653507d29",
   "agentic-pattern-harvest/references/evidence-template.md": "8648b9a4173ed70b3f1fc9be2d8d68cbdf713e0bd0f75b9aeee0dfd3515e1520",
   "agentic-private-events/SKILL.md": "8faf33a6eceb5d390d9b307396e2b8508d745d88ead15bcdf10cc3a0b6bce8c3",
@@ -6,6 +8,8 @@
   "agentic-private-events/references/evidence.md": "d2c0404c532d5b975ea4ee0e72c26608c7584d9ed609aabfa92e1b66518c9c37",
   "agentic-provider-routing/SKILL.md": "38411bf00888d9d43a029613197e96b12de9270540c3202bed98cbdee60cea13",
   "agentic-provider-routing/references/evidence.md": "061d59b786d4fedfdbe9d5f657075c46bba91fb407dd766577d22c6c4246eeed",
+  "agentic-research-planning/SKILL.md": "d044e1874019d12547d80a725aef9a9ec647fbc734f1a0195fc185caa88192be",
+  "agentic-research-planning/references/evidence.md": "4c6b906993ca7855e100d2d783a03a7734ab7ed26d5724cf4a8a642f5a59dd89",
   "agentic-usage-refresh/SKILL.md": "9d09f3c9b48464b32a96254fa472ea9801b521c5dc89ce67deb6a434ac358d98",
   "agentic-usage-refresh/references/evidence.md": "a78189929cfdf933f4702fd9e7b30f32441c248372a4b4ca5c9209666b34c0c1"
 }

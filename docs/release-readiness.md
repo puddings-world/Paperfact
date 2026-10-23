@@ -1,8 +1,22 @@
-# Release readiness — 2026-10-21
+# Release readiness
 
-The next useful milestone is a **colleague preview**, followed by a public beta.
-This is a readiness assessment, not a published release or a guarantee that every
-provider works for every account.
+## 0.2.0 preview — 2026-10-24
+
+This candidate includes topic research routes, parallel PDF downloads, shared
+background progress, list-scoped transfer controls and clearer cross-platform
+installation instructions. The tag workflow runs the full check and frozen-app
+research round trip separately on Windows, macOS and Linux before creating a draft.
+See the [0.2.0 release](https://github.com/puddings-world/Paperfact/releases/tag/v0.2.0)
+for its final artifact and acceptance evidence. Builds remain unsigned previews;
+automated acceptance does not verify real provider accounts or Google OAuth.
+
+## Historical 0.1.0 assessment — 2026-10-21
+
+The **v0.1.0 colleague preview is published** on
+[Releases](https://github.com/puddings-world/Paperfact/releases/tag/v0.1.0).
+The table below records the release assessment made on 2026-10-21; it is not
+acceptance evidence for later source changes or every platform/account.
+For current installation instructions and architectures, see [Installation](install.md).
 
 ## Verified status
 
@@ -18,7 +32,6 @@ provider works for every account.
 | Privacy | Research bundles exclude account settings; aggregate feedback is opt-in | Review the complete Git history and screenshot redistribution rights before publication |
 
 GitHub build evidence: [successful Release workflow](https://github.com/puddings-world/Paperfact/actions/runs/39463606993).
-This link requires access while the repository is private.
 
 A local pattern scan covered 935 reachable historical blobs of at most 2 MB and
 the Git-visible working tree. No configured credential pattern matched. Two older
@@ -44,10 +57,10 @@ resolve. The two AI screenshots use synthetic identities and usage.
    preview/beta only after these checks; retain a stable-release gate for unresolved
    cross-platform and live-account checks.
 
-The version is currently `0.1.0`, prepared on `beta/0.1.0`. Keep the first release
+The initial `0.1.0` candidate was prepared on `beta/0.1.0`. Keep preview releases
 marked as a prerelease. A public repository and a stable installer are separate decisions.
 
-## Installation details for eventual binaries
+## Installation details for preview binaries
 
 The build produces a Windows per-user setup EXE, an Apple silicon DMG and a Linux
 x86-64 AppImage. It bundles Python and Qt; provider CLIs are separate prerequisites

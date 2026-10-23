@@ -7,7 +7,7 @@ a rewrite, and lets the reader edit the result like a note.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QProcess, QProcessEnvironment
+from PySide6.QtCore import QProcess
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -129,10 +129,19 @@ class SurveyDialog(QDialog):
             if answer != QMessageBox.StandardButton.Yes:
                 return
             args.append("--force")
+        from paper_daily.desktop.activity import begin, process_environment
+
+        self._activity = begin(self, "撰寫清單綜覽", key=f"survey:{self.list_id}",
+                               result=self._show_result)
+        if not self._activity.accepted:
+            self.status.setText("這份清單的綜覽正在撰寫，請查看進度布告。")
+            return
+        self._activity_pending = self._output_tail = ""
         # Owned by the window behind the dialog, so closing the dialog does not kill
         # a survey that is minutes into being written; reopening shows it.
         self.job = QProcess(self.parent() or self)
-        self.job.setProcessEnvironment(QProcessEnvironment.systemEnvironment())
+        process_environment(self.job)
+        self.job.readyReadStandardOutput.connect(self._output)
         self.job.setWorkingDirectory(str(ROOT))
         self.job.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.job.finished.connect(self._done)
@@ -141,9 +150,27 @@ class SurveyDialog(QDialog):
         program, *rest = runtime.cli_command(*args)
         self.job.start(program, rest)
 
+    def _show_result(self):
+        self._load()
+        self.show()
+        self.raise_()
+        self.view.setFocus()
+
+    def _output(self):
+        from paper_daily.desktop.activity import consume
+
+        chunk = bytes(self.job.readAllStandardOutput()).decode("utf-8", "replace")
+        self._activity_pending = consume(self._activity, chunk, self._activity_pending)
+        self._output_tail = (self._output_tail + chunk)[-4096:]
+
     def _done(self, code: int, _status) -> None:
-        output = bytes(self.job.readAll()).decode("utf-8", "replace").strip()
+        if self.job is None:
+            return
+        self._output()
+        output = self._output_tail.strip()
+        self.job.deleteLater()
         self.job = None
+        self._activity.finish(code == 0)
         if not self.isVisible():
             return
         self._load()
@@ -154,6 +181,7 @@ class SurveyDialog(QDialog):
         if error == QProcess.ProcessError.FailedToStart and self.job is not None:
             job, self.job = self.job, None
             job.deleteLater()
+            self._activity.finish(False)
             self._load()
             self.status.setText("無法啟動清單綜覽；請確認安裝後重試。")
 

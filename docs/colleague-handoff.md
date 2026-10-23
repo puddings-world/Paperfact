@@ -6,7 +6,8 @@ computer, Paperfact cloud account or shared database is required.
 
 ## First use
 
-1. Run the platform setup command from the README, then open the reader.
+1. Follow [Installation](install.md): open a released installer, or run the
+   source setup and launch commands for your platform.
 2. An empty collection overview is normal. Acknowledge the usage explanation;
    the separate optional improvement-statistics checkbox can remain unchecked
    without changing any reader or AI functionality.
@@ -19,7 +20,8 @@ computer, Paperfact cloud account or shared database is required.
 5. Select the global connection or a per-feature override, continue analysis and
    save edits. Re-export the selected collection to share those saved results.
 
-Run `paperfact doctor` for local checks. Optional `--ai` invokes the selected
+For local checks from a source checkout, use `.\scripts\dev.ps1 doctor`
+(Windows) or `bash scripts/dev.sh doctor` (macOS/Linux). Optional `--ai` invokes the selected
 model and may use quota; optional `--sources` contacts scholarly websites.
 
 ## Shared operation boundary

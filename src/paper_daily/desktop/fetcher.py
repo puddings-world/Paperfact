@@ -64,6 +64,11 @@ class FetchRunner(QObject):
             return False
         if self._thread is not None:
             self._thread.wait()
+        from paper_daily.desktop.activity import begin
+
+        self._activity = begin(self, "準備原文 PDF", key=f"reader-pdf:{paper_id}")
+        if not self._activity.accepted:
+            return False
         self._paper_id = paper_id
         self._on_done = on_done
         self._thread = QThread()
@@ -79,3 +84,4 @@ class FetchRunner(QObject):
     def _deliver(self, paper_id: str, ok: bool) -> None:
         if self._on_done:
             self._on_done(paper_id, ok)
+        self._activity.finish(ok)

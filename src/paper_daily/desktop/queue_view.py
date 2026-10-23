@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import time
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -58,6 +59,15 @@ ROW_HEIGHT = 74
 PIN_W = 52
 ROOT = runtime.bundle_root()
 PAPER_ROLE = Qt.ItemDataRole.UserRole + 1
+DOWNLOAD_ROLE = PAPER_ROLE + 1
+
+
+def pdf_progress_slot(row, text_left, text_width, state):
+    """A small title-line slot; terminal states use the normal PDF tag only."""
+    if state is None or state.phase in ("done", "error", "cancelled"):
+        return QRect()
+    width = min(132, max(0, text_width // 2))
+    return QRect(text_left + text_width - width, row.top() + 7, width, 18)
 
 # The strip on the left where a click ticks the row instead of opening it. Opening is
 # what a click on this list has always meant, so the two must not overlap.
@@ -109,6 +119,7 @@ class PaperListModel(QAbstractListModel):
         self.reorder = None
         self.can_reorder = False
         self._epoch = uuid4().hex
+        self.downloads = {}
 
     def set_rows(self, rows: list[tuple[int, object]]) -> None:
         self.beginResetModel()
@@ -176,6 +187,10 @@ class PaperListModel(QAbstractListModel):
         position, paper = self._rows[index.row()]
         if role == PAPER_ROLE:
             return paper
+        if role == DOWNLOAD_ROLE:
+            return self.downloads.get(paper.id)
+        if role == Qt.ItemDataRole.ToolTipRole and paper.id in self.downloads:
+            return self.downloads[paper.id].label
         if role == Qt.ItemDataRole.UserRole:
             return position
         if role == Qt.ItemDataRole.DisplayRole:
@@ -226,6 +241,8 @@ class PaperDelegate(QStyledItemDelegate):
             # "找不到" once every source was tried: right-click to supply it by hand.
             text = "缺 PDF(找不到,右鍵補)" if paper.pdf_failed else "缺 PDF"
             out.append((text, p["warn"], p["warnSoft"]))
+        else:
+            out.append(("有 PDF", p["done"], p["doneSoft"]))
         if paper.read:
             out.append(("已讀", p["done"], p["doneSoft"]))
         elif paper.state == "delivered":
@@ -276,14 +293,17 @@ class PaperDelegate(QStyledItemDelegate):
 
         text_left = left + pos_w + 8
         text_width = r.right() - text_left - 12 - PIN_W
+        state = index.data(DOWNLOAD_ROLE)
+        slot = pdf_progress_slot(r, text_left, text_width, state)
+        title_width = max(0, text_width - slot.width() - 10) if not slot.isEmpty() else text_width
 
         painter.setFont(self.title_font)
         painter.setPen(QColor(pal["muted"] if paper.read else pal["ink"]))
         title = QFontMetrics(self.title_font).elidedText(
-            paper.title, Qt.TextElideMode.ElideRight, text_width
+            paper.title, Qt.TextElideMode.ElideRight, title_width
         )
         painter.drawText(
-            QRect(text_left, r.top() + 6, text_width, 20),
+            QRect(text_left, r.top() + 6, title_width, 20),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             title,
         )
@@ -323,6 +343,27 @@ class PaperDelegate(QStyledItemDelegate):
             painter.drawRect(pin.adjusted(0, 0, -1, -1))
             painter.setPen(QColor(pal["faint"]))
         painter.drawText(pin, Qt.AlignmentFlag.AlignCenter, "置頂")
+        if not slot.isEmpty():
+            painter.setFont(self.tag_font)
+            painter.setPen(QColor(pal["muted"]))
+            label = (f"{state.percent}%" if state.percent is not None else
+                     {"queued": "排隊", "waiting": "等待", "resolving": "尋找",
+                      "verifying": "檢查"}.get(state.phase, "下載中"))
+            painter.drawText(
+                QRect(slot.right() - 38, slot.top(), 39, slot.height()),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, label,
+            )
+            track = QRect(slot.left(), slot.top() + 6, max(8, slot.width() - 44), 6)
+            painter.fillRect(track, QColor(pal["border"]))
+            if state.percent is not None:
+                width = int(track.width() * state.percent / 100)
+                painter.fillRect(QRect(track.left(), track.top(), width, track.height()),
+                                 QColor(pal["accent"]))
+            elif state.phase not in ("error", "cancelled", "queued"):
+                width = max(8, track.width() // 5)
+                offset = int((time.monotonic() % 1.5) / 1.5 * (track.width() - width))
+                painter.fillRect(QRect(track.left() + offset, track.top(), width, track.height()),
+                                 QColor(pal["accent"]))
         painter.restore()
 
 
@@ -339,7 +380,17 @@ class QueuePage(QWidget):
         self.heading = QLabel("Reading queue")
         self.heading.setFont(fonts.font(fonts.SERIF, 17, QFont.Weight.DemiBold))
         self.heading.setStyleSheet(f"color:{pal['ink']};")
-        outer.addWidget(self.heading)
+        header = QHBoxLayout()
+        header.addWidget(self.heading, 1)
+        self.import_bundle_button = QPushButton("匯入研究資料包…")
+        self.import_bundle_button.setToolTip("開啟資料包並預覽；沿用包內清單名稱與內容。")
+        self.import_bundle_button.clicked.connect(lambda: self.win._import_bundle())
+        header.addWidget(self.import_bundle_button)
+        self.export_bundle_button = QPushButton("匯出此清單…")
+        self.export_bundle_button.setEnabled(False)
+        self.export_bundle_button.clicked.connect(lambda: self.win._export_bundle())
+        header.addWidget(self.export_bundle_button)
+        outer.addLayout(header)
 
         self.blurb = QLabel()
         self.blurb.setWordWrap(True)
@@ -447,6 +498,27 @@ class QueuePage(QWidget):
         bar.addWidget(self.survey_btn)
         bar.addWidget(self.analyze_btn)
         outer.addLayout(bar)
+        self.downloads = None
+        self.download_bar = QWidget()
+        pdf_row = QHBoxLayout(self.download_bar)
+        pdf_row.setContentsMargins(0, 0, 0, 0)
+        self.auto_pdf = QCheckBox("開啟清單時自動下載 PDF")
+        self.auto_pdf.setToolTip("最多 3 篇並行，只下載可取得的公開原文，不啟動 AI 分析。")
+        self.auto_pdf.toggled.connect(self._auto_pdf_changed)
+        pdf_row.addWidget(self.auto_pdf)
+        self.pdf_status = QLabel()
+        pdf_row.addWidget(self.pdf_status, 1)
+        self.retry_pdf = QPushButton("重試／繼續下載")
+        self.retry_pdf.clicked.connect(lambda: self.enqueue_pdfs(retry=True))
+        pdf_row.addWidget(self.retry_pdf)
+        self.pause_pdf = QPushButton("暫停本清單下載")
+        self.pause_pdf.clicked.connect(self._pause_pdfs)
+        pdf_row.addWidget(self.pause_pdf)
+        outer.addWidget(self.download_bar)
+        self.download_bar.hide()
+        self._pdf_poll = QTimer(self)
+        self._pdf_poll.setInterval(250)
+        self._pdf_poll.timeout.connect(self._poll_pdfs)
         self._job: QProcess | None = None
         self._then = None
         self._job_line = ""
@@ -660,6 +732,13 @@ class QueuePage(QWidget):
         return q in paper.title.lower() or q in " ".join(paper.authors).lower() or q in where
 
     def refresh(self) -> None:
+        self.export_bundle_button.setEnabled(bool(self.win.active_list))
+        name = self.win.list_picker.currentText().rsplit(" (", 1)[0]
+        self.export_bundle_button.setToolTip(
+            f"匯出「{name}」整份清單的研究資料包：已下載 PDF、分析、筆記及簡報等已儲存內容。"
+            "不受搜尋、篩選或勾選論文影響。"
+            if self.win.active_list else "請先開啟清單。"
+        )
         # A list is in the order someone chose; the queue is in ranked order. Saying
         # the wrong one is worse than saying nothing.
         if self.win.active_list:
@@ -779,6 +858,68 @@ class QueuePage(QWidget):
             self.analyze_btn.setText(f"分析未完成的 {left} 篇" if left else "全部分析完成")
             self.analyze_btn.setEnabled(bool(left))
 
+    def enable_downloads(self, manager):
+        self.downloads = manager
+        with connect() as conn:
+            enabled = bool(get_kv(conn, "ui.auto_pdf", True))
+        self.auto_pdf.blockSignals(True)
+        self.auto_pdf.setChecked(enabled)
+        self.auto_pdf.blockSignals(False)
+        self._pdf_poll.start()
+        self.enqueue_pdfs()
+
+    def enqueue_pdfs(self, *, retry=False):
+        if self.downloads is None:
+            return
+        self.download_bar.setVisible(bool(self.win.active_list))
+        if self.win.active_list and (retry or self.auto_pdf.isChecked()):
+            self.downloads.submit([p.id for p in self.win.papers if not p.has_pdf], retry=retry)
+        self._poll_pdfs()
+
+    def _auto_pdf_changed(self, enabled):
+        with connect() as conn:
+            set_kv(conn, "ui.auto_pdf", bool(enabled))
+        if self.downloads is not None:
+            if enabled:
+                self.enqueue_pdfs(retry=True)
+            else:
+                self.downloads.cancel()
+
+    def _pause_pdfs(self):
+        if self.downloads is not None:
+            self.downloads.cancel([p.id for p in self.win.papers])
+            self._poll_pdfs()
+
+    def _poll_pdfs(self):
+        if self.downloads is None:
+            return
+        states = self.downloads.snapshot()
+        old = self.model.downloads
+        self.model.downloads = states
+        finished = False
+        for paper in self.win.papers:
+            state = states.get(paper.id)
+            if state and state.phase == "done" and not paper.has_pdf:
+                paper._has_pdf, paper.pdf_failed = True, False
+                finished = True
+        if finished:
+            self.refresh()  # Reapply PDF filters only on completion, not every chunk.
+        else:
+            for i, (_position, paper) in enumerate(self.model._rows):
+                if old.get(paper.id) != states.get(paper.id):
+                    index = self.model.index(i)
+                    self.model.dataChanged.emit(index, index)
+        current = [states[p.id] for p in self.win.papers if p.id in states]
+        active = sum(s.phase in ("waiting", "resolving", "downloading", "verifying")
+                     for s in current)
+        queued = sum(s.phase == "queued" for s in current)
+        errors = sum(s.phase == "error" for s in current)
+        self.pdf_status.setText(f"進行中 {active} · 等待 {queued} · 未完成 {errors}")
+        self.pause_pdf.setEnabled(bool(active or queued))
+        self.retry_pdf.setEnabled(any(not p.has_pdf for p in self.win.papers))
+        if active:
+            self.view.viewport().update()  # Animate unknown-length progress without a fake percent.
+
     def _show_survey(self) -> None:
         from paper_daily.desktop.survey_dialog import SurveyDialog
 
@@ -812,7 +953,28 @@ class QueuePage(QWidget):
         if self._job is not None:
             self.analysis.setText("上一個工作還在跑,等它結束或先停止。")
             return
+        if args and args[0] == "analyze" and self.win.analysis_running():
+            self.analysis.setText("已有深入分析工作，請先等候或停止該工作。")
+            return
+        from paper_daily.desktop.activity import begin
+
+        list_id = self.win.active_list
+
+        def show_result():
+            if list_id:
+                self.win._open_list(list_id)
+            else:
+                self.win.show_queue()
+            self.view.setFocus()
+
+        self._activity = begin(self, "清單分析" if args[0] == "analyze" else "整理論文",
+                               key=f"queue:{list_id}", result=show_result)
+        if not self._activity.accepted:
+            return
+        self._activity_pending = ""
         env = QProcessEnvironment.systemEnvironment()
+        env.insert("PAPERFACT_PROGRESS", "1")
+        env.insert("PYTHONUNBUFFERED", "1")
         env.insert("PYTHONIOENCODING", "utf-8")
         self._job = QProcess(self)
         self._job.setProcessEnvironment(env)
@@ -829,7 +991,11 @@ class QueuePage(QWidget):
 
     def _job_output(self) -> None:
         chunk = bytes(self._job.readAllStandardOutput()).decode("utf-8", "replace")
-        lines = [ln.strip() for ln in chunk.splitlines() if ln.strip()]
+        from paper_daily.desktop.activity import consume
+
+        self._activity_pending = consume(self._activity, chunk, self._activity_pending)
+        lines = [ln.strip() for ln in chunk.splitlines()
+                 if ln.strip() and not ln.startswith("@paperfact-progress ")]
         if lines:
             self._job_line = lines[-1][:120]
             self._say_analysis()
@@ -838,6 +1004,9 @@ class QueuePage(QWidget):
             self._reload_soon.start()
 
     def _job_done(self, code: int, _status) -> None:
+        if self._job is not None:
+            self._job_output()
+        self._activity.finish(code == 0)
         self._job = None
         then, self._then = self._then, None
         self.win.reload()
@@ -848,6 +1017,7 @@ class QueuePage(QWidget):
         if error == QProcess.ProcessError.FailedToStart and self._job is not None:
             job, self._job = self._job, None
             self._then = None
+            self._activity.finish(False)
             job.deleteLater()
             self.win.reload()
             self.analysis.setText("無法啟動背景工作；請確認安裝後重試。")

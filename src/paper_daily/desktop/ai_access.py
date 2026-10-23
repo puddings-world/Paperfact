@@ -42,6 +42,7 @@ class AccessBridge(QObject):
     def __init__(self, parent):
         super().__init__(parent)
         self.runner = AskRunner(self)
+        self.runner.activity_label = "檢查 AI 登入"
         self.good = {}
         self.dialog = None
         self.needed.connect(self.show_login)

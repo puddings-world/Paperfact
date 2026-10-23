@@ -127,12 +127,13 @@ def _list_fixture(tmp_path, monkeypatch):
 
     from paper_daily import lists, store
     from paper_daily.enrich import s2
-    from paper_daily.sources import arxiv, cvf
+    from paper_daily.sources import arxiv, cvf, openalex
 
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
     monkeypatch.setattr(s2, "match_title", lambda title, **kw: None)
     monkeypatch.setattr(cvf, "pdf_url", lambda *a, **kw: None)
     monkeypatch.setattr(arxiv, "match_title", lambda *a, **kw: None)
+    monkeypatch.setattr(openalex, "match_title", lambda *a, **kw: None)
     monkeypatch.setattr(lists, "parse_bibliography", lambda raw, log=None: [
         {"title": t.strip(), "authors": [], "venue": "arXiv", "year": 2024, "url": None}
         for t in raw.splitlines() if t.strip()

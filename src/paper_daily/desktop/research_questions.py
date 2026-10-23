@@ -17,6 +17,7 @@ class ResearchQuestions(QWidget):
         super().__init__(parent)
         self.paper_id = None
         self.runner = AskRunner(self)
+        self.runner.activity_label = "整理研究問題"
         self._attempted = set()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

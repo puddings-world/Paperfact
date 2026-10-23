@@ -15,10 +15,12 @@ from paper_daily.slide_layout import HEIGHT, WIDTH
 class PdfExport(QObject):
     finished = Signal(str)
     failed = Signal(str)
+    progress = Signal(int, int)
 
     def start(self, deck, dest: Path):
         self.deck, self.dest = deck, dest
         self.index = 0
+        self.progress.emit(0, len(deck.slides))
         self.canvas = SlideCanvas()
         self.painter = QPainter()
         self.tmp = None
@@ -47,6 +49,7 @@ class PdfExport(QObject):
                 QRectF(0, 0, WIDTH, HEIGHT),
             )
             self.index += 1
+            self.progress.emit(self.index, len(self.deck.slides))
             if self.index < len(self.deck.slides):
                 QTimer.singleShot(0, self._page)
             else:

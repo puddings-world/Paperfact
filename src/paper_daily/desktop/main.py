@@ -470,13 +470,13 @@ class ReaderPage(QWidget):
         # started it to the moment it is saved.
         self._pending: tuple[int, str] | None = None
         self._open_notes: set[int] = set()
-        self.runner = AskRunner()
+        self.runner = AskRunner(self)
         # A separate runner: translating a line should not have to wait behind a
         # question that is still being answered.
-        self.translate_runner = AskRunner()
+        self.translate_runner = AskRunner(self)
         # Its own runner: Google failing hands over to it before that thread has quit.
-        self.refine_runner = AskRunner()
-        self.fetcher = FetchRunner()
+        self.refine_runner = AskRunner(self)
+        self.fetcher = FetchRunner(self)
         self._res_job: subprocess.Popen | None = None
         self._res_poll = QTimer(self)
         self._res_poll.setInterval(800)
@@ -714,6 +714,7 @@ class ReaderPage(QWidget):
         self.questions.source_requested.connect(self._jump_to_source)
         al.addWidget(self.questions)
         self.chat_view = rich_view.RichView(pal)
+        self.runner.result_target = lambda: self.chat_view.setFocus()
         self.chat_view.anchorClicked.connect(self._note_action)
         al.addWidget(self.chat_view, 1)
         # A passage chosen with 問這段 waits here until a question is typed for it,
@@ -1612,7 +1613,7 @@ class ReaderPage(QWidget):
             text,
             lambda answer: overlay.show_result("Google 翻譯", answer, refinable=True),
             lambda _reason: self._translate_with_model(text),
-            call=translate.machine,
+            call=translate.machine, task="translate",
         )
 
     def _translate_with_model(self, text: str) -> None:
@@ -1889,17 +1890,27 @@ class MainWindow(QWidget):
         bar.addWidget(self.list_picker)
 
         add_button = QPushButton("＋ 新增")
-        add_button.setToolTip("建立清單、加入論文，或匯入／匯出研究資料包")
+        add_button.setToolTip("建立研究清單，或加入論文到目前清單")
         add_menu = QMenu(add_button)
         add_menu.setToolTipsVisible(True)
         create = add_menu.addAction("建立清單…", self._import_list)
         create.setToolTip("從參考文獻、研究主題或空白清單開始")
         self.add_paper_action = add_menu.addAction("加入論文到這份清單…", self._add_paper)
-        add_menu.addSeparator()
-        add_menu.addAction("匯入研究資料包…", self._import_bundle)
-        self.export_bundle_action = add_menu.addAction("匯出目前清單…", self._export_bundle)
         add_button.setMenu(add_menu)
         bar.addWidget(add_button)
+
+        self.research_data_button = QPushButton("研究資料 ▾")
+        self.research_data_button.setToolTip("匯入研究資料包，或分享目前清單的 PDF、分析與筆記")
+        data_menu = QMenu(self.research_data_button)
+        data_menu.setToolTipsVisible(True)
+        self.import_bundle_action = data_menu.addAction("匯入研究資料包…", self._import_bundle)
+        self.import_bundle_action.setToolTip("載入同事分享的清單與研究內容")
+        self.export_bundle_action = data_menu.addAction(
+            "匯出目前清單資料包…", self._export_bundle)
+        self.export_bundle_action.setToolTip(
+            "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
+        self.research_data_button.setMenu(data_menu)
+        bar.addWidget(self.research_data_button)
 
         self.progress = QLabel("")
         self.progress.setStyleSheet(f"color:{self.pal['muted']};font-size:12px;")
@@ -1977,7 +1988,12 @@ class MainWindow(QWidget):
             f"border:1px solid {self.pal['border']};border-radius:6px;"
             f"margin:6px 16px 0 16px;padding:0 10px;font-size:11.5px;}}"
         )
-        outer.addWidget(self.ai_summary)
+        from paper_daily.desktop.activity import ActivityBoard, ActivityHub
+
+        self.activity_hub = ActivityHub(self)
+        self.activity_board = ActivityBoard(
+            self.activity_hub, self.ai_summary, self.pal, height=AI_ROW_HEIGHT)
+        outer.addWidget(self.activity_board)
         self.account_status = AccountStatus(self, self._refresh_ai_summary)
         from paper_daily.desktop.analysis_settings import ReadyBanner
 
@@ -2175,6 +2191,14 @@ class MainWindow(QWidget):
                 self.reader_page.presentation_pane.restore_workspace(json.loads(presentation_layout))
 
     def _prepare_restart(self) -> bool:
+        hub = getattr(self, "activity_hub", None)
+        if hub is not None and hub.busy:
+            return False
+        downloads = getattr(self, "pdf_downloads", None)
+        if downloads is not None and downloads.busy:
+            downloads.cancel()
+            self.queue_page.pdf_status.setText("正在停止 PDF 下載，結束後可安全重啟。")
+            return False
         access = getattr(self, "ai_access", None)
         if access is not None and access.runner.busy:
             return False
@@ -2241,6 +2265,31 @@ class MainWindow(QWidget):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
     def closeEvent(self, event) -> None:
+        reader = self.reader_page
+        hub = getattr(self, "activity_hub", None)
+        workers = (getattr(reader, name, None) for name in
+                   ("runner", "translate_runner", "refine_runner", "fetcher"))
+        if (hub is not None and hub.busy) or any(r is not None and r.busy for r in workers):
+            event.ignore()
+            board = getattr(self, "activity_board", None)
+            if board is not None:
+                board.setFocus()
+                board.setToolTip("尚有背景工作，請等候完成或在原操作區停止。")
+            return
+        downloads = getattr(self, "pdf_downloads", None)
+        if downloads is not None and downloads.busy:
+            downloads.cancel()
+            self.queue_page.pdf_status.setText("正在停止下載並清理暫存檔，完成後關閉…")
+            event.ignore()
+            if not getattr(self, "_pdf_close_waiting", False):
+                self._pdf_close_waiting = True
+
+                def retry_close():
+                    self._pdf_close_waiting = False
+                    self.close()
+
+                QTimer.singleShot(200, self, retry_close)
+            return
         access = getattr(self, "ai_access", None)
         if access is not None and access.runner.busy:
             self.reader_page.presentation_pane.status.setText("正在檢查 AI 登入，完成後即可關閉。")
@@ -2307,16 +2356,33 @@ class MainWindow(QWidget):
 
     def _spawn_job(self, args: list[str], paper_id: str | None) -> None:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        from paper_daily.desktop.activity import begin
+
         self._job_paper = paper_id
+        def show_result():
+            if paper_id:
+                self.open_anywhere(paper_id)
+                self.reader_page._analysis_finished()
+                self.reader_page.tabs.setCurrentWidget(self.reader_page.dive_view)
+                self.reader_page.dive_view.setFocus()
+        self._analysis_activity = begin(
+            self.reader_page, "深入分析" if paper_id else "背景分析",
+            key=f"analysis:{paper_id}", result=show_result, paper_id=paper_id)
+        if not self._analysis_activity.accepted:
+            return
         try:
             self._dive_job = subprocess.Popen(
                 runtime.cli_command(*args),
                 cwd=str(ROOT),
                 creationflags=flags,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace",
+                env={**os.environ, "PAPERFACT_PROGRESS": "1", "PYTHONUNBUFFERED": "1",
+                     "PYTHONIOENCODING": "utf-8"},
             )
+            self.activity_hub.watch_popen(self._analysis_activity, self._dive_job)
         except OSError:
+            self._analysis_activity.finish(False, "無法啟動分析，請重試")
             self._dive_job = None
 
     @requires_ai(*ANALYSIS_TASKS)
@@ -2327,15 +2393,21 @@ class MainWindow(QWidget):
         once; idle work on the papers ahead gives way, and since every step skips
         what already exists, it loses nothing it had finished.
         """
+        if self.queue_page._job is not None:
+            self.activity_board.setFocus()
+            return
         if self.analysis_running(paper_id):
+            self.activity_board.setFocus()
             return
         if self.analysis_running():
             self._dive_job.terminate()
+            self._analysis_activity.finish(cancelled=True)
         self._spawn_job(["analyze", paper_id, "--retry"], paper_id)
 
     def stop_analysis(self) -> None:
         if self.analysis_running():
             self._dive_job.terminate()
+            self._analysis_activity.finish(cancelled=True)
 
     def top_up_dives(self) -> None:
         """Keep the next few papers fully analysed, in the background.
@@ -2411,9 +2483,13 @@ class MainWindow(QWidget):
         self._switching = False
 
     def _import_list(self) -> None:
-        list_id = run_import(self.pal, ROOT, self)
+        list_id = run_import(self.pal, ROOT, self, on_analysis=self._analyze_created_list)
         if list_id:
             self._open_list(list_id)
+
+    def _analyze_created_list(self, list_id):
+        self._open_list(list_id)
+        self.queue_page._start(["analyze", "--list", list_id, "--jobs", "1"])
 
     def _open_list(self, list_id):
         self.active_list = list_id
@@ -2476,6 +2552,8 @@ class MainWindow(QWidget):
         read = sum(1 for p in self.papers if p.read)
         self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
         self.queue_page.refresh()
+        if self.stack.currentWidget() is self.queue_page:
+            self.queue_page.enqueue_pdfs()
 
     def show_queue(self) -> None:
         self.stack.setCurrentWidget(self.queue_page)
@@ -2940,6 +3018,11 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
 
     server.newConnection.connect(on_second_launch)
 
+    from paper_daily.pdf_downloads import DownloadQueue
+
+    window.pdf_downloads = DownloadQueue()
+    window.queue_page.enable_downloads(window.pdf_downloads)
+    app.aboutToQuit.connect(window.pdf_downloads.close)
     window.show()
     from paper_daily.desktop.feedback_dialog import FeedbackInvitation
 

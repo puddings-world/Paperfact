@@ -29,6 +29,7 @@ class AskWorker(QObject):
 
     finished = Signal(str)
     failed = Signal(str)
+    progress = Signal(object)
 
     def __init__(self, prompt: str, timeout: int = 300, call=None, task: str = "ask") -> None:
         super().__init__()
@@ -43,7 +44,9 @@ class AskWorker(QObject):
         self._context.run(self._run_scoped)
 
     def _run_scoped(self):
-        with llm.connection_scope(self._connections):
+        from paper_daily.work_progress import observe
+
+        with llm.connection_scope(self._connections), observe(self.progress.emit):
             from paper_daily import feedback
 
             if self._call is not None:
@@ -119,6 +122,9 @@ class AskRunner(QObject):
         self._worker: AskWorker | None = None
         self._on_done = None
         self._on_fail = None
+        from paper_daily.desktop.activity import Handle
+
+        self.activity = Handle()
         self.read_only = read_only
         self._reading = False
         self._read_epoch = 0
@@ -184,6 +190,14 @@ class AskRunner(QObject):
         # running QThread, which also aborts.
         if self._thread is not None:
             self._thread.wait()
+        from paper_daily.desktop.activity import begin
+
+        if not self.read_only:
+            self.activity = begin(self, getattr(self, "activity_label", None), task=task,
+                                  result=getattr(self, "result_target", None))
+            if not self.activity.accepted:
+                on_fail("相同工作已在執行，請查看上方進度。")
+                return
         self._on_done, self._on_fail = on_done, on_fail
         if self.read_only:
             self._start_read(prompt, call)
@@ -192,18 +206,33 @@ class AskRunner(QObject):
         self._worker = AskWorker(prompt, call=call, task=task)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
+        self._worker.progress.connect(self._progress)
         self._worker.finished.connect(self._deliver)
         self._worker.failed.connect(self._fail)
         self._worker.finished.connect(self._thread.quit)
         self._worker.failed.connect(self._thread.quit)
         self._thread.start()
 
+    @Slot(object)
+    def _progress(self, event):
+        self.activity.update(event)
+
+    def report(self, message):
+        self.activity.stage(message)
+
     @Slot(str)
     def _deliver(self, answer: str) -> None:
-        if self._on_done:
-            self._on_done(answer)
+        try:
+            if self._on_done:
+                self._on_done(answer)
+        except Exception:
+            self.activity.finish(False)
+            raise
+        else:
+            self.activity.finish()
 
     @Slot(str)
     def _fail(self, reason: str) -> None:
+        self.activity.finish(False)
         if self._on_fail:
             self._on_fail(reason)

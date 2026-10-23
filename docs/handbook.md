@@ -20,30 +20,11 @@ other conferences and journals are [planned work](agent-workflows.md).
 
 ## Start the desktop app
 
-From a source checkout on Windows:
-
-```powershell
-.\scripts\setup.ps1
-.\scripts\dev.ps1 app
-```
-
-On macOS or Linux:
-
-```bash
-./scripts/setup.sh
-./scripts/dev.sh app
-```
-
-Windows and macOS show the same layout: setup downloads the two typefaces the app
-ships with (Noto Sans TC, JetBrains Mono), so text wraps at the same places on
-both. The app creates its local database on first launch. You do not need to bootstrap
-the ML corpus or register a nightly task to use reading lists.
-
-On Windows, optionally run `scripts/make-shortcut.ps1` once, then open **Paperfact**
-from the Desktop or Start menu; on macOS, `scripts/make-app-mac.sh` puts
-**Paperfact.app** in `~/Applications`. With the project environment active,
-`paperfact app` is the equivalent terminal command; `paper-daily` remains an alias.
-The `dev` scripts are development launchers, not a separate product interface.
+Use the [platform installation guide](install.md) to choose a released installer
+or run the current source. It separates Windows PowerShell from macOS/Linux
+Terminal instructions, first-time setup from later launches, and user setup
+from developer checks. A fresh workspace starts empty; no ML corpus or nightly
+task is required.
 
 ## Use your own reading lists
 
@@ -124,7 +105,8 @@ see without re-running hours of model calls.
 .\scripts\dev.ps1 list-export cataract --no-notes   # leave out your notes and Q&A
 ```
 
-Use **＋ 新增 → 匯出目前清單** in the app, then send the zip privately. The bundle
+Use **研究資料 → 匯出目前清單資料包…** in the app, then send the ZIP privately.
+Older preview installers may keep this action under **＋ 新增**. The bundle
 holds all local PDF files, analyses, survey, rendered figures, slide decks (not their
 history), verified highlights, research questions and optionally notes and Q&A.
 The export reports any papers whose PDF has not been downloaded. All packed files
@@ -134,10 +116,10 @@ They review the contents before importing; existing work is kept unless they cho
 and confirm replacement. A different local PDF's page-linked analysis is kept with it.
 For a smaller online package, CLI `--without-pdfs` retains verified download URLs.
 
-The colleague, after the setup above:
+Optional Windows CLI example (for macOS/Linux, use `bash scripts/dev.sh`):
 
 ```powershell
-.\scripts\dev.ps1 list-import cataract-20261015.zip   # also downloads and checks the PDFs
+.\scripts\dev.ps1 list-import cataract-20261015.zip   # restores packed PDFs; no AI required
 .\scripts\dev.ps1 app
 ```
 

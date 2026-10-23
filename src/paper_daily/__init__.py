@@ -1,3 +1,3 @@
-"""Daily deep-dive queue over ten years of ICLR / ICML / NeurIPS papers."""
+"""Paperfact: a local research workspace for papers, notes, and presentations."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

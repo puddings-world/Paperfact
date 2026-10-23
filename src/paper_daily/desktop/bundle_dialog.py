@@ -56,6 +56,7 @@ class BundleDialog(QDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         self.progress.connect(self.status.setText)
+        self.progress.connect(self.runner.report)
         self.go = QPushButton("匯入" if source else "選擇儲存位置並匯出")
         self.go.clicked.connect(self._start)
         self.go.setEnabled(not source)

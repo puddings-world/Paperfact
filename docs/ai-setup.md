@@ -164,7 +164,9 @@ All desktop and pipeline AI features go through `llm.complete`. Nightly generati
 uses the selected profiles. Shared web readers use their embedding host's
 replaceable AI capability and do not receive desktop credentials.
 
-The CLI manages the same profiles:
+The CLI manages the same profiles. These examples use Windows PowerShell;
+on macOS/Linux, replace `.\scripts\dev.ps1` with `bash scripts/dev.sh`
+and keep the remaining arguments. See [CLI entry points](cli-reference.md).
 
 ```powershell
 .\scripts\dev.ps1 llm --profile local --backend openai --model your-local-model --base-url http://localhost:11434/v1 --no-requires-key --token-parameter max_tokens
@@ -237,6 +239,7 @@ dives. To rebuild the optional ML corpus on a new machine:
 ```
 
 Everything is idempotent and resumable, so an interrupted bootstrap is re-run rather
-than repaired. To carry the reading history across instead of rebuilding it, copy
-`data/papers.db` — it holds the corpus, the queue state, the notes, the dives and the
-chat; `data/pdf/` and `data/figures/` are caches and will refill themselves.
+than repaired. To move a whole workspace, close the app and privately back up
+the entire configured data directory, including PDFs, figures and editable decks.
+Copying only `papers.db` does not preserve all research files. To share selected
+lists without account settings, use a research package; see [Installation](install.md).

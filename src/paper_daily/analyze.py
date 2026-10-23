@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from paper_daily import paper_highlights
+from paper_daily import paper_highlights, work_progress
 from paper_daily.config import PDF_DIR
 from paper_daily.fetch import _safe_name
 from paper_daily.store import connect, get_kv, set_kv
@@ -90,6 +90,7 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
         return {}
     name = row["title"][:60]
 
+    work_progress.report("取得原文與擷取文字", paper_id=paper_id)
     if todo("pdf"):
         path, _text = fetch.prepare(row)
         _record(paper_id, "pdf", None if path else "no source had the PDF")
@@ -104,6 +105,7 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
     def explain() -> None:
         if not has_pdf(paper_id):
             return
+        work_progress.report("撰寫深度講解與逐節精讀", paper_id=paper_id)
         if todo("dive"):
             with connect() as conn:
                 have = conn.execute("SELECT 1 FROM dives WHERE paper_id=?", (paper_id,))
@@ -119,6 +121,7 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
                     log(f"  {'逐節精讀 ' + format(len(body), ',') if body else why}  {name}")
                     reason = None if body else f"close reading: {why}"
             _record(paper_id, "dive", reason)
+        work_progress.report("分析原文重點並連結素材", paper_id=paper_id)
         if todo("highlights"):
             try:
                 prepared, why = paper_highlights.prepare_reading(paper_id)
@@ -134,6 +137,7 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
             except (ValueError, OSError, RuntimeError) as exc:
                 _record(paper_id, "highlights", str(exc))
                 log(f"  原文重點未完成：{exc}  {name}")
+        work_progress.report("整理候選研究問題", paper_id=paper_id)
         from paper_daily import research_questions
 
         try:
@@ -144,9 +148,11 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
 
     def place() -> None:
         # The 研究脈絡 is written from the references' verdicts, so 承先 comes first.
+        work_progress.report("核對參考文獻與引用關係", paper_id=paper_id)
         if has_pdf(paper_id) and todo("cites"):
             n = cites.analyse(paper_id, log=log)
             _record(paper_id, "cites", None if n else "no references could be read")
+        work_progress.report("查找後續研究與發展脈絡", paper_id=paper_id)
         if todo("later"):
             followups.analyse(paper_id, log=log)
 
@@ -159,7 +165,11 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
         chain.result()
 
     with connect() as conn:
-        return status(conn, paper_id)
+        state = status(conn, paper_id)
+        work_progress.report("本篇分析結束", sum(state.values()), len(state),
+                             paper_id=paper_id,
+                             outcome=None if all(state.values()) else "partial")
+        return state
 
 
 def left(conn, paper_id: str, retry: bool = False) -> list[str]:
@@ -241,6 +251,7 @@ def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
         return 0
     log(f"analysing {len(todo)} paper(s), {jobs} at a time")
     complete = 0
+    work_progress.report("開始處理論文", 0, len(todo))
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         futures = {pool.submit(analyse, pid, log, retry): pid for pid in todo}
         for done, future in enumerate(as_completed(futures), 1):
@@ -248,8 +259,12 @@ def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
             try:
                 state = future.result()
             except Exception as e:  # one paper's failure must not stop the rest
+                work_progress.report("此篇未完成，繼續其他論文", done, len(todo),
+                                     outcome="partial")
                 log(f"[{done}/{len(todo)}] failed {pid}: {e}")
                 continue
+            work_progress.report("已處理論文（含未完成項目）", done, len(todo),
+                                 outcome=None if all(state.values()) else "partial")
             complete += all(state.values())
             with connect() as conn:
                 title = conn.execute("SELECT title FROM papers WHERE id=?", (pid,)).fetchone()[0]

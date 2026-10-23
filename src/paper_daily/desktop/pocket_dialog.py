@@ -211,6 +211,11 @@ class PocketDialog(QDialog):
         ids = self.win.marked_ids()
         if not ids:
             return
+        from paper_daily.desktop.activity import begin
+
+        self._activity = begin(self, "製作攜帶閱讀頁", key="pocket-build")
+        if not self._activity.accepted:
+            return
         self.build_btn.setEnabled(False)
         self.status.setText("正在壓 PDF、整理引用與血緣… 第一次跑每篇要幾秒。")
 
@@ -226,6 +231,7 @@ class PocketDialog(QDialog):
 
     @Slot(object, str)
     def _done(self, built, error: str) -> None:
+        self._activity.finish(built is not None)
         self.build_btn.setEnabled(True)
         if built is None:
             self.status.setText(f"建不出來:{error}")

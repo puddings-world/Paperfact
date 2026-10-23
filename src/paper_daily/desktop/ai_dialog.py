@@ -35,7 +35,7 @@ TASK_LABELS = {
     "ask": "論文問答",
     "translate": "AI 翻譯",
     "dive": "深度講解",
-    "list_parse": "匯入清單",
+    "list_parse": "建立清單",
     "citations": "引用分析",
     "followups": "後續研究",
     "overview": "研究脈絡",

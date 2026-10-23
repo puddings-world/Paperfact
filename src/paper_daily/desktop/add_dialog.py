@@ -218,9 +218,17 @@ class AddToListDialog(QDialog):
             handle.write(raw)
             self._temp = Path(handle.name)
 
+        from paper_daily.desktop.activity import begin, process_environment
+
+        self._activity = begin(self, "新增論文", key=f"list-add:{self.list_id}")
+        if not self._activity.accepted:
+            self._clear_temp()
+            return
+        self._activity_pending = ""
         self.go.setEnabled(False)
         self.status.setText("正在比對,並找程式碼和資料集…幾秒鐘。")
         self.process = QProcess(self)
+        process_environment(self.process)
         self.process.setWorkingDirectory(str(self.repo_root))
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self._progress)
@@ -234,11 +242,18 @@ class AddToListDialog(QDialog):
     def _progress(self) -> None:
         assert self.process
         chunk = bytes(self.process.readAllStandardOutput()).decode("utf-8", "replace")
-        lines = [ln.strip() for ln in chunk.splitlines() if ln.strip()]
+        from paper_daily.desktop.activity import consume
+
+        self._activity_pending = consume(self._activity, chunk, self._activity_pending)
+        lines = [ln.strip() for ln in chunk.splitlines()
+                 if ln.strip() and not ln.startswith("@paperfact-progress ")]
         if lines:
             self.status.setText(lines[-1][:160])
 
     def _finished(self, code: int, _status) -> None:
+        if self.process is not None:
+            self._progress()
+        self._activity.finish(code == 0, cancelled=code < 0)
         self.go.setEnabled(True)
         if self.process is not None:
             self.process.deleteLater()
@@ -262,6 +277,7 @@ class AddToListDialog(QDialog):
         if error == QProcess.ProcessError.FailedToStart and self.process is not None:
             self.process.deleteLater()
             self.process = None
+            self._activity.finish(False)
             self._clear_temp()
             self.go.setEnabled(True)
             self.status.setText("無法啟動新增論文工作；輸入已保留，可重試。")

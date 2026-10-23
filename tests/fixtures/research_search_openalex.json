@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-10-23",
+  "request": "https://api.openalex.org/works?search=chain+of+thought+faithfulness&per_page=25",
+  "results": [
+    {
+      "id": "https://openalex.org/W7172327399",
+      "display_name": "On the Generalization of Steering Vectors for Chain-of-Thought Faithfulness",
+      "publication_year": 2026
+    }
+  ]
+}

@@ -545,11 +545,14 @@ PDF has neither problem, because it is the document.
 The same page from a terminal, for a selection that is easier to express as ids:
 
 ```powershell
-.\scripts\dev.ps1 python scripts/build_pocket_reader.py ref:abc ref:def
-.\scripts\dev.ps1 python scripts/build_pocket_reader.py   # whatever is ticked
+.\.venv\Scripts\python.exe scripts/build_pocket_reader.py ref:abc ref:def
+.\.venv\Scripts\python.exe scripts/build_pocket_reader.py   # whatever is ticked
 # then publish data/pocket/index.html as an Artifact, with data/pocket/files.json
 # as its supporting files, declaring capabilities db, user and sample
 ```
+
+On macOS/Linux, use `.venv/bin/python scripts/build_pocket_reader.py` with
+the same paper IDs. These are Python helper scripts, not CLI subcommands.
 
 `paper_daily/pocket.py` holds the building; the script and the dialog are two ways
 into it.

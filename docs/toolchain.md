@@ -1,7 +1,9 @@
 # Toolchain
 
-Everything needed to build, test and run `paper-daily`. After `git clone` plus one
-setup command the project is fully functional; no manual tool hunting.
+Developer reference for Paperfact. For ordinary installation, use the
+[platform guide](install.md). Source setup installs Python dependencies and
+assets; AI CLIs, Node.js for tests, and Linux system libraries are separate
+prerequisites where applicable.
 
 ```powershell
 .\scripts\setup.ps1      # Windows
@@ -10,8 +12,9 @@ setup command the project is fully functional; no manual tool hunting.
 ./scripts/setup.sh       # macOS / Linux
 ```
 
-Verify with `.\scripts\dev.ps1 doctor`, which checks each item below and reports what
-is missing.
+Verify with `.\scripts\dev.ps1 doctor` on Windows or
+`bash scripts/dev.sh doctor` on macOS/Linux. It reports local prerequisites
+without making AI calls.
 
 ## Tools
 
@@ -28,9 +31,9 @@ is missing.
 | `hdiutil`, `iconutil` | built in (macOS) | The `.dmg` and the `.icns` icon | ships with macOS | `scripts/build_app.py` |
 | appimagetool | 1.9.1 (pinned) | Packs the Linux build into one AppImage | downloaded by `scripts/build_app.py` into `build/` | `scripts/build_app.py` |
 
-No SDKs, JARs or native binaries are required to run or develop, so there is no
-`tools/` directory to download into; the build-only tools above are needed only to
-make installers (see [Releasing](releasing.md)). The downloads outside `uv sync` are the fonts and the renderers
+Installer-building tools above are needed only to make installers
+(see [Releasing](releasing.md)). Qt still depends on native desktop libraries;
+the Linux build workflow lists the packages used on Ubuntu. The downloads outside `uv sync` are the fonts and the renderers
 the reading views typeset with:
 
 | Asset | What it does | Installed by | Used in |
@@ -146,10 +149,11 @@ command.
 | `data/llm.json` | Model backend and key, if not taken from the environment | tiny |
 
 Downloading every PDF in the corpus would be 400-600 GB, which is why fetching is
-lazy. Deleting `data/` is a clean reset; every stage rebuilds it idempotently.
+lazy. The data folder also holds original notes, edits and analysis: back it up
+privately rather than treating the entire folder as a disposable cache.
 
 ## Scheduled run
 
 The nightly job runs `refresh` (to pick up newly published papers) then `today` (to
 build the briefing pack), and a Claude session turns the pack into the deep dive. See
-the "Nightly schedule" section of the README for setup.
+the [optional ML workflow](ml-daily.md) for setup.
