@@ -4,6 +4,9 @@ Status: required architecture, not implemented modes. Current model profiles and
 the custom gateway adapter are available; the managed service, account/credits UI,
 agent executor, MCP server/client and policy enforcement below remain to be built.
 
+For the concrete local-project use case, current CLI examples and proposed
+call-flow diagrams, see [Local integration](local-integration.md).
+
 ## One product, two execution modes
 
 Both modes use the same library, list operations, workflow modules and job schemas.
