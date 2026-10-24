@@ -59,6 +59,13 @@ desktop, an AI model, or a background analysis loop. The host controls when it e
 [Official MCP architecture](https://modelcontextprotocol.io/docs/learn/architecture)
 and [transport specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
 
+Refresh is driven by a committed database revision, so legacy CLI commands,
+bundle imports and ordinary SQLite writes also update list views. It only observes
+the selected workspace: a write to another data folder cannot update this one.
+Installed builds default to the platform app-data directory; a source checkout
+may select another folder through `.env`. Copy the desktop's generated MCP settings
+or explicitly set `PAPERFACT_DATA` for legacy CLI commands.
+
 Desktop list refresh preserves the active list, overview selection, filters and
 open reader. A modal dialog defers the refresh until closed. It does not switch
 to a new list or reload an in-progress editor. Local bundle import/export also

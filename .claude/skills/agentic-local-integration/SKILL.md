@@ -28,6 +28,10 @@ buttons serialize through a server just to share behavior.
 - Notify a long-lived UI through a small committed revision signal. Preserve
   active selection, filters, scroll and unsaved editors; defer refresh around
   modal interactions. Never treat a refresh as permission to invoke a model.
+  If older commands or ordinary database writers remain supported, their writes
+  must invalidate views too; an event emitted by only the newest adapter is not
+  workspace-wide tracking. Compare the actual database and membership before
+  diagnosing a stale screen: separate workspaces do not synchronize implicitly.
 - Treat helper configuration as a capability grant for its selected workspace.
   Expose bounded operations rather than paths, shell or SQL. Explain that data
   returned to an external host may enter that host's model context.

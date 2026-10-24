@@ -42,3 +42,22 @@ retry and helper restart. Final release artifacts are verified separately.
 
 API evidence: [Qt QThread.quit is thread-safe](https://doc.qt.io/qt-6/qthread.html#quit).
 This does not authorize direct connections for arbitrary UI methods.
+
+
+## Workspace-wide refresh (2026-10-24)
+
+The initial integration receipt counter observed only structured commits. Legacy
+CLI and ordinary SQLite mutations could change lists without a notification.
+`tests/test_workspace_refresh.py` reproduced 12 failures before the change.
+A bounded revision row maintained by database triggers now invalidates list views
+after committed membership, naming, metadata or analysis-state changes. Rollback
+does not publish a change; unrelated account/UI polling does not invalidate lists.
+Refresh failures retain a pending retry, and modal/popup/drag interaction defers it.
+The first targeted run passed 51 tests across workspace refresh and integration.
+
+A separate live diagnostic found two databases with different list memberships:
+the app was already displaying its own database accurately. Database invalidation
+cannot reconcile a different workspace. Check workspace identity first; merging
+research is a separate operation with its own destination and preservation rules.
+Only synthetic records are used in tests. No real research identifiers are retained
+in this evidence record. Migration and full-suite checks accompany the final change.

@@ -1,4 +1,4 @@
-"""Poll a small revision counter; never reload a reader or steal focus."""
+"""Observe committed workspace changes from all writers without reloading editors."""
 
 import sqlite3
 
@@ -25,9 +25,11 @@ class WorkspaceChanges(QObject):
                 store.DB_PATH.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.025
             )
             try:
-                return conn.execute(
-                    "SELECT COALESCE(MAX(id),0) FROM integration_changes"
-                ).fetchone()[0]
+                revision = conn.execute(
+                    "SELECT revision,(SELECT COALESCE(MAX(id),0) FROM integration_changes) "
+                    "FROM workspace_revision WHERE id=1"
+                ).fetchone()
+                return (str(store.DB_PATH.resolve()), *revision) if revision else None
             finally:
                 conn.close()
         except (sqlite3.Error, OSError):

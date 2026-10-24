@@ -434,6 +434,17 @@ def adopt_legacy_queue() -> str | None:
     from paper_daily import analysis_schedule
 
     with connect() as conn:
+        adopted = get_kv(conn, "lists.legacy_queue")
+        if adopted:
+            return adopted
+        rows = conn.execute(
+            "SELECT q.* FROM queue q JOIN papers p ON p.id=q.paper_id "
+            "WHERE q.state != 'skipped' ORDER BY q.rank, q.paper_id"
+        ).fetchall()
+        if not rows:
+            return None
+        # Normal refresh is read-only. Acquire a write lock only for the actual
+        # one-time migration, then recheck in case another process adopted it.
         conn.execute("BEGIN IMMEDIATE")
         adopted = get_kv(conn, "lists.legacy_queue")
         if adopted:

@@ -2092,10 +2092,20 @@ class MainWindow(QWidget):
 
     def _external_lists_changed(self):
         # Keep the open paper, editor contents, selection and keyboard focus intact.
-        if QApplication.activeModalWidget() is not None:
-            self._external_refresh_pending = True
+        self._external_refresh_pending = True
+        if (QApplication.activeModalWidget() is not None
+                or QApplication.activePopupWidget() is not None
+                or QApplication.mouseButtons() != Qt.MouseButton.NoButton):
+            return
+        try:
+            self._refresh_external_list_views()
+        except sqlite3.Error:
+            # Retain the pending change: the next timer tick retries even if no
+            # further write occurs. Never reload a reader to recover a list view.
             return
         self._external_refresh_pending = False
+
+    def _refresh_external_list_views(self):
         self.refresh_lists()
         self.lists_page.refresh(preserve_state=True)
         if self.stack.currentWidget() is self.queue_page:
@@ -2514,9 +2524,10 @@ class MainWindow(QWidget):
         adopted = lists_mod.adopt_legacy_queue()
         if self.active_list is None and adopted:
             self.active_list = adopted
+        entries = lists_mod.all_lists()
         self._switching = True
         self.list_picker.clear()
-        for entry in lists_mod.all_lists():
+        for entry in entries:
             self.list_picker.addItem(
                 f"{entry['name']} ({entry['read']}/{entry['count']})", entry["id"]
             )

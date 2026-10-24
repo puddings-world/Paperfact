@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from paper_daily.config import DB_PATH, ensure_dirs
+from paper_daily.workspace_revision import SCHEMA as REVISION_SCHEMA
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS integration_previews (
@@ -328,7 +329,7 @@ CREATE TABLE IF NOT EXISTS chat (
     anchor     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_chat_paper ON chat(paper_id, id);
-"""
+""" + REVISION_SCHEMA
 
 
 def now() -> str:
