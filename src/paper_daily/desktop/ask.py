@@ -12,7 +12,7 @@ import queue
 import threading
 from contextvars import copy_context
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 
 from paper_daily import llm
 
@@ -128,6 +128,7 @@ class AskRunner(QObject):
         self.read_only = read_only
         self._reading = False
         self._read_epoch = 0
+        self._pending_delivery = False
         self._results = queue.Queue()
         self._poll = QTimer(self)
         self._poll.setInterval(25)
@@ -135,7 +136,8 @@ class AskRunner(QObject):
 
     @property
     def busy(self) -> bool:
-        return self._reading or (self._thread is not None and self._thread.isRunning())
+        return (self._reading or self._pending_delivery
+                or (self._thread is not None and self._thread.isRunning()))
 
     def cancel_read(self):
         """Detach UI from a read-only query; no Qt object lives on its daemon thread."""
@@ -209,8 +211,12 @@ class AskRunner(QObject):
         self._worker.progress.connect(self._progress)
         self._worker.finished.connect(self._deliver)
         self._worker.failed.connect(self._fail)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.failed.connect(self._thread.quit)
+        # QThread.quit is thread-safe. Do not queue it on the GUI thread:
+        # a callback can arrive just before the GUI joins this thread, leaving
+        # quit undelivered and both sides waiting forever. UI delivery stays queued.
+        self._worker.finished.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
+        self._worker.failed.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
+        self._pending_delivery = True
         self._thread.start()
 
     @Slot(object)
@@ -230,9 +236,14 @@ class AskRunner(QObject):
             raise
         else:
             self.activity.finish()
+        finally:
+            self._pending_delivery = False
 
     @Slot(str)
     def _fail(self, reason: str) -> None:
-        self.activity.finish(False)
-        if self._on_fail:
-            self._on_fail(reason)
+        try:
+            self.activity.finish(False)
+            if self._on_fail:
+                self._on_fail(reason)
+        finally:
+            self._pending_delivery = False

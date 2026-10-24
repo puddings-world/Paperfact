@@ -30,6 +30,7 @@ Claude Code 使用[`.claude/skills`](https://code.claude.com/docs/en/skills)。
 | `agentic-provider-routing` | 功能、帳號、provider、model 解耦 |
 | `agentic-usage-refresh` | 背景用量查詢、快取與跨帳號競態 |
 | `agentic-private-events` | 不存問答原文的操作節點與同意機制 |
+| `agentic-local-integration` | 共用 CLI／MCP 操作、固定工作區、重試去重與畫面更新 |
 
 在 repo 中開啟 agent 時，可要求「使用 agentic-pattern-harvest 整理這次修正」。
 Codex CLI 可用 `$agentic-pattern-harvest`，Claude Code 可用

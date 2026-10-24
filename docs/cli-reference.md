@@ -55,9 +55,14 @@ a console executable named `paperfact-cli`, separate from the desktop launcher.
 /Applications/Paperfact.app/Contents/MacOS/paperfact-cli doctor
 ```
 
-On Linux the console executable is inside the AppImage, rather than installed on
-PATH. For automation, use a source checkout as above, or `paperfact-cli` in an
-unpacked build produced by `scripts/build_app.py --no-installer`.
+On Linux, use the AppImage's console mode (0.3.0+):
+
+```bash
+./Paperfact-0.3.0-linux-x86_64.AppImage --cli doctor
+```
+
+For automation, a source checkout or `paperfact-cli` in an unpacked build also
+works. Neither method adds a global command to PATH.
 With a source virtual environment explicitly activated, `paperfact` is also
 available; `paper-daily` remains a compatibility alias.
 
@@ -169,3 +174,14 @@ not PowerShell/Bash commands or built-in commands for every AI provider.
 | `/paper-queue` | Show what is coming and how to change it |
 | `/paper-note` | Append a note to today's brief |
 | `/paper-pull-notes` | Pull the notes other readers wrote on the shared page into `papers.db` |
+
+## Local agent and project integration
+
+`mcp --workspace /absolute/data/folder` runs the local stdio MCP helper.
+`integration OPERATION --workspace /absolute/data/folder --file arguments.json`
+runs the same offline operation and prints one JSON result. Without `--file`, it
+reads UTF-8 JSON from stdin. Neither command calls an AI provider.
+
+Use `integration config --workspace /absolute/data/folder` for host settings, or
+copy them from **研究資料 → 本地整合** in the desktop. The workspace must match the
+desktop's data folder. See [tools, JSON examples and retry rules](local-integration.md).

@@ -88,9 +88,20 @@ def verify(built, out):
         assert db.execute('SELECT count(*) FROM list_papers').fetchone()[0] == 1
         assert db.execute('SELECT body FROM dives').fetchone()[0]
     assert not (workspace / 'llm.json').exists()
-    result = {'passed': True, 'research_files_preserved': files,
+    from verify_local_integration import verify as verify_integration
+
+    integration = verify_integration([cli], out / 'integration-workspace', empty)
+    if sys.platform.startswith('linux'):
+        from paper_daily import __version__
+
+        appimage = ROOT / 'dist' / f'Paperfact-{__version__}-linux-x86_64.AppImage'
+        if appimage.exists():
+            integration['appimage'] = verify_integration(
+                [appimage, '--cli'], out / 'appimage-workspace',
+                {**empty, 'APPIMAGE_EXTRACT_AND_RUN': '1'})
+    result = {'passed': True, 'research_files_preserved': files, 'integration': integration,
               'checks': ['version', 'doctor', 'first-use', 'import', 'duplicate-import',
-                         'reader', 'export', 'file-fidelity'],
+                         'reader', 'export', 'file-fidelity', 'json-cli', 'mcp-stdio', 'mcp-retry'],
               'limitations': 'No real provider login, model call or Google Slides export.'}
     (out / 'report.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result))

@@ -1070,6 +1070,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--version", action="version", version=f"paperfact {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
+    sub.add_parser("mcp", help="local stdio MCP server (requires --workspace)")
+    sub.add_parser("integration", help="offline JSON research operations (requires --workspace)")
 
     def add_scope(sp, default_years="2016-2026"):
         sp.add_argument(
@@ -1401,6 +1403,13 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
+    supplied = sys.argv[1:] if argv is None else argv
+    if supplied and supplied[0] in ("mcp", "integration"):
+        # Console scripts and frozen entrypoints use integration_entry directly,
+        # before config imports. Direct cli.main callers must keep this workspace.
+        from paper_daily.integration_entry import main as integration_main
+
+        return integration_main(supplied)
     args = build_parser().parse_args(argv)
     if args.func not in (cmd_app, cmd_llm):
         from paper_daily import llm

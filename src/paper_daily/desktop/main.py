@@ -1909,6 +1909,8 @@ class MainWindow(QWidget):
             "匯出目前清單資料包…", self._export_bundle)
         self.export_bundle_action.setToolTip(
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
+        data_menu.addSeparator()
+        data_menu.addAction("本地整合 · 連接 agent…", self._local_integration)
         self.research_data_button.setMenu(data_menu)
         bar.addWidget(self.research_data_button)
 
@@ -2063,6 +2065,14 @@ class MainWindow(QWidget):
         self.reload()
         self._refresh_ai_summary()
         self.announce_ready()
+        from paper_daily.desktop.workspace_changes import WorkspaceChanges
+
+        self._external_refresh_pending = False
+        self.workspace_changes = WorkspaceChanges(self)
+        self.workspace_changes.changed.connect(self._external_lists_changed)
+        self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll)
+        self.workspace_changes.timer.timeout.connect(self._poll_external_lists)
+        self._external_lists_changed()
         if open_next:
             self.open_next_unread()
         elif not self.papers and self.list_picker.count() == 0:
@@ -2074,6 +2084,37 @@ class MainWindow(QWidget):
         self.compact_header.setVisible(collapsed)
         self.remember("top_collapsed", "1" if collapsed else "0")
         self._refresh_ai_summary()
+
+    def _local_integration(self):
+        from paper_daily.desktop.integration_dialog import IntegrationDialog
+
+        IntegrationDialog(self).exec()
+
+    def _external_lists_changed(self):
+        # Keep the open paper, editor contents, selection and keyboard focus intact.
+        if QApplication.activeModalWidget() is not None:
+            self._external_refresh_pending = True
+            return
+        self._external_refresh_pending = False
+        self.refresh_lists()
+        self.lists_page.refresh(preserve_state=True)
+        if self.stack.currentWidget() is self.queue_page:
+            current = self.queue_page._current_paper()
+            scroll = self.queue_page.view.verticalScrollBar().value()
+            self.papers = self.data.queue(list_id=self.active_list) if self.active_list else []
+            pins = self.data.pins(self.active_list or "queue")
+            for paper in self.papers:
+                paper.pinned = paper.id in pins
+            self.queue_page.refresh()
+            self.queue_page._select(current.id if current else None)
+            self.queue_page.view.verticalScrollBar().setValue(scroll)
+            read = sum(1 for paper in self.papers if paper.read)
+            self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
+
+    def _poll_external_lists(self):
+        self.workspace_changes.poll()
+        if self._external_refresh_pending and QApplication.activeModalWidget() is None:
+            self._external_lists_changed()
 
     def _schedule_settings(self) -> None:
         from paper_daily.desktop.analysis_settings import AnalysisSettings
@@ -2265,6 +2306,11 @@ class MainWindow(QWidget):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
     def closeEvent(self, event) -> None:
+        from paper_daily.desktop.integration_dialog import OperationWorker
+
+        if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
+            event.ignore()
+            return
         reader = self.reader_page
         hub = getattr(self, "activity_hub", None)
         workers = (getattr(reader, name, None) for name in

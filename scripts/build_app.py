@@ -183,6 +183,10 @@ def linux_appimage(built: Path) -> Path:
     apprun = appdir / "AppRun"
     apprun.write_text(
         '#!/bin/sh\nhere="$(dirname "$(readlink -f "$0")")"\n'
+        'if [ "$1" = "--cli" ]; then\n'
+        '  shift\n'
+        '  exec "$here/usr/lib/paperfact/paperfact-cli" "$@"\n'
+        'fi\n'
         'exec "$here/usr/lib/paperfact/Paperfact" "$@"\n',
         encoding="utf-8",
     )

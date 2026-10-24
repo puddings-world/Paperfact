@@ -12,6 +12,7 @@ generated `dependency-licenses/` directory, plus a version inventory in
 | Qt WebEngine / Chromium | Multiple third-party licenses; [notices](https://doc.qt.io/qt-6/qtwebengine-licensing.html), [source](https://code.qt.io/cgit/qt/qtwebengine.git/) |
 | Python | PSF license; [source](https://www.python.org/downloads/source/) |
 | HTTPX, HTTPCore, AnyIO, H11, Markdown-it-py, mdit-py-plugins, mdurl | MIT; packaged upstream notices and version inventory |
+| MCP Python SDK / mcp-types, Pydantic / pydantic-core | MIT; packaged upstream notices and version inventory |
 | certifi | MPL-2.0; [source](https://github.com/certifi/python-certifi) |
 | idna | BSD-3-Clause; [source](https://github.com/kjd/idna) |
 | typing-extensions | PSF-2.0; [source](https://github.com/python/typing_extensions) |

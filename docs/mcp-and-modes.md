@@ -2,9 +2,10 @@
 
 Status: required architecture, not implemented modes. Current model profiles and
 the custom gateway adapter are available; the managed service, account/credits UI,
-agent executor, MCP server/client and policy enforcement below remain to be built.
+agent executor, MCP client and managed policy enforcement below remain to be built.
+The local stdio MCP server for offline list operations ships in 0.3.0.
 
-For the concrete local-project use case, current CLI examples and proposed
+For the concrete local-project use case, CLI/MCP examples and
 call-flow diagrams, see [Local integration](local-integration.md).
 
 ## One product, two execution modes
@@ -50,7 +51,7 @@ The [official MCP architecture](https://modelcontextprotocol.io/docs/learn/archi
 defines hosts, clients and servers, and limits MCP's scope to context/tool exchange.
 It does not determine a host's model provider or token billing.
 
-Paperfact should first provide a local MCP server over stdio. A supported external
+Paperfact provides a local MCP server over stdio for structured list operations. A supported external
 agent host starts it and uses its tools against the selected local workspace.
 The desktop and built-in executor call the same underlying services directly.
 They need not serialize every in-process operation through MCP.
@@ -62,7 +63,8 @@ conversations inside an arbitrary external agent application.
 
 ## Minimum tool surface
 
-Proposed names, not existing commands:
+The broader execution surface below is a proposal. For the six implemented offline
+operations, use the [local integration tool reference](local-integration.md).
 
 | Tool | Result or allowed effect |
 | --- | --- |

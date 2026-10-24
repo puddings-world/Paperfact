@@ -9,6 +9,7 @@ license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "licensing/*.txt
 dependencies = [
     "httpx>=0.27",
     "pymupdf>=1.24",
+    "mcp>=2.1,<3",
 ]
 
 [project.optional-dependencies]
@@ -27,8 +28,8 @@ app = [
 ]
 
 [project.scripts]
-paperfact = "paper_daily.cli:main"
-paper-daily = "paper_daily.cli:main"
+paperfact = "paper_daily.integration_entry:main"
+paper-daily = "paper_daily.integration_entry:main"
 
 [build-system]
 requires = ["hatchling"]

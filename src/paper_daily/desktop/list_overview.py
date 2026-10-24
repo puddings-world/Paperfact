@@ -352,7 +352,10 @@ class ListOverview(QWidget):
         self.win.queue_page.refresh()
         self.status.setText("名稱已儲存；論文與研究內容保持不變。")
 
-    def refresh(self):
+    def refresh(self, *, preserve_state=False):
+        selected = self.view.currentItem()
+        selected_id = selected.data(Qt.ItemDataRole.UserRole) if selected else None
+        scroll = self.view.verticalScrollBar().value()
         self.view.clear()
         entries = {entry["id"]: entry for entry in lists.all_lists()}
         picker = self.win.list_picker
@@ -362,12 +365,18 @@ class ListOverview(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, list_id)
             item.setData(STATS_ROLE, entries.get(list_id))
             self.view.addItem(item)
-        self.view.setCurrentRow(max(0, picker.currentIndex()))
+        row = max(0, picker.currentIndex())
+        if preserve_state and selected_id:
+            row = next((i for i in range(self.view.count())
+                        if self.view.item(i).data(Qt.ItemDataRole.UserRole) == selected_id), row)
+        self.view.setCurrentRow(row)
+        if preserve_state:
+            self.view.verticalScrollBar().setValue(scroll)
         empty = self.view.count() == 0
         self.summary.setText(summary(list(entries.values())))
         self.empty_card.setVisible(empty)
         self.body.setVisible(not empty)
-        if self.isVisible():
+        if self.isVisible() and not preserve_state:
             self.view.setFocus()
 
     def _selection_changed(self, current, _previous):

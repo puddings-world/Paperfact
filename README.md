@@ -131,27 +131,27 @@ no automatic uploader. [Data choices →](docs/feedback-privacy.md)
 
 ## Connect your projects and agents
 
-**Available now:** another local project or an agent with shell access can use the
-CLI to create a reading list from references, add papers or import a research
-package into the same workspace. [Commands and examples →](docs/local-integration.md)
+**Available in 0.3.0:** connect a local agent through MCP, or use the JSON CLI.
+Both share the desktop's structured import: **preview papers → select → save a
+reading list**, with retry-safe writes and automatic desktop list refresh.
 
-**Planned architecture:** desktop buttons, CLI commands and MCP tools will share
-the same validated research operations. MCP support is not included in 0.2.0.
+Open **研究資料 → 本地整合 · 連接 agent…** to copy launch settings for your workspace,
+or paste an agent-prepared JSON list directly. Saving papers uses no AI tokens.
+[Setup, examples and tool reference →](docs/local-integration.md)
 
 ```mermaid
 flowchart LR
     UI["Paperfact desktop"] --> Core["Shared research operations"]
     Project["Local project / script"] --> CLI["CLI adapter"] --> Core
-    Agent["Compatible agent host"] -.-> MCP["Local MCP adapter - planned"]
-    MCP -.-> Core
+    Agent["Compatible agent host"] --> MCP["Local stdio MCP helper"]
+    MCP --> Core
     Core --> Data[("Your local workspace")]
-    Core -. "planned refresh" .-> UI
+    Data -. "refresh list views" .-> UI
 ```
 
-The intended workflow is: **agent finds papers → preview and select → save a
-Paperfact list → continue reading in the app**. Saving structured candidates will
-not require another model call; additional AI analysis is a separate action.
-Today, `import-list` still uses Paperfact's configured AI to parse references.
+The helper starts with your agent host; no cloud service or open port is needed.
+Additional AI analysis is a separate action. The older `import-list` command still
+uses Paperfact's configured AI to parse rough references.
 [How MCP works here, with a call-flow diagram →](docs/local-integration.md)
 
 ## Go further

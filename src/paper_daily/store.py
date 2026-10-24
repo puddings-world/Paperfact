@@ -17,6 +17,21 @@ from typing import Any
 from paper_daily.config import DB_PATH, ensure_dirs
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS integration_previews (
+    id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS integration_operations (
+    id TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS integration_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    list_id TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS papers (
     id                 TEXT PRIMARY KEY,
     venue              TEXT NOT NULL,
@@ -356,9 +371,9 @@ def search_papers(conn: sqlite3.Connection, text: str, limit: int = 20) -> list[
 
 
 @contextmanager
-def connect() -> Iterator[sqlite3.Connection]:
+def connect(*, timeout: float = 30) -> Iterator[sqlite3.Connection]:
     ensure_dirs()
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = sqlite3.connect(DB_PATH, timeout=timeout)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")

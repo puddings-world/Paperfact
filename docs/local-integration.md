@@ -1,155 +1,196 @@
 # Connect a local project or agent to Paperfact
 
-**Available in 0.2.0:** CLI commands can create a list from references, add papers,
-import research packages and run analysis in a selected workspace.
-**Planned:** a local MCP server, a structured import API shared by all entry points,
-operation IDs for safe retries, and notifications that refresh an open desktop.
-The proposed tool names below are design examples, not installed commands.
+**Available in 0.3.0:** local MCP over stdio and a JSON CLI use the same offline
+research operations as the desktop's structured import. An external agent can
+save a reading list without calling another model. The desktop can be closed.
 
-## One research operation, three ways to call it
+## Connect once
 
-The desktop takes button clicks, the CLI takes command arguments, and an MCP
-adapter takes tool requests. Each adapter should validate its transport input and
-call the same research service. That service owns paper identity, validation,
-transactions, deduplication and the result schema. A fix to list creation then
-applies to all three entry points.
+In Paperfact, open **研究資料 → 本地整合 · 連接 agent… → 連接 agent** and copy the
+generated configuration. It contains the executable and **this workspace's data
+folder**, with no account keys. Add it to a host supporting `mcpServers` JSON.
+For hosts using another configuration format, copy the same `command` and `args`
+into that host's MCP settings; the JSON wrapper itself is not universal.
 
-```mermaid
-flowchart TB
-    UI["Paperfact desktop"] --> Core["Shared research operations"]
-    Script["Another local project"] --> CLI["CLI adapter"]
-    CLI --> Core
-    Host["MCP-compatible agent host"] --> MCP["Local MCP adapter - planned"]
-    MCP --> Core
-    Core --> DB[("Selected local workspace")]
-    Core -. "planned change event" .-> UI
+```json
+{
+  "mcpServers": {
+    "paperfact": {
+      "command": "C:\\Apps\\Paperfact\\paperfact-cli.exe",
+      "args": ["mcp", "--workspace", "D:\\Research\\Paperfact"]
+    }
+  }
+}
 ```
 
-This is the target architecture. Today, bundle import/export already share
-`research_service.py`; other commands use modules such as `lists.py` directly.
-The full structured list-creation boundary still needs to be extracted. Neither
-the desktop nor the CLI needs to call through MCP to use an in-process service.
-The MCP server can run without the desktop window being open.
+The example paths are placeholders; prefer the generated settings. A source
+checkout generates its Python interpreter with `-m paper_daily`; installed
+Windows and macOS builds use the bundled `paperfact-cli` executable. The Linux
+AppImage uses its persistent file path with `--cli` rather than a temporary mount path.
+The helper works independently of the terminal's current directory. Re-copy
+settings after moving the checkout, executable or workspace.
 
-## What MCP contributes
+Ask your connected agent: **“Save these papers as a Paperfact list called
+Model quantization, in this reading order. Preview uncertain matches first.”**
+The host discovers tools and invokes them; you do not type protocol messages.
+Host permission prompts still follow that host's settings.
 
-MCP defines how an agent application discovers and calls tools. The **host** is
-the agent application; its **client** communicates with a **server** that exposes
-Paperfact operations. Tool definitions describe inputs using JSON Schema, and
-calls can return structured results. The host and model decide when to request
-a tool; Paperfact executes and validates the operation.
-[Official architecture](https://modelcontextprotocol.io/docs/learn/architecture)
-and [tools specification](https://modelcontextprotocol.io/specification/2026-07-28/server/tools).
+No MCP-capable host? The same dialog's **匯入 agent 整理的清單** tab accepts the
+JSON format below. Preview it, check the papers, then save. Full research packages
+with PDFs, notes and slides still use **研究資料 → 匯入研究資料包**.
 
-For this local use case, use **stdio** first: the host starts a Paperfact helper
-process and exchanges JSON-RPC messages over its standard input/output. A local
-stdio server does not need a public URL or a cloud service. Exact host settings
-and supported protocol/SDK versions must be verified during implementation.
-[Official transports](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
+## One operation, three entry points
 
-MCP supplies the tool protocol; it does not automatically implement paper search,
-list validation, UI refresh, deduplication, model login or billing. Those remain
-Paperfact and host responsibilities. A tool result returned to a cloud-backed
-agent may enter that agent's model context: local storage is not a promise that
-all returned data stays on the computer. Return IDs and bounded summaries by default.
+```mermaid
+flowchart LR
+    UI["Desktop JSON import"] --> Core["Shared research operations"]
+    Script["Local project"] --> CLI["JSON CLI"] --> Core
+    Host["Agent host + MCP client"] --> MCP["Local stdio helper"] --> Core
+    Core --> DB[("One selected workspace")]
+    DB -. "revision checked every 2 seconds" .-> Refresh["Refresh desktop lists"]
+```
 
-## Example: an agent has already found the papers
+MCP is a **protocol**, and Paperfact supplies a **server process** implementing
+it. With stdio, the host starts that process and exchanges requests through its
+standard input/output. There is no HTTP listener, public URL, cloud deployment
+or always-running Windows service. The helper stays alive while the host keeps
+the connection open, using memory and waiting for requests; it does not load the
+desktop, an AI model, or a background analysis loop. The host controls when it exits.
+[Official MCP architecture](https://modelcontextprotocol.io/docs/learn/architecture)
+and [transport specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
 
-You ask an agent working in another project: "Save these selected papers as a new
-Paperfact list called Model quantization, and keep my reading order."
+Desktop list refresh preserves the active list, overview selection, filters and
+open reader. A modal dialog defers the refresh until closed. It does not switch
+to a new list or reload an in-progress editor. Local bundle import/export also
+already share a service; older AI bibliography/topic commands remain separate
+workflows and are not converted into MCP calls.
 
-The following is a **proposed** flow, including application-level staging and
-desktop notifications that MCP itself does not provide:
+## Preview, select, save
 
 ```mermaid
 sequenceDiagram
-    actor User as Researcher
-    participant Host as Agent host + MCP client
-    participant MCP as Paperfact local MCP server
-    participant Core as Shared research service
+    participant Agent as Agent + MCP client
+    participant MCP as Paperfact helper
+    participant Core as Shared operations
     participant DB as Local workspace
-    participant UI as Paperfact desktop
-    Host->>MCP: tools/list
-    MCP-->>Host: Tool descriptions and input schemas
-    User->>Host: Save the selected papers as a named list
-    Host->>MCP: tools/call imports.propose with papers and sources
-    MCP->>Core: Validate candidates and resolve identity
-    Core-->>MCP: Preview ID, matches and warnings
-    MCP-->>Host: Structured preview
-    Host-->>User: Show the proposed list when review is needed
-    Host->>MCP: tools/call imports.commit with selection and operation ID
-    MCP->>Core: Commit the authorized selection
-    Core->>DB: Atomic save of list, members and provenance
-    Core-->>MCP: List ID, counts and warnings
-    MCP-->>Host: Structured result
-    Core-->>UI: App-specific change notification if open
-    Host-->>User: Saved list ID and summary
+    Agent->>MCP: imports.propose with name and papers
+    MCP->>Core: Validate fields and match local identities
+    Core->>DB: Save seven-day preview
+    Core-->>Agent: Preview ID, candidate IDs, matches and warnings
+    Agent->>MCP: imports.commit with selection and operation ID
+    MCP->>Core: Check retry identity and current paper matches
+    Core->>DB: Atomic list, members, result and change revision
+    Core-->>Agent: List ID and added count
+    Note over Agent,DB: Retry the same operation ID and payload to recover the same result
 ```
 
-The host must first be configured with the local helper's executable, arguments
-and selected workspace. Compatible hosts can then discover tools with `tools/list`
-and invoke one with `tools/call`. Users do not need to type protocol messages.
-Host permission settings and the scope of the user's request determine when
-additional approval is necessary; a preview need not mean another modal on every call.
+| Tool / CLI operation | Result |
+|---|---|
+| `lists.list` | IDs, names and paper counts; pagination up to 100 lists |
+| `lists.read` | Ordered titles, identifiers and source URLs; up to 100 papers per page |
+| `imports.propose` | Validate 1–500 structured papers and save a preview for seven days |
+| `imports.commit` | Save selected candidate IDs in their supplied order, atomically |
+| `imports.discard` | Cancel a preview, leaving saved research untouched |
+| `operations.inspect` | Recover a completed commit by operation ID |
 
-Proposed operations:
+All six operations are **offline and use no AI**. Metadata supplied by an agent
+is not publication verification. Sources are stored as data; URLs are not fetched
+by these tools. Open the list to use the desktop's existing PDF preparation,
+or request AI analysis separately through the app or the existing `analyze` CLI.
+MCP analysis/job-control tools are not included in this release.
 
-| Operation | Responsibility | Model use |
-|---|---|---|
-| `lists.list` | List collection IDs and names in the selected workspace | None |
-| `imports.propose` | Validate structured paper candidates; report matches and uncertainty | None by default; metadata lookup may use the network |
-| `imports.commit` | Save the chosen candidates and reading order atomically | None |
-| `analysis.start` | Start a separate, explicitly requested analysis job | Uses the selected Paperfact connection and budget |
-| `jobs.inspect` | Return job state and observable progress | None |
+## JSON CLI from any project
 
-An externally prepared import should **not call another model just to store it**.
-The external host pays for its own research/reasoning. Asking Paperfact to perform
-additional analysis is a separate action using Paperfact's selected AI connection.
-Rough references that still need parsing and topic discovery remain distinct
-AI-enabled workflows; the current `import-list` command does use Paperfact's AI.
+Use `paperfact integration OPERATION --workspace ABSOLUTE_FOLDER --file input.json`.
+Omit `--file` to read UTF-8 JSON from stdin (`{}` for operations with no arguments).
+Use the same folder the desktop shows in **本地整合**. The explicit argument wins
+over inherited environment variables and a source checkout's `.env`.
 
-For safe retries, a proposed commit request includes a caller-generated operation
-ID. The same ID and payload return the original result; reusing the ID for a
-different payload is an error. Paper matching is a separate concern: detect DOI,
-arXiv or other verified identity matches, and surface uncertain title matches.
-All adapters must enforce these rules, including concurrent callers targeting
-the same workspace. A database transaction alone is not retry deduplication.
+For a source checkout, replace `paperfact` with its absolute Python executable
+and `-m paper_daily`. See [platform-specific executable paths](cli-reference.md).
 
-## What you can use now
+Create `papers.json`:
 
-From another Windows project, a source installation can be called by absolute
-path. Replace these example paths with the real checkout, workspace and UTF-8 file:
+```json
+{
+  "name": "Model quantization",
+  "papers": [
+    {
+      "title": "Example paper title",
+      "authors": ["A. Researcher"],
+      "year": 2025,
+      "doi": "10.1234/example",
+      "url": "https://example.org/paper",
+      "pdf_url": "https://example.org/paper.pdf",
+      "reason": "Read first for the background and notation."
+    }
+  ]
+}
+```
+
+Only `name`, `papers`, and each paper's `title` are required. Other accepted paper
+fields are `venue` and `arxiv_id`; unknown fields are rejected. Omit unavailable
+fields rather than inserting `null`. Input is limited to 2 MB. To append to an
+existing list, add `target_list_id` from `lists.list`; its existing name and
+members stay unchanged.
+
+Windows PowerShell:
 
 ```powershell
-$env:PAPERFACT_DATA = "D:\Research\Paperfact-workspace"
-& "C:\Projects\Paperfact\.venv\Scripts\python.exe" `
-  -m paper_daily import-list "Model quantization" `
-  --file "C:\Projects\Experiment\references.txt" `
-  --slug "quantization-research"
+& "C:\Projects\Paperfact\.venv\Scripts\python.exe" -m paper_daily integration imports.propose `
+  --workspace "D:\Research\Paperfact" --file "C:\Projects\Experiment\papers.json"
 ```
 
-The installed Windows build instead ships
-`$env:LOCALAPPDATA\Programs\Paperfact\paperfact-cli.exe`; use it with the same
-subcommand and workspace setting. [Cross-platform CLI paths](cli-reference.md).
+macOS / Linux source checkout:
 
-Important current behavior:
+```bash
+/path/to/Paperfact/.venv/bin/python -m paper_daily integration imports.propose \
+  --workspace "$HOME/Research/Paperfact" --file ./papers.json
+```
 
-- The desktop and external process must select the **same workspace**. Source
-  checkouts and installed builds have different defaults. A source checkout's
-  `.env` may set `PAPERFACT_DATA`; an installed build does not read that file.
-- `import-list` parses references with Paperfact's configured AI and then resolves
-  papers. It is not the proposed no-model structured import operation.
-- `--slug` names a list, not an operation ID; it does not provide the planned
-  retry contract. Do not use another list's ID unintentionally.
-- CLI results are primarily human-readable output. Stable structured results for
-  external list creation remain to be implemented.
-- Return to the desktop's list overview to reload lists created externally.
-  Automatic external-change notification is not implemented yet.
-- An external agent with shell access can use these commands today. An agent host
-  needs an MCP integration to discover future Paperfact tools; merely opening an
-  agent window does not connect it to Paperfact.
+The response is one JSON envelope: `{"ok":true,"result":{...}}`. Copy the returned
+`preview_id`, choose candidate IDs (`"0"`, `"1"`, …), and create `commit.json`:
 
-The shared service should authorize access to the selected workspace and accept
-bounded research operations, rather than exposing arbitrary SQL or shell execution.
-Downloaded sources and paper text are data, not instructions to the integration.
-For the broader AI/account architecture, see [MCP and execution modes](mcp-and-modes.md).
+```json
+{"preview_id":"COPY_RETURNED_ID","operation_id":"experiment-import-001","selected":["0"]}
+```
+
+Run the same command with `imports.commit --file commit.json`. CLI failures return
+`{"ok":false,"error":{"code":"...","message":"..."}}` and exit code 2.
+MCP domain failures set the tool error flag with the same error object as JSON
+text. SDK schema errors are reported by MCP before the operation executes.
+
+To generate the launch configuration without opening the app:
+
+```bash
+paperfact integration config --workspace /absolute/path/to/workspace
+```
+
+## Retries, matching and boundaries
+
+- Generate an operation ID once per intended commit and keep it across timeouts.
+  The same ID and request return the original result; changing selection or
+  preview under that ID returns `conflict`. A new ID means a new operation.
+- `operations.inspect` returns `committed` plus the saved result, or
+  `not_committed`. A concurrent commit may still be finishing; retry with the
+  original ID. Success records persist even after preview expiry or cancellation.
+- DOI and arXiv matches reuse existing papers. Conflicting identifiers fail the
+  entire transaction. Title-only matches are warnings, not automatic merges.
+  After checking identity, supply `reuse: {"0":"EXISTING_PAPER_ID"}` to commit.
+- Existing notes, explanations, reading order and metadata are preserved. New
+  members append in selected order; missing identifiers/URLs may be filled.
+  Source URLs and reading reasons remain with the saved research.
+- Previews expire after seven days and are cleaned on a later proposal. Use
+  `imports.discard` to remove one sooner. Commit receipts persist for retry safety.
+  These integration records are local bookkeeping, not shared research-package content.
+- Tools cannot switch workspace, run shell/SQL, read arbitrary files, select AI
+  accounts, or export credentials. Connecting a host grants access to the tool
+  set for that workspace. Titles returned to a cloud-backed host can enter its
+  model context; local storage is not a guarantee of local-only model processing.
+- No analytics uploader or OpenTelemetry exporter is added by this integration.
+
+The official Python SDK is exercised through real stdio subprocesses in tests;
+the frozen-app acceptance check repeats discovery, commit and retry. Host-specific
+settings screens and real Claude/Codex/Gemini sessions are separate manual checks.
+For future paid execution and external source integrations, see
+[MCP and execution modes](mcp-and-modes.md).
