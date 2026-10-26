@@ -151,7 +151,8 @@ class PresentationPane(QWidget):
         self.export_button = QPushButton("匯出簡報…")
         self.export_button.setToolTip(
             "匯出目前這份簡報，預設為 PDF；可選 HTML、講稿或可編輯格式。"
-            "分享整份研究清單請用上方「研究資料」。")
+            "分享整份研究清單請用上方「研究資料」。"
+        )
         self.export_button.clicked.connect(self._export)
         self.toolbar.addWidget(self.export_button)
         self.google_button = QToolButton()
@@ -1007,7 +1008,14 @@ class PresentationPane(QWidget):
     def _ensure_evidence(self, payload: dict) -> None:
         """A figure or table from the paper is evidence the slide must be able to cite,
         even when the deck was generated without the original."""
-        sid, label = payload["id"], payload.get("label") or payload["id"]
+        from paper_daily.figures import source_id
+
+        sid = source_id(payload["id"], payload.get("document_hash"))
+        label = payload.get("label") or payload["id"]
+        for existing in [*self.deck.figures, *self.deck.sources]:
+            if (existing["id"] == sid and payload.get("document_hash")
+                    and existing.get("document_hash") != payload["document_hash"]):
+                raise ValueError("Existing source has unverified document provenance")
         page = payload.get("page") if type(payload.get("page")) is int else None
         if payload.get("file") and not any(f["id"] == sid for f in self.deck.figures):
             self.deck.figures.append(
@@ -1017,12 +1025,19 @@ class PresentationPane(QWidget):
                     "label": label,
                     "caption": payload.get("caption") or "",
                     "page": page,
+                    **{
+                        key: payload[key]
+                        for key in ("document_hash", "cache_key")
+                        if payload.get(key)
+                    },
                 }
             )
             self.figure.addItem(label, sid)
         if not any(s["id"] == sid for s in self.deck.sources):
             self.deck.sources.append(
-                {"id": sid, "label": label, "kind": "figure", "page": page, "url": None}
+                {"id": sid, "label": label, "kind": "figure", "page": page, "url": None,
+                 **({"document_hash": payload["document_hash"]}
+                    if payload.get("document_hash") else {})}
             )
             self._add_source_item(sid, label)
 
@@ -1176,10 +1191,25 @@ class PresentationPane(QWidget):
             self._material_feedback("每頁最多 60 個物件，請先刪除部分物件或換一頁。")
             return
         kind = payload.get("kind")
+        if kind in ("exhibit", "table") and payload.get("document_hash"):
+            from paper_daily.figures import source_id
+
+            try:
+                payload = dict(payload, id=source_id(payload["id"], payload["document_hash"]))
+            except (KeyError, TypeError, ValueError) as exc:
+                self._material_feedback(f"Invalid material source: {exc}")
+                return
         source = payload.get("id") if kind in ("exhibit", "table") else payload.get("source")
         if kind == "sentence":
             page = payload.get("page")
             source = f"page:{page}" if type(page) is int and page > 0 else "original"
+            from paper_daily.figures import source_id
+
+            try:
+                source = source_id(source, payload.get("document_hash"))
+            except (TypeError, ValueError) as exc:
+                self._material_feedback(f"Invalid material source: {exc}")
+                return
         if source and not self._can_add_sources([source]):
             self._material_feedback(self.status.text())
             return
@@ -1203,11 +1233,19 @@ class PresentationPane(QWidget):
                 spec = text_box(str(payload["text"]), 56, 82, 900, 60, 30, bold=True)
             elif kind == "sentence":
                 page = payload.get("page")
-                sid = f"page:{page}" if type(page) is int and page > 0 else "original"
+                sid = source
                 payload = dict(payload, source=sid)
-                if not any(s["id"] == sid for s in self.deck.sources):
-                    label = f"原文第 {page} 頁" if sid != "original" else "原文（無頁碼）"
-                    self.deck.sources.append(dict(id=sid, kind="original", label=label, page=page))
+                existing = next((s for s in self.deck.sources if s["id"] == sid), None)
+                if (existing and payload.get("document_hash")
+                        and existing.get("document_hash") != payload["document_hash"]):
+                    raise ValueError("Existing source has unverified document provenance")
+                if existing is None:
+                    label = f"原文第 {page} 頁" if page else "原文（無頁碼）"
+                    self.deck.sources.append(dict(
+                        id=sid, kind="original", label=label, page=page,
+                        **({"document_hash": payload["document_hash"]}
+                           if payload.get("document_hash") else {}),
+                    ))
                     self._add_source_item(sid, label)
                 quote = f"「{payload['text']}」" + (f"（p.{page}）" if page else "")
                 spec = text_box(quote, 56, 313, 820, 140, 22)
@@ -1910,8 +1948,9 @@ class PresentationPane(QWidget):
         job.start(self.deck, dest)
 
     def _pdf_progress(self, done, total):
-        self._pdf_activity.update(dict(stage=f"已繪製 {done}/{total} 頁",
-                                       completed=done, total=total))
+        self._pdf_activity.update(
+            dict(stage=f"已繪製 {done}/{total} 頁", completed=done, total=total)
+        )
 
     def _pdf_finished(self, filename: str) -> None:
         self._pdf_activity.finish(message="PDF 已匯出")

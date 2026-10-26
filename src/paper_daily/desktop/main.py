@@ -74,6 +74,16 @@ from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
 from paper_daily.desktop.analysis_bar import AnalysisBar
 from paper_daily.desktop.ask import AskRunner, build_prompt
 from paper_daily.desktop.cites_pane import CitesPane, _spawn
+from paper_daily.desktop.document_flow import (
+    DocumentRunner,
+    ManagedDocumentReader,
+    anchor_allowed,
+    loaded_document_valid,
+    managed,
+)
+from paper_daily.desktop.document_flow import (
+    message as document_message,
+)
 from paper_daily.desktop.fetcher import FetchRunner
 from paper_daily.desktop.figure_pane import FigurePane
 from paper_daily.desktop.flow_layout import FlowLayout
@@ -167,6 +177,9 @@ class Paper:
     # Every source was tried and none had the PDF: it needs a hand.
     pdf_failed: bool = False
     _has_pdf: bool | None = None
+    _document_reader: object | None = None
+    _document_status: object | None = None
+    _loaded_document: object | None = None
 
     @property
     def read(self) -> bool:
@@ -174,6 +187,13 @@ class Paper:
 
     @property
     def pdf_path(self) -> Path:
+        if managed(self):
+            result = self._loaded_document or self._document_status
+            if result is not None and result.available and result.path is not None:
+                return result.path
+            # A managed paper never resolves through a sanitized legacy alias.
+            key = hashlib.sha256(self.id.encode()).hexdigest()
+            return PDF_DIR / ".managed-unavailable" / f"{key}.pdf"
         import re
 
         return PDF_DIR / (re.sub(r"[^A-Za-z0-9._-]", "_", self.id) + ".pdf")
@@ -183,7 +203,9 @@ class Paper:
         """Cached: the delegate asks this on every repaint of every visible row, and
         the PDF filter asks it of all 5000, so it must not be a stat() each time."""
         if self._has_pdf is None:
-            self._has_pdf = self.pdf_path.exists()
+            self._has_pdf = (
+                bool(self._document_status.available) if managed(self) else self.pdf_path.exists()
+            )
         return self._has_pdf
 
 
@@ -250,7 +272,29 @@ class Data:
                 rows = conn.execute(self.LIST_SQL, (list_id, limit))
             else:
                 rows = conn.execute(self.QUEUE_SQL, (limit,))
-            return [_row_to_paper(r) for r in rows]
+            papers = [_row_to_paper(r) for r in rows]
+            from paper_daily.document_reader import from_workspace
+
+            database = next(
+                row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"
+            )
+            if database:
+                registered = False
+                if conn.execute(
+                    "SELECT 1 FROM sqlite_master "
+                    "WHERE type='table' AND name='document_reader_paths'"
+                ).fetchone():
+                    registered = conn.execute(
+                        "SELECT 1 FROM document_reader_paths WHERE id=1"
+                    ).fetchone() is not None
+                resolver = from_workspace(
+                    Path(database), legacy_root=None if registered else PDF_DIR
+                )
+                states = resolver.inspect_many([paper.id for paper in papers], conn=conn)
+                for paper in papers:
+                    paper._document_reader = resolver
+                    paper._document_status = states[paper.id]
+            return papers
 
     def pins(self, scope: str) -> set[str]:
         with connect() as conn:
@@ -461,7 +505,7 @@ def tag(text: str, pal: dict[str, str], kind: str = "plain") -> str:
     )
 
 
-class ReaderPage(QWidget):
+class ReaderPage(ManagedDocumentReader, QWidget):
     def __init__(self, window: MainWindow) -> None:
         super().__init__()
         self.win = window
@@ -477,6 +521,8 @@ class ReaderPage(QWidget):
         # Its own runner: Google failing hands over to it before that thread has quit.
         self.refine_runner = AskRunner(self)
         self.fetcher = FetchRunner(self)
+        self.document_runner = DocumentRunner(self)
+        self._active_document = None
         self._res_job: subprocess.Popen | None = None
         self._res_poll = QTimer(self)
         self._res_poll.setInterval(800)
@@ -532,6 +578,10 @@ class ReaderPage(QWidget):
             btn.clicked.connect(slot)
             bar.addWidget(btn)
         bar.addWidget(self.pdf_note)
+        self.document_refresh = QPushButton(document_message("refresh"))
+        self.document_refresh.clicked.connect(self._use_latest_document)
+        self.document_refresh.hide()
+        bar.addWidget(self.document_refresh)
         # Selection has no affordance of its own, and a feature nobody finds is not a
         # feature. Ctrl+wheel zooms too, which is the other thing people try first.
         hint = QLabel(f"選取原文 → 翻譯 / 寫筆記 / 問這段 · {fonts.ZOOM_WHEEL}縮放")
@@ -895,7 +945,7 @@ class ReaderPage(QWidget):
     def _check_resources(self) -> None:
         """Look for the paper's code in the background, once, and again once its
         text has arrived: the paper's own words are the best source."""
-        if not self.paper or self._running(self._res_job):
+        if not self.paper or managed(self.paper) or self._running(self._res_job):
             return
         with connect() as conn:
             if not resources.needs_check(conn, self.paper.id):
@@ -916,6 +966,12 @@ class ReaderPage(QWidget):
 
     def _load_pdf(self) -> None:
         assert self.paper
+        if self._load_managed_document():
+            return
+        self.document_refresh.hide()
+        self.auto_highlights.setEnabled(True)
+        self._active_document = None
+        self._pdf_fingerprint = None
         path = self.paper.pdf_path
         if path.exists() and self.pdf.load(path):
             self.pdf.show()
@@ -928,6 +984,7 @@ class ReaderPage(QWidget):
             QTimer.singleShot(0, self._prepare_reading_highlights)
             return
 
+        self.pdf.unload()
         self.pdf.hide()
         self.open_external.setEnabled(False)
         pal = self.win.pal
@@ -1029,7 +1086,7 @@ class ReaderPage(QWidget):
 
     def _prepare_reading_highlights(self) -> None:
         pane = self.presentation_pane
-        if (not self.paper or not self.auto_highlights.isChecked()
+        if (not self.paper or managed(self.paper) or not self.auto_highlights.isChecked()
                 or pane.paper_id != self.paper.id or not self.pdf.isVisible()):
             return
         key = (self.paper.id, getattr(self, "_pdf_fingerprint", None))
@@ -1053,13 +1110,26 @@ class ReaderPage(QWidget):
                 count = sum(mark.get("origin") == "ai" for mark, _words in selection._marks)
                 self.pdf_note.setText(f"已同步 {count} 段 AI 重點（綠色）與素材。")
 
-    def _load_highlights(self, path: Path) -> None:
+    def _load_highlights(self, path: Path, *, fingerprint=None) -> None:
         selection = getattr(self.pdf, "selection", None)
+        if managed(self.paper):
+            active = getattr(self, "_active_document", None)
+            resolver = getattr(self.paper, "_document_reader", None)
+            if (active is None or resolver is None or active.path != path
+                    or not resolver.intact(active)):
+                self._pdf_fingerprint = None
+                if selection:
+                    selection.set_highlights([])
+                self.highlight_status.setText(document_message("invalid"))
+                return
+            fingerprint = active.sha256
         self._pdf_fingerprint = None
         if selection is None or not self.paper:
             return
         try:
-            self._pdf_fingerprint = pdf_highlights.document_hash(path)
+            active = getattr(self, "_active_document", None)
+            known = active.sha256 if active is not None and active.path == path else None
+            self._pdf_fingerprint = fingerprint or known or pdf_highlights.document_hash(path)
             marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
             selection.set_highlights(marks)
             ai = sum(mark.get("origin") == "ai" for mark in marks)
@@ -1072,6 +1142,9 @@ class ReaderPage(QWidget):
             self.highlight_status.setText(f"螢光標記無法載入：{exc}")
 
     def _highlight_selection(self) -> None:
+        if not loaded_document_valid(self):
+            self.pdf_note.setText(document_message("invalid"))
+            return
         selection = getattr(self.pdf, "selection", None)
         fingerprint = getattr(self, "_pdf_fingerprint", None)
         if not self.paper or not selection or not fingerprint or not selection.anchor():
@@ -1090,6 +1163,9 @@ class ReaderPage(QWidget):
         self.pdf_note.setText("螢光標記已保存並同步素材。")
 
     def _erase_selection_highlights(self) -> None:
+        if not loaded_document_valid(self):
+            self.pdf_note.setText(document_message("invalid"))
+            return
         selection = getattr(self.pdf, "selection", None)
         fingerprint = getattr(self, "_pdf_fingerprint", None)
         if not self.paper or not selection or not fingerprint:
@@ -1386,6 +1462,9 @@ class ReaderPage(QWidget):
             anchor = json.loads(row["anchor"])
         except ValueError:
             return
+        if not anchor_allowed(self, anchor):
+            self.note_status.setText(document_message("anchor"))
+            return
         if selection.focus(anchor):
             self.note_status.setText(f"已跳到第 {row['page']} 頁")
             QTimer.singleShot(2500, self.note_status, lambda: self.note_status.setText(""))
@@ -1521,6 +1600,9 @@ class ReaderPage(QWidget):
         if selection is None or not self.pdf.isVisible():
             status.setText("原文尚未載入，請先下載或開啟這篇論文的 PDF。")
             return
+        if not anchor_allowed(self, source):
+            status.setText(document_message("anchor"))
+            return
         page = source.get("page")
         text = str(source.get("text") or "").strip()
         rect = source.get("rect")
@@ -1561,6 +1643,13 @@ class ReaderPage(QWidget):
         selection = getattr(self.pdf, "selection", None)
         if selection is None or not self.pdf.isVisible():
             return
+        if not anchor_allowed(self, {
+            "document_hash": getattr(
+                getattr(self, "figure_pane", None), "loaded_document_hash", None
+            )
+        }):
+            self.pdf_note.setText(document_message("anchor"))
+            return
         anchor = selection.find(page - 1, caption)
         if anchor is None or not selection.focus(anchor):
             selection.scroll_to_page(page - 1)
@@ -1593,8 +1682,11 @@ class ReaderPage(QWidget):
             self.pdf_note.setText(self.pdf.fit_width())
 
     def _open_external(self) -> None:
+        if not loaded_document_valid(self):
+            self.pdf_note.setText(document_message("invalid"))
+            return
         if self.paper and self.paper.pdf_path.exists():
-            QDesktopServices.openUrl(f"file:///{self.paper.pdf_path.as_posix()}")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.paper.pdf_path)))
 
     # ---- acting on a passage of the paper --------------------------------
     def _translate_selection(self, text: str) -> None:
@@ -1639,10 +1731,17 @@ class ReaderPage(QWidget):
         The page is one-based because it is shown; the anchor inside stays
         zero-based because that is what the overlay indexes by.
         """
+        if not loaded_document_valid(self):
+            self.note_status.setText(document_message("invalid"))
+            return None, None
         selection = getattr(self.pdf, "selection", None)
         spot = selection.anchor() if selection is not None else None
         if not spot:
             return None, None
+        spot = dict(spot)
+        fingerprint = getattr(self, "_pdf_fingerprint", None)
+        if fingerprint:
+            spot["document_hash"] = fingerprint
         return spot["p0"] + 1, json.dumps(spot)
 
     def _note_selection(self, text: str) -> None:
@@ -2107,6 +2206,10 @@ class MainWindow(QWidget):
         self._external_refresh_pending = False
 
     def _refresh_external_list_views(self):
+        reader = getattr(self, "reader_page", None)
+        notify_document = getattr(reader, "_check_document_update", None)
+        if notify_document is not None:
+            notify_document()
         self.refresh_lists()
         self.lists_page.refresh(preserve_state=True)
         if self.stack.currentWidget() is self.queue_page:
@@ -2261,7 +2364,8 @@ class MainWindow(QWidget):
             return False
         if (pane.busy or any(worker.busy for worker in (
                 reader.runner, reader.translate_runner, reader.refine_runner, reader.fetcher,
-        )) or QApplication.activeModalWidget() is not None):
+                getattr(reader, "document_runner", None),
+        ) if worker is not None) or QApplication.activeModalWidget() is not None):
             pane.status.setText("仍有工作或對話視窗，暫不重啟；完成後可再試一次。")
             return False
         if not pane.save_changes():
@@ -2325,7 +2429,7 @@ class MainWindow(QWidget):
         reader = self.reader_page
         hub = getattr(self, "activity_hub", None)
         workers = (getattr(reader, name, None) for name in
-                   ("runner", "translate_runner", "refine_runner", "fetcher"))
+                   ("runner", "translate_runner", "refine_runner", "fetcher", "document_runner"))
         if (hub is not None and hub.busy) or any(r is not None and r.busy for r in workers):
             event.ignore()
             board = getattr(self, "activity_board", None)

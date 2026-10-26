@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
 from paper_daily import materials as material_store
 from paper_daily.desktop import ai_style
 from paper_daily.desktop.slide_canvas import MATERIAL_MIME
-from paper_daily.fetch import _safe_name
 from paper_daily.materials import Materials
 
 
@@ -202,6 +201,9 @@ class MaterialsPanel(QWidget):
                             "rows",
                             "rect",
                             "document_hash",
+                            "cache_key",
+                            "navigation_available",
+                            "navigation_reason",
                         )
                     },
                 ),
@@ -255,6 +257,9 @@ class MaterialsPanel(QWidget):
                         anchor=item.get("anchor"),
                         mark_id=item.get("mark_id"),
                         origin=item.get("origin", "ai"),
+                        document_hash=item.get("document_hash"),
+                        navigation_available=item.get("navigation_available"),
+                        navigation_reason=item.get("navigation_reason"),
                     ),
                     "AI 選取理由：" + item.get("reason", "") + "\n\n原文：\n" + item["text"],
                 )
@@ -377,10 +382,13 @@ class MaterialsPanel(QWidget):
         if payload and payload.get("kind") == "exhibit":
             name = payload.get("file")
             if self.paper_id and isinstance(name, str) and Path(name).name == name:
-                folder = (material_store.FIG_DIR / _safe_name(self.paper_id)).resolve()
-                image_path = (folder / name).resolve()
-                if image_path.is_relative_to(folder):
-                    self._preview_image = QImage(str(image_path))
+                from paper_daily.figures import image_path
+
+                source = image_path(
+                    self.paper_id, payload, root=material_store.FIG_DIR, historical=True
+                )
+                if source is not None:
+                    self._preview_image = QImage(str(source))
             if self._preview_image.isNull():
                 self._preview_error = "找不到可預覽的原圖；以下仍保留說明與可用表格資料。"
         self._render_preview(reset_scroll=True)

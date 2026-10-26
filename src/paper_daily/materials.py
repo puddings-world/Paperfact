@@ -8,7 +8,7 @@ discussing, and the PDF text layer holds the headings and claims. This module re
 those pieces into one list the deck editor can offer for picking or dragging, so a
 slide can carry a clean editable table rather than a crop of one.
 
-Exhibit IDs follow presentations.collect_evidence (``figure:N`` by manifest position)
+Exhibit IDs follow presentations.collect_evidence (position plus managed PDF hash)
 so a material dropped on a slide cites the same evidence entry a generated deck would.
 """
 
@@ -23,8 +23,8 @@ from pathlib import Path
 from paper_daily import paper_highlights, pdf_highlights
 from paper_daily.closeread import MARKER
 from paper_daily.config import DATA_DIR, PDF_DIR, TEXT_DIR
-from paper_daily.fetch import _safe_name
-from paper_daily.figures import FIG_DIR
+from paper_daily.fetch import _safe_name, capture_document, document_current
+from paper_daily.figures import FIG_DIR, cache_directory
 from paper_daily.presentations import _atomic_json
 from paper_daily.store import connect
 
@@ -71,8 +71,16 @@ def exhibit_key(label: str) -> str:
     return f"{kind} {number.strip().lower()}"
 
 
-def figure_entries(paper_id: str) -> list[dict]:
-    index_path = FIG_DIR / _safe_name(paper_id) / "index.json"
+def figure_entries(paper_id: str, *, document=None) -> list[dict]:
+    document = capture_document(paper_id, document=document, legacy_root=PDF_DIR)
+    folder = cache_directory(paper_id, document=document, root=FIG_DIR, legacy_root=PDF_DIR)
+    if folder is None:
+        return []
+    index_path = folder / "index.json"
+    if not index_path.exists() and document is not None and document_current(document):
+        from paper_daily.figures import extract
+
+        extract(paper_id, document.path, document=document)
     if not index_path.exists():
         return []
     manifest = json.loads(index_path.read_text(encoding="utf-8"))
@@ -82,10 +90,14 @@ def figure_entries(paper_id: str) -> list[dict]:
     for i, item in enumerate(manifest[:60]):
         if not isinstance(item, dict):
             continue
+        if document is not None and item.get("document_hash") != document.sha256:
+            continue
         name = item.get("file")
         if not isinstance(name, str) or Path(name).name != name:
             continue
-        sid = f"figure:{i + 1}"
+        from paper_daily.figures import source_id
+
+        sid = source_id(f"figure:{i + 1}", document.sha256 if document else None)
         entries.append(
             {
                 "id": sid,
@@ -95,9 +107,17 @@ def figure_entries(paper_id: str) -> list[dict]:
                 "page": item.get("page"),
                 "kind": item.get("kind", "figure"),
                 "rect": item.get("rect"),
+                **(
+                    {
+                        "document_hash": document.sha256,
+                        "cache_key": folder.relative_to(FIG_DIR).as_posix(),
+                    }
+                    if document is not None
+                    else {}
+                ),
             }
         )
-    return entries
+    return entries if document_current(document) else []
 
 
 def markdown_tables(text: str) -> list[tuple[int, list[list[str]]]]:
@@ -186,16 +206,22 @@ def place_exhibits(exhibits: list[dict], body: str | None) -> None:
             item.setdefault("section", _section_at(sections, chosen[0]))
 
 
-def _pages(paper_id: str) -> list[tuple[int | None, str]]:
-    pdf_path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
+def _pages(paper_id: str, *, document=None) -> list[tuple[int | None, str]]:
+    document = capture_document(paper_id, document=document, legacy_root=PDF_DIR)
+    if document is not None and not document_current(document):
+        return []
+    pdf_path = document.path if document is not None else PDF_DIR / (_safe_name(paper_id) + ".pdf")
     if pdf_path.exists():
         import pymupdf
 
         try:
             with pymupdf.open(pdf_path) as doc:
-                return [(i + 1, doc[i].get_text()) for i in range(min(len(doc), MAX_PAGES))]
+                pages = [(i + 1, doc[i].get_text()) for i in range(min(len(doc), MAX_PAGES))]
+                return pages if document_current(document) else []
         except (RuntimeError, ValueError, OSError):
             pass
+    if document is not None:
+        return []
     cached = TEXT_DIR / (_safe_name(paper_id) + ".txt")
     if cached.exists():
         return [(None, cached.read_text(encoding="utf-8"))]
@@ -243,24 +269,53 @@ def headings_from_close_reading(body: str | None) -> list[dict]:
     ]
 
 
-def collect(paper_id: str) -> Materials:
+def collect(paper_id: str, *, document=None) -> Materials:
+    document = capture_document(paper_id, document=document, legacy_root=PDF_DIR)
     with connect() as conn:
         row = conn.execute(
             "SELECT body FROM close_readings WHERE paper_id=?", (paper_id,)
         ).fetchone()
     close = row["body"] if row else None
-    exhibits = figure_entries(paper_id)
-    place_exhibits(exhibits, close)
-    pages = _pages(paper_id)
+    exhibits = figure_entries(paper_id, document=document)
+    if document is None:
+        place_exhibits(exhibits, close)
+    pages = _pages(paper_id, document=document)
     headings = headings_from_pages(pages)
+    if document is not None and document_current(document):
+        for item in headings:
+            item["document_hash"] = document.sha256
     if len(headings) < 2:
         headings = headings_from_close_reading(close)
-    _locate_materials(paper_id, exhibits + headings)
-    highlights = paper_highlights.cached(paper_id)
+    _locate_materials(paper_id, exhibits + headings, document=document)
+    highlights = (
+        paper_highlights.cached(
+            paper_id,
+            pages=[
+                {"page": page, "text": paper_highlights.normalize(text)} for page, text in pages
+            ],
+        )
+        if document is not None
+        else paper_highlights.cached(paper_id)
+    )
     sentences = [dict(item, origin="ai") for item in highlights["items"]] if highlights else []
-    path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
-    if path.exists():
-        marks = pdf_highlights.list_marks(paper_id, pdf_highlights.document_hash(path))
+    path = (
+        (document.path if document_current(document) else None)
+        if document is not None
+        else (PDF_DIR / (_safe_name(paper_id) + ".pdf"))
+    )
+    if document is not None:
+        for item in sentences:
+            if item.get("document_hash") != document.sha256 or not document_current(document):
+                item.pop("anchor", None)
+                item.pop("rect", None)
+                item.update(
+                    navigation_available=False, navigation_reason="source_document_mismatch"
+                )
+    if path is not None and path.exists():
+        fingerprint = (
+            document.sha256 if document is not None else pdf_highlights.document_hash(path)
+        )
+        marks = pdf_highlights.list_marks(paper_id, fingerprint)
         for mark in marks:
             page = mark["anchor"]["p0"] + 1
             if mark["origin"] == "manual":
@@ -273,19 +328,50 @@ def collect(paper_id: str) -> Materials:
                 )
             if item is not None:
                 item.update(anchor=mark["anchor"], mark_id=mark["id"])
+                if document is not None:
+                    item.update(document_hash=fingerprint, navigation_available=True)
+    if document is not None and not document_current(document):
+        for item in exhibits + headings + sentences:
+            item.pop("rect", None)
+            item.pop("anchor", None)
+            item.update(navigation_available=False, navigation_reason="document_unavailable")
     return Materials(paper_id, exhibits, headings, sentences, highlights)
 
 
-def _locate_materials(paper_id, items):
-    path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
+def _locate_materials(paper_id, items, *, document=None):
+    document = capture_document(paper_id, document=document, legacy_root=PDF_DIR)
+    if document is not None and not document_current(document):
+        for item in items:
+            item.pop("rect", None)
+            item.pop("anchor", None)
+            item.update(navigation_available=False, navigation_reason="document_unavailable")
+        return
+    path = document.path if document is not None else PDF_DIR / (_safe_name(paper_id) + ".pdf")
     if not path.exists() or not items:
         return
-    fingerprint = pdf_highlights.document_hash(path)
-    keys = [f"{i.get('page')}:{i.get('caption') or i.get('text', '')}" for i in items]
-    signature = hashlib.sha256(json.dumps([fingerprint, keys]).encode()).hexdigest()
+    fingerprint = document.sha256 if document is not None else pdf_highlights.document_hash(path)
+    eligible = []
+    for item in items:
+        # Supplied geometry is not evidence of source identity. Never relabel old
+        # coordinates, or automatically reanchor unproven managed analysis text.
+        proven = item.get("document_hash") == fingerprint
+        if (document is not None and not proven) or (item.get("rect") and not proven):
+            item.pop("rect", None)
+            item.pop("anchor", None)
+            item.update(navigation_available=False, navigation_reason="source_document_mismatch")
+            continue
+        eligible.append(item)
+    keys = [f"{i.get('page')}:{i.get('caption') or i.get('text', '')}" for i in eligible]
+    signature = hashlib.sha256(
+        json.dumps(
+            ["positions-v2", fingerprint, keys, [item.get("rect") for item in eligible]]
+        ).encode()
+    ).hexdigest()
     dest = (
         DATA_DIR / "material-positions" / (hashlib.sha256(paper_id.encode()).hexdigest() + ".json")
     )
+    if document is not None:
+        dest = DATA_DIR / "material-positions" / fingerprint / (signature + ".json")
     positions = {}
     try:
         saved = json.loads(dest.read_text(encoding="utf-8"))
@@ -293,11 +379,11 @@ def _locate_materials(paper_id, items):
             positions = saved["positions"]
     except (OSError, ValueError, KeyError):
         pass
-    if not positions:
+    if not positions and eligible:
         import pymupdf
 
         with pymupdf.open(path) as doc:
-            for key, item in zip(keys, items, strict=True):
+            for key, item in zip(keys, eligible, strict=True):
                 page = item.get("page")
                 if type(page) is not int or not 1 <= page <= len(doc):
                     continue
@@ -311,6 +397,15 @@ def _locate_materials(paper_id, items):
                             box |= other
                         rect = list(box)
                 positions[key] = rect
-        _atomic_json(dest, dict(signature=signature, positions=positions))
-    for key, item in zip(keys, items, strict=True):
+        if document_current(document):
+            _atomic_json(dest, dict(signature=signature, positions=positions))
+    if not document_current(document):
+        for item in eligible:
+            item.pop("rect", None)
+            item.pop("anchor", None)
+            item.update(navigation_available=False, navigation_reason="document_unavailable")
+        return
+    for key, item in zip(keys, eligible, strict=True):
         item.update(rect=positions.get(key), document_hash=fingerprint)
+        if document is not None:
+            item["navigation_available"] = bool(item["rect"])

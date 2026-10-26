@@ -13,8 +13,8 @@ from uuid import uuid4
 from paper_daily import llm
 from paper_daily.ai_types import Settings
 from paper_daily.config import DATA_DIR, PDF_DIR, TEXT_DIR
-from paper_daily.fetch import _safe_name
-from paper_daily.figures import FIG_DIR
+from paper_daily.fetch import _safe_name, capture_document, document_current
+from paper_daily.figures import FIG_DIR, cache_directory, image_path
 from paper_daily.slide_layout import used_figures, validate_elements
 from paper_daily.store import connect, now
 
@@ -318,6 +318,11 @@ def figure_bytes(deck: Deck, figure_id: str) -> bytes:
     if not isinstance(name, str) or Path(name).name != name or name in (".", ".."):
         raise ValueError("Invalid figure filename")
     target = base / name
+    if not asset:
+        target = image_path(deck.paper_id, figure, root=FIG_DIR, historical=True)
+        if target is None:
+            raise ValueError("Presentation figure source is unavailable")
+        base = FIG_DIR
     if not target.resolve().is_relative_to(base.resolve()):
         raise ValueError("Figure path escapes its evidence folder")
     blob = target.read_bytes()
@@ -366,6 +371,7 @@ def _url(row: dict) -> str | None:
 
 
 def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
+    document = capture_document(paper_id, legacy_root=PDF_DIR)
     if not inputs or inputs - INPUTS.keys():
         raise ValueError("Choose at least one supported research source")
     with connect() as conn:
@@ -417,9 +423,13 @@ def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
 
     add("abstract", "論文摘要", "abstract", paper.get("abstract"), url=paper_url)
     if "original" in inputs:
-        pdf_path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
+        pdf_path = (
+            (document.path if document_current(document) else None)
+            if document is not None
+            else PDF_DIR / (_safe_name(paper_id) + ".pdf")
+        )
         original_added = False
-        if pdf_path.exists():
+        if pdf_path is not None and pdf_path.exists():
             import pymupdf
 
             try:
@@ -444,7 +454,7 @@ def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
             except (RuntimeError, ValueError, OSError):
                 coverage.append("PDF 文字讀取失敗，改用已抽取的文字")
         cached = TEXT_DIR / (_safe_name(paper_id) + ".txt")
-        if not original_added and cached.exists():
+        if document is None and not original_added and cached.exists():
             text = cached.read_text(encoding="utf-8")
             add("original", "已抽取原文（無頁碼）", "original", text, url=paper_url, limit=48000)
             original_added = bool(text.strip())
@@ -521,18 +531,23 @@ def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
         if len(chats) > 30:
             coverage.append("問答：只納入最近 30 則訊息")
     figures = []
-    index_path = FIG_DIR / _safe_name(paper_id) / "index.json"
-    if "original" in inputs and index_path.exists():
+    figure_folder = cache_directory(paper_id, document=document, root=FIG_DIR, legacy_root=PDF_DIR)
+    index_path = figure_folder / "index.json" if figure_folder is not None else None
+    if "original" in inputs and index_path is not None and index_path.exists():
         manifest = json.loads(index_path.read_text(encoding="utf-8"))
         if not isinstance(manifest, list):
             raise ValueError("Invalid paper figure index")
         for i, item in enumerate(manifest[:60]):
             if not isinstance(item, dict):
                 continue
+            if document is not None and item.get("document_hash") != document.sha256:
+                continue
             name = item.get("file")
             if not isinstance(name, str) or Path(name).name != name:
                 continue
-            sid = f"figure:{i + 1}"
+            from paper_daily.figures import source_id
+
+            sid = source_id(f"figure:{i + 1}", document.sha256 if document else None)
             figures.append(
                 {
                     "id": sid,
@@ -540,6 +555,14 @@ def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
                     "label": item.get("label") or sid,
                     "caption": item.get("caption", ""),
                     "page": item.get("page"),
+                    **(
+                        {
+                            "document_hash": document.sha256,
+                            "cache_key": figure_folder.relative_to(FIG_DIR).as_posix(),
+                        }
+                        if document is not None
+                        else {}
+                    ),
                 }
             )
             add(
@@ -573,6 +596,15 @@ def collect_evidence(paper_id: str, inputs: set[str]) -> dict:
                 clipped = True
         if clipped:
             coverage.append(f"{INPUTS.get(kind, kind)}：按來源平均分配 {budget} 字預算")
+    if document is not None:
+        if not document_current(document):
+            # Preserve explanatory sources but never expose an old original as current.
+            sources = [row for row in sources if row["kind"] not in ("original", "figure")]
+            figures = []
+        else:
+            for row in sources:
+                if row["kind"] in ("original", "figure"):
+                    row["document_hash"] = document.sha256
     snapshot = {
         "paper": {k: paper.get(k) for k in ("id", "title", "venue", "year", "authors_json")},
         "sources": sources,

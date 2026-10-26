@@ -25,7 +25,7 @@ from pathlib import Path
 
 from paper_daily import llm
 from paper_daily.config import DATA_DIR
-from paper_daily.figures import FIG_DIR, _safe
+from paper_daily.figures import FIG_DIR, _safe, image_path
 from paper_daily.pocket import cites_for, figures_for, lineage_for
 from paper_daily.store import connect
 
@@ -73,11 +73,13 @@ def _short(title: str) -> str:
     return head if len(head.split()) <= 3 else head.split()[0]
 
 
-def _figure_file(paper_id: str, name: str, dest_dir: Path) -> str:
+def _figure_file(paper_id: str, name: str, dest_dir: Path, *, item=None) -> str:
     """Copy a figure next to the draft, as JPEG when that is clearly smaller."""
     import pymupdf
 
-    src = FIG_DIR / _safe(paper_id) / name
+    src = image_path(paper_id, item or {"file": name}, root=FIG_DIR)
+    if src is None:
+        raise ValueError("Figure source is unavailable for the current document")
     dest_dir.mkdir(parents=True, exist_ok=True)
     png = src.read_bytes()
     jpeg = pymupdf.Pixmap(str(src)).tobytes("jpeg", jpg_quality=JPEG_QUALITY)
@@ -188,7 +190,7 @@ def _paper_md(conn, paper_id: str, out_dir: Path) -> tuple[str, dict]:
         fig_dir = out_dir / "fig" / _safe(paper_id)
         out += ["### 圖表", "", '<div class="figures">', ""]
         for f in figures:
-            name = _figure_file(paper_id, f["file"], fig_dir)
+            name = _figure_file(paper_id, f["file"], fig_dir, item=f)
             out += [
                 f"![{f['label']}](fig/{_safe(paper_id)}/{name})",
                 f"<small>{f['caption']} · 原文第 {f['page']} 頁</small>",
@@ -261,8 +263,7 @@ def compare(facts: list[dict]) -> tuple[str | None, str]:
             f"深度講解:\n{f['dive'][:9000]}"
         )
     prompt = (
-        "\n\n".join(parts)
-        + "\n\n---\n\n請輸出 Markdown,只要以下兩部分,不要前言:\n"
+        "\n\n".join(parts) + "\n\n---\n\n請輸出 Markdown,只要以下兩部分,不要前言:\n"
         "1. 一張對照表,欄是各篇的簡稱,列是:研究問題、資料來源與規模、標註內容、"
         "提供的任務與 benchmark、評估指標、主要限制。每格一兩句。\n"
         "2. 一個「放在一起看」小節,三到五個條列:這幾篇的關係(延伸、互補、取代?)、"
@@ -296,8 +297,7 @@ def draft(paper_ids: list[str], slug: str | None = None, with_compare: bool = Fa
                 failed = reason
             else:
                 doc += [
-                    '<p class="provenance">以下由 AI 依兩篇的深度講解整理,'
-                    "未逐條對照原文。</p>",
+                    '<p class="provenance">以下由 AI 依兩篇的深度講解整理,未逐條對照原文。</p>',
                     "",
                     text.strip(),
                     "",

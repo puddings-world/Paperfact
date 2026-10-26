@@ -1,7 +1,8 @@
 # ADR 0005: Activate readers through an exact document identity
 
-Status: **planned next implementation slice**, 2026-10-26. Documentation only;
-no reader, cache, legacy research or production workspace was changed by this ADR.
+Status: **reader foundation implemented; desktop/derivative integration under test**,
+2026-10-26. Verification uses isolated fixtures; no production workspace is enrolled
+or modified by implementation tests. Installed-backend acceptance remains separate.
 Build on [ADR 0004](0004-owned-document-transfer.md) and
 [document bindings](../sync-documents.md); do not replace their transfer contract.
 
@@ -40,12 +41,45 @@ Do not solve either by assigning new hashes to old cached coordinates.
 
 ## Resolver and activation boundary
 
-Add a proposed `document_reader.py` seam taking explicit research DB/workspace and
+The `document_reader.py` seam takes an explicit research DB/workspace and
 BlobStore/cache roots. Return an immutable result containing portable/local paper
 identity, source mode (`managed` or `legacy`), desired operation/incarnation when
 managed, verified SHA256, reader path, and availability/reason. Paths stay local;
 they are not wire or DTO fields. Verification and material preparation run in
 workers. UI consumers use cached status plus cheap identity checks.
+
+Implemented public contract:
+
+- `DocumentReader(db_path, blob_store=..., projection_root=..., legacy_root=...)`
+  owns no research transaction and performs no I/O at construction. `resolve`
+  performs worker-only verification and prepares the owned `.pdf` projection.
+- `inspect_many(local_ids, conn=...)` reads one metadata snapshot and accepts the
+  already-bound research connection. It never hashes, stats or parses PDF files.
+  `inspect` is the single-paper form; `portable=True` resolves the stable mapping.
+- Immutable `ResolvedDocument` exposes `local_id`, portable `paper_id`, `mode`,
+  `status`, `path`, `sha256`, `target`, `reason`, `available` and `managed`.
+  `unchecked` is not proof of availability. A cached badge is advisory; a new
+  activation calls `resolve` again and checks `current(result)` before display.
+- `current(result)` rejects changed desired/applied identity. `intact(result)` is
+  only for an already-open version: it checks owner/generation, workspace/path
+  registration, local mapping and file identity while permitting a newer desired
+  document to exist. It never authorizes activation of an old version.
+- `register_document_paths(conn, workspace_id=..., blob_root=...,
+  projection_root=..., legacy_root=...)` requires a caller transaction. It stores
+  device-local paths in `document_reader_paths`; identical registration does not
+  write again. These paths are never synchronized or included in manifest DTOs.
+  `from_workspace` reads this registration without creating a DB/store; the store's
+  `transfer_binding` must match workspace, device and absolute research DB path.
+- Convenience `document_status`, `resolve_document` and `document_current` support
+  existing local workers. Explicit context is preferred; the lazy fallback uses
+  the current `store.DB_PATH`, not a stale configuration alias. Import discovers
+  no workspace. Missing or empty un-enrolled DBs permit explicit legacy reading
+  without creating a DB; malformed or incomplete managed databases fail closed.
+
+Owned projections are bounded by a configurable quota (1 GiB by default), use a
+private SQLite publication lock, and recover only their known same-hash partial
+file. Corrupt final projections fail closed; they are not silently overwritten
+under an open native reader. Authoritative blobs and legacy aliases remain intact.
 
 Bind the workspace once at application startup. `runtime.data_dir` honors
 `PAPERFACT_DATA`/`PAPER_DAILY_DATA`; otherwise installed builds use platform app-data

@@ -85,9 +85,9 @@ never deletes a finalized object. Other failures use a bounded generic code.
 
 - Fair scheduling beyond a bounded blocked outbox window, offline pinning, progress
   UI, cancellation ownership across workers and managed cache eviction.
-- Server read efficiency: the conservative reference service still verifies the
-  entire object for each chunk. Do not ship large-document sync with that cost.
-  Verified per-chunk digests and bounded read work need their own integrity tests.
+- Server reads now use verified block digests with bounded content reads; see
+  [ADR0006](adr/0006-bounded-blob-integrity.md). Production storage/throughput and
+  multi-process admission still require acceptance beyond local instrumentation.
 - Trusted repair of missing/corrupt finalized objects, retention and bootstrap.
 - Full capture of existing app writers, anchored research, decks and other assets.
 - Production login, hosting, HTTPS, mobile/browser storage and real-device acceptance.
@@ -97,3 +97,11 @@ actual loopback HTTP round trip, restart/resume, lost replies, corrupt-partial
 repair, wrong-session denial, cancellation, repeated activation, action rollback,
 binding rollback and stale completion. It does not test an installed app or use
 real research, AI accounts or a public server.
+
+
+The coordinator registers its explicit local blob/reader/legacy paths in a
+device-local table. Recreating it without path overrides retains the current
+registration; explicit path changes invalidate old reader context. These paths
+are not synchronized. Registered managed documents now use the background desktop
+resolver and explicit version-switch controls; full app-writer enrollment remains
+separate from this library constructor.

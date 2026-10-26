@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from threading import Lock
 from urllib.parse import urlsplit
 
@@ -61,7 +62,9 @@ class DocumentTransfers:
     bytes or delete resumable partials. Server cancellation is an explicit API.
     """
 
-    def __init__(self, client, store, transport, *, origin, token=None):
+    def __init__(
+        self, client, store, transport, *, origin, token=None, reader_root=None, legacy_root=None
+    ):
         if not isinstance(store, BlobStore):
             raise ValueError("An explicitly owned BlobStore is required")
         self.client, self.store, self.transport = client, store, transport
@@ -94,6 +97,36 @@ class DocumentTransfers:
                 "(operation_id TEXT,direction TEXT,endpoint TEXT,target TEXT NOT NULL,"
                 "state TEXT NOT NULL,offset INTEGER NOT NULL,error TEXT,"
                 "PRIMARY KEY(operation_id,direction,endpoint))"
+            )
+
+        from paper_daily.document_reader import register_document_paths
+
+        with journal.transaction() as conn:
+            existing = None
+            if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='document_reader_paths'"
+            ).fetchone():
+                existing = conn.execute(
+                    "SELECT workspace,blob_root,projection_root,legacy_root "
+                    "FROM document_reader_paths WHERE id=1"
+                ).fetchone()
+            same_store = existing is not None and (
+                existing[0] == journal.workspace_id and Path(existing[1]) == store.root
+            )
+            register_document_paths(
+                conn,
+                workspace_id=journal.workspace_id,
+                blob_root=store.root,
+                projection_root=(
+                    reader_root
+                    if reader_root is not None
+                    else (existing[2] if same_store else store.root / "reader-documents")
+                ),
+                legacy_root=(
+                    legacy_root
+                    if legacy_root is not None
+                    else (existing[3] if same_store else journal.path.parent / "pdf")
+                ),
             )
 
     def set_session(self, token):

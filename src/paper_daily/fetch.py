@@ -12,6 +12,8 @@ lineage graph.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sqlite3
 import tempfile
@@ -30,8 +32,13 @@ def _safe_name(paper_id: str) -> str:
 
 # Where a conference's own PDF is its clean camera-ready copy.
 PROCEEDINGS_HOSTS = (
-    "proceedings.mlr.press", "papers.nips.cc", "proceedings.neurips.cc",
-    "openaccess.thecvf.com", "aclanthology.org", "openreview.net", "papers.miccai.org",
+    "proceedings.mlr.press",
+    "papers.nips.cc",
+    "proceedings.neurips.cc",
+    "openaccess.thecvf.com",
+    "aclanthology.org",
+    "openreview.net",
+    "papers.miccai.org",
 )
 
 
@@ -60,10 +67,48 @@ def pdf_candidates(row: sqlite3.Row) -> list[str]:
     return out
 
 
-def ensure_pdf(row: sqlite3.Row) -> Path | None:
+def capture_document(paper_id, *, document=None, legacy_root=None, cached_only=False):
+    """Capture managed provenance in workers; None preserves the legacy workflow."""
+    from paper_daily.document_reader import document_status, resolve_document
+
+    if document is not None:
+        if document.local_id != paper_id:
+            raise ValueError("Captured document belongs to another paper")
+        return document
+    options = {"legacy_root": legacy_root if legacy_root is not None else PDF_DIR}
+    status = document_status(paper_id, **options)
+    if status.managed:
+        return status if cached_only else resolve_document(paper_id, **options)
+    return status if status.status == "ambiguous" else None
+
+
+def document_current(document):
+    if document is None:
+        return True
+    from paper_daily.document_reader import document_current as current
+
+    return document.available and current(document)
+
+
+def derivative_key(document, producer, options):
+    """No paper aliases in managed derivative identities; include every output option."""
+    if not document.managed or not re.fullmatch(r"[0-9a-f]{64}", document.sha256 or ""):
+        raise ValueError("Managed derivative needs a verified document hash")
+    encoded = json.dumps(options, sort_keys=True, separators=(",", ":"))
+    return (
+        Path("documents")
+        / document.sha256
+        / (producer + "-" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24])
+    )
+
+
+def ensure_pdf(row: sqlite3.Row, *, document=None) -> Path | None:
     """Download the PDF if we do not have it. Returns the local path, or None."""
     from paper_daily.pdf_downloads import paper_lock
 
+    document = capture_document(row["id"], document=document)
+    if document is not None:
+        return document.path if document_current(document) else None
     ensure_dirs()
     dest = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
     with paper_lock(dest, threading.Event()):
@@ -71,6 +116,9 @@ def ensure_pdf(row: sqlite3.Row) -> Path | None:
 
 
 def _ensure_pdf_locked(row, dest):
+    document = capture_document(row["id"])
+    if document is not None:
+        return document.path if document_current(document) else None
     if dest.exists() and dest.stat().st_size > 1024:
         return dest
 
@@ -79,11 +127,15 @@ def _ensure_pdf_locked(row, dest):
             blob = fetch(url, cache=False)
         except Exception:
             continue
+        document = capture_document(row["id"])
+        if document is not None:
+            return document.path if document_current(document) else None
         if blob[:5] == b"%PDF-":
             temporary = None
             try:
-                with tempfile.NamedTemporaryFile(dir=dest.parent,
-                                                 suffix=".part", delete=False) as f:
+                with tempfile.NamedTemporaryFile(
+                    dir=dest.parent, suffix=".part", delete=False
+                ) as f:
                     temporary = Path(f.name)
                     f.write(blob)
                 temporary.replace(dest)
@@ -94,12 +146,24 @@ def _ensure_pdf_locked(row, dest):
     return None
 
 
-def extract_text(pdf_path: Path, paper_id: str, max_chars: int = 120_000) -> str | None:
+def extract_text(
+    pdf_path: Path, paper_id: str, max_chars: int = 120_000, *, document=None
+) -> str | None:
     """Plain text of the paper body, truncated and stripped of the reference list."""
+    document = capture_document(paper_id, document=document)
+    if document is not None and (
+        not document_current(document) or Path(pdf_path).resolve() != document.path.resolve()
+    ):
+        return None
     ensure_dirs()
     cached = TEXT_DIR / f"{_safe_name(paper_id)}.txt"
+    if document is not None and document.managed:
+        cached = (
+            TEXT_DIR / derivative_key(document, "text-v1", {"max_chars": max_chars}) / "body.txt"
+        )
     if cached.exists():
-        return cached.read_text(encoding="utf-8")
+        text = cached.read_text(encoding="utf-8")
+        return text if document_current(document) else None
 
     try:
         import pymupdf
@@ -118,13 +182,29 @@ def extract_text(pdf_path: Path, paper_id: str, max_chars: int = 120_000) -> str
     if matches:
         text = text[: matches[-1].start()]
     text = re.sub(r"\n{3,}", "\n\n", text).strip()[:max_chars]
-    cached.write_text(text, encoding="utf-8")
-    return text
+    if not document_current(document):
+        return None
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    if document is not None and document.managed:
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=cached.parent, suffix=".part", delete=False) as f:
+                temporary = Path(f.name)
+                f.write(text.encode("utf-8"))
+            temporary.replace(cached)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+    else:
+        cached.write_text(text, encoding="utf-8")
+    return text if document_current(document) else None
 
 
 def prepare(row: sqlite3.Row) -> tuple[Path | None, str | None]:
     """Download and extract in one step, for the daily brief."""
-    pdf = ensure_pdf(row)
+    document = capture_document(row["id"])
+    pdf = ensure_pdf(row, document=document)
     if not pdf:
         return None, None
-    return pdf, extract_text(pdf, row["id"])
+    text = extract_text(pdf, row["id"], document=document)
+    return (pdf, text) if document_current(document) else (None, None)

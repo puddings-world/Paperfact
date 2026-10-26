@@ -43,6 +43,10 @@ buttons serialize through a server just to share behavior.
   research or its cursor. Bind completed bytes only after rechecking the exact
   target version, parent incarnation and active session; stale work may populate a
   private cache but cannot activate the wrong document.
+- Keep activation of a new document separate from retaining an already-open
+  verified version. A background revision should announce a choice without moving
+  focus or discarding drafts. Key derived assets and their references by source
+  version; a positional figure/page number is not stable cross-version identity.
 - Before sending private bytes with an opaque credential, authenticate its intended
   workspace/device binding. A valid token and a local cancellation generation do not
   prove they refer to the same workspace. Recheck binding after credential changes;

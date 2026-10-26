@@ -112,11 +112,32 @@ class _QtPdfPane(QWidget):
         QTimer.singleShot(0, hold)
         return f"{_round_pct(new)}%"
 
-    def load(self, path: Path) -> bool:
-        self._doc.load(str(path))
+    def unload(self) -> None:
         if self.selection is not None:
-            self.selection.set_document(path)
-        return self._doc.status() == QPdfDocument.Status.Ready
+            self.selection.set_document(None)
+        old = self._doc
+        self._view.setDocument(None)
+        old.close()
+        self._doc = QPdfDocument(self)
+        self._view.setDocument(self._doc)
+        old.deleteLater()
+
+    def load(self, path: Path) -> bool:
+        candidate = QPdfDocument(self)
+        candidate.load(str(path))
+        ready = candidate.status() == QPdfDocument.Status.Ready
+        if ready and self.selection is not None:
+            ready = self.selection.set_document(path)
+        if not ready:
+            candidate.close()
+            candidate.deleteLater()
+            return False
+        old = self._doc
+        self._doc = candidate
+        self._view.setDocument(candidate)
+        old.close()
+        old.deleteLater()
+        return True
 
     def page_count(self) -> int:
         return max(self._doc.pageCount(), 0)
@@ -167,22 +188,29 @@ class _PixmapPdfPane(QScrollArea):
 
     # ---- lifecycle -------------------------------------------------------
     def load(self, path: Path) -> bool:
-        self._close()
         if not path.exists():
             return False
         try:
             import pymupdf
 
-            self._doc = pymupdf.open(path)
+            candidate = pymupdf.open(path)
+            if candidate.needs_pass or candidate.page_count == 0:
+                candidate.close()
+                return False
         except Exception:
-            self._doc = None
             return False
+        self._close()
+        self._doc = candidate
         self._path = path
         self._build_placeholders()
         self._render_visible()
         return self.page_count() > 0
 
+    def unload(self) -> None:
+        self._close()
+
     def _close(self) -> None:
+        self._path = None
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item.widget():

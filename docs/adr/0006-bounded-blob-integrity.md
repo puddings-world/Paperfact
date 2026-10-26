@@ -1,6 +1,7 @@
 # ADR 0006: Bound attachment-read verification work
 
-Status: planned, not implemented or benchmarked. Follow the owned-blob contract in
+Status: implemented locally with instrumented byte-work and loopback tests;
+wall-clock production performance is not benchmarked. Follow the owned-blob contract in
 [ADR 0004](0004-owned-document-transfer.md); keep per-request authorization.
 
 ## Problem
@@ -11,7 +12,7 @@ That is a delivery blocker for larger documents even when correctness tests pass
 A stat-only cache would miss corruption that preserves size and timestamps; do not
 silently exchange the current integrity contract for that assumption.
 
-## Proposed decision
+## Decision
 
 - During explicit commit, verify the complete file against its declared SHA256 and
   size while computing fixed 256 KiB block digests. The maximum primary PDF has
@@ -38,11 +39,12 @@ silently exchange the current integrity contract for that assumption.
 
 ## Compatibility and bounded work
 
-The initial private service may already own objects without block records. Choose
-an explicit lazy-upgrade path that fully verifies and records the digests once, or
-require a trusted maintenance step. Never manufacture digests from unchecked data.
-The first upgrade can be expensive; publish that state honestly and bound concurrent
-verification. Subsequent chunk reads must do O(chunk size) work, not O(file size).
+Existing ownership with no integrity header and no block rows takes the chosen lazy
+upgrade path: fully verify and record the digests once. A partial or malformed index
+fails closed. The first upgrade can be expensive; normal indexed reads inspect only
+one or two object blocks plus the bounded complete index shape. Full commit/backfill
+verification runs outside authority write transactions and is limited to two active
+scans per process; publication reauthenticates and rechecks file identity afterward.
 
 Keep a consistent authority-before-BlobStore lock order. Avoid opening a second
 authority write transaction from a helper that already owns one. Revocation must
@@ -66,5 +68,8 @@ independent decisions.
   and quotas retain existing behavior. Exercise actual loopback HTTP in addition to
   pure helpers, then run the full project check.
 
-This ADR records a concrete next implementation, not a claim that large-file transfer
-performance is ready or that a production service has been deployed.
+Implemented in `sync_blob_service.py`, with authority schema initialized through the
+existing service constructor. `tests/test_sync_blob_integrity.py` checks deterministic
+read-byte bounds, corruption/lifecycle/authorization cases and actual loopback HTTP.
+The receiving-client final hash/PDF checks and full manifest-put verification remain.
+No production deployment or real-device performance benchmark is claimed.

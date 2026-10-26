@@ -72,20 +72,28 @@ def stream_pdf(url, dest, progress, cancel):
     temporary = None
     started = time.monotonic()
     try:
-        with httpx.Client(
-            timeout=httpx.Timeout(15, connect=10), follow_redirects=True,
-            headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
-        ) as client, client.stream("GET", url) as response:
+        with (
+            httpx.Client(
+                timeout=httpx.Timeout(15, connect=10),
+                follow_redirects=True,
+                headers={"User-Agent": USER_AGENT, "Accept-Encoding": "identity"},
+            ) as client,
+            client.stream("GET", url) as response,
+        ):
             if response.status_code != 200:
                 raise FetchError(f"下載來源回應 HTTP {response.status_code}")
             length = response.headers.get("content-length", "")
-            total = int(length) if length.isdigit() and not response.headers.get(
-                "content-encoding") else None
+            total = (
+                int(length)
+                if length.isdigit() and not response.headers.get("content-encoding")
+                else None
+            )
             total = total or None
             if total and total > MAX_BYTES:
                 raise FetchError("PDF 超過 150 MB 下載上限，可手動加入檔案。")
-            with tempfile.NamedTemporaryFile(dir=dest.parent, prefix=dest.stem + ".",
-                                             suffix=".part", delete=False) as output:
+            with tempfile.NamedTemporaryFile(
+                dir=dest.parent, prefix=dest.stem + ".", suffix=".part", delete=False
+            ) as output:
                 temporary = Path(output.name)
                 received, prefix, trailer = 0, b"", b""
                 progress("downloading", 0, total, "")
@@ -129,6 +137,15 @@ def stream_pdf(url, dest, progress, cancel):
 
 
 def download(paper_id, progress, cancel):
+    from paper_daily.fetch import capture_document, document_current
+
+    check_cancel(cancel)
+    document = capture_document(paper_id, legacy_root=PDF_DIR)
+    check_cancel(cancel)
+    if document is not None:
+        if not document_current(document):
+            raise FetchError("Managed PDF is unavailable; use workspace attachment synchronization")
+        return document.path
     with connect() as conn:
         record = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
     if record is None:
@@ -137,12 +154,24 @@ def download(paper_id, progress, cancel):
     dest = PDF_DIR / (_safe_name(paper_id) + ".pdf")
     progress("waiting", 0, None, "等待同篇下載工作")
     with paper_lock(dest, cancel):
+        document = capture_document(paper_id, legacy_root=PDF_DIR)
+        check_cancel(cancel)
+        if document is not None:
+            if not document_current(document):
+                raise FetchError(
+                    "Managed PDF is unavailable; use workspace attachment synchronization"
+                )
+            return document.path
         if dest.exists():
             return dest
         attempted, reasons = set(), []
 
         def attempt(url):
             check_cancel(cancel)
+            if capture_document(paper_id, legacy_root=PDF_DIR) is not None:
+                raise FetchError(
+                    "Document ownership changed; retry through workspace synchronization"
+                )
             if url in attempted:
                 return None
             attempted.add(url)
@@ -151,6 +180,10 @@ def download(paper_id, progress, cancel):
             except (FetchError, httpx.HTTPError) as exc:
                 reasons.append(str(exc) if isinstance(exc, FetchError) else "下載連線中斷或逾時。")
                 return None
+            if capture_document(paper_id, legacy_root=PDF_DIR) is not None:
+                raise FetchError(
+                    "Document ownership changed; retry through workspace synchronization"
+                )
             with connect() as conn:
                 conn.execute("UPDATE papers SET pdf_url=? WHERE id=?", (url, paper_id))
                 conn.execute("DELETE FROM kv WHERE key=?", (f"analyze.failed.pdf.{paper_id}",))
@@ -188,13 +221,22 @@ class State:
 
     @property
     def label(self):
-        labels = dict(queued="等待下載", waiting="等待同篇下載", resolving="尋找原文來源",
-                      verifying="檢查 PDF", done="PDF 已下載", cancelled="已暫停",
-                      error="下載未完成")
+        labels = dict(
+            queued="等待下載",
+            waiting="等待同篇下載",
+            resolving="尋找原文來源",
+            verifying="檢查 PDF",
+            done="PDF 已下載",
+            cancelled="已暫停",
+            error="下載未完成",
+        )
         if self.phase == "downloading":
             size = f"{self.received / 1048576:.1f} MB"
-            return f"下載 PDF · {self.percent}% · {size}" if self.percent is not None else (
-                f"下載 PDF · {size}（總大小未知）")
+            return (
+                f"下載 PDF · {self.percent}% · {size}"
+                if self.percent is not None
+                else (f"下載 PDF · {size}（總大小未知）")
+            )
         return labels.get(self.phase, self.phase) + (" · " + self.message if self.message else "")
 
 
@@ -223,9 +265,9 @@ class DownloadQueue:
                 return
             for pid in dict.fromkeys(paper_ids):
                 old = self._states.get(pid)
-                if pid in self._active or (old and not (
-                    retry and old.phase in ("error", "cancelled")
-                )):
+                if pid in self._active or (
+                    old and not (retry and old.phase in ("error", "cancelled"))
+                ):
                     continue
                 self._states[pid] = State()
                 self._pending.append(pid)
@@ -252,8 +294,9 @@ class DownloadQueue:
         except Cancelled:
             progress("cancelled", 0, None, "")
         except Exception as exc:
-            message = (str(exc) if isinstance(exc, FetchError)
-                       else "下載失敗，請重試或檢查磁碟空間。")
+            message = (
+                str(exc) if isinstance(exc, FetchError) else "下載失敗，請重試或檢查磁碟空間。"
+            )
             progress("error", 0, None, message)
         finally:
             with self._lock:

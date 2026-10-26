@@ -38,19 +38,20 @@ def toc_html(figures: list[Figure], pal: dict[str, str]) -> str:
 
 
 class _ExtractWorker(QObject):
-    finished = Signal(str, list)
+    finished = Signal(str, int, list)
 
-    def __init__(self, paper_id: str, pdf_path: Path) -> None:
+    def __init__(self, paper_id: str, pdf_path: Path, generation=0) -> None:
         super().__init__()
         self._paper_id = paper_id
         self._pdf_path = pdf_path
+        self._generation = generation
 
     def run(self) -> None:
         try:
             figures = extract(self._paper_id, self._pdf_path)
         except Exception:
             figures = []
-        self.finished.emit(self._paper_id, figures)
+        self.finished.emit(self._paper_id, self._generation, figures)
 
 
 class _ClickableImage(QLabel):
@@ -75,13 +76,13 @@ class FigurePane(QScrollArea):
         self._layout.setContentsMargins(18, 16, 18, 24)
         self._layout.setSpacing(10)
         self.setWidget(self._inner)
-        self.setStyleSheet(
-            f"QScrollArea{{background:{palette['ground']};border:0;}}"
-        )
+        self.setStyleSheet(f"QScrollArea{{background:{palette['ground']};border:0;}}")
         self._thread: QThread | None = None
         self._worker: _ExtractWorker | None = None
         self._paper_id: str | None = None
         self._requested = None
+        self._generation = 0
+        self.loaded_document_hash = None
         # The paper's figures by label, pinned above the scrolling list: a paper with
         # twenty of them was a long scroll to find the one the explanation named.
         self._entries: list[QWidget] = []
@@ -98,6 +99,8 @@ class FigurePane(QScrollArea):
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper_id: str, pdf_path: Path, has_pdf: bool) -> None:
+        self._generation += 1
+        generation = self._generation
         self._paper_id = paper_id
         self._requested = None
         self._clear()
@@ -114,10 +117,10 @@ class FigurePane(QScrollArea):
             # finished can be delivered before native thread-local cleanup ends.
             self._thread.wait()
         self._thread = QThread()
-        self._worker = _ExtractWorker(paper_id, pdf_path)
+        self._worker = _ExtractWorker(paper_id, pdf_path, generation)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._show)
+        self._worker.finished.connect(self._show_result)
         self._worker.finished.connect(self._thread.quit)
         self._thread.finished.connect(self._next_request)
         self._thread.start()
@@ -127,6 +130,7 @@ class FigurePane(QScrollArea):
             self.load(*self._requested)
 
     def _clear(self) -> None:
+        self.loaded_document_hash = None
         self._entries = []
         self._toc.hide()
         self.setViewportMargins(0, 0, 0, 0)
@@ -142,11 +146,28 @@ class FigurePane(QScrollArea):
         self._layout.addWidget(label)
         self._layout.addStretch(1)
 
+    def _show_result(self, paper_id, generation, figures):
+        if generation == self._generation:
+            self._show(paper_id, figures)
+
     def _show(self, paper_id: str, figures: list[Figure]) -> None:
         # The reader may have moved on while the extraction was running.
         if paper_id != self._paper_id:
             return
         self._clear()
+        from paper_daily.document_reader import document_status
+
+        status = document_status(paper_id)
+        if status.status == "ambiguous":
+            figures = []
+        if status.managed:
+            figures = [
+                figure
+                for figure in figures
+                if status.available and figure.meta.get("document_hash") == status.sha256
+            ]
+            if figures:
+                self.loaded_document_hash = status.sha256
         if not figures:
             self._message(
                 "這篇的 PDF 裡找不到帶標號的圖或表。抽圖是靠 "
@@ -186,6 +207,12 @@ class FigurePane(QScrollArea):
         super().resizeEvent(event)
         self._place_toc()
 
+    def _jump(self, figure):
+        # Navigation targets the PDF actually rendered by the parent reader. A
+        # newly desired version must not invalidate the user's still-open version.
+        self.loaded_document_hash = figure.meta.get("document_hash")
+        self.jump.emit(figure.page, figure.caption)
+
     def _entry(self, fig: Figure) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
@@ -199,19 +226,17 @@ class FigurePane(QScrollArea):
         )
         head.setTextFormat(Qt.TextFormat.RichText)
         head.setStyleSheet(f"color:{self.pal['accent']};font-size:12px;")
-        head.linkActivated.connect(lambda _=None, f=fig: self.jump.emit(f.page, f.caption))
+        head.linkActivated.connect(lambda _=None, f=fig: self._jump(f))
         layout.addWidget(head)
 
         image = _ClickableImage()
         image.setCursor(Qt.CursorShape.PointingHandCursor)
         image.setToolTip("點圖跳到原文中的位置")
-        image.clicked.connect(lambda f=fig: self.jump.emit(f.page, f.caption))
+        image.clicked.connect(lambda f=fig: self._jump(f))
         pixmap = QPixmap(str(fig.path))
         if not pixmap.isNull():
             if pixmap.width() > MAX_WIDTH:
-                pixmap = pixmap.scaledToWidth(
-                    MAX_WIDTH, Qt.TransformationMode.SmoothTransformation
-                )
+                pixmap = pixmap.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
             image.setPixmap(pixmap)
         image.setStyleSheet("background:#ffffff;")
         image.setAlignment(Qt.AlignmentFlag.AlignLeft)

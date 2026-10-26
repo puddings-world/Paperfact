@@ -219,17 +219,24 @@ class SelectionOverlay(QWidget):
         self.result.refine.clicked.connect(lambda: self.refine.emit(self.selected_text()))
 
     # ---- document --------------------------------------------------------
-    def set_document(self, path) -> None:
+    def set_document(self, path) -> bool:
+        candidate = None
+        if path is not None:
+            try:
+                import pymupdf
+
+                candidate = pymupdf.open(path)
+                if candidate.needs_pass or candidate.page_count == 0:
+                    candidate.close()
+                    return False
+            except Exception:
+                return False
         self.clear()
         self._marks.clear()
         self._words.clear()
         self._close()
-        try:
-            import pymupdf
-
-            self._doc = pymupdf.open(path)
-        except Exception:
-            self._doc = None
+        self._doc = candidate
+        return True
 
     def _close(self) -> None:
         if self._doc is not None:

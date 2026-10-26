@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from paper_daily.config import DATA_DIR, ensure_dirs
+from paper_daily.fetch import capture_document, derivative_key, document_current
 
 FIG_DIR = DATA_DIR / "figures"
 
@@ -28,13 +30,11 @@ FIG_DIR = DATA_DIR / "figures"
 # with a capital letter, which is what separates it from "Figure 1 shows".
 # The lookahead is case-sensitive even though the rest is not: re.I would let
 # "Fig. 2 sample frames" through, which is prose, not a caption.
-CAPTION_RE = re.compile(
-    r"^(Figure|Fig\.|Table)\s+(\d+[a-z]?)(?:\s*[:.]|\s+(?=(?-i:[A-Z])))", re.I
-)
+CAPTION_RE = re.compile(r"^(Figure|Fig\.|Table)\s+(\d+[a-z]?)(?:\s*[:.]|\s+(?=(?-i:[A-Z])))", re.I)
 
-MIN_HEIGHT = 40.0      # anything thinner is a caption wedged against its neighbour
-MAX_HEIGHT = 560.0     # stop before a "figure" swallows a column of body text
-RENDER_SCALE = 2.0     # 144 dpi: legible when zoomed, still small on disk
+MIN_HEIGHT = 40.0  # anything thinner is a caption wedged against its neighbour
+MAX_HEIGHT = 560.0  # stop before a "figure" swallows a column of body text
+RENDER_SCALE = 2.0  # 144 dpi: legible when zoomed, still small on disk
 MIN_PNG_BYTES = 3_000  # below this the crop came out blank
 
 
@@ -47,6 +47,26 @@ class Figure:
     path: Path
     kind: str = "figure"
     meta: dict = field(default_factory=dict)
+
+
+def source_id(sid: str, document_hash: str | None = None) -> str:
+    """Keep positional legacy IDs; bind managed evidence to its exact PDF."""
+    if not document_hash:
+        return sid
+    if not re.fullmatch(r"[0-9a-f]{64}", document_hash):
+        raise ValueError("Invalid source document hash")
+    parts = sid.split(":")
+    base_length = 1 if parts[0] == "original" else 2
+    if len(parts) == base_length + 1:
+        if parts[-1] != document_hash:
+            raise ValueError("Source belongs to another document version")
+        sid = ":".join(parts[:-1])
+        parts = parts[:-1]
+    if sid != "original" and (
+        len(parts) != 2 or parts[0] not in ("figure", "page") or not parts[1].isdigit()
+    ):
+        raise ValueError("Invalid managed document source ID")
+    return f"{sid}:{document_hash}"
 
 
 def _safe(paper_id: str) -> str:
@@ -130,25 +150,105 @@ def _drawn_bounds(page) -> list[tuple[float, float, float, float]]:
     return boxes
 
 
+def cache_directory(paper_id, *, document=None, root=None, legacy_root=None, cached_only=False):
+    """Current source cache directory; unavailable managed documents have no fallback."""
+    document = capture_document(
+        paper_id, document=document, legacy_root=legacy_root, cached_only=cached_only
+    )
+    root = Path(root) if root is not None else FIG_DIR
+    if document is None:
+        return root / _safe(paper_id)
+    if not document_current(document):
+        return None
+    if not document.managed:
+        return root / _safe(paper_id)
+    return root / derivative_key(
+        document,
+        "figures-v1",
+        {
+            "min_height": MIN_HEIGHT,
+            "max_height": MAX_HEIGHT,
+            "render_scale": RENDER_SCALE,
+            "min_png_bytes": MIN_PNG_BYTES,
+        },
+    )
+
+
+def image_path(paper_id, item, *, root=None, legacy_root=None, historical=False):
+    """Resolve a proven cache entry, or a retained legacy deck asset explicitly."""
+    root = Path(root) if root is not None else FIG_DIR
+    name = item.get("file")
+    if not isinstance(name, str) or Path(name).name != name:
+        return None
+    if historical:
+        if item.get("document_hash"):
+            key = item.get("cache_key")
+            if not isinstance(key, str):
+                return None
+            parts = Path(key).parts
+            if (
+                len(parts) != 3
+                or parts[:2] != ("documents", item["document_hash"])
+                or not re.fullmatch(r"[0-9a-f]{64}", parts[1])
+                or not re.fullmatch(r"figures-v[0-9]+-[0-9a-f]{24}", parts[2])
+            ):
+                return None
+            folder = root / key
+        else:
+            folder = root / _safe(paper_id)
+    else:
+        document = capture_document(paper_id, legacy_root=legacy_root, cached_only=True)
+        if document is not None and (
+            not document_current(document) or item.get("document_hash") != document.sha256
+        ):
+            return None
+        folder = cache_directory(
+            paper_id, document=document, root=root, legacy_root=legacy_root, cached_only=True
+        )
+        if folder is None:
+            return None
+    path = (folder / name).resolve()
+    return path if path.is_relative_to(root.resolve()) and path.is_file() else None
+
+
 def extract(
-    paper_id: str, pdf_path: Path, force: bool = False, *, cached_only=False
+    paper_id: str, pdf_path: Path, force: bool = False, *, cached_only=False, document=None
 ) -> list[Figure]:
     """Render every figure and table in the paper, newest render cached on disk."""
+    document = capture_document(paper_id, document=document, cached_only=cached_only)
+    if document is not None and (
+        not document_current(document) or Path(pdf_path).resolve() != document.path.resolve()
+    ):
+        return []
     ensure_dirs()
-    out_dir = FIG_DIR / _safe(paper_id)
+    out_dir = cache_directory(paper_id, document=document, cached_only=cached_only)
+    if out_dir is None:
+        return []
+    source = (
+        {"document_hash": document.sha256, "cache_key": out_dir.relative_to(FIG_DIR).as_posix()}
+        if document is not None and document.managed
+        else {}
+    )
     index = out_dir / "index.json"
 
     if index.exists() and not force:
         stored = json.loads(index.read_text(encoding="utf-8"))
-        return [
+        found = [
             Figure(
-                paper_id=paper_id, label=f["label"], caption=f["caption"],
-                page=f["page"], path=out_dir / f["file"], kind=f["kind"],
-                meta={"rect": f.get("rect")},
+                paper_id=paper_id,
+                label=f["label"],
+                caption=f["caption"],
+                page=f["page"],
+                path=out_dir / f["file"],
+                kind=f["kind"],
+                meta={"rect": f.get("rect"), **source},
             )
             for f in stored
-            if (out_dir / f["file"]).exists()
+            if Path(f["file"]).name == f["file"]
+            and (out_dir / f["file"]).exists()
+            and (not source or f.get("document_hash") == source["document_hash"])
         ]
+        return found if document_current(document) else []
 
     if cached_only or not pdf_path.exists():
         return []
@@ -190,7 +290,20 @@ def extract(
                             matrix=pymupdf.Matrix(RENDER_SCALE, RENDER_SCALE),
                             clip=pymupdf.Rect(*rect),
                         )
-                        pix.save(out_dir / name)
+                        if source:
+                            temporary = None
+                            try:
+                                with tempfile.NamedTemporaryFile(
+                                    dir=out_dir, suffix=".png", delete=False
+                                ) as handle:
+                                    temporary = Path(handle.name)
+                                pix.save(temporary)
+                                temporary.replace(out_dir / name)
+                            finally:
+                                if temporary is not None:
+                                    temporary.unlink(missing_ok=True)
+                        else:
+                            pix.save(out_dir / name)
                     except Exception:
                         continue
 
@@ -201,14 +314,36 @@ def extract(
                         continue
 
                     figures.append(
-                        Figure(paper_id, label, caption, pno + 1, out_dir / name, kind)
+                        Figure(
+                            paper_id,
+                            label,
+                            caption,
+                            pno + 1,
+                            out_dir / name,
+                            kind,
+                            {"rect": list(rect), **source},
+                        )
                     )
                     manifest.append(
-                        {"label": label, "caption": caption, "page": pno + 1,
-                         "file": name, "kind": kind, "rect": list(rect)}
+                        {
+                            "label": label,
+                            "caption": caption,
+                            "page": pno + 1,
+                            "file": name,
+                            "kind": kind,
+                            "rect": list(rect),
+                            **source,
+                        }
                     )
     except Exception:
-        return figures
+        return figures if document_current(document) else []
 
-    index.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
-    return figures
+    if not document_current(document):
+        return []
+    if source:
+        from paper_daily.presentations import _atomic_json
+
+        _atomic_json(index, manifest)
+    else:
+        index.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    return figures if document_current(document) else []

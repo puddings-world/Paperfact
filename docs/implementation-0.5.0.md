@@ -41,10 +41,13 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   integration and full entity coverage remain.
 - **S06 partial:** authenticated workspace-owned blobs, primary-PDF manifests,
   independent desired/applied bindings and a bounded resumable transfer coordinator.
-  Reader/cache/anchor activation, efficient large-file reads, offline pinning,
-  other attachment types and transfer UI remain.
-- **S09/S10 handoff prepared:** independent Claude mobile worktree created; launch was
-  blocked by Claude's first-use workspace trust prompt. No Claude execution is claimed.
+  Exact managed-reader activation, versioned derivatives and bounded block reads
+  now have fixture coverage. Offline pinning, other attachment types, cache/history
+  lifecycle and complete transfer/onboarding UI remain.
+- **S09/S10 in progress:** the independent Claude worktree remains prepared;
+  launch was blocked by its first-use workspace trust prompt. No Claude execution
+  is claimed. An internal implementation agent is now building the PWA in a
+  separate worktree, with an injected authenticated transport and fixture storage.
 - **S07/S08/S11/S12 implementation pending.** Planning and task ownership are in
   [parallel work](parallel-work-0.5.0.md); the table retains complete acceptance targets.
 - [Delivery decision](adr/0002-sync-delivery-boundaries.md) records the reference-first
@@ -317,3 +320,42 @@ Concrete next contracts: [reader activation](adr/0005-document-reader-activation
 and [bounded blob integrity](adr/0006-bounded-blob-integrity.md). Both are plans,
 not completed runtime features. The Claude/mobile handoff now points to the actual
 DTO2 and authenticated document contracts rather than the earlier v1 proposal.
+
+
+## Managed reader and bounded integrity checkpoint — 2026-10-26
+
+- Implemented [ADR0005](adr/0005-document-reader-activation.md): exact document
+  resolution, registered device-local roots, owned `.pdf` projections, metadata-only
+  list inspection, and background desktop verification. Registration does not enroll
+  legacy research or capture existing writers into sync.
+- Incoming versions announce an explicit switch while retaining the current PDF,
+  selection, drafts and focus. Activation rechecks context; failed replacements
+  preserve the prior native view. Managed/ambiguous/missing documents cannot fall
+  through to legacy aliases, publisher fetching or automatic AI.
+- New note anchors carry a PDF hash. Source jumps/highlight writes/external opening
+  validate the currently rendered version; old verified versions remain usable until
+  explicitly switched. Invalid contexts clear the PDF without erasing editor text.
+- Fixed native Qt handle release by detaching and disposing the old document. The
+  Windows fixture can remove the projection after unload; both PDF backends retain
+  the old document on a rejected replacement.
+- [Versioned derivatives](document-derivatives.md) cover text/figures, previews,
+  pocket/share consumers and editable-deck intake. Positional managed figure/page
+  IDs include source hashes, so versions coexist without reusing the wrong asset.
+  Legacy files, caches and deck assets are retained.
+- Implemented [ADR0006](adr/0006-bounded-blob-integrity.md): server-computed block
+  digests committed with ownership, bounded verified reads and safe lazy backfill.
+  Instrumented tests verify one aligned block, at most two unaligned blocks and zero
+  content reads at EOF; full-file checks still guard manifest publication.
+- Targeted evidence: 29 actual reader/context cases, 26 resolver cases, 92 derivative/
+  presentation cases (22 new), and 187 integrity/transport cases. Windows offscreen
+  renders with bundled fonts were visually inspected at 1300×850; the new-version
+  notice leaves the selected passage and unsaved note visible. Local ignored previews:
+  `build/managed-reader-verified.png`, `build/managed-reader-new-version.png`.
+- Full check: **2,031 Python tests passed** in 654.48 seconds, **18 frontend
+  tests passed**, privacy scan and Ruff passed. Local ignored log:
+  `build/managed-reader-full-check.log`. No Mac, phone, installed app, OS PDF
+  association, real research or public service acceptance is claimed.
+- Next delivery slice remains runtime research capture/enrollment, not another
+  standalone transport prototype: every UI/CLI/MCP/import/AI write must participate
+  before enabling user-facing sync. Full research entities/decks, snapshots/recovery,
+  onboarding/status/devices/offline pins and the independent PWA remain required.

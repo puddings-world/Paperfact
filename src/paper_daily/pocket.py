@@ -23,11 +23,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tempfile
 from pathlib import Path
 
 from paper_daily import cites, closeread, http, pipeline, web_assets
 from paper_daily.config import DATA_DIR, PDF_DIR
-from paper_daily.figures import FIG_DIR, _safe
+from paper_daily.fetch import capture_document, derivative_key, document_current
+from paper_daily.figures import FIG_DIR, _safe, cache_directory, image_path
 from paper_daily.store import connect
 
 OUT_DIR = DATA_DIR / "pocket"
@@ -71,11 +73,19 @@ def set_marked(paper_ids: list[str]) -> None:
 
 def has_pdf(paper_id: str) -> bool:
     """Whether the original is on disk, which decides what this paper can carry."""
+    document = capture_document(paper_id, legacy_root=PDF_DIR, cached_only=True)
+    if document is not None:
+        return document.available
     return (PDF_DIR / (_safe(paper_id) + ".pdf")).exists()
 
 
 def pocket_pdf(paper_id: str) -> Path | None:
     """A copy of the paper's PDF small enough to open over mobile data."""
+    document = capture_document(paper_id, legacy_root=PDF_DIR)
+    if document is not None:
+        if not document_current(document):
+            return None
+        return _managed_pocket_pdf(document)
     src = PDF_DIR / (_safe(paper_id) + ".pdf")
     if not src.exists():
         return None
@@ -98,6 +108,68 @@ def pocket_pdf(paper_id: str) -> Path | None:
     doc.save(dest, garbage=4, deflate=True, deflate_images=True, clean=True)
     doc.close()
     return dest
+
+
+def _managed_pocket_pdf(document):
+    """Compression is a separate artifact, never an original-PDF identity."""
+    import pymupdf
+
+    from paper_daily.presentations import _atomic_json
+
+    options = {
+        "dpi_threshold": PDF_DPI_THRESHOLD,
+        "dpi_target": PDF_DPI_TARGET,
+        "quality": PDF_JPEG_QUALITY,
+    }
+    key = derivative_key(document, "pocket-v1", options)
+    dest = POCKET_PDF_DIR / (document.sha256 + "-" + key.name + ".pdf")
+    metadata = dest.with_suffix(".json")
+    if dest.exists() and metadata.exists():
+        try:
+            prior = json.loads(metadata.read_text(encoding="utf-8"))
+            with dest.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            if (
+                prior.get("source_hash") == document.sha256
+                and prior.get("document_hash") == digest
+                and prior.get("options") == options
+                and document_current(document)
+            ):
+                return dest
+        except (OSError, ValueError, TypeError):
+            pass
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=dest.parent, suffix=".pdf", delete=False) as handle:
+            temporary = Path(handle.name)
+        with pymupdf.open(document.path) as pdf:
+            pdf.rewrite_images(
+                dpi_threshold=PDF_DPI_THRESHOLD,
+                dpi_target=PDF_DPI_TARGET,
+                quality=PDF_JPEG_QUALITY,
+                lossy=True,
+            )
+            pdf.subset_fonts()
+            pdf.save(temporary, garbage=4, deflate=True, deflate_images=True, clean=True)
+        if not document_current(document):
+            return None
+        with temporary.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        temporary.replace(dest)
+        _atomic_json(
+            metadata,
+            {
+                "source_hash": document.sha256,
+                "document_hash": digest,
+                "producer_version": "pocket-v1",
+                "options": options,
+            },
+        )
+        return dest if document_current(document) else None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def ensure_pdfjs() -> dict[str, str]:
@@ -130,20 +202,35 @@ def ensure_typesetting() -> dict[str, str]:
 
 
 def figures_for(paper_id: str) -> list[dict]:
-    index = FIG_DIR / _safe(paper_id) / "index.json"
+    document = capture_document(paper_id, legacy_root=PDF_DIR)
+    folder = cache_directory(paper_id, document=document, root=FIG_DIR, legacy_root=PDF_DIR)
+    if folder is None:
+        return []
+    index = folder / "index.json"
     found = json.loads(index.read_text(encoding="utf-8")) if index.exists() else None
     if not found:
         # Only the 圖表 tab and the briefing pack extract figures, and a paper
         # added from a list may have had neither -- or an older caption rule
         # found nothing and left an empty index. The close reading's markers
         # need the renderings, so they are made here when the PDF is on disk.
-        src = PDF_DIR / (_safe(paper_id) + ".pdf")
+        src = document.path if document is not None else PDF_DIR / (_safe(paper_id) + ".pdf")
         if not src.exists():
             return []
         from paper_daily.figures import extract
 
-        extract(paper_id, src, force=True)
+        if document is None:
+            extract(paper_id, src, force=True)
+        else:
+            extract(paper_id, src, force=True, document=document)
         found = json.loads(index.read_text(encoding="utf-8")) if index.exists() else []
+    if document is not None:
+        if not document_current(document):
+            return []
+        return [
+            dict(item, cache_key=folder.relative_to(FIG_DIR).as_posix())
+            for item in found
+            if item.get("document_hash") == document.sha256
+        ]
     return found
 
 
@@ -359,7 +446,10 @@ def collect(paper_ids: list[str]) -> tuple[list[dict], dict[str, str], list[dict
             figs = []
             for f in figures_for(pid):
                 served = f"fig/{_safe(pid)}/{f['file']}"
-                files[served] = str(FIG_DIR / _safe(pid) / f["file"])
+                source = image_path(pid, f, root=FIG_DIR, legacy_root=PDF_DIR)
+                if source is None:
+                    continue
+                files[served] = str(source)
                 figs.append(
                     {
                         "label": f["label"],
@@ -459,7 +549,10 @@ def anchor_for(paper_id: str, page: int, quote: str) -> dict | None:
 
 def locate(paper_id: str, quote: str, pages: list[int] | None = None) -> dict | None:
     """Where `quote` is printed, searching `pages` (one-based) or the whole paper."""
-    src = PDF_DIR / (_safe(paper_id) + ".pdf")
+    document = capture_document(paper_id, legacy_root=PDF_DIR)
+    if document is not None and not document_current(document):
+        return None
+    src = document.path if document is not None else PDF_DIR / (_safe(paper_id) + ".pdf")
     want = _norm(quote)
     if not src.exists() or len(want) < 4:
         return None
@@ -480,7 +573,15 @@ def locate(paper_id: str, quote: str, pages: list[int] | None = None) -> dict | 
             at = text.find(want[:n])
             if at >= 0:
                 end = min(at + len(want), len(text)) - 1
-                return {"p0": page - 1, "o0": owner[at], "p1": page - 1, "o1": owner[end]}
+                if not document_current(document):
+                    return None
+                return {
+                    "p0": page - 1,
+                    "o0": owner[at],
+                    "p1": page - 1,
+                    "o1": owner[end],
+                    **({"document_hash": document.sha256} if document is not None else {}),
+                }
     return None
 
 

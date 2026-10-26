@@ -1,6 +1,6 @@
 # Authenticated reference attachment service
 
-Status: isolated local authority implementation for ADR 0004. Storage requires an
+Status: isolated local authority implementation for ADR 0004 and ADR 0006. Storage requires an
 explicit directory; this is not public enrollment, production hosting, or automatic
 capture of existing research files.
 
@@ -62,6 +62,9 @@ Committed attachments cannot be cancelled as partial uploads.
 - `sync_blob_namespaces`: workspace to server-generated opaque directory ID.
 - `sync_workspace_blobs`: workspace/digest, declared size, reserved/committed state.
 - `sync_blob_uploads`: opaque session ID, workspace/device, manifest, and lifecycle.
+- `sync_blob_integrity`: verified manifest, encoding version, fixed block size/count,
+  and server-owned filesystem identity snapshot.
+- `sync_blob_blocks`: workspace/digest-scoped contiguous block indexes and SHA256 values.
 
 There is one active session per workspace/digest. Each workspace owns a separate
 BlobStore namespace, including its physical objects and reservations. Knowing a
@@ -69,7 +72,10 @@ digest from another workspace grants neither read permission nor a deduplication
 hit: beginning the same content there starts its own upload. Caller paths, URLs,
 filenames, tokens, and account credentials are not stored in these records.
 
-Locks are always acquired authority first, BlobStore second. Namespace registration
+When both locks are needed, acquisition remains authority first, BlobStore second.
+Explicit commit finalization/full verification runs outside an authority transaction;
+its BlobStore lock is released before the authority publication transaction begins.
+The publication reauthenticates and rechecks the upload/file binding. Namespace registration
 is durably committed before touching files. Authority SQLite and the BlobStore index
 and files are separate transactions: physical verification/finalization occurs
 before authority ownership commit. If interrupted between them, verified but
@@ -83,6 +89,38 @@ All methods, including exact retries and reads, reauthenticate. Revocation block
 subsequent calls; it cannot retract bytes already returned by a completed call.
 Workspace authorization precedes object access, and every read requires committed
 ownership matching both hash and size. Read results expose no server filesystem path.
+
+## Bounded read integrity
+
+Explicit commit computes fixed 256 KiB block digests and the complete file hash from
+the same opened file. It checks the declared whole-file SHA256/size and stable
+opened-file identity before atomically publishing the complete digest set with
+workspace ownership. A failed digest/ownership transaction leaves no partial index
+authorized for reads. Authenticated begin/commit retries rebuild the index from
+verified bytes; client-supplied block lists never establish trust.
+
+Every indexed read authenticates and checks committed ownership, validates the
+complete bounded digest-set shape, rejects symlinks/reparse points, and matches the
+opened handle to the verified file identity. It reads and hashes the one or two
+blocks covering the requested range, checking their exact lengths before returning
+the requested slice. A 150 MiB PDF has 600 records; one range reads at most 512 KiB
+of object bytes. EOF reads inspect no content. Generic empty objects have a valid
+zero-block header. The byte bounds are measured by fixture instrumentation, not
+wall-clock estimates.
+
+A valid returned block does not claim every other block is currently undamaged.
+Corruption in a requested block fails that request, including corruption preserving
+size/mtime; the receiver still verifies the final full-file hash and PDF readability.
+New document metadata puts retain full-file availability verification.
+
+Legacy committed objects with neither header nor block rows receive one lazy full
+verification/backfill before their first range read. Full commit/backfill scans run
+outside authority write transactions, with at most two scans active per process.
+Publication reauthenticates after the scan, so revocation during verification cannot
+publish ownership/index data or return bytes. Partial, extra, malformed or mismatched
+existing metadata fails closed rather than silently becoming a trusted backfill.
+The first legacy upgrade is proportional to file size; subsequent object-byte work
+is bounded by the requested covered blocks, plus bounded index validation.
 
 ## Document prerequisite and independent availability
 
@@ -110,21 +148,17 @@ Transport maps these to fixed errors without raw paths, content, URLs, or tokens
 known-hash isolation, session takeover, revocation in every phase, concurrency,
 quota reservation, restart/overlap retry, finalization-before-ownership interruption,
 manifest prerequisites, corruption/loss, and history retention. Existing
-`test_sync_blobs.py` remains responsible for local file-integrity primitives and
-symlink/reparse-point behavior.
+`test_sync_blobs.py` retains the local file-integrity primitives.
+`test_sync_blob_integrity.py` adds instrumented read bounds, exact/unaligned/EOF
+ranges, malformed indexes, legacy upgrade, opened-handle/link checks, corruption,
+revocation during verification, atomic recovery, isolation, and actual loopback HTTP.
 
 Automatic lease expiry, orphan reconciliation, committed-blob garbage collection,
 trusted repair of lost/corrupt previously committed authority objects, global server
 disk admission, and production rate/concurrency limits remain explicit later gates.
-Current reads conservatively verify the full object before returning a bounded
-chunk. A 150 MiB object split into 256 KiB reads causes approximately 90 GiB of
-verification reads, so large-file transfer performance remains an explicit gate.
-A stat-only cache is not sufficient to preserve the full-content integrity rule:
-corruption can leave a file's metadata unchanged. A follow-up can persist bounded per-chunk digests only after verification of the
-full manifest hash and committed ownership. Reads must verify every covered chunk
-before returning requested bytes, and the client must still verify the final full
-hash. Keep per-request authorization and test corruption/replacement, offset ranges
-crossing chunk boundaries, revocation during verification, and recovery between
-publication and digest/ownership commit before replacing the current check. No unverified persistent availability flag is authoritative.
+Large-file wall-clock performance and production concurrency/disk admission remain
+unbenchmarked. Indexed reads avoid the former repeated full-file scans; explicit
+commits and first legacy upgrades still perform bounded complete verification.
+No stat-only cache or persistent unverified availability flag grants byte access.
 The store does not sandbox a hostile process replacing its owned filesystem entries.
 No real-account, real-research, cloud, deployment, or cross-device test is claimed.

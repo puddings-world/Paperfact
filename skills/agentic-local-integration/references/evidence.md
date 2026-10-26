@@ -167,3 +167,23 @@ in this evidence record. Migration and full-suite checks accompany the final cha
   a metadata-only cache must not silently weaken content verification.
 - Privacy/promotion: no tokens, personal content or absolute local paths recorded;
   no global skill installation or automatic promotion.
+
+
+## Activate current content, retain exact open content — 2026-10-26
+
+- Status: `validated-local`; a repository-local refinement for document editors.
+- Trigger: a replacement PDF arrives while a reader has selected text and an unsaved
+  note; positional figure/page IDs would otherwise reuse an older deck asset.
+- Invariant: strict current-target checks gate new activation, while an already-open
+  version remains navigable only with unchanged verified bytes and its original
+  workspace context. Invalid contexts disable coordinates without deleting drafts.
+  Native replacement must stage before swapping; unload must release native handles.
+- Recovery: show the pending version, allow explicit retry, retain old assets and
+  version their citations rather than silently relabeling old coordinates.
+- Evidence: 29 actual reader/context fixture cases passed, including a reproduced
+  Windows Qt handle leak fixed by view detachment/document disposal; 26 resolver
+  tests passed. Versioned derivatives/intake are covered by a 92-test regression
+  set. Full-check results are recorded in the implementation ledger.
+- Limits: offscreen Windows/isolated fixtures; no Mac/phone/installed-app or hosted
+  service claim. This does not establish full research-writer capture or turn file
+  metadata into permanent cryptographic proof. No real content or credentials used.
