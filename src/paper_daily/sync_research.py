@@ -76,6 +76,10 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
             "sync_id TEXT PRIMARY KEY,incarnation TEXT NOT NULL,"
             "list_incarnation TEXT NOT NULL,paper_incarnation TEXT NOT NULL)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS research_list_projection ("
+            "sync_id TEXT PRIMARY KEY,incarnation TEXT NOT NULL)"
+        )
         paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
         paper_rows = conn.execute(
             "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
@@ -272,6 +276,130 @@ def _plain_note(conn, mapping):
         raise ValueError("Anchored and non-text notes are not supported by this contract")
 
 
+def _order_targets(conn, scope):
+    """Resolve the complete materialized set; legacy rows are never silently excluded."""
+    from paper_daily.sync_ordering import MAX_ITEMS
+    from paper_daily.sync_schema_v2 import membership_id
+
+    if scope["kind"] == "workspace_list_order":
+        rows = conn.execute(
+            "SELECT l.id,m.incarnation FROM lists l LEFT JOIN research_list_projection m "
+            "ON m.sync_id=l.id LIMIT ?",
+            (MAX_ITEMS + 1,),
+        ).fetchall()
+        if len(rows) > MAX_ITEMS or any(row[1] is None for row in rows):
+            raise ValueError("Workspace ordering requires all current lists to be enrolled")
+        return {row[0]: (row[1], row[0]) for row in rows}
+    root = conn.execute(
+        "SELECT m.incarnation FROM lists l LEFT JOIN research_list_projection m "
+        "ON m.sync_id=l.id WHERE l.id=?",
+        (scope["id"],),
+    ).fetchone()
+    if root is None or root[0] != scope["incarnation"]:
+        raise ValueError("Ordering requires the current projected list incarnation")
+    rows = conn.execute(
+        "SELECT lp.paper_id,m.sync_id,p.id FROM list_papers lp "
+        "LEFT JOIN research_paper_identity m ON m.local_id=lp.paper_id "
+        "LEFT JOIN papers p ON p.id=lp.paper_id WHERE lp.list_id=? LIMIT ?",
+        (scope["id"], MAX_ITEMS + 1),
+    ).fetchall()
+    if len(rows) > MAX_ITEMS:
+        raise ValueError("Ordering exceeds the supported membership count")
+    targets = {}
+    for local_id, portable_id, paper in rows:
+        if portable_id is None or paper is None:
+            raise ValueError("Ordering requires enrolled paper metadata")
+        identity = membership_id(scope["id"], portable_id)
+        marker = conn.execute(
+            "SELECT incarnation,list_incarnation FROM research_membership_projection "
+            "WHERE sync_id=?",
+            (identity,),
+        ).fetchone()
+        if marker is None or marker[1] != scope["incarnation"]:
+            raise ValueError("Ordering requires all current memberships to be enrolled")
+        targets[identity] = (marker[0], local_id)
+    return targets
+
+
+def research_order_writer(conn: sqlite3.Connection, scope: dict, ordered_items: list) -> None:
+    """Apply a complete resolved order inside the caller's materialization transaction.
+
+    The client supplies filtered retained items plus deterministic defaults. This
+    callback never decides graph conflicts, deletes research, or commits by itself.
+    """
+    from paper_daily.sync_ordering import canonical_set_bytes
+
+    if not conn.in_transaction:
+        raise ValueError("Research ordering requires a caller transaction")
+    if not isinstance(scope, dict) or set(scope) != {"kind", "id", "incarnation", "workspace_id"}:
+        raise ValueError("Invalid research ordering scope")
+    _identifier(scope["workspace_id"])
+    _identifier(scope["id"])
+    if scope["kind"] == "list_order":
+        _identifier(scope["incarnation"])
+        parents = [{"kind": "list", "id": scope["id"], "incarnation": scope["incarnation"]}]
+    elif (scope["kind"], scope["id"], scope["incarnation"]) == (
+        "workspace_list_order",
+        "workspace-lists",
+        None,
+    ):
+        parents = []
+    else:
+        raise ValueError("Invalid research ordering scope")
+    binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
+    if binding is None or binding[0] != scope["workspace_id"]:
+        raise ValueError("Research ordering belongs to another workspace")
+    stub = {
+        "workspace_id": scope["workspace_id"],
+        "entity_type": scope["kind"],
+        "entity_id": scope["id"],
+        "parents": parents,
+    }
+    canonical_set_bytes(stub, ordered_items)
+    targets = _order_targets(conn, scope)
+    expected = {(identity, value[0]) for identity, value in targets.items()}
+    if {(item["id"], item["incarnation"]) for item in ordered_items} != expected:
+        raise ValueError("Ordering requires a full current incarnation permutation")
+    if scope["kind"] == "workspace_list_order":
+        order = [item["id"] for item in ordered_items]
+        current = conn.execute(
+            "SELECT CASE WHEN length(CAST(value AS BLOB))<=262144 THEN value ELSE NULL END "
+            "FROM kv WHERE key='lists.order'"
+        ).fetchone()
+        try:
+            if current is not None and json.loads(current[0]) == order:
+                return
+        except (ValueError, TypeError, RecursionError):
+            pass
+        conn.execute(
+            "INSERT INTO kv(key,value) VALUES('lists.order',?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (json.dumps(order, ensure_ascii=False),),
+        )
+    else:
+        conn.executemany(
+            "UPDATE list_papers SET position=? WHERE list_id=? AND paper_id=? AND position!=?",
+            [
+                (position, scope["id"], targets[item["id"]][1], position)
+                for position, item in enumerate(ordered_items)
+            ],
+        )
+
+
+def _write_order(conn, operation):
+    from paper_daily.sync_ordering import observed_set, scope
+
+    if operation["action"] == "delete":
+        # Only the dedicated graph projector knows the current canonical default order.
+        return
+    items = operation["payload"]["items"]
+    if observed_set(operation, items) != operation["payload"]["observed_set"]:
+        raise ValueError("Ordering observed set does not match its complete permutation")
+    research_order_writer(
+        conn, {**scope(operation), "workspace_id": operation["workspace_id"]}, items
+    )
+
+
 def _write_note(conn, value):
     sync_id, payload = value["entity_id"], value["payload"]
     mapping = conn.execute(
@@ -323,6 +451,9 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
     if binding is None or binding[0] != operation["workspace_id"]:
         raise ValueError("Research operation belongs to another workspace")
     if operation["version"] == 2:
+        if operation["entity_type"] in ("list_order", "workspace_list_order"):
+            _write_order(conn, operation)
+            return
         if operation["entity_type"] == "paper":
             _write_paper(conn, operation)
             return
@@ -354,6 +485,7 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
         # List removal never deletes papers, notes, analyses or other memberships.
         conn.execute("DELETE FROM list_papers WHERE list_id=?", (identity,))
         conn.execute("DELETE FROM lists WHERE id=?", (identity,))
+        conn.execute("DELETE FROM research_list_projection WHERE sync_id=?", (identity,))
         return
     conn.execute(
         "INSERT INTO lists(id,name,note,created_at) VALUES(?,?,?,?) "
@@ -365,3 +497,9 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
             datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
+    if operation["version"] == 2:
+        conn.execute(
+            "INSERT INTO research_list_projection VALUES(?,?) "
+            "ON CONFLICT(sync_id) DO UPDATE SET incarnation=excluded.incarnation",
+            (identity, operation["incarnation"]),
+        )

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from paper_daily.sync_graph import apply_accepted, check_preconditions
 from paper_daily.sync_journal import ID, canonical_operation
+from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
 class ReferenceService:
@@ -195,6 +196,15 @@ class ReferenceService:
                 ):
                     raise ValueError("Version 1 cannot bypass an enrolled paper parent")
             graph_ready = check_preconditions(get_entity, get_receipt, value)
+            if graph_ready and value["entity_type"] in ORDER_KINDS:
+                graph = {
+                    (row["entity_type"], row["entity_id"]): json.loads(row["metadata"])
+                    for row in conn.execute(
+                        "SELECT entity_type,entity_id,metadata FROM sync_graph WHERE workspace=?",
+                        (workspace,),
+                    )
+                }
+                graph_ready = validate_order(value, graph)
             base, parent_conflicted = value["base_revision"], False
             if value["depends_on"] is not None:
                 parent = conn.execute(

@@ -140,3 +140,39 @@ can be written. Canonical graph metadata remains owned by the sync engine.
 unchanged metadata, exact retries, reopen/citation preservation, explicit reset,
 missing members, stale retirement after restoration, legacy migration and rollback.
 No existing desktop/CLI writer is automatically enrolled.
+
+## Version-2 ordering projections
+
+`list_order` puts update dense `list_papers.position` values for the current list
+incarnation. `workspace_list_order` puts update only the `kv` key `lists.order`.
+Both require a complete permutation of the actual materialized rows, with exact
+portable item IDs and incarnations, and a matching shared observed-set digest.
+Unenrolled legacy lists/members cause an explicit error rather than disappearing
+from the order. No membership, paper, state, citation, timestamp or queue rank is
+created, removed or changed by an ordering write.
+
+Preparation adds `research_list_projection(sync_id, incarnation)` without enrolling
+legacy list rows. Successful v2 list puts write this marker in the same transaction;
+list deletion clears it. A membership order validates its exact list marker plus
+all membership markers before writing any positions. Workspace ordering validates
+every current list marker before touching the one allowed preference key.
+
+The dedicated callback is
+`research_order_writer(conn, scope, ordered_items)`, where scope has exactly
+`kind`, `id`, `incarnation`, and `workspace_id`. List scope uses kind `list_order`,
+the list ID and its list incarnation; workspace scope uses `workspace_list_order`,
+ID `workspace-lists`, and null incarnation. Items are at most 2,000 unique closed
+`{id, incarnation}` objects. The caller owns the transaction and must supply the
+complete resolved order: retained canonical items followed by deterministic
+defaults. This callback checks local binding/permutation/incarnations, never
+decides graph conflicts or commits independently. An order delete passed to the
+ordinary research writer is non-destructive; the dedicated client projector applies
+the resolved default. It must not be routed through ordinary list deletion.
+
+Already-correct positions are not updated; an equivalent stored `lists.order`
+array, regardless of JSON whitespace, is not rewritten. Repeated projection
+therefore does not generate unnecessary database changes or UI invalidations.
+
+`tests/test_sync_ordering_research.py` covers full permutations, stale/duplicate/
+missing IDs, scoped roots, legacy enrollment errors, default resets, transaction
+rollback, retries/reopen, unrelated data preservation and no-op database stability.

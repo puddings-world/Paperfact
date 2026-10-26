@@ -101,3 +101,31 @@ exact list/paper ancestry, protecting both membership and list deletion races.
 The action returns selected states, timestamps and operation IDs after the commit.
 Failure on a later paper or the action receipt rolls back the entire selection.
 This library API is not yet connected to the existing desktop reading controls.
+
+
+## Explicit ordering actions
+
+- `reorder_papers(list_id, paper_ids, request_id=...)` takes a complete ordered list
+  of portable paper IDs. It resolves the current membership incarnations within the
+  same transaction, then records an independent `list_order` intent and retry receipt.
+- `reorder_lists(list_ids, request_id=...)` records the complete workspace list order.
+  Only the explicit `lists.order` key changes; other key/value state and the legacy
+  daily queue remain local and untouched.
+- Empty lists/workspaces accept an empty order. Partial, duplicate, foreign, missing
+  or deleted entries fail without changing positions. Requests are bounded to 2,000
+  entries and the existing 256 KiB envelope limit; these are prototype contract limits,
+  not a change to the existing desktop drag/drop behavior.
+- Exact retries return their original receipt after later reorder operations, without
+  rewinding the visible order. A changed retry ID payload is rejected. Research writes,
+  order intent and action receipt share one transaction, including receipt failures.
+
+Construct an ordering-aware client with `order_writer=research_order_writer`. The
+dedicated projection applies filtered accepted orders and deterministic defaults;
+ordinary research writes do not reinterpret retained historical order payloads.
+Missing projection support is shown as deferred, never silently marked applied.
+See [the ordering contract](sync-ordering.md) for set conflicts and lifecycle rules.
+
+Targeted shared-action acceptance: **21 tests passed**, covering empty peers, default
+creation order despite later citation updates, append/remove projection, both ordering
+scopes, repeated actions, invalid selections and transaction rollback. The full-suite result is recorded in the implementation ledger;
+existing desktop control integration remains a separate gate.

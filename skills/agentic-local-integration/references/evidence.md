@@ -118,3 +118,27 @@ in this evidence record. Migration and full-suite checks accompany the final cha
 - Limits: no production writer enrollment, hosted identity, arbitrary file atomicity,
   physical power-loss, real mobile storage or full-workspace synchronization claim.
   No private content, accounts, local absolute paths or global installation recorded.
+
+
+## Observed-set protection for complete ordering intents — 2026-10-26
+
+- Status: `validated-local`; not a universal replacement for revision checks.
+- Trigger: a complete list reorder must detect removed/restored/new members without
+  conflicting merely because a paper's citation or reading status changed.
+- Invariant: compare a versioned, domain/scope-separated digest of effective-active
+  identity/incarnation pairs, alongside the order entity's own revision. Reject an
+  invalid permutation; preserve a stale-set intent as a conflict. An empty matching
+  digest cannot authorize a deleted scope. Recreated members have new incarnations.
+- Recovery: keep the accepted payload/history unchanged. Project exact surviving
+  incarnations and append later creations by accepted creation-receipt sequence;
+  latest metadata revision is not creation order. Pending local work stays protected.
+- Trade-off: an intervening add/remove returning to the identical active set may
+  accept the old complete permutation. This is valid ordering intent, not a guarantee
+  that membership history never changed. Generic child/parent delete guards remain.
+- Evidence: `tests/test_sync_ordering_contract.py` pins literal cross-language bytes
+  and digest; contract/service suites passed 55 cases. Shared action suite passed
+  21 cases using isolated actual-schema databases, including late-citation/default
+  order, retries and receipt rollback. Full-check results belong in the work ledger.
+- Limits: bounded private protocol and trusted projection adapter; no production
+  writer enrollment, general CRDT, hosted authentication or mobile acceptance claim.
+  Synthetic research only; no credentials, real user content or global installation.

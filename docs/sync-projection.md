@@ -156,3 +156,29 @@ history, change DTO1, or establish canonical bootstrap completeness.
 `tests/test_sync_reading_state_projection.py` covers missing/local state, pending
 and acknowledged writes, received progress, parent deferral/replacement, bounded
 timestamps, no database writes and unchanged DTO1 fields.
+
+### Ordering metadata in DTO2
+
+Each list has `order`; the manifest has `list_order` for the workspace list order.
+Both closed objects contain `revision`, `sync_state`, `graph`, `editable`, and
+`read_only_reason`. `capabilities.ordering_contract_version` is 2. The displayed
+list/member arrays remain the actual local projection; pending content is visible.
+Missing canonical order history does not imply readiness to create an order.
+
+Known active, applied order graph plus exact parent/item graphs and adapter
+incarnation markers are required for `editable: true`. Otherwise graph is null and
+the reason is `graph_unavailable`, `parent_graph_unavailable`,
+`item_graph_unavailable`, or `projection_unavailable`. Unsupported/unmapped local
+rows never silently disappear to make an order look writable. This remains a
+read projection, not an authenticated write grant or canonical bootstrap.
+
+DTO2 reads exactly one allowlisted preference: `kv['lists.order']`, a bounded
+JSON array of unique IDs. Removed IDs are ignored when sorting the display;
+current lists absent from the preference remain visible in creation order.
+Malformed or oversized preferences fail without repair. Other settings are never
+read or exported. DTO1 retains its existing shape and ordering behavior.
+
+`tests/test_sync_ordering_projection.py` verifies visible local/received order,
+pending and deferred readiness, missing projection markers, bounded preference
+handling, unrelated-setting exclusion, unchanged DTO1, and order/cursor consistency
+under a concurrent WAL commit.

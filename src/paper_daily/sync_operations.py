@@ -133,6 +133,84 @@ class ResearchOperations:
             )
             return json.loads(encoded)
 
+    def reorder_papers(self, list_id, paper_ids, *, request_id):
+        """Save the complete paper permutation for one list without changing content."""
+        _identifier(list_id)
+        if not isinstance(paper_ids, list):
+            raise ValueError("Paper order must be a list of portable UUIDs")
+        identities = paper_ids.copy()
+        if len(identities) > 2000:
+            raise ValueError("Order accepts at most 2000 entries")
+        members = [membership_id(list_id, identity) for identity in identities]
+        return self._reorder("list_order", list_id, members, request_id)
+
+    def reorder_lists(self, list_ids, *, request_id):
+        """Save the complete workspace list permutation with an independent revision."""
+        return self._reorder("workspace_list_order", "workspace-lists", list_ids, request_id)
+
+    def _reorder(self, kind, identity, ordered_ids, request_id):
+        _identifier(request_id)
+        if not isinstance(ordered_ids, list):
+            raise ValueError("Order must be a list of research identities")
+        ordered_ids = ordered_ids.copy()
+        if len(ordered_ids) > 2000:
+            raise ValueError("Order accepts at most 2000 entries")
+        for item in ordered_ids:
+            _identifier(item)
+        if len(set(ordered_ids)) != len(ordered_ids):
+            raise ValueError("Order cannot contain duplicate identities")
+        request = json.dumps(
+            {"mode": kind, "entity_id": identity, "ordered_ids": ordered_ids},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        fingerprint = hashlib.sha256(request.encode("utf-8")).hexdigest()
+        journal = self.client.journal
+        with journal.transaction() as conn:
+            receipt = conn.execute(
+                "SELECT fingerprint,result FROM research_action_receipts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if receipt:
+                if receipt[0] != fingerprint:
+                    raise ValueError("Research action retry changed its content")
+                return json.loads(receipt[1])
+            graph = self.client._optimistic_graph(conn)[0]
+            old = graph.get((kind, identity))
+            expected = []
+            if kind == "list_order":
+                scope = graph.get(("list", identity))
+                if scope is None or not scope["active"]:
+                    raise ValueError("Ordering requires an active graph list")
+                expected = [{"kind": "list", "id": identity, "incarnation": scope["incarnation"]}]
+            restore = old is not None and (
+                not old["active"]
+                or self.client._parent_keys(old["parents"]) != self.client._parent_keys(expected)
+            )
+            operation = self.client.new_order_operation_in(
+                conn,
+                kind,
+                identity,
+                ordered_ids,
+                operation_id=self._id(request_id, "order-op"),
+                restore=restore,
+            )
+            journal.apply_in(conn, operation, self.client.writer)
+            result = {
+                "kind": kind,
+                "entity_id": identity,
+                "ordered_ids": ordered_ids,
+                "operation_id": operation["operation_id"],
+            }
+            encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
+            if len(encoded.encode("utf-8")) > MAX_BYTES:
+                raise ValueError("Research action receipt exceeds its bounded size")
+            conn.execute(
+                "INSERT INTO research_action_receipts VALUES(?,?,?)",
+                (request_id, fingerprint, encoded),
+            )
+            return json.loads(encoded)
+
     def _id(self, request_id, label):
         namespace = json.dumps(
             [self.client.journal.workspace_id, self.client.journal.device_id, request_id, label],

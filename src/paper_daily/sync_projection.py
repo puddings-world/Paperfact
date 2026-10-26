@@ -571,6 +571,9 @@ def _portable_projection(conn, result):
                 cursor,
             )
         collection["members"].sort(key=lambda item: (item["position"], item["paper_id"]))
+        collection["order"] = _order_projection(conn, tables, result, collection)
+    result["list_order"] = _order_projection(conn, tables, result)
+    _workspace_display_order(conn, result)
     for note in result["notes"]:
         note["paper_id"] = mapping[note["paper_id"]]
         note["graph"] = _graph_info(
@@ -605,7 +608,79 @@ def _portable_projection(conn, result):
     result["schema_version"] = 2
     result["capabilities"]["note_contract_version"] = 2
     result["capabilities"]["reading_state_contract_version"] = 2
+    result["capabilities"]["ordering_contract_version"] = 2
     return result
+
+
+def _order_projection(conn, tables, result, collection=None):
+    from paper_daily.sync_research import _order_targets
+
+    kind = "workspace_list_order" if collection is None else "list_order"
+    identity = "workspace-lists" if collection is None else collection["id"]
+    cursor = result["cursor"]
+    projected = _sync_state(conn, tables, kind, identity, cursor)
+    projected["graph"] = _graph_info(
+        conn,
+        tables,
+        kind,
+        identity,
+        projected,
+        cursor,
+        {} if collection is None else {"list": identity},
+    )
+    reason = "graph_unavailable" if projected["graph"] is None else None
+    if reason is None and collection is not None:
+        parent = projected["graph"]["parents"][0]
+        if (
+            collection["graph"] is None
+            or collection["graph"]["incarnation"] != parent["incarnation"]
+        ):
+            reason = "parent_graph_unavailable"
+    if reason is None:
+        items = result["lists"] if collection is None else collection["members"]
+        if any(item["graph"] is None for item in items):
+            reason = "item_graph_unavailable"
+        elif not {"research_list_projection", "research_membership_projection"} <= tables:
+            reason = "projection_unavailable"
+        else:
+            scope = {
+                "kind": kind,
+                "id": identity,
+                "incarnation": None if collection is None else collection["graph"]["incarnation"],
+            }
+            try:
+                targets = _order_targets(conn, scope)
+                expected = {(item["id"], item["graph"]["incarnation"]) for item in items}
+                if {(key, value[0]) for key, value in targets.items()} != expected:
+                    reason = "projection_unavailable"
+            except ValueError:
+                reason = "projection_unavailable"
+    if reason is not None:
+        projected["graph"] = None
+    projected.update(editable=reason is None, read_only_reason=reason)
+    return projected
+
+
+def _workspace_display_order(conn, result):
+    """Read only the explicitly allowed display preference; never enumerate settings."""
+    row = conn.execute(
+        "SELECT CASE WHEN length(CAST(value AS BLOB))<=262144 THEN value ELSE NULL END "
+        "FROM kv WHERE key='lists.order'"
+    ).fetchone()
+    if row is None:
+        return
+    try:
+        order = json.loads(row[0])
+    except (ValueError, TypeError, RecursionError):
+        raise ValueError("Invalid bounded workspace list order") from None
+    if not isinstance(order, list) or len(order) > 2000:
+        raise ValueError("Invalid bounded workspace list order")
+    for identity in order:
+        _identifier(identity)
+    if len(set(order)) != len(order):
+        raise ValueError("Invalid duplicate workspace list order")
+    ranks = {identity: index for index, identity in enumerate(order)}
+    result["lists"].sort(key=lambda item: ranks.get(item["id"], len(order)))
 
 
 def read_manifest(

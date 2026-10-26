@@ -141,3 +141,11 @@ The private v2 contract now also supports [per-membership reading state](sync-re
 That kind alone requires exactly three parents (membership, list, paper), using
 the membership's authoritative root closure. Other kinds retain the shapes above.
 Order, complete research/file capture and runtime enrollment remain separate gates.
+
+## Ordering extension
+
+[List and workspace ordering](sync-ordering.md) use independent order revisions and
+a canonical digest of the effective-active identity/incarnation set. The list order
+retains an exact list parent and normal structural-delete protection. Metadata and
+reading-state edits do not alter the observed set. These are opt-in library contracts;
+existing application writers and device enrollment are not automatically connected.

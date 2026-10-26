@@ -201,3 +201,54 @@ renames, exact/forged closure, ancestor deletion races, explicit restore, custom
 resolution/retirement, same-transaction chains, restart and atomic receive failure.
 This remains an explicit local API; production reading UI actions, complete graph
 enrollment, per-device PDF reading positions and real-device sync are separate work.
+
+
+## Scoped ordering and deterministic defaults
+
+`new_order_operation(kind, entity_id, ordered_ids)` and its same-transaction
+`new_order_operation_in(conn, ...)` counterpart build complete permutations for
+`list_order` (membership IDs) and `workspace_list_order` (`workspace-lists`, list
+IDs). Each item carries its current incarnation. A workspace-bound SHA256 digest
+asserts the full effective active set; own base revision/dependency still protects
+against concurrent reorders. The builder sees uncommitted outbox creations and
+acknowledged-but-unreceived operations. Raw `save()` repeats set and parent checks
+inside the research-write transaction. See [the ordering contract](sync-ordering.md)
+for canonical hash bytes and service conflict semantics.
+
+Construct `SyncClient(journal, writer, order_writer=callback)` for order projection.
+The callback receives `(conn, scope, ordered_items)`. The closed scope contains
+`kind`, `id`, `incarnation` (null for workspace order), and `workspace_id`;
+`ordered_items` is the full current materialized permutation of `{id, incarnation}`.
+It changes positions only. The research writer handles optimistic local order puts;
+the dedicated callback handles incoming/default/reset ordering after root and child
+content is ready. An order deletion resets to creation order upon its receipt;
+there is currently no production reset-order UI.
+
+Projection filters accepted items against exact current incarnations and appends
+new items by accepted creation-receipt sequence, not the latest citation/name head.
+This also defines the default for an empty peer with no explicit order. Changing
+the active set reevaluates an unchanged accepted order head. Deleted/restored
+members never reclaim an old incarnation's position. Deleted, obsolete-scope and
+rejected-first-order projections are inactive; retained source/history stays intact.
+The canonical accepted payload is never rewritten or re-enqueued by projection.
+
+Pending local order/lifecycle changes and acknowledgment gaps protect local order.
+Scopes whose materialized set is not ready defer independently. The projection
+cache records accepted revision and set digest; lifecycle outcomes invalidate only
+affected scopes, including a rejected optimistic removal that recreated a row.
+An unchanged citation update does not rewrite unrelated ordering. Callback failure
+rolls back research, graph, history and cursor together. Without `order_writer`,
+incoming explicit orders remain deferred with `order_writer_unavailable`; supplying
+the callback and receiving again retries them.
+
+Conflict resolution never silently extends a stale permutation. A stale-set chosen
+payload is rejected with a request to build a fresh complete reorder; a caller may
+review the current set and pass a new complete payload explicitly. Concurrent
+reorders over the same set can use the existing incoming/canonical choice. Ordinary
+list-order edits retain their parent structural protection against list deletion.
+
+`tests/test_sync_ordering_client.py` uses synthetic writers and local reference
+peers for lifecycle, ordering, rollback, missing-callback, pending/receipt-gap and
+conflict cases. Real research adapter/action coverage lives in separate integration
+tests. This does not claim UI enrollment, production migration, network delivery,
+real-device synchronization or performance validation at large workspace sizes.

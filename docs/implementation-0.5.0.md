@@ -245,3 +245,39 @@ until unsupported writes cannot silently escape synchronization.
 - Review confirmed safe retirement of a child tied to a rejected membership
   creation attempt in an isolated temporary fixture. A named regression is
   queued for the next slice; the reported suite count does not include it.
+
+
+## Fifth local slice: deterministic ordering (verified core)
+
+- Keep list/paper ordering independent of metadata and reading state. Full ordering
+  intents use their own entity revision, plus an observed-set digest over exact active
+  identities/incarnations in an authenticated scope. Normal parent lifecycle checks
+  still apply to an empty list; a matching digest cannot authorize a deleted scope.
+- The digest replaces the earlier proposed separate set clock: offline creation uses
+  stable incarnation IDs, so clients need not predict server revisions. Citation/read
+  edits do not invalidate it. Transient add/remove returning the identical active set
+  may accept the old complete permutation; history still retains those events.
+- A stale reorder arriving after a set change conflicts. Later membership-set changes
+  can remain valid: filter removed/replaced incarnations, then append new ones by
+  accepted creation-receipt sequence. Never sort by latest metadata revision. Existing
+  graph deletion guards still apply: list_order touches its parent list structure, so
+  a concurrent parent-list deletion may conflict with that child edit.
+- Implement the same deterministic fallback when no explicit order exists, with an
+  independent trusted projection writer. Pending local ordering/lifecycle work defers
+  projection; received order payloads remain immutable history.
+- Shared action integration: **21 targeted tests passed** using two isolated
+  actual-schema research databases. Service/adapter/client suites cover additional
+  races and projection failures. Full check: **1,750 Python tests passed** in
+  357.15 seconds, **18 frontend tests passed**, privacy scan and Ruff passed.
+  Log: `build/sync-ordering-check.log` (local ignored artifact). Existing desktop
+  drag/drop controls remain outside sync until the writer enrollment gate is complete.
+- The four rejected-lineage retirement cases queued in the previous slice are now
+  committed and included in this count. Historical parent attempts can be safely
+  discarded without changing a different canonical child or resurrecting a parent.
+- Next: authenticated immutable PDF transfer and paper-document manifests, with
+  separate desired/applied byte availability. The current legacy reader/text/figure
+  caches and some anchor jumps require hash-aware integration before PDF activation.
+  Do not call legacy PDF replacement or URL discovery during remote application.
+- No real account, workspace, hosted service, Mac, phone or installer acceptance
+  was performed. Full research/file capture, UI enrollment, recovery, production
+  authentication and mobile acceptance remain release gates.

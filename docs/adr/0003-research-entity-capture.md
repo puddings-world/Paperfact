@@ -3,8 +3,9 @@
 Status: **partially implemented**, 2026-10-26. The private v2 paper/membership
 graph, parent lifecycle rules, dependency-aware client and shared-connection journal
 are implemented in isolated workspaces. [Shared intake actions](../sync-operations.md)
-create complete lists on an empty peer. Order/read-state, full research manifests,
-existing writer capture and production enrollment remain planned below.
+create complete lists on an empty peer. Per-membership reading state and deterministic
+ordering are also implemented in isolated fixtures; full research manifests, existing
+writer capture and production enrollment remain planned below.
 See [the graph contract](../sync-graph-contract.md) for implemented wire details.
 
 ## Original failure and remaining writer boundaries
@@ -47,8 +48,8 @@ provenance contract. URLs are metadata, never instructions to fetch during remot
 Ordering and reading state are separate conflict domains, not incidental fields in
 a full membership replacement:
 
-- `list_order`: one bounded ordered list of active membership IDs per list; validate
-  the observed membership-set revision. Concurrent reorder/add/remove preserves a
+- `list_order`: one bounded ordered list of active membership identity/incarnation pairs;
+  validate the observed membership-set digest (see [the contract](../sync-ordering.md)). Concurrent reorder/add/remove preserves a
   conflict instead of silently dropping members. Project dense `position` integers.
 - `workspace_list_order`: the analogous list-ID sequence; replaces only the explicit
   `lists.order` projection, never replicates arbitrary `kv` keys.

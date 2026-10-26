@@ -510,3 +510,75 @@ def test_reading_state_cannot_use_another_workspace_parent_graph(ready):
     with pytest.raises(ValueError, match="Missing graph parent"):
         service.push(other, operation)
     assert service.pull(other) == []
+
+
+@pytest.mark.parametrize("canonical_child", [False, True])
+@pytest.mark.parametrize("deleted_list", [False, True])
+def test_rejected_parent_lineage_retirement_is_bounded_to_its_own_child(
+    ready, canonical_child, deleted_list
+):
+    service, a, b = ready
+    existing_child = service.push(a, reading()) if canonical_child else None
+    if deleted_list:
+        service.push(
+            a,
+            op(
+                "remove-list",
+                "list",
+                "list",
+                {},
+                incarnation="list-create",
+                base=1,
+                structure=metadata(service, "list", "list")["structure_revision"],
+                action="delete",
+            ),
+        )
+
+    # A competing creation has its own retained receipt but never becomes a head.
+    rejected_parent = service.push(b, member("rejected-member", device="b"))
+    attempted_child = reading("rejected-child", member_inc="rejected-member", device="b")
+    attempted_child["payload"]["state"] = "read"
+    rejected_child = service.push(b, attempted_child)
+    assert rejected_parent["outcome"] == rejected_child["outcome"] == "conflict"
+    keys = [("membership", MEMBER), ("list", "list"), ("paper", PAPER)]
+    before = {key: metadata(service, *key) for key in keys}
+    before_child = metadata(service, "reading_state", MEMBER)
+
+    retirement = reading(
+        "discard-rejected-child",
+        member_inc="rejected-member",
+        incarnation="rejected-child",
+        device="b",
+        action="delete",
+        payload={},
+        base=existing_child["sequence"] if existing_child else 0,
+        structure=before_child["structure_revision"] if before_child else 0,
+    )
+    retirement["resolution_of"] = "rejected-child"
+    result = service.push(b, retirement)
+
+    # The rejected parent incarnation cannot modify the accepted membership.
+    assert metadata(service, "membership", MEMBER) == before["membership", MEMBER]
+    assert metadata(service, "list", "list")["active"] is not deleted_list
+    if canonical_child:
+        # Even an up-to-date base/structure cannot delete another incarnation.
+        assert result["outcome"] == "conflict"
+        assert result["head"] == existing_child["head"]
+        assert metadata(service, "reading_state", MEMBER) == before_child
+        assert {key: metadata(service, *key) for key in keys} == before
+    else:
+        assert result["outcome"] == "accepted"
+        assert not metadata(service, "reading_state", MEMBER)["active"]
+        assert result["head"]["operation"] == retirement
+        for kind, identity in [("list", "list"), ("paper", PAPER)]:
+            expected = copy.deepcopy(before[kind, identity])
+            if expected["active"]:
+                expected["structure_revision"] = result["sequence"]
+            assert metadata(service, kind, identity) == expected
+
+    # Discarding does not erase rejected research content or create retry events.
+    restarted = ReferenceService(service.path)
+    assert restarted.push(b, retirement) == result
+    retained = {event["operation"]["operation_id"]: event for event in restarted.pull(a)}
+    assert retained["rejected-member"] == rejected_parent
+    assert retained["rejected-child"] == rejected_child

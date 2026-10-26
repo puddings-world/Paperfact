@@ -50,9 +50,10 @@ class SyncClient:
     Neither credentials nor model calls are stored or executed by this client.
     """
 
-    def __init__(self, journal: Journal, writer):
+    def __init__(self, journal: Journal, writer, *, order_writer=None):
         self.journal = journal
         self.writer = writer
+        self.order_writer = order_writer
         self._running = threading.Lock()
         conn = journal._connect()
         try:
@@ -114,6 +115,10 @@ class SyncClient:
                 "CREATE TABLE IF NOT EXISTS paperfact_sync_graph_receipts "
                 "(operation_id TEXT PRIMARY KEY,event TEXT NOT NULL)"
             )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paperfact_sync_order_projection "
+                "(scope TEXT PRIMARY KEY,revision INTEGER NOT NULL,digest TEXT NOT NULL)"
+            )
             if not has_graph:
                 for row in conn.execute("SELECT event FROM paperfact_sync_inbox ORDER BY sequence"):
                     self._record_graph_state(conn, json.loads(row[0]))
@@ -165,6 +170,15 @@ class SyncClient:
                 )
 
             if event["outcome"] == "accepted":
+                from paper_daily.sync_ordering import ORDER_KINDS, validate_order
+
+                if operation["entity_type"] in ORDER_KINDS:
+                    state = {
+                        (row[0], row[1]): json.loads(row[2])
+                        for row in conn.execute("SELECT * FROM paperfact_sync_graph")
+                    }
+                    if not validate_order(operation, state):
+                        raise ValueError("Accepted order violates its observed set")
                 if not check_preconditions(get_entity, get_receipt, operation):
                     raise ValueError("Accepted event violates graph preconditions")
                 apply_accepted(get_entity, set_entity, operation, event["sequence"])
@@ -276,7 +290,15 @@ class SyncClient:
     ):
         if type(restore) is not bool:
             raise ValueError("Restore must be an explicit boolean choice")
-        if kind not in ("list", "paper", "membership", "note", "reading_state"):
+        if kind not in (
+            "list",
+            "paper",
+            "membership",
+            "note",
+            "reading_state",
+            "list_order",
+            "workspace_list_order",
+        ):
             raise ValueError("Unsupported graph entity")
         if not isinstance(payload, dict):
             raise ValueError("Graph payload must be an object")
@@ -287,10 +309,12 @@ class SyncClient:
         state, touches, own = self._optimistic_graph(conn)
         key = (kind, entity_id)
         current = state.get(key)
-        if kind in ("paper", "list", "reading_state"):
+        if kind in ("paper", "list", "reading_state", "workspace_list_order"):
             if kind == "reading_state" and action == "delete" and current is None:
                 raise ValueError("A child deletion needs its known parent identities")
             requested = []
+        elif kind == "list_order" and action == "put":
+            requested = [("list", entity_id)]
         elif action == "delete":
             if current is None:
                 raise ValueError("A child deletion needs its known parent identities")
@@ -359,7 +383,84 @@ class SyncClient:
         operation = json.loads(canonical_operation(operation))
         self._guard_membership_creation(conn, operation)
         self._guard_reading_parents(conn, operation)
+        self._guard_order(conn, operation)
         return operation
+
+    def new_order_operation(
+        self, kind, entity_id, ordered_ids, *, operation_id=None, restore=False
+    ):
+        """Build a full permutation against the current optimistic member set."""
+        conn = self.journal._connect()
+        try:
+            conn.execute("BEGIN")
+            return self.new_order_operation_in(
+                conn, kind, entity_id, ordered_ids, operation_id=operation_id, restore=restore
+            )
+        finally:
+            conn.close()
+
+    def new_order_operation_in(
+        self, conn, kind, entity_id, ordered_ids, *, operation_id=None, restore=False
+    ):
+        from paper_daily.sync_ordering import ORDER_KINDS, active_items, observed_set
+
+        if not conn.in_transaction:
+            raise ValueError("A caller-owned transaction is required")
+        databases = conn.execute("PRAGMA database_list").fetchall()
+        main = next((row[2] for row in databases if row[1] == "main"), None)
+        if not main or Path(main).resolve() != self.journal.path.resolve():
+            raise ValueError("Connection belongs to another research database")
+        self.journal._binding(conn)
+        if kind not in ORDER_KINDS:
+            raise ValueError("Unsupported ordering kind")
+        state, _, _ = self._optimistic_graph(conn)
+        parents = []
+        if kind == "list_order":
+            parent = state.get(("list", entity_id))
+            if not parent or not parent["active"]:
+                raise ValueError("Ordering requires an active list")
+            parents = [{"kind": "list", "id": entity_id, "incarnation": parent["incarnation"]}]
+        stub = {
+            "workspace_id": self.journal.workspace_id,
+            "entity_type": kind,
+            "entity_id": entity_id,
+            "parents": parents,
+        }
+        items = active_items(stub, state)
+        if (
+            not isinstance(ordered_ids, list)
+            or any(not isinstance(value, str) for value in ordered_ids)
+            or sorted(ordered_ids) != sorted(item["id"] for item in items)
+        ):
+            raise ValueError("Order must be a complete permutation of the active set")
+        lookup = {item["id"]: item for item in items}
+        payload = {
+            "items": [lookup[identity] for identity in ordered_ids],
+            "observed_set": observed_set(stub, items),
+        }
+        if kind == "list_order":
+            payload["list_id"] = entity_id
+        return self.new_graph_operation_in(
+            conn, kind, entity_id, payload, operation_id=operation_id, restore=restore
+        )
+
+    def _guard_order(self, conn, operation):
+        from paper_daily.sync_ordering import ORDER_KINDS, validate_order
+
+        if operation["version"] != 2 or operation["entity_type"] not in ORDER_KINDS:
+            return
+        state, _, _ = self._optimistic_graph(conn)
+        if not (operation["action"] == "delete" and operation.get("resolution_of")):
+            for ref in operation["parents"]:
+                parent = state.get((ref["kind"], ref["id"]))
+                if (
+                    parent is None
+                    or not parent["active"]
+                    or parent["incarnation"] != ref["incarnation"]
+                ):
+                    raise ValueError("Ordering parent is missing, deleted or replaced")
+        if not validate_order(operation, state):
+            raise ValueError("Ordering set changed; build a new complete reorder")
 
     def deferred_reasons(self, limit=100):
         if type(limit) is not int or not 1 <= limit <= 1000:
@@ -522,6 +623,7 @@ class SyncClient:
             self._guard_legacy(conn, value)
             self._guard_membership_creation(conn, value)
             self._guard_reading_parents(conn, value)
+            self._guard_order(conn, value)
             self.writer(conn, value)
 
         return self.journal.apply(operation, write)
@@ -698,6 +800,7 @@ class SyncClient:
             self._guard_legacy(conn, value)
             self._guard_membership_creation(conn, value)
             self._guard_reading_parents(conn, value)
+            self._guard_order(conn, value)
             self.writer(conn, value)
             conn.execute(
                 "INSERT INTO research_resolution_intents VALUES(?,?,?,?)",
@@ -852,6 +955,7 @@ class SyncClient:
                 )
                 self._record_conflict_state(conn, event)
                 self._record_graph_state(conn, event)
+                self._invalidate_order_cache(conn, op)
                 cursor = sequence
                 received += 1
             applied = self._materialize(conn, cursor)
@@ -917,6 +1021,7 @@ class SyncClient:
             "SELECT h.*,p.source,p.operation AS projected_operation,p.active,p.reason "
             "FROM paperfact_sync_heads h JOIN paperfact_sync_graph_projection p "
             "USING(entity_type,entity_id) "
+            "WHERE h.entity_type NOT IN ('list_order','workspace_list_order') "
             "ORDER BY CASE WHEN h.entity_type IN ('list','paper') THEN 0 "
             "WHEN h.entity_type='reading_state' THEN 2 ELSE 1 END,h.revision"
         ).fetchall()
@@ -1050,8 +1155,209 @@ class SyncClient:
             applied += project(head, source, visible=visible, reason=reason)
         return applied
 
+    @staticmethod
+    def _invalidate_order_cache(conn, operation):
+        if operation["version"] != 2 or operation["entity_type"] not in ("list", "membership"):
+            return
+        if (
+            operation["action"] != "delete"
+            and operation["incarnation"] != operation["operation_id"]
+        ):
+            return
+        # A rejected optimistic removal may have physically recreated a row at the
+        # end even when canonical membership and the accepted order are unchanged.
+        for row in conn.execute("SELECT scope FROM paperfact_sync_order_projection").fetchall():
+            scope = json.loads(row[0])
+            affected = (
+                operation["entity_type"] == "list"
+                and (
+                    scope["kind"] == "workspace_list_order" or scope["id"] == operation["entity_id"]
+                )
+            ) or (
+                operation["entity_type"] == "membership"
+                and scope["kind"] == "list_order"
+                and any(
+                    ref["kind"] == "list" and ref["id"] == scope["id"]
+                    for ref in operation["parents"]
+                )
+            )
+            if affected:
+                conn.execute("DELETE FROM paperfact_sync_order_projection WHERE scope=?", (row[0],))
+
+    def _materialize_orders(self, conn, cursor):
+        from paper_daily.sync_ordering import active_items, observed_set, scope
+
+        canonical = {
+            (row[0], row[1]): json.loads(row[2])
+            for row in conn.execute("SELECT * FROM paperfact_sync_graph")
+        }
+        pending = self._pending_graph(conn, cursor)
+        optimistic = dict(canonical)
+        for op in pending:
+            if op["version"] == 2:
+                optimistic[(op["entity_type"], op["entity_id"])] = {
+                    "active": op["action"] == "put",
+                    "incarnation": op["incarnation"],
+                    "parents": op["parents"],
+                }
+        projected = {}
+        for row in conn.execute(
+            "SELECT entity_type,entity_id,operation,active FROM paperfact_sync_graph_projection "
+            "WHERE operation IS NOT NULL"
+        ):
+            op = json.loads(row[2])
+            projected[(row[0], row[1])] = {
+                "active": bool(row[3]),
+                "incarnation": op["incarnation"],
+                "parents": op["parents"],
+            }
+        heads = {
+            (row["entity_type"], row["entity_id"]): row
+            for row in conn.execute(
+                "SELECT h.*,p.source FROM paperfact_sync_heads h "
+                "JOIN paperfact_sync_graph_projection p USING(entity_type,entity_id) "
+                "WHERE h.entity_type IN ('list_order','workspace_list_order')"
+            )
+        }
+        stubs = {
+            ("workspace_list_order", "workspace-lists"): {
+                "workspace_id": self.journal.workspace_id,
+                "entity_type": "workspace_list_order",
+                "entity_id": "workspace-lists",
+                "parents": [],
+            }
+        }
+        for (kind, identity), value in canonical.items():
+            if kind == "list" and value["active"]:
+                stubs[("list_order", identity)] = {
+                    "workspace_id": self.journal.workspace_id,
+                    "entity_type": "list_order",
+                    "entity_id": identity,
+                    "parents": [
+                        {"kind": "list", "id": identity, "incarnation": value["incarnation"]}
+                    ],
+                }
+        for key, head in heads.items():
+            stubs.setdefault(key, json.loads(head["operation"] or head["source"]))
+
+        def mark(key, reason, *, applied=False, operation=None, visible=False):
+            if key not in heads:
+                return
+            conn.execute(
+                "UPDATE paperfact_sync_graph_projection SET reason=? "
+                "WHERE entity_type=? AND entity_id=?",
+                (reason, *key),
+            )
+            if applied:
+                conn.execute(
+                    "UPDATE paperfact_sync_heads SET applied_revision=revision "
+                    "WHERE entity_type=? AND entity_id=?",
+                    key,
+                )
+                conn.execute(
+                    "UPDATE paperfact_sync_graph_projection SET operation=?,active=? "
+                    "WHERE entity_type=? AND entity_id=?",
+                    (canonical_operation(operation), int(visible), *key),
+                )
+
+        applied = 0
+        for key, stub in stubs.items():
+            head = heads.get(key)
+            source = json.loads(head["operation"] or head["source"]) if head else None
+            callback_scope = {**scope(stub), "workspace_id": self.journal.workspace_id}
+            if any((op["entity_type"], op["entity_id"]) == key for op in pending):
+                mark(key, "pending_local")
+                continue
+            if self.order_writer is None:
+                mark(key, "order_writer_unavailable")
+                continue
+            parent = stub["parents"][0] if stub["parents"] else None
+            if parent:
+                root_key = ("list", parent["id"])
+                root = canonical.get(root_key)
+                if root is None or not root["active"]:
+                    mark(key, None, applied=True, operation=source)
+                    continue
+                local_root = projected.get(root_key)
+                if (
+                    local_root is None
+                    or not local_root["active"]
+                    or local_root["incarnation"] != root["incarnation"]
+                    or any((op["entity_type"], op["entity_id"]) == root_key for op in pending)
+                ):
+                    mark(key, "parent_pending")
+                    continue
+            actual = active_items(stub, canonical)
+            # Neither a local lifecycle change nor a deferred graph parent may be
+            # overwritten by a positional callback with a smaller/different set.
+            if active_items(stub, optimistic) != actual or active_items(stub, projected) != actual:
+                mark(key, "pending_descendant")
+                continue
+            revision = head["revision"] if head else 0
+            digest = observed_set(stub, actual)
+            encoded_scope = json.dumps(callback_scope, sort_keys=True)
+            cached = conn.execute(
+                "SELECT revision,digest FROM paperfact_sync_order_projection WHERE scope=?",
+                (encoded_scope,),
+            ).fetchone()
+            explicit = (
+                source is not None
+                and head["operation"] is not None
+                and source["action"] == "put"
+                and scope(source) == scope(stub)
+            )
+            if (
+                cached is not None
+                and tuple(cached) == (revision, digest)
+                and (head is None or head["applied_revision"] == revision)
+            ):
+                mark(key, None)
+                continue
+            remaining = {(item["id"], item["incarnation"]): item for item in actual}
+            ordered = []
+            for item in source["payload"]["items"] if explicit else []:
+                found = remaining.pop((item["id"], item["incarnation"]), None)
+                if found:
+                    ordered.append(found)
+
+            def created(item, order_kind=key[0]):
+                row = conn.execute(
+                    "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (item["incarnation"],),
+                ).fetchone()
+                event = json.loads(row[0]) if row else None
+                expected_kind = "list" if order_kind == "workspace_list_order" else "membership"
+                if (
+                    event is None
+                    or event["outcome"] != "accepted"
+                    or event["operation"]["entity_type"] != expected_kind
+                    or event["operation"]["entity_id"] != item["id"]
+                    or event["operation"]["incarnation"] != item["incarnation"]
+                    or event["operation"]["action"] != "put"
+                ):
+                    raise ValueError("Ordering requires the accepted creation receipt")
+                return event["sequence"], item["id"]
+
+            ordered.extend(sorted(remaining.values(), key=created))
+            conn.set_authorizer(self.journal._authorize_writer)
+            try:
+                self.order_writer(conn, callback_scope, ordered)
+            finally:
+                conn.set_authorizer(None)
+            conn.execute(
+                "INSERT INTO paperfact_sync_order_projection VALUES(?,?,?) "
+                "ON CONFLICT(scope) DO UPDATE SET revision=excluded.revision,"
+                "digest=excluded.digest",
+                (encoded_scope, revision, digest),
+            )
+            if head:
+                mark(key, None, applied=True, operation=source, visible=explicit)
+            applied += 1
+        return applied
+
     def _materialize(self, conn, cursor):
-        return self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
+        applied = self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
+        return applied + self._materialize_orders(conn, cursor)
 
     def sync_once(self, transport, token, *, limit=100):
         """One bounded pass, with no timer, hidden retries, login or network policy."""

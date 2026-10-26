@@ -33,6 +33,11 @@ buttons serialize through a server just to share behavior.
   Parent deletion/restoration needs an explicit lifecycle boundary so retained children
   cannot silently attach themselves to a new incarnation. This applies to replication,
   not every ordinary local integration.
+- For a command that reorders a complete collection, validate the observed members
+  separately from the order record's revision. A canonical digest of exact active
+  identities/incarnations can avoid false conflicts from unrelated metadata edits.
+  It does not replace authorization, scope lifecycle checks, or competing-order
+  revision checks; define what happens when membership changes after acceptance.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

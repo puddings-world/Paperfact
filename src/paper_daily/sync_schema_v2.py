@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from paper_daily.sync_journal import FIELDS, ID, MAX_BYTES
+from paper_daily.sync_ordering import ORDER_KINDS, validate_payload
 
 REQUIRED = FIELDS | {"incarnation", "parents", "structure_revision"}
 OPTIONAL = {"resolution_of", "structure_depends_on"}
@@ -111,7 +112,15 @@ def canonical_operation(value: dict) -> str:
         if type(value[key]) is not int or value[key] < 0:
             raise ValueError("Invalid graph revision")
     kind, action, payload = value["entity_type"], value["action"], value["payload"]
-    if kind not in ("list", "note", "paper", "membership", "reading_state") or action not in (
+    if kind not in (
+        "list",
+        "note",
+        "paper",
+        "membership",
+        "reading_state",
+        "list_order",
+        "workspace_list_order",
+    ) or action not in (
         "put",
         "delete",
     ):
@@ -138,6 +147,8 @@ def canonical_operation(value: dict) -> str:
         "note": {"paper"},
         "membership": {"list", "paper"},
         "reading_state": {"membership", "list", "paper"},
+        "list_order": {"list"},
+        "workspace_list_order": set(),
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
@@ -151,9 +162,15 @@ def canonical_operation(value: dict) -> str:
         raise ValueError("Membership identity does not match its parent pair")
     if kind == "reading_state" and refs["membership"]["id"] != value["entity_id"]:
         raise ValueError("Reading-state identity must match its membership parent")
+    if kind == "list_order" and value["entity_id"] != refs["list"]["id"]:
+        raise ValueError("Order identity must equal its list scope")
+    if kind == "workspace_list_order" and value["entity_id"] != "workspace-lists":
+        raise ValueError("Workspace order requires the fixed workspace-lists identity")
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
+    elif kind in ORDER_KINDS:
+        validate_payload(value)
     elif kind == "paper":
         _paper(payload)
     elif kind == "list":
