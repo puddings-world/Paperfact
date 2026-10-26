@@ -129,12 +129,16 @@ class _StartupFit(QObject):
         if not self.active:
             return False
         window = self.window
-        belongs = (
-            watched is window
-            or watched is window.windowHandle()
-            or isinstance(watched, QWidget) and watched.window() is window
-        )
-        user_input = belongs and event.type() in self._INPUT
+        # Native destruction can deliver Hide/PlatformSurface events while the
+        # QWidget is only partly alive. Even windowHandle() can crash there;
+        # inspect ownership only for actual input, never for teardown events.
+        user_input = False
+        if event.type() in self._INPUT:
+            user_input = (
+                watched is window
+                or watched is window.windowHandle()
+                or isinstance(watched, QWidget) and watched.window() is window
+            )
         hidden = watched is window and event.type() in (QEvent.Type.Hide, QEvent.Type.Close)
         state_changed = (
             watched is window

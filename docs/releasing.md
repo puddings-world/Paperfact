@@ -169,3 +169,19 @@ resolved). The same pictures locally:
 
 `--demo` builds a throwaway workspace (`scripts/demo_workspace.py`): one list and
 one paper with a generated PDF and a deep dive, written for the purpose.
+
+
+### Startup layout shutdown regression
+
+The v0.4.2 candidate passed the full test suite on all three release runners, but
+its Windows/macOS screenshot processes crashed after producing their final reports.
+An active startup-fit event filter queried native window ownership during teardown.
+The v0.4.3 correction inspects ownership only for input events. The regression
+exercises real WebEngine subprocess shutdown and native window deletion while the
+startup timer is pending; it fails before the correction and exits cleanly after it.
+Release runners provide WebEngine and Xvfb where needed. Local environments without
+those optional facilities report these new integration cases as skipped rather than
+claiming native coverage. The original layout and input behavior tests remain.
+
+The failed v0.4.2 tag is retained for provenance; no installer release was published
+from it. v0.4.3 still requires the full check and all platform packaging gates.
