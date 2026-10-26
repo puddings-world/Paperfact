@@ -111,37 +111,46 @@ def canonical_operation(value: dict) -> str:
         if type(value[key]) is not int or value[key] < 0:
             raise ValueError("Invalid graph revision")
     kind, action, payload = value["entity_type"], value["action"], value["payload"]
-    if kind not in ("list", "note", "paper", "membership") or action not in ("put", "delete"):
+    if kind not in ("list", "note", "paper", "membership", "reading_state") or action not in (
+        "put",
+        "delete",
+    ):
         raise ValueError("Unsupported graph operation")
     if not isinstance(payload, dict):
         raise ValueError("Payload must be an object")
     parents = value["parents"]
-    if not isinstance(parents, list) or len(parents) > 2:
+    if not isinstance(parents, list) or len(parents) > (3 if kind == "reading_state" else 2):
         raise ValueError("Invalid parent references")
     refs = {}
     for parent in parents:
         if not isinstance(parent, dict) or set(parent) != {"kind", "id", "incarnation"}:
             raise ValueError("Invalid parent reference")
-        if parent["kind"] not in ("list", "paper") or parent["kind"] in refs:
+        if parent["kind"] not in ("list", "paper", "membership") or parent["kind"] in refs:
             raise ValueError("Duplicate or unsupported parent kind")
         _identifier(parent["id"])
         _identifier(parent["incarnation"])
-        if parent["kind"] == "paper":
+        if parent["kind"] in ("paper", "membership"):
             _uuid(parent["id"])
         refs[parent["kind"]] = parent
-    expected = {"list": set(), "paper": set(), "note": {"paper"}, "membership": {"list", "paper"}}[
-        kind
-    ]
+    expected = {
+        "list": set(),
+        "paper": set(),
+        "note": {"paper"},
+        "membership": {"list", "paper"},
+        "reading_state": {"membership", "list", "paper"},
+    }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
     if kind == "paper":
         _uuid(value["entity_id"])
         if action == "delete":
             raise ValueError("Paper deletion requires a later retention contract")
-    if kind == "membership" and value["entity_id"] != membership_id(
+    if kind in ("membership", "reading_state") and value["entity_id"] != membership_id(
         refs["list"]["id"], refs["paper"]["id"]
     ):
         raise ValueError("Membership identity does not match its parent pair")
+    if kind == "reading_state" and refs["membership"]["id"] != value["entity_id"]:
+        raise ValueError("Reading-state identity must match its membership parent")
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
@@ -156,6 +165,22 @@ def canonical_operation(value: dict) -> str:
         if set(payload) != {"paper_id", "body"} or payload["paper_id"] != refs["paper"]["id"]:
             raise ValueError("Text note payload must match its paper parent")
         _text(payload["body"], 200 * 1024)
+    elif kind == "reading_state":
+        if set(payload) != {"list_id", "paper_id", "state", "delivered_at", "read_at"}:
+            raise ValueError("Unexpected or missing reading-state fields")
+        if payload["list_id"] != refs["list"]["id"] or payload["paper_id"] != refs["paper"]["id"]:
+            raise ValueError("Reading-state payload does not match its parents")
+        if payload["state"] not in ("pending", "delivered", "read", "skipped", "deferred"):
+            raise ValueError("Invalid reading state")
+        for key in ("delivered_at", "read_at"):
+            _text(payload[key], 64, nullable=True)
+            if payload[key] is not None:
+                try:
+                    stamp = datetime.fromisoformat(payload[key])
+                    if stamp.tzinfo is None:
+                        raise ValueError("Missing timestamp timezone")
+                except ValueError as exc:
+                    raise ValueError("Reading timestamps must be ISO with timezone") from exc
     else:
         if set(payload) != {"list_id", "paper_id", "citation", "added_at"}:
             raise ValueError("Unexpected or missing membership fields")

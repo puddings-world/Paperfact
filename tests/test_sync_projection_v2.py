@@ -70,6 +70,17 @@ def test_different_local_ids_produce_equivalent_portable_references_without_writ
         "revision": None,
         "sync_state": "local",
         "graph": None,
+        "reading_state": {
+            "id": membership_id(LIST, PAPER),
+            "state": "read",
+            "delivered_at": None,
+            "read_at": None,
+            "revision": None,
+            "sync_state": "local",
+            "graph": None,
+            "editable": False,
+            "read_only_reason": "graph_unavailable",
+        },
     }
     assert first["notes"][0]["id"] == NOTE and first["notes"][0]["paper_id"] == PAPER
     assert first["highlights"][0]["paper_id"] == PAPER

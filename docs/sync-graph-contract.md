@@ -134,3 +134,10 @@ must independently order parents before children and hide archived descendants;
 revision sorting alone is insufficient. Runtime writer capture, ordering/read-state,
 full research kinds, retention, hosted authentication and real-device acceptance
 remain separate gates.
+
+## Reading-state extension
+
+The private v2 contract now also supports [per-membership reading state](sync-reading-state.md).
+That kind alone requires exactly three parents (membership, list, paper), using
+the membership's authoritative root closure. Other kinds retain the shapes above.
+Order, complete research/file capture and runtime enrollment remain separate gates.

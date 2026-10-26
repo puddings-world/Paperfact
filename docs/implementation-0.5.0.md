@@ -223,3 +223,25 @@ Next integration gates, in order:
 Next implementation: order and per-membership reading state with separate conflict
 domains, then audited shared writer capture. Production enrollment stays disabled
 until unsupported writes cannot silently escape synchronization.
+
+
+## Fourth local slice: per-list reading state (verified core)
+
+- Add `reading_state` as a separate conflict domain with a closed membership/list/paper
+  parent closure. This fixed domain depth does not require a generic recursive graph.
+- Shared actions preserve existing timestamp transitions, isolate each list, retain
+  retry results and roll back bulk failures. Targeted action tests: **14 passed**.
+- The research adapter guards the projected membership incarnation; old-state retirement
+  cannot reset the state of a newly restored membership. DTO2 exposes readiness and
+  timestamps; DTO1 is unchanged. The DTO2 exact-shape test is extended for the new
+  reading-state object while retaining every previous field assertion.
+- Full check: **1,619 Python tests passed** in 411.04 seconds, **18 frontend tests
+  passed**, privacy scan and Ruff passed. Log: `build/sync-reading-state-check.log`
+  (local ignored artifact). No real cloud, account, Mac, phone or packaged UI
+  acceptance was performed. Existing application writers remain unenrolled.
+- Next: lifecycle-aware list/paper ordering, then complete research/file capture.
+  Ordering, desktop sync UX, backup/bootstrap/authentication, mobile and the
+  full release matrix remain required; this is not a completed v0.5 release.
+- Review confirmed safe retirement of a child tied to a rejected membership
+  creation attempt in an isolated temporary fixture. A named regression is
+  queued for the next slice; the reported suite count does not include it.

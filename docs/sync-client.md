@@ -163,3 +163,41 @@ A supplied raw envelope cannot change the time after passing the builder. Changi
 the citation keeps the creation time; explicit deletion/restoration with a new
 incarnation may establish a new time. This prevents an updated existing projection
 and a newly bootstrapped peer from deriving different membership timestamps.
+
+
+## Reading state as a dependent graph entity
+
+`new_graph_operation("reading_state", membership_id, payload)` accepts the closed
+reading-state shape from the graph contract: `list_id`, `paper_id`, `state`,
+`delivered_at`, and `read_at`. Supported states are `pending`, `delivered`, `read`,
+`skipped`, and `deferred`; timestamps are nullable timezone-aware ISO values.
+The identity is the portable membership identity, not a global paper state.
+
+The builder derives all three references from one membership incarnation: the
+membership itself and its stored list/paper parent references. It verifies that
+this exact closure is active; it never combines an old membership with independently
+chosen newer root incarnations. Uncommitted local parent operations and acknowledged
+but unreceived parent creations remain visible to the builder. Raw `save()` calls
+repeat closure validation inside their journal transaction before research writes.
+Canonical retirement has only the shared graph contract's validated conflict bypass.
+
+Projection ordering is roots, memberships/notes, then reading states, regardless of
+the latest head sequence. A pending/awaiting/deferred parent holds the dependent
+state without blocking unrelated ready data. Membership deletion or restoration
+cannot cascade away an unsent state edit. The same protection applies when an
+unchanged membership becomes obsolete because its list was deleted or restored.
+Once the state outcome arrives, any rejected local content stays in conflict history
+and obsolete projections can be hidden safely. No extra outgoing delete is emitted.
+
+Restoring a list or membership does not restore its old reading state. The user
+must choose a new reading-state incarnation with `restore=True`, including an
+incoming conflict resolution that would revive the old state. Canonical retirement
+preserves the old closure and cannot silently reparent to the new membership.
+Reading-state changes touch all three direct parents' structural revisions; offline
+ancestor deletions use the latest state operation as their structural predecessor.
+
+`tests/test_sync_reading_state_client.py` covers pending/acknowledged parents, late
+renames, exact/forged closure, ancestor deletion races, explicit restore, custom
+resolution/retirement, same-transaction chains, restart and atomic receive failure.
+This remains an explicit local API; production reading UI actions, complete graph
+enrollment, per-device PDF reading positions and real-device sync are separate work.

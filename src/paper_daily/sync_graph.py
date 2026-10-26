@@ -51,6 +51,29 @@ def _retirement(get_receipt, operation, current):
     ) == _parent_map(reference["parents"])
 
 
+def _reading_closure(get_entity, get_receipt, operation, retirement):
+    refs = {parent["kind"]: parent for parent in operation["parents"]}
+    membership = get_entity("membership", refs["membership"]["id"])
+    if retirement and membership["incarnation"] != refs["membership"]["incarnation"]:
+        origin = get_receipt(refs["membership"]["incarnation"])
+        if origin is None:
+            raise ValueError("Missing historical membership incarnation receipt")
+        source = origin["operation"]
+        if (
+            source["version"] != 2
+            or source["entity_type"] != "membership"
+            or (source["entity_id"], source["incarnation"])
+            != (refs["membership"]["id"], refs["membership"]["incarnation"])
+        ):
+            raise ValueError("Invalid historical membership incarnation receipt")
+        membership = source
+    actual = _parent_map(membership["parents"])
+    supplied = _parent_map([refs["list"], refs["paper"]])
+    if set(actual) != set(supplied):
+        raise ValueError("Reading-state root identities do not match its membership")
+    return actual == supplied
+
+
 def check_preconditions(get_entity, get_receipt, operation) -> bool:
     """Return False for preserved graph conflict; raise for missing/invalid dependencies.
 
@@ -99,6 +122,10 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
             not found["active"] or found["incarnation"] != parent["incarnation"]
         ) and not retirement:
             parents_match = False
+    if kind == "reading_state" and not _reading_closure(
+        get_entity, get_receipt, operation, retirement
+    ):
+        parents_match = False
     if not parents_match:
         return False
     incarnation = operation["incarnation"]

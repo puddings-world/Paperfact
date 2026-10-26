@@ -71,6 +71,11 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
             "CREATE TABLE IF NOT EXISTS research_paper_identity ("
             "sync_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)"
         )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS research_membership_projection ("
+            "sync_id TEXT PRIMARY KEY,incarnation TEXT NOT NULL,"
+            "list_incarnation TEXT NOT NULL,paper_incarnation TEXT NOT NULL)"
+        )
         paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
         paper_rows = conn.execute(
             "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
@@ -199,6 +204,9 @@ def _write_membership(conn, value):
     list_id, paper_id = parents["list"], _local_paper(conn, parents["paper"])
     if value["action"] == "delete":
         conn.execute("DELETE FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, paper_id))
+        conn.execute(
+            "DELETE FROM research_membership_projection WHERE sync_id=?", (value["entity_id"],)
+        )
         return
     if conn.execute("SELECT 1 FROM lists WHERE id=?", (list_id,)).fetchone() is None:
         raise ValueError("List must be synchronized before its membership")
@@ -212,6 +220,46 @@ def _write_membership(conn, value):
         "ON CONFLICT(list_id,paper_id) DO UPDATE SET citation=excluded.citation",
         (list_id, paper_id, next_position, payload["citation"], payload["added_at"]),
     )
+    incarnations = {parent["kind"]: parent["incarnation"] for parent in value["parents"]}
+    conn.execute(
+        "INSERT INTO research_membership_projection VALUES(?,?,?,?) "
+        "ON CONFLICT(sync_id) DO UPDATE SET incarnation=excluded.incarnation,"
+        "list_incarnation=excluded.list_incarnation,paper_incarnation=excluded.paper_incarnation",
+        (value["entity_id"], value["incarnation"], incarnations["list"], incarnations["paper"]),
+    )
+
+
+def _write_reading_state(conn, value):
+    parents = {parent["kind"]: parent for parent in value["parents"]}
+    membership = parents["membership"]
+    marker = conn.execute(
+        "SELECT incarnation,list_incarnation,paper_incarnation "
+        "FROM research_membership_projection WHERE sync_id=?",
+        (membership["id"],),
+    ).fetchone()
+    expected = (
+        membership["incarnation"],
+        parents["list"]["incarnation"],
+        parents["paper"]["incarnation"],
+    )
+    if marker is None or tuple(marker) != expected:
+        if value["action"] == "delete":
+            # Retiring an archived state must not reset a restored membership.
+            return
+        raise ValueError("Reading state requires its current projected membership")
+    paper_id = _local_paper(conn, parents["paper"]["id"])
+    list_id = parents["list"]["id"]
+    if value["action"] == "delete":
+        values = ("pending", None, None)
+    else:
+        payload = value["payload"]
+        values = (payload["state"], payload["delivered_at"], payload["read_at"])
+    result = conn.execute(
+        "UPDATE list_papers SET state=?,delivered_at=?,read_at=? WHERE list_id=? AND paper_id=?",
+        (*values, list_id, paper_id),
+    )
+    if not result.rowcount and value["action"] == "put":
+        raise ValueError("Membership must be synchronized before its reading state")
 
 
 def _plain_note(conn, mapping):
@@ -280,6 +328,9 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
             return
         if operation["entity_type"] == "membership":
             _write_membership(conn, operation)
+            return
+        if operation["entity_type"] == "reading_state":
+            _write_reading_state(conn, operation)
             return
         if operation["entity_type"] == "note":
             parent = operation["parents"][0]

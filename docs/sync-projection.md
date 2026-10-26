@@ -127,3 +127,32 @@ projection remains unsupported, rather than inventing portable asset references.
 IDs and equivalent portable references, strict mapping failures, default DTO1
 compatibility, no database writes, applied graph/readiness states and mapping/cursor
 coherence during a concurrent commit. The original DTO1 tests remain unchanged.
+
+### Reading progress in DTO2
+
+Each `lists[].members[]` additionally includes `reading_state` with these fields:
+`id`, `state`, `delivered_at`, `read_at`, `revision`, `sync_state`, `graph`,
+`editable`, and `read_only_reason`. Its ID equals the containing membership ID
+under a separate entity kind. The original member `state` remains as a display
+field and always matches this object's state. Timestamps are null or bounded,
+timezone-aware ISO strings; invalid stored values fail explicitly rather than
+claiming a valid write contract. DTO1 does not read or expose these timestamps.
+
+`capabilities.reading_state_contract_version` is 2. A missing canonical state is
+still displayed from local membership data with local/pending status, null graph,
+and `editable: false`. Graph and edit readiness require a fully applied active
+state and matching membership/list/paper parent incarnations. Missing state graph
+uses `graph_unavailable`; unavailable or replaced parent graph uses
+`parent_graph_unavailable`. The graph is null in both cases. Pending, awaiting,
+deferred and archived content never claims write readiness. Ready state has null
+reason; authentication and authorization remain separate requirements.
+
+A matching adapter-owned membership incarnation marker is also required. Missing
+or mismatched markers use `membership_projection_unavailable` with null graph and
+false editability; read projection never repairs or enrolls these legacy rows.
+
+This does not advertise state creation readiness for memberships without state
+history, change DTO1, or establish canonical bootstrap completeness.
+`tests/test_sync_reading_state_projection.py` covers missing/local state, pending
+and acknowledged writes, received progress, parent deferral/replacement, bounded
+timestamps, no database writes and unchanged DTO1 fields.

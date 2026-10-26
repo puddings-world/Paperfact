@@ -80,3 +80,24 @@ A SQLite whole-transaction abort (for example, `ON CONFLICT ROLLBACK`) cannot
 retain earlier savepoint work. The original failure is preserved; the action scope
 also detects a swallowed abort and refuses success, including a subsequent implicit
 transaction. External owners using `apply_in` must abort/retry their entire action.
+
+
+## Explicit reading actions
+
+`set_reading_state(list_id, paper_ids, state, request_id=...)` marks between 1 and
+200 selected portable paper identities in one transaction. Supported states are
+`pending`, `delivered`, `read`, `skipped` and `deferred`; duplicates, missing/removed
+memberships and invalid IDs fail without partial changes. Each list retains its
+own state when it shares a paper with another list. The legacy daily queue is separate.
+
+The action captures its input selection and timestamps once. Marking delivered or
+read updates the corresponding timestamp; other transitions preserve prior timestamps.
+The request fingerprint excludes the generated clock value, so exact retries return
+the saved receipt even after restart, later edits or removal. A different explicit
+mark on a restored membership creates state for the current incarnation, rather
+than attaching an old offline state to it. Every child state uses the membership's
+exact list/paper ancestry, protecting both membership and list deletion races.
+
+The action returns selected states, timestamps and operation IDs after the commit.
+Failure on a later paper or the action receipt rolls back the entire selection.
+This library API is not yet connected to the existing desktop reading controls.

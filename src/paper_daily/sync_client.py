@@ -276,7 +276,7 @@ class SyncClient:
     ):
         if type(restore) is not bool:
             raise ValueError("Restore must be an explicit boolean choice")
-        if kind not in ("list", "paper", "membership", "note"):
+        if kind not in ("list", "paper", "membership", "note", "reading_state"):
             raise ValueError("Unsupported graph entity")
         if not isinstance(payload, dict):
             raise ValueError("Graph payload must be an object")
@@ -287,7 +287,9 @@ class SyncClient:
         state, touches, own = self._optimistic_graph(conn)
         key = (kind, entity_id)
         current = state.get(key)
-        if kind in ("paper", "list"):
+        if kind in ("paper", "list", "reading_state"):
+            if kind == "reading_state" and action == "delete" and current is None:
+                raise ValueError("A child deletion needs its known parent identities")
             requested = []
         elif action == "delete":
             if current is None:
@@ -310,6 +312,8 @@ class SyncClient:
             parents.append(
                 {"kind": parent_key[0], "id": parent_key[1], "incarnation": parent["incarnation"]}
             )
+        if kind == "reading_state":
+            parents = self._reading_parents(state, entity_id)
         changed_parent = current and self._parent_keys(current["parents"]) != self._parent_keys(
             parents
         )
@@ -354,6 +358,7 @@ class SyncClient:
             operation["structure_depends_on"] = touches[key]
         operation = json.loads(canonical_operation(operation))
         self._guard_membership_creation(conn, operation)
+        self._guard_reading_parents(conn, operation)
         return operation
 
     def deferred_reasons(self, limit=100):
@@ -407,6 +412,48 @@ class SyncClient:
             return value
         finally:
             conn.close()
+
+    @staticmethod
+    def _reading_parents(state, identity):
+        membership = state.get(("membership", identity))
+        if membership is None or not membership["active"]:
+            raise ValueError("Reading state requires an active membership")
+        parents = [
+            {"kind": "membership", "id": identity, "incarnation": membership["incarnation"]},
+            *[dict(parent) for parent in membership["parents"]],
+        ]
+        for ref in parents:
+            parent = state.get((ref["kind"], ref["id"]))
+            if (
+                parent is None
+                or not parent["active"]
+                or parent["incarnation"] != ref["incarnation"]
+            ):
+                raise ValueError("Reading state membership parent closure is not active")
+        return parents
+
+    def _guard_reading_parents(self, conn, operation):
+        if operation["version"] != 2 or operation["entity_type"] != "reading_state":
+            return
+        if operation["action"] == "delete" and operation.get("resolution_of"):
+            from paper_daily.sync_graph import check_preconditions
+
+            def receipt(identity):
+                row = conn.execute(
+                    "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (identity,),
+                ).fetchone()
+                return json.loads(row[0]) if row else None
+
+            if not check_preconditions(
+                lambda kind, identity: self._graph_entity(conn, kind, identity), receipt, operation
+            ):
+                raise ValueError("Reading state retirement no longer matches its conflict")
+            return
+        state, _, _ = self._optimistic_graph(conn)
+        parents = self._reading_parents(state, operation["entity_id"])
+        if self._parent_keys(parents) != self._parent_keys(operation["parents"]):
+            raise ValueError("Reading state parent closure differs from its membership")
 
     @staticmethod
     def _guard_membership_creation(conn, operation):
@@ -474,6 +521,7 @@ class SyncClient:
         def write(conn, value):
             self._guard_legacy(conn, value)
             self._guard_membership_creation(conn, value)
+            self._guard_reading_parents(conn, value)
             self.writer(conn, value)
 
         return self.journal.apply(operation, write)
@@ -649,6 +697,7 @@ class SyncClient:
                     raise ValueError("Graph changed; review the conflict again")
             self._guard_legacy(conn, value)
             self._guard_membership_creation(conn, value)
+            self._guard_reading_parents(conn, value)
             self.writer(conn, value)
             conn.execute(
                 "INSERT INTO research_resolution_intents VALUES(?,?,?,?)",
@@ -868,7 +917,8 @@ class SyncClient:
             "SELECT h.*,p.source,p.operation AS projected_operation,p.active,p.reason "
             "FROM paperfact_sync_heads h JOIN paperfact_sync_graph_projection p "
             "USING(entity_type,entity_id) "
-            "ORDER BY CASE WHEN h.entity_type IN ('list','paper') THEN 0 ELSE 1 END,h.revision"
+            "ORDER BY CASE WHEN h.entity_type IN ('list','paper') THEN 0 "
+            "WHEN h.entity_type='reading_state' THEN 2 ELSE 1 END,h.revision"
         ).fetchall()
         pending = self._pending_graph(conn, cursor)
         outstanding = {(op["entity_type"], op["entity_id"]) for op in pending}
@@ -913,7 +963,7 @@ class SyncClient:
             if key in outstanding:
                 blocked(key, "pending_local")
                 continue
-            if source["entity_type"] in ("list", "paper"):
+            if source["entity_type"] in ("list", "paper", "membership"):
                 old = (
                     json.loads(head["projected_operation"]) if head["projected_operation"] else None
                 )
@@ -966,6 +1016,20 @@ class SyncClient:
                 ):
                     reason = "parent_deferred"
                     break
+            if (
+                source["entity_type"] == "membership"
+                and reason in ("parent_missing", "parent_deleted", "parent_incarnation")
+                and any(
+                    (parent["kind"], parent["id"]) == key
+                    for operation in pending
+                    if operation["version"] == 2
+                    for parent in operation["parents"]
+                )
+            ):
+                # Hiding an obsolete membership can cascade into its local state row,
+                # even though its own head did not change. Preserve that unsent child.
+                blocked(key, "pending_descendant")
+                continue
             if (
                 head["operation"] is not None
                 and source["action"] == "delete"

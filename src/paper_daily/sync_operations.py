@@ -19,7 +19,7 @@ MAX_PAPERS = 200
 
 
 class ResearchOperations:
-    """One retry identity and one transaction for a complete list-intake action."""
+    """One retry identity and one transaction for a compound research action."""
 
     def __init__(self, client):
         self.client = client
@@ -35,6 +35,103 @@ class ResearchOperations:
     def add_papers(self, list_id, papers, *, request_id):
         _identifier(list_id)
         return self._intake("add", list_id, None, None, papers, request_id)
+
+    def set_reading_state(self, list_id, paper_ids, state, *, request_id):
+        """Record one explicit, retry-safe reading action for selected memberships.
+
+        Each list has its own state for a shared paper. An explicit mark on a
+        restored membership creates fresh state in its current incarnation; old
+        offline state is never silently reattached to it.
+        """
+        _identifier(list_id)
+        _identifier(request_id)
+        if not isinstance(state, str) or state not in {
+            "pending",
+            "delivered",
+            "read",
+            "skipped",
+            "deferred",
+        }:
+            raise ValueError("Unsupported reading state")
+        if not isinstance(paper_ids, list):
+            raise ValueError("Select between 1 and 200 papers")
+        paper_ids = paper_ids.copy()
+        if not 1 <= len(paper_ids) <= MAX_PAPERS:
+            raise ValueError("Select between 1 and 200 papers")
+        for paper_id in paper_ids:
+            if not isinstance(paper_id, str) or str(UUID(paper_id)) != paper_id:
+                raise ValueError("Reading state requires portable paper UUIDs")
+        if len(set(paper_ids)) != len(paper_ids):
+            raise ValueError("Reading selection contains duplicate papers")
+        request = json.dumps(
+            {"mode": "reading_state", "list_id": list_id, "paper_ids": paper_ids, "state": state},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        fingerprint = hashlib.sha256(request.encode("utf-8")).hexdigest()
+        journal = self.client.journal
+        with journal.transaction() as conn:
+            receipt = conn.execute(
+                "SELECT fingerprint,result FROM research_action_receipts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if receipt:
+                if receipt[0] != fingerprint:
+                    raise ValueError("Research action retry changed its content")
+                return json.loads(receipt[1])
+            result = {"list_id": list_id, "papers": [], "operation_ids": []}
+            stamp = datetime.now(UTC).isoformat(timespec="seconds")
+            graph = self.client._optimistic_graph(conn)[0]
+            for index, paper_id in enumerate(paper_ids):
+                member_id = membership_id(list_id, paper_id)
+                member = graph.get(("membership", member_id))
+                if member is None or not member["active"]:
+                    raise ValueError("Reading state requires an active graph membership")
+                row = conn.execute(
+                    "SELECT lp.delivered_at,lp.read_at FROM list_papers lp "
+                    "JOIN research_paper_identity p ON p.local_id=lp.paper_id "
+                    "WHERE lp.list_id=? AND p.sync_id=?",
+                    (list_id, paper_id),
+                ).fetchone()
+                if row is None:
+                    raise ValueError("Reading membership is unavailable in this workspace")
+                payload = {
+                    "list_id": list_id,
+                    "paper_id": paper_id,
+                    "state": state,
+                    "delivered_at": stamp if state == "delivered" else row[0],
+                    "read_at": stamp if state == "read" else row[1],
+                }
+                parents = [
+                    {"kind": "membership", "id": member_id, "incarnation": member["incarnation"]},
+                    *member["parents"],
+                ]
+                old = graph.get(("reading_state", member_id))
+                restore = old is not None and (
+                    not old["active"]
+                    or self.client._parent_keys(old["parents"]) != self.client._parent_keys(parents)
+                )
+                operation = self.client.new_graph_operation_in(
+                    conn,
+                    "reading_state",
+                    member_id,
+                    payload,
+                    operation_id=self._id(request_id, f"reading-state-op:{index}"),
+                    restore=restore,
+                )
+                journal.apply_in(conn, operation, self.client.writer)
+                result["operation_ids"].append(operation["operation_id"])
+                result["papers"].append(
+                    {key: payload[key] for key in ("paper_id", "state", "delivered_at", "read_at")}
+                )
+            encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
+            if len(encoded.encode("utf-8")) > MAX_BYTES:
+                raise ValueError("Research action receipt exceeds its bounded size")
+            conn.execute(
+                "INSERT INTO research_action_receipts VALUES(?,?,?)",
+                (request_id, fingerprint, encoded),
+            )
+            return json.loads(encoded)
 
     def _id(self, request_id, label):
         namespace = json.dumps(

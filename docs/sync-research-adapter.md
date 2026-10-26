@@ -109,3 +109,34 @@ note path, enrollment and metadata preservation, identity collisions, missing
 parents, membership ordering/state preservation, note reassignment prevention,
 list deletion, retry/reopen and transactional rollback of paper metadata/mapping.
 Existing v1 adapter tests remain unchanged and are run alongside these cases.
+
+## Version-2 membership reading state
+
+`reading_state` uses the deterministic membership ID in its own entity namespace.
+Its closed payload contains `list_id`, portable `paper_id`, `state`, `delivered_at`
+and `read_at`. The state is pending, delivered, read, skipped or deferred; each
+timestamp is null or a timezone-aware ISO timestamp. The shared graph validates
+the complete membership/list/paper parent closure and their incarnations.
+
+The adapter updates only the existing membership's state and two timestamps.
+It does not infer timestamps, create a membership, alter order/citation/added time,
+update the legacy queue, or change another list's progress for the same paper.
+Higher-level actions own timestamp transition semantics. An explicit delete resets
+the current membership to pending with null timestamps; a removed membership is
+left absent.
+
+Explicit preparation adds `research_membership_projection`, an adapter-owned
+marker recording the successfully projected membership incarnation and its root
+parent incarnations. Preparation does not enroll existing legacy membership rows
+or change their content. A successful membership put records the marker in the
+same transaction; membership removal clears it. Reading-state puts require a
+matching marker and an existing row. A delete with a missing/mismatched marker is
+a no-op, so retiring archived state cannot reset a restored membership or an
+unenrolled legacy row. List removal may leave an inert marker; there is no row to
+reset, and an explicit membership restoration replaces the marker before state
+can be written. Canonical graph metadata remains owned by the sync engine.
+
+`tests/test_sync_reading_state_research.py` checks all five states, list isolation,
+unchanged metadata, exact retries, reopen/citation preservation, explicit reset,
+missing members, stale retirement after restoration, legacy migration and rollback.
+No existing desktop/CLI writer is automatically enrolled.

@@ -11,6 +11,7 @@ import ipaddress
 import json
 import re
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -421,7 +422,8 @@ def _graph_info(conn, tables, kind, identity, state, cursor, parents):
     for ref in data["parents"]:
         if not isinstance(ref, dict) or set(ref) != {"kind", "id", "incarnation"}:
             raise ValueError("Invalid research graph parent")
-        if ref["kind"] not in ("list", "paper") or ref["kind"] in found:
+        allowed = ("list", "paper", "membership") if kind == "reading_state" else ("list", "paper")
+        if ref["kind"] not in allowed or ref["kind"] in found:
             raise ValueError("Invalid research graph parent")
         _identifier(ref["id"])
         _identifier(ref["incarnation"])
@@ -437,6 +439,67 @@ def _graph_info(conn, tables, kind, identity, state, cursor, parents):
         "parents": data["parents"],
         "structure_revision": structure,
     }
+
+
+def _reading_timestamp(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > 64:
+        raise ValueError("Invalid reading-state timestamp")
+    try:
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("Invalid reading-state timestamp")
+    except ValueError:
+        raise ValueError("Invalid reading-state timestamp") from None
+    return value
+
+
+def _reading_projection(conn, tables, member, collection, paper_graph, times, cursor):
+    if member["state"] not in {"pending", "delivered", "read", "skipped", "deferred"}:
+        raise ValueError("Invalid reading state")
+    result = {
+        "id": member["id"],
+        "state": member["state"],
+        "delivered_at": _reading_timestamp(times[0]),
+        "read_at": _reading_timestamp(times[1]),
+        **_sync_state(conn, tables, "reading_state", member["id"], cursor),
+    }
+    result["graph"] = _graph_info(
+        conn,
+        tables,
+        "reading_state",
+        member["id"],
+        result,
+        cursor,
+        {"membership": member["id"], "list": collection["id"], "paper": member["paper_id"]},
+    )
+    reason = "graph_unavailable" if result["graph"] is None else None
+    if result["graph"] is not None:
+        graphs = {"membership": member["graph"], "list": collection["graph"], "paper": paper_graph}
+        if any(
+            graphs[ref["kind"]] is None or graphs[ref["kind"]]["incarnation"] != ref["incarnation"]
+            for ref in result["graph"]["parents"]
+        ):
+            reason = "parent_graph_unavailable"
+            result["graph"] = None
+    if reason is None:
+        marker = (
+            conn.execute(
+                "SELECT incarnation,list_incarnation,paper_incarnation "
+                "FROM research_membership_projection WHERE sync_id=?",
+                (member["id"],),
+            ).fetchone()
+            if "research_membership_projection" in tables
+            else None
+        )
+        incarnations = {ref["kind"]: ref["incarnation"] for ref in result["graph"]["parents"]}
+        expected = tuple(incarnations[kind] for kind in ("membership", "list", "paper"))
+        if marker is None or tuple(marker) != expected:
+            reason = "membership_projection_unavailable"
+            result["graph"] = None
+    result.update(editable=reason is None, read_only_reason=reason)
+    return result
 
 
 def _portable_projection(conn, result):
@@ -455,6 +518,15 @@ def _portable_projection(conn, result):
         mapping[row[0]] = portable
         seen.add(portable)
     cursor = result["cursor"]
+    reading_times = {}
+    for row in conn.execute(
+        "SELECT list_id,paper_id,"
+        "CASE WHEN length(delivered_at)<=64 THEN delivered_at "
+        "WHEN delivered_at IS NULL THEN NULL ELSE '' END,"
+        "CASE WHEN length(read_at)<=64 THEN read_at "
+        "WHEN read_at IS NULL THEN NULL ELSE '' END FROM list_papers"
+    ):
+        reading_times[(row[0], mapping[row[1]])] = (row[2], row[3])
     paper_graphs = {}
     for paper in result["papers"]:
         paper["id"] = mapping[paper["id"]]
@@ -489,6 +561,15 @@ def _portable_projection(conn, result):
                     for ref in member["graph"]["parents"]
                 ):
                     member["graph"] = None
+            member["reading_state"] = _reading_projection(
+                conn,
+                tables,
+                member,
+                collection,
+                paper_graphs[member["paper_id"]],
+                reading_times[(collection["id"], member["paper_id"])],
+                cursor,
+            )
         collection["members"].sort(key=lambda item: (item["position"], item["paper_id"]))
     for note in result["notes"]:
         note["paper_id"] = mapping[note["paper_id"]]
@@ -523,6 +604,7 @@ def _portable_projection(conn, result):
     result["highlights"].sort(key=lambda item: item["id"])
     result["schema_version"] = 2
     result["capabilities"]["note_contract_version"] = 2
+    result["capabilities"]["reading_state_contract_version"] = 2
     return result
 
 
