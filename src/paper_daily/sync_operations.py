@@ -36,6 +36,12 @@ class ResearchOperations:
         _identifier(list_id)
         return self._intake("add", list_id, None, None, papers, request_id)
 
+    def attach_document(self, paper_id, manifest, *, store, request_id):
+        """Attach staged, verified PDF bytes through the common research action API."""
+        from paper_daily.sync_document_actions import attach_document
+
+        return attach_document(self, paper_id, manifest, store=store, request_id=request_id)
+
     def set_reading_state(self, list_id, paper_ids, state, *, request_id):
         """Record one explicit, retry-safe reading action for selected memberships.
 

@@ -252,3 +252,47 @@ peers for lifecycle, ordering, rollback, missing-callback, pending/receipt-gap a
 conflict cases. Real research adapter/action coverage lives in separate integration
 tests. This does not claim UI enrollment, production migration, network delivery,
 real-device synchronization or performance validation at large workspace sizes.
+
+
+## PDF document manifests and explicit push preparation
+
+`paper_document` is a version-2 leaf whose identity is the paper UUID and whose
+single parent is that exact paper incarnation. Its closed put payload is
+`{paper_id, sha256, size, media_type: "application/pdf"}`; deletion has an empty
+payload. The builder sees pending and acknowledged parent operations. Raw local
+saves recheck the active parent inside their write transaction. Document deletion,
+explicit restore, pending edit protection and conflict preservation use the same
+graph lifecycle as other dependent research.
+
+The research writer applies document metadata only. Missing local bytes do not
+delay the received cursor or unrelated notes/papers. This client does not fetch
+URLs, download PDFs, modify legacy reader paths, or make old PDF anchors apply to
+a replacement document. Verified byte availability and desired/applied document
+bindings belong to the separate transfer/research adapter boundary.
+
+The authority requires a completed workspace-owned blob before accepting a put.
+Low-level `sync_once` without preparation surfaces `BlobUnavailableError`; the
+document remains pending and missing bytes allocate no accepted event. Callers
+can complete the upload and retry the same operation identity.
+
+`sync_once(..., prepare_push=callback)` provides explicit coordinator integration.
+The trusted callback receives a detached canonical operation and returns exactly
+`True` (ready) or `False` (defer this pass). Changing the supplied envelope is an
+error; preparation cannot rewrite a saved intent. A false result also defers later
+operations depending on its operation ID, structural predecessor, parent creation
+incarnation or ordered-item incarnation. Independent ready operations in the
+pending window still push, and metadata pull still runs. The result adds
+`deferred_push`; ordinary calls report zero. Callback exceptions propagate, retain
+unsent work and release the run lock; authentication/corruption failures are not
+silently converted to background retries.
+
+The low-level pending window is bounded by `limit` and starts with the oldest
+unacknowledged operations. A full window of indefinitely blocked entries can starve
+later uploads. A fair scan policy is an outstanding coordinator/scheduler gate;
+this seam does not claim to implement it. Callers must also enforce cancellation,
+session-generation checks, byte budgets and pre-push ownership verification.
+
+`tests/test_sync_document_client.py` covers metadata-only receiving, late parent
+updates, same-transaction creation, wrong-parent rejection, deletion/restoration,
+pending replacement conflicts, missing-authority-byte retry, atomic writer failure
+and preparation dependency/exception behavior. All use synthetic workspaces.

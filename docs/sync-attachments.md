@@ -58,7 +58,10 @@ of possession of its hash. Blob identity does not grant workspace access. The
 research manifest must bind media type, owner/entity revision, PDF version and
 source anchors. Byte correctness alone does not decide which PDF belongs to a paper.
 
-Still required: authorized upload/download endpoints, reference/history retention,
+Authenticated upload/download endpoints and primary-PDF bindings now exist in
+[sync-blob-service](sync-blob-service.md) and [sync-documents](sync-documents.md).
+The [coordinator](sync-transfers.md) keeps metadata and byte progress independent.
+Still required: reader/anchor activation, efficient large-file reads, reference/history retention,
 repair and garbage collection, offline pinning/quota UX, selected-list dependency
 closure, deck manifest publication, and UI progress. Cache eviction is not deletion
 of research. A missing asset must not make an incomplete deck appear fully offline.

@@ -683,8 +683,103 @@ def _workspace_display_order(conn, result):
     result["lists"].sort(key=lambda item: ranks.get(item["id"], len(order)))
 
 
+def _document_projection(conn, result, verified_documents, max_records, max_bytes):
+    from paper_daily.sync_documents import (
+        VerifiedDocument,
+        _paper_current,
+        applied_document,
+        desired_document,
+    )
+    from paper_daily.sync_documents import (
+        _encode as encode_target,
+    )
+
+    if not isinstance(verified_documents, (tuple, list)) or len(verified_documents) > 10000:
+        raise ValueError("Invalid document verification snapshots")
+    if any(not isinstance(item, VerifiedDocument) for item in verified_documents):
+        raise ValueError("Document availability requires explicit verification snapshots")
+    verified_by_target = {}
+    for snapshot in verified_documents:
+        key = getattr(snapshot, "_target", None)
+        if not isinstance(key, str) or len(key) > 4096:
+            raise ValueError("Invalid document verification snapshot")
+        verified_by_target[key] = snapshot
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    supported = {"research_document_desired", "research_document_applied"} <= tables
+    if supported:
+        records = size = 0
+        for table, condition in (
+            ("research_document_desired", " WHERE active=1"),
+            ("research_document_applied", ""),
+        ):
+            count, byte_size = conn.execute(
+                f"SELECT count(*),COALESCE(SUM(length(CAST(target AS BLOB))),0) FROM {table}"
+                + condition
+            ).fetchone()
+            records += count
+            size += byte_size
+        _preflight(conn, max_records - records, max_bytes - size)
+        orphan = conn.execute(
+            "SELECT 1 FROM research_document_desired d "
+            "LEFT JOIN research_paper_identity m ON m.sync_id=d.paper_id "
+            "LEFT JOIN papers p ON p.id=m.local_id WHERE d.active=1 AND p.id IS NULL LIMIT 1"
+        ).fetchone()
+        if orphan is not None:
+            raise ValueError("Document projection contains an unresolved paper reference")
+    assets = {}
+    for paper in result["papers"]:
+        desired = desired_document(conn, paper["id"]) if supported else None
+        applied = applied_document(conn, paper["id"]) if supported else None
+        state = _sync_state(conn, tables, "paper_document", paper["id"], result["cursor"])
+        document = {
+            "desired": None,
+            "applied_sha256": applied["sha256"] if applied is not None else None,
+            "availability": "unchecked",
+            **state,
+        }
+        if desired is not None:
+            manifest = {key: desired[key] for key in ("paper_id", "sha256", "size", "media_type")}
+            document["desired"] = manifest
+            asset_id = "sha256:" + desired["sha256"]
+            paper["pdf_asset_id"] = asset_id
+            snapshot = verified_by_target.get(encode_target(desired))
+            if (
+                "research_paper_projection" in tables
+                and _paper_current(conn, desired)
+                and snapshot is not None
+                and snapshot.matches(desired)
+            ):
+                document["availability"] = "available"
+            asset = {
+                "id": asset_id,
+                "sha256": desired["sha256"],
+                "size": desired["size"],
+                "media_type": desired["media_type"],
+                "availability": document["availability"],
+            }
+            prior = assets.get(asset_id)
+            if prior is not None:
+                if (prior["size"], prior["media_type"]) != (asset["size"], asset["media_type"]):
+                    raise ValueError("Conflicting document content manifests")
+                if prior["availability"] == "available":
+                    asset["availability"] = "available"
+            assets[asset_id] = asset
+        paper["document"] = document
+    result["assets"] = [assets[key] for key in sorted(assets)]
+    result["capabilities"]["document_contract_version"] = 2
+    result["capabilities"]["document_manifests"] = True
+    result["capabilities"]["assets"] = True
+    result["capabilities"]["reader_activation"] = False
+
+
 def read_manifest(
-    path: Path, *, workspace_id: str, schema_version=1, max_records=10000, max_bytes=8 * 1024 * 1024
+    path: Path,
+    *,
+    workspace_id: str,
+    schema_version=1,
+    max_records=10000,
+    max_bytes=8 * 1024 * 1024,
+    verified_documents=(),
 ):
     """Read one consistent bounded snapshot without creating or modifying a database.
 
@@ -706,6 +801,7 @@ def read_manifest(
         result = _project(conn, workspace_id, max_records, max_bytes)
         if schema_version == 2:
             result = _portable_projection(conn, result)
+            _document_projection(conn, result, verified_documents, max_records, max_bytes)
         if len(_encode(result)) > max_bytes:
             raise ValueError("Research projection exceeds the byte limit")
         return result

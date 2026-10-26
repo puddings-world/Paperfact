@@ -82,8 +82,8 @@ content/anchors/reasons, portable identities, secret-field exclusion, safe URL
 filtering, limits, missing references, read-only/no-create behavior, pending/deferred
 states, and snapshot/cursor coherence during a concurrent WAL commit.
 
-Remaining: authorized read-manifest delivery, canonical server bootstrap, file and
-deck manifests, PDF availability verification, private mobile session integration,
+Remaining: authorized read-manifest delivery, canonical server bootstrap, non-PDF
+file/deck manifests, reader activation, private mobile session integration,
 all-entity revisions and complete runtime writer coverage. No mobile/cloud/live
 research tests or actual attachment reads are claimed by this module.
 
@@ -103,8 +103,8 @@ so different local paper names do not produce different read-highlight identitie
 Papers, notes and highlights sort by portable ID; membership position/state remain
 unchanged, with portable paper ID as the deterministic tie-breaker.
 
-`capabilities.note_contract_version` is 2, while `sync_bootstrap`, `assets` and
-`decks` remain false. Version 2 adds `revision`/`sync_state` to papers and memberships
+`capabilities.note_contract_version` is 2; `sync_bootstrap` and `decks` remain
+false. Primary-PDF asset manifests are now exposed as described below. Version 2 adds `revision`/`sync_state` to papers and memberships
 and a `graph` field to papers, lists, memberships and notes. Graph is null unless
 the entity is fully received/applied, active, and has recorded v2 graph metadata.
 Known graph objects contain `incarnation`, `parents` and `structure_revision` from
@@ -120,8 +120,8 @@ New-note creation likewise requires known paper graph prerequisites in a later
 authorized writer workflow. Locally unsent content is not hidden or discarded.
 
 No local paper identity or path is copied into structured DTO2 identity fields.
-As in DTO1, user-authored research text is not automatically redacted. PDF/deck/file
-projection remains unsupported, rather than inventing portable asset references.
+As in DTO1, user-authored research text is not automatically redacted. Primary-PDF
+manifest projection is supported; deck and other file projection remain unsupported.
 
 `tests/test_sync_projection_v2.py` checks two databases with different local paper
 IDs and equivalent portable references, strict mapping failures, default DTO1
@@ -182,3 +182,16 @@ read or exported. DTO1 retains its existing shape and ordering behavior.
 pending and deferred readiness, missing projection markers, bounded preference
 handling, unrelated-setting exclusion, unchanged DTO1, and order/cursor consistency
 under a concurrent WAL commit.
+
+
+### Primary PDF manifests in DTO2
+
+`capabilities.document_contract_version=2`, `document_manifests=true` and `assets=true`
+describe manifest support only. `reader_activation=false` remains explicit. Each
+paper has `document` containing `desired`, `applied_sha256`, `availability`,
+`revision` and `sync_state`; `pdf_asset_id` references the deduplicated `assets[]`
+manifest by SHA256. Default availability is `unchecked`, even when a prior applied
+binding exists. Pass explicit process-local `VerifiedDocument` snapshots to
+`read_manifest(..., verified_documents=...)` to report currently matching bytes.
+Projection does no hashing, PDF parsing, downloading or activation. See
+[exact document contract](sync-documents.md); DTO1 is unchanged.

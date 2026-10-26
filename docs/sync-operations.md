@@ -129,3 +129,16 @@ Targeted shared-action acceptance: **21 tests passed**, covering empty peers, de
 creation order despite later citation updates, append/remove projection, both ordering
 scopes, repeated actions, invalid selections and transaction rollback. The full-suite result is recorded in the implementation ledger;
 existing desktop control integration remains a separate gate.
+
+
+## Explicit primary-PDF attachment
+
+`attach_document(paper_id, manifest, store=..., request_id=...)` takes a portable
+paper identity and already staged immutable bytes. `stage_file(store, path)` is
+an explicit local-file helper; it neither discovers URLs nor publishes research.
+The shared action validates PDF readability, rechecks the exact graph target and
+commits desired metadata, outbox and the request receipt in one transaction.
+An exact retry cannot revert a newer document; changed retries fail. Bytes remain
+local until the separate authenticated coordinator uploads them. No current desktop
+control, legacy PDF alias or AI workflow is automatically enrolled by this action.
+See [document transfer](sync-transfers.md) for recovery and acceptance evidence.

@@ -39,8 +39,10 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
 - **S05 partial:** bounded push/pull and atomic materialization/cursor, with preserved
   conflict history and explicit cross-device resolution. Desktop draft/selection
   integration and full entity coverage remain.
-- **S06 partial:** verified resumable local blob store; authorization, research manifests,
-  offline pinning and transfer UI remain.
+- **S06 partial:** authenticated workspace-owned blobs, primary-PDF manifests,
+  independent desired/applied bindings and a bounded resumable transfer coordinator.
+  Reader/cache/anchor activation, efficient large-file reads, offline pinning,
+  other attachment types and transfer UI remain.
 - **S09/S10 handoff prepared:** independent Claude mobile worktree created; launch was
   blocked by Claude's first-use workspace trust prompt. No Claude execution is claimed.
 - **S07/S08/S11/S12 implementation pending.** Planning and task ownership are in
@@ -281,3 +283,37 @@ until unsupported writes cannot silently escape synchronization.
 - No real account, workspace, hosted service, Mac, phone or installer acceptance
   was performed. Full research/file capture, UI enrollment, recovery, production
   authentication and mobile acceptance remain release gates.
+
+The [owned document transfer contract](adr/0004-owned-document-transfer.md) now has
+an opt-in reference implementation; the reader/anchor gates remain unimplemented.
+See [transfer coordinator](sync-transfers.md), [document bindings](sync-documents.md)
+and [workspace blob service](sync-blob-service.md). This is not a shipped sync feature.
+
+
+## Authenticated primary-PDF transfer checkpoint — 2026-10-26
+
+- Added exact document manifests, metadata-only receive/intents, verified PDF binding
+  and DTO2 availability; DTO1 and existing legacy research stay unchanged.
+- Added workspace-owned upload/read/cancel APIs and authenticated session discovery.
+  Bind the opaque credential to the intended workspace/device before sending bytes;
+  generation invalidation alone does not prevent wrong-account uploads.
+- Added shared local staging/attach actions and a bounded transfer coordinator.
+  Research/outbox/action receipts commit together; byte transfer remains independent.
+  Retry, cancel, restart, lost responses and stale completion use fixture tests.
+- Internal review reproduced/fixed source-versus-durable-offset confusion, valid
+  overlapping upload acknowledgments, corrupt partial retry loops, and publication
+  after cancellation/sign-out. No credentials or provider error messages are saved.
+- Full check: **1,921 Python tests passed** in 657.21s (0:10:57),
+  **18 frontend tests passed**, privacy scan and Ruff passed. Local log:
+  `build/sync-document-check.log`. This checkpoint does not enroll existing
+  desktop/CLI/MCP/import/AI writers or activate
+  the PDF reader, and it does not claim complete v0.5.0 or release readiness.
+- Next implementation: hash-aware reader/anchor/cache activation and bounded
+  per-chunk integrity verification; then full research entity capture, bootstrap/
+  recovery, desktop UX and the mobile reader. All original S01–S12 gates remain.
+
+
+Concrete next contracts: [reader activation](adr/0005-document-reader-activation.md)
+and [bounded blob integrity](adr/0006-bounded-blob-integrity.md). Both are plans,
+not completed runtime features. The Claude/mobile handoff now points to the actual
+DTO2 and authenticated document contracts rather than the earlier v1 proposal.

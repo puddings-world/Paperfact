@@ -1,7 +1,7 @@
 """Local reference sync authority for isolated tests and transport integration.
 
 Enrollment/revocation are trusted administrative seams, not public endpoints.
-This module provides no HTTP, identity provider, filesystem access or AI calls.
+Attachment storage is optional and explicit; no HTTP, identity provider or AI calls.
 """
 
 from __future__ import annotations
@@ -13,18 +13,29 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from paper_daily.sync_blob_service import BlobServiceMixin
 from paper_daily.sync_graph import apply_accepted, check_preconditions
 from paper_daily.sync_journal import ID, canonical_operation
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
-class ReferenceService:
+class ReferenceService(BlobServiceMixin):
     """Serialize workspace changes and retain conflicting operations durably."""
 
-    def __init__(self, path: Path):
+    def __init__(
+        self,
+        path: Path,
+        *,
+        blob_root: Path | None = None,
+        blob_quota_bytes: int = 4 * 1024**3,
+        blob_max_bytes: int = 150 * 1024**2,
+        blob_max_uploads: int = 16,
+    ):
+        self._configure_blobs(blob_root, blob_quota_bytes, blob_max_bytes, blob_max_uploads)
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._transaction(write=True) as conn:
+            self._blob_schema(conn)
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS sync_devices ("
                 "token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, device TEXT NOT NULL, "
@@ -101,6 +112,16 @@ class ReferenceService:
             "SELECT COALESCE(MAX(sequence),0) FROM sync_events WHERE workspace=?", (workspace,)
         ).fetchone()[0]
 
+    def session_info(self, token: str) -> dict:
+        """Read the authenticated immutable token binding without creating state.
+
+        Transfer coordinators must compare both IDs to their local workspace and
+        device before sending bytes, and repeat this for each session generation.
+        """
+        with self._transaction() as conn:
+            workspace, device = self._authenticate(conn, token)
+            return {"workspace_id": workspace, "device_id": device}
+
     def enroll(self, workspace_id: str, device_id: str) -> str:
         """Trusted admin only: issue a token once for a new workspace/device pair."""
         for value in (workspace_id, device_id):
@@ -148,6 +169,8 @@ class ReferenceService:
                 if previous["fingerprint"] != fingerprint:
                     raise ValueError("Operation ID was reused with different content")
                 return json.loads(previous["event"])
+
+            self._require_document_blob(conn, workspace, value)
 
             if "resolution_of" in value:
                 target = conn.execute(

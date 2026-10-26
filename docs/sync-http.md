@@ -58,5 +58,64 @@ routes, redirect suppression, proxy independence and clean server shutdown.
 
 No cloud, real account, public deployment, native/mobile client or TLS deployment
 was exercised. Production hosting/authentication, secure device enrollment,
-certificate/ingress setup, abuse controls, browser session/CORS policy and attachment
-transport are separate release gates. No CLI or app startup auto-launches this server.
+certificate/ingress setup, abuse controls, browser session/CORS policy and managed
+attachment UI/reader activation are separate release gates. No CLI or app startup auto-launches this server.
+
+
+## Private attachment routes
+
+When the reference authority has an explicit `blob_root`, five additional fixed
+POST routes expose its authenticated native blob API. They use the same bearer
+header, closed JSON parsing, body caps, no-store responses and non-logging server.
+
+| Route | JSON body | Success body |
+|---|---|---|
+| `/v1/blobs/begin` | `{sha256, size}` | `{upload_id, sha256, size, offset, complete}` |
+| `/v1/blobs/append` | `{upload_id, offset, data}` | `{offset}` |
+| `/v1/blobs/commit` | `{upload_id}` | `{sha256, size, complete: true}` |
+| `/v1/blobs/cancel` | `{upload_id}` | `{cancelled: true}` |
+| `/v1/blobs/read` | `{sha256, size, offset, limit}` | `{data}` |
+
+`data` is canonical strict base64. Raw append/read chunks are bounded to 256 KiB,
+so the encoded request stays below the existing 512 KiB cap. Append requires a
+nonempty chunk; a read exactly at EOF returns empty bytes. Query paths, duplicate
+fields, malformed/padded alternate encodings, traversal-shaped upload IDs, boolean
+offsets and oversized ranges are rejected. Workspace ownership is enforced by the
+service on every phase; knowing a digest or an upload ID grants no access.
+
+`HttpTransport` exposes `blob_begin`, `blob_append`, `blob_commit`, `blob_cancel`
+and `blob_read` with the same arguments as the native service (`blob_read` returns
+bytes). It validates closed response shapes, manifest identity at begin, offset
+bounds, completion booleans and exact read-range length before returning results.
+The caller must compare commit's hash/size to its original manifest and perform
+full local hash verification before publishing downloaded bytes. The transport
+stores neither credentials nor upload progress and does not automatically retry.
+
+HTTP 409 maps to retryable `BlobUnavailableError`; an absent blob configuration
+maps to `BlobDisabledError` (503), as does a missing route on an older server (404).
+Quota/transfer rejection on blob routes maps to `BlobQuotaError` (413). Revocation
+remains `PermissionError`; connection/timeouts retain the existing sanitized
+exceptions. No public deployment, blob redirect support or URL fetching is added.
+
+`tests/test_sync_blob_http.py` covers real loopback upload/resume/commit/read/cancel,
+workspace isolation, revocation, malformed bounds, unavailable/disabled/quota
+responses and strict client reply validation. Connection-error handling uses an
+injected httpx error around an otherwise real upload/resume fixture. These tests
+do not exercise a public service, real accounts or native/mobile platform delivery.
+
+
+## Session identity before byte transfer
+
+`POST /v1/session/info` requires the bearer header and the exact empty JSON object
+`{}`. It returns only `{workspace_id, device_id}` for the authenticated token;
+neither field is selected by the request. It remains available when blob storage
+is disabled. Revoked/unknown tokens fail authorization, and query-token paths are
+rejected without echoing credentials.
+
+`HttpTransport.session_info(token)` validates the closed response and both bounded
+identifiers. A transfer coordinator must compare this identity with its bound
+journal before sending any PDF bytes, and repeat the handshake for a new session
+generation. Possessing a valid token for a different workspace/device is not a
+valid binding for the current local research. Every subsequent blob request still
+reauthorizes independently; a successful handshake is not a revocation bypass.
+Peers without this endpoint fail closed rather than assuming token ownership.

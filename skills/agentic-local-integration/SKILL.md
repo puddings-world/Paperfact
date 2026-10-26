@@ -38,6 +38,19 @@ buttons serialize through a server just to share behavior.
   identities/incarnations can avoid false conflicts from unrelated metadata edits.
   It does not replace authorization, scope lifecycle checks, or competing-order
   revision checks; define what happens when membership changes after acceptance.
+- When research metadata references transferred files, keep desired metadata and
+  verified applied bytes separate. Receiving a manifest must not block unrelated
+  research or its cursor. Bind completed bytes only after rechecking the exact
+  target version, parent incarnation and active session; stale work may populate a
+  private cache but cannot activate the wrong document.
+- Before sending private bytes with an opaque credential, authenticate its intended
+  workspace/device binding. A valid token and a local cancellation generation do not
+  prove they refer to the same workspace. Recheck binding after credential changes;
+  preserve per-request authorization and do not persist tokens in transfer state.
+- Treat file publication and database ownership as separate durability boundaries.
+  Publish verified bytes before granting ownership, fail closed on unowned or
+  damaged objects, and make retry repair the interrupted boundary. A local verified
+  flag alone is not current availability, and cancellation cannot retract sent bytes.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

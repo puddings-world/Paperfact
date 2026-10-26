@@ -7,6 +7,7 @@ from datetime import datetime
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from paper_daily.sync_documents import validate_manifest
 from paper_daily.sync_journal import FIELDS, ID, MAX_BYTES
 from paper_daily.sync_ordering import ORDER_KINDS, validate_payload
 
@@ -120,6 +121,7 @@ def canonical_operation(value: dict) -> str:
         "reading_state",
         "list_order",
         "workspace_list_order",
+        "paper_document",
     ) or action not in (
         "put",
         "delete",
@@ -149,6 +151,7 @@ def canonical_operation(value: dict) -> str:
         "reading_state": {"membership", "list", "paper"},
         "list_order": {"list"},
         "workspace_list_order": set(),
+        "paper_document": {"paper"},
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
@@ -166,6 +169,8 @@ def canonical_operation(value: dict) -> str:
         raise ValueError("Order identity must equal its list scope")
     if kind == "workspace_list_order" and value["entity_id"] != "workspace-lists":
         raise ValueError("Workspace order requires the fixed workspace-lists identity")
+    if kind == "paper_document" and value["entity_id"] != refs["paper"]["id"]:
+        raise ValueError("Document identity must match its paper parent")
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
@@ -173,6 +178,8 @@ def canonical_operation(value: dict) -> str:
         validate_payload(value)
     elif kind == "paper":
         _paper(payload)
+    elif kind == "paper_document":
+        validate_manifest(payload, paper_id=refs["paper"]["id"])
     elif kind == "list":
         if set(payload) != {"name", "note"}:
             raise ValueError("List payload requires name and note only")

@@ -12,8 +12,10 @@ path and never loads the app's workspace, AI accounts or runtime configuration.
   hardware under a new device ID; never silently recycle a revoked identity.
 - `revoke(token)`: trusted administrative action, idempotent for a known credential.
   Revoked credentials cannot read, push or retrieve an existing retry receipt.
-- `push(token, operation) -> event`: authenticate and validate the closed version-1
-  journal envelope, then atomically persist canonical state and a durable receipt.
+- `session_info(token) -> {workspace_id, device_id}`: authenticate the opaque token
+  without creating data, namespaces or uploads. Use before transmitting private bytes.
+- `push(token, operation) -> event`: authenticate and validate the closed v1/v2
+  journal/graph envelope, then atomically persist canonical state and a durable receipt.
 - `pull(token, after=0, limit=100) -> events`: read ordered events from that
   credential's workspace. Limits are 1-1,000; cursors must be nonnegative integers
   at or below that workspace's current sequence. Boolean values are not integers
@@ -86,3 +88,10 @@ An accepted resolution lets every client mark that specific conflict resolved wh
 retaining its full history. A resolution race can leave a new unresolved conflict.
 Ordinary accepted edits carry no such link and do not implicitly resolve conflicts.
 This extends an unreleased private contract, not a deployed compatibility promise.
+
+
+Primary-PDF puts additionally require committed workspace-owned bytes; an exact
+previous receipt remains retryable after byte loss without changing history.
+See [blob service](sync-blob-service.md), [HTTP transport](sync-http.md) and
+[transfer coordinator](sync-transfers.md). These are private development seams,
+not a public enrollment or browser-account API.

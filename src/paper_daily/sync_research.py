@@ -80,6 +80,9 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
             "CREATE TABLE IF NOT EXISTS research_list_projection ("
             "sync_id TEXT PRIMARY KEY,incarnation TEXT NOT NULL)"
         )
+        from paper_daily.sync_documents import initialize as initialize_documents
+
+        initialize_documents(conn)
         paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
         paper_rows = conn.execute(
             "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
@@ -200,6 +203,11 @@ def _write_paper(conn, value):
     else:
         assignments = ",".join(f"{name}=?" for name in _PAPER_METADATA)
         conn.execute(f"UPDATE papers SET {assignments} WHERE id=?", (*values, local_id))
+    conn.execute(
+        "INSERT INTO research_paper_projection VALUES(?,?) ON CONFLICT(sync_id) "
+        "DO UPDATE SET incarnation=excluded.incarnation WHERE incarnation!=excluded.incarnation",
+        (identity, value["incarnation"]),
+    )
 
 
 def _write_membership(conn, value):
@@ -451,6 +459,11 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
     if binding is None or binding[0] != operation["workspace_id"]:
         raise ValueError("Research operation belongs to another workspace")
     if operation["version"] == 2:
+        if operation["entity_type"] == "paper_document":
+            from paper_daily.sync_documents import write_document
+
+            write_document(conn, operation)
+            return
         if operation["entity_type"] in ("list_order", "workspace_list_order"):
             _write_order(conn, operation)
             return

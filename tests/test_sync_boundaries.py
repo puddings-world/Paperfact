@@ -22,7 +22,8 @@ def denied_network(*args, **kwargs):
 socket.create_connection = denied_network
 for name in ('sync_journal', 'sync_research', 'sync_service', 'sync_client',
              'sync_blobs', 'sync_http', 'sync_projection', 'sync_schema_v2',
-             'sync_graph', 'sync_operations', 'sync_ordering'):
+             'sync_graph', 'sync_operations', 'sync_ordering', 'sync_documents',
+             'sync_transfers', 'sync_document_actions', 'sync_blob_service'):
     importlib.import_module('paper_daily.' + name)
 forbidden = {'paper_daily.config', 'paper_daily.store', 'paper_daily.llm',
              'paper_daily.ai_accounts', 'paper_daily.feedback'}

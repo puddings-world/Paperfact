@@ -14,7 +14,7 @@ Card M is reserved for that Claude worktree. Cards R and U have completed their 
 > Continue Paperfact v0.5.0 in the active `Paperfact` repository, not the archived
 > `paper-daily` checkout. Read `AGENTS.md`, `docs/roadmap-0.5.0.md`,
 > `docs/sync-service-contract.md`, `docs/sync-research-adapter.md`,
-> `docs/sync-attachments.md`, and this document before editing. Inspect the current
+> `docs/sync-documents.md`, `docs/sync-transfers.md`, and this document before editing. Inspect the current
 > branch and working tree; preserve other sessions' files and local research.
 >
 > Own only a new `mobile/` directory and `docs/mobile-0.5.md`. Build an independent
@@ -35,7 +35,8 @@ Card M is reserved for that Claude worktree. Cards R and U have completed their 
   Read PDF availability, explanations, citations, highlight reasons and slide previews.
   Full mobile slide editing and AI execution are outside this task.
 - Pure JavaScript semantics and fixtures shared by the UI and fake transport.
-  Match version-1 list/note operations and service events; reject unknown versions,
+  Match version-2 graph operations and service events; keep v1 only as a compatibility
+  fixture. Reject unknown versions,
   changed retries, event gaps and wrong workspace identities.
 - IndexedDB persistence, scoped by workspace and local device identity. Persist a
   note edit and its outbox entry in one transaction; preserve both through reload.
@@ -65,15 +66,17 @@ browser authentication and authorized attachment access remain integration work.
 Do not expose reference `enroll` or `revoke` as unauthenticated web endpoints.
 Do not claim public login, E2EE or production cross-device sync is shipped.
 
-## Proposed read-manifest DTO (review before integration)
+## Read-manifest integration contract
 
-This is a **proposal for a read projection**, not an accepted server response or
-replacement for the operation envelope. Keep a versioned synthetic fixture in
-`mobile/`; send deviations to the parent rather than changing Python contracts.
+The local read projection now supports explicit DTO2; it is not an authenticated
+server bootstrap or replacement for the operation envelope. Match
+`sync_projection.read_manifest(..., schema_version=2)` in synthetic fixtures.
+The table below is a summary; exact fields/capabilities are in `sync-projection.md`
+and `sync-documents.md`. Send contract changes to the parent.
 
 | Field | Proposed content |
 |---|---|
-| `schema_version` | `1`; unsupported versions are read-only/error, never coerced |
+| `schema_version` | `2`; unsupported versions are read-only/error, never coerced |
 | `workspace_id`, `cursor` | Workspace identity and consistent snapshot/event cursor |
 | `lists[]` | `id`, `name`, `note`, `revision`, ordered `members[{paper_id, position, state}]` |
 | `papers[]` | `id`, `title`, authors, year, DOI/URL, PDF asset reference, analysis sections and citation summaries |
@@ -89,11 +92,11 @@ integrity, not ownership authorization. Verify the PDF hash before displaying it
 anchors. Show missing/corrupt assets honestly rather than marking a deck offline.
 Bootstrap must eventually bind the manifest and cursor to one consistent snapshot.
 
-## Existing text-note operation shape
+## V2 text-note operation shape
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "operation_id": "op-example-1",
   "workspace_id": "workspace-example",
   "device_id": "device-example",
@@ -102,7 +105,19 @@ Bootstrap must eventually bind the manifest and cursor to one consistent snapsho
   "action": "put",
   "base_revision": 0,
   "depends_on": null,
-  "payload": {"paper_id": "paper-example", "body": "A synthetic observation"}
+  "payload": {
+    "paper_id": "00000000-0000-4000-8000-000000000001",
+    "body": "A synthetic observation"
+  },
+  "incarnation": "op-example-1",
+  "parents": [
+    {
+      "kind": "paper",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "incarnation": "paper-creation-example"
+    }
+  ],
+  "structure_revision": 0
 }
 ```
 
@@ -111,7 +126,10 @@ limits must match `sync_journal.canonical_operation`; do not add anchor, timesta
 or credentials fields. Preserve an operation ID for retries. Consecutive offline
 edits depend on the latest pending edit; do not issue every edit against revision 0.
 An anchored note can be read from a projection, but cannot be edited through this
-limited write contract. Reading-position writes need a separate agreed entity type.
+limited write contract. Per-list reading state and deterministic ordering have v2
+contracts; actual PDF scroll/reading-position sync still needs a separate entity.
+See `sync-reading-state.md` and `sync-ordering.md` where available, and the exact
+schema/tests. Do not infer an anchor-write capability from a read projection.
 
 Explicit resolution adds optional `resolution_of` with the original conflicting
 operation ID. Only an accepted resolution event closes that conflict on every
@@ -181,3 +199,15 @@ that a Claude session received, accepted or completed the task.
   semantics. DTO v2 explicitly exposes write readiness; v1 cannot mutate an enrolled
   v2 entity. Other kinds in [the capture ADR](adr/0003-research-entity-capture.md) remain
   planned and must not be treated as accepted wire operations.
+
+
+## Latest core handoff: authenticated primary PDFs
+
+The reference service now has authenticated session discovery and bounded private
+blob endpoints. A valid token must match the intended workspace/device before any
+upload. This is not browser login or a hosted PWA API. Core DTO2 exposes desired PDF
+manifests and explicit verified availability; receiving metadata does not require
+file bytes. Mobile must mirror that separation and preserve exact document hashes.
+Reader/anchor activation is planned in `adr/0005-document-reader-activation.md`.
+The existing isolated mobile worktree may predate these contracts; coordinate an
+update without overwriting local work before starting implementation.

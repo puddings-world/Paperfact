@@ -1,0 +1,130 @@
+# Authenticated reference attachment service
+
+Status: isolated local authority implementation for ADR 0004. Storage requires an
+explicit directory; this is not public enrollment, production hosting, or automatic
+capture of existing research files.
+
+```python
+service = ReferenceService(
+    database_path,
+    blob_root=private_storage_directory,
+    blob_quota_bytes=4 * 1024**3,
+    blob_max_bytes=150 * 1024**2,
+    blob_max_uploads=16,
+)
+```
+
+Omitting `blob_root` keeps attachment storage disabled. Limits are administrative
+configuration and must be consistent across instances sharing this authority.
+They bound each workspace's full committed/reserved bytes, each object, and open
+upload sessions. Decoded append/read chunks are capped at 256 KiB. The generic blob
+store supports zero-byte objects; primary-PDF manifests require positive size.
+
+## Native API
+
+Before transmitting bytes, the coordinator calls `session_info(token)` and compares
+its exact `{workspace_id, device_id}` response to the immutable local binding. A
+token is bound to one workspace/device for its lifetime; local session generation
+changes require a fresh handshake. This read-only method reauthenticates and creates
+no namespaces, uploads, or files. Checking only a token's presence is insufficient:
+an otherwise valid token for another workspace must never receive local PDF bytes.
+Every later blob request still authenticates independently, so the handshake does
+not bypass revocation. The HTTP route is `POST /v1/session/info` with an empty object.
+
+Every method authenticates the current token independently. A manifest is exactly
+`{"sha256": <lowercase 64-character digest>, "size": <nonnegative integer>}`.
+
+| Method | Result |
+| --- | --- |
+| `blob_begin(token, manifest)` | `upload_id`, `sha256`, `size`, durable `offset`, `complete` |
+| `blob_append(token, upload_id, offset, data: bytes)` | `{"offset": <durable next offset>}` |
+| `blob_commit(token, upload_id)` | `sha256`, `size`, `complete: true` |
+| `blob_cancel(token, upload_id)` | `{"cancelled": true}` |
+| `blob_read(token, sha256, size, offset, limit=256*1024)` | Bounded bytes; empty at exact EOF |
+
+Begin is also resume/status. Repeated begin on an open upload by its owning device
+returns the same opaque session ID. A committed object returns `upload_id: null`,
+full offset, and `complete: true`. Upload IDs are identifiers, never authorization
+capabilities. A different device cannot take over an open session; other authorized
+devices in the workspace can read a committed object.
+
+Matching overlapping chunk retries append only missing bytes. Gaps, changed retry
+bytes, invalid offsets and oversized chunks cannot overwrite content. Commit
+verifies the complete size and SHA256 before publishing. Repeating commit or a
+matching append retry after commit is safe. Cancel is idempotent for unfinished
+uploads and releases their reservation; cancelled session IDs cannot resume writes.
+Committed attachments cannot be cancelled as partial uploads.
+
+## Isolation, storage, and crash repair
+
+`sync_blob_service.py` is a mixin of `ReferenceService`. Authority tables hold:
+
+- `sync_blob_namespaces`: workspace to server-generated opaque directory ID.
+- `sync_workspace_blobs`: workspace/digest, declared size, reserved/committed state.
+- `sync_blob_uploads`: opaque session ID, workspace/device, manifest, and lifecycle.
+
+There is one active session per workspace/digest. Each workspace owns a separate
+BlobStore namespace, including its physical objects and reservations. Knowing a
+digest from another workspace grants neither read permission nor a deduplication
+hit: beginning the same content there starts its own upload. Caller paths, URLs,
+filenames, tokens, and account credentials are not stored in these records.
+
+Locks are always acquired authority first, BlobStore second. Namespace registration
+is durably committed before touching files. Authority SQLite and the BlobStore index
+and files are separate transactions: physical verification/finalization occurs
+before authority ownership commit. If interrupted between them, verified but
+unowned bytes cannot be read or referenced by a new paper manifest. The same device's
+authenticated begin/commit retry verifies those bytes and repairs ownership. A
+failed reservation may leave private underlying reserved bytes; its namespace stays
+recorded and its BlobStore quota still counts them. This is recovery, not a claim of
+cross-database/filesystem atomicity.
+
+All methods, including exact retries and reads, reauthenticate. Revocation blocks
+subsequent calls; it cannot retract bytes already returned by a completed call.
+Workspace authorization precedes object access, and every read requires committed
+ownership matching both hash and size. Read results expose no server filesystem path.
+
+## Document prerequisite and independent availability
+
+After exact operation-receipt retry lookup, a new `paper_document` put must resolve
+to a committed owned blob with verified bytes. An unavailable prerequisite raises
+`BlobUnavailableError` without allocating an event. Normal revision/graph rules
+then decide accepted versus conflict. Exact existing operation receipts still replay
+unchanged even if bytes later become unavailable; history is not rewritten.
+
+Manifest conflict or deletion does not collect bytes referenced by retained history.
+The authority verifies byte integrity, not PDF readability; receiving-client PDF
+validation and desired-versus-applied binding are separate responsibilities. Missing
+local bytes must not prevent the receiving client from durably advancing its metadata
+cursor or recording the manifest.
+
+Failures use `BlobDisabledError` for absent configuration, `BlobUnavailableError`
+for missing/uncommitted manifest prerequisites or lost/corrupt owned bytes,
+`BlobQuotaError` for storage/session limits, and `PermissionError` for unauthorized
+workspace/session access. Intrinsically malformed requests use `ValueError`/`BlobError`.
+Transport maps these to fixed errors without raw paths, content, URLs, or tokens.
+
+## Verification and remaining gates
+
+`tests/test_sync_blob_service.py` uses isolated bytes and authorities. It covers
+known-hash isolation, session takeover, revocation in every phase, concurrency,
+quota reservation, restart/overlap retry, finalization-before-ownership interruption,
+manifest prerequisites, corruption/loss, and history retention. Existing
+`test_sync_blobs.py` remains responsible for local file-integrity primitives and
+symlink/reparse-point behavior.
+
+Automatic lease expiry, orphan reconciliation, committed-blob garbage collection,
+trusted repair of lost/corrupt previously committed authority objects, global server
+disk admission, and production rate/concurrency limits remain explicit later gates.
+Current reads conservatively verify the full object before returning a bounded
+chunk. A 150 MiB object split into 256 KiB reads causes approximately 90 GiB of
+verification reads, so large-file transfer performance remains an explicit gate.
+A stat-only cache is not sufficient to preserve the full-content integrity rule:
+corruption can leave a file's metadata unchanged. A follow-up can persist bounded per-chunk digests only after verification of the
+full manifest hash and committed ownership. Reads must verify every covered chunk
+before returning requested bytes, and the client must still verify the final full
+hash. Keep per-request authorization and test corruption/replacement, offset ranges
+crossing chunk boundaries, revocation during verification, and recovery between
+publication and digest/ownership commit before replacing the current check. No unverified persistent availability flag is authoritative.
+The store does not sandbox a hostile process replacing its owned filesystem entries.
+No real-account, real-research, cloud, deployment, or cross-device test is claimed.

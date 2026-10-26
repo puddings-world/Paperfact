@@ -142,3 +142,28 @@ in this evidence record. Migration and full-suite checks accompany the final cha
 - Limits: bounded private protocol and trusted projection adapter; no production
   writer enrollment, general CRDT, hosted authentication or mobile acceptance claim.
   Synthetic research only; no credentials, real user content or global installation.
+
+
+## Authenticated document intents and late file completion — 2026-10-26
+
+- Status: `validated-local`; repository-local evidence, not cross-project reuse.
+- Trigger: research metadata must converge while a PDF is missing or interrupted;
+  switching accounts or document versions must not activate late, unrelated bytes.
+- Invariant: authenticate expected workspace/device before sending bytes. Commit
+  received metadata and cursor without waiting for a file. Verify hash/size/readability
+  separately, then atomically recheck current target/session before applying its binding.
+  Server ownership follows durable verified bytes, not merely a matching client claim.
+- Recovery: retain the previous binding when replacement fails. Retry unfinished
+  corrupt partials explicitly; never delete a finalized object as partial cleanup.
+  Source read offsets and acknowledged durable EOF are different during overlap retries.
+- Evidence: `tests/test_sync_transfers.py` passed 32 fixture cases, including real
+  loopback HTTP, wrong-account upload denial, restart/resume, rollback, duplicate
+  activation and late completion. The combined transport/client/service boundary set
+  passed 137 cases before the final two session-publication cases were added. The
+  implementation ledger records the subsequent full-check result.
+- Limits: trusted owned filesystem, explicit private library APIs and local fixtures.
+  No production authentication/hosting, reader activation, real research, installer
+  or phone acceptance is established. Server chunk-read efficiency remains a gate;
+  a metadata-only cache must not silently weaken content verification.
+- Privacy/promotion: no tokens, personal content or absolute local paths recorded;
+  no global skill installation or automatic promotion.

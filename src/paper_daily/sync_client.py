@@ -296,6 +296,7 @@ class SyncClient:
             "membership",
             "note",
             "reading_state",
+            "paper_document",
             "list_order",
             "workspace_list_order",
         ):
@@ -384,6 +385,7 @@ class SyncClient:
         self._guard_membership_creation(conn, operation)
         self._guard_reading_parents(conn, operation)
         self._guard_order(conn, operation)
+        self._guard_document_parent(conn, operation)
         return operation
 
     def new_order_operation(
@@ -443,6 +445,34 @@ class SyncClient:
         return self.new_graph_operation_in(
             conn, kind, entity_id, payload, operation_id=operation_id, restore=restore
         )
+
+    def _guard_document_parent(self, conn, operation):
+        if operation["version"] != 2 or operation["entity_type"] != "paper_document":
+            return
+        if operation["action"] == "delete" and operation.get("resolution_of"):
+            from paper_daily.sync_graph import check_preconditions
+
+            def receipt(identity):
+                row = conn.execute(
+                    "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (identity,),
+                ).fetchone()
+                return json.loads(row[0]) if row else None
+
+            if not check_preconditions(
+                lambda kind, identity: self._graph_entity(conn, kind, identity), receipt, operation
+            ):
+                raise ValueError("Document retirement no longer matches its conflict")
+            return
+        state, _, _ = self._optimistic_graph(conn)
+        parent = state.get(("paper", operation["entity_id"]))
+        expected = (
+            [{"kind": "paper", "id": operation["entity_id"], "incarnation": parent["incarnation"]}]
+            if parent
+            else []
+        )
+        if not parent or not parent["active"] or operation["parents"] != expected:
+            raise ValueError("Document requires its exact active paper incarnation")
 
     def _guard_order(self, conn, operation):
         from paper_daily.sync_ordering import ORDER_KINDS, validate_order
@@ -624,6 +654,7 @@ class SyncClient:
             self._guard_membership_creation(conn, value)
             self._guard_reading_parents(conn, value)
             self._guard_order(conn, value)
+            self._guard_document_parent(conn, value)
             self.writer(conn, value)
 
         return self.journal.apply(operation, write)
@@ -801,6 +832,7 @@ class SyncClient:
             self._guard_membership_creation(conn, value)
             self._guard_reading_parents(conn, value)
             self._guard_order(conn, value)
+            self._guard_document_parent(conn, value)
             self.writer(conn, value)
             conn.execute(
                 "INSERT INTO research_resolution_intents VALUES(?,?,?,?)",
@@ -1359,15 +1391,38 @@ class SyncClient:
         applied = self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
         return applied + self._materialize_orders(conn, cursor)
 
-    def sync_once(self, transport, token, *, limit=100):
+    def sync_once(self, transport, token, *, limit=100, prepare_push=None):
         """One bounded pass, with no timer, hidden retries, login or network policy."""
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("Invalid sync batch limit")
+        if prepare_push is not None and not callable(prepare_push):
+            raise ValueError("Push preparation must be callable")
         if not self._running.acquire(blocking=False):
             return {"busy": True}
         try:
-            pushed = 0
+            pushed, deferred_push = 0, 0
+            skipped = set()
             for operation in self.journal.pending(limit):
+                dependencies = {operation.get("depends_on"), operation.get("structure_depends_on")}
+                dependencies.update(ref["incarnation"] for ref in operation.get("parents", []))
+                if operation["entity_type"] in ("list_order", "workspace_list_order"):
+                    dependencies.update(
+                        item["incarnation"] for item in operation["payload"].get("items", [])
+                    )
+                ready = not bool(dependencies & skipped)
+                if ready and prepare_push is not None:
+                    # Preparation can inspect an immutable intent but cannot modify
+                    # the envelope subsequently acknowledged by this client.
+                    prepared = json.loads(canonical_operation(operation))
+                    ready = prepare_push(prepared)
+                    if canonical_operation(prepared) != canonical_operation(operation):
+                        raise ValueError("Push preparation cannot change a saved operation")
+                    if type(ready) is not bool:
+                        raise ValueError("Push preparation must return a boolean")
+                if not ready:
+                    skipped.add(operation["operation_id"])
+                    deferred_push += 1
+                    continue
                 event = transport.push(token, operation)
                 validate_event(event, self.journal.workspace_id)
                 if event["operation"] != operation:
@@ -1376,6 +1431,12 @@ class SyncClient:
                 pushed += 1
             events = transport.pull(token, after=self.status()["cursor"], limit=limit)
             received = self.receive(events)
-            return {"busy": False, "pushed": pushed, **received, **self.status()}
+            return {
+                "busy": False,
+                "pushed": pushed,
+                "deferred_push": deferred_push,
+                **received,
+                **self.status(),
+            }
         finally:
             self._running.release()
