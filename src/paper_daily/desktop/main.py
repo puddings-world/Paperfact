@@ -51,7 +51,6 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -659,7 +658,9 @@ class ReaderPage(QWidget):
         left_layout.addWidget(self.pdf_missing, 1)
         split.addWidget(left)
 
-        self.tabs = QTabWidget()
+        from paper_daily.desktop.reading_layout import ReadingTabs
+
+        self.tabs = ReadingTabs()
         self.dive_view = rich_view.RichView(pal)
         self.dive_view.anchorClicked.connect(self._dive_source)
         self.tabs.addTab(self.dive_view, "深度講解")
@@ -697,13 +698,13 @@ class ReaderPage(QWidget):
         al = QVBoxLayout(ask)
         al.setContentsMargins(14, 12, 14, 12)
         al.setSpacing(8)
+        al.addWidget(QLabel("通用提問範本 · 點選後可編輯"))
         seeds = QHBoxLayout()
         seeds.setSpacing(6)
         for label, question in SEED_QUESTIONS:
             btn = QPushButton(label)
             btn.setToolTip(question)
-            ai_style.mark(btn, pal)
-            btn.clicked.connect(lambda _=False, q=question: self._ask_from_box(q))
+            btn.clicked.connect(lambda _=False, q=question: self._draft_question(q))
             seeds.addWidget(btn)
         seeds.addStretch(1)
         al.addLayout(seeds)
@@ -711,9 +712,13 @@ class ReaderPage(QWidget):
 
         self.questions = ResearchQuestions(palette=pal)
         self.questions.chosen.connect(self._draft_question)
+        self.questions.return_to_draft.connect(self._resume_question_draft)
         self.questions.source_requested.connect(self._jump_to_source)
         al.addWidget(self.questions)
         self.chat_view = rich_view.RichView(pal)
+        if not self.chat_view.rich:
+            # The fallback transcript scrolls; let it yield space to the composer.
+            self.chat_view.view.setMinimumHeight(64)
         self.runner.result_target = lambda: self.chat_view.setFocus()
         self.chat_view.anchorClicked.connect(self._note_action)
         al.addWidget(self.chat_view, 1)
@@ -739,7 +744,7 @@ class ReaderPage(QWidget):
             f"border:1px solid {pal['firm']};padding:8px;"
         )
         ask_bar.addWidget(self.ask_box, 1)
-        self.ask_btn = QPushButton("問")
+        self.ask_btn = QPushButton("送出")
         ai_style.mark(self.ask_btn, pal, primary=True)
         self.ask_btn.clicked.connect(lambda: self._ask_from_box(self.ask_box.text()))
         ask_bar.addWidget(self.ask_btn)
@@ -1427,11 +1432,11 @@ class ReaderPage(QWidget):
         if not rows:
             self.chat_view.setHtml(
                 f'<div style="color:{pal["faint"]};font-size:12px;">'
-                "問任何問題,答案會用這篇論文的原文回答。</div>"
+                "問答紀錄 · 尚無對話。可在底部自行輸入，或先選擇提問建議。</div>"
             )
             return
         chunks = [self._exchange(q, a) for q, a in _exchanges(rows)]
-        self.chat_view.setHtml("".join(chunks), at_end=True)
+        self.chat_view.setHtml("<h3>問答紀錄</h3>" + "".join(chunks), at_end=True)
 
     def _exchange(self, question, answer) -> str:
         """One question and its answer as a card: the question as its header."""
@@ -1691,10 +1696,22 @@ class ReaderPage(QWidget):
         self.passage_chip.hide()
         self.ask_box.setPlaceholderText("問這篇論文的任何問題…")
 
+    def _resume_question_draft(self):
+        paper = self.paper
+
+        def focus():
+            if (self.isVisible() and self.tabs.currentWidget() is self.ask_tab
+                    and self.paper is paper):
+                self.ask_box.setFocus()
+
+        # A modal's own focus restoration happens after rejected/accepted.
+        QTimer.singleShot(0, self.ask_box, focus)
+
     def _draft_question(self, question):
         self._clear_passage()
         self.ask_box.setText(question)
         self.ask_box.setFocus()
+        self._resume_question_draft()
 
     def _ask_from_box(self, question: str) -> None:
         """Ask what was typed, about the chosen passage when there is one."""
@@ -2078,6 +2095,14 @@ class MainWindow(QWidget):
             self.open_next_unread()
         elif not self.papers and self.list_picker.count() == 0:
             self.show_lists()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_screen_fit_scheduled", False):
+            self._screen_fit_scheduled = True
+            from paper_daily.desktop.reading_layout import schedule_startup_fit
+
+            schedule_startup_fit(self)
 
     def _set_top_collapsed(self, collapsed: bool) -> None:
         self.top_toolbar.setVisible(not collapsed)

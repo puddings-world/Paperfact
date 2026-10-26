@@ -247,6 +247,25 @@ def _record(result: Completion, task: str, elapsed_ms: int, cfg: Settings) -> No
         logging.getLogger(__name__).warning("Could not save local AI usage receipt")
 
 
+def _request_label(cfg: Settings) -> str:
+    """Name the captured request without reading accounts or guessing reply versions."""
+    brand = {
+        "cli": "Claude",
+        "codex": "Codex",
+        "gemini": "Gemini",
+        "anthropic": "Anthropic",
+        "openai": "OpenAI 相容服務",
+        "gateway": "AI 閘道",
+    }.get(cfg.backend, cfg.backend)
+    if cfg.model:
+        model = f"指定模型：{cfg.model}"
+    elif cfg.effective_model:
+        model = f"預設模型：{cfg.effective_model}"
+    else:
+        model = "服務預設模型（未指定）"
+    return f"{brand} / {model}"
+
+
 def complete_result(
     prompt: str,
     system: str | None = None,
@@ -296,7 +315,7 @@ def complete_result(
                          input_chars=len(prompt), node_id=request_id)
     from paper_daily.work_progress import report
 
-    report(f"等待 {cfg.backend} / {cfg.effective_model} 回覆")
+    report(f"等待 {_request_label(cfg)} 回覆")
     start = time.monotonic()
     try:
         result = provider.complete(request, cfg, _post)

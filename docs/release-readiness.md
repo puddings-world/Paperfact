@@ -1,5 +1,29 @@
 # Release readiness
 
+## 0.4.2 candidate — question input visibility
+
+- Separate common prompt templates, paper-specific suggestions, and sent
+  conversation history. Browse bounded question previews alongside their complete
+  wording, rationale, and source evidence. Templates and suggestions both prepare
+  an editable draft; only Send invokes the question-answering model.
+- Keep the question input and send button accessible in short reading windows.
+  Inactive slide-editor layouts no longer dictate the reading tab's minimum
+  height. Long generated question explanations scroll within a bounded region.
+- Fit restored normal windows, including their native frames, to the screen's
+  work area; preserve maximized windows and existing drafts.
+- Show the selected AI service and requested model in progress messages. A
+  provider-selected default is identified explicitly instead of `cli / None`;
+  this does not claim knowledge of the model version returned by the service.
+
+This is a narrow patch based on v0.4.1. It does not contain the unfinished v0.5
+workspace synchronization changes. The reproduced defect is layout overflow,
+not evidence that all v0.4 AI requests hang. Regression fixtures use synthetic
+papers and simulated AI responses; no personal account or research data is used.
+
+Release status: local verification in progress. Cross-platform frozen builds
+and installer acceptance must pass before this candidate is published.
+
+
 ## 0.4.1 public beta
 
 The v0.4.0 candidate did not pass the cross-platform gate: its update-notice
