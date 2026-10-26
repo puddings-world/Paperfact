@@ -83,6 +83,9 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
         from paper_daily.sync_documents import initialize as initialize_documents
 
         initialize_documents(conn)
+        from paper_daily.sync_artifacts import initialize as initialize_artifacts
+
+        initialize_artifacts(conn)
         from paper_daily.sync_content import initialize_content
 
         initialize_content(conn)
@@ -482,6 +485,11 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
             if rich:
                 write_rich_note(conn, operation)
                 return
+        if operation["entity_type"] == "research_file":
+            from paper_daily.sync_artifacts import write_file
+
+            write_file(conn, operation)
+            return
         if operation["entity_type"] == "paper_document":
             from paper_daily.sync_documents import write_document
 

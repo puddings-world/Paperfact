@@ -1,8 +1,10 @@
 # ADR 0008: Observe research inputs before generation or editing
 
-Status: proposed implementation slice, 2026-10-26. Source audit only; no producer
-enrollment or runtime behavior is changed by this ADR. Extends ADR 0007 and the
-document identity/reader contracts in ADRs 0004-0005.
+Status: first producer slice implemented in isolated fixtures, 2026-10-26.
+`closeread.write` and the shared survey-compatible observation/publication registry
+are wired; the remaining producer inventory below is still a plan. No automatic
+workspace enrollment. See [the implemented contract](../research-generation.md).
+Extends ADR 0007 and the document identity/reader contracts in ADRs 0004-0005.
 
 ## Decision
 

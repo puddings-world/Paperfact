@@ -31,6 +31,8 @@ import {
   flushDrafts
 } from './view.mjs';
 const app = document.querySelector('#app');
+let deckURLs = [];
+function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
 let switchingWorkspace = false;
 let language = navigator.language.toLowerCase().startsWith('zh') ? 'zh-TW': 'en', t = translator(language);
 let engine, store, state, view = new ReaderView(), notice = 'demoHelp', busy = false, isError = false,
@@ -153,6 +155,7 @@ function retainFocus() {
 }
 function render() {
   if(! state) return;
+  clearDeckURLs();
   const focus = retainFocus(),
   data = projection(state),
   paper = data.papers.find(p => p.id === view.paper),
@@ -320,9 +323,7 @@ function render() {
     if(view.tab === 'notes') renderNotes(panel, paper, data);
     if(view.tab === 'pdf') renderPdf(panel, paper);
     if(view.tab === 'evidence') renderEvidence(panel, paper, data);
-    if(view.tab === 'slides') panel.append(el('div', {
-      class: 'card'
-    }, text('noSlides')));
+    if(view.tab === 'slides') renderSlides(panel, paper, data);
     main.append(panel);
   } else {
     main.append(
@@ -1014,4 +1015,62 @@ try {
   await startDemo();
 } catch(error) {
   app.replaceChildren(el('main', {}, el('h1', {}, 'Paperfact'), text(error.message), text('copyHint')));
+}
+
+function renderSlides(panel, paper, data) {
+  const decks = data.decks.filter(deck => deck.paper_id === paper.id);
+  if(!decks.length) { panel.append(el('div',{class:'card'},text('noSlides'))); return; }
+  panel.append(text('readOnlySlides'));
+  const serial = renderSerial, owner = engine;
+  for(const manifest of decks) {
+    const card = el('section',{class:'card'},el('h2',{},manifest.slot === 'guide' ? t('guideDeck') : t('notesDeck')));
+    const body = el('div',{},text('loadingSlides'));
+    card.append(button(t('downloadSlides'),() => attempt(() => owner.downloadArtifact(manifest.id),{working:true}),
+      {disabled:!connected || busy ? '' : null}),body);
+    panel.append(card);
+    owner.deck(manifest.id).then(result => {
+      if(serial !== renderSerial || owner !== engine || view.paper !== paper.id || view.tab !== 'slides') return;
+      body.replaceChildren();
+      if(result.awaiting) body.append(text('slidesPending'));
+      body.append(el('h3',{},result.body.deck.title));
+      const deck = result.body.deck;
+      const figures = new Map(deck.figures.map(figure => {
+        const asset = result.operation.payload.assets.find(item => item.id === figure.asset_id);
+        const url = URL.createObjectURL(new Blob([result.blobs.get(asset.sha256)],{type:'image/png'}));
+        deckURLs.push(url); return [figure.id,{...figure,url}];
+      }));
+      deck.slides.forEach((slide,index) => {
+        const surface = el('div',{class:'slide-surface',role:'img','aria-label':`${index+1}. ${slide.title}`});
+        const objects = slide.elements ?? [
+          {kind:'text',text:slide.section,x:56,y:34,w:1088,h:30,size:17,color:'#2356bd'},
+          {kind:'text',text:slide.title,x:56,y:82,w:1088,h:112,size:40,bold:true},
+          {kind:'text',text:slide.takeaway,x:56,y:206,w:1088,h:85,size:27,color:'#2356bd'},
+          {kind:'text',text:slide.bullets.map(value=>'• '+value).join('\n'),x:56,y:313,w:slide.figure?470:1088,h:285,size:slide.figure?24:27},
+          ...(slide.figure?[{kind:'figure',figure:slide.figure,x:564,y:310,w:580,h:285}]:[])
+        ];
+        for(const object of objects) {
+          const box=el('div',{class:'slide-object'});
+          Object.assign(box.style,{left:`${object.x/12}%`,top:`${object.y/6.75}%`,width:`${object.w/12}%`,height:`${object.h/6.75}%`,fontSize:`${(object.size??26)/12}cqw`});
+          if(object.kind==='figure') {
+            const figure=figures.get(object.figure);
+            box.append(el('img',{src:figure.url,alt:figure.caption??figure.label}));
+          } else if(object.kind==='table') {
+            box.append(el('table',{},object.rows.map((cells,row)=>el('tr',{},cells.map(cell=>el(row===0&&object.header!==false?'th':'td',{},cell))))));
+          } else {
+            box.style.color=object.color??'#172238'; box.style.fontWeight=object.bold?'700':'400';
+            box.style.textAlign=object.align??'left'; box.textContent=object.text??'';
+          }
+          surface.append(box);
+        }
+        const notes=el('details',{},el('summary',{},t('speakerNotes')),el('p',{class:'slide-notes'},slide.speaker_notes));
+        notes.append(el('h4',{},t('slideSources')),...slide.sources.map(id=> {
+          const source=deck.sources.find(item=>item.id===id);
+          return el('p',{},source.label,source.page ? ` - p. ${source.page}` : '',source.text ? ` - ${source.text}` : '');
+        }));
+        body.append(el('article',{class:'slide-page'},el('p',{class:'muted'},`${index+1} / ${deck.slides.length}`),surface,notes));
+      });
+    }).catch(() => {
+      if(serial===renderSerial && owner===engine) body.replaceChildren(text('artifact_unavailable'));
+    });
+  }
 }

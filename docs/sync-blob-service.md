@@ -162,3 +162,20 @@ commits and first legacy upgrades still perform bounded complete verification.
 No stat-only cache or persistent unverified availability flag grants byte access.
 The store does not sandbox a hostile process replacing its owned filesystem entries.
 No real-account, real-research, cloud, deployment, or cross-device test is claimed.
+
+
+## Research-file publication
+
+`research_file` puts require a complete owned body/assets closure. The service
+authenticates the operation's workspace/device and checks retry receipts first.
+At most two closure verifications run concurrently; each validates the closed deck
+format and full size/SHA256 of at most 8 MiB body plus 64 MiB assets outside the
+authority write transaction. No caller path, URL or hash alone grants access.
+
+The publication transaction authenticates again, handles a concurrent exact retry,
+and rechecks committed workspace ownership, namespace path and verified file
+identity before allocating an event. Revocation or replacement during validation
+prevents publication. Existing exact receipts remain stable even when bytes later
+need repair. Primary PDF manifest checks remain unchanged. This assumes the owned
+immutable storage boundary; it is not a defense against a privileged process
+concurrently modifying service files while restoring their complete OS identity.

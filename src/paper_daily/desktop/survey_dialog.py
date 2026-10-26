@@ -7,6 +7,8 @@ a rewrite, and lets the reader edit the result like a note.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QProcess
 from PySide6.QtWidgets import (
     QDialog,
@@ -18,18 +20,51 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from paper_daily import runtime, survey
+from paper_daily import runtime, store, survey
 from paper_daily.desktop import ai_style, md
 from paper_daily.desktop.note_editor import NoteEditor
 from paper_daily.store import connect
 
 ROOT = runtime.bundle_root()
+SURVEY_EDIT_TEXT = {
+    "zh-TW": {
+        "empty": "請保留綜覽內容；空白內容尚未儲存。",
+        "failed": "尚未儲存，草稿仍在這裡。請確認清單或工作區是否已變更，再重試或複製草稿。",
+        "stale": "綜覽已在別處更新。這份修改已保留為待核對版本，草稿仍在這裡。",
+        "changed": "綜覽已在別處變更，請先重新整理並確認新版內容。",
+        "workspace": "目前工作區已變更。請關閉此視窗，從原清單重新開啟。",
+    },
+    "en": {
+        "empty": "Keep some survey text; an empty survey has not been saved.",
+        "failed": (
+            "Not saved. Your draft remains here. "
+            "Check the list and workspace, then retry or copy it."
+        ),
+        "stale": (
+            "The survey changed elsewhere. Your revision was retained for review; "
+            "the draft is still here."
+        ),
+        "changed": "The survey changed elsewhere. Refresh and review its current version first.",
+        "workspace": (
+            "The active workspace changed. "
+            "Close this window and reopen the original list."
+        ),
+    },
+}
 
 
 class SurveyDialog(QDialog):
-    def __init__(self, list_id: str, list_name: str, palette: dict[str, str], parent=None) -> None:
+    def __init__(
+        self, list_id: str, list_name: str, palette: dict[str, str], parent=None,
+        *, language="zh-TW",
+    ) -> None:
         super().__init__(parent)
         self.list_id = list_id
+        self._database = Path(store.DB_PATH).resolve()
+        self._language = language
+        self._edit_text = SURVEY_EDIT_TEXT.get(language, SURVEY_EDIT_TEXT["en"])
+        self._stored = None
+        self._editing = False
         self.pal = palette
         self.job: QProcess | None = None
         self.setWindowTitle(f"清單綜覽 · {list_name}")
@@ -63,7 +98,15 @@ class SurveyDialog(QDialog):
         layout.addWidget(self.view, 1)
         self._load()
 
+    def _workspace_matches(self) -> bool:
+        return Path(store.DB_PATH).resolve() == self._database
+
     def _load(self) -> None:
+        if not self._workspace_matches():
+            self.status.setText(self._edit_text["workspace"])
+            self.run_btn.setEnabled(False)
+            self.edit_btn.setEnabled(False)
+            return
         with connect() as conn:
             stored = survey.get(conn, self.list_id)
             count = conn.execute(
@@ -74,6 +117,7 @@ class SurveyDialog(QDialog):
                 "lp.paper_id WHERE lp.list_id=? AND d.paper_id IS NULL",
                 (self.list_id,),
             ).fetchone()[0]
+        self._stored = stored
         running = self.job is not None
         self.run_btn.setEnabled(not running)
         self.run_btn.setText(
@@ -117,6 +161,9 @@ class SurveyDialog(QDialog):
         requires_ai("survey")(type(self)._run_ready)(self)
 
     def _run_ready(self) -> None:
+        if not self._workspace_matches():
+            self.status.setText(self._edit_text["workspace"])
+            return
         if self.job is not None:
             return
         with connect() as conn:
@@ -141,6 +188,9 @@ class SurveyDialog(QDialog):
         # a survey that is minutes into being written; reopening shows it.
         self.job = QProcess(self.parent() or self)
         process_environment(self.job)
+        environment = self.job.processEnvironment()
+        environment.insert("PAPERFACT_DATA", str(self._database.parent))
+        self.job.setProcessEnvironment(environment)
         self.job.readyReadStandardOutput.connect(self._output)
         self.job.setWorkingDirectory(str(ROOT))
         self.job.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
@@ -186,17 +236,37 @@ class SurveyDialog(QDialog):
             self.status.setText("無法啟動清單綜覽；請確認安裝後重試。")
 
     def _edit(self) -> None:
+        if self._editing or self.job is not None:
+            return
+        if not self._workspace_matches():
+            self.status.setText(self._edit_text["workspace"])
+            return
+        original_list = self.list_id
         with connect() as conn:
-            stored = survey.get(conn, self.list_id)
-        if not stored:
+            expected = survey.edit_snapshot(conn, original_list)
+        stored = expected.target
+        if not stored or stored != self._stored:
+            self.status.setText(self._edit_text["changed"])
             return
-        editor = NoteEditor(
-            stored["body"], self.pal, "Markdown。修改過的綜覽重新撰寫時會先確認。", self
-        )
-        editor.setWindowTitle("編輯清單綜覽")
-        if editor.exec() != QDialog.DialogCode.Accepted:
-            return
-        body = editor.text().strip()
-        if body and body != stored["body"].strip():
-            survey.edit(self.list_id, body)
-            self._load()
+
+        def save(body):
+            if self.list_id != original_list or not self._workspace_matches():
+                raise ValueError("The survey editor's workspace or list changed")
+            if body == stored["body"].strip():
+                return
+            survey.edit(original_list, body, expected=expected)
+
+        self._editing = True
+        self.edit_btn.setEnabled(False)
+        try:
+            editor = NoteEditor(
+                stored["body"], self.pal,
+                "Markdown。儲存前會核對版本；變更衝突時保留草稿。", self,
+                save=save, language=self._language, save_messages=self._edit_text,
+            )
+            editor.setWindowTitle("編輯清單綜覽")
+            if editor.exec() == QDialog.DialogCode.Accepted:
+                self._load()
+        finally:
+            self._editing = False
+            self.edit_btn.setEnabled(self._workspace_matches())

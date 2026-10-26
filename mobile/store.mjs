@@ -25,6 +25,8 @@ export function emptyState(workspace, device) {
     drafts: {},
     draftBases: {},
     files: {},
+    artifactFiles: {},
+    appliedArtifacts: {},
     selection: {
       list: null,
       paper: null

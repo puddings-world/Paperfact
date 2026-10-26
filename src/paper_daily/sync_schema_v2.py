@@ -123,6 +123,7 @@ def canonical_operation(value: dict) -> str:
         "workspace_list_order",
         "paper_document",
         "research_content",
+        "research_file",
     ) or action not in (
         "put",
         "delete",
@@ -153,11 +154,12 @@ def canonical_operation(value: dict) -> str:
         "list_order": {"list"},
         "workspace_list_order": set(),
         "paper_document": {"paper"},
+        "research_file": {"paper"},
         "research_content": set(refs) if set(refs) in ({"paper"}, {"list"}) else {"invalid"},
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
-    if kind == "research_content":
+    if kind in ("research_content", "research_file"):
         _uuid(value["entity_id"])
     if kind == "paper":
         _uuid(value["entity_id"])
@@ -178,6 +180,10 @@ def canonical_operation(value: dict) -> str:
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
+    elif kind == "research_file":
+        from paper_daily.sync_files import validate_payload as validate_file
+
+        validate_file(payload, entity_id=value["entity_id"], parents=parents)
     elif kind == "research_content":
         from paper_daily.sync_content import validate_payload as validate_content
 

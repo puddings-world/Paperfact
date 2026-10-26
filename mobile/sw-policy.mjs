@@ -1,6 +1,6 @@
 export const SHELL =['./', './index.html', './style.css', './app.mjs', './store.mjs', './domain.mjs',
 './engine.mjs', './transport.mjs', './fixture.mjs', './i18n.mjs', './view.mjs', './manifest.webmanifest',
-'./icon.svg', './sw-policy.mjs', './content.mjs', './ids.mjs'];
+'./icon.svg', './sw-policy.mjs', './content.mjs', './ids.mjs', './artifacts.mjs', './artifact-engine.mjs'];
 export function cacheable(request, scope) {
   const url = new URL(request.url),
   base = new URL(scope);

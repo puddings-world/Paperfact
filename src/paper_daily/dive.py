@@ -121,18 +121,21 @@ pack 的 Lineage 與 Recently read 段落會附上讀者已讀論文當時的一
 
 
 def generate(conn, row, timeout: int = 900) -> tuple[str | None, str]:
-    """Produce the deep dive for one paper.
+    """Generate and publish for the caller's explicit database, outside its transaction."""
+    from pathlib import Path
 
-    Returns (body, reason). A bare None told the nightly log nothing: a whole night's
-    dives failed on an expired OAuth session and every line just said "failed",
-    which looks identical to the model declining.
-    """
-    pack, _ = brief.pack_text(conn, row)
-    return _from_pack(pack, timeout)
+    if conn.in_transaction:
+        raise ValueError("Finish the caller transaction before generating a deep dive")
+    database = next(r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main")
+    if not database:
+        raise ValueError("Generation requires an on-disk research workspace")
+    return _generate_for(row["id"], database=Path(database), timeout=timeout)
 
 
-def _from_pack(pack: str, timeout: int = 900) -> tuple[str | None, str]:
-    body, reason = llm.complete(pack, system=DIVE_INSTRUCTIONS, timeout=timeout, task="dive")
+def _from_pack(pack: str, timeout: int = 900, *, cfg=None) -> tuple[str | None, str]:
+    body, reason = llm.complete(
+        pack, system=DIVE_INSTRUCTIONS, timeout=timeout, task="dive", cfg=cfg
+    )
     if not body:
         return None, reason
     # A refusal or an error message is short; a real dive runs to thousands of
@@ -186,28 +189,88 @@ def _select(conn, count: int, paper_id: str | None, list_id: str | None, rewrite
     ).fetchall()
 
 
-def _generate_for(paper_id: str) -> tuple[str | None, str]:
-    """Build the pack on this thread's own connection, then let go of the database.
+class DiveResult(tuple):
+    """Compatible (body, reason), with the durable publication outcome attached."""
 
-    A sqlite3 connection belongs to the thread that made it, and assembling a pack
-    reads the corpus and can backfill it, so a worker cannot borrow the caller's.
+    def __new__(cls, body, reason, publication=None):
+        result = super().__new__(cls, (body, reason))
+        result.publication = publication
+        return result
 
-    The connection is closed before the model call, which is the whole point of the
-    split: holding it open across a call that runs for minutes kept a write
-    transaction alive that long, and three workers plus the reader then collided --
-    a bulk run died with "database is locked" and the script above it read the empty
-    result as "nothing left to do".
-    """
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT p.*, q.role, q.reason FROM papers p "
-            "LEFT JOIN queue q ON q.paper_id = p.id WHERE p.id = ?",
-            (paper_id,),
-        ).fetchone()
-        if row is None:
-            return None, "paper vanished between selection and writing"
-        pack, _ = brief.pack_text(conn, row)
-    return _from_pack(pack)
+
+class DiveCompletion(tuple):
+    def __new__(cls, paper_id, result, label):
+        value = super().__new__(cls, (paper_id, *result, label))
+        value.publication = getattr(result, "publication", None)
+        return value
+
+
+def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None):
+    """Capture, generate and publish on the original workspace; no DB lock during AI."""
+    from contextlib import closing
+
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+
+    database = (database or store.DB_PATH).resolve()
+    with research_job_lock.claim(database, "dive", paper_id) as acquired:
+        if not acquired:
+            return DiveResult(None, "deep dive is already in progress")
+        with llm.connection_scope(connections):
+            cfg = llm.settings(task="dive")
+            with closing(generation._connect(database)) as conn, conn:
+                row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
+                if row is None:
+                    return DiveResult(None, "paper vanished between selection and writing")
+                context = generation.begin_generation(conn, table="dives", owner_id=paper_id)
+                prepared = brief.pack_text(conn, row)
+                pack, _pdf = prepared
+                if isinstance(prepared, brief.PreparedPack):
+                    context = generation.bind_inputs(
+                        context, document=prepared.document, input_snapshot=prepared.snapshot
+                    )
+                elif context.data["binding"] is not None:
+                    return DiveResult(
+                        None, "prepared input provenance is required for enrolled research"
+                    )
+            body, reason = _from_pack(pack, timeout, cfg=cfg)
+        if body is None:
+            return DiveResult(None, reason)
+        result = generation.publish_generated(context, row={
+            "paper_id": paper_id, "body": body, "written_at": now(), "spec": DIVE_SPEC,
+        })
+        if result.status != "accepted":
+            return DiveResult(
+                None, f"{result.reason}; generated result retained: {result.candidate_id}", result
+            )
+        return DiveResult(body, "ok", result)
+
+
+def edit_snapshot(conn, paper_id):
+    from paper_daily.research_generation import begin_generation
+
+    return begin_generation(conn, table="dives", owner_id=paper_id, input_reader="target")
+
+
+def save(paper_id, body, *, expected=None):
+    """Store an external/manual explanation against its original loaded target."""
+    from paper_daily.research_generation import publish_edit
+    from paper_daily.sync_capture import StaleCaptureError
+
+    if not isinstance(body, str) or not body.strip():
+        raise ValueError("A deep dive needs nonempty text")
+    if expected is None:
+        with connect() as conn:
+            expected = edit_snapshot(conn, paper_id)
+    if expected.table != "dives" or expected.owner_id != paper_id:
+        raise ValueError("The deep dive edit belongs to another paper")
+    result = publish_edit(expected, row={
+        "paper_id": paper_id, "body": body,
+        "written_at": expected.started_at, "spec": (expected.target or {}).get("spec"),
+    })
+    if result.status != "accepted":
+        raise StaleCaptureError(result.candidate_id)
+    return result
 
 
 def _fatal(reason: str) -> bool:
@@ -243,31 +306,48 @@ def dive_ahead(
     `jobs` runs that many dives at once. Each one is a subprocess or an HTTPS call
     waiting on a model, so the time is spent waiting, not computing.
     """
+    from contextlib import closing
+
+    from paper_daily import research_generation as generation
+    from paper_daily import store
+
     init_db()
-    with connect() as conn:
+    database = store.DB_PATH.resolve()
+    connections = llm.capture_connections()
+    with closing(generation._connect(database)) as conn:
         rows = _select(conn, count, paper_id, list_id, rewrite)
+        # Custom legacy iterators keep the four-item interface. Observe their
+        # fallback targets before execution, in the same explicit workspace.
+        fallback = {row["id"]: edit_snapshot(conn, row["id"]) for row in rows}
     if not rows:
         log("  nothing to write: every paper in scope is already on the current spec")
         return 0
-
     written = 0
-    for paper_id_, body, reason, label in _run(rows, jobs, log):
+    for completion in _run(rows, jobs, log, database, connections):
+        paper_id_, body, reason, label = completion
         if not body:
             log(f"    failed [{label}]: {reason}")
             if _fatal(reason):
                 log("  stopping: nothing will succeed until the login is renewed")
                 break
             continue
-        with connect() as conn:
-            conn.execute(
-                "INSERT INTO dives(paper_id, body, written_at, spec) VALUES (?,?,?,?) "
-                "ON CONFLICT(paper_id) DO UPDATE SET body=excluded.body, "
-                "written_at=excluded.written_at, spec=excluded.spec",
-                (paper_id_, body, now(), DIVE_SPEC),
-            )
+        if getattr(completion, "publication", None) is None:
+            expected = fallback[paper_id_]
+            if expected.data["binding"] is not None:
+                log("    custom generation has no captured input provenance")
+                continue
+            result = generation.publish_generation(expected, row={
+                "paper_id": paper_id_, "body": body, "written_at": now(), "spec": DIVE_SPEC,
+            })
+            if result.status != "accepted":
+                log(f"    retained for review: {result.candidate_id}")
+                continue
         written += 1
         log(f"    stored {len(body)} chars [{label}]")
-        _prepare_highlights(paper_id_, log)
+        # The optional legacy highlight pipeline is not workspace-bound yet.
+        # Never dispatch it into a newly selected workspace after completion.
+        if store.DB_PATH.resolve() == database and fallback[paper_id_].data["binding"] is None:
+            _prepare_highlights(paper_id_, log)
     return written
 
 
@@ -299,24 +379,31 @@ def _prepare_highlights(paper_id: str, log: Log):
         if marks else f"    原文重點未完成（講解已保存）：{reason}")
 
 
-def _run(rows, jobs: int, log: Log):
+def _run(rows, jobs: int, log: Log, database=None, connections=None):
     """Yield (paper_id, body, reason, label) as each dive comes back."""
+    from paper_daily import store
+
+    database = (database or store.DB_PATH).resolve()
+    connections = connections or llm.capture_connections()
     labels = {r["id"]: f"{r['venue']} {r['year']} {r['title'][:44]}" for r in rows}
     if jobs <= 1:
         for r in rows:
             log(f"  writing: {labels[r['id']]}")
-            body, reason = _generate_for(r["id"])
-            yield r["id"], body, reason, labels[r["id"]]
+            result = _generate_for(r["id"], database=database, connections=connections)
+            yield DiveCompletion(r["id"], result, labels[r["id"]])
         return
 
     log(f"  writing {len(rows)} dives, {jobs} at a time")
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        futures = {pool.submit(_generate_for, r["id"]): r["id"] for r in rows}
+        futures = {
+            pool.submit(_generate_for, r["id"], database=database, connections=connections): r["id"]
+            for r in rows
+        }
         try:
             for future in as_completed(futures):
                 pid = futures[future]
-                body, reason = future.result()
-                yield pid, body, reason, labels[pid]
+                result = future.result()
+                yield DiveCompletion(pid, result, labels[pid])
         finally:
             # Breaking out of the loop (an expired login) must not leave the rest of
             # the batch running against a backend that cannot answer.

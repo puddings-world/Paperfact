@@ -211,3 +211,35 @@ Limits: SQLite-specific guard details are not a universal ORM recipe. Capture al
 does not infer AI input provenance, atomically publish legacy files, enroll a real
 workspace, provide candidate review/publication, or authorize remote uploads. The
 remaining producers must supply their start-time graph and document observations.
+
+
+## Delayed output bound to original inputs and storage (2026-10-26)
+
+Status: validated-local; first producer/editor slice, not complete writer coverage.
+
+The actual close-reading and list-survey producers now capture absent/existing
+outputs and the SQL inputs used in their prompts. A changed target, membership,
+analysis or PDF preserves generated content as a candidate. Publication uses the
+original database binding rather than whichever workspace is selected at completion.
+An actual replaced/rebound database exposed a second failure mode: saving even a
+rejected candidate there contaminates the replacement. An owned recovery sidecar
+now retains that result without changing the replacement's tables.
+
+Windows replacement fixtures also exposed SQLite read helpers whose connection
+contexts ended transactions without closing handles. Explicit closing fixed the
+real file-replacement assertions; no test was weakened. Generation/reader/adapter
+fixtures passed 124 combined cases. The parent survey/note/activity/stress set
+passed 105 cases, including original-workspace subprocess binding, duplicate job
+exclusion, stale editor drafts, candidate retry identity and legacy timestamps.
+These counts overlap; do not add them to infer unique full-suite coverage.
+
+Evidence: `research_generation.py`, `document_reader.py`,
+`tests/test_research_generation.py`, `tests/test_survey_observations.py`,
+`tests/test_research_job_lock.py`, and `docs/research-generation.md`. The integration
+ledger records the full-project check after the coordinated batch freezes.
+
+Limits: isolated Windows databases and simulated model calls; no real account,
+production enrollment, Mac/phone or hosted service claim. Sidecar retention is not
+automatic candidate application or backup restoration. File-backed producers and
+other AI phases require their own observed inputs and verified publication paths.
+No global skill installation or private content is included.

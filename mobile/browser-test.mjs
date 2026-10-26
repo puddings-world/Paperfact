@@ -1,3 +1,6 @@
+import { artifactFixture } from './artifact-fixture.mjs';
+import { fileId } from './artifacts.mjs';
+import { receive } from './domain.mjs';
 import {
   IndexedStore
 } from './store.mjs';
@@ -143,6 +146,41 @@ async() => {
   assert(!(await caches.match(new URL('./v1/pull', location.href))), 'research cached');
 }
 );
+await check('Verified offline deck renders slide image, speaker notes and source on actual mobile UI', async()=> {
+  const fixture = await artifactFixture(), id = fileId(PAPER,'guide');
+  const store = await IndexedStore.open('demo-workspace','demo-phone');
+  const transport = await demoTransport();
+  for(const [hash,bytes] of fixture.blobs) transport.blobs.set(hash,bytes);
+  let artifactEvent;
+  await store.update(state=> {
+    const op={version:2,operation_id:'browser-deck',workspace_id:state.workspace,device_id:'demo-desktop',
+      entity_type:'research_file',entity_id:id,action:'put',base_revision:0,depends_on:null,payload:fixture.payload,
+      incarnation:'browser-deck',parents:[{kind:'paper',id:PAPER,incarnation:PAPER+'-created'}],structure_revision:0};
+    const sequence=state.cursor+1;
+    artifactEvent={sequence,outcome:'accepted',operation:op,head:{revision:sequence,operation:op}};
+    receive(state,[artifactEvent]);
+  });
+  const authority=await IndexedStore.open('demo-workspace','fixture-authority');
+  await authority.update(next=>receive(next,[artifactEvent]));
+  authority.close();
+  const engine = new Engine(store,{transport}); await engine.connect('fixture-token');
+  await engine.downloadArtifact(id); engine.disconnect();
+  assert((await engine.deck(id)).body.deck.title===fixture.body.deck.title,'offline deck missing');
+  const frame=document.querySelector('#reader');
+  const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+  frame.contentWindow.location.reload(); await loaded;
+  await until(()=>frame.contentDocument.querySelector('.paper-card') || frame.contentDocument.querySelector('#tab-slides'));
+  const doc=frame.contentDocument; doc.querySelector('.paper-card')?.click(); doc.querySelector('#tab-slides').click();
+  await until(()=>doc.querySelector('.slide-surface img')?.complete && doc.querySelector('.slide-surface img')?.naturalWidth>0);
+  assert(doc.querySelector('.slide-surface').textContent.includes('Why this result matters'),'slide content missing');
+  const boxes=doc.querySelectorAll('.slide-object');
+  assert(boxes[1].getBoundingClientRect().top > boxes[0].getBoundingClientRect().top,'CSP blocked slide geometry');
+  doc.querySelector('.slide-page details').open=true;
+  assert(doc.querySelector('.slide-notes').textContent.includes('synthetic slide'),'speaker notes missing');
+  assert(doc.querySelector('.slide-page details').textContent.includes('Figure 1'),'source missing');
+  assert(!doc.querySelector('.slide-page textarea'),'read-only viewer unexpectedly editable');
+  store.close();
+});
 document.body.dataset.result = results.some(line => line.startsWith('FAIL')) ? 'fail': 'pass';
 result.textContent = results.join('\n') + '\n' + document.body.dataset.result.toUpperCase();
 async function saveCurrent(engine, id, paperId, body, options = {}) {

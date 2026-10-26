@@ -173,8 +173,10 @@ contract when the shell reaches that boundary; continue independent fixture work
 | R — Release readiness | New `docs/release-readiness-0.5.md` only | English OS/mobile acceptance matrix, source/install upgrade and backup/restore checklist, evidence placeholders | Scope now; actual packaging only after core gates |
 | U — Workspace/storage UX | New `docs/workspace-settings-0.5.md` only | Wireflow/copy for location, storage, offline pinning, devices, backups, conflicts and recoverable deletion | Attachment and lifecycle contracts; no desktop implementation yet |
 
-Card M awaits the trust gate; R and U documentation is complete. Coordinate
-with the parent before editing another card. R and U must not mark checks passed or invent shipped
+The original Claude session for card M still awaits its first-use trust gate.
+The internal mobile implementation is integrated under root `mobile/`; its current
+artifact extension is being coordinated with the core owner. R and U documentation
+is complete. Coordinate with the parent before editing another card. R and U must not mark checks passed or invent shipped
 behavior. No task owns root documentation or another card's files implicitly.
 
 | Integration gate | Core owner provides | Independent task can do now |
@@ -200,17 +202,24 @@ that a Claude session received, accepted or completed the task.
   and `local_state`; distinguishes unsent/deferred content and is not server bootstrap.
 - [Graph contract](sync-graph-contract.md): implemented private v2 parent/lifecycle
   semantics. DTO v2 explicitly exposes write readiness; v1 cannot mutate an enrolled
-  v2 entity. Other kinds in [the capture ADR](adr/0003-research-entity-capture.md) remain
-  planned and must not be treated as accepted wire operations.
+  v2 entity. Rich research content and file artifacts have separate closed validators;
+  consult the current schemas and tests. The broader writer inventory in
+  [the capture ADR](adr/0003-research-entity-capture.md) is not proof that every
+  producer has been enrolled.
 
 
-## Latest core handoff: authenticated primary PDFs
+## Primary-PDF handoff and subsequent implementation
 
 The reference service now has authenticated session discovery and bounded private
 blob endpoints. A valid token must match the intended workspace/device before any
 upload. This is not browser login or a hosted PWA API. Core DTO2 exposes desired PDF
 manifests and explicit verified availability; receiving metadata does not require
 file bytes. Mobile must mirror that separation and preserve exact document hashes.
-Reader/anchor activation is planned in `adr/0005-document-reader-activation.md`.
-The existing isolated mobile worktree may predate these contracts; coordinate an
-update without overwriting local work before starting implementation.
+Reader/anchor activation now has fixture coverage described in
+`adr/0005-document-reader-activation.md` and the implementation ledger. The root
+`mobile/` implementation is the integrated source; the original Claude worktree
+predates it and is preserved as a separate handoff, not an active integration base.
+Read `sync-content.md`, `research-generation.md`, `sync-recovery.md` and the latest
+artifact contract before extending research payloads. Candidate review is planned
+in `adr/0011-retained-work-review.md`; storage retention does not imply a finished
+review/reapply UI.

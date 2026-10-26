@@ -191,7 +191,13 @@ try {
     await send('Runtime.evaluate', {
       expression: 'document.querySelector(".paper-card")?.click()'
     });
-    for(const [name, width, height, mobile] of[['desktop', 1320, 900, false], ['phone', 390, 844, true]]) {
+    await send('Runtime.evaluate', {expression:'document.querySelector("#tab-slides")?.click()'});
+    for(let tick=0;tick<60;tick++) {
+      const ready=await send('Runtime.evaluate',{expression:'Boolean(document.querySelector(".slide-surface img")?.complete && document.querySelector(".slide-surface img")?.naturalWidth)',returnByValue:true});
+      if(ready.result.value) break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    for(const [name, width, height, mobile] of[['slides-desktop', 1320, 900, false], ['slides-phone', 390, 844, true]]) {
       await send(
       'Emulation.setDeviceMetricsOverride',
       {

@@ -340,25 +340,65 @@ def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
     return done, ("" if done else reason)
 
 
+def overview_inputs(conn, paper_id, *, limit=2000):
+    """The bounded metadata actually consumed by the overview prompt."""
+    for table in ("cites", "followups"):
+        count = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE paper_id=?", (paper_id,)
+        ).fetchone()[0]
+        if count > limit:
+            raise ValueError("Overview input exceeds its record limit")
+    paper = conn.execute(
+        "SELECT title,venue,year,abstract FROM papers WHERE id=?", (paper_id,)
+    ).fetchone()
+    dive = conn.execute("SELECT body FROM dives WHERE paper_id=?", (paper_id,)).fetchone()
+    verdicts = ("必讀", "值得")
+    refs = [r for r in references(conn, paper_id) if r.get("verdict") in verdicts][:30]
+    later = [r for r in for_paper(conn, paper_id) if r.get("verdict") in verdicts][:30]
+    return {
+        "paper": dict(paper) if paper else None,
+        "dive": (dive["body"] or "")[:3500] if dive else "",
+        "refs": [
+            {key: r.get(key) for key in ("title", "year", "verdict", "purpose")} for r in refs
+        ],
+        "later": [
+            {key: r.get(key) for key in ("title", "year", "verdict", "relation", "why")}
+            for r in later
+        ],
+    }
+
+
 def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
-    """Write the before-and-after story and the reading order. Never over a hand edit."""
-    with connect() as conn:
-        mine = conn.execute(
-            "SELECT edited FROM paper_context WHERE paper_id=?", (paper_id,)
-        ).fetchone()
-        if mine and mine["edited"]:
-            return False, "edited by hand"
-        paper = conn.execute(
-            "SELECT title, venue, year, abstract FROM papers WHERE id=?", (paper_id,)
-        ).fetchone()
-        dive = conn.execute("SELECT body FROM dives WHERE paper_id=?", (paper_id,)).fetchone()
-        refs = references(conn, paper_id)
-        later = for_paper(conn, paper_id)
-    keep_refs = [r for r in refs if r.get("verdict") in ("必讀", "值得")][:30]
-    keep_later = [r for r in later if r.get("verdict") in ("必讀", "值得")][:30]
+    from contextlib import closing
+
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+
+    database = store.DB_PATH.resolve()
+    with research_job_lock.claim(database, "context", paper_id) as acquired:
+        if not acquired:
+            return False, "overview is already in progress"
+        with llm.connection_scope():
+            cfg = llm.settings(task="overview")
+            with closing(generation._connect(database)) as conn:
+                if conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone() is None:
+                    return False, "paper no longer exists"
+                context = generation.begin_generation(
+                    conn, table="paper_context", owner_id=paper_id
+                )
+            if context.target and context.target["edited"]:
+                return False, "edited by hand"
+            return _write_overview(context, cfg, log)
+
+
+def _write_overview(context, cfg, log):
+    from paper_daily.research_generation import publish_generated
+
+    inputs = context.inputs
+    paper, dive = inputs["paper"], {"body": inputs["dive"]}
+    keep_refs, keep_later = inputs["refs"], inputs["later"]
     if not keep_refs and not keep_later:
         return False, "nothing judged yet to build an overview from"
-
     lines = [
         f"論文:{paper['title']}({paper['venue']} {paper['year']})",
         f"摘要:{paper['abstract'] or '(無)'}",
@@ -376,29 +416,34 @@ def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
         what = r.get("relation") or r.get("why") or ""
         lines.append(f"- [{r['verdict']}] {r['title']} ({r.get('year') or '?'}):{what}")
     text, reason = llm.complete(
-        "\n".join(lines), system=OVERVIEW_SYSTEM, timeout=600, task="overview"
+        "\n".join(lines), system=OVERVIEW_SYSTEM, timeout=600, task="overview", cfg=cfg
     )
     if not text:
         return False, reason
     try:
         data = _json(text, "{", "}")
-    except ValueError:
-        return False, "the model's answer was not a JSON object"
-    reading = [
-        {"title": str(x.get("title") or ""), "direction": str(x.get("direction") or ""),
-         "why": str(x.get("why") or "")}
-        for x in (data.get("reading") or [])
-        if x.get("title")
-    ][:6]
-    with connect() as conn:
-        conn.execute(
-            "INSERT INTO paper_context(paper_id, summary, reading_json, written_at, edited) "
-            "VALUES (?,?,?,?,0) ON CONFLICT(paper_id) DO UPDATE SET summary=excluded.summary, "
-            "reading_json=excluded.reading_json, written_at=excluded.written_at",
-            (paper_id, str(data.get("summary") or ""), json.dumps(reading, ensure_ascii=False),
-             now()),
-        )
-        conn.commit()
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("summary"), str)
+            or not data["summary"].strip()
+            or not isinstance(data.get("reading"), list)
+            or any(not isinstance(item, dict) for item in data["reading"])
+        ):
+            raise ValueError("Invalid overview fields")
+        reading = [
+            {"title": str(x.get("title") or ""), "direction": str(x.get("direction") or ""),
+             "why": str(x.get("why") or "")}
+            for x in (data.get("reading") or []) if isinstance(x, dict) and x.get("title")
+        ][:6]
+        result = publish_generated(context, row={
+            "paper_id": context.owner_id, "summary": str(data.get("summary") or ""),
+            "reading_json": json.dumps(reading, ensure_ascii=False),
+            "written_at": now(), "edited": 0,
+        })
+    except (ValueError, TypeError, AttributeError):
+        return False, "the model's answer was not a valid overview"
+    if result.status != "accepted":
+        return False, f"{result.reason}; generated result retained: {result.candidate_id}"
     log("  overview written")
     return True, ""
 
@@ -558,12 +603,25 @@ def edit_reference(paper_id: str, ref_key: str, **fields) -> None:
         conn.commit()
 
 
-def edit_overview(paper_id: str, summary: str, reading: list[dict]) -> None:
-    with connect() as conn:
-        conn.execute(
-            "INSERT INTO paper_context(paper_id, summary, reading_json, written_at, edited) "
-            "VALUES (?,?,?,?,1) ON CONFLICT(paper_id) DO UPDATE SET summary=excluded.summary, "
-            "reading_json=excluded.reading_json, written_at=excluded.written_at, edited=1",
-            (paper_id, summary, json.dumps(reading, ensure_ascii=False), now()),
-        )
-        conn.commit()
+def overview_edit_snapshot(conn, paper_id):
+    from paper_daily.research_generation import begin_generation
+
+    return begin_generation(conn, table="paper_context", owner_id=paper_id, input_reader="target")
+
+
+def edit_overview(paper_id: str, summary: str, reading: list[dict], *, expected=None) -> None:
+    from paper_daily.research_generation import publish_edit
+    from paper_daily.sync_capture import StaleCaptureError
+
+    if expected is None:
+        with connect() as conn:
+            expected = overview_edit_snapshot(conn, paper_id)
+    if expected.table != "paper_context" or expected.owner_id != paper_id:
+        raise ValueError("The overview edit belongs to another paper")
+    result = publish_edit(expected, row={
+        "paper_id": paper_id, "summary": summary,
+        "reading_json": json.dumps(reading, ensure_ascii=False),
+        "written_at": expected.started_at, "edited": 1,
+    })
+    if result.status != "accepted":
+        raise StaleCaptureError(result.candidate_id)

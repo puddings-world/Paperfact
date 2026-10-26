@@ -315,6 +315,7 @@ class SyncClient:
             "reading_state",
             "paper_document",
             "research_content",
+            "research_file",
             "list_order",
             "workspace_list_order",
         ):
@@ -496,7 +497,9 @@ class SyncClient:
             raise ValueError("Research content requires its exact active parent")
 
     def _guard_document_parent(self, conn, operation):
-        if operation["version"] != 2 or operation["entity_type"] != "paper_document":
+        if operation["version"] != 2 or operation["entity_type"] not in (
+            "paper_document", "research_file"
+        ):
             return
         if operation["action"] == "delete" and operation.get("resolution_of"):
             from paper_daily.sync_graph import check_preconditions
@@ -514,9 +517,11 @@ class SyncClient:
                 raise ValueError("Document retirement no longer matches its conflict")
             return
         state, _, _ = self._optimistic_graph(conn)
-        parent = state.get(("paper", operation["entity_id"]))
+        paper_id = (operation["entity_id"] if operation["entity_type"] == "paper_document"
+                    else operation["parents"][0]["id"])
+        parent = state.get(("paper", paper_id))
         expected = (
-            [{"kind": "paper", "id": operation["entity_id"], "incarnation": parent["incarnation"]}]
+            [{"kind": "paper", "id": paper_id, "incarnation": parent["incarnation"]}]
             if parent
             else []
         )

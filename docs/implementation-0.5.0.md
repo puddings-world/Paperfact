@@ -424,3 +424,95 @@ DTO2 and authenticated document contracts rather than the earlier v1 proposal.
 - Integrated full-check result is recorded with the SQL writer checkpoint above.
   The app's connection form is a developer seam; hosted sign-in/pairing and deck
   reading remain required release work, not a finished public mobile product.
+
+
+## Observed producers, file closure, recovery and mobile decks — 2026-10-27
+
+- Close reading and list surveys capture their actual input and target versions
+  before generation. Survey editors save against the displayed revision. Duplicate
+  jobs use nonblocking, database-scoped process locks. Late results retain their
+  original database binding and become candidates rather than replacing new work.
+- Generation receipts and bounded recovery sidecars retain successful output when
+  the original database is missing or replaced. Unbound legacy cached-text analysis
+  remains usable without claiming verified PDF provenance. Enrolled or managed
+  documents cannot silently use that fallback.
+- Editable decks, speaker notes, guides and referenced assets have closed manifests,
+  verified transfer closure and separate desired/applied versions. Existing slide
+  generation and editor saves participate; incomplete incoming versions retain the
+  last usable deck and local drafts. This is not complete coverage of every producer.
+- Detached recovery archives reconstruct trusted schema and validate research,
+  operation history, candidates and file bytes. They restore with a fresh recovery
+  identity, keep old-device operations inactive and reject incomplete backups.
+  Windows no-replace directory publication is exercised locally; Linux/macOS native
+  publication still needs execution on those systems. Recovery UI and enrollment
+  remain required.
+- The PWA receives verified deck bodies and assets, retaining old content until the
+  full new closure is available. Offline slide, speaker-note and source reading is
+  implemented; mobile slide editing remains outside scope. Agent evidence: 74 Node
+  tests, real loopback Python HTTP interoperability and five headless Edge checks.
+  Phone/desktop renders were inspected. These are not physical-device acceptance.
+- Targeted producer, artifact, service and recovery checks passed; the first combined
+  check exposed a legacy text-preparation compatibility regression and a short-window
+  layout case. Both received code fixes while retaining existing expectations. The
+  full current-tree check remains the commit gate; targeted counts overlap and must
+  not be added as a project-wide total.
+- A separate v0.4.2 worktree contains only the question-input/layout/progress hotfix
+  and the requested suggestion-browser UX. Its changes are forwarded to this branch;
+  unfinished v0.5 sync code does not enter that release.
+- Next required work: complete remaining producer/editor observations, reviewed
+  candidate application ([ADR0011](adr/0011-retained-work-review.md)), workspace
+  bootstrap/enrollment, desktop sync status/devices/storage/backup UX, offline pins,
+  resume/inbox, production identity/hosting decisions and cross-device acceptance.
+  The full v0.5 objective remains open. No hosted deployment or production migration
+  is claimed, and the Claude trust prompt has not been bypassed.
+
+
+### Follow-up audit fixes and next isolated assignment
+
+- Artifact verification now rejects a wrong on-disk size before opening the body,
+  bounds the read to the declared size plus one byte, and compares open-handle and
+  path identities. Six regression cases and the related 50-case artifact group
+  passed. Manifest limits must constrain allocation as well as validation.
+- Detached recovery now rejects case-insensitive or sanitized PDF alias collisions
+  across all retained paper IDs, including papers without an applied PDF. Windows
+  reserved device names are also rejected. It fails before publishing an archive or
+  restore destination and never silently renames research. Eighteen new cases and
+  the 70-case recovery group passed. This is a documented migration gate, not proof
+  that every legacy ID can already be restored into detached legacy filenames.
+- The existing prohibition on application-wide Python event filters caught a startup
+  geometry regression. The fix reuses the scoped window/focus watcher; that existing
+  regression test is unchanged. Current-tree full verification is required again.
+- The independent `feature/0.5-producer-completion` worktree now contains a public
+  source snapshot and initial file hashes. Its assignment is actual dive/context
+  generation plus manual save/editor paths, with observed inputs and retained late
+  results. It must not edit the release or checkpoint worktrees. This is active
+  implementation work, not completed producer coverage or a Claude execution claim.
+
+
+### Four observed producers and verification fixes — 2026-10-27
+
+- Integrated the exact owned-file delta for dive and research-context generation,
+  their Data/CLI/manual editor entrypoints, and the existing close-reading/survey
+  callers. All four capture the original workspace, inputs and AI connection.
+  Completed outputs survive SQL publication failure; changed stale manual drafts
+  remain distinct retained work. See `research-producer-completion.md`.
+- The producer handoff passed 183 related regression cases, a later 60-case
+  selection/worker handoff run, and 85 adoption/close-reading/survey cases. These
+  sets overlap; they are not a summed project-wide test count.
+- Fixed a reproducible Windows early-HTTP-rejection reset with bounded graceful
+  cleanup after the response. Existing routes/authentication are unchanged. The
+  related HTTP suites passed 113 cases, including 16 new regressions.
+- Forward-applied the native startup teardown correction from the isolated
+  v0.4.3 hotfix. Real WebEngine fast exit and native deletion now have subprocess
+  coverage. The hotfix alone passed 1,163 Python/desktop and 18 frontend tests;
+  its installers still require all three platform packaging gates.
+- The previous combined tree completed 2,350 Python tests: 2 Windows HTTP-reset
+  failures and 2,348 passes. Both failures were reproduced independently and
+  fixed in code; no existing expectation or timeout was weakened. A fresh full
+  check of this integrated tree remains the commit gate.
+
+Next independent work: typed retained-work review, durable QA turn publication,
+compound citation/followup/resource producers and observed highlight/question
+artifacts. Workspace enrollment, complete writer coverage, desktop sync status,
+device/storage/backup controls and external deployment/device acceptance remain
+required. No research sync is enabled automatically by these changes.

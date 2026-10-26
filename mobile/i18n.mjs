@@ -257,3 +257,21 @@ messages['zh-TW'],
 export function translator(language = 'en') {
   return key => messages[language]?.[key] ?? messages.en[key] ?? messages[language]?.error ?? messages.en.error;
 }
+
+Object.assign(messages.en, {
+  downloadSlides:'Download slides for offline reading', readOnlySlides:'Slides are read-only here. Edit them on desktop.',
+  guideDeck:'Reading guide', notesDeck:'Research notes', loadingSlides:'Checking saved slides…',
+  slidesPending:'Showing the last verified version. Download the updated slides when ready.',
+  speakerNotes:'Speaker notes', slideSources:'Sources', artifact_unavailable:'Slides are not downloaded or their files are unavailable.',
+  invalid_artifact:'The slide files failed validation. Your previous verified version is retained.',
+  stale_artifact:'The slide version changed during download. Retry to get the latest version.',
+  storage_quota:'Offline storage is full. Export your local work before clearing storage.', unsupported_png:'This image format is not supported by the mobile reader.'
+});
+Object.assign(messages['zh-TW'], {
+  downloadSlides:'下載簡報供離線閱讀', readOnlySlides:'此處提供簡報閱讀；請在桌面版編輯。',
+  guideDeck:'論文導讀', notesDeck:'研究筆記', loadingSlides:'正在驗證已儲存的簡報…',
+  slidesPending:'目前顯示上一個已驗證版本，可下載更新後的簡報。', speakerNotes:'講稿', slideSources:'引用來源',
+  artifact_unavailable:'簡報尚未下載，或檔案目前無法使用。', invalid_artifact:'簡報檔案未通過驗證，先前的已驗證版本仍保留。',
+  stale_artifact:'下載期間簡報版本已改變，請重試以取得新版。', storage_quota:'離線空間已滿，清除儲存空間前請先匯出本地工作。',
+  unsupported_png:'手機閱讀器尚不支援此圖片格式。'
+});

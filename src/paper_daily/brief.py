@@ -145,7 +145,7 @@ def _recent_reading(conn: sqlite3.Connection, limit: int = 8) -> str:
 _CAPTION_PREFIX = re.compile(r"^(Figure|Fig\.|Table)\s+\d+[a-z]?\s*[:.]\s*", re.I)
 
 
-def _exhibits(paper_id: str, pdf_path: Path | None) -> str:
+def _exhibits(paper_id: str, pdf_path: Path | None, *, document=None) -> str:
     """The paper's figure and table captions, numbered as the paper numbers them.
 
     The full text carries captions inline, buried in tens of thousands of words, and
@@ -158,7 +158,9 @@ def _exhibits(paper_id: str, pdf_path: Path | None) -> str:
     try:
         from paper_daily.figures import extract
 
-        found = extract(paper_id, pdf_path)
+        found = extract(
+            paper_id, pdf_path, force=bool(document and not document.managed), document=document
+        )
     except Exception:
         return "_Figure extraction failed._"
     if not found:
@@ -250,6 +252,80 @@ def _backfill_from_conference_page(conn: sqlite3.Connection, row: sqlite3.Row) -
     return refreshed or row
 
 
+class PreparedPack(tuple):
+    """The existing two-item API, plus immutable-input provenance for producers."""
+
+    def __new__(cls, text, path, *, snapshot, document):
+        item = super().__new__(cls, (text, path))
+        item.snapshot = snapshot
+        item.document = document
+        return item
+
+
+def input_snapshot(conn, paper_id):
+    owned = not conn.in_transaction
+    if owned:
+        conn.execute("BEGIN")
+    try:
+        row = conn.execute(
+            "SELECT p.*,q.role,q.reason FROM papers p LEFT JOIN queue q ON q.paper_id=p.id "
+            "WHERE p.id=?",
+            (paper_id,),
+        ).fetchone()
+        return {
+            "paper": dict(row) if row is not None else None,
+            "lineage": _lineage_context(conn, paper_id),
+            "recent": _recent_reading(conn),
+        }
+    finally:
+        if owned:
+            conn.rollback()
+
+
+def _observed_pdf(conn, row):
+    from paper_daily import fetch
+    from paper_daily.document_reader import from_workspace
+
+    database = next(r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main")
+    reader = from_workspace(database, legacy_root=fetch.PDF_DIR)
+    status = reader.inspect(row["id"])
+    if not status.managed and status.status != "ambiguous":
+        fetch.ensure_pdf(row)
+    document = reader.resolve(row["id"])
+    if not document.available:
+        # Legacy imports can contain extracted text without a readable original.
+        # Keep the existing preparation seam, but never claim PDF provenance for
+        # that text or let it bypass an enrolled/managed document lifecycle.
+        enrolled = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_sync_binding'"
+        ).fetchone()
+        if not status.managed and status.status != "ambiguous" and not enrolled:
+            _unverified_path, body = prepare(row)
+            return None, body, None
+        return None, None, None
+    # Read exact verified bytes even for legacy aliases: an old alias text cache
+    # is not proof that its text belongs to this PDF version.
+    import pymupdf
+
+    with pymupdf.open(document.path) as pdf:
+        chunks = []
+        count = 0
+        for page in pdf:
+            chunk = page.get_text()
+            chunks.append(chunk)
+            count += len(chunk)
+            if count >= 120_000:
+                break
+    body = "\n".join(chunks)
+    matches = list(fetch._REFERENCES_RE.finditer(body))
+    if matches:
+        body = body[: matches[-1].start()]
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()[:120_000]
+    if not reader.current(document):
+        return None, None, None
+    return document.path, body, document
+
+
 def pack_text(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, Path | None]:
     """The briefing pack as text, plus the local PDF if one was fetched.
 
@@ -258,7 +334,9 @@ def pack_text(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, Path | N
     queue, and reading ahead must not.
     """
     row = _backfill_from_conference_page(conn, row)
-    pdf_path, body = prepare(row)
+    snapshot = input_snapshot(conn, row["id"])
+    row = snapshot["paper"]
+    pdf_path, body, document = _observed_pdf(conn, row)
     if not body:
         body = (
             "_Full text unavailable -- the PDF could not be fetched or parsed. "
@@ -281,12 +359,14 @@ def pack_text(conn: sqlite3.Connection, row: sqlite3.Row) -> tuple[str, Path | N
         reason=f" -- {row['reason']}" if "reason" in columns and row["reason"] else "",
         why=_why_ranked(row),
         abstract=row["abstract"] or "_No abstract on record._",
-        exhibits=_exhibits(row["id"], pdf_path),
-        lineage=_lineage_context(conn, row["id"]),
-        recent=_recent_reading(conn),
+        exhibits=_exhibits(row["id"], pdf_path, document=document),
+        lineage=snapshot["lineage"],
+        recent=snapshot["recent"],
         body=body,
     )
-    return text, pdf_path
+    if document is not None and not document._owner.current(document):
+        raise ValueError("Input PDF changed while preparing the briefing pack")
+    return PreparedPack(text, pdf_path, snapshot=snapshot, document=document)
 
 
 def build_pack(conn: sqlite3.Connection, row: sqlite3.Row) -> Path:

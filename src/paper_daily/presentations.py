@@ -313,6 +313,11 @@ def figure_bytes(deck: Deck, figure_id: str) -> bytes:
     if not figure:
         raise ValueError("Unknown presentation figure")
     asset = figure.get("asset")
+    operation = getattr(deck, "_file_operation", None)
+    if operation is not None and asset:
+        from paper_daily.sync_deck_publication import managed_figure_bytes
+
+        return managed_figure_bytes(deck, figure_id)
     base = _folder(deck.paper_id) / "assets" if asset else FIG_DIR / _safe_name(deck.paper_id)
     name = asset or figure.get("file")
     if not isinstance(name, str) or Path(name).name != name or name in (".", ".."):
@@ -331,8 +336,16 @@ def figure_bytes(deck: Deck, figure_id: str) -> bytes:
     return blob
 
 
-def save_deck(deck: Deck) -> Path:
+def save_deck(deck: Deck, *, observation=None, request_id=None, evidence=None) -> Path:
     deck_from_dict(deck.to_dict())
+    from paper_daily.sync_deck_publication import publish_deck
+
+    saved = publish_deck(
+        deck, observation=observation or getattr(deck, "_file_observation", None),
+        request_id=request_id, evidence=evidence,
+    )
+    if saved is not None:
+        return saved
     dest = _path(deck.paper_id, deck.mode)
     for item in deck.figures:
         if item["id"] not in used_figures(deck) or item.get("asset"):
@@ -353,12 +366,19 @@ def save_deck(deck: Deck) -> Path:
 
 
 def load_deck(paper_id: str, mode: str) -> Deck | None:
+    from paper_daily.sync_deck_publication import load_managed_deck, observe_deck
+
+    managed, deck = load_managed_deck(paper_id, mode)
+    if managed:
+        return deck
+    observation = observe_deck(paper_id, mode)
     dest = _path(paper_id, mode)
     if not dest.exists():
         return None
     deck = deck_from_dict(json.loads(dest.read_text(encoding="utf-8")))
     if deck.paper_id != paper_id or deck.mode != mode:
         raise ValueError("Presentation does not belong to this paper")
+    deck._file_observation = observation
     return deck
 
 
@@ -633,6 +653,9 @@ def generate(
         return None, "請設定 1–120 分鐘的講解時間"
     if not isinstance(audience, str) or len(audience) > 500:
         return None, "聽眾描述過長"
+    from paper_daily.sync_deck_publication import observe_deck
+
+    observation = observe_deck(paper_id, mode)
     try:
         evidence = collect_evidence(paper_id, inputs)
     except (ValueError, OSError) as exc:
@@ -700,14 +723,20 @@ def generate(
                 "request_id": result.request_id,
             },
         )
-        _atomic_json(_folder(paper_id) / "evidence" / (deck.source_hash + ".json"), evidence)
-        save_deck(deck)
+        if observation is None:
+            _atomic_json(_folder(paper_id) / "evidence" / (deck.source_hash + ".json"), evidence)
+        save_deck(deck, observation=observation, evidence=evidence)
     except (ValueError, TypeError, KeyError, OSError) as exc:
         return None, f"簡報草稿未通過驗證，原稿未變動：{exc}"
     return deck, "ok"
 
 
 def list_versions(paper_id: str, mode: str) -> list[dict]:
+    from paper_daily.sync_deck_publication import version_summaries
+
+    versions = version_summaries(paper_id, mode)
+    if versions is not None:
+        return versions
     folder = _path(paper_id, mode).parent / "history"
     result = []
     for path in sorted(
@@ -727,6 +756,12 @@ def list_versions(paper_id: str, mode: str) -> list[dict]:
 
 
 def restore_version(paper_id: str, mode: str, filename: str) -> Deck:
+    from paper_daily.sync_deck_publication import observe_deck, restore_managed
+
+    restored = restore_managed(paper_id, mode, filename)
+    if restored is not None:
+        return restored
+    observation = observe_deck(paper_id, mode)
     folder = _path(paper_id, mode).parent / "history"
     if Path(filename).name != filename or not filename.startswith(mode + "-"):
         raise ValueError("Invalid presentation history filename")
@@ -738,5 +773,5 @@ def restore_version(paper_id: str, mode: str, filename: str) -> Deck:
         raise ValueError("Presentation history belongs to another paper or mode")
     deck.deck_id = uuid4().hex
     deck.created_at = now()
-    save_deck(deck)
+    save_deck(deck, observation=observation)
     return deck

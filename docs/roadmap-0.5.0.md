@@ -1,8 +1,9 @@
 # v0.5.0 — Research across devices
 
 Status: in development, unreleased, 2026-10-26. Published baseline: v0.4.1.
-The local reference sync foundation is implemented and tested in fixtures; app writer
-integration, production identity/hosting and the mobile client are still pending.
+The reference service, managed PDF reader, partial app-writer capture and independent
+mobile client have fixture coverage. Complete writer/file enrollment, production
+identity/hosting, recovery UX and real-device acceptance remain release gates.
 See the implementation ledger for exact coverage rather than inferring release readiness.
 
 ## Release goal

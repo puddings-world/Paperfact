@@ -119,3 +119,29 @@ generation. Possessing a valid token for a different workspace/device is not a
 valid binding for the current local research. Every subsequent blob request still
 reauthorizes independently; a successful handshake is not a revocation bypass.
 Peers without this endpoint fail closed rather than assuming token ownership.
+
+
+## Bounded rejection cleanup
+
+An error response is written and flushed before cleanup. The server then
+half-closes its output and discards unread input in chunks of at most 64 KiB,
+with a total 512 KiB cap and a 200 ms absolute deadline. This discard does not
+interpret or trust the rejected request's framing. A timeout, reset or EOF ends
+cleanup without replacing the original response. Successful requests keep their
+existing behavior; authorization, route matching and body limits are unchanged.
+Cleanup cannot guarantee delivery when the peer exceeds these limits or resets
+its connection. This remains a loopback reference adapter, not a public server.
+
+Windows loopback evidence: before this fix, 300 unknown-route POST requests
+produced 78 connection errors (one normal request, 71 requests with headers/body
+split by 2 ms, and six with a 64 KiB body). The same experiment with bounded
+cleanup returned the complete 404 JSON response for all 300 requests. The full
+suite's two unknown-route failures independently reported WinError 10053. This
+was a connection-close race, not evidence of invalid credentials or a slow API.
+
+`tests/test_sync_http_rejection.py` covers delayed bodies on unknown/query routes,
+missing authorization, unsupported methods and invalid framing; buffered unread
+input; absent bodies; EOF/reset/timeout; and deterministic byte/deadline limits.
+These use local fixture sockets and fake streams, without accounts or external
+services. The observed transport failure and experiment are Windows-specific;
+native Linux/macOS validation is still separate from these fixture checks.

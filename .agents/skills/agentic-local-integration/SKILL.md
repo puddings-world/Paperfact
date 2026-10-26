@@ -60,6 +60,15 @@ buttons serialize through a server just to share behavior.
   read: carry its observed base through the save, and retain a stale candidate
   without overwriting newer research. Retry of that candidate should not create
   another copy. Test both local research and outbox rollback.
+- For delayed generated output, observe target absence as well as existing rows,
+  and capture the bounded inputs actually used. Carry the original database binding
+  and PDF version through completion; current global settings are not a destination.
+  If that database has been replaced or rebound, preserve the result outside its
+  replacement rather than inserting even a conflict candidate into the wrong store.
+- Close database/file handles explicitly before workspace replacement. In Python,
+  a SQLite connection context manages its transaction, not its lifetime; a read-only
+  helper can still retain a Windows file lock. Verify replacement with actual handles,
+  not only a mocked path change.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

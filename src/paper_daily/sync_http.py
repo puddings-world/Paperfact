@@ -12,6 +12,7 @@ import json
 import math
 import re
 import socket
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -153,6 +154,33 @@ class _RequestError(Exception):
         self.status = status
 
 
+def _finish_rejection(connection, incoming, outgoing):
+    """Send the error first, then bound unread-body cleanup before TCP close.
+
+    Closing with unread input can reset the peer before it receives the JSON
+    error on Windows. Half-close output and discard input without trusting its
+    framing, allocating the claimed body, or extending the absolute deadline.
+    """
+    try:
+        outgoing.flush()
+        connection.shutdown(socket.SHUT_WR)
+        deadline = time.monotonic() + 0.2
+        remaining = MAX_REQUEST_BYTES
+        while remaining:
+            timeout = deadline - time.monotonic()
+            if timeout <= 0:
+                break
+            connection.settimeout(timeout)
+            chunk = incoming.read1(min(64 * 1024, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+    except OSError:
+        # A disconnected/timed-out peer must not trigger a second error reply
+        # after the original response has already been sent and half-closed.
+        pass
+
+
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -193,6 +221,8 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
             self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
+            if code >= 400:
+                _finish_rejection(self.connection, self.rfile, self.wfile)
 
         def _error(self, code):
             self._reply(code, _encode({"error": _ERRORS[code]}))

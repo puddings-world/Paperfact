@@ -28,6 +28,7 @@ also added a dozen at a time, and the faces not on screen are built while idle.
 from __future__ import annotations
 
 import html
+import sqlite3
 import subprocess
 
 from PySide6.QtCore import Qt, QTimer
@@ -1044,6 +1045,20 @@ class CitesPane(QScrollArea):
         self._reload()
 
     def _edit_story(self, story: dict) -> None:
+        if not self.paper_id:
+            return
+        from paper_daily import store
+
+        original_paper = self.paper_id
+        with connect() as conn:
+            expected = followups.overview_edit_snapshot(conn, original_paper)
+        if expected.target is None:
+            return
+        # Render the same row whose revision is captured, not an older card payload.
+        import json
+
+        story = {"summary": expected.target["summary"] or "",
+                 "reading": json.loads(expected.target["reading_json"] or "[]")}
         dialog = QDialog(self)
         dialog.setWindowTitle("編輯研究脈絡")
         dialog.resize(640, 540)
@@ -1060,22 +1075,43 @@ class CitesPane(QScrollArea):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
+        status = QLabel()
+        status.setWordWrap(True)
+        status.setObjectName("overview-save-status")
+        form.addWidget(status)
         form.addWidget(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted or not self.paper_id:
-            return
-        items = []
-        for line in reading.toPlainText().splitlines():
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 2 and parts[1]:
-                items.append({
-                    "direction": parts[0],
-                    "title": parts[1],
-                    "why": parts[2] if len(parts) > 2 else "",
-                })
-        followups.edit_overview(self.paper_id, summary.toPlainText().strip(), items)
-        self._reload()
+        saving = False
+
+        def save():
+            nonlocal saving
+            if saving:
+                return
+            saving = True
+            try:
+                items = []
+                for line in reading.toPlainText().splitlines():
+                    parts = [p.strip() for p in line.split("|")]
+                    if len(parts) >= 2 and parts[1]:
+                        items.append({"direction": parts[0], "title": parts[1],
+                                      "why": parts[2] if len(parts) > 2 else ""})
+                followups.edit_overview(
+                    original_paper, summary.toPlainText().strip(), items, expected=expected
+                )
+            except (ValueError, RuntimeError, OSError, sqlite3.Error) as exc:
+                status.setText(f"Not saved. Your draft is retained: {exc}")
+                return
+            finally:
+                saving = False
+            dialog.accept()
+
+        buttons.accepted.connect(save)
+        buttons.rejected.connect(dialog.reject)
+        if (
+            dialog.exec() == QDialog.DialogCode.Accepted
+            and self.paper_id == original_paper
+            and store.DB_PATH.resolve() == expected.database_path.resolve()
+        ):
+            self._reload()
 
     # ---- background work -------------------------------------------------
     @requires_ai("citations")

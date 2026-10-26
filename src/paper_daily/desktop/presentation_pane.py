@@ -729,6 +729,8 @@ class PresentationPane(QWidget):
             self.status.setText(f"簡報讀取失敗，已保存的檔案未變動：{exc}")
             return
         self._show_deck(deck)
+        if getattr(deck, "_file_pending", False):
+            self.status.setText("較新版本的檔案尚未完整；目前顯示上一份完整簡報。")
         self._restore_recovery()
         if self._first_paper:
             self.settings_button.setChecked(deck is None)
@@ -741,7 +743,13 @@ class PresentationPane(QWidget):
             self.load(*pending)
 
     def _recovery_path(self):
-        return presentations._folder(self.paper_id) / f"{self._mode}-recovery.json"
+        operation = getattr(self.deck, "_file_operation", None)
+        suffix = ""
+        if operation:
+            import hashlib
+
+            suffix = "-" + hashlib.sha256(operation["operation_id"].encode()).hexdigest()[:24]
+        return presentations._folder(self.paper_id) / f"{self._mode}{suffix}-recovery.json"
 
     def save_recovery(self):
         if self.deck and self._dirty:
@@ -775,6 +783,8 @@ class PresentationPane(QWidget):
                 raw.get("elements"), {f["id"] for f in temp.figures}
             )
             temp.slides[index] = restored
+            base._file_observation = getattr(self.deck, "_file_observation", None)
+            base._file_operation = getattr(self.deck, "_file_operation", None)
             self._show_deck(base, reset_options=False)
             self.outline.setCurrentRow(index)
             self._loading = True
@@ -1434,7 +1444,9 @@ class PresentationPane(QWidget):
             updated = presentations.deck_from_dict(self.deck.to_dict())
             updated.slides[self._index] = slide
             updated.edited = True
-            presentations.save_deck(updated)
+            presentations.save_deck(
+                updated, observation=getattr(self.deck, "_file_observation", None)
+            )
             with suppress(OSError):
                 self._recovery_path().unlink(missing_ok=True)
         except (ValueError, OSError) as exc:
@@ -1462,7 +1474,10 @@ class PresentationPane(QWidget):
         self._thumbnail(self._index)
         self._update_controls()
         self.outline.item(self._index).setText(f"{self._index + 1}. {slide.title}")
-        self.status.setText("修改已儲存。")
+        if getattr(self.deck, "_file_operation", None):
+            self.status.setText("已儲存於本機；等待同步。")
+        else:
+            self.status.setText("修改已儲存。")
         self._render_preview()
         if not canvas_only:
             self.canvas.load(self.deck, self._index)
@@ -1698,7 +1713,9 @@ class PresentationPane(QWidget):
         )
         updated.edited = True
         try:
-            presentations.save_deck(updated)
+            presentations.save_deck(
+                updated, observation=getattr(self.deck, "_file_observation", None)
+            )
         except (ValueError, OSError) as exc:
             self.status.setText(str(exc))
             return
@@ -1714,7 +1731,9 @@ class PresentationPane(QWidget):
         updated.slides.pop(self._index)
         updated.edited = True
         try:
-            presentations.save_deck(updated)
+            presentations.save_deck(
+                updated, observation=getattr(self.deck, "_file_observation", None)
+            )
         except (ValueError, OSError) as exc:
             self.status.setText(str(exc))
             return
@@ -1736,7 +1755,9 @@ class PresentationPane(QWidget):
         )
         updated.edited = True
         try:
-            presentations.save_deck(updated)
+            presentations.save_deck(
+                updated, observation=getattr(self.deck, "_file_observation", None)
+            )
         except (ValueError, OSError) as exc:
             self.status.setText(str(exc))
             return
@@ -1791,7 +1812,9 @@ class PresentationPane(QWidget):
                 result = json.loads(answer)
                 updated = presentations.deck_from_dict(result["deck"])
                 updated.edited = True
-                presentations.save_deck(updated)
+                presentations.save_deck(
+                    updated, observation=getattr(self.deck, "_file_observation", None)
+                )
             except (ValueError, OSError) as exc:
                 self.status.setText(f"改寫未儲存，原頁保留：{exc}")
                 return
@@ -1825,7 +1848,9 @@ class PresentationPane(QWidget):
     def _restore_edit(self, source: list, target: list, message: str) -> None:
         previous = presentations.deck_from_dict(source[-1])
         try:
-            presentations.save_deck(previous)
+            presentations.save_deck(
+                previous, observation=getattr(self.deck, "_file_observation", None)
+            )
         except (ValueError, OSError) as exc:
             self.status.setText(str(exc))
             return

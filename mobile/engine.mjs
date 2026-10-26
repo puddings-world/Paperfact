@@ -1,3 +1,4 @@
+import { downloadArtifact, readArtifact } from './artifact-engine.mjs';
 import {
   copy,
   own,
@@ -321,6 +322,15 @@ export class Engine {
       sha256: target.payload.sha256
     };
   }
+  downloadArtifact(id) {
+    const key = 'artifact:' + id;
+    if(this.downloads.has(key)) return this.downloads.get(key);
+    const generation = this.generation;
+    const job = downloadArtifact(this,id,this.#token,generation).finally(() => this.downloads.delete(key));
+    this.downloads.set(key,job);
+    return job;
+  }
+  async deck(id) { return readArtifact(this,id); }
   async exportLocal() {
     const state = await this.store.read();
     return {

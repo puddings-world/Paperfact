@@ -173,6 +173,37 @@ def observe_content(conn, table, row):
     return _content_parent(conn, table, dict(row), token)
 
 
+def observe_target(conn, scope_kind, owner_id, feature, key="main"):
+    """Observe an absent/existing typed target without inventing an output row."""
+    if not enabled(conn):
+        return None
+    from paper_daily.sync_content import content_id
+
+    if scope_kind not in ("paper", "list"):
+        raise CaptureError("Invalid research owner kind")
+    identity = owner_id
+    if scope_kind == "paper":
+        row = conn.execute(
+            "SELECT sync_id FROM research_paper_identity WHERE local_id=?", (owner_id,)
+        ).fetchone()
+        if row is None:
+            raise CaptureError("Research owner is not enrolled")
+        identity = row[0]
+    scope = {"kind": scope_kind, "id": identity}
+    token = observe(conn, "research_content", content_id(scope, feature, key))
+    if not token["parents"]:
+        parent = conn._capture_client._optimistic_graph(conn)[0].get((scope_kind, identity))
+        token["parents"] = [
+            {
+                "kind": scope_kind,
+                "id": identity,
+                "incarnation": parent["incarnation"] if parent else None,
+                "active": bool(parent and parent["active"]),
+            }
+        ]
+    return token
+
+
 def _content_parent(conn, table, row, token):
     if token["kind"] != "research_content" or token["parents"]:
         return token
@@ -191,9 +222,11 @@ def _content_parent(conn, table, row, token):
 
 
 @contextmanager
-def expecting(conn, observations):
+def expecting(conn, observations, *, source_hashes=None):
     """Carry loaded bases through the write AND its explicit commit."""
     previous = getattr(conn, "_capture_expected", {})
+    previous_sources = getattr(conn, "_capture_source_hashes", {})
+    sources = dict(previous_sources)
     expected = dict(previous)
     for value in observations:
         if value is None:
@@ -204,11 +237,23 @@ def expecting(conn, observations):
         if set(value) != set(current) or value["workspace_id"] != current["workspace_id"]:
             raise CaptureError("Observation belongs to another workspace")
         expected[(value["kind"], value["entity_id"])] = json.loads(_json(value))
+    for identity, digest in (source_hashes or {}).items():
+        if ("research_content", identity) not in expected:
+            raise CaptureError("Source provenance requires an observed research target")
+        if digest is not None and (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(c not in "0123456789abcdef" for c in digest)
+        ):
+            raise CaptureError("Invalid research source document hash")
+        sources[identity] = digest
     conn._capture_expected = expected
+    conn._capture_source_hashes = sources
     try:
         yield conn
     finally:
         conn._capture_expected = previous
+        conn._capture_source_hashes = previous_sources
 
 
 class CaptureConnection(sqlite3.Connection):
@@ -498,7 +543,13 @@ def _payload(conn, table, row):
         }
     content = _content()
     if content and table in content.CONTENT_TABLES:
-        return content.content_payload(conn, table, row)
+        payload = content.content_payload(conn, table, row)
+        kind, identity = content.content_identity(conn, table, row)
+        sources = getattr(conn, "_capture_source_hashes", {})
+        if kind == "research_content" and identity in sources:
+            payload["source_document_hash"] = sources[identity]
+            content.validate_payload(payload)
+        return payload
     if table == "notes":
         if row["page"] is not None or row["anchor"] is not None or row["kind"] != "note":
             raise CaptureError("Anchored notes require the rich research adapter")

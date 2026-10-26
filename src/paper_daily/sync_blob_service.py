@@ -77,6 +77,69 @@ class BlobServiceMixin:
             "block_hash TEXT NOT NULL,PRIMARY KEY(workspace,digest,block_index))"
         )
 
+    def _prepare_research_file(self, token, operation, encoded):
+        """Verify bounded closure without holding the authority write lock."""
+        if operation["entity_type"] != "research_file" or operation["action"] != "put":
+            return None
+        from paper_daily.sync_files import referenced_blobs, validate_closure
+
+        fingerprint = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        with _VERIFICATION_SLOTS:
+            with self._transaction() as conn:
+                workspace, device = self._authenticate(conn, token)
+                if (operation["workspace_id"], operation["device_id"]) != (workspace, device):
+                    raise PermissionError("Operation does not belong to this workspace/device")
+                previous = conn.execute(
+                    "SELECT fingerprint FROM sync_events WHERE workspace=? AND operation_id=?",
+                    (workspace, operation["operation_id"]),
+                ).fetchone()
+                if previous:
+                    if previous[0] != fingerprint:
+                        raise ValueError("Operation ID was reused with different content")
+                    return None  # The commit transaction still reauthenticates the retry.
+                paths = {}
+                for row in referenced_blobs(operation):
+                    manifest = BlobManifest(row["sha256"], row["size"])
+                    store = self._blob_owned_store(conn, workspace, manifest)
+                    paths[manifest.sha256] = (manifest, store._path(manifest))
+            identities = {}
+
+            def read_blob(row):
+                manifest, path = paths[row["sha256"]]
+                try:
+                    before = self._file_identity(path)
+                    with path.open("rb") as stream:
+                        self._file_identity(path, stream)
+                        data = stream.read(manifest.size + 1)
+                        after = self._file_identity(path, stream)
+                    if before != after or len(data) != manifest.size:
+                        raise BlobUnavailableError(
+                            "Owned attachment bytes changed during validation"
+                        )
+                    if hashlib.sha256(data).hexdigest() != manifest.sha256:
+                        raise BlobUnavailableError("Owned attachment bytes require repair")
+                    identities[manifest.sha256] = after
+                    return data
+                except (BlobError, FileNotFoundError) as exc:
+                    raise BlobUnavailableError("Owned attachment bytes require repair") from exc
+
+            validate_closure(operation["payload"], read_blob)
+            return (paths, identities)
+
+    def _require_prepared_file(self, conn, workspace, operation, prepared):
+        if operation["entity_type"] != "research_file" or operation["action"] != "put":
+            return
+        if prepared is None:
+            raise BlobUnavailableError("Artifact validation must precede publication")
+        paths, identities = prepared
+        for digest, (manifest, path) in paths.items():
+            store = self._blob_owned_store(conn, workspace, manifest)
+            try:
+                if store._path(manifest) != path or self._file_identity(path) != identities[digest]:
+                    raise BlobUnavailableError("Owned attachment changed before publication")
+            except (BlobError, FileNotFoundError) as exc:
+                raise BlobUnavailableError("Owned attachment bytes require repair") from exc
+
     def _blob_enabled(self):
         if self.blob_root is None:
             raise BlobDisabledError("Attachment storage is not configured")

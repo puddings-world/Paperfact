@@ -154,6 +154,12 @@ class ReferenceService(BlobServiceMixin):
 
     def push(self, token: str, operation: dict) -> dict:
         """Accept a causal edit or preserve it as a conflict; replay exactly once."""
+        with self._transaction() as conn:
+            self._authenticate(conn, token)
+        # Close the envelope before verification so caller mutation cannot race it.
+        encoded = canonical_operation(operation)
+        operation = json.loads(encoded)
+        prepared = self._prepare_research_file(token, operation, encoded)
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
             encoded = canonical_operation(operation)
@@ -171,6 +177,7 @@ class ReferenceService(BlobServiceMixin):
                 return json.loads(previous["event"])
 
             self._require_document_blob(conn, workspace, value)
+            self._require_prepared_file(conn, workspace, value, prepared)
 
             if "resolution_of" in value:
                 target = conn.execute(

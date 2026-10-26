@@ -1,3 +1,4 @@
+import { fileId } from './artifacts.mjs';
 /** Full-stack fixture: JavaScript client → actual Python HTTP/reference service. */
 import {
   spawn
@@ -231,7 +232,28 @@ try {
   state = await store.read();
   assert.equal(state.entities['note/phone-note'].operation.action, 'delete');
   assert.equal(state.outbox.length, 0);
-  console.log('PASS actual Python HTTP authority: session, seed history, rich analysis + anchored note without draft loss, offline note chain, reading state, retry, verified PDF, conflict resolution and edit-delete');
+  // Python serializes float coordinates as 200.0; keep authoritative raw bytes.
+  const artifact = ready.artifact;
+  assert.ok(Buffer.from(artifact.blobs[artifact.payload.body.sha256],'base64').toString('utf8').includes('200.0'));
+  for(const description of [artifact.payload.body,...artifact.payload.assets]) {
+    const data = Buffer.from(artifact.blobs[description.sha256],'base64');
+    const upload = await post('/v1/blobs/begin',{sha256:description.sha256,size:data.length},ready.desktop_token);
+    await post('/v1/blobs/append',{upload_id:upload.upload_id,offset:0,data:data.toString('base64')},ready.desktop_token);
+    await post('/v1/blobs/commit',{upload_id:upload.upload_id},ready.desktop_token);
+  }
+  const artifactId = fileId(PAPER,'notes');
+  const artifactOp = {version:2,operation_id:'desktop-deck',workspace_id:'demo-workspace',device_id:'demo-desktop',
+    entity_type:'research_file',entity_id:artifactId,action:'put',base_revision:0,depends_on:null,
+    payload:artifact.payload,incarnation:'desktop-deck',parents:[{kind:'paper',id:PAPER,incarnation:PAPER+'-created'}],structure_revision:0};
+  assert.equal((await transport.push(ready.desktop_token,artifactOp)).outcome,'accepted');
+  await engine.sync();
+  assert.equal(projection(await store.read()).decks[0].id,artifactId);
+  await engine.downloadArtifact(artifactId); engine.disconnect();
+  const deck = await engine.deck(artifactId);
+  assert.equal(deck.body.deck.title,'研究 🧪');
+  assert.equal(deck.body.deck.slides[0].elements[1].x,200);
+  assert.equal(deck.body.deck.slides[0].speaker_notes,'原文引用與講稿');
+  console.log('PASS actual Python HTTP authority: session, seed history, rich analysis + anchored note without draft loss, offline note chain, reading state, retry, verified PDF, conflict resolution, edit-delete and verified Python float/Unicode deck+PNG offline closure');
 } finally {
   child.stdin.end('\n');
   await new Promise(resolve => {

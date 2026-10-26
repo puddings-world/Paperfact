@@ -22,9 +22,10 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import closing
 
 from paper_daily import brief, llm
-from paper_daily.store import connect, init_db, now
+from paper_daily.store import init_db, now
 
 Log = Callable[[str], None]
 
@@ -82,35 +83,51 @@ CLOSE_INSTRUCTIONS = """\
 """
 
 
-def write(paper_id: str, timeout: int = 1800) -> tuple[str | None, str]:
-    """Write one paper's close reading. Returns (body, reason)."""
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT p.*, q.role, q.reason FROM papers p "
-            "LEFT JOIN queue q ON q.paper_id = p.id WHERE p.id = ?",
-            (paper_id,),
-        ).fetchone()
-        if row is None:
-            return None, f"no paper {paper_id}"
-        pack, pdf = brief.pack_text(conn, row)
-    if pdf is None:
-        return None, "no PDF: a close reading needs the full text"
-    body, reason = llm.complete(pack, system=CLOSE_INSTRUCTIONS, timeout=timeout, task="dive")
-    if not body:
-        return None, reason
-    # A refusal or an "I cannot read the text" is short; a section-by-section
-    # reading of even a four-page paper is not.
-    if len(body) < 3000:
-        return None, f"reply too short to be a close reading: {body.splitlines()[0][:120]}"
-    with connect() as conn:
-        conn.execute(
-            "INSERT INTO close_readings(paper_id, body, spec, written_at) VALUES (?,?,?,?) "
-            "ON CONFLICT(paper_id) DO UPDATE SET body=excluded.body, spec=excluded.spec, "
-            "written_at=excluded.written_at",
-            (paper_id, body, CLOSE_SPEC, now()),
+def write(
+    paper_id: str, timeout: int = 1800, *, database=None, connections=None
+) -> tuple[str | None, str]:
+    """Generate once against loaded inputs; retain stale results without overwriting."""
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+
+    database = (database or store.DB_PATH).resolve()
+    with (
+        research_job_lock.claim(database, "close_reading", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            return None, "close reading is already in progress"
+        with closing(generation._connect(database)) as conn, conn:
+            row = conn.execute(
+                "SELECT p.*, q.role, q.reason FROM papers p "
+                "LEFT JOIN queue q ON q.paper_id=p.id WHERE p.id=?",
+                (paper_id,),
+            ).fetchone()
+            if row is None:
+                return None, f"no paper {paper_id}"
+            context = generation.begin_generation(conn, table="close_readings", owner_id=paper_id)
+            prepared = brief.pack_text(conn, row)
+            pack, pdf = prepared
+            if isinstance(prepared, brief.PreparedPack):
+                context = generation.bind_inputs(
+                    context, document=prepared.document, input_snapshot=prepared.snapshot
+                )
+            elif context.data["binding"] is not None:
+                return None, "prepared PDF provenance is required for enrolled research"
+        if pdf is None:
+            return None, "no PDF: a close reading needs the full text"
+        body, reason = llm.complete(pack, system=CLOSE_INSTRUCTIONS, timeout=timeout, task="dive")
+        if not body:
+            return None, reason
+        if len(body) < 3000:
+            return None, f"reply too short to be a close reading: {body.splitlines()[0][:120]}"
+        result = generation.publish_generated(
+            context,
+            row={"paper_id": paper_id, "body": body, "spec": CLOSE_SPEC, "written_at": now()},
         )
-        conn.commit()
-    return body, "ok"
+        if result.status == "candidate":
+            return None, f"{result.reason}; generated result retained: {result.candidate_id}"
+        return body, "ok"
 
 
 def get(conn, paper_id: str) -> str | None:
@@ -130,8 +147,13 @@ def select(conn, paper_ids: list[str], rewrite: bool = False) -> list[str]:
 
 def write_many(paper_ids: list[str], jobs: int = 3, log: Log = print) -> int:
     """Write several at once; each is a long wait on a model. Returns how many."""
+    from paper_daily import research_generation as generation
+    from paper_daily import store
+
     init_db()
-    with connect() as conn:
+    database = store.DB_PATH.resolve()
+    connections = llm.capture_connections()
+    with closing(generation._connect(database)) as conn:
         titles = (
             {
                 r["id"]: r["title"][:56]
@@ -145,7 +167,10 @@ def write_many(paper_ids: list[str], jobs: int = 3, log: Log = print) -> int:
         )
     written = 0
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        futures = {pool.submit(write, pid): pid for pid in paper_ids}
+        futures = {
+            pool.submit(write, pid, database=database, connections=connections): pid
+            for pid in paper_ids
+        }
         for future in as_completed(futures):
             pid = futures[future]
             body, reason = future.result()

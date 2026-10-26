@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from contextlib import ExitStack
+from datetime import datetime
 
 from paper_daily import llm
 from paper_daily.store import connect, init_db, now
@@ -125,54 +127,69 @@ def digest(row, dive: str | None, context: str | None, followups: int, limit: in
     return _clip("\n".join(lines), limit)
 
 
+def build_input_from_snapshot(inputs: dict, list_id: str) -> tuple[str, int]:
+    """Render precisely the SQL input snapshot whose versions guard publication."""
+    rows = inputs["papers"]
+    if not rows:
+        return "", 0
+    limit = min(PER_PAPER_MAX, BUDGET // len(rows))
+    cards = [digest(r, r["dive"], r["context"], r["later"], limit) for r in rows]
+    item = inputs["list"]
+    title = item["name"] if item else list_id
+    text = f"# 閱讀清單:{title}({len(rows)} 篇,依年份排列)\n\n" + "\n\n".join(cards)
+    return text, len(rows)
+
+
 def build_input(conn, list_id: str) -> tuple[str, int]:
-    """Every paper's card, in list order, and how many papers there are."""
+    """Every paper's card in stable chronological order, using current local data."""
     rows = conn.execute(
         "SELECT p.*, d.body AS dive, pc.summary AS context, "
         "  (SELECT COUNT(*) FROM followups f WHERE f.paper_id = p.id) AS later "
         "FROM list_papers lp JOIN papers p ON p.id = lp.paper_id "
         "LEFT JOIN dives d ON d.paper_id = p.id "
         "LEFT JOIN paper_context pc ON pc.paper_id = p.id "
-        "WHERE lp.list_id = ? ORDER BY p.year, lp.position",
+        "WHERE lp.list_id = ? ORDER BY p.year, lp.position, lp.paper_id",
         (list_id,),
     ).fetchall()
-    if not rows:
-        return "", 0
-    limit = min(PER_PAPER_MAX, BUDGET // len(rows))
-    cards = [digest(r, r["dive"], r["context"], r["later"], limit) for r in rows]
-    name = conn.execute("SELECT name FROM lists WHERE id=?", (list_id,)).fetchone()
-    title = name["name"] if name else list_id
-    text = f"# 閱讀清單:{title}({len(rows)} 篇,依年份排列)\n\n" + "\n\n".join(cards)
-    return text, len(rows)
+    item = conn.execute("SELECT * FROM lists WHERE id=?", (list_id,)).fetchone()
+    return build_input_from_snapshot({"list": item, "papers": rows}, list_id)
 
 
 def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tuple[bool, str]:
-    """Write the list's survey. Returns (written, reason)."""
+    """Generate from one captured list; a changed input retains a candidate."""
+    from paper_daily.research_generation import begin_generation, publish_generated
+    from paper_daily.research_job_lock import claim
+
     init_db()
-    with connect() as conn:
-        old = conn.execute("SELECT edited FROM list_surveys WHERE list_id=?", (list_id,)).fetchone()
-        if old and old["edited"] and not force:
-            return False, "edited by hand (pass --force to replace it)"
-        text, count = build_input(conn, list_id)
-    if not count:
-        return False, f"no papers in list {list_id}"
-    log(f"  {count} papers, {len(text):,} characters of digest")
-    body, reason = llm.complete(text, system=SURVEY_SYSTEM, timeout=1800, task="survey")
-    if not body:
-        return False, reason
-    if len(body) < 2000:
-        return False, f"reply too short to be a survey: {body.splitlines()[0][:120]}"
-    with connect() as conn:
-        conn.execute(
-            "INSERT INTO list_surveys(list_id, body, papers, spec, written_at, edited) "
-            "VALUES (?,?,?,?,?,0) ON CONFLICT(list_id) DO UPDATE SET body=excluded.body, "
-            "papers=excluded.papers, spec=excluded.spec, written_at=excluded.written_at, "
-            "edited=0",
-            (list_id, body, count, SURVEY_SPEC, now()),
-        )
-        conn.commit()
-    log(f"  survey written: {len(body):,} characters")
-    return True, "ok"
+    with ExitStack() as stack:
+        stack.enter_context(llm.connection_scope())
+        with connect() as conn:
+            database = conn.execute("PRAGMA database_list").fetchone()[2]
+            if not stack.enter_context(claim(database, "survey", list_id)):
+                return False, "this list's survey is already being generated"
+            if conn.execute("SELECT 1 FROM lists WHERE id=?", (list_id,)).fetchone() is None:
+                return False, f"no papers in list {list_id}"
+            context = begin_generation(conn, table="list_surveys", owner_id=list_id)
+            old = context.target
+            if old and old["edited"] and not force:
+                return False, "edited by hand (pass --force to replace it)"
+            text, count = build_input_from_snapshot(context.inputs, list_id)
+        if not count:
+            return False, f"no papers in list {list_id}"
+        log(f"  {count} papers, {len(text):,} characters of digest")
+        body, reason = llm.complete(text, system=SURVEY_SYSTEM, timeout=1800, task="survey")
+        if not body:
+            return False, reason
+        if len(body) < 2000:
+            return False, f"reply too short to be a survey: {body.splitlines()[0][:120]}"
+        result = publish_generated(context, row={
+            "list_id": list_id, "body": body, "papers": count,
+            "spec": SURVEY_SPEC, "written_at": now(), "edited": 0,
+        })
+        if result.status != "accepted":
+            return False, f"{result.reason}; generated survey retained: {result.candidate_id}"
+        log(f"  survey written: {len(body):,} characters")
+        return True, "ok"
 
 
 def get(conn, list_id: str) -> dict | None:
@@ -180,7 +197,39 @@ def get(conn, list_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def edit(list_id: str, body: str) -> None:
-    with connect() as conn:
-        conn.execute("UPDATE list_surveys SET body=?, edited=1 WHERE list_id=?", (body, list_id))
-        conn.commit()
+def edit_snapshot(conn, list_id: str):
+    """Capture the displayed editable version without observing unrelated inputs."""
+    from paper_daily.research_generation import begin_generation
+
+    return begin_generation(conn, table="list_surveys", owner_id=list_id, input_reader="target")
+
+
+def edit(list_id: str, body: str, *, expected=None) -> None:
+    """Save against the editor's loaded version, retaining a stale draft on failure."""
+    from paper_daily.research_generation import publish_edit
+    from paper_daily.sync_capture import StaleCaptureError
+
+    if not isinstance(body, str) or not body.strip():
+        raise ValueError("A survey needs nonempty text")
+    if expected is None:
+        with connect() as conn:
+            expected = edit_snapshot(conn, list_id)
+    if expected.table != "list_surveys" or expected.owner_id != list_id:
+        raise ValueError("The survey edit belongs to another list")
+    old = expected.target
+    if old is None:
+        raise ValueError("This survey no longer exists")
+    row = {**old, "body": body.strip(), "edited": 1}
+    # Preserve valid generation time. A legacy placeholder cannot travel on the
+    # strict wire; record this edit's captured time and retain its original in the
+    # durable context. The timestamp must stay identical when Save is retried.
+    try:
+        timestamp = datetime.fromisoformat(old["written_at"].replace("Z", "+00:00"))
+        valid_time = timestamp.tzinfo is not None
+    except (TypeError, ValueError, AttributeError):
+        valid_time = False
+    if not valid_time:
+        row["written_at"] = expected.started_at
+    result = publish_edit(expected, row=row)
+    if result.status != "accepted":
+        raise StaleCaptureError(result.candidate_id)

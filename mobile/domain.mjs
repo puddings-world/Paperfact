@@ -1,3 +1,4 @@
+import { validateArtifact } from './artifacts.mjs';
 import {
   copy,
   own,
@@ -13,7 +14,7 @@ const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const HASH = /^[0-9a-f]{64}$/;
 export const states =['pending', 'delivered', 'read', 'skipped', 'deferred'];
 const kinds =['list', 'paper', 'membership', 'note', 'reading_state', 'list_order', 'workspace_list_order',
-'paper_document', 'research_content'];
+'paper_document', 'research_content', 'research_file'];
 export function requireThat(test, code = 'invalid_data') {
   if(! test) throw new Error(code);
 }
@@ -41,11 +42,12 @@ function boundedText(value, limit, nullable = false) {
   requireThat((nullable && value === null) ||(typeof value === 'string' &&[...value].length <= limit));
 }
 function parentShape(op) {
-  if(op.entity_type === 'research_content') {
-    requireThat(op.parents.length === 1 &&['paper', 'list'].includes(op.parents[0].kind));
+  if(['research_content','research_file'].includes(op.entity_type)) {
+    requireThat(op.parents.length === 1 && (op.entity_type === 'research_file' ? ['paper'] : ['paper','list']).includes(op.parents[0].kind));
     closed(op.parents[0], ['kind', 'id', 'incarnation']);
     identifier(op.parents[0].id);
     identifier(op.parents[0].incarnation);
+    if(op.entity_type === 'research_file') requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.parents[0].id));
     requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.entity_id));
     return;
   }
@@ -56,6 +58,7 @@ function parentShape(op) {
     membership: ['list', 'paper'],
     note: ['paper'],
     paper_document: ['paper'],
+    research_file: ['paper'],
     reading_state: ['membership', 'list', 'paper'],
     list_order: ['list']
   }
@@ -116,6 +119,8 @@ export function validateOperation(op, workspace) {
       requireThat(op.version === 2);
       validateRichNote(op.payload);
     }
+  } else if(op.entity_type === 'research_file') {
+    validateArtifact(op.payload, op.entity_id, op.parents);
   } else if(op.entity_type === 'research_content') {
     validateContent(op.payload, op.entity_id, op.parents);
   } else if(op.entity_type === 'list') {
@@ -500,6 +505,7 @@ export function projection(state) {
     }))],
     highlights: [...contentHighlights, ...snapshotHighlights.live],
     imported_highlights: snapshotHighlights.archived,
-    decks: supplementary?.decks ??[]
+    decks: rows('research_file').map(({operation: op}) => ({id: op.entity_id, paper_id: op.payload.paper_id,
+      slot: op.payload.slot, operation_id: op.operation_id, editable: false}))
   };
 }

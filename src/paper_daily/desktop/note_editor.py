@@ -29,6 +29,9 @@ from paper_daily.store import connect, get_kv, set_kv
 MODES = ("編輯", "分割", "預覽")
 SAVE_TEXT = {
     "zh-TW": {
+        "save": "儲存",
+        "cancel": "取消",
+        "status": "儲存狀態",
         "missing": "這則筆記已不存在，請重新整理。",
         "changed": "筆記已在別處變更。請重新整理並確認新版內容後再刪除。",
         "delete_failed": "尚未刪除。請確認筆記是否已變更，再重試。",
@@ -38,6 +41,9 @@ SAVE_TEXT = {
         "stale": "筆記已在別處更新。這份修改已保留為待核對版本，草稿仍在這裡。",
     },
     "en": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "status": "Save status",
         "missing": "This note no longer exists. Refresh the note list.",
         "changed": "This note changed elsewhere. Refresh and review it before deleting.",
         "delete_failed": "Not deleted. Check for changes, then retry.",
@@ -62,14 +68,14 @@ def note_message(code, language="zh-TW"):
 class NoteEditor(QDialog):
     def __init__(
         self, body: str, palette: dict[str, str], hint: str = "", parent=None,
-        *, save=None, language="zh-TW",
+        *, save=None, language="zh-TW", save_messages=None,
     ) -> None:
         super().__init__(parent)
         self.pal = palette
         self._save_callback = save
         self._saving = self._saved = False
-        self._save_text = SAVE_TEXT.get(language, SAVE_TEXT["en"])
-        self.setWindowTitle("編輯筆記")
+        self._save_text = {**SAVE_TEXT.get(language, SAVE_TEXT["en"]), **(save_messages or {})}
+        self.setWindowTitle("編輯筆記" if language == "zh-TW" else "Edit note")
         self.resize(1100, 700)
         layout = QVBoxLayout(self)
 
@@ -82,7 +88,8 @@ class NoteEditor(QDialog):
         else:
             top.addStretch(1)
         self.modes = QButtonGroup(self)
-        for i, name in enumerate(MODES):
+        modes = MODES if language == "zh-TW" else ("Edit", "Split", "Preview")
+        for i, name in enumerate(modes):
             button = QPushButton(name)
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -114,9 +121,11 @@ class NoteEditor(QDialog):
         )
         self.save_status = QLabel()
         self.save_status.setWordWrap(True)
-        self.save_status.setAccessibleName("Save status")
+        self.save_status.setAccessibleName(self._save_text["status"])
         layout.addWidget(self.save_status)
         self.save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        self.save_button.setText(self._save_text["save"])
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(self._save_text["cancel"])
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

@@ -1,6 +1,8 @@
 # ADR 0010: Workspace bootstrap and independent recovery
 
-Status: next implementation plan; not implemented. 2026-10-26.
+Status: partially implemented. Independent complete-or-fail recovery CLI and detached
+reader restore are implemented; enrollment/bootstrap/reapply remain planned. 2026-10-26.
+See [recovery contract](../sync-recovery.md) for supported schemas and migration gates.
 This defines local orchestration around the existing reference protocol. There is
 no public enrollment, snapshot-download, restore or retention endpoint today.
 
@@ -182,5 +184,7 @@ client backup restoration is not an administrative server-restore procedure.
   preservation, no credentials in the package, exact candidate recovery and
   idempotent reviewed reapply before advertising complete recovery.
 
-Run the complete project check for each implementation batch. This ADR adds no
-service endpoints, migrations, deployment or completed recovery-test claim.
+Run the complete project check for each implementation batch. Recovery adds no public
+service endpoints or deployment. Its targeted behavior tests cover private archives,
+retained protocol/candidates, exact bytes, detached readers and failure preservation;
+bootstrap and reviewed reapply acceptance remain outstanding.

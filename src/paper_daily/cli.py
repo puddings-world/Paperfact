@@ -1074,20 +1074,24 @@ def cmd_set_dive(args) -> int:
     nightly run fires at 00:00 local, which is still the previous UTC day, and the
     wrong paper ended up showing another paper's explanation.
     """
+    from paper_daily import dive
+
+    # Capture before stdin/file loading: that read may block while another writer saves.
+    with connect() as conn:
+        row = conn.execute("SELECT title FROM papers WHERE id=?", (args.paper_id,)).fetchone()
+        if row is None:
+            print(f"no paper with id {args.paper_id}")
+            return 1
+        expected = dive.edit_snapshot(conn, args.paper_id)
     body = Path(args.file).read_text(encoding="utf-8").strip() if args.file else sys.stdin.read()
     if not body:
         print("nothing to store")
         return 1
-
-    from paper_daily.desktop.main import Data
-
-    with connect() as conn:
-        row = conn.execute("SELECT title FROM papers WHERE id=?", (args.paper_id,)).fetchone()
-    if not row:
-        print(f"no paper with id {args.paper_id}")
+    try:
+        dive.save(args.paper_id, body, expected=expected)
+    except (ValueError, RuntimeError) as exc:
+        print(f"deep dive not replaced: {exc}")
         return 1
-
-    Data().save_dive(args.paper_id, body)
     print(f"deep dive stored ({len(body)} chars) for {row['title'][:70]}")
     return 0
 

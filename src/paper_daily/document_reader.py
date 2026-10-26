@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from threading import RLock
@@ -324,7 +325,7 @@ class DocumentReader:
         if self._blob_root is None:
             raise FileNotFoundError("Document store is not configured")
         root = _owned_path(self._blob_root)
-        with _connect(root / "index.sqlite") as conn:
+        with closing(_connect(root / "index.sqlite")) as conn, conn:
             row = conn.execute(
                 "SELECT workspace,device,research_path FROM transfer_binding WHERE id=1"
             ).fetchone()
@@ -421,10 +422,13 @@ class DocumentReader:
                     digest = hashlib.file_digest(stream, "sha256").hexdigest()
                 import pymupdf
 
-                with pymupdf.open(path) as document:
-                    if document.needs_pass or document.page_count < 1:
-                        raise ValueError("Unreadable legacy PDF")
-                    document.load_page(0)
+                try:
+                    with pymupdf.open(path) as document:
+                        if document.needs_pass or document.page_count < 1:
+                            raise ValueError("Unreadable legacy PDF")
+                        document.load_page(0)
+                except pymupdf.FileDataError as exc:
+                    raise ValueError("Unreadable legacy PDF") from exc
                 if _identity(path) != before:
                     raise ValueError("Legacy document changed during verification")
             result = replace(
@@ -491,7 +495,7 @@ def from_workspace(db_path, *, legacy_root=None, projection_root=None):
     path = Path(db_path).absolute()
     registration, binding = None, None
     if _owned_path(path).exists():
-        with _connect(path) as conn:
+        with closing(_connect(path)) as conn, conn:
             conn.execute("BEGIN")
             tables = _tables(conn)
             registration = _registration(conn, tables)
