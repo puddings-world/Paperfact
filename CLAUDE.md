@@ -8,6 +8,16 @@ A desktop workspace for papers, reading lists, notes and research context, with
 configurable AI providers. The bundled ML workflow maintains a reading queue over
 ten-plus years of ICLR / ICML / NeurIPS and prepares nightly deep dives.
 
+## v0.5.0 planning handoff
+
+For cross-device work, read `docs/roadmap-0.5.0.md`, then
+`docs/sync-architecture.md` and `docs/implementation-0.5.0.md`.
+They separate agreed scope, proposed architecture, unresolved decisions, and
+implementation tasks. Sync and the independent mobile PWA are not implemented.
+The next task is the S01 mutation inventory, followed by S02 contract decisions.
+Use the active `Paperfact` checkout; the old `paper-daily` checkout is an archive.
+Keep repository planning documentation concise and in English.
+
 ## Intent
 
 The product is field-independent: researchers bring papers, maintain multiple lists
@@ -29,8 +39,10 @@ Do not describe planned module/agent features as already implemented.
   directly. Notes, deep dives and the paper chat all live in that one file.
 - Setup: `./scripts/setup.ps1` or `./scripts/setup.sh` (idempotent).
 - Tests: `pytest tests/`. Format: `ruff format && ruff check --fix`.
-- All generated data lives under `data/` and is gitignored. Deleting it is a valid
-  reset; every stage is idempotent and resumable.
+- Workspace data includes original notes and edits. Source defaults to `data/`;
+  installed apps use platform data directories, and `PAPERFACT_DATA` overrides
+  either. Never treat a real workspace as disposable generated output. Use
+  isolated fixture directories for resets and migration/sync tests.
 - Deep dives, close readings and answers are written in Traditional Chinese with
   English technical terms. They are read in the app, which typesets them, so maths
   is LaTeX (KaTeX), diagrams are mermaid and algorithms are ```pseudocode blocks.

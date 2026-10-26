@@ -1,5 +1,10 @@
 # Paperfact architecture
 
+For the next milestone, see the [v0.5.0 scope](roadmap-0.5.0.md),
+[proposed cross-device architecture](sync-architecture.md), and
+[implementation handoff](implementation-0.5.0.md). Those documents describe
+planned synchronization and mobile work, not the current runtime.
+
 Paperfact is a desktop research workspace. Reading lists, papers, notes, research
 context and shared reading exports are the core. AI providers use configurable
 adapters. Daily recommendation workflows remain bundled; independently installed

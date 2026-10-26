@@ -182,6 +182,17 @@ Additional AI analysis is a separate action. The older `import-list` command sti
 uses Paperfact's configured AI to parse rough references.
 [How MCP works here, with a call-flow diagram →](docs/local-integration.md)
 
+## Next milestone: v0.5.0 (planned)
+
+- Continue research across desktop, Mac, and a private mobile reader.
+- Work offline; synchronize changes with recoverable conflicts and version history.
+- Keep local use and personal AI accounts independent of optional sync.
+
+These are planned capabilities, not features in v0.4.1.
+[Release scope](docs/roadmap-0.5.0.md) ·
+[Proposed sync architecture](docs/sync-architecture.md) ·
+[Implementation plan](docs/implementation-0.5.0.md)
+
 ## Go further
 
 [Installation](docs/install.md) · [Handbook](docs/handbook.md) · [Reader](docs/reader-guide.md) ·

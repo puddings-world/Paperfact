@@ -1,5 +1,12 @@
 # Paperfact regression requirements
 
+For v0.5.0 planning or cross-device implementation, start with
+[the release scope](docs/roadmap-0.5.0.md),
+[proposed architecture](docs/sync-architecture.md), and
+[implementation handoff](docs/implementation-0.5.0.md).
+These describe planned work, not implemented synchronization. Maintain English
+planning documents and record evidence when updating task status.
+
 Preserve existing local research data and uncommitted work.
 
 For each new or changed user action, add behavior tests for its normal outcome
