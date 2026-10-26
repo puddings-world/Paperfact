@@ -1,6 +1,12 @@
 # Release readiness
 
-## 0.4.0 public beta
+## 0.4.1 public beta
+
+The v0.4.0 candidate did not pass the cross-platform gate: its update-notice
+fixture supplied only a Windows asset while exercising downloads on other
+platforms. v0.4.1 supplies all three fixture assets and runs the same repeated
+activation and close-before-download assertions for each platform. No existing
+assertion was removed or relaxed; the failed tag is retained for traceability.
 
 This candidate adds HTTPS research-package sharing to the common desktop/CLI
 transfer service, beta-aware update notices, and refresh after external SQLite
@@ -16,7 +22,7 @@ not an unverified claim in this candidate document.
 Limitations: unsigned builds; direct HTTPS links only (browser download for
 cloud login/preview pages); no hosted research database or live synchronization;
 real recipient AI login and Google OAuth remain separate manual checks.
-[Sharing guide](sharing.md) · [v0.4.0 release](https://github.com/puddings-world/Paperfact/releases/tag/v0.4.0)
+[Sharing guide](sharing.md) · [v0.4.1 release](https://github.com/puddings-world/Paperfact/releases/tag/v0.4.1)
 
 ## 0.2.0 preview — 2026-10-24
 

@@ -1,6 +1,6 @@
 # Share a research list by link
 
-Available in **0.4.0** for source and packaged apps. This transfers a snapshot of
+Available in **0.4.1** for source and packaged apps. This transfers a snapshot of
 one list into the recipient's local workspace. It does not connect their app to
 your database or sign them in to your AI account.
 

@@ -102,7 +102,7 @@ so it may not include newer source features. Existing v0.3.0 and older installer
 skip beta notices; install a build containing this fix manually once to receive
 future beta notices. [Update details](docs/install.md#update-notices)
 To match an installer exactly, developers can check out its tag, for example
-`git switch --detach v0.4.0`, then rerun setup. Both use the same research
+`git switch --detach v0.4.1`, then rerun setup. Both use the same research
 operations and account-routing code; platform packaging differs.
 New AI work additionally needs your own supported provider account and CLI/API
 connection; [AI setup](docs/ai-setup.md) explains those separate prerequisites.
@@ -140,7 +140,7 @@ packages; **簡報 → 匯出簡報…** separately exports a presentation. Olde
 preview installers may place package actions under **＋ 新增**.
 Available PDF files travel with the research; missing files are reported. AI settings
 and login tokens stay out. This transfers a snapshot; it is not live synchronization.
-**New in 0.4.0:** export a list, upload its ZIP to a file host you choose, then
+**New in 0.4.1:** export a list, upload its ZIP to a file host you choose, then
 use **製作並複製分享連結…**. Your colleague chooses **網址匯入…** on either
 list page, previews the package, and confirms the import. Direct HTTPS downloads
 are supported; for cloud login/preview pages, download in the browser first.

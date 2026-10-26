@@ -57,7 +57,11 @@ def offer():
         "Preview",
         "- 外部清單更新",
         "https://github.com/puddings-world/Paperfact/releases/tag/v0.4.0",
-        {"Paperfact-0.4.0-windows-x64-setup.exe": "https://fixture/setup.exe"},
+        {
+            "Paperfact-0.4.0-windows-x64-setup.exe": "https://fixture/setup.exe",
+            "Paperfact-0.4.0-macos-arm64.dmg": "https://fixture/app.dmg",
+            "Paperfact-0.4.0-linux-x86_64.AppImage": "https://fixture/app.AppImage",
+        },
         prerelease=True,
     )
 
@@ -179,7 +183,12 @@ def test_check_failure_can_retry_and_close_ignores_late_result(workspace, pendin
     assert len(pending) == 0
 
 
-def test_download_repeated_activation_and_late_offer_are_isolated(workspace, pending, monkeypatch):
+@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
+def test_download_repeated_activation_and_late_offer_are_isolated(
+    workspace, pending, monkeypatch, platform
+):
+    asset_for = updates.asset_for
+    monkeypatch.setattr(updates, "asset_for", lambda found: asset_for(found, platform))
     monkeypatch.setattr(updates, "can_install", lambda: True)
     workspace.offer(offer())
     for _ in range(30):
@@ -196,9 +205,12 @@ def test_download_repeated_activation_and_late_offer_are_isolated(workspace, pen
     assert len(pending) == 2
 
 
+@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
 def test_download_finishing_after_close_does_not_start_installer(
-    workspace, pending, monkeypatch, tmp_path
+    workspace, pending, monkeypatch, tmp_path, platform
 ):
+    asset_for = updates.asset_for
+    monkeypatch.setattr(updates, "asset_for", lambda found: asset_for(found, platform))
     launched = []
     monkeypatch.setattr(updates, "can_install", lambda: True)
     monkeypatch.setattr(updates, "download_dir", lambda: tmp_path)
