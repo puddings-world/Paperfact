@@ -374,7 +374,9 @@ def search_papers(conn: sqlite3.Connection, text: str, limit: int = 20) -> list[
 @contextmanager
 def connect(*, timeout: float = 30) -> Iterator[sqlite3.Connection]:
     ensure_dirs()
-    conn = sqlite3.connect(DB_PATH, timeout=timeout)
+    from paper_daily.sync_capture import CaptureConnection
+
+    conn = sqlite3.connect(DB_PATH, timeout=timeout, factory=CaptureConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -386,7 +388,12 @@ def connect(*, timeout: float = 30) -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
+    from paper_daily.sync_capture import enabled
+
     with connect() as conn:
+        if enabled(conn):
+            # Enrolled schema changes require an explicit migration boundary.
+            return
         conn.executescript(SCHEMA)
         _migrate(conn)
 

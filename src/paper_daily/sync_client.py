@@ -135,6 +135,14 @@ class SyncClient:
         finally:
             conn.close()
 
+    @classmethod
+    def attach_existing(cls, journal, writer, *, order_writer=None):
+        """Use initialized sync tables on the caller's current transaction."""
+        value = cls.__new__(cls)
+        value.journal, value.writer, value.order_writer = journal, writer, order_writer
+        value._running = threading.Lock()
+        return value
+
     @staticmethod
     def _graph_entity(conn, kind, identity):
         row = conn.execute(
@@ -205,35 +213,44 @@ class SyncClient:
             )
         ]
 
+    @staticmethod
+    def _overlay_optimistic(graph, operation):
+        """Overlay one local intent without inventing an accepted server sequence."""
+        state, touches, own = graph
+        key = (operation["entity_type"], operation["entity_id"])
+        own[key] = operation
+        if operation["version"] != 2:
+            return
+        old = state.get(key)
+        lifecycle = (
+            old is None
+            or not old["active"]
+            or operation["action"] == "delete"
+            or old["incarnation"] != operation["incarnation"]
+        )
+        state[key] = {
+            "incarnation": operation["incarnation"],
+            "structure_revision": old["structure_revision"] if old else 0,
+            "active": operation["action"] == "put",
+            "parents": operation["parents"],
+        }
+        if lifecycle:
+            touches[key] = operation["operation_id"]
+        for parent in operation["parents"]:
+            touches[(parent["kind"], parent["id"])] = operation["operation_id"]
+
     def _optimistic_graph(self, conn):
+        cached = getattr(conn, "_capture_graph_cache", None)
+        if cached is not None:
+            return cached
         state = {
             (row[0], row[1]): json.loads(row[2])
             for row in conn.execute("SELECT * FROM paperfact_sync_graph")
         }
-        touches, own = {}, {}
+        graph = (state, {}, {})
         for operation in self._pending_graph(conn):
-            key = (operation["entity_type"], operation["entity_id"])
-            own[key] = operation
-            if operation["version"] != 2:
-                continue
-            old = state.get(key)
-            lifecycle = (
-                old is None
-                or not old["active"]
-                or operation["action"] == "delete"
-                or old["incarnation"] != operation["incarnation"]
-            )
-            state[key] = {
-                "incarnation": operation["incarnation"],
-                "structure_revision": old["structure_revision"] if old else 0,
-                "active": operation["action"] == "put",
-                "parents": operation["parents"],
-            }
-            if lifecycle:
-                touches[key] = operation["operation_id"]
-            for parent in operation["parents"]:
-                touches[(parent["kind"], parent["id"])] = operation["operation_id"]
-        return state, touches, own
+            self._overlay_optimistic(graph, operation)
+        return graph
 
     def new_graph_operation(
         self, kind, entity_id, payload, *, action="put", operation_id=None, restore=False
@@ -297,6 +314,7 @@ class SyncClient:
             "note",
             "reading_state",
             "paper_document",
+            "research_content",
             "list_order",
             "workspace_list_order",
         ):
@@ -314,6 +332,9 @@ class SyncClient:
             if kind == "reading_state" and action == "delete" and current is None:
                 raise ValueError("A child deletion needs its known parent identities")
             requested = []
+        elif kind == "research_content" and action == "put":
+            scope = payload.get("scope", {})
+            requested = [(scope.get("kind"), scope.get("id"))]
         elif kind == "list_order" and action == "put":
             requested = [("list", entity_id)]
         elif action == "delete":
@@ -445,6 +466,34 @@ class SyncClient:
         return self.new_graph_operation_in(
             conn, kind, entity_id, payload, operation_id=operation_id, restore=restore
         )
+
+    def _guard_content_parent(self, conn, operation):
+        if operation["version"] != 2 or operation["entity_type"] != "research_content":
+            return
+        if operation["action"] == "delete" and operation.get("resolution_of"):
+            from paper_daily.sync_graph import check_preconditions
+
+            def receipt(identity):
+                row = conn.execute(
+                    "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (identity,),
+                ).fetchone()
+                return json.loads(row[0]) if row else None
+
+            if not check_preconditions(
+                lambda kind, identity: self._graph_entity(conn, kind, identity), receipt, operation
+            ):
+                raise ValueError("Content retirement no longer matches its conflict")
+            return
+        graph, _, _ = self._optimistic_graph(conn)
+        parent = operation["parents"][0]
+        current = graph.get((parent["kind"], parent["id"]))
+        if (
+            current is None
+            or not current["active"]
+            or current["incarnation"] != parent["incarnation"]
+        ):
+            raise ValueError("Research content requires its exact active parent")
 
     def _guard_document_parent(self, conn, operation):
         if operation["version"] != 2 or operation["entity_type"] != "paper_document":
@@ -655,6 +704,7 @@ class SyncClient:
             self._guard_reading_parents(conn, value)
             self._guard_order(conn, value)
             self._guard_document_parent(conn, value)
+            self._guard_content_parent(conn, value)
             self.writer(conn, value)
 
         return self.journal.apply(operation, write)
@@ -833,6 +883,7 @@ class SyncClient:
             self._guard_reading_parents(conn, value)
             self._guard_order(conn, value)
             self._guard_document_parent(conn, value)
+            self._guard_content_parent(conn, value)
             self.writer(conn, value)
             conn.execute(
                 "INSERT INTO research_resolution_intents VALUES(?,?,?,?)",

@@ -27,12 +27,48 @@ from paper_daily.desktop import fonts, md
 from paper_daily.store import connect, get_kv, set_kv
 
 MODES = ("編輯", "分割", "預覽")
+SAVE_TEXT = {
+    "zh-TW": {
+        "missing": "這則筆記已不存在，請重新整理。",
+        "changed": "筆記已在別處變更。請重新整理並確認新版內容後再刪除。",
+        "delete_failed": "尚未刪除。請確認筆記是否已變更，再重試。",
+        "deleted": "已刪除筆記。",
+        "empty": "請保留筆記內容；若要刪除整則筆記，請回到筆記清單。",
+        "failed": "尚未儲存，內容仍保留在這裡。請確認筆記是否已在其他視窗變更，再重試或複製草稿。",
+        "stale": "筆記已在別處更新。這份修改已保留為待核對版本，草稿仍在這裡。",
+    },
+    "en": {
+        "missing": "This note no longer exists. Refresh the note list.",
+        "changed": "This note changed elsewhere. Refresh and review it before deleting.",
+        "delete_failed": "Not deleted. Check for changes, then retry.",
+        "deleted": "Note deleted.",
+        "empty": "Keep some note text. To delete the note, return to the note list.",
+        "failed": (
+            "Not saved. Your draft is still here. Check for changes elsewhere, "
+            "then retry or copy it."
+        ),
+        "stale": (
+            "This note changed elsewhere. Your revision was retained for review; "
+            "the draft is still here."
+        ),
+    },
+}
+
+
+def note_message(code, language="zh-TW"):
+    return SAVE_TEXT.get(language, SAVE_TEXT["en"])[code]
 
 
 class NoteEditor(QDialog):
-    def __init__(self, body: str, palette: dict[str, str], hint: str = "", parent=None) -> None:
+    def __init__(
+        self, body: str, palette: dict[str, str], hint: str = "", parent=None,
+        *, save=None, language="zh-TW",
+    ) -> None:
         super().__init__(parent)
         self.pal = palette
+        self._save_callback = save
+        self._saving = self._saved = False
+        self._save_text = SAVE_TEXT.get(language, SAVE_TEXT["en"])
         self.setWindowTitle("編輯筆記")
         self.resize(1100, 700)
         layout = QVBoxLayout(self)
@@ -76,6 +112,11 @@ class NoteEditor(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
+        self.save_status = QLabel()
+        self.save_status.setWordWrap(True)
+        self.save_status.setAccessibleName("Save status")
+        layout.addWidget(self.save_status)
+        self.save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -94,6 +135,30 @@ class NoteEditor(QDialog):
         self.modes.button(mode).setChecked(True)
         self._set_mode(mode, remember=False)
         self._render()
+
+    def accept(self) -> None:
+        if self._saving or self._saved:
+            return
+        if self._save_callback is None:
+            super().accept()
+            return
+        body = self.text().strip()
+        if not body:
+            self.save_status.setText(self._save_text["empty"])
+            return
+        self._saving = True
+        self.save_button.setEnabled(False)
+        try:
+            self._save_callback(body)
+        except Exception as exc:
+            key = "stale" if getattr(exc, "candidate_id", None) else "failed"
+            self.save_status.setText(self._save_text[key])
+        else:
+            self._saved = True
+            super().accept()
+        finally:
+            self._saving = False
+            self.save_button.setEnabled(not self._saved)
 
     def text(self) -> str:
         return self.editor.toPlainText()

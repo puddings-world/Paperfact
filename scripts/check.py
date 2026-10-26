@@ -111,6 +111,10 @@ def run_checks(root, execute=subprocess.run, files=None):
             "Frontend tests",
             [node, "--test", *map(str, sorted((root / "tests").glob("test_*.mjs")))],
         ),
+        (
+            "Mobile domain and Python service integration",
+            [node, str(root / "mobile" / "check.mjs"), "--python", sys.executable],
+        ),
     ]
     for name, command in checks:
         print(f"Checking: {name}", flush=True)

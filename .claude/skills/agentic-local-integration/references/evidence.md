@@ -187,3 +187,27 @@ in this evidence record. Migration and full-suite checks accompany the final cha
 - Limits: offscreen Windows/isolated fixtures; no Mac/phone/installed-app or hosted
   service claim. This does not establish full research-writer capture or turn file
   metadata into permanent cryptographic proof. No real content or credentials used.
+
+
+## Actual writer capture and observed note edits (2026-10-26)
+
+Status: validated-local; enrollment and producer coverage remain incomplete.
+
+Existing store callers included explicit inner commits, so a context-exit-only
+outbox hook would miss already durable changes. The opt-in connection now captures
+typed dirty scopes before each real commit; remote projectors suppress echo but
+still maintain lifecycle markers. Tests cover raw SQL/cursor transaction bypass,
+savepoints, REPLACE identity, statement-cache policy, atomic receipts and rollback.
+
+The desktop editor captures the note's observed base on load. A stale save rolls
+back research/outbox and retains a deterministic candidate; repeated Retry returns
+one retained version. The dialog preserves its draft and selection on failure.
+Actual notes/list/intake fixtures passed 130 combined checks plus four final boundary
+regressions. Source: `sync_capture.py`, `tests/test_sync_capture.py`,
+`tests/test_note_observation.py`, and ADR0007. Full-project evidence is recorded in
+the implementation ledger after integration.
+
+Limits: SQLite-specific guard details are not a universal ORM recipe. Capture alone
+does not infer AI input provenance, atomically publish legacy files, enroll a real
+workspace, provide candidate review/publication, or authorize remote uploads. The
+remaining producers must supply their start-time graph and document observations.

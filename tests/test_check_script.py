@@ -7,7 +7,7 @@ import pytest
 CHECK = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "check.py"))
 
 
-@pytest.mark.parametrize("failure", [None, 0, 1, 2])
+@pytest.mark.parametrize("failure", [None, 0, 1, 2, 3])
 def test_full_check_propagates_failure_and_stops_without_reporting_success(
     tmp_path, monkeypatch, capsys, failure
 ):
@@ -20,7 +20,7 @@ def test_full_check_propagates_failure_and_stops_without_reporting_success(
 
     result = CHECK["run_checks"](tmp_path, execute, files=[])
     assert result == (0 if failure is None else 7)
-    assert len(observed) == (3 if failure is None else failure + 1)
+    assert len(observed) == (4 if failure is None else failure + 1)
     assert ("All checks passed." in capsys.readouterr().out) == (failure is None)
     assert all(options["env"]["QT_QPA_PLATFORM"] == "offscreen" for _, options in observed)
 
@@ -96,3 +96,17 @@ def test_outside_a_git_checkout_the_scan_fails_rather_than_passing_blind(tmp_pat
     monkeypatch.setattr(CHECK["subprocess"], "run", lambda *a, **k: failed)
     assert CHECK["committable_files"](tmp_path) is None
 
+
+
+def test_full_check_includes_mobile_and_real_service_contract(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK["shutil"], "which", lambda name: "node")
+    observed = []
+
+    def execute(command, **options):
+        observed.append(command)
+        return SimpleNamespace(returncode=0)
+
+    assert CHECK["run_checks"](tmp_path, execute, files=[]) == 0
+    assert observed[-1] == [
+        "node", str(tmp_path / "mobile" / "check.mjs"), "--python", CHECK["sys"].executable
+    ]

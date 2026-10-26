@@ -55,6 +55,11 @@ buttons serialize through a server just to share behavior.
   Publish verified bytes before granting ownership, fail closed on unowned or
   damaged objects, and make retry repair the interrupted boundary. A local verified
   flag alone is not current availability, and cancellation cannot retract sent bytes.
+- Capture SQL changes at the actual commit boundary, including inner commits.
+  A first-write snapshot cannot infer what a long-lived editor or AI job originally
+  read: carry its observed base through the save, and retain a stale candidate
+  without overwriting newer research. Retry of that candidate should not create
+  another copy. Test both local research and outbox rollback.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

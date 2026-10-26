@@ -353,13 +353,58 @@ class Data:
             )
             return int(cur.lastrowid)
 
-    def update_note(self, note_id: int, body: str) -> None:
-        with connect() as conn:
-            conn.execute("UPDATE notes SET body=? WHERE id=?", (body, note_id))
+    def note_for_edit(self, paper_id: str, note_id: int) -> dict | None:
+        from paper_daily.sync_capture import observe_note
 
-    def delete_note(self, note_id: int) -> None:
         with connect() as conn:
-            conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+            conn.execute("BEGIN")
+            row = conn.execute(
+                "SELECT * FROM notes WHERE id=? AND paper_id=?", (note_id, paper_id)
+            ).fetchone()
+            if row is None:
+                return None
+            database = next(r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main")
+            return {
+                "row": dict(row), "workspace": str(Path(database).resolve()),
+                "observation": observe_note(conn, note_id),
+            }
+
+    @staticmethod
+    def _check_note_snapshot(conn, note_id, expected):
+        if expected is not None:
+            database = next(
+                r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"
+            )
+            if str(Path(database).resolve()) != expected["workspace"]:
+                raise ValueError("The note belongs to another workspace")
+            current = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
+            if current is None or current["paper_id"] != expected["row"]["paper_id"]:
+                raise ValueError("The note is no longer available")
+            if expected["observation"] is None and dict(current) != expected["row"]:
+                raise ValueError("The note changed after this editor opened")
+
+    def update_note(self, note_id: int, body: str, *, expected=None) -> None:
+        from paper_daily.sync_capture import expecting
+
+        with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._check_note_snapshot(conn, note_id, expected)
+            observations = [expected["observation"]] if expected is not None else []
+            with expecting(conn, [item for item in observations if item is not None]):
+                conn.execute("UPDATE notes SET body=? WHERE id=?", (body, note_id))
+                conn.commit()
+
+    def delete_note(self, note_id: int, *, expected=None) -> bool:
+        from paper_daily.sync_capture import expecting
+
+        with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._check_note_snapshot(conn, note_id, expected)
+            observations = [expected["observation"]] if expected is not None else []
+            with expecting(conn, [item for item in observations if item is not None]):
+                removed = conn.execute("DELETE FROM notes WHERE id=?", (note_id,)).rowcount
+                conn.commit()
+                return bool(removed)
 
     def delete_chat(self, chat_ids: list[int]) -> None:
         with connect() as conn:
@@ -1309,6 +1354,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         assert self.paper
         pal = self.win.pal
         rows = self.win.data.notes(self.paper.id)
+        self._visible_notes = {int(row["id"]): dict(row) for row in rows}
         if not rows:
             self.note_log.setHtml(
                 f'<div style="color:{pal["faint"]};font-size:12px;">'
@@ -1406,23 +1452,26 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         """Rewrite a note in full, quote line included, since half of them are
         answers kept from 問 AI that are worth tidying once they are understood."""
         assert self.paper
-        row = next(
-            (r for r in self.win.data.notes(self.paper.id) if int(r["id"]) == note_id), None
-        )
-        if row is None:
+        paper_id = self.paper.id
+        snapshot = self.win.data.note_for_edit(paper_id, note_id)
+        if snapshot is None:
             return
+        row = snapshot["row"]
+
+        def save(body):
+            if self.paper is None or self.paper.id != paper_id:
+                raise ValueError("The active paper changed")
+            if body != (row["body"] or "").strip():
+                self.win.data.update_note(note_id, body, expected=snapshot)
+
         dialog = NoteEditor(
             row["body"] or "",
             self.win.pal,
             "Markdown。開頭以「> 」起頭的行是引用的原文(問 AI 的筆記則是問題);"
             "刪掉它,這則筆記就不再連回原處。",
-            self,
+            self, save=save,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        body = dialog.text().strip()
-        if body and body != (row["body"] or "").strip():
-            self.win.data.update_note(note_id, body)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             self._load_notes()
 
     def _note_action(self, url) -> None:
@@ -1436,9 +1485,28 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         elif what == "edit":
             self._edit_note(ident)
         elif what == "del":
-            self.win.data.delete_note(ident)
+            from paper_daily.desktop.note_editor import note_message
+
+            if not self.paper:
+                return
+            try:
+                snapshot = self.win.data.note_for_edit(self.paper.id, ident)
+                visible = getattr(self, "_visible_notes", {}).get(ident)
+                if snapshot is None:
+                    self.note_status.setText(note_message("missing"))
+                    return
+                if visible is None or any(
+                    snapshot["row"].get(key) != value for key, value in visible.items()
+                ):
+                    self.note_status.setText(note_message("changed"))
+                    return
+                self.win.data.delete_note(ident, expected=snapshot)
+            except Exception:
+                self.note_status.setText(note_message("delete_failed"))
+                return
             self._open_notes.discard(ident)
             self._load_notes()
+            self.note_status.setText(note_message("deleted"))
         elif what == "toggle":
             self._open_notes.symmetric_difference_update({ident})
             keep = self.note_log.verticalScrollBar().value()

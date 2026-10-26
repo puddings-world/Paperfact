@@ -2,7 +2,9 @@
 
 Status: reviewed baseline, 2026-10-26 (S01). The existing application is v0.4.1.
 This is a source audit, not a claim that these writers now participate in sync.
-No existing writer is wired to the experimental journal yet.
+Opt-in store capture now exercises existing SQL writers in fixtures; full runtime
+enrollment remains gated. See ADR0007 and the implementation ledger for the current
+tested boundary; the table below preserves the original inventory and remaining scope.
 
 ## Research and identity map
 

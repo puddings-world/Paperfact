@@ -1,0 +1,1 @@
+{"name":"paperfact-mobile","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs","check":"node check.mjs"},"engines":{"node":">=22"}}

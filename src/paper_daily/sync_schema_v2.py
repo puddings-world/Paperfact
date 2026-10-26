@@ -122,6 +122,7 @@ def canonical_operation(value: dict) -> str:
         "list_order",
         "workspace_list_order",
         "paper_document",
+        "research_content",
     ) or action not in (
         "put",
         "delete",
@@ -152,9 +153,12 @@ def canonical_operation(value: dict) -> str:
         "list_order": {"list"},
         "workspace_list_order": set(),
         "paper_document": {"paper"},
+        "research_content": set(refs) if set(refs) in ({"paper"}, {"list"}) else {"invalid"},
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
+    if kind == "research_content":
+        _uuid(value["entity_id"])
     if kind == "paper":
         _uuid(value["entity_id"])
         if action == "delete":
@@ -174,6 +178,10 @@ def canonical_operation(value: dict) -> str:
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
+    elif kind == "research_content":
+        from paper_daily.sync_content import validate_payload as validate_content
+
+        validate_content(payload, entity_id=value["entity_id"], parents=parents)
     elif kind in ORDER_KINDS:
         validate_payload(value)
     elif kind == "paper":
@@ -186,9 +194,14 @@ def canonical_operation(value: dict) -> str:
         _text(payload["name"], 200, nonempty=True)
         _text(payload["note"], 128 * 1024)
     elif kind == "note":
-        if set(payload) != {"paper_id", "body"} or payload["paper_id"] != refs["paper"]["id"]:
+        if payload.get("paper_id") != refs["paper"]["id"]:
             raise ValueError("Text note payload must match its paper parent")
-        _text(payload["body"], 200 * 1024)
+        if set(payload) == {"paper_id", "body"}:
+            _text(payload["body"], 200 * 1024)
+        else:
+            from paper_daily.sync_content import validate_rich_note
+
+            validate_rich_note(payload)
     elif kind == "reading_state":
         if set(payload) != {"list_id", "paper_id", "state", "delivered_at", "read_at"}:
             raise ValueError("Unexpected or missing reading-state fields")

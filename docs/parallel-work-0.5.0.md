@@ -4,7 +4,10 @@ Status: **Claude dispatch awaiting workspace trust**, 2026-10-26.
 An isolated `Paperfact-mobile` worktree on `feature/0.5-mobile-reader` exists.
 The native Claude CLI refused launch with `Workspace not trusted`; the owner must
 accept that folder's first-use trust prompt. No running Claude session or completed
-mobile work is claimed. Parent continues core development while this gate is pending.
+mobile work by Claude is claimed. An internal agent completed a separate mobile
+implementation worktree; its source is now integrated into the development branch.
+See `docs/mobile-0.5.md` for tested behavior and remaining gates. The original
+Claude worktree remains available and was not overwritten.
 
 Card M is reserved for that Claude worktree. Cards R and U have completed their documentation
 (`release-readiness-0.5.md` and `workspace-settings-0.5.md`), not runtime acceptance. The parent owns shared contracts and integration.

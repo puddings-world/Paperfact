@@ -128,9 +128,24 @@ class Journal:
         finally:
             conn.close()
 
+    @classmethod
+    def attach_existing(cls, path, *, workspace_id, device_id):
+        """Attach inside a caller transaction without opening a schema writer."""
+        _identifier(workspace_id)
+        _identifier(device_id)
+        value = cls.__new__(cls)
+        value.path = Path(path)
+        if not value.path.is_file():
+            raise ValueError("An existing research database is required")
+        value.workspace_id, value.device_id = workspace_id, device_id
+        return value
+
     def _connect(self):
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
+        from paper_daily.sync_capture import trusted_connection
+
+        trusted_connection(conn)
         return conn
 
     def _binding(self, conn):
@@ -199,6 +214,12 @@ class Journal:
             return self.apply_in(conn, operation, write)
 
     def apply_in(self, conn: sqlite3.Connection, operation: dict, write) -> dict:
+        from paper_daily.sync_capture import suppress_capture
+
+        with suppress_capture(conn):
+            return self._apply_in(conn, operation, write)
+
+    def _apply_in(self, conn: sqlite3.Connection, operation: dict, write) -> dict:
         """Save inside a caller-owned transaction without committing that transaction.
 
         The connection must target this journal's database and must not have a

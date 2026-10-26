@@ -47,11 +47,11 @@ def _digest(paper_id: str) -> str:
     return hashlib.sha256(paper_id.encode()).hexdigest()
 
 
-def _paper_files(paper_id: str) -> list[Path]:
+def _paper_files(paper_id: str, *, derivatives=True) -> list[Path]:
     """The app's files about a paper, relative to the data directory."""
     out: list[Path] = []
     figures = DATA_DIR / "figures" / _safe_name(paper_id)
-    if figures.is_dir():
+    if derivatives and figures.is_dir():
         out += [p.relative_to(DATA_DIR) for p in figures.rglob("*") if p.is_file()]
     # Decks live under the first 24 hex digits; their history stays behind, it is
     # the sharer's undo, not the deck.
@@ -65,7 +65,7 @@ def _paper_files(paper_id: str) -> list[Path]:
     # The text extracted from the PDF is what questions, translation and any rerun
     # read; nothing rebuilds it when a PDF arrives by import rather than by analyze.
     text = DATA_DIR / "text" / f"{_safe_name(paper_id)}.txt"
-    if text.exists():
+    if derivatives and text.exists():
         out.append(text.relative_to(DATA_DIR))
     for folder in ("paper-highlights", "reading-links", "material-positions", "research-questions"):
         path = DATA_DIR / folder / (_digest(paper_id) + ".json")
@@ -78,16 +78,41 @@ def _sha256(blob: bytes) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+def _document(paper_id):
+    """Resolve against the selected research DB, never another paper's alias."""
+    from paper_daily.document_reader import from_workspace
+
+    with connect() as conn:
+        database = next(row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main")
+    resolver = from_workspace(Path(database), legacy_root=PDF_DIR)
+    status = resolver.inspect(paper_id)
+    if status.managed:
+        return resolver.resolve(paper_id)
+    return status if status.status == "ambiguous" else None
+
+
+def _document_path(paper_id, document):
+    if document is not None:
+        return document.path if document.available else None
+    return PDF_DIR / f"{_safe_name(paper_id)}.pdf"
+
+
 def pdf_record(row, log=lambda _m: None) -> dict | None:
     """The local PDF's fingerprint, and a URL that serves exactly it, if any.
 
     Downloading every candidate is slow, so the answer is kept in kv against the
     fingerprint and reused until the local file changes.
     """
-    path = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
-    if not path.exists():
+    captured = _document(row["id"])
+    path = _document_path(row["id"], captured)
+    if path is None or not path.exists():
         return None
     blob = path.read_bytes()
+    if captured is not None:
+        if _sha256(blob) != captured.sha256:
+            raise ValueError("The verified document changed during export")
+        # A sync-owned PDF has no implicit publisher-fetch permission or stable public URL.
+        return {"sha256": captured.sha256, "bytes": len(blob), "url": None}
     record = {"sha256": _sha256(blob), "bytes": len(blob), "url": None}
     key = f"pdf.verified.{row['id']}"
     with connect() as conn:
@@ -186,24 +211,33 @@ def export(
         keys = [k.format(pid=pid) for pid in ids for k in KV_KEYS]
         kv = _rows(conn, f"SELECT * FROM kv WHERE key IN ({','.join('?' * len(keys))})", keys)
 
-    pdfs = {}
+    pdfs, captured, paths = {}, {}, {}
     for row in tables["papers"]:
-        path = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
+        pid = row["id"]
+        captured[pid] = _document(pid)
+        path = _document_path(pid, captured[pid])
+        paths[pid] = path
         if with_pdfs:
-            pdfs[row["id"]] = (
-                dict(sha256=_sha256(path.read_bytes()), bytes=path.stat().st_size, url=None)
-                if path.exists()
-                else None
+            blob = path.read_bytes() if path is not None and path.exists() else None
+            pdfs[pid] = (
+                dict(sha256=_sha256(blob), bytes=len(blob), url=None) if blob is not None else None
             )
+            if (captured[pid] is not None and blob is not None
+                    and pdfs[pid]["sha256"] != captured[pid].sha256):
+                raise ValueError("The verified document changed during export")
         else:
-            pdfs[row["id"]] = pdf_record(row, log)
-    files = [f for pid in ids for f in _paper_files(pid)]
+            pdfs[pid] = pdf_record(row, log)
+    # Legacy aliases may contain another revision. Reproducible derivatives can be
+    # regenerated locally from the exported PDF; curated decks retain their own assets.
+    files = {
+        relative: DATA_DIR / relative
+        for pid in ids for relative in _paper_files(pid, derivatives=captured[pid] is None)
+    }
     if with_pdfs:
-        files += [
-            (PDF_DIR / f"{_safe_name(pid)}.pdf").relative_to(DATA_DIR)
-            for pid, rec in pdfs.items()
-            if rec
-        ]
+        files.update({
+            Path("pdf") / f"{_safe_name(pid)}.pdf": paths[pid]
+            for pid, rec in pdfs.items() if rec
+        })
     manifest = {
         "format": FORMAT,
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -212,7 +246,7 @@ def export(
         "pdfs": pdfs,
         "notes_included": notes,
         "pdfs_included": with_pdfs,
-        "file_hashes": {f.as_posix(): _sha256((DATA_DIR / f).read_bytes()) for f in files},
+        "file_hashes": {f.as_posix(): _sha256(source.read_bytes()) for f, source in files.items()},
         "counts": {t: len(rows) for t, rows in tables.items()} | {"files": len(files)},
     }
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -224,11 +258,16 @@ def export(
         with zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1))
             z.writestr("tables.json", json.dumps({**tables, "kv": kv}, ensure_ascii=False))
-            for rel in files:
-                z.write(DATA_DIR / rel, "files/" + rel.as_posix())
+            for rel, source in files.items():
+                z.write(source, "files/" + rel.as_posix())
         # Detect research files changed during packing before replacing a prior export.
         with zipfile.ZipFile(staged) as z:
             _validated(z)
+        from paper_daily.document_reader import document_current
+
+        if any(item.managed and not document_current(item)
+               for item in captured.values() if item is not None and item.available):
+            raise ValueError("The selected document version changed during export; retry")
         os.replace(staged, out)
     finally:
         staged.unlink(missing_ok=True)
@@ -275,6 +314,10 @@ def fetch_pdfs(pdfs: dict, titles: dict, log=lambda _m: None, *, replace=False) 
     for pid, rec in pdfs.items():
         if not rec:
             continue
+        captured = _document(pid)
+        if captured is not None:
+            (got if captured.available and captured.sha256 == rec["sha256"] else need).append(pid)
+            continue
         dest = PDF_DIR / f"{_safe_name(pid)}.pdf"
         if dest.exists() and _sha256(dest.read_bytes()) == rec["sha256"]:
             got.append(pid)
@@ -314,6 +357,7 @@ def inspect(path: Path) -> dict:
     with zipfile.ZipFile(path) as z:
         manifest, tables, _owners = _validated(z)
     with connect() as conn:
+        _check_workspace_aliases(conn, _owners)
         existing = {r[0] for r in conn.execute("SELECT id FROM papers")}
         list_exists = bool(
             conn.execute("SELECT 1 FROM lists WHERE id=?", (manifest["list"]["id"],)).fetchone()
@@ -334,7 +378,7 @@ def inspect(path: Path) -> dict:
 
 def _validated(z):
     names = z.namelist()
-    if len(names) != len(set(names)):
+    if len(names) != len({name.casefold() for name in names}):
         raise ValueError("資料包包含重複檔名")
     try:
         manifest = json.loads(z.read("manifest.json"))
@@ -380,9 +424,15 @@ def _validated(z):
             or not (DATA_DIR / rel).resolve().is_relative_to(DATA_DIR.resolve())
         ):
             raise ValueError(f"bundle path escapes the data directory: {name}")
-        owner = next((pid for pid in ids if _owns_file(pid, rel)), None)
-        if owner is None:
-            raise ValueError(f"資料包包含不屬於論文的檔案：{relative}")
+        matches = [pid for pid in ids if _owns_file(pid, rel)]
+        if len(matches) != 1:
+            raise ValueError(f"資料包檔案缺少唯一論文歸屬：{relative}")
+        owner = matches[0]
+        if rel.parts[0] in ("pdf", "text", "figures") and any(
+            pid != owner and _safe_name(pid).casefold() == _safe_name(owner).casefold()
+            for pid in ids
+        ):
+            raise ValueError("Bundle filenames alias multiple papers")
         blob = z.read(name)  # also validates CRC, including legacy bundles
         expected = manifest.get("file_hashes", {}).get(relative)
         if expected and _sha256(blob) != expected:
@@ -414,6 +464,18 @@ def _owns_file(pid, rel):
     )
 
 
+def _check_workspace_aliases(conn, owners):
+    """A bundle may not claim another local paper's sanitized filename."""
+    aliases = {}
+    for (paper_id,) in conn.execute("SELECT id FROM papers"):
+        aliases.setdefault(_safe_name(paper_id).casefold(), set()).add(paper_id)
+    for relative, owner in owners.items():
+        if Path(relative).parts[0] not in ("pdf", "text", "figures"):
+            continue
+        if aliases.get(_safe_name(owner).casefold(), set()) - {owner}:
+            raise ValueError("Bundle file aliases another local paper; reconcile identities first")
+
+
 def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m: None) -> dict:
     """Bring a bundle into this workspace. Returns what was added.
 
@@ -423,9 +485,22 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
     with zipfile.ZipFile(path) as z:
         manifest, tables, owners = _validated(z)
         listing = manifest["list"]
+        with connect() as conn:
+            _check_workspace_aliases(conn, owners)
         report: dict = {"list": listing["id"], "name": listing["name"]}
         conflicts = set()
+        managed = {}
+        for row in tables["papers"]:
+            pid = row["id"]
+            captured = _document(pid)
+            if captured is not None:
+                managed[pid] = captured
+                rec = manifest.get("pdfs", {}).get(pid)
+                if not rec or not captured.available or captured.sha256 != rec["sha256"]:
+                    conflicts.add(pid)
         for pid, rec in manifest.get("pdfs", {}).items():
+            if pid in managed:
+                continue
             local = PDF_DIR / f"{_safe_name(pid)}.pdf"
             if (
                 rec
@@ -449,8 +524,11 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             if not name.startswith("files/") or name.endswith("/"):
                 continue
             relative = Path(name.removeprefix("files/"))
-            if owners[relative.as_posix()] in conflicts:
+            owner = owners[relative.as_posix()]
+            if owner in conflicts:
                 continue
+            if relative.parts[0] == "pdf" and owner in managed:
+                continue  # Existing managed bytes remain owned by the document binding.
             target = (DATA_DIR / relative).resolve()
             if not target.is_relative_to(DATA_DIR.resolve()):
                 raise ValueError("Bundle file escapes the workspace")
@@ -461,6 +539,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
         # database commit restores installed files as the connection rolls back.
         with bundle_files.stage(DATA_DIR, z, relatives) as staged, connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            _check_workspace_aliases(conn, owners)
             report["papers"] = _insert(conn, "papers", tables["papers"], replace)
             # Context only: never let the bundle overwrite a paper the receiver keeps.
             report["cited_papers"] = _insert(
@@ -508,6 +587,11 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             talked = {r[0] for r in conn.execute("SELECT DISTINCT paper_id FROM chat")}
             fresh = [r for r in tables.get("chat", []) if r["paper_id"] not in talked]
             report["chat"] = _insert(conn, "chat", fresh, replace=False)
+            from paper_daily.document_reader import document_current
+
+            if any(not document_current(item) for pid, item in managed.items()
+                   if pid not in conflicts):
+                raise ValueError("The document version changed during import; retry")
             report["files"] = staged.install()
     if pdfs:
         titles = {r["id"]: r["title"] for r in tables["papers"]}

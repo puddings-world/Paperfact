@@ -2,7 +2,8 @@
 
 Status: local foundation in development, 2026-10-26. Planning checkpoint: `c6ba6d9`.
 Journal, research adapter, reference service, client and attachment foundations
-exist. Existing app actions are not enrolled in sync yet.
+exist. Opt-in SQL capture now exercises existing app actions in isolated fixtures;
+user-facing enrollment and complete producer/file capture are still gated.
 No cloud deployment, credential changes, production migration or version bump.
 
 ## Read first
@@ -30,9 +31,10 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   writers and unsupported integration paths explicitly listed. Adapter coverage is pending.
 - **S02 partial:** [local journal ADR](adr/0001-local-sync-journal.md); production identity,
   remote conflicts, hosting/authentication and encryption decisions remain open.
-- **S03 partial:** explicit-path list/paper/membership/plain-note adapters, portable
-  identities and shared transactional intake actions preserve legacy rows. Existing
-  UI/CLI/MCP/import/AI writers are not enrolled yet.
+- **S03 partial:** portable identities, actual store transaction capture and typed
+  graph/rich SQL projections preserve legacy rows. Existing list/intake actions and
+  desktop note editing/deletion now exercise capture in fixtures. Unsupported writes
+  fail closed; remaining editors, AI observations and file producers still need wiring.
 - **S04 partial:** SQLite reference authority with device credentials, revocation,
   retries and conflicts. Bounded authenticated loopback HTTP is implemented; production identity
   and remote HTTPS deployment remain gated.
@@ -44,10 +46,11 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   Exact managed-reader activation, versioned derivatives and bounded block reads
   now have fixture coverage. Offline pinning, other attachment types, cache/history
   lifecycle and complete transfer/onboarding UI remain.
-- **S09/S10 in progress:** the independent Claude worktree remains prepared;
-  launch was blocked by its first-use workspace trust prompt. No Claude execution
-  is claimed. An internal implementation agent is now building the PWA in a
-  separate worktree, with an injected authenticated transport and fixture storage.
+- **S09/S10 partial:** an independent PWA now has IndexedDB notes/outbox/drafts,
+  private transport contracts, verified PDFs, read-only rich research and conflict
+  handling. Its isolated agent worktree is integrated. Claude launch remains blocked
+  by first-use workspace trust; no Claude execution is claimed. Public browser login,
+  deck transport, mobile resume and physical-device acceptance remain gated.
 - **S07/S08/S11/S12 implementation pending.** Planning and task ownership are in
   [parallel work](parallel-work-0.5.0.md); the table retains complete acceptance targets.
 - [Delivery decision](adr/0002-sync-delivery-boundaries.md) records the reference-first
@@ -359,3 +362,65 @@ DTO2 and authenticated document contracts rather than the earlier v1 proposal.
   standalone transport prototype: every UI/CLI/MCP/import/AI write must participate
   before enabling user-facing sync. Full research entities/decks, snapshots/recovery,
   onboarding/status/devices/offline pins and the independent PWA remain required.
+
+
+## Existing SQL writers and guarded note editing — 2026-10-26
+
+- [ADR0007](adr/0007-research-writer-enrollment.md) now has an opt-in actual store
+  boundary. Dirty scopes, portable identities, research, receipts and outbox share
+  one commit, including legacy inner commits. Typed remote projection is suppressed
+  from capture and retains its lifecycle markers. Ordinary unbound workspaces remain
+  usable; there is no user-facing enrollment toggle yet.
+- [SQL research content](sync-content.md) covers ten analysis/message/highlight
+  families with per-feature/per-row identity and exact graph parents. Rich notes
+  preserve kind, time and PDF anchors without weakening the existing plain contract.
+  File-backed decks/JSON, conversation total order and large-content manifests remain
+  separate gates; the PDF transport is not silently reused for arbitrary content.
+- The actual note editor saves against its loaded version. Failure keeps the dialog,
+  text and selection; a stale save retains a deduplicated local candidate and does not
+  replace newer research. Delete checks the visible note before using a fresh guarded
+  transaction. Repeated activation does not duplicate saves or tombstones.
+- SQLite authorizer/cache, cursor scripts, raw transaction exits, savepoints and
+  REPLACE identity changes have explicit regressions. A temporary transaction graph
+  cache reduced the same synthetic 500-paper intake from 100.759 to 7.917 seconds,
+  retaining 500 papers and 1,503 operations. This is fixture timing, not a performance
+  guarantee for the owner's corpus or other devices.
+- Managed research-bundle exports pack the verified PDF into the portable package;
+  they do not reuse a legacy alias or search for a public URL. Curated decks/assets
+  remain included. Unproven old text/figure derivatives are omitted and can be rebuilt
+  locally from the PDF. Import never adopts sender sync identity or overwrites another
+  paper's colliding filename. Explicit old-hash anchors cannot navigate into a newer
+  PDF, including after importing into an ordinary unbound reader.
+- Targeted evidence: 130 capture/note/journal/client cases, four final boundary
+  regressions, 66 SQL-content/adapter cases, and 30 bundle/provenance cases passed.
+  A Windows offscreen note-conflict render was inspected with bundled fonts; the draft,
+  preview, status and Save/Cancel actions remain visible. This is not a live Mac test.
+- Full check: **2,116 Python tests passed** in 764.79 seconds,
+  **18 frontend tests and 58 mobile tests passed**, with actual JavaScript-to-Python
+  HTTP interoperability, privacy scan and Ruff passing. Local ignored log:
+  `build/capture-mobile-full-check.log`. No production workspace, real AI/account,
+  hosted service, phone or installer acceptance is claimed. Candidate publication,
+  complete AI/editor observations, file capture, baseline/backup/recovery and the
+  desktop sync setup remain required before enabling enrollment or releasing v0.5.0.
+
+
+## Mobile integration checkpoint — 2026-10-26
+
+- Integrated the isolated implementation under `mobile/`; see
+  [mobile contract and limits](mobile-0.5.md). Root `scripts/check.py` now requires
+  mobile domain tests plus JavaScript-to-Python loopback service interoperability.
+- The browser stores note changes/outbox atomically, keeps observed versions with
+  drafts, preserves stale drafts, and flushes the old workspace before switching.
+  Credentials remain memory-only. Session checks bind workspace/device; incoming
+  research never initiates AI or automatic document downloads.
+- Rich SQL content and anchored notes receive into read-only projections without
+  flattening metadata. Canonical deletion suppresses older supplementary content.
+  Bounded sync passes distinguish more work from completion. DTO imports never
+  become writable bootstrap or advance the canonical cursor.
+- Agent evidence: 58 Node tests, actual latest-core Python HTTP interoperability,
+  and four isolated headless Edge checks passed. Parent inspected the 390×844 phone
+  render: readable content, visible actions and no horizontal clipping. This is not
+  physical-phone, public-authentication or installed-PWA acceptance.
+- Integrated full-check result is recorded with the SQL writer checkpoint above.
+  The app's connection form is a developer seam; hosted sign-in/pairing and deck
+  reading remain required release work, not a finished public mobile product.

@@ -117,12 +117,12 @@ def anchor_allowed(reader, source):
         return False
     if not loaded_document_valid(reader):
         return False
-    if not managed(getattr(reader, "paper", None)):
-        return True
+    claimed = outer_hash if outer_hash is not None else nested_hash
+    if not managed(getattr(reader, "paper", None)) and claimed is None:
+        return True  # Untagged legacy sources retain compatibility.
     if not isinstance(source, dict):
         return False
     fingerprint = getattr(reader, "_pdf_fingerprint", None)
-    claimed = outer_hash if outer_hash is not None else nested_hash
     return bool(fingerprint and claimed == fingerprint)
 
 
