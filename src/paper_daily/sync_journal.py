@@ -36,12 +36,16 @@ def _identifier(value):
 
 def canonical_operation(value: dict) -> str:
     """Validate a closed payload shape before opening a transaction or calling a writer."""
-    if not isinstance(value, dict) or set(value) != FIELDS:
+    if not isinstance(value, dict) or set(value) not in (FIELDS, FIELDS | {"resolution_of"}):
         raise ValueError("Unexpected or missing operation fields")
     if type(value["version"]) is not int or value["version"] != 1:
         raise ValueError("Unsupported sync protocol version")
     for key in ("operation_id", "workspace_id", "device_id", "entity_id"):
         _identifier(value[key])
+    if "resolution_of" in value:
+        _identifier(value["resolution_of"])
+        if value["resolution_of"] == value["operation_id"]:
+            raise ValueError("An operation cannot resolve itself")
     dependency = value["depends_on"]
     if dependency is not None:
         _identifier(dependency)
@@ -143,10 +147,9 @@ class Journal:
         }
         if action not in allowed:
             return sqlite3.SQLITE_DENY
-        if (
-            action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE)
-            and (first or "").startswith(PREFIX)
-        ):
+        if action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE) and (
+            first or ""
+        ).startswith(PREFIX):
             return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK
 

@@ -235,3 +235,21 @@ def test_returned_pending_payload_cannot_modify_saved_operation(journal):
     batch[0]["payload"]["name"] = "consumer changed"
     assert journal.pending() == [operation()]
     assert content(journal)[0][1] == "Reading"
+
+
+@pytest.mark.parametrize("target", [None, "", "../other", "op-1"])
+def test_invalid_resolution_reference_never_writes(journal, target):
+    value = operation()
+    value["resolution_of"] = target
+    with pytest.raises(ValueError):
+        journal.apply(value, writer)
+    assert content(journal) == []
+    assert journal.pending() == []
+
+
+def test_resolution_reference_is_preserved_in_atomic_outbox(journal):
+    value = operation()
+    value["resolution_of"] = "conflicting-operation"
+    journal.apply(value, writer)
+    assert journal.pending() == [value]
+    assert content(journal) == [("entity-1", "Reading", "Background")]

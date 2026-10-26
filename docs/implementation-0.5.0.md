@@ -1,7 +1,8 @@
 # v0.5.0 implementation and session handoff
 
 Status: local foundation in development, 2026-10-26. Planning checkpoint: `c6ba6d9`.
-An isolated journal prototype exists; no app action participates in sync yet.
+Journal, research adapter, reference service, client and attachment foundations
+exist. Existing app actions are not enrolled in sync yet.
 No cloud deployment, credential changes, production migration or version bump.
 
 ## Read first
@@ -29,9 +30,22 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   writers and unsupported integration paths explicitly listed. Adapter coverage is pending.
 - **S02 partial:** [local journal ADR](adr/0001-local-sync-journal.md); production identity,
   remote conflicts, hosting/authentication and encryption decisions remain open.
-- **S03 in progress:** isolated `sync_journal.py` and behavioral tests; no production
-  writer adapters, integer-ID migration or full sync implementation.
-- **S04-S12 not started.** The table below retains the complete acceptance targets.
+- **S03 partial:** explicit-path list/plain-note adapter and portable note-ID mapping,
+  preserving legacy rows; existing UI/CLI/MCP writers are not enrolled yet.
+- **S04 partial:** SQLite reference authority with device credentials, revocation,
+  retries and conflicts. Bounded authenticated loopback HTTP is implemented; production identity
+  and remote HTTPS deployment remain gated.
+- **S05 partial:** bounded push/pull and atomic materialization/cursor, with preserved
+  conflict history and explicit cross-device resolution. Desktop draft/selection
+  integration and full entity coverage remain.
+- **S06 partial:** verified resumable local blob store; authorization, research manifests,
+  offline pinning and transfer UI remain.
+- **S09/S10 handoff prepared:** independent Claude mobile worktree created; launch was
+  blocked by Claude's first-use workspace trust prompt. No Claude execution is claimed.
+- **S07/S08/S11/S12 implementation pending.** Planning and task ownership are in
+  [parallel work](parallel-work-0.5.0.md); the table retains complete acceptance targets.
+- [Delivery decision](adr/0002-sync-delivery-boundaries.md) records the reference-first
+  approach and the identity, hosting, encryption and retention gates.
 
 | ID | Deliverable | Depends on | Acceptance evidence |
 |---|---|---|---|
@@ -133,3 +147,48 @@ Run the existing full check before declaring an implementation complete or commi
   (local ignored artifact). No live cloud, mobile, power-loss or cross-device check was performed.
 - This applies an existing repository-local atomic receipt pattern; no new global
   skill rule or installation was introduced at this checkpoint.
+
+
+## Second local slice (in progress)
+
+- Source schemas: `sync_journal.py`, `sync_research.py`; existing application schema
+  is exercised in `test_sync_research_roundtrip.py`, not the owner's database.
+- Service/client: `sync_service.py`, `sync_client.py`; two isolated research stores
+  exchange list names/plain notes and retain edit/edit or edit/delete conflicts.
+- Attachments: `sync_blobs.py`; staged chunks, resumable offsets, quota reservation,
+  hash verification and atomic publication, with no production file migration.
+- Review caught upload-ack/pull gaps, stale-page materialization and fabricated conflict
+  heads. Regression tests reproduce those failures before their fixes.
+- Release and workspace UX plans: `docs/release-readiness-0.5.md` and
+  `docs/workspace-settings-0.5.md` (planning complete; runtime/UI and release acceptance remain pending).
+- Full-check evidence for this slice: **1,378 Python tests passed** in
+  437.50 seconds, **18 frontend tests passed**, privacy scan and Ruff passed.
+  Log: `build/sync-roundtwo-check.log` (local ignored artifact).
+- The acceptance includes actual loopback HTTP between two fixture research
+  databases and explicit conflict resolution. No production database, hosted
+  service, real AI account, installer, Mac or mobile-device check was performed.
+- Read projection: `sync_projection.py` exposes a consistent local DB snapshot
+  with honest pending/awaiting/deferred state; it explicitly is not canonical
+  server bootstrap and does not claim file/deck support.
+- Next domain decision: [research entity capture](adr/0003-research-entity-capture.md).
+  Paper/membership identities and parent-aware materialization must land before
+  existing app writers are enrolled.
+- Claude dispatch: both the isolated mobile worktree and existing checkout
+  returned `Workspace not trusted`. No Claude task started. The owner was asked
+  to accept first-use trust for the mobile worktree; core development continues.
+
+Next integration gates, in order:
+
+1. Verify explicit conflict resolution and bounded HTTP acceptance in fixtures
+   with the complete existing regression suite.
+2. Expand the operation/read-projection contract to paper metadata, list membership,
+   order, reading state, anchors, analyses and deck/asset manifests before enrolling
+   existing writers. Do not silently drop unsupported content.
+3. Add shared transactional capture to the audited UI/CLI/MCP/import/AI write paths;
+   verify unsaved desktop drafts and selection during remote refresh.
+4. Add consistent bootstrap, authenticated blob ownership/transfer, backups/restores,
+   and explicit enrollment/revocation lifecycle.
+5. Integrate the Claude mobile contribution and its tests into the full check;
+   implement reviewed private browser sessions and foreground/offline acceptance.
+6. Run the release matrix, including real Mac/phone and packaged upgrade journeys.
+   Preserve v0.4.1 until the complete v0.5 release gate is satisfied.

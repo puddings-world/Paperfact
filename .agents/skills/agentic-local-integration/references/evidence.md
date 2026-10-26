@@ -61,3 +61,35 @@ cannot reconcile a different workspace. Check workspace identity first; merging
 research is a separate operation with its own destination and preservation rules.
 Only synthetic records are used in tests. No real research identifiers are retained
 in this evidence record. Migration and full-suite checks accompany the final change.
+
+
+## Replication extension: acknowledgment is not materialization
+
+- Pattern ID: local-integration-replication-receipts-v1
+- Status: validated-local
+- Date / project: 2026-10-26 / Paperfact
+- Trigger: review of the first two-workspace client found that upload acknowledgment
+  cleared the local predecessor before pull. A following edit falsely conflicted
+  with its own accepted predecessor; an older pull page could replace newer local text.
+- Invariant: acknowledged-but-unreceived operations remain outstanding for causal
+  chaining and materialization. Event history, research application and cursor are
+  one local transaction; deferred content does not imply a lost remote event.
+- Preconditions: replication with separate upload acknowledgments and ordered receive.
+  Ordinary local CLI/MCP receipts do not require this additional remote state machine.
+- Trade-off: retained receipts/history and an explicit awaiting-receipt state add
+  storage and lifecycle work; they avoid deriving causality from wall-clock time.
+- Implementation: `src/paper_daily/sync_client.py` and `sync_service.py`.
+- Regression evidence: five added cases failed before the fixes; the client suite
+  then passed 19 cases (82 combined client/service/journal cases). These cover failed
+  pull + restart + subsequent edit, older pull pages, unobserved conflict heads, and
+  canonical absence preserving the rejected version in history.
+- Named tests: `test_acknowledged_edit_remains_causal_parent_after_failed_pull_and_restart`,
+  `test_older_pull_page_never_replaces_newer_acknowledged_local_content` in
+  `tests/test_sync_client.py`. Run `python -m pytest tests/test_sync_client.py -q`.
+- Limits: isolated SQLite and simulated services; not physical power-loss, hosted
+  security, live mobile/browser storage, or complete application writer coverage.
+  Later explicit-resolution changes and full-suite counts are tracked in the
+  repository implementation ledger rather than substituted for this initial evidence.
+- Privacy: synthetic records only; no account secrets, private research or machine paths.
+- Promotion: repository-local refinement only; no global installation or cross-project
+  reuse claim. Production retention, protocol evolution and enrollment remain separate.

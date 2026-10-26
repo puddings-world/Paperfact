@@ -15,9 +15,10 @@ For cross-device work, read `docs/roadmap-0.5.0.md`, then
 They separate agreed scope, proposed architecture, unresolved decisions, and
 implementation tasks. Sync and the independent mobile PWA are not implemented.
 The S01 baseline is in `docs/sync-write-inventory.md`; `docs/adr/0001-local-sync-journal.md`
-records the isolated journal prototype. No production writer uses it yet. Continue
-with the ledger's shared list/note adapter and fake-peer acceptance slice; keep open
-identity, hosting and conflict decisions explicit.
+records the journal foundation. The reference client/service and explicit list/note
+adapter are in development; existing app writers are not enrolled yet. Follow the
+updated ledger and `docs/parallel-work-0.5.0.md` for ownership; do not overwrite another
+session's files. Production identity/hosting and full research coverage remain gated.
 Use the active `Paperfact` checkout; the old `paper-daily` checkout is an archive.
 Keep repository planning documentation concise and in English.
 

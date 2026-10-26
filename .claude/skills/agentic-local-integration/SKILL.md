@@ -19,6 +19,11 @@ buttons serialize through a server just to share behavior.
   in the same transaction as the research data. Return the original result for
   identical retries; reject an operation ID reused for a different payload.
   An ordinary SQL transaction alone does not prevent duplicate retries.
+- When extending local operations into replication, distinguish remote acceptance
+  from local application. An acknowledged write not yet received in a contiguous
+  event stream remains a causal predecessor; older pages must not replace its newer
+  local content. Commit received research, history and cursor together. This is a
+  replication boundary, not an extra protocol required for ordinary local CLI calls.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

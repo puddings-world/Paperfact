@@ -1,8 +1,9 @@
 # v0.5.0 — Research across devices
 
-Status: local planning draft, 2026-10-26. Baseline: v0.4.1.
-The scope is agreed in principle; the architecture and service choices remain
-proposals. No synchronization service or new mobile client is implemented by this plan.
+Status: in development, unreleased, 2026-10-26. Published baseline: v0.4.1.
+The local reference sync foundation is implemented and tested in fixtures; app writer
+integration, production identity/hosting and the mobile client are still pending.
+See the implementation ledger for exact coverage rather than inferring release readiness.
 
 ## Release goal
 

@@ -89,3 +89,15 @@ power-loss or filesystem fault tests. Final full-suite counts are in the
 S02 remains open for production identity migration, wire evolution, remote conflict
 and retention rules, hosting/authentication, encryption/recovery and operating costs.
 S03 remains open for production adapters, stable IDs and safe schema migrations.
+
+
+## Follow-up: explicit resolution identity
+
+The private version-1 prototype now permits one optional `resolution_of` identifier.
+It names a conflicting operation; the service validates that the conflict exists
+for the same workspace and entity. Only an accepted resolution received in the
+contiguous client stream marks the original resolved. Local intent, research and
+outbox persistence remain atomic; history is retained. This field is necessary for
+other devices to distinguish an explicit resolution from an ordinary content edit.
+See [the client contract](../sync-client.md). No deployed protocol compatibility is
+claimed, and production version negotiation remains an open S02 decision.
