@@ -13,6 +13,7 @@ import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from paper_daily.sync_journal import _identifier
 
@@ -376,13 +377,166 @@ def _project(conn, workspace_id, max_records, max_bytes):
     }
 
 
-def read_manifest(path: Path, *, workspace_id: str, max_records=10000, max_bytes=8 * 1024 * 1024):
+def _portable_uuid(value):
+    if not isinstance(value, str):
+        raise ValueError("Invalid portable paper identity")
+    try:
+        if str(UUID(value)) != value:
+            raise ValueError("Invalid portable paper identity")
+    except (ValueError, AttributeError):
+        raise ValueError("Invalid portable paper identity") from None
+    return value
+
+
+def _graph_info(conn, tables, kind, identity, state, cursor, parents):
+    if state["sync_state"] != "synced" or "paperfact_sync_graph" not in tables:
+        return None
+    row = conn.execute(
+        "SELECT CASE WHEN length(metadata)<=8192 THEN metadata ELSE NULL END "
+        "FROM paperfact_sync_graph WHERE entity_type=? AND entity_id=?",
+        (kind, identity),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        data = json.loads(row[0])
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError("Invalid research graph metadata") from None
+    if not isinstance(data, dict) or set(data) != {
+        "incarnation",
+        "parents",
+        "structure_revision",
+        "active",
+    }:
+        raise ValueError("Invalid research graph metadata")
+    _identifier(data["incarnation"])
+    structure = _integer(data["structure_revision"])
+    if (
+        structure > cursor
+        or type(data["active"]) is not bool
+        or not isinstance(data["parents"], list)
+    ):
+        raise ValueError("Invalid research graph metadata")
+    found = {}
+    for ref in data["parents"]:
+        if not isinstance(ref, dict) or set(ref) != {"kind", "id", "incarnation"}:
+            raise ValueError("Invalid research graph parent")
+        if ref["kind"] not in ("list", "paper") or ref["kind"] in found:
+            raise ValueError("Invalid research graph parent")
+        _identifier(ref["id"])
+        _identifier(ref["incarnation"])
+        if ref["kind"] == "paper":
+            _portable_uuid(ref["id"])
+        found[ref["kind"]] = ref["id"]
+    if found != parents:
+        raise ValueError("Research graph parents do not match projected content")
+    if not data["active"]:
+        return None
+    return {
+        "incarnation": data["incarnation"],
+        "parents": data["parents"],
+        "structure_revision": structure,
+    }
+
+
+def _portable_projection(conn, result):
+    from paper_daily.sync_schema_v2 import membership_id
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    mapping, seen = {}, set()
+    for row in conn.execute(
+        "SELECT p.id,m.sync_id FROM papers p LEFT JOIN research_paper_identity m ON m.local_id=p.id"
+    ):
+        if row[1] is None:
+            raise ValueError("Research projection contains an unenrolled paper")
+        portable = _portable_uuid(row[1])
+        if portable in seen:
+            raise ValueError("Research projection has ambiguous paper identities")
+        mapping[row[0]] = portable
+        seen.add(portable)
+    cursor = result["cursor"]
+    paper_graphs = {}
+    for paper in result["papers"]:
+        paper["id"] = mapping[paper["id"]]
+        paper.update(_sync_state(conn, tables, "paper", paper["id"], cursor))
+        paper["graph"] = _graph_info(conn, tables, "paper", paper["id"], paper, cursor, {})
+        paper_graphs[paper["id"]] = paper["graph"]
+    for collection in result["lists"]:
+        collection["graph"] = _graph_info(
+            conn, tables, "list", collection["id"], collection, cursor, {}
+        )
+        for member in collection["members"]:
+            member["paper_id"] = mapping[member["paper_id"]]
+            member["id"] = membership_id(collection["id"], member["paper_id"])
+            member.update(_sync_state(conn, tables, "membership", member["id"], cursor))
+            member["graph"] = _graph_info(
+                conn,
+                tables,
+                "membership",
+                member["id"],
+                member,
+                cursor,
+                {"list": collection["id"], "paper": member["paper_id"]},
+            )
+            if member["graph"] is not None:
+                parent_graphs = {
+                    "list": collection["graph"],
+                    "paper": paper_graphs[member["paper_id"]],
+                }
+                if any(
+                    parent_graphs[ref["kind"]] is None
+                    or parent_graphs[ref["kind"]]["incarnation"] != ref["incarnation"]
+                    for ref in member["graph"]["parents"]
+                ):
+                    member["graph"] = None
+        collection["members"].sort(key=lambda item: (item["position"], item["paper_id"]))
+    for note in result["notes"]:
+        note["paper_id"] = mapping[note["paper_id"]]
+        note["graph"] = _graph_info(
+            conn, tables, "note", note["id"], note, cursor, {"paper": note["paper_id"]}
+        )
+        reason = None
+        if not note["editable"]:
+            reason = "unsupported_note_contract"
+        elif note["graph"] is None:
+            reason = "graph_unavailable"
+        elif paper_graphs[note["paper_id"]] is None or (
+            note["graph"]["parents"][0]["incarnation"]
+            != paper_graphs[note["paper_id"]]["incarnation"]
+        ):
+            reason = "paper_graph_unavailable"
+        note.update(editable=reason is None, read_only_reason=reason)
+    highlight_ids = {}
+    for table, origin in (("pdf_highlights", "manual"), ("pdf_ai_highlights", "ai")):
+        source_column = "source_key" if origin == "ai" else "anchor"
+        for row in conn.execute(f"SELECT paper_id,document_hash,{source_column} FROM {table}"):
+            old_key = [result["workspace_id"], origin, row[0], row[1], row[2]]
+            new_key = [result["workspace_id"], origin, mapping[row[0]], row[1], row[2]]
+            highlight_ids[hashlib.sha256(_encode(old_key)).hexdigest()] = hashlib.sha256(
+                _encode(new_key)
+            ).hexdigest()
+    for highlight in result["highlights"]:
+        highlight["paper_id"] = mapping[highlight["paper_id"]]
+        highlight["id"] = highlight_ids[highlight["id"]]
+    result["papers"].sort(key=lambda item: item["id"])
+    result["notes"].sort(key=lambda item: item["id"])
+    result["highlights"].sort(key=lambda item: item["id"])
+    result["schema_version"] = 2
+    result["capabilities"]["note_contract_version"] = 2
+    return result
+
+
+def read_manifest(
+    path: Path, *, workspace_id: str, schema_version=1, max_records=10000, max_bytes=8 * 1024 * 1024
+):
     """Read one consistent bounded snapshot without creating or modifying a database.
 
     Text remains untrusted text, not HTML. This is a local research read projection;
     its cursor is not authority to skip pending/deferred data during sync bootstrap.
     """
     _identifier(workspace_id)
+    if type(schema_version) is not int or schema_version not in (1, 2):
+        raise ValueError("Unsupported read projection version")
     if type(max_records) is not int or not 1 <= max_records <= 100000:
         raise ValueError("Invalid projection record limit")
     if type(max_bytes) is not int or not 1 <= max_bytes <= 64 * 1024 * 1024:
@@ -393,6 +547,8 @@ def read_manifest(path: Path, *, workspace_id: str, max_records=10000, max_bytes
         conn.row_factory = sqlite3.Row
         conn.execute("BEGIN")
         result = _project(conn, workspace_id, max_records, max_bytes)
+        if schema_version == 2:
+            result = _portable_projection(conn, result)
         if len(_encode(result)) > max_bytes:
             raise ValueError("Research projection exceeds the byte limit")
         return result

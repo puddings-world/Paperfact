@@ -30,8 +30,9 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   writers and unsupported integration paths explicitly listed. Adapter coverage is pending.
 - **S02 partial:** [local journal ADR](adr/0001-local-sync-journal.md); production identity,
   remote conflicts, hosting/authentication and encryption decisions remain open.
-- **S03 partial:** explicit-path list/plain-note adapter and portable note-ID mapping,
-  preserving legacy rows; existing UI/CLI/MCP writers are not enrolled yet.
+- **S03 partial:** explicit-path list/paper/membership/plain-note adapters, portable
+  identities and shared transactional intake actions preserve legacy rows. Existing
+  UI/CLI/MCP/import/AI writers are not enrolled yet.
 - **S04 partial:** SQLite reference authority with device credentials, revocation,
   retries and conflicts. Bounded authenticated loopback HTTP is implemented; production identity
   and remote HTTPS deployment remain gated.
@@ -149,7 +150,7 @@ Run the existing full check before declaring an implementation complete or commi
   skill rule or installation was introduced at this checkpoint.
 
 
-## Second local slice (in progress)
+## Second local slice (verified foundation)
 
 - Source schemas: `sync_journal.py`, `sync_research.py`; existing application schema
   is exercised in `test_sync_research_roundtrip.py`, not the owner's database.
@@ -192,3 +193,33 @@ Next integration gates, in order:
    implement reviewed private browser sessions and foreground/offline acceptance.
 6. Run the release matrix, including real Mac/phone and packaged upgrade journeys.
    Preserve v0.4.1 until the complete v0.5 release gate is satisfied.
+
+
+## Third local slice: complete graph intake (verified core)
+
+- [Private v2 graph](sync-graph-contract.md): paper metadata, list membership and
+  portable paper IDs; parent incarnation/structural preconditions protect deletion,
+  explicit restoration and concurrent child edits. V1 cannot bypass enrolled parents.
+- [Client](sync-client.md): root-first projection, protected pending descendants,
+  recoverable stale children and bounded deferred diagnostics. Accepted history stays
+  separate from materialization; a later parent rename cannot strand an older child.
+- [Shared operations](sync-operations.md): one connection and commit cover list,
+  paper, membership, notes, outbox and action receipt. Identical and concurrent retries
+  return the original result; partial failures leave no partial intake.
+- [Read projection](sync-projection.md): explicit DTO v2 uses portable references and
+  known graph write metadata. DTO v1 remains unchanged; neither is server bootstrap.
+- Targeted transaction/intake/import-boundary tests: **31 passed**. This includes
+  a real loopback HTTP journey into an empty fixture research DB with paged delivery
+  and a late list rename. Review then reproduced/fixed a late-peer membership
+  creation-time mismatch and three whole-transaction SQLite abort cases. Full-check
+  evidence: **1,506 Python tests passed** in 387.67 seconds, **18 frontend tests
+  passed**, privacy scan and Ruff passed. Log: `build/sync-graph-check.log`
+  (local ignored artifact). No real cloud, AI account, Mac, mobile or installer
+  acceptance was performed for this library slice.
+- Existing app actions, complete order/read-state, analyses, anchors, editable decks,
+  attachment transfer/authentication, backups, production login and mobile acceptance
+  remain incomplete. No real workspace, account, deployed service or release changed.
+
+Next implementation: order and per-membership reading state with separate conflict
+domains, then audited shared writer capture. Production enrollment stays disabled
+until unsupported writes cannot silently escape synchronization.

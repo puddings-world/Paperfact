@@ -57,3 +57,55 @@ Remaining: all research entity shapes, paper metadata replication, stable chat I
 anchored notes/PDF versions, creation-time metadata on the wire, deleted list-owned
 content recovery, explicit bootstrap/re-enrollment, UI invalidation for note edits,
 and routing every supported app writer through shared transactional operations.
+
+## Private version 2: paper and membership graph
+
+Version 1 remains available with its original local-paper-ID text-note semantics.
+Version 2 uses the closed graph envelope from `sync_schema_v2`: portable paper
+UUIDs, deterministic membership IDs, incarnation and parent references, plus
+structure revisions. List/note identifiers retain their validated contract forms.
+The journal validator dispatches by version; this writer never infers a protocol
+from the payload. The sync service/client own parent-incarnation and conflict
+acceptance. Calling the writer directly does not bypass those integration duties.
+
+`prepare`/`initialize` now also add `research_paper_identity(sync_id, local_id)`.
+Legacy paper identities derive from workspace, origin device and local paper ID.
+Enrollment preserves existing paper rows, local IDs, file naming and note links.
+`paper_identity(conn, local_id)` exposes the portable mapping. Repeated enrollment
+retains mappings; independently initialized nonempty devices do not silently
+identify their papers merely because titles, DOIs or local IDs match.
+
+An incoming unmapped paper receives local ID `sync:<portable UUID>`. An existing
+unrelated row at that ID is a reconciliation error, even if its metadata looks
+similar. A missing row behind an existing mapping also fails. Nonempty-workspace
+joining, external identifier reconciliation and authorized bootstrap remain
+separate workflows. The adapter never silently merges two existing papers.
+
+Paper puts update only title/title key, authors, year, venue, abstract, DOI,
+arXiv/Semantic Scholar IDs, source URLs and source label. Rank, scores, crawl
+timestamps, local research and paper IDs remain unchanged. Unknown wire year/venue
+map to the existing SQLite schema's `0`/empty-string sentinels; no year is invented.
+An unknown source label is stored as `sync`; the private v2 contract forbids paper deletion.
+No source URL is fetched by this writer.
+
+Membership identity is the schema helper's deterministic UUID for a list/portable
+paper pair. Its existing SQLite composite key is sufficient for retry-safe local
+materialization; no separate integer membership identity is introduced. A put
+requires both parents, resolves the portable paper to its local ID, and appends
+after the current maximum position. An update changes only citation text, keeping
+position, reading state, original added time and read/delivery timestamps. A delete
+removes only that membership, never its paper, notes or another list's membership.
+The sync graph retains tombstones/incarnations outside this materialized view.
+
+Version-2 notes similarly translate their portable paper parent before using the
+existing integer-note mapping. They cannot move an existing note to another paper;
+anchored/non-note protection remains unchanged. List deletion still removes only
+the list and its materialized memberships. Graph history and independent paper
+research survive; service/client parent-incarnation rules decide whether dependent
+content may later materialize after a list is recreated.
+
+`tests/test_sync_graph_research.py` checks an empty receiver's paper/list/membership/
+note path, enrollment and metadata preservation, identity collisions, missing
+parents, membership ordering/state preservation, note reassignment prevention,
+list deletion, retry/reopen and transactional rollback of paper metadata/mapping.
+Existing v1 adapter tests remain unchanged and are run alongside these cases.

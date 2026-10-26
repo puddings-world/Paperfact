@@ -1,4 +1,4 @@
-"""Opt-in list/text-note persistence for the experimental sync contract.
+"""Opt-in research persistence for the experimental v1/v2 sync contracts.
 
 No runtime configuration, provider, or network imports. Existing app writers do
 not call this adapter yet. Callers own conflict checks and the transaction.
@@ -6,6 +6,7 @@ not call this adapter yet. Callers own conflict checks and the transaction.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,9 +21,24 @@ _REQUIRED = {
     "notes": {"id", "paper_id", "body", "created_at", "kind", "page", "anchor"},
 }
 
+_PAPER_METADATA = (
+    "title",
+    "title_key",
+    "authors_json",
+    "year",
+    "venue",
+    "abstract",
+    "doi",
+    "arxiv_id",
+    "s2_id",
+    "page_url",
+    "pdf_url",
+    "source",
+)
+
 
 def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -> None:
-    """Add portable note identities inside an already-open caller transaction.
+    """Add portable paper/note identities inside an already-open caller transaction.
 
     The device distinguishes independent legacy integer IDs within one workspace.
     Existing mappings travel with a bootstrap snapshot; never remap them on join.
@@ -50,6 +66,19 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
         if tuple(binding.fetchone()) != (workspace_id, device_id):
             raise ValueError(
                 "Research workspace/device binding differs; explicit enrollment required"
+            )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS research_paper_identity ("
+            "sync_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)"
+        )
+        paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
+        paper_rows = conn.execute(
+            "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
+        ).fetchall()
+        for (local_id,) in paper_rows:
+            conn.execute(
+                "INSERT INTO research_paper_identity VALUES(?,?)",
+                (str(uuid5(paper_namespace, local_id)), local_id),
             )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS research_note_identity ("
@@ -103,6 +132,88 @@ def note_identity(conn: sqlite3.Connection, local_id: int) -> str:
     return row[0]
 
 
+def paper_identity(conn: sqlite3.Connection, local_id: str) -> str:
+    """Return a paper's enrolled portable identity without changing its local ID."""
+    if not isinstance(local_id, str) or not local_id:
+        raise ValueError("Invalid local paper ID")
+    row = conn.execute(
+        "SELECT sync_id FROM research_paper_identity WHERE local_id=?", (local_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError("Paper is not enrolled in this research adapter")
+    return row[0]
+
+
+def _local_paper(conn, sync_id):
+    row = conn.execute(
+        "SELECT m.local_id,p.id FROM research_paper_identity m "
+        "LEFT JOIN papers p ON p.id=m.local_id WHERE m.sync_id=?",
+        (sync_id,),
+    ).fetchone()
+    if row is None or row[1] is None:
+        raise ValueError("Paper metadata must be synchronized before dependent research")
+    return row[0]
+
+
+def _write_paper(conn, value):
+    if value["action"] != "put":
+        raise ValueError("Paper deletion is not supported by this contract")
+    identity, payload = value["entity_id"], value["payload"]
+    mapping = conn.execute(
+        "SELECT local_id FROM research_paper_identity WHERE sync_id=?",
+        (identity,),
+    ).fetchone()
+    if mapping is None:
+        local_id = "sync:" + identity
+        if conn.execute("SELECT 1 FROM papers WHERE id=?", (local_id,)).fetchone() is not None:
+            raise ValueError(
+                "Incoming paper identity collides with local research; reconciliation required"
+            )
+    else:
+        local_id = _local_paper(conn, identity)
+    # Unknown year/venue use the existing schema's sentinels, never invented metadata.
+    values = (
+        payload["title"],
+        "".join(ch for ch in payload["title"].lower() if ch.isalnum())[:120],
+        json.dumps(payload["authors"], ensure_ascii=False),
+        payload["year"] if payload["year"] is not None else 0,
+        payload["venue"] if payload["venue"] is not None else "",
+        *(payload[key] for key in ("abstract", "doi", "arxiv_id", "s2_id", "page_url", "pdf_url")),
+        payload["source"] if payload["source"] is not None else "sync",
+    )
+    if mapping is None:
+        names = ",".join(_PAPER_METADATA)
+        placeholders = ",".join("?" for _ in _PAPER_METADATA)
+        conn.execute(
+            f"INSERT INTO papers(id,{names}) VALUES(?,{placeholders})", (local_id, *values)
+        )
+        conn.execute("INSERT INTO research_paper_identity VALUES(?,?)", (identity, local_id))
+    else:
+        assignments = ",".join(f"{name}=?" for name in _PAPER_METADATA)
+        conn.execute(f"UPDATE papers SET {assignments} WHERE id=?", (*values, local_id))
+
+
+def _write_membership(conn, value):
+    # The validator binds deterministic membership ID and these parent references.
+    parents = {parent["kind"]: parent["id"] for parent in value["parents"]}
+    list_id, paper_id = parents["list"], _local_paper(conn, parents["paper"])
+    if value["action"] == "delete":
+        conn.execute("DELETE FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, paper_id))
+        return
+    if conn.execute("SELECT 1 FROM lists WHERE id=?", (list_id,)).fetchone() is None:
+        raise ValueError("List must be synchronized before its membership")
+    payload = value["payload"]
+    next_position = conn.execute(
+        "SELECT COALESCE(MAX(position),-1)+1 FROM list_papers WHERE list_id=?",
+        (list_id,),
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT INTO list_papers(list_id,paper_id,position,citation,added_at) VALUES(?,?,?,?,?) "
+        "ON CONFLICT(list_id,paper_id) DO UPDATE SET citation=excluded.citation",
+        (list_id, paper_id, next_position, payload["citation"], payload["added_at"]),
+    )
+
+
 def _plain_note(conn, mapping):
     row = conn.execute(
         "SELECT paper_id,created_at,kind,page,anchor FROM notes WHERE id=?", (mapping[0],)
@@ -151,7 +262,7 @@ def _write_note(conn, value):
 
 
 def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
-    """Apply one validated list/note mutation without committing or invoking AI.
+    """Apply one validated research mutation without committing or invoking AI.
 
     Use as Journal.apply's callback or in a remote-apply transaction after conflict
     resolution. Device ID may differ on remote apply, but workspace must match.
@@ -163,6 +274,27 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
     binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
     if binding is None or binding[0] != operation["workspace_id"]:
         raise ValueError("Research operation belongs to another workspace")
+    if operation["version"] == 2:
+        if operation["entity_type"] == "paper":
+            _write_paper(conn, operation)
+            return
+        if operation["entity_type"] == "membership":
+            _write_membership(conn, operation)
+            return
+        if operation["entity_type"] == "note":
+            parent = operation["parents"][0]
+            local_id = _local_paper(conn, parent["id"])
+            mapping = conn.execute(
+                "SELECT paper_id FROM research_note_identity WHERE sync_id=?",
+                (operation["entity_id"],),
+            ).fetchone()
+            if mapping is not None and mapping[0] != local_id:
+                raise ValueError("An existing note cannot be reassigned to another paper")
+            translated = dict(operation)
+            if operation["action"] == "put":
+                translated["payload"] = dict(operation["payload"], paper_id=local_id)
+            _write_note(conn, translated)
+            return
     if operation["entity_type"] == "note":
         _write_note(conn, operation)
         return

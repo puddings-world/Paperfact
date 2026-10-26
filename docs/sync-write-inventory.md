@@ -67,10 +67,12 @@ automatically establish sync semantics. Consent and AI credentials remain local.
   optional daily workflow must each prove atomic capture before being marked supported.
 - External tools that write SQLite directly bypass application contracts. Decide
   detection/reconciliation or explicitly unsupported behavior; do not promise capture.
-- The experimental journal currently validates list metadata and unanchored text
-  notes only. It is not automatically called by any of the writers above.
+- The experimental v2 graph validates list/paper metadata, membership and plain
+  notes. Shared compound intake is tested, but none of the existing writers above
+  is automatically enrolled; order/read-state and other research kinds remain.
 
-Next: implement one shared list/note operation adapter and a fake peer, then test
-duplicate delivery, remote application and concurrent edits in two isolated workspaces.
+Verified foundations: shared graph intake, empty-peer replication, retry/rollback
+and concurrent-edit protection. Next: order/read-state and typed research/file
+contracts, then route the audited writers through complete capture coverage.
 See [the local journal decision](adr/0001-local-sync-journal.md) and
 [the implementation ledger](implementation-0.5.0.md).

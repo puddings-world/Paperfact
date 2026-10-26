@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+from pathlib import Path
 from uuid import uuid4
 
 from paper_daily.sync_journal import ID, Journal, canonical_operation
@@ -93,10 +94,282 @@ class SyncClient:
                 # its cursor transaction. Ordinary restart must not scan full history.
                 for row in conn.execute("SELECT event FROM paperfact_sync_inbox ORDER BY sequence"):
                     self._record_conflict_state(conn, json.loads(row[0]))
+            has_graph = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='paperfact_sync_graph'"
+                ).fetchone()
+                is not None
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paperfact_sync_graph "
+                "(entity_type TEXT,entity_id TEXT,metadata TEXT NOT NULL,"
+                "PRIMARY KEY(entity_type,entity_id))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paperfact_sync_graph_projection "
+                "(entity_type TEXT,entity_id TEXT,source TEXT NOT NULL,operation TEXT,"
+                "active INTEGER NOT NULL,reason TEXT,PRIMARY KEY(entity_type,entity_id))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paperfact_sync_graph_receipts "
+                "(operation_id TEXT PRIMARY KEY,event TEXT NOT NULL)"
+            )
+            if not has_graph:
+                for row in conn.execute("SELECT event FROM paperfact_sync_inbox ORDER BY sequence"):
+                    self._record_graph_state(conn, json.loads(row[0]))
+                conn.execute(
+                    "UPDATE paperfact_sync_heads SET applied_revision=-1 WHERE EXISTS "
+                    "(SELECT 1 FROM paperfact_sync_graph_projection p WHERE "
+                    "p.entity_type=paperfact_sync_heads.entity_type "
+                    "AND p.entity_id=paperfact_sync_heads.entity_id)"
+                )
             conn.commit()
         except BaseException:
             conn.rollback()
             raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _graph_entity(conn, kind, identity):
+        row = conn.execute(
+            "SELECT metadata FROM paperfact_sync_graph WHERE entity_type=? AND entity_id=?",
+            (kind, identity),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    @staticmethod
+    def _parent_keys(parents):
+        return {(parent["kind"], parent["id"], parent["incarnation"]) for parent in parents}
+
+    def _record_graph_state(self, conn, event):
+        operation = event["operation"]
+        if operation["version"] == 2:
+            from paper_daily.sync_graph import apply_accepted, check_preconditions
+
+            def get_entity(kind, identity):
+                return self._graph_entity(conn, kind, identity)
+
+            def get_receipt(identity):
+                row = conn.execute(
+                    "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (identity,),
+                ).fetchone()
+                return json.loads(row[0]) if row else None
+
+            def set_entity(kind, identity, metadata):
+                conn.execute(
+                    "INSERT INTO paperfact_sync_graph VALUES(?,?,?) "
+                    "ON CONFLICT(entity_type,entity_id) DO UPDATE SET metadata=excluded.metadata",
+                    (kind, identity, json.dumps(metadata, sort_keys=True)),
+                )
+
+            if event["outcome"] == "accepted":
+                if not check_preconditions(get_entity, get_receipt, operation):
+                    raise ValueError("Accepted event violates graph preconditions")
+                apply_accepted(get_entity, set_entity, operation, event["sequence"])
+            conn.execute(
+                "INSERT INTO paperfact_sync_graph_projection "
+                "(entity_type,entity_id,source,operation,active,reason) VALUES(?,?,?,NULL,0,NULL) "
+                "ON CONFLICT(entity_type,entity_id) DO UPDATE SET source=excluded.source",
+                (operation["entity_type"], operation["entity_id"], canonical_operation(operation)),
+            )
+        conn.execute(
+            "INSERT INTO paperfact_sync_graph_receipts VALUES(?,?)",
+            (operation["operation_id"], json.dumps(event, sort_keys=True)),
+        )
+
+    def _pending_graph(self, conn, cursor=None):
+        if cursor is None:
+            cursor = conn.execute("SELECT sequence FROM paperfact_sync_cursor").fetchone()[0]
+        return [
+            json.loads(row[0])
+            for row in conn.execute(
+                "SELECT envelope FROM paperfact_sync_operations WHERE server_revision IS NULL "
+                "OR server_revision>? ORDER BY sequence",
+                (cursor,),
+            )
+        ]
+
+    def _optimistic_graph(self, conn):
+        state = {
+            (row[0], row[1]): json.loads(row[2])
+            for row in conn.execute("SELECT * FROM paperfact_sync_graph")
+        }
+        touches, own = {}, {}
+        for operation in self._pending_graph(conn):
+            key = (operation["entity_type"], operation["entity_id"])
+            own[key] = operation
+            if operation["version"] != 2:
+                continue
+            old = state.get(key)
+            lifecycle = (
+                old is None
+                or not old["active"]
+                or operation["action"] == "delete"
+                or old["incarnation"] != operation["incarnation"]
+            )
+            state[key] = {
+                "incarnation": operation["incarnation"],
+                "structure_revision": old["structure_revision"] if old else 0,
+                "active": operation["action"] == "put",
+                "parents": operation["parents"],
+            }
+            if lifecycle:
+                touches[key] = operation["operation_id"]
+            for parent in operation["parents"]:
+                touches[(parent["kind"], parent["id"])] = operation["operation_id"]
+        return state, touches, own
+
+    def new_graph_operation(
+        self, kind, entity_id, payload, *, action="put", operation_id=None, restore=False
+    ):
+        """Build an explicit v2 operation; restoring an entity requires restore=True."""
+        conn = self.journal._connect()
+        try:
+            conn.execute("BEGIN")
+            self.journal._binding(conn)
+            return self.new_graph_operation_in(
+                conn,
+                kind,
+                entity_id,
+                payload,
+                action=action,
+                operation_id=operation_id,
+                restore=restore,
+            )
+        finally:
+            conn.close()
+
+    def new_graph_operation_in(
+        self, conn, kind, entity_id, payload, *, action="put", operation_id=None, restore=False
+    ):
+        """Build against the caller's transaction, including its uncommitted outbox."""
+        if not conn.in_transaction:
+            raise ValueError("A caller-owned transaction is required")
+        databases = conn.execute("PRAGMA database_list").fetchall()
+        main = next((row[2] for row in databases if row[1] == "main"), None)
+        if not main or Path(main).resolve() != self.journal.path.resolve():
+            raise ValueError("Connection belongs to another research database")
+        self.journal._binding(conn)
+        return self._new_graph_operation(
+            conn,
+            kind,
+            entity_id,
+            payload,
+            action=action,
+            operation_id=operation_id,
+            restore=restore,
+        )
+
+    def _new_graph_operation(
+        self,
+        conn,
+        kind,
+        entity_id,
+        payload,
+        *,
+        action="put",
+        operation_id=None,
+        restore=False,
+        retirement=False,
+    ):
+        if type(restore) is not bool:
+            raise ValueError("Restore must be an explicit boolean choice")
+        if kind not in ("list", "paper", "membership", "note"):
+            raise ValueError("Unsupported graph entity")
+        if not isinstance(payload, dict):
+            raise ValueError("Graph payload must be an object")
+        identity = operation_id if operation_id is not None else str(uuid4())
+        for value in (entity_id, identity):
+            if not isinstance(value, str) or not ID.fullmatch(value):
+                raise ValueError("Invalid graph identifier")
+        state, touches, own = self._optimistic_graph(conn)
+        key = (kind, entity_id)
+        current = state.get(key)
+        if kind in ("paper", "list"):
+            requested = []
+        elif action == "delete":
+            if current is None:
+                raise ValueError("A child deletion needs its known parent identities")
+            requested = [(p["kind"], p["id"]) for p in current["parents"]]
+        else:
+            requested = [("paper", payload.get("paper_id"))]
+            if kind == "membership":
+                requested.insert(0, ("list", payload.get("list_id")))
+        parents = []
+        for parent_key in requested:
+            if not isinstance(parent_key[1], str) or not ID.fullmatch(parent_key[1]):
+                raise ValueError("Invalid graph parent identifier")
+            parent = state.get(parent_key)
+            if parent is None or not parent["active"]:
+                if retirement and current:
+                    parents = current["parents"]
+                    break
+                raise ValueError("Parent is missing or deleted; restore it explicitly first")
+            parents.append(
+                {"kind": parent_key[0], "id": parent_key[1], "incarnation": parent["incarnation"]}
+            )
+        changed_parent = current and self._parent_keys(current["parents"]) != self._parent_keys(
+            parents
+        )
+        if retirement and current:
+            parents = current["parents"]
+            incarnation = current["incarnation"]
+        elif current and (not current["active"] or changed_parent):
+            if action == "put":
+                if not restore:
+                    raise ValueError("Restoring deleted research requires restore=True")
+                incarnation = identity
+            elif changed_parent:
+                raise ValueError("Parent incarnation changed; review the child conflict")
+            else:
+                incarnation = current["incarnation"]
+        elif current:
+            if restore:
+                raise ValueError("An active entity cannot be restored")
+            incarnation = current["incarnation"]
+        else:
+            incarnation = identity
+        head = conn.execute(
+            "SELECT revision FROM paperfact_sync_heads WHERE entity_type=? AND entity_id=?", key
+        ).fetchone()
+        accepted = self._graph_entity(conn, *key)
+        operation = {
+            "version": 2,
+            "operation_id": identity,
+            "workspace_id": self.journal.workspace_id,
+            "device_id": self.journal.device_id,
+            "entity_type": kind,
+            "entity_id": entity_id,
+            "action": action,
+            "base_revision": head[0] if head else 0,
+            "depends_on": own[key]["operation_id"] if key in own else None,
+            "payload": payload,
+            "incarnation": incarnation,
+            "parents": parents,
+            "structure_revision": accepted["structure_revision"] if accepted else 0,
+        }
+        if key in touches:
+            operation["structure_depends_on"] = touches[key]
+        operation = json.loads(canonical_operation(operation))
+        self._guard_membership_creation(conn, operation)
+        return operation
+
+    def deferred_reasons(self, limit=100):
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("Invalid deferred reason limit")
+        conn = self.journal._connect()
+        try:
+            self.journal._binding(conn)
+            return [
+                {"entity_type": row[0], "entity_id": row[1], "reason": row[2]}
+                for row in conn.execute(
+                    "SELECT entity_type,entity_id,reason FROM paperfact_sync_graph_projection "
+                    "WHERE reason IS NOT NULL ORDER BY entity_type,entity_id LIMIT ?",
+                    (limit,),
+                )
+            ]
         finally:
             conn.close()
 
@@ -129,14 +402,85 @@ class SyncClient:
                 "depends_on": previous[0] if previous else None,
                 "payload": payload,
             }
-            return json.loads(canonical_operation(value))
+            value = json.loads(canonical_operation(value))
+            self._guard_legacy(conn, value)
+            return value
         finally:
             conn.close()
 
-    def save(self, operation):
-        return self.journal.apply(operation, self.writer)
+    @staticmethod
+    def _guard_membership_creation(conn, operation):
+        if (
+            operation["version"] != 2
+            or operation["entity_type"] != "membership"
+            or operation["action"] != "put"
+        ):
+            return
+        origin = conn.execute(
+            "SELECT envelope FROM paperfact_sync_operations WHERE operation_id=?",
+            (operation["incarnation"],),
+        ).fetchone()
+        if origin:
+            creation = json.loads(origin[0])
+        else:
+            receipt = conn.execute(
+                "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                (operation["incarnation"],),
+            ).fetchone()
+            creation = json.loads(receipt[0])["operation"] if receipt else None
+        if creation is not None and (
+            creation["version"] == 2
+            and creation["entity_type"] == "membership"
+            and creation["entity_id"] == operation["entity_id"]
+            and creation["action"] == "put"
+            and creation["incarnation"] == operation["incarnation"]
+            and creation["payload"]["added_at"] != operation["payload"]["added_at"]
+        ):
+            raise ValueError("Membership added_at is immutable within its incarnation")
 
-    def resolve_conflict(self, sequence, *, choice="incoming", payload=None, operation_id=None):
+    def _guard_legacy(self, conn, operation):
+        if operation["version"] != 1:
+            return
+        graph, _, _ = self._optimistic_graph(conn)
+        key = (operation["entity_type"], operation["entity_id"])
+        if key in graph:
+            raise ValueError("Use the version-2 builder for enrolled graph research")
+        if key[0] != "note":
+            return
+        papers = set()
+        if operation["action"] == "put":
+            papers.add(operation["payload"]["paper_id"])
+        else:
+            head = conn.execute(
+                "SELECT operation FROM paperfact_sync_heads WHERE entity_type=? AND entity_id=?",
+                key,
+            ).fetchone()
+            if head and head[0]:
+                papers.add(json.loads(head[0])["payload"].get("paper_id"))
+            for row in conn.execute(
+                "SELECT envelope FROM paperfact_sync_operations "
+                "WHERE entity_type=? AND entity_id=? "
+                "ORDER BY sequence DESC",
+                key,
+            ):
+                previous = json.loads(row[0])
+                if previous["action"] == "put":
+                    papers.add(previous["payload"].get("paper_id"))
+                    break
+        if any(("paper", paper) in graph for paper in papers):
+            raise ValueError("Use the version-2 builder for notes under enrolled graph papers")
+
+    def save(self, operation):
+        def write(conn, value):
+            self._guard_legacy(conn, value)
+            self._guard_membership_creation(conn, value)
+            self.writer(conn, value)
+
+        return self.journal.apply(operation, write)
+
+    def resolve_conflict(
+        self, sequence, *, choice="incoming", payload=None, operation_id=None, restore=False
+    ):
         """Save an explicit resolution; acceptance in the event stream closes the conflict.
 
         Retain operation_id for caller retries. Repeated pending requests without an ID
@@ -144,6 +488,8 @@ class SyncClient:
         """
         if type(sequence) is not int or sequence < 1:
             raise ValueError("Invalid conflict sequence")
+        if type(restore) is not bool:
+            raise ValueError("Restore must be an explicit boolean choice")
         if choice not in ("incoming", "canonical"):
             raise ValueError("Invalid resolution choice")
         if payload is not None and not isinstance(payload, dict):
@@ -154,7 +500,12 @@ class SyncClient:
             raise ValueError("Invalid resolution operation ID")
         try:
             request = json.dumps(
-                {"sequence": sequence, "choice": choice, "payload": payload},
+                {
+                    "sequence": sequence,
+                    "choice": choice,
+                    "payload": payload,
+                    **({"restore": True} if restore else {}),
+                },
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
@@ -227,6 +578,39 @@ class SyncClient:
                     else (source["payload"] if source else {}),
                     "resolution_of": conflict["operation_id"],
                 }
+                if conflict["version"] == 2:
+                    state = self._graph_entity(conn, *key)
+                    references = state["parents"] if state else conflict["parents"]
+                    obsolete = any(
+                        (parent := self._graph_entity(conn, ref["kind"], ref["id"])) is None
+                        or not parent["active"]
+                        or parent["incarnation"] != ref["incarnation"]
+                        for ref in references
+                    )
+                    retirement = choice == "canonical" and (obsolete or source is None)
+                    if retirement:
+                        operation.update(
+                            version=2,
+                            action="delete",
+                            payload={},
+                            parents=references,
+                            incarnation=state["incarnation"] if state else conflict["incarnation"],
+                            structure_revision=state["structure_revision"] if state else 0,
+                        )
+                        if payload not in (None, {}):
+                            raise ValueError("Canonical retirement requires an empty payload")
+                    else:
+                        operation = self._new_graph_operation(
+                            conn,
+                            *key,
+                            operation["payload"],
+                            action=operation["action"],
+                            operation_id=operation["operation_id"],
+                            restore=restore,
+                        )
+                        operation["resolution_of"] = conflict["operation_id"]
+                elif restore:
+                    raise ValueError("Explicit incarnation restore requires version 2")
                 operation = json.loads(canonical_operation(operation))
         finally:
             conn.close()
@@ -247,6 +631,24 @@ class SyncClient:
                 raise ValueError("Canonical content changed; review the conflict again")
             if self._outstanding(conn, key):
                 raise ValueError("Synchronize outstanding edits before resolving this conflict")
+            if value["version"] == 2:
+                from paper_daily.sync_graph import check_preconditions
+
+                def get_receipt(identity):
+                    record = conn.execute(
+                        "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                        (identity,),
+                    ).fetchone()
+                    return json.loads(record[0]) if record else None
+
+                if not check_preconditions(
+                    lambda kind, identity: self._graph_entity(conn, kind, identity),
+                    get_receipt,
+                    value,
+                ):
+                    raise ValueError("Graph changed; review the conflict again")
+            self._guard_legacy(conn, value)
+            self._guard_membership_creation(conn, value)
             self.writer(conn, value)
             conn.execute(
                 "INSERT INTO research_resolution_intents VALUES(?,?,?,?)",
@@ -316,7 +718,9 @@ class SyncClient:
                     "SELECT COUNT(*) FROM paperfact_sync_conflicts WHERE resolved_by IS NULL"
                 ).fetchone()[0],
                 "deferred": conn.execute(
-                    "SELECT COUNT(*) FROM paperfact_sync_heads WHERE applied_revision<revision"
+                    "SELECT COUNT(*) FROM paperfact_sync_heads h LEFT JOIN "
+                    "paperfact_sync_graph_projection p USING(entity_type,entity_id) "
+                    "WHERE h.applied_revision<h.revision OR p.reason IS NOT NULL"
                 ).fetchone()[0],
             }
         finally:
@@ -398,6 +802,7 @@ class SyncClient:
                     (sequence, data, event["outcome"]),
                 )
                 self._record_conflict_state(conn, event)
+                self._record_graph_state(conn, event)
                 cursor = sequence
                 received += 1
             applied = self._materialize(conn, cursor)
@@ -410,9 +815,11 @@ class SyncClient:
         finally:
             conn.close()
 
-    def _materialize(self, conn, cursor):
+    def _materialize_legacy(self, conn, cursor):
         heads = conn.execute(
-            "SELECT * FROM paperfact_sync_heads WHERE applied_revision<revision ORDER BY revision"
+            "SELECT * FROM paperfact_sync_heads h WHERE applied_revision<revision "
+            "AND NOT EXISTS (SELECT 1 FROM paperfact_sync_graph_projection p "
+            "WHERE p.entity_type=h.entity_type AND p.entity_id=h.entity_id) ORDER BY revision"
         ).fetchall()
         applied = 0
         for head in heads:
@@ -455,6 +862,132 @@ class SyncClient:
             )
             applied += 1
         return applied
+
+    def _materialize_graph(self, conn, cursor):
+        heads = conn.execute(
+            "SELECT h.*,p.source,p.operation AS projected_operation,p.active,p.reason "
+            "FROM paperfact_sync_heads h JOIN paperfact_sync_graph_projection p "
+            "USING(entity_type,entity_id) "
+            "ORDER BY CASE WHEN h.entity_type IN ('list','paper') THEN 0 ELSE 1 END,h.revision"
+        ).fetchall()
+        pending = self._pending_graph(conn, cursor)
+        outstanding = {(op["entity_type"], op["entity_id"]) for op in pending}
+        applied = 0
+
+        def blocked(key, reason):
+            conn.execute(
+                "UPDATE paperfact_sync_graph_projection SET reason=? "
+                "WHERE entity_type=? AND entity_id=?",
+                (reason, *key),
+            )
+
+        def project(head, source, *, visible, reason=None):
+            key = (head["entity_type"], head["entity_id"])
+            changed = (
+                head["applied_revision"] != head["revision"] or bool(head["active"]) != visible
+            )
+            if changed:
+                operation = json.loads(canonical_operation(source))
+                if not visible:
+                    operation.update(action="delete", payload={})
+                conn.set_authorizer(self.journal._authorize_writer)
+                try:
+                    self.writer(conn, operation)
+                finally:
+                    conn.set_authorizer(None)
+            conn.execute(
+                "UPDATE paperfact_sync_heads SET applied_revision=revision "
+                "WHERE entity_type=? AND entity_id=?",
+                key,
+            )
+            conn.execute(
+                "UPDATE paperfact_sync_graph_projection SET operation=?,active=?,reason=? "
+                "WHERE entity_type=? AND entity_id=?",
+                (canonical_operation(source), int(visible), reason, *key),
+            )
+            return int(changed)
+
+        for head in heads:
+            key = (head["entity_type"], head["entity_id"])
+            source = json.loads(head["operation"] or head["source"])
+            if key in outstanding:
+                blocked(key, "pending_local")
+                continue
+            if source["entity_type"] in ("list", "paper"):
+                old = (
+                    json.loads(head["projected_operation"]) if head["projected_operation"] else None
+                )
+                lifecycle = (
+                    source["action"] == "delete"
+                    or (old is not None and old["incarnation"] != source["incarnation"])
+                    or any(
+                        (parent["kind"], parent["id"]) == key
+                        and parent["incarnation"] != source["incarnation"]
+                        for operation in pending
+                        if operation["version"] == 2
+                        for parent in operation["parents"]
+                    )
+                )
+                if lifecycle and any(
+                    (parent["kind"], parent["id"]) == key
+                    for operation in pending
+                    if operation["version"] == 2
+                    for parent in operation["parents"]
+                ):
+                    blocked(key, "pending_descendant")
+                    continue
+            reason = None
+            for parent in source["parents"]:
+                parent_key = (parent["kind"], parent["id"])
+                if parent_key in outstanding:
+                    reason = "parent_pending"
+                    break
+                state = self._graph_entity(conn, *parent_key)
+                if state is None:
+                    reason = "parent_missing"
+                    break
+                if not state["active"]:
+                    reason = "parent_deleted"
+                    break
+                if state["incarnation"] != parent["incarnation"]:
+                    reason = "parent_incarnation"
+                    break
+                projected = conn.execute(
+                    "SELECT h.revision,h.applied_revision,p.active,p.operation,p.reason "
+                    "FROM paperfact_sync_heads h JOIN paperfact_sync_graph_projection p "
+                    "USING(entity_type,entity_id) WHERE h.entity_type=? AND h.entity_id=?",
+                    parent_key,
+                ).fetchone()
+                if (
+                    projected is None
+                    or projected["revision"] != projected["applied_revision"]
+                    or not projected["active"]
+                    or projected["reason"] is not None
+                ):
+                    reason = "parent_deferred"
+                    break
+            if (
+                head["operation"] is not None
+                and source["action"] == "delete"
+                and reason in ("parent_missing", "parent_deleted", "parent_incarnation")
+            ):
+                # An accepted retirement is already canonical absence, not a child
+                # waiting forever for an obsolete parent's incarnation to return.
+                reason = None
+            if reason in ("parent_pending", "parent_deferred"):
+                blocked(key, reason)
+                continue
+            if head["operation"] is None and source["entity_type"] == "paper":
+                # Paper deletion is outside the v2 retention contract. Keep a rejected
+                # local paper for explicit reconciliation instead of inventing deletion.
+                blocked(key, "canonical_absence")
+                continue
+            visible = head["operation"] is not None and source["action"] == "put" and reason is None
+            applied += project(head, source, visible=visible, reason=reason)
+        return applied
+
+    def _materialize(self, conn, cursor):
+        return self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
 
     def sync_once(self, transport, token, *, limit=100):
         """One bounded pass, with no timer, hidden retries, login or network policy."""

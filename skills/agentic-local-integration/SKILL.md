@@ -24,6 +24,15 @@ buttons serialize through a server just to share behavior.
   event stream remains a causal predecessor; older pages must not replace its newer
   local content. Commit received research, history and cursor together. This is a
   replication boundary, not an extra protocol required for ordinary local CLI calls.
+- A compound operation needs one transaction owner. Pass its existing connection
+  through typed writes, outbox capture and action receipts; an independently committed
+  sub-operation cannot provide all-or-nothing retry behavior. Keep remote work outside
+  the transaction and test failure after an earlier successful child write.
+- When replicating related entities, apply their dependency graph before latest-revision
+  order: a parent renamed after its child was created must still materialize first.
+  Parent deletion/restoration needs an explicit lifecycle boundary so retained children
+  cannot silently attach themselves to a new incarnation. This applies to replication,
+  not every ordinary local integration.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.

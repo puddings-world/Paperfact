@@ -86,3 +86,44 @@ Remaining: authorized read-manifest delivery, canonical server bootstrap, file a
 deck manifests, PDF availability verification, private mobile session integration,
 all-entity revisions and complete runtime writer coverage. No mobile/cloud/live
 research tests or actual attachment reads are claimed by this module.
+
+## Explicit DTO version 2
+
+Request `read_manifest(..., schema_version=2)` explicitly. The default remains
+version 1, including its local paper IDs and existing editable-shape behavior.
+Unknown versions fail; there is no automatic consumer upgrade or cursor override.
+
+Version 2 requires a canonical UUID mapping in `research_paper_identity` for every
+paper. It rewrites `papers[].id` and every structured `paper_id` in membership,
+notes and highlights to that portable identity. Missing/invalid mappings fail
+without generating IDs or modifying the database. Note IDs remain unchanged.
+`members[].id` uses `sync_schema_v2.membership_id(list_id, portable_paper_id)`.
+Highlight IDs are rederived using the same source identity and the portable paper,
+so different local paper names do not produce different read-highlight identities.
+Papers, notes and highlights sort by portable ID; membership position/state remain
+unchanged, with portable paper ID as the deterministic tie-breaker.
+
+`capabilities.note_contract_version` is 2, while `sync_bootstrap`, `assets` and
+`decks` remain false. Version 2 adds `revision`/`sync_state` to papers and memberships
+and a `graph` field to papers, lists, memberships and notes. Graph is null unless
+the entity is fully received/applied, active, and has recorded v2 graph metadata.
+Known graph objects contain `incarnation`, `parents` and `structure_revision` from
+the stored graph, not guessed values or the stale structure revision of an earlier
+operation. Missing, pending, awaiting or deferred prerequisites never imply readiness.
+
+Version-2 notes have `editable: true` only when their text shape is supported and
+both note and matching paper-parent graph states are ready. Otherwise their full
+text remains visible and `read_only_reason` is `unsupported_note_contract`,
+`graph_unavailable` or `paper_graph_unavailable`; ready notes use null. This does
+not authorize a browser session or establish a complete canonical bootstrap.
+New-note creation likewise requires known paper graph prerequisites in a later
+authorized writer workflow. Locally unsent content is not hidden or discarded.
+
+No local paper identity or path is copied into structured DTO2 identity fields.
+As in DTO1, user-authored research text is not automatically redacted. PDF/deck/file
+projection remains unsupported, rather than inventing portable asset references.
+
+`tests/test_sync_projection_v2.py` checks two databases with different local paper
+IDs and equivalent portable references, strict mapping failures, default DTO1
+compatibility, no database writes, applied graph/readiness states and mapping/cursor
+coherence during a concurrent commit. The original DTO1 tests remain unchanged.

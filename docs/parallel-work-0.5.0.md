@@ -51,11 +51,13 @@ Card M is reserved for that Claude worktree. Cards R and U have completed their 
 - No automatic AI calls, PDF fetching or analytics consent from incoming research.
   Explicit offline download may fetch the selected authorized attachments only.
 
-The Python reference service exposes **in-process methods**; a bounded loopback
-HTTP adapter is being developed separately. Neither is a production browser-auth API. The client has a local journal, bounded push/pull, ordered events and retained
-conflicts. The research adapter currently supports list metadata and **unanchored
-text notes only**; paper metadata must already exist before a note can be applied.
-Do not represent generated fixture papers as already replicated by that adapter.
+The Python reference service and bounded loopback HTTP adapter are implemented;
+neither is a production browser-auth API. The client has a local journal, bounded
+push/pull, ordered events and retained conflicts. The private v2 graph now replicates
+list/paper metadata, membership and unanchored notes into an empty research DB.
+Read [the graph contract](sync-graph-contract.md), [DTO v2](sync-projection.md) and
+[shared operations](sync-operations.md) before implementing new writes. V1 remains a
+compatibility fixture, not permission to bypass v2 parent/lifecycle rules.
 
 Transport-facing methods may be `loadReadManifest`, `push`, `pull`, and `fetchBlob`
 behind an injected interface. Their HTTP routes, bootstrap consistency, private
@@ -175,5 +177,7 @@ that a Claude session received, accepted or completed the task.
   public browser sessions, hosted TLS and read/blob authorization remain separate.
 - [Local read projection](sync-projection.md): implemented DTO with `capabilities`
   and `local_state`; distinguishes unsent/deferred content and is not server bootstrap.
-- [Next entity contract](adr/0003-research-entity-capture.md): draft parent/child
-  identities and capture rules; do not implement draft kinds as if already accepted.
+- [Graph contract](sync-graph-contract.md): implemented private v2 parent/lifecycle
+  semantics. DTO v2 explicitly exposes write readiness; v1 cannot mutate an enrolled
+  v2 entity. Other kinds in [the capture ADR](adr/0003-research-entity-capture.md) remain
+  planned and must not be treated as accepted wire operations.

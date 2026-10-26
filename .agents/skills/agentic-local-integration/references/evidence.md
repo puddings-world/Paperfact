@@ -93,3 +93,28 @@ in this evidence record. Migration and full-suite checks accompany the final cha
 - Privacy: synthetic records only; no account secrets, private research or machine paths.
 - Promotion: repository-local refinement only; no global installation or cross-project
   reuse claim. Production retention, protocol evolution and enrollment remain separate.
+
+
+## Compound graph intake and transaction ownership — 2026-10-26
+
+- Status: `validated-local`; repository-local refinement, not cross-project reuse.
+- Trigger: a list intake creates paper metadata, membership and notes and must survive
+  retries; an empty peer must reconstruct those dependencies even after a later rename.
+- Invariant: one caller-owned transaction covers research, outbox and action receipt.
+  Ordinary failed inner writes roll back to a savepoint; propagating failure aborts
+  the complete action. Whole-transaction SQLite aborts preserve their original error
+  and cannot be swallowed into a successful partial action (three reproduced failures). No helper commits another connection while the action is incomplete.
+- Recovery: exact retries return the committed action result; changed payloads under
+  the same retry identity fail. Dependency-first projection keeps parent lifecycle
+  distinct from content revisions so a rename does not invalidate existing children.
+- Evidence: `tests/test_sync_transactions.py` (17 cases) and
+  `tests/test_sync_operations.py` (17 cases), including a late-peer creation-time regression;
+  targeted and full-check results are recorded in the implementation ledger. Tests assert complete stored research, concurrent retry
+  outcomes, writer/receipt failure rollback, caller rollback, wrong database rejection,
+  an attached-database boundary, and actual paged HTTP into an empty fixture peer.
+- Trade-offs: explicit operation/schema adapters and retained history require more
+  integration work than row copying. The connection seam accepts trusted application
+  writers, temporarily owns SQLite authorization, and is not an untrusted-code sandbox.
+- Limits: no production writer enrollment, hosted identity, arbitrary file atomicity,
+  physical power-loss, real mobile storage or full-workspace synchronization claim.
+  No private content, accounts, local absolute paths or global installation recorded.

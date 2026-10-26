@@ -1,0 +1,200 @@
+"""Shared, explicit graph research actions for future UI/CLI/MCP adapters.
+
+These actions receive already-resolved research. They never call an AI provider,
+download a PDF, change the active workspace, or enable sync on app startup.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import UTC, datetime
+from uuid import NAMESPACE_URL, UUID, uuid5
+
+from paper_daily.sync_journal import MAX_BYTES, _identifier, canonical_operation
+from paper_daily.sync_schema_v2 import membership_id
+
+MAX_ACTION_BYTES = 8 * 1024 * 1024
+MAX_PAPERS = 200
+
+
+class ResearchOperations:
+    """One retry identity and one transaction for a complete list-intake action."""
+
+    def __init__(self, client):
+        self.client = client
+        with client.journal.transaction() as conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS research_action_receipts "
+                "(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,result TEXT NOT NULL)"
+            )
+
+    def create_list(self, name, papers, *, request_id, note=""):
+        return self._intake("create", None, name, note, papers, request_id)
+
+    def add_papers(self, list_id, papers, *, request_id):
+        _identifier(list_id)
+        return self._intake("add", list_id, None, None, papers, request_id)
+
+    def _id(self, request_id, label):
+        namespace = json.dumps(
+            [self.client.journal.workspace_id, self.client.journal.device_id, request_id, label],
+            separators=(",", ":"),
+        )
+        return str(uuid5(NAMESPACE_URL, "paperfact:research-action:" + namespace))
+
+    def _request(self, mode, list_id, name, note, papers, request_id):
+        _identifier(request_id)
+        if mode == "create" and (
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 200
+            or not isinstance(note, str)
+            or len(note) > 128 * 1024
+        ):
+            raise ValueError("Invalid list name or note")
+        if not isinstance(papers, list) or len(papers) > MAX_PAPERS:
+            raise ValueError("An intake action accepts at most 200 paper entries")
+        byte_count, normalized, reused = 0, [], set()
+        operations = 1 if mode == "create" else 0
+        for index, item in enumerate(papers):
+            if not isinstance(item, dict) or not set(item) <= {
+                "paper",
+                "paper_id",
+                "notes",
+                "citation",
+            }:
+                raise ValueError("Invalid paper entry fields")
+            if ("paper" in item) == ("paper_id" in item):
+                raise ValueError("Choose new paper metadata or an existing portable paper ID")
+            notes, citation = item.get("notes", []), item.get("citation")
+            if not isinstance(notes, list) or len(notes) > 100:
+                raise ValueError("Invalid note collection")
+            operations += len(notes) + (2 if "paper" in item else 1)
+            if operations > 1000:
+                raise ValueError(
+                    "Research intake requires bounded batches of at most 1000 operations"
+                )
+            for body in notes:
+                if not isinstance(body, str) or len(body.encode("utf-8")) > 200 * 1024:
+                    raise ValueError("Invalid bounded note body")
+                byte_count += len(body.encode("utf-8"))
+            if citation is not None and (not isinstance(citation, str) or len(citation) > 4000):
+                raise ValueError("Invalid membership citation")
+            if "paper_id" in item:
+                identity = item["paper_id"]
+                if not isinstance(identity, str) or str(UUID(identity)) != identity:
+                    raise ValueError("Existing paper requires a portable UUID")
+                if identity in reused:
+                    raise ValueError("An intake action cannot repeat an existing paper")
+                reused.add(identity)
+            else:
+                identity = self._id(request_id, f"paper:{index}")
+                op_id = self._id(request_id, f"paper-op:{index}")
+                encoded = canonical_operation(
+                    {
+                        "version": 2,
+                        "operation_id": op_id,
+                        "workspace_id": self.client.journal.workspace_id,
+                        "device_id": self.client.journal.device_id,
+                        "entity_type": "paper",
+                        "entity_id": identity,
+                        "action": "put",
+                        "base_revision": 0,
+                        "depends_on": None,
+                        "payload": item["paper"],
+                        "incarnation": op_id,
+                        "parents": [],
+                        "structure_revision": 0,
+                    }
+                )
+                byte_count += len(encoded.encode("utf-8"))
+            if byte_count > MAX_ACTION_BYTES:
+                raise ValueError("Research intake exceeds 8 MiB")
+            normalized.append({**item, "notes": notes, "citation": citation})
+        encoded = json.dumps(
+            {"mode": mode, "list_id": list_id, "name": name, "note": note, "papers": normalized},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        if len(encoded.encode("utf-8")) > MAX_ACTION_BYTES:
+            raise ValueError("Research intake exceeds 8 MiB")
+        return json.loads(encoded), hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _intake(self, mode, list_id, name, note, papers, request_id):
+        value, fingerprint = self._request(mode, list_id, name, note, papers, request_id)
+        journal = self.client.journal
+        with journal.transaction() as conn:
+            receipt = conn.execute(
+                "SELECT fingerprint,result FROM research_action_receipts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if receipt:
+                if receipt[0] != fingerprint:
+                    raise ValueError("Research action retry changed its content")
+                return json.loads(receipt[1])
+            list_id = list_id or self._id(request_id, "list")
+            operation_ids = []
+
+            def save(kind, identity, payload, label):
+                operation = self.client.new_graph_operation_in(
+                    conn, kind, identity, payload, operation_id=self._id(request_id, label)
+                )
+                # The journal and every typed projection write share this one transaction.
+                journal.apply_in(conn, operation, self.client.writer)
+                operation_ids.append(operation["operation_id"])
+
+            if mode == "create":
+                save("list", list_id, {"name": value["name"], "note": value["note"]}, "list-op")
+            else:
+                graph = self.client._optimistic_graph(conn)[0].get(("list", list_id))
+                if graph is None or not graph["active"]:
+                    raise ValueError("List must be active in the graph before adding papers")
+            result = {"list_id": list_id, "papers": [], "operation_ids": operation_ids}
+            added_at = datetime.now(UTC).isoformat(timespec="seconds")
+            for index, item in enumerate(value["papers"]):
+                if "paper" in item:
+                    paper_id = self._id(request_id, f"paper:{index}")
+                    save("paper", paper_id, item["paper"], f"paper-op:{index}")
+                else:
+                    paper_id = item["paper_id"]
+                member = membership_id(list_id, paper_id)
+                existing = conn.execute(
+                    "SELECT lp.added_at FROM list_papers lp "
+                    "JOIN research_paper_identity p ON p.local_id=lp.paper_id "
+                    "WHERE lp.list_id=? AND p.sync_id=?",
+                    (list_id, paper_id),
+                ).fetchone()
+                membership_time = existing[0] if existing is not None else added_at
+                save(
+                    "membership",
+                    member,
+                    {
+                        "list_id": list_id,
+                        "paper_id": paper_id,
+                        "citation": item["citation"],
+                        "added_at": membership_time,
+                    },
+                    f"member-op:{index}",
+                )
+                entry = {"paper_id": paper_id, "membership_id": member, "note_ids": []}
+                for offset, body in enumerate(item["notes"]):
+                    identity = self._id(request_id, f"note:{index}:{offset}")
+                    save(
+                        "note",
+                        identity,
+                        {"paper_id": paper_id, "body": body},
+                        f"note-op:{index}:{offset}",
+                    )
+                    entry["note_ids"].append(identity)
+                result["papers"].append(entry)
+            encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
+            if len(encoded.encode("utf-8")) > MAX_BYTES:
+                raise ValueError("Research action receipt exceeds its bounded size")
+            conn.execute(
+                "INSERT INTO research_action_receipts VALUES(?,?,?)",
+                (request_id, fingerprint, encoded),
+            )
+            return json.loads(encoded)

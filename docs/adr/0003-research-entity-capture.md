@@ -1,12 +1,15 @@
 # ADR 0003: Capture and materialize the research graph
 
-Status: **draft implementation decision**, 2026-10-26. None of the contracts below
-is implemented by this ADR. The current prototype synchronizes list metadata and
-unanchored text notes only. This is the next domain expansion, not generic row replication.
+Status: **partially implemented**, 2026-10-26. The private v2 paper/membership
+graph, parent lifecycle rules, dependency-aware client and shared-connection journal
+are implemented in isolated workspaces. [Shared intake actions](../sync-operations.md)
+create complete lists on an empty peer. Order/read-state, full research manifests,
+existing writer capture and production enrollment remain planned below.
+See [the graph contract](../sync-graph-contract.md) for implemented wire details.
 
-## Problem demonstrated by the current design
+## Original failure and remaining writer boundaries
 
-`SyncClient._materialize` orders latest entity heads by revision. That is insufficient
+The original `SyncClient._materialize` ordered latest entity heads by revision. That was insufficient
 for related records: list creation at revision 1, membership at 2, and list rename at
 3 leaves latest heads ordered membership-before-list on an empty client. Keeping
 every event does not fix this if materialization collapses them into latest heads.
@@ -126,9 +129,10 @@ of silently creating unsynchronized research. Preserve a durable gap marker if a
 unsupported external raw-SQL writer bypasses the unit; block claims of complete sync
 until reconciled. CLI/MCP remain the supported external mutation interfaces.
 
-The current `Journal.apply` opens its own connection. Add a tested shared-connection
-seam before connecting existing compound actions; never call it after `store.connect`
-has already committed. Convert inner commits in `lists.import_list` into explicitly
+`Journal.transaction` and `Journal.apply_in` now provide the tested shared-connection
+seam. `ResearchOperations` uses it for compound list intake, including its retry receipt.
+Existing app writers still need conversion; never call a separate `Journal.apply` after
+`store.connect` has already committed. Convert inner commits in `lists.import_list` into explicitly
 bounded unit-of-work batches with stable retry identities. Sync-disabled behavior
 must continue working while adapters are migrated.
 
@@ -172,7 +176,8 @@ service/client semantic fixtures before its writer is enabled.
   tests cannot establish coverage. Run the full repository check plus two-workspace
   mixed-operation, failure/retry and parent-delete/child-edit fixtures at each slice.
 
-Upstream gates: shared-connection journal seam; versioned parent/incarnation contract;
-service structural preconditions; dependency-aware projection. Downstream gates:
-typed analysis/file manifests, backup/restore, UI conflict/recovery views and real-device
-acceptance. These remain planned work after the current local prototype checkpoint.
+Implemented upstream: shared-connection journal seam, versioned parent/incarnation
+contract, service structural preconditions and dependency-aware projection. Remaining
+gates: order/read-state, audited writer capture, typed analysis/file manifests,
+backup/restore, UI conflict/recovery views and real-device acceptance. Passing the
+prototype tests does not enable production enrollment or complete this ADR.

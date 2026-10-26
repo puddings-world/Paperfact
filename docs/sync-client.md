@@ -77,3 +77,89 @@ No model is invoked and no provider credential travels in an operation.
 
 Desktop draft/focus behavior, all research entity adapters, hosted authentication,
 real networking, mobile storage and real-device acceptance remain separate work.
+
+
+## Version-2 dependency-aware graph
+
+The explicit graph builder is separate from the legacy version-1 helper:
+
+```python
+operation = client.new_graph_operation(
+    "note", portable_note_id, {"paper_id": portable_paper_id, "body": "Observation"}
+)
+client.save(operation)
+```
+
+`new_graph_operation_in(conn, kind, entity_id, payload, ...)` uses a caller-owned
+transaction on the same journal database. Combine it with `Journal.apply_in` to
+save a paper, list, membership and note as one compound action. It sees earlier
+uncommitted outbox operations; it never commits, closes or replaces the connection.
+An inactive transaction, wrong database or workspace/device mismatch is rejected.
+
+- The builder derives incarnations, parent references and structural dependencies
+  from accepted graph state plus outstanding local operations. Acknowledged edits
+  remain outstanding until their outcomes arrive in the contiguous inbox.
+- Roots (paper/list) have no parents; notes reference a paper; memberships reference
+  one list and paper. Membership identity comes from `sync_schema_v2.membership_id`.
+  The graph contract defines the closed payload shapes and lifecycle semantics.
+- A deleted entity or child of a restored parent cannot be revived by an ordinary
+  edit. Explicit `restore=True` assigns a new incarnation and current parent refs.
+  Missing/deleted parents must be restored first. No implicit title matching,
+  reparenting, download or AI call occurs.
+- The legacy builder rejects accepted/pending graph entities and legacy notes
+  under a graph paper, directing callers to the version-2 builder. `save()` and
+  conflict resolution recheck this inside the journal transaction, so a supplied
+  stale version-1 envelope cannot bypass the builder and mutate local graph data.
+
+Accepted events maintain graph metadata transactionally with history and cursor.
+The first opening of an older private prototype backfills graph metadata from its
+retained ordered inbox once; normal restarts do not replay the whole history.
+Research projection applies roots before children even when a root's latest rename
+has a later sequence than a child's creation. Parent changes reevaluate children
+whose own heads did not change, so restoring a list cannot resurrect its former
+memberships automatically.
+
+Pending local parent edits, unreceived acknowledgments or deferred parent projection
+hold dependent children without blocking unrelated ready entities. An accepted list
+delete/restoration waits while an old-incarnation membership has outstanding local
+work; its content remains in the outbox/history until the authority preserves its
+conflict. Once settled, obsolete memberships are hidden using a local writer-only
+delete, never an extra outgoing operation. Notes belong to papers and survive list
+removal. Writer failure rolls graph state, content and cursor back together.
+
+`deferred_reasons(limit=100)` returns bounded entity IDs and reason codes, without
+research text: `pending_local`, `pending_descendant`, `parent_pending`,
+`parent_deferred`, `parent_missing`, `parent_deleted`, `parent_incarnation`, or
+`canonical_absence`. `status().deferred` includes these blocked projections.
+A child with an obsolete parent remains hidden until an explicit restoration or
+retirement; "deferred" does not imply automatic eventual resurrection.
+
+For version-2 conflicts, `resolve_conflict(..., restore=True)` is required when an
+incoming choice would restore research. A canonical choice for an obsolete child
+creates the graph contract's narrow explicit retirement: it preserves old parent
+refs, does not revive/reparent anything and closes the conflict only after accepted
+receipt. Ordinary edits cannot request this bypass. Pending resolution retries keep
+their original identity and choices. Graph/structural state is rechecked in the
+same transaction as saving the resolution.
+
+Paper deletion remains outside this version's retention contract. A rejected local
+paper creation whose canonical head is absent is retained for explicit reconciliation
+with reason `canonical_absence`; the client does not invent a paper-deletion action.
+Projection scans and private schema evolution still need performance/migration
+review before production enablement. These APIs do not attach existing UI/CLI/MCP
+writers, implement a desktop conflict screen or prove real-device synchronization.
+
+`tests/test_sync_graph_client.py` exercises graph ordering, offline chains, pending
+ancestor/descendant protection, explicit restore and retirement, acknowledged pull
+gaps, same-connection rollback, graph-index rebuild and bounded diagnostics. The
+parent checkpoint records exact final full-suite evidence separately.
+
+
+Membership `added_at` is immutable within one incarnation. The graph builder and
+the save/resolution transaction compare it with that incarnation's creation
+operation, found in the local journal or retained received receipt. This includes
+pending creations and acknowledged operations whose events have not yet arrived.
+A supplied raw envelope cannot change the time after passing the builder. Changing
+the citation keeps the creation time; explicit deletion/restoration with a new
+incarnation may establish a new time. This prevents an updated existing projection
+and a newly bootstrapped peer from deriving different membership timestamps.

@@ -13,6 +13,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from paper_daily.sync_graph import apply_accepted, check_preconditions
 from paper_daily.sync_journal import ID, canonical_operation
 
 
@@ -40,6 +41,28 @@ class ReferenceService:
                 "revision INTEGER NOT NULL, operation TEXT NOT NULL, "
                 "PRIMARY KEY(workspace,entity_type,entity_id))"
             )
+
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS sync_graph ("
+                "workspace TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,"
+                "metadata TEXT NOT NULL,PRIMARY KEY(workspace,entity_type,entity_id))"
+            )
+
+    @staticmethod
+    def _graph_entity(conn, workspace, kind, identity):
+        row = conn.execute(
+            "SELECT metadata FROM sync_graph WHERE workspace=? AND entity_type=? AND entity_id=?",
+            (workspace, kind, identity),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    @staticmethod
+    def _set_graph_entity(conn, workspace, kind, identity, value):
+        conn.execute(
+            "INSERT INTO sync_graph VALUES(?,?,?,?) "
+            "ON CONFLICT(workspace,entity_type,entity_id) DO UPDATE SET metadata=excluded.metadata",
+            (workspace, kind, identity, json.dumps(value, sort_keys=True, separators=(",", ":"))),
+        )
 
     @contextmanager
     def _transaction(self, *, write=False):
@@ -149,6 +172,29 @@ class ReferenceService:
                 "revision": row["revision"] if row else 0,
                 "operation": json.loads(row["operation"]) if row else None,
             }
+
+            def get_entity(kind, identity):
+                return self._graph_entity(conn, workspace, kind, identity)
+
+            def get_receipt(identity):
+                row = conn.execute(
+                    "SELECT event FROM sync_events WHERE workspace=? AND operation_id=?",
+                    (workspace, identity),
+                ).fetchone()
+                return json.loads(row[0]) if row else None
+
+            if value["version"] == 1 and value["entity_type"] == "note":
+                previous_note = head["operation"]
+                if (
+                    value["action"] == "delete"
+                    and previous_note
+                    and (
+                        previous_note["action"] == "put"
+                        and get_entity("paper", previous_note["payload"]["paper_id"]) is not None
+                    )
+                ):
+                    raise ValueError("Version 1 cannot bypass an enrolled paper parent")
+            graph_ready = check_preconditions(get_entity, get_receipt, value)
             base, parent_conflicted = value["base_revision"], False
             if value["depends_on"] is not None:
                 parent = conn.execute(
@@ -169,7 +215,7 @@ class ReferenceService:
                 parent_conflicted = parent["outcome"] == "conflict"
 
             sequence = self._high_water(conn, workspace) + 1
-            accepted = not parent_conflicted and base == head["revision"]
+            accepted = graph_ready and not parent_conflicted and base == head["revision"]
             if accepted:
                 head = {"revision": sequence, "operation": value}
                 conn.execute(
@@ -177,6 +223,14 @@ class ReferenceService:
                     "ON CONFLICT(workspace,entity_type,entity_id) DO UPDATE SET "
                     "revision=excluded.revision,operation=excluded.operation",
                     (*key, sequence, encoded),
+                )
+                apply_accepted(
+                    get_entity,
+                    lambda kind, identity, metadata: self._set_graph_entity(
+                        conn, workspace, kind, identity, metadata
+                    ),
+                    value,
+                    sequence,
                 )
             event = {
                 "sequence": sequence,

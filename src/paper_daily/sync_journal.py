@@ -1,6 +1,6 @@
 """Experimental local sync journal; opt-in by explicit path, never on app startup.
 
-Only list metadata and unanchored text notes are described by this first contract.
+Private v1 list/plain-note and v2 paper/membership graph contracts are supported.
 No network, credentials, research migration, or desktop integration is provided.
 """
 
@@ -10,7 +10,9 @@ import hashlib
 import json
 import re
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 MAX_BYTES = 256 * 1024
 PREFIX = "paperfact_sync_"
@@ -36,6 +38,10 @@ def _identifier(value):
 
 def canonical_operation(value: dict) -> str:
     """Validate a closed payload shape before opening a transaction or calling a writer."""
+    if isinstance(value, dict) and type(value.get("version")) is int and value["version"] == 2:
+        from paper_daily.sync_schema_v2 import canonical_operation as canonical_v2
+
+        return canonical_v2(value)
     if not isinstance(value, dict) or set(value) not in (FIELDS, FIELDS | {"resolution_of"}):
         raise ValueError("Unexpected or missing operation fields")
     if type(value["version"]) is not int or value["version"] != 1:
@@ -136,6 +142,8 @@ class Journal:
 
     @staticmethod
     def _authorize_writer(action, first, second, database, trigger):
+        if database not in (None, "main"):
+            return sqlite3.SQLITE_DENY
         allowed = {
             sqlite3.SQLITE_SELECT,
             sqlite3.SQLITE_READ,
@@ -153,26 +161,80 @@ class Journal:
             return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK
 
+    @contextmanager
+    def transaction(self):
+        """Own one connection/commit for a compound research action.
+
+        Network work must finish before entering. Call apply_in repeatedly inside
+        this scope; any propagated failure rolls back the entire compound action.
+        """
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            self._binding(conn)
+            boundary = "paperfact_action_" + uuid4().hex
+            conn.execute(f"SAVEPOINT {boundary}")
+            yield conn
+            if not conn.in_transaction:
+                raise RuntimeError("Research transaction ended before the action completed")
+            try:
+                # SQLite ON CONFLICT ROLLBACK can abort the whole transaction.
+                # Even if a caller catches that error and starts another write,
+                # loss of this marker prevents reporting a partial action as saved.
+                conn.execute(f"RELEASE SAVEPOINT {boundary}")
+            except sqlite3.DatabaseError as exc:
+                raise RuntimeError(
+                    "Research transaction was interrupted; retry the action"
+                ) from exc
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def apply(self, operation: dict, write) -> dict:
         """Commit once; an exact replay never calls the research writer again."""
+        with self.transaction() as conn:
+            return self.apply_in(conn, operation, write)
+
+    def apply_in(self, conn: sqlite3.Connection, operation: dict, write) -> dict:
+        """Save inside a caller-owned transaction without committing that transaction.
+
+        The connection must target this journal's database and must not have a
+        caller-installed SQLite authorizer: this method temporarily owns it while
+        invoking the trusted application writer. It restores the default afterward.
+        An ordinary failed operation rolls back to its savepoint. SQLite failures
+        that abort the entire transaction cannot retain earlier writes; external
+        transaction owners must abort/retry if conn.in_transaction becomes false.
+        Propagate the failure to
+        transaction() to roll back an entire compound action; catch it only when
+        intentionally retaining earlier unrelated work in the outer transaction.
+        """
         encoded = canonical_operation(operation)
         value = json.loads(encoded)
         if (value["workspace_id"], value["device_id"]) != (self.workspace_id, self.device_id):
             raise ValueError("Operation belongs to another workspace/device")
+        if not conn.in_transaction:
+            raise ValueError("A caller-owned write transaction is required")
+        databases = conn.execute("PRAGMA database_list").fetchall()
+        main = next((row[2] for row in databases if row[1] == "main"), None)
+        if not main or Path(main).resolve() != self.path.resolve():
+            raise ValueError("Connection belongs to another research database")
         fingerprint = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-        conn = self._connect()
+        savepoint = "paperfact_write_" + uuid4().hex
+        conn.execute(f"SAVEPOINT {savepoint}")
         try:
-            conn.execute("BEGIN IMMEDIATE")
             self._binding(conn)
             previous = conn.execute(
                 "SELECT sequence,fingerprint FROM paperfact_sync_operations WHERE operation_id=?",
                 (value["operation_id"],),
             ).fetchone()
             if previous:
-                if previous["fingerprint"] != fingerprint:
+                if previous[1] != fingerprint:
                     raise ValueError("Operation ID was reused with different content")
-                conn.commit()
-                return {"applied": False, "sequence": previous["sequence"]}
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                return {"applied": False, "sequence": previous[0]}
             predecessor = value["depends_on"]
             if predecessor:
                 parent = conn.execute(
@@ -206,13 +268,16 @@ class Journal:
                     encoded,
                 ),
             )
-            conn.commit()
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             return {"applied": True, "sequence": cursor.lastrowid}
         except BaseException:
-            conn.rollback()
+            # Some SQLite failures already roll back the entire transaction.
+            # Preserve that original failure instead of masking it with a missing
+            # savepoint error. The transaction owner must then abort/retry the action.
+            if conn.in_transaction:
+                conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             raise
-        finally:
-            conn.close()
 
     def pending(self, limit: int = 100) -> list[dict]:
         if type(limit) is not int or not 1 <= limit <= 1000:
