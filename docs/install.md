@@ -6,19 +6,19 @@ current code. These are separate installations with separate default workspaces.
 ## Install a released preview
 
 Open [Releases](https://github.com/puddings-world/Paperfact/releases) and expand
-**Assets**. The published `v0.2.0` preview provides:
+**Assets**. The published `v0.3.0` preview provides:
 
 | Your computer | Download | Open it |
 |---|---|---|
-| Windows x64 | `Paperfact-0.2.0-windows-x64-setup.exe` | Run setup, then open Paperfact from Start. |
-| macOS, Apple silicon | `Paperfact-0.2.0-macos-arm64.dmg` | Open the DMG, copy Paperfact to Applications, then open it there. |
-| Linux x86-64 | `Paperfact-0.2.0-linux-x86_64.AppImage` | Allow the downloaded file to execute, then open it in your desktop session. |
+| Windows x64 | `Paperfact-0.3.0-windows-x64-setup.exe` | Run setup, then open Paperfact from Start. |
+| macOS, Apple silicon | `Paperfact-0.3.0-macos-arm64.dmg` | Open the DMG, copy Paperfact to Applications, then open it there. |
+| Linux x86-64 | `Paperfact-0.3.0-linux-x86_64.AppImage` | Allow the downloaded file to execute, then open it in your desktop session. |
 
 For Linux, from the folder containing that download:
 
 ```bash
-chmod +x Paperfact-0.2.0-linux-x86_64.AppImage
-./Paperfact-0.2.0-linux-x86_64.AppImage
+chmod +x Paperfact-0.3.0-linux-x86_64.AppImage
+./Paperfact-0.3.0-linux-x86_64.AppImage
 ```
 
 Use the matching filename if downloading a different version. The Linux binary
@@ -155,3 +155,34 @@ Development requires Node.js in addition to source setup. Run the complete check
 
 See [Development](development.md) for tests, [CLI reference](cli-reference.md)
 for automation, and [Releasing](releasing.md) for building installers.
+
+## Update notices
+
+The top update banner uses public GitHub Release notes. It checks asynchronously
+at startup, then hourly while the app stays open, with at most one successful
+GitHub request per day for each current version/channel. Offline failures retry
+later. No research content or account credentials are included in the request;
+GitHub receives an ordinary HTTPS request and the app version in its User-Agent.
+
+Paperfact 0.x previews default to the **beta** channel (stable releases plus
+published beta releases); 1.x and later default to **stable**. To override locally,
+set `PAPERFACT_UPDATE_CHANNEL=stable` or `PAPERFACT_UPDATE_CHANNEL=beta` before
+launch. Drafts and research-bundle tags are always ignored. Version tags must be
+`vX.Y.Z`; the GitHub prerelease flag distinguishes beta from stable.
+
+The banner names the running source/installed build and the offered release.
+Every six seconds it rotates the summary and update guidance. Hovering or moving
+keyboard focus into the banner pauses rotation; it never takes focus from reading
+or editing. **稍後** hides that release until the next day. The full notes remain
+available through **看更新內容**. Starting a download pauses notice rotation;
+failure leaves a retry action rather than repeatedly starting downloads.
+
+An installed copy offers its platform's installer. A source checkout shows Git
+instructions and never modifies local code. First save/commit local edits, run
+`git pull --ff-only`, rerun the platform's setup script, then restart. If Git
+reports conflicts or divergent history, resolve those before updating. A push
+to the source branch alone is not a release and does not produce this notice.
+
+The v0.3.0 and older installers ignored all beta releases. Those users need one
+manual installation of a build containing the updated checker. Publishing this
+source fix does not update binaries that have already been downloaded.

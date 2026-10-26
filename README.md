@@ -81,8 +81,26 @@ After the first setup, only `bash scripts/dev.sh app` is needed to open the app.
 
 </details>
 
-Source and installed copies have separate default workspaces. A release contains
-its tagged code, so it may not include newer source features.
+| | Release installer | Git checkout |
+|---|---|---|
+| Best for | Reading and research | Development and trying current source changes |
+| Code | One published, tagged snapshot | The commit you checked out; `git pull` brings newer commits |
+| Runtime | Python and Qt included | Prepared by the setup script |
+| Update | In-app release notice and platform installer | Save local work, `git pull --ff-only`, rerun setup, restart |
+
+The app checks GitHub Releases in the background at launch and revisits the cache
+hourly while open; successful network checks are limited to once per day for a
+version/channel. Current 0.x previews include published beta releases. The notice
+rotates between the new-version summary and update instructions, pauses while
+hovered or keyboard-focused, and **稍後** dismisses that version for the day.
+It never runs `git pull` or installs an update without your action. New commits
+without a published release do not trigger a release notice.
+
+Source and installed copies have separate default workspaces; set `PAPERFACT_DATA`
+to the same absolute data folder to share one. A release contains its tagged code,
+so it may not include newer source features. Existing v0.3.0 and older installers
+skip beta notices; install a build containing this fix manually once to receive
+future beta notices. [Update details](docs/install.md#update-notices)
 New AI work additionally needs your own supported provider account and CLI/API
 connection; [AI setup](docs/ai-setup.md) explains those separate prerequisites.
 

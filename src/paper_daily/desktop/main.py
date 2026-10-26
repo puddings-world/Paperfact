@@ -2399,6 +2399,7 @@ class MainWindow(QWidget):
             return
         self.remember("presentation", json.dumps(pane.workspace_state()))
         self.remember("geometry", self.saveGeometry().toHex().data().decode())
+        self.update_banner.shutdown()
         super().closeEvent(event)
 
     # Papers kept analysed ahead of the reading while the window is open.

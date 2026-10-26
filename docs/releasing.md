@@ -90,10 +90,26 @@ does not install, so a copy lives beside the script
 
 ## How an installed copy updates
 
-`updates.check` asks the GitHub releases API at most once a day (a failed request
-is retried at the next launch), and only tags shaped `vX.Y.Z` count: the same
-Releases page carries data bundles such as reading lists. Drafts and pre-releases
-are ignored.
+The desktop checks at launch and hourly while open. `updates.check` asks GitHub
+at most once per day per current version/channel; failed checks retry later.
+Only tags shaped `vX.Y.Z` count, because Releases can also carry research bundles.
+Drafts are always ignored. Current 0.x builds default to the beta channel and
+include published prereleases; stable-channel clients skip them. The cache key
+includes the running version and channel, so two copies sharing a workspace do
+not inherit an incompatible result. `PAPERFACT_UPDATE_CHANNEL` can override the
+default with `stable` or `beta`.
+
+The notice rotates its summary and update instructions every six seconds and
+pauses on hover/focus. Checking is deduplicated, downloading suppresses polling
+and rotation, and closing prevents late results from launching an installer.
+`tests/test_update_notices.py` covers preview selection, cache isolation, old-cache
+migration, snooze, repeated activation, failure/retry and window closure. The
+targeted update suite passed 34 cases locally; platform installers still need
+their separate acceptance checks for each new release.
+
+Existing v0.3.0 and older installers skipped *all* prereleases. Their users need
+one manual installation of a corrected build before beta notifications can work.
+Do not remove a beta's prerelease flag just to bypass an old client's policy.
 
 **更新並重啟** downloads this platform's file, then:
 

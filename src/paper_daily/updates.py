@@ -13,7 +13,6 @@ owner.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shlex
@@ -37,6 +36,7 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases"
 LAST_CHECK = "update.last_check"
 FOUND = "update.found"
 SNOOZED = "update.snoozed"
+CACHE_PREFIX = "update.cache."
 
 # What each platform's build is called on a release (see .github/workflows/release.yml).
 ASSET_SUFFIX = {
@@ -55,6 +55,7 @@ class Release:
     notes: str
     page: str
     assets: dict[str, str]
+    prerelease: bool = False
 
 
 def parse_version(text: str) -> tuple[int, int, int] | None:
@@ -62,12 +63,25 @@ def parse_version(text: str) -> tuple[int, int, int] | None:
     return tuple(int(part) for part in match.groups()) if match else None
 
 
-def newest(releases: list[dict], current: str) -> Release | None:
+def default_channel(current: str = __version__, env=os.environ) -> str:
+    """0.x previews receive beta releases; stable builds default to stable only."""
+    configured = env.get("PAPERFACT_UPDATE_CHANNEL", "").strip().lower()
+    if configured in ("stable", "beta"):
+        return configured
+    version = parse_version(current)
+    return "beta" if version and version[0] == 0 else "stable"
+
+
+def newest(
+    releases: list[dict], current: str, *, include_prerelease: bool = False
+) -> Release | None:
     """The highest published version above `current`, if there is one."""
     have = parse_version(current) or (0, 0, 0)
     best: tuple[tuple[int, int, int], dict] | None = None
     for item in releases:
-        if item.get("draft") or item.get("prerelease"):
+        if not isinstance(item, dict) or item.get("draft"):
+            continue
+        if item.get("prerelease") and not include_prerelease:
             continue
         version = parse_version(item.get("tag_name") or "")
         if version is None or version <= have:
@@ -83,6 +97,7 @@ def newest(releases: list[dict], current: str) -> Release | None:
         notes=item.get("body") or "",
         page=item.get("html_url") or RELEASES_PAGE,
         assets={a["name"]: a["browser_download_url"] for a in item.get("assets") or []},
+        prerelease=bool(item.get("prerelease")),
     )
 
 
@@ -136,23 +151,29 @@ def check(
     current: str = __version__,
     fetch: Callable[[], list[dict] | None] = fetch_releases,
     today: date | None = None,
+    *,
+    channel: str = "stable",
 ) -> Release | None:
     """A newer release than this copy, asking GitHub at most once a day.
 
     A failed request is not remembered as a check, so being offline at launch only
-    postpones it to the next launch.
+    postpones it to the next background check or launch.
     """
+    if channel not in ("stable", "beta"):
+        raise ValueError("Unknown update channel")
     today = today or date.today()
-    if get_kv(conn, LAST_CHECK) != today.isoformat():
+    cache_key = f"{CACHE_PREFIX}{current}|{channel}"
+    cached = get_kv(conn, cache_key) or {}
+    if cached.get("checked") != today.isoformat():
         releases = fetch()
         if releases is not None:
-            found = newest(releases, current)
-            set_kv(conn, FOUND, json.dumps(asdict(found)) if found else "")
-            set_kv(conn, LAST_CHECK, today.isoformat())
-    stored = get_kv(conn, FOUND)
+            found = newest(releases, current, include_prerelease=channel == "beta")
+            cached = {"checked": today.isoformat(), "found": asdict(found) if found else None}
+            set_kv(conn, cache_key, cached)
+    stored = cached.get("found")
     if not stored:
         return None
-    release = Release(**json.loads(stored))
+    release = Release(**stored)
     # Found before this copy was itself updated: no longer news.
     if (parse_version(release.version) or (0, 0, 0)) <= (parse_version(current) or (0, 0, 0)):
         return None
