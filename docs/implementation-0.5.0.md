@@ -1,7 +1,8 @@
 # v0.5.0 implementation and session handoff
 
-Status: planning only, 2026-10-26. No sync code, cloud deployment, credentials,
-database migration, version bump, or release is part of this documentation change.
+Status: local foundation in development, 2026-10-26. Planning checkpoint: `c6ba6d9`.
+An isolated journal prototype exists; no app action participates in sync yet.
+No cloud deployment, credential changes, production migration or version bump.
 
 ## Read first
 
@@ -22,8 +23,15 @@ on its boundary. No global skill changes are needed for this unimplemented desig
 
 ## Work ledger
 
-All implementation items below are **not started**. Change a row only when evidence
-exists; add an owner/session and commit or test reference when claiming work.
+Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
+
+- **S01 reviewed baseline:** [writer inventory](sync-write-inventory.md), with dynamic
+  writers and unsupported integration paths explicitly listed. Adapter coverage is pending.
+- **S02 partial:** [local journal ADR](adr/0001-local-sync-journal.md); production identity,
+  remote conflicts, hosting/authentication and encryption decisions remain open.
+- **S03 in progress:** isolated `sync_journal.py` and behavioral tests; no production
+  writer adapters, integer-ID migration or full sync implementation.
+- **S04-S12 not started.** The table below retains the complete acceptance targets.
 
 | ID | Deliverable | Depends on | Acceptance evidence |
 |---|---|---|---|
@@ -117,4 +125,11 @@ Run the existing full check before declaring an implementation complete or commi
 - Prepared the English scope, architecture proposal, and implementation sequence.
 - Added discovery links for repository readers, Codex, and Claude sessions.
 - Runtime behavior and existing workspace paths remain at the v0.4.1 baseline.
-- Next task: S01 mutation inventory, followed by the S02 contract/decision review.
+- Next task: connect a shared list/note adapter in fixture workspaces, then implement
+  fake-peer push/pull, accepted revisions and preserved conflicts. The two-device
+  vertical slice above is not complete.
+- Verification: 32 new journal cases; full `scripts/check.py` passed with 1,157 Python
+  tests and 18 frontend tests, plus privacy scan and Ruff. Log: `build/sync-foundation-check.log`
+  (local ignored artifact). No live cloud, mobile, power-loss or cross-device check was performed.
+- This applies an existing repository-local atomic receipt pattern; no new global
+  skill rule or installation was introduced at this checkpoint.

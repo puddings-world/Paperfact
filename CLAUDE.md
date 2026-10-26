@@ -14,7 +14,10 @@ For cross-device work, read `docs/roadmap-0.5.0.md`, then
 `docs/sync-architecture.md` and `docs/implementation-0.5.0.md`.
 They separate agreed scope, proposed architecture, unresolved decisions, and
 implementation tasks. Sync and the independent mobile PWA are not implemented.
-The next task is the S01 mutation inventory, followed by S02 contract decisions.
+The S01 baseline is in `docs/sync-write-inventory.md`; `docs/adr/0001-local-sync-journal.md`
+records the isolated journal prototype. No production writer uses it yet. Continue
+with the ledger's shared list/note adapter and fake-peer acceptance slice; keep open
+identity, hosting and conflict decisions explicit.
 Use the active `Paperfact` checkout; the old `paper-daily` checkout is an archive.
 Keep repository planning documentation concise and in English.
 
