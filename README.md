@@ -101,6 +101,9 @@ to the same absolute data folder to share one. A release contains its tagged cod
 so it may not include newer source features. Existing v0.3.0 and older installers
 skip beta notices; install a build containing this fix manually once to receive
 future beta notices. [Update details](docs/install.md#update-notices)
+To match an installer exactly, developers can check out its tag, for example
+`git switch --detach v0.4.0`, then rerun setup. Both use the same research
+operations and account-routing code; platform packaging differs.
 New AI work additionally needs your own supported provider account and CLI/API
 connection; [AI setup](docs/ai-setup.md) explains those separate prerequisites.
 
@@ -123,7 +126,9 @@ The route is saved in the list overview and travels with research bundles.
 ```mermaid
 flowchart LR
     A["Your list"] -->|"匯出資料包"| B[".paperfact.zip<br/>PDFs · analyses · figures · slides<br/>optional notes and Q&A"]
-    B -->|"Send privately"| C["Colleague imports"]
+    B -->|"Send ZIP privately"| C["Colleague previews and imports"]
+    B -->|"Upload to your chosen file host"| E["HTTPS download link + checksum"]
+    E -->|"網址匯入…"| C
     C --> D["Read offline<br/>continue with their own AI"]
 ```
 
@@ -135,7 +140,12 @@ packages; **簡報 → 匯出簡報…** separately exports a presentation. Olde
 preview installers may place package actions under **＋ 新增**.
 Available PDF files travel with the research; missing files are reported. AI settings
 and login tokens stay out. This transfers a snapshot; it is not live synchronization.
-[Sharing and import details →](docs/colleague-handoff.md)
+**New in 0.4.0:** export a list, upload its ZIP to a file host you choose, then
+use **製作並複製分享連結…**. Your colleague chooses **網址匯入…** on either
+list page, previews the package, and confirms the import. Direct HTTPS downloads
+are supported; for cloud login/preview pages, download in the browser first.
+Paperfact does not upload your research or change sharing permissions.
+[Share by link →](docs/sharing.md) · [Package contents →](docs/colleague-handoff.md)
 
 | Read on your phone | Take the slides with you |
 |---|---|

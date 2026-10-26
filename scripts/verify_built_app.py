@@ -1,6 +1,7 @@
 """Exercise a frozen app using generated research and isolated account/data homes."""
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
@@ -74,6 +75,11 @@ def verify(built, out):
         "from pathlib import Path; bundle.export('demo', Path(sys.argv[1]))"
     )
     run('seed', [sys.executable, '-c', seed, original], sender)
+    run('share-link', [cli, 'list-share-link', original,
+                       'https://files.example.org/research.zip'], sender)
+    expected = 'https://files.example.org/research.zip#paperfact-sha256=' + (
+        hashlib.sha256(original.read_bytes()).hexdigest())
+    assert expected in (out / 'share-link.log').read_text(encoding='utf-8')
     run('import', [cli, 'list-import', original], recipient)
     run('import-again', [cli, 'list-import', original], recipient)
     # This acknowledges only the generated test recipient's local fixture.
@@ -101,7 +107,8 @@ def verify(built, out):
                 {**empty, 'APPIMAGE_EXTRACT_AND_RUN': '1'})
     result = {'passed': True, 'research_files_preserved': files, 'integration': integration,
               'checks': ['version', 'doctor', 'first-use', 'import', 'duplicate-import',
-                         'reader', 'export', 'file-fidelity', 'json-cli', 'mcp-stdio', 'mcp-retry'],
+                         'reader', 'export', 'file-fidelity', 'share-link-checksum',
+                         'json-cli', 'mcp-stdio', 'mcp-retry'],
               'limitations': 'No real provider login, model call or Google Slides export.'}
     (out / 'report.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result))

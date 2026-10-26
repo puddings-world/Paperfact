@@ -7,7 +7,7 @@ An external adapter must authorize workspace and file access before calling them
 
 from pathlib import Path
 
-from paper_daily import bundle
+from paper_daily import bundle, bundle_links
 from paper_daily.store import connect
 
 
@@ -37,3 +37,13 @@ def import_bundle(
 ) -> dict:
     """Merge validated research, preserving local work unless replacement is explicit."""
     return bundle.import_(Path(source), replace=replace, pdfs=pdfs, log=log)
+
+
+def download_bundle(url: str, target: Path, **kwargs) -> Path:
+    """Download a bounded package; preview/import remain explicit separate steps."""
+    return bundle_links.download(url, target, **kwargs)
+
+
+def make_share_link(url: str, source: Path) -> str:
+    """Attach an integrity checksum to a file host URL; never upload research."""
+    return bundle_links.make_link(url, source)

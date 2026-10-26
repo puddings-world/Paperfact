@@ -4,10 +4,12 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
+    QInputDialog,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -21,9 +23,11 @@ from paper_daily.desktop.ask import AskRunner
 class BundleDialog(QDialog):
     progress = Signal(str)
 
-    def __init__(self, parent=None, *, source=None, list_id=None, list_name=""):
+    def __init__(self, parent=None, *, source=None, list_id=None, list_name="",
+                 download_missing=True):
         super().__init__(parent)
         self.source = Path(source) if source else None
+        self.download_missing = download_missing
         self.list_id = list_id
         self.list_name = list_name
         self.result_data = None
@@ -61,6 +65,10 @@ class BundleDialog(QDialog):
         self.go.clicked.connect(self._start)
         self.go.setEnabled(not source)
         layout.addWidget(self.go)
+        self.share_button = QPushButton("製作並複製分享連結…")
+        self.share_button.setVisible(False)
+        self.share_button.clicked.connect(self._share_link)
+        layout.addWidget(self.share_button)
         self.close_button = QPushButton("關閉")
         self.close_button.clicked.connect(self.reject)
         layout.addWidget(self.close_button)
@@ -90,7 +98,7 @@ class BundleDialog(QDialog):
         self.runner.start("", done, self._failed, call=call)
 
     def _start(self):
-        if self.runner.busy:
+        if self.runner.busy or (self.source and not self.preview_ready):
             return
         if self.result_data is not None:
             self.accept()
@@ -131,6 +139,7 @@ class BundleDialog(QDialog):
             try:
                 result = (
                     research_service.import_bundle(self.source, replace=replace,
+                                                   pdfs=self.download_missing,
                                                    log=self.progress.emit)
                     if self.source
                     else research_service.export_bundle(
@@ -162,6 +171,7 @@ class BundleDialog(QDialog):
                 f"{len(result['pdf_missing'])} 篇尚無本機 PDF。\n{result['out']}"
             )
         self.status.setText(message)
+        self.share_button.setVisible(not self.source)
         self.go.setText("完成")
         self.go.setEnabled(True)
 
@@ -170,6 +180,44 @@ class BundleDialog(QDialog):
         self.go.setEnabled(not self.source or self.preview_ready)
         self.replace.setEnabled(True)
         self.notes.setEnabled(True)
+
+    def _share_link(self):
+        if self.runner.busy or self.source or not self.result_data:
+            return
+        url, accepted = QInputDialog.getText(
+            self, "製作研究包分享連結",
+            "先將剛匯出的 ZIP 上傳到你選擇的檔案空間，再貼上 HTTPS 直接下載網址。\n"
+            "Paperfact 不會代為上傳或變更分享權限。接收者可用『網址匯入』載入。",
+        )
+        if not accepted:
+            return
+        from paper_daily.bundle_links import parse_link
+
+        try:
+            parse_link(url)
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
+        path = Path(self.result_data["out"])
+        self.share_button.setEnabled(False)
+
+        def call(_):
+            try:
+                return research_service.make_share_link(url, path), "ok"
+            except (ValueError, OSError) as exc:
+                return None, str(exc)
+
+        def done(link):
+            QGuiApplication.clipboard().setText(link)
+            self.status.setText("分享連結已複製，含這份研究包的校驗碼。\n"
+                                "接收者可從『研究資料 → 從分享網址匯入』貼上。")
+            self.share_button.setEnabled(True)
+
+        def failed(reason):
+            self.status.setText("無法製作分享連結：" + reason)
+            self.share_button.setEnabled(True)
+
+        self.runner.start("", done, failed, call=call)
 
     def reject(self):
         if self.runner.busy:

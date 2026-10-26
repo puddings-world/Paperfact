@@ -939,6 +939,36 @@ def cmd_list_import(args) -> int:
     return 0
 
 
+def cmd_list_import_url(args) -> int:
+    from tempfile import TemporaryDirectory
+
+    from paper_daily import research_service
+
+    try:
+        with TemporaryDirectory(prefix="paperfact-shared-") as folder:
+            source = research_service.download_bundle(args.url, Path(folder) / "shared.zip")
+            preview = research_service.inspect_bundle(source)
+            result = preview if args.preview else research_service.import_bundle(
+                source, replace=args.replace, pdfs=False,
+            )
+            print(json.dumps(result, ensure_ascii=False, default=str))
+        return 0
+    except (ValueError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
+def cmd_list_share_link(args) -> int:
+    from paper_daily import research_service
+
+    try:
+        print(research_service.make_share_link(args.url, Path(args.path)))
+        return 0
+    except (ValueError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
 def cmd_survey(args) -> int:
     """Read a whole reading list as one field: history, lines of work, open problems."""
     from paper_daily import survey
@@ -1212,6 +1242,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-pdfs", action="store_true",
                     help="do not download the PDFs from their verified URLs")
     sp.set_defaults(func=cmd_list_import)
+
+    sp = sub.add_parser("list-import-url", help="download and import a shared research package")
+    sp.add_argument("url")
+    sp.add_argument("--preview", action="store_true", help="validate and inspect without importing")
+    sp.add_argument("--replace", action="store_true", help="replace matching saved research")
+    sp.set_defaults(func=cmd_list_import_url)
+
+    sp = sub.add_parser("list-share-link", help="add a checksum to an uploaded package URL")
+    sp.add_argument("path", help="the exact exported ZIP uploaded to your file host")
+    sp.add_argument("url", help="HTTPS direct download URL; this command never uploads")
+    sp.set_defaults(func=cmd_list_share_link)
 
     sp = sub.add_parser("survey", help="a survey of the field a reading list covers")
     sp.add_argument("list_id")

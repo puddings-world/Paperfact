@@ -1,5 +1,23 @@
 # Release readiness
 
+## 0.4.0 public beta
+
+This candidate adds HTTPS research-package sharing to the common desktop/CLI
+transfer service, beta-aware update notices, and refresh after external SQLite
+writers. Source and binaries are built from the same release tag. Accounts and
+model settings remain local to each recipient; packages are research snapshots.
+
+The release gate runs the full suite and frozen-app research/MCP acceptance on
+all three platforms. Frozen acceptance also checks share-link SHA-256 output
+without uploading data. Final platform counts, artifact hashes and Windows
+install/upgrade preservation evidence belong to the release validation asset,
+not an unverified claim in this candidate document.
+
+Limitations: unsigned builds; direct HTTPS links only (browser download for
+cloud login/preview pages); no hosted research database or live synchronization;
+real recipient AI login and Google OAuth remain separate manual checks.
+[Sharing guide](sharing.md) · [v0.4.0 release](https://github.com/puddings-world/Paperfact/releases/tag/v0.4.0)
+
 ## 0.2.0 preview — 2026-10-24
 
 This candidate includes topic research routes, parallel PDF downloads, shared

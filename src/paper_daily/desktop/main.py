@@ -1905,6 +1905,7 @@ class MainWindow(QWidget):
         data_menu.setToolTipsVisible(True)
         self.import_bundle_action = data_menu.addAction("匯入研究資料包…", self._import_bundle)
         self.import_bundle_action.setToolTip("載入同事分享的清單與研究內容")
+        self.import_link_action = data_menu.addAction("從分享網址匯入…", self._import_bundle_link)
         self.export_bundle_action = data_menu.addAction(
             "匯出目前清單資料包…", self._export_bundle)
         self.export_bundle_action.setToolTip(
@@ -2571,6 +2572,27 @@ class MainWindow(QWidget):
         dialog.exec()
         if dialog.result_data:
             self._open_list(dialog.result_data["list"])
+
+    def _import_bundle_link(self):
+        from tempfile import TemporaryDirectory
+
+        from paper_daily.desktop.bundle_dialog import BundleDialog
+        from paper_daily.desktop.bundle_link_dialog import BundleLinkDialog
+
+        if getattr(self, "_link_transfer_active", False):
+            return
+        self._link_transfer_active = True
+        try:
+            with TemporaryDirectory(prefix="paperfact-shared-") as folder:
+                download = BundleLinkDialog(Path(folder), self)
+                if download.exec() != QDialog.DialogCode.Accepted or not download.source:
+                    return
+                dialog = BundleDialog(self, source=download.source, download_missing=False)
+                dialog.exec()
+                if dialog.result_data:
+                    self._open_list(dialog.result_data["list"])
+        finally:
+            self._link_transfer_active = False
 
     def _export_bundle(self):
         if not self.active_list:
