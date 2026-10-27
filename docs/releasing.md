@@ -90,8 +90,11 @@ does not install, so a copy lives beside the script
 
 ## How an installed copy updates
 
-The desktop checks at launch and hourly while open. `updates.check` asks GitHub
-at most once per day per current version/channel; failed checks retry later.
+The desktop checks at launch and every 15 minutes while open. `updates.check`
+caches results for 15 minutes per current version/channel; failed checks retry
+later. **Version and updates** in the bottom-right footer provides an immediate
+check that bypasses this cache and snoozing. An offline manual check says it
+could not check, rather than claiming the app is current.
 Only tags shaped `vX.Y.Z` count, because Releases can also carry research bundles.
 Drafts are always ignored. Current 0.x builds default to the beta channel and
 include published prereleases; stable-channel clients skip them. The cache key
@@ -100,12 +103,23 @@ not inherit an incompatible result. `PAPERFACT_UPDATE_CHANNEL` can override the
 default with `stable` or `beta`.
 
 The notice rotates its summary and update instructions every six seconds and
-pauses on hover/focus. Checking is deduplicated, downloading suppresses polling
-and rotation, and closing prevents late results from launching an installer.
-`tests/test_update_notices.py` covers preview selection, cache isolation, old-cache
-migration, snooze, repeated activation, failure/retry and window closure. The
-targeted update suite passed 34 cases locally; platform installers still need
-their separate acceptance checks for each new release.
+pauses on hover/focus. Checking is deduplicated. Downloading and a pending install
+suppress polling and rotation; closing prevents late results from launching an
+installer. Native CPU selection avoids offering Apple Silicon installers to Intel
+Macs. Download length and GitHub's asset SHA-256 digest must match before an
+installer can run. Missing digest metadata offers the release page instead.
+This integrity check does not replace publisher signing/notarization.
+
+Before installation, the window checks active work and saves restart/draft state.
+If it cannot safely restart, the downloaded update stays ready for an explicit
+retry. Retrying rechecks the file in the background. A newer release notice cannot
+replace the identity of an update already waiting to install.
+
+`tests/test_updates.py`, `tests/test_update_notices.py` and
+`tests/test_maintenance.py` cover these behaviors with fixture files and simulated
+network/installer responses. Native installers still need separate acceptance
+checks for each release. This is automatic discovery with a user-initiated update,
+not unattended forced installation.
 
 Existing v0.3.0 and older installers skipped *all* prereleases. Their users need
 one manual installation of a corrected build before beta notifications can work.
@@ -169,19 +183,3 @@ resolved). The same pictures locally:
 
 `--demo` builds a throwaway workspace (`scripts/demo_workspace.py`): one list and
 one paper with a generated PDF and a deep dive, written for the purpose.
-
-
-### Startup layout shutdown regression
-
-The v0.4.2 candidate passed the full test suite on all three release runners, but
-its Windows/macOS screenshot processes crashed after producing their final reports.
-An active startup-fit event filter queried native window ownership during teardown.
-The v0.4.3 correction inspects ownership only for input events. The regression
-exercises real WebEngine subprocess shutdown and native window deletion while the
-startup timer is pending; it fails before the correction and exits cleanly after it.
-Release runners provide WebEngine and Xvfb where needed. Local environments without
-those optional facilities report these new integration cases as skipped rather than
-claiming native coverage. The original layout and input behavior tests remain.
-
-The failed v0.4.2 tag is retained for provenance; no installer release was published
-from it. v0.4.3 still requires the full check and all platform packaging gates.

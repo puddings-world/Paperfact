@@ -39,20 +39,25 @@ def spark(colour: str, size: int = 14) -> QIcon:
 
 
 def css(pal: dict[str, str], primary: bool = False) -> str:
+    # The same pressable shape as other buttons: a heavier lower edge that the
+    # press flattens.
+    edge = QColor(pal["ai"]).darker(135).name()
     if primary:
         return (
             f"QPushButton{{background:{pal['ai']};color:{pal['onAi']};"
-            f"border:1px solid {pal['ai']};border-radius:4px;padding:5px 14px;"
-            f"font-weight:600;font-size:12px;}}"
+            f"border:1px solid {pal['ai']};border-bottom:2px solid {edge};border-radius:6px;"
+            f"padding:5px 14px 4px 14px;font-weight:600;font-size:12px;}}"
             f"QPushButton:hover{{background:{pal['aiStrong']};border-color:{pal['aiStrong']};}}"
+            f"QPushButton:pressed{{border-bottom-width:1px;padding:6px 14px 4px 14px;}}"
             f"QPushButton:disabled{{background:{pal['sunk']};color:{pal['faint']};"
             f"border-color:{pal['border']};}}"
         )
     return (
         f"QPushButton{{background:{pal['aiSoft']};color:{pal['ai']};"
-        f"border:1px solid {pal['ai']};border-radius:4px;padding:4px 11px;"
-        f"font-weight:600;font-size:12px;}}"
+        f"border:1px solid {pal['ai']};border-bottom:2px solid {edge};border-radius:6px;"
+        f"padding:4px 11px 3px 11px;font-weight:600;font-size:12px;}}"
         f"QPushButton:hover{{background:{pal['surface']};}}"
+        f"QPushButton:pressed{{border-bottom-width:1px;padding:5px 11px 3px 11px;}}"
         f"QPushButton:disabled{{background:{pal['sunk']};color:{pal['faint']};"
         f"border-color:{pal['border']};}}"
     )

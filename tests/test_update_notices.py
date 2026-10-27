@@ -1,6 +1,7 @@
 """Release channels, non-blocking announcements and background lifecycle."""
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -47,7 +48,7 @@ def pending(monkeypatch):
         def start(self):
             jobs.append(self.target)
 
-    monkeypatch.setattr(update_banner.threading, "Thread", Thread)
+    monkeypatch.setattr(update_banner, "threading", SimpleNamespace(Thread=Thread))
     return jobs
 
 

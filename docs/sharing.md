@@ -1,30 +1,57 @@
 # Share a research list by link
 
-Available in **0.4.1** for source and packaged apps. This transfers a snapshot of
-one list into the recipient's local workspace. It does not connect their app to
-your database or sign them in to your AI account.
+Available in **0.4.1** for source and packaged apps; one-step Google Drive
+sharing is new in the next release. This transfers a snapshot of one list into
+the recipient's local workspace. It does not connect their app to your database or
+sign them in to your AI account.
 
 ```mermaid
 flowchart LR
-    A["Export list + PDFs + research"] --> B["Upload ZIP to your file host"]
-    B --> C["Copy HTTPS link with checksum"]
+    A["Export list + PDFs + research"] --> B["Upload to your Google Drive<br/>(or any file host)"]
+    B --> C["Link copied to the clipboard"]
     C --> D["Recipient: download → preview → confirm"]
     D --> E["Read locally"]
     E --> F["Continue with recipient's own AI → export again"]
 ```
 
-## Sender
+## Sender: share through your Google Drive
+
+1. Choose the list's export button, as below.
+2. Under **分享到 Google Drive**, enter your colleagues' Google account emails, or
+   tick **知道連結的任何人都能下載**. PDFs are included by default
+   (**附上原文 PDF**); untick it to share only the research.
+3. Choose **上傳到我的 Google Drive 並複製連結**. The first time, your browser
+   asks you to sign in to Google. A progress bar follows the upload; closing the
+   dialog cancels it. The link is then on your clipboard.
+
+- **Invited emails** receive Google's sharing email. They open the link signed in
+  to that account, download the ZIP and use **匯入研究資料包…**.
+- **Anyone with the link** gets a direct download carrying the package checksum,
+  which the recipient pastes into **網址匯入…**. Only use it for research you may
+  redistribute: a public link with PDFs lets anyone holding it download them.
+- **Sharing the same list again** replaces the file in place, so the link you sent
+  keeps working and readers get the latest version. Readers you added before keep
+  their access; unticking **知道連結的任何人** removes the public link.
+- **在 Google Drive 開啟** shows the file, where you can change or remove access.
+
+Paperfact uses Google's `drive.file` permission: it can only see and share the
+packages it uploaded, never the rest of your Drive. The sign-in lasts until the app
+closes and is not saved. The installer must have Google sign-in enabled, as for
+[Google Slides](presentations.md).
+
+## Sender: any other file host
 
 1. Select a list in **清單總覽**, or open it, and choose its export button.
 2. Decide whether to include personal notes and Q&A. Available PDFs, analyses,
    figures, research routes and editable slide content travel with the package.
    The export result reports missing PDFs; these cannot be included until acquired.
-3. Upload the exported ZIP to your chosen file host and choose who can download it.
+3. Choose **改為存成檔案…**, upload the ZIP to your chosen file host and choose
+   who can download it.
 4. In the export dialog choose **製作並複製分享連結…**, then paste the file's
    direct HTTPS download URL. Paperfact adds the ZIP's SHA-256 checksum and copies
    the link. Send that link privately to your colleague.
 
-Paperfact does not upload files, create hosted storage, or change access permissions.
+On this route Paperfact does not upload files or change access permissions.
 A checksum detects a changed download; it does not authenticate the sender or grant
 access. Anyone who has a bearer download link may be able to download the research,
 so use your file host's expiry/access controls. Renew the link after changing the ZIP.
@@ -49,9 +76,10 @@ replace the recipient's provider configuration. See [package details](colleague-
 
 - A direct HTTPS ZIP download, without browser login cookies, on the normal HTTPS
   port. Signed/expiring query links are supported; their query is not shown in errors.
-- A cloud preview or login page (including many default Drive sharing links) is
-  not a direct download. Open it in your browser, download the ZIP, and use the
-  existing **匯入研究資料包…** file picker instead.
+- A Google Drive page link (`drive.google.com/file/d/…`) is fetched as the file
+  itself. If the file is shared only with specific accounts, the import explains
+  that; open it in your browser, download the ZIP, and use **匯入研究資料包…**.
+  Other cloud preview or login pages need the same browser download.
 - The app checks the optional link checksum, archive limits, then the existing
   package manifest and content hashes before import. Downloads are limited to
   1 GiB; expanded archives to 4 GiB, 50,000 files and 256 MiB per file.

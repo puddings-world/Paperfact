@@ -145,3 +145,28 @@ def test_panel_and_focus_registry_can_be_destroyed_in_either_order(monkeypatch, 
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     app.processEvents()
     assert failures == [], "\n".join("".join(traceback.format_exception(*e)) for e in failures)
+
+
+def test_escape_steps_out_to_the_panel_around_then_lets_the_page_handle_it(window):
+    scopes = window["scopes"]
+    QTest.mouseClick(window["blank"], Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+    _pump()
+    assert scopes.active.name == "inner"
+    win = window["inner"].window()
+    assert scopes.step_out(win)
+    _pump()
+    assert scopes.active.name == "outer" and QApplication.focusWidget() is window["outer_edit"]
+    # The outermost panel has nowhere to step to: Esc goes on to its usual job.
+    assert not scopes.step_out(win)
+    assert scopes.active.name == "outer"
+
+
+def test_the_panel_tag_stays_faint_after_its_moment(window):
+    scopes = window["scopes"]
+    QTest.mouseClick(window["blank"], Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+    _pump()
+    tag = scopes._tag
+    assert tag is not None and tag.isVisible() and tag.graphicsEffect() is None
+    scopes._hide_tag()
+    assert scopes._tag is tag and tag.isVisible()
+    assert tag.graphicsEffect().opacity() < 1

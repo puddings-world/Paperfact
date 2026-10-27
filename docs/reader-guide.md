@@ -50,15 +50,20 @@ A click anywhere in a panel, its background included, gives that panel the keys;
 innermost panel wins. A key goes to that panel first and then outward, so every
 panel on the way is live: the innermost is framed in bright blue, the panels around
 it faintly, and the path with the inner panel's keys (分析 › 簡報 › 投影片視角 · ←/→)
-shows in its corner for a moment when you arrive. Window keys work everywhere (Ctrl+1 to
-Ctrl+6 switch the analysis tabs, counting only the tabs shown, Ctrl+N, Ctrl+F); panel keys only in their panel
+shows in its corner when you arrive, then stays there faintly so the keys can be
+looked up again. Esc steps out of a nested panel to the one around it (from
+投影片視角 to 簡報); from the outermost panel it goes back to the list as before.
+Window keys work everywhere (Ctrl+Tab and Ctrl+Shift+Tab step through the analysis
+tabs, wrapping round; Ctrl+1 to Ctrl+6 jump to one, counting only the tabs shown;
+Ctrl+N, Ctrl+F); panel keys only in their panel
 (←/→ switch slide views only in 投影片視角, ↑↓ change slides in 頁面目錄, and A / D / R
 toggle the slide list, toggle the materials and restore the layout anywhere in 簡報). Hold
 Ctrl for a moment to see each tab's key; in 投影片視角 holding Alt shows where Alt+←
 and Alt+→ lead.
 
 **On macOS** every Ctrl shortcut is the same key with ⌘ (⌘N, ⌘F, ⌘1–⌘9, ⌘-wheel
-zoom). Back and forward are ⌘[ and ⌘], and the next / previous match is ⌘G / ⇧⌘G
+zoom). Stepping through tabs uses the Control key itself (⌃Tab / ⌃⇧Tab), since ⌘Tab
+switches applications. Back and forward are ⌘[ and ⌘], and the next / previous match is ⌘G / ⇧⌘G
 instead of F3. Tooltips and menus show the keys the way the running platform writes
 them.
 
@@ -94,7 +99,16 @@ dives under it, and it says how many papers it had to read from the abstract alo
 It is stored per list, can be edited like a note, and a hand-edited survey is not
 replaced without asking. `survey <list>` writes it from the command line.
 
-The dropdown at the end of that row re-sorts what is on screen: by citations, by date
+The dropdown at the end of that row re-sorts what is on screen. It starts on
+**最近開啟**: the papers you last opened come first, newest first, so returning to a
+list puts you back among what you were reading. The menu lists the sorts in order
+of importance, and that order also settles ties: papers the chosen sort cannot tell
+apart are ordered by 最近開啟, then venue, newest first, citations, dependents, read,
+type and analysis state, and finally by the list's own order. **自訂順序**, last in
+the menu, is that own order alone (the import order until you change it) and the
+only sort where dragging a paper moves it; the order you drag is what 自訂順序
+shows next time and what **下一篇** follows.
+The other sorts: by citations, by date
 either way (year, and the month from the arXiv id within a year), grouped by venue
 (MICCAI, IPCAI, IJCARS, MedIA, TMI … then other venues, preprints last), grouped by
 paper type, unanalysed first, by how many queued papers depend on it, by when you last
@@ -116,6 +130,19 @@ opened the lookup runs in the background, and again once its PDF has arrived.
 
 Right-click any row to act on it without opening it: **從佇列移除** / **從這個清單移除**,
 **插到佇列最前面**, **置頂**, and marking it read or unread.
+
+In a list, **編輯閱讀理由與 #標籤…** rewrites why the paper is on it; the import's
+first draft is only a start. The note shows at the end of the row's tags as
+**理由：…**, with the whole note in the row's tooltip, and each `#tag` shows as its
+own tag: type `#tag` into the search box to see only those papers, which keeps
+several reading lines apart inside one list. A bibliography import keeps each
+citation line as the note; one that only repeats the title is not shown. Clearing
+the note removes it.
+
+The tag a list is sorted by comes first on every row (after 置頂), so the sorted
+column reads straight down: venue for the venue and date sorts, cites, type,
+analysis state, 依賴, 已讀, and for 最近開啟 how long ago the paper was opened
+(**3 小時前開過**). The other tags keep one fixed order behind it.
 
 A paper counts as read only when you say so: **標記已讀** in the reader, or the
 right-click menu. Opening one is not reading it, so 只看未讀, 讀過的 and the
@@ -307,7 +334,7 @@ window — navigation, ticking, pinning — stays blue or grey.
   **刪除這組問答** removes one exchange, and a note kept from it stays. Which answers
   are worth keeping is a judgement, so it is a button rather than something that
   happens to every answer.
-- **引用** reads as summary first, then detail, and places the paper in its field
+- **脈絡** reads as summary first, then detail, and places the paper in its field
   rather than in this corpus. The corpus is three ML conferences plus the lists
   imported by hand, so a lineage drawn inside it showed Cataract-1K one ancestor out of
   forty references and five descendants out of forty-seven.
@@ -317,6 +344,14 @@ window — navigation, ticking, pinning — stays blue or grey.
   open — and **接下來必讀**, the handful of papers backwards (承先) and forwards (啟後)
   that matter most, in reading order, title and reason only. Both are one model call
   over the two lists below, stored per paper and editable.
+
+  The switch at the right of that row, **全域 / 作者團隊**, narrows both lists to
+  the paper's own team: the earlier and later work that shares an author or a research
+  institution with it. Authors and institutions come from OpenAlex by their ids, so a
+  shared surname is not a match; each kept card says why (**同作者：…**, **同機構：…**),
+  and a line under the switch counts how many works OpenAlex could identify. The
+  first switch looks them up in the background (a few seconds per list, then cached);
+  全域 is the default. The map view is not filtered.
 
   Below it, one switch between two itemised lists, each sortable:
 

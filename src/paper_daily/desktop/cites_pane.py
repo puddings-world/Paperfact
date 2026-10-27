@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import html
 import subprocess
+import threading
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -47,11 +48,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import citegraph, followups, runtime
-from paper_daily.desktop import ai_style
+from paper_daily import citegraph, followups, lineage_team, runtime
+from paper_daily.desktop import ai_style, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
-from paper_daily.store import connect, get_kv, set_kv, title_key
+from paper_daily.store import connect, title_key
 
 # Where a reference goes when you are reading the main queue rather than a list.
 SPILLOVER_ID = "extra-reading"
@@ -170,11 +171,24 @@ class _Text(QLabel):
 
 
 class CitesPane(QScrollArea):
+    # (generation, result) from the author/institution lookup thread.
+    team_ready = Signal(int, object)
+    team_progress = Signal(int, int, int)
+
     def __init__(self, window, palette: dict[str, str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.win = window
         self.pal = palette
         self.paper_id: str | None = None
+        # 全域 shows the whole lineage; 作者團隊 only work sharing an author or an
+        # institution with this paper, as OpenAlex lists them.
+        self._team = "all"
+        self._team_data: dict | None = None
+        self._team_loading = False
+        self._team_note: QLabel | None = None
+        self._paper_info: dict = {}
+        self.team_ready.connect(self._team_done)
+        self.team_progress.connect(self._team_step)
         self._cites_job: subprocess.Popen | None = None
         self._follow_job: subprocess.Popen | None = None
         self._side = "refs"            # or "later"
@@ -198,7 +212,7 @@ class CitesPane(QScrollArea):
         self._pending: dict[str, object] = {}
         self._generation = 0
         with connect() as conn:
-            self._view = get_kv(conn, "ui.cites_view", "list")  # or "graph"
+            self._view = ui_state.read(conn, "ui.cites_view", "list")  # or "graph"
         # The links lookup takes a few seconds; the map redraws itself when it is
         # done instead of waiting for the tab to be reopened.
         self._watch = QTimer(self)
@@ -234,8 +248,11 @@ class CitesPane(QScrollArea):
                     conn, r.get("doi"), r.get("title"), r.get("corpus_id")
                 )
             counts = conn.execute(
-                "SELECT reference_count, citation_count FROM papers WHERE id=?", (paper_id,)
+                "SELECT reference_count, citation_count, title, doi FROM papers WHERE id=?",
+                (paper_id,),
             ).fetchone()
+        self._paper_info = {"title": counts["title"], "doi": counts["doi"]} if counts else {}
+        self._team_data, self._team_loading = None, False
         self._coverage = coverage(
             refs, later, asked,
             counts["reference_count"] if counts else None,
@@ -244,6 +261,8 @@ class CitesPane(QScrollArea):
         self._data = {"refs": refs, "later": later, "story": story, "asked": asked}
         self._view_bar.show()
         self._show_face()
+        if self._team == "team":
+            self._start_team()
         # The other face, and the other side of the list, are made while nothing
         # else is happening, so the first flip to them is as quick as the rest.
         generation = self._generation
@@ -494,8 +513,7 @@ class CitesPane(QScrollArea):
             return
         self._view = view
         self._view_buttons[view].setChecked(True)
-        with connect() as conn:
-            set_kv(conn, "ui.cites_view", view)
+        ui_state.save("ui.cites_view", view)
         self._show_face()
 
     # ---- the two lists ---------------------------------------------------
@@ -527,7 +545,18 @@ class CitesPane(QScrollArea):
             widget.setVisible(side == self._side)
             row.addWidget(widget)
         row.addStretch(1)
+        team, self._team_buttons = self._segmented(
+            (("全域", "all"), ("作者團隊", "team")), self._team, self._set_team
+        )
+        team.setToolTip(
+            "作者團隊：只看和這篇有共同作者或同一研究機構的前作與後續研究"
+            "（作者與機構資料來自 OpenAlex）"
+        )
+        row.addWidget(team)
         layout.addWidget(bar)
+        self._team_note = self._label("", 11.5, "faint")
+        self._team_note.setVisible(False)
+        layout.addWidget(self._team_note)
         for side in ("refs", "later"):
             holder = QWidget()
             box = QVBoxLayout(holder)
@@ -570,6 +599,83 @@ class CitesPane(QScrollArea):
         holder.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
         self._fit()
 
+    # ---- the paper's own team ---------------------------------------------
+    def _set_team(self, team: str) -> None:
+        if team == self._team:
+            return
+        self._team = team
+        if self._list_face is not None:
+            self._team_buttons[team].setChecked(True)
+        if team == "team" and self._team_data is None:
+            self._start_team()
+        self._refill()
+
+    def _start_team(self) -> None:
+        if self._team_loading or self._data is None:
+            return
+        self._team_loading = True
+        generation = self._generation
+        info = dict(self._paper_info)
+        refs, later = list(self._data["refs"]), list(self._data["later"])
+
+        def look() -> None:
+            result = lineage_team.team(
+                info, refs, later,
+                progress=lambda done, total: self.team_progress.emit(generation, done, total),
+            )
+            self.team_ready.emit(generation, result)
+
+        threading.Thread(target=look, name="lineage-team", daemon=True).start()
+        self._say_team()
+
+    def _team_step(self, generation: int, done: int, total: int) -> None:
+        if generation == self._generation and self._team_note is not None:
+            self._team_note.setText(f"正在向 OpenAlex 查作者與機構…{done}/{total}")
+
+    def _team_done(self, generation: int, result: dict) -> None:
+        if generation != self._generation:
+            return
+        self._team_data, self._team_loading = result, False
+        if self._team == "team":
+            self._refill()
+
+    def _refill(self) -> None:
+        for side in ("refs", "later"):
+            if side in self._boxes:
+                self._fill_side(side)
+        self._say_team()
+        self._fit()
+
+    def _say_team(self) -> None:
+        note = self._team_note
+        if note is None:
+            return
+        data = self._team_data
+        if self._team != "team":
+            note.setVisible(False)
+            return
+        if data is None:
+            note.setText("正在向 OpenAlex 查作者與機構…")
+        elif not data.get("own"):
+            note.setText("OpenAlex 找不到這篇論文，無法比對作者與機構。")
+        else:
+            shown = len(data["refs"]) + len(data["later"])
+            note.setText(
+                f"和這篇有共同作者或同一機構的：參考文獻 {len(data['refs'])} 篇、"
+                f"後續研究 {len(data['later'])} 篇（OpenAlex 查到 {data['known']}/"
+                f"{data['total']} 篇的作者資料）"
+                + ("" if shown else "。這篇的團隊沒有出現在它的承先啟後裡。")
+            )
+        note.setVisible(True)
+
+    def _team_rows(self, side: str, rows: list) -> list:
+        """The side's rows under the 作者團隊 filter; all of them under 全域."""
+        if self._team != "team":
+            return rows
+        found = (self._team_data or {}).get(side, {})
+        key = "ref_key" if side == "refs" else "work_id"
+        return [r for r in rows if r.get(key) in found]
+
     def _set_order(self, order: str) -> None:
         if self._side == "refs":
             self._ref_order = order
@@ -591,8 +697,8 @@ class CitesPane(QScrollArea):
         self._cards = {k: v for k, v in self._cards.items() if v[0] != side}
         data = self._data
         rows = (
-            self._ref_rows(box, data["refs"]) if side == "refs"
-            else self._later_rows(box, data["later"], data["asked"])
+            self._ref_rows(box, self._team_rows("refs", data["refs"])) if side == "refs"
+            else self._later_rows(box, self._team_rows("later", data["later"]), data["asked"])
         )
         make = self._ref_card if side == "refs" else self._later_card
         cards = ((r, make) for r in rows)
@@ -621,6 +727,16 @@ class CitesPane(QScrollArea):
             return False
         r, make = nxt
         card = make(r)
+        match = (self._team_data or {}).get(side, {}).get(
+            r.get("ref_key") if side == "refs" else r.get("work_id")
+        )
+        if self._team == "team" and match:
+            said = []
+            if match["authors"]:
+                said.append("同作者：" + "、".join(match["authors"]))
+            if match["institutions"]:
+                said.append("同機構：" + "、".join(match["institutions"]))
+            card.layout().insertWidget(0, self._label(" · ".join(said), 11.5, "accent"))
         self._remember(side, card, r.get("title"), r.get("ref_key") if side == "refs" else None)
         box.addWidget(card)
         return True
@@ -816,7 +932,7 @@ class CitesPane(QScrollArea):
         label = str(source.get("label") or "")
         if sid == "context":
             self.verticalScrollBar().setValue(0)
-            return "已跳到「引用」分頁最上方的研究脈絡。"
+            return "已跳到「脈絡」分頁最上方的研究脈絡。"
         if sid.startswith("cite:"):
             side, key = "refs", ("ref", sid.removeprefix("cite:"))
             title = label.split("] ", 1)[1] if "] " in label else ""
@@ -847,11 +963,11 @@ class CitesPane(QScrollArea):
         self._complete(side)
         hit = next((self._cards[k] for k in wanted if k in self._cards), None)
         if hit is None:
-            return "「引用」分頁裡找不到這一篇；簡報產生之後，引用分析可能重新整理過。"
+            return "「脈絡」分頁裡找不到這一篇；簡報產生之後，引用分析可能重新整理過。"
         card = hit[1]
         QTimer.singleShot(60, lambda: self.ensureWidgetVisible(card, 0, 60))
         self._flash(card)
-        return "已跳到「引用」分頁的" + ("參考文獻" if side == "refs" else "後續研究") + "這一筆。"
+        return "已跳到「脈絡」分頁的" + ("參考文獻" if side == "refs" else "後續研究") + "這一筆。"
 
     def _find_dot(self, side: str, sid: str, title: str):
         if self._map is None:

@@ -13,15 +13,18 @@ owner.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import platform as system_platform
 import re
 import shlex
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from datetime import date
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
@@ -37,6 +40,7 @@ LAST_CHECK = "update.last_check"
 FOUND = "update.found"
 SNOOZED = "update.snoozed"
 CACHE_PREFIX = "update.cache."
+CACHE_SECONDS = 15 * 60
 
 # What each platform's build is called on a release (see .github/workflows/release.yml).
 ASSET_SUFFIX = {
@@ -56,6 +60,7 @@ class Release:
     page: str
     assets: dict[str, str]
     prerelease: bool = False
+    digests: dict[str, str] = field(default_factory=dict)
 
 
 def parse_version(text: str) -> tuple[int, int, int] | None:
@@ -98,17 +103,39 @@ def newest(
         page=item.get("html_url") or RELEASES_PAGE,
         assets={a["name"]: a["browser_download_url"] for a in item.get("assets") or []},
         prerelease=bool(item.get("prerelease")),
+        digests={a["name"]: a.get("digest", "") for a in item.get("assets") or []},
     )
 
 
-def asset_for(release: Release, platform: str = sys.platform) -> tuple[str, str] | None:
+def asset_for(
+    release: Release, platform: str = sys.platform, *, machine=None
+) -> tuple[str, str] | None:
     """(file name, download url) of this platform's build on the release."""
     key = "linux" if platform.startswith("linux") else platform
     suffix = ASSET_SUFFIX.get(key)
+    machine = (
+        machine
+        or (
+            system_platform.machine()
+            if platform == sys.platform
+            else "arm64"
+            if key == "darwin"
+            else "x86_64"
+        )
+    ).lower()
+    if key == "darwin" and machine in {"x86_64", "amd64"}:
+        suffix = "-macos-x86_64.dmg"
+    elif (
+        key == "darwin"
+        and machine not in {"arm64", "aarch64"}
+        or key in {"win32", "linux"}
+        and machine not in {"amd64", "x86_64"}
+    ):
+        return None
     if suffix is None:
         return None
     for name, url in release.assets.items():
-        if name.endswith(suffix):
+        if name.endswith(suffix) and "/" not in name and "\\" not in name:
             return name, url
     return None
 
@@ -153,23 +180,43 @@ def check(
     today: date | None = None,
     *,
     channel: str = "stable",
+    force: bool = False,
+    now: float | None = None,
 ) -> Release | None:
-    """A newer release than this copy, asking GitHub at most once a day.
+    """A newer release than this copy, using a 15-minute cache unless explicitly refreshed.
 
     A failed request is not remembered as a check, so being offline at launch only
     postpones it to the next background check or launch.
     """
     if channel not in ("stable", "beta"):
         raise ValueError("Unknown update channel")
+    stamp = (
+        now
+        if now is not None
+        else (
+            datetime.combine(today, datetime.min.time(), tzinfo=UTC).timestamp()
+            if today is not None
+            else time.time()
+        )
+    )
     today = today or date.today()
     cache_key = f"{CACHE_PREFIX}{current}|{channel}"
     cached = get_kv(conn, cache_key) or {}
-    if cached.get("checked") != today.isoformat():
+    cached = cached if isinstance(cached, dict) else {}
+    checked = cached.get("checked_at")
+    age = stamp - checked if type(checked) in {int, float} else float("inf")
+    if force or not 0 <= age < CACHE_SECONDS:
         releases = fetch()
         if releases is not None:
             found = newest(releases, current, include_prerelease=channel == "beta")
-            cached = {"checked": today.isoformat(), "found": asdict(found) if found else None}
+            cached = {
+                "checked": today.isoformat(),
+                "checked_at": stamp,
+                "found": asdict(found) if found else None,
+            }
             set_kv(conn, cache_key, cached)
+        elif force:
+            raise OSError("Update service unavailable")
     stored = cached.get("found")
     if not stored:
         return None
@@ -210,17 +257,32 @@ def download(
 ) -> Path:
     """Stream `url` to `dest`; a partial file never takes the final name."""
     partial = dest.with_name(dest.name + ".part")
-    with httpx.stream("GET", url, follow_redirects=True, timeout=60.0) as response:
-        response.raise_for_status()
-        total = int(response.headers.get("content-length") or 0)
-        done = 0
-        with partial.open("wb") as out:
-            for chunk in response.iter_bytes(1 << 16):
-                out.write(chunk)
-                done += len(chunk)
-                progress(done, total)
-    partial.replace(dest)
+    try:
+        with httpx.stream("GET", url, follow_redirects=True, timeout=60.0) as response:
+            response.raise_for_status()
+            total = int(response.headers.get("content-length") or 0)
+            done = 0
+            with partial.open("wb") as out:
+                for chunk in response.iter_bytes(1 << 16):
+                    out.write(chunk)
+                    done += len(chunk)
+                    progress(done, total)
+            if not done or (total and done != total):
+                raise OSError("Incomplete update download")
+        partial.replace(dest)
+    finally:
+        partial.unlink(missing_ok=True)
     return dest
+
+
+def verify_download(path: Path, digest: str) -> None:
+    """Missing metadata is not verified; never execute an unchecked installer."""
+    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+        raise ValueError("此版本缺少 SHA-256 驗證資訊，請從發布頁下載。")
+    with path.open("rb") as stream:
+        actual = hashlib.file_digest(stream, "sha256").hexdigest()
+    if actual != digest[7:].lower():
+        raise ValueError("下載檔案驗證失敗，請重新下載。")
 
 
 def app_bundle(executable: str = sys.executable) -> Path:
@@ -239,16 +301,22 @@ def mac_script(dmg: Path, app: Path, pid: int) -> str:
     return f"""#!/bin/sh
 while kill -0 {pid} 2>/dev/null; do sleep 0.3; done
 mnt=$(mktemp -d)
+test -n "$mnt" || exit 1
 if ! hdiutil attach -nobrowse -readonly -mountpoint "$mnt" {q(str(dmg))}; then
   open {q(str(dmg))}; exit 1
 fi
-rm -rf {old}
-if mv {q(str(app))} {old} && ditto "$mnt/{app.name}" {q(str(app))}; then
+trap 'hdiutil detach "$mnt" -quiet; rmdir "$mnt" 2>/dev/null' EXIT
+test -d "$mnt/{app.name}" || exit 1
+# A previous recovery copy must never be overwritten.
+test ! -e {old} || exit 1
+# If the old bundle cannot be moved, leave it intact.
+mv {q(str(app))} {old} || exit 1
+if ditto "$mnt/{app.name}" {q(str(app))}; then
   rm -rf {old}
 else
-  rm -rf {q(str(app))}; mv {old} {q(str(app))}
+  rm -rf {q(str(app))}
+  mv {old} {q(str(app))} || exit 1
 fi
-hdiutil detach "$mnt" -quiet
 open {q(str(app))}
 """
 

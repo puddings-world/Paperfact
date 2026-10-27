@@ -397,6 +397,26 @@ def rename(list_id: str, name: str) -> None:
             raise ValueError("清單已不存在，請重新整理。")
 
 
+NOTE_LIMIT = 4000
+
+
+def set_note(list_id: str, paper_id: str, note: str) -> str | None:
+    """Rewrite why a paper is on a list. The note is the list's own label for the
+    paper -- import only fills in a first draft -- and its #tags are how a list
+    read along several lines keeps them apart."""
+    note = note.strip() or None
+    if note and len(note) > NOTE_LIMIT:
+        raise ValueError(f"閱讀理由請在 {NOTE_LIMIT} 字以內。")
+    with connect() as conn:
+        changed = conn.execute(
+            "UPDATE list_papers SET citation=? WHERE list_id=? AND paper_id=?",
+            (note, list_id, paper_id),
+        ).rowcount
+    if not changed:
+        raise ValueError("這篇論文已不在清單裡，請重新整理。")
+    return note
+
+
 def reorder(list_ids: list[str]) -> None:
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")

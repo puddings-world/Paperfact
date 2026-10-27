@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from paper_daily.ai_types import DEFAULT_MAX_TOKENS, Settings
@@ -230,6 +231,26 @@ def assign(path: Path, selections: dict, backends: tuple[str, ...]) -> Path:
     return write(path, data)
 
 
+_claude_found: dict = {}
+CLAUDE_RECHECK = 30.0
+
+
+def _claude_on_path() -> bool:
+    """Whether the Claude CLI is installed, re-asked at most every 30 seconds.
+
+    `which` walks every PATH folder; settings are resolved several times a second
+    while the window is open, and on Windows that walk froze it for up to 0.6 s.
+    The key includes the lookup itself and PATH, so a changed PATH (or a test's
+    stand-in) is asked again at once."""
+    key = (shutil.which, os.environ.get("PATH"))
+    found = _claude_found.get(key)
+    if found is None or time.monotonic() - found[0] > CLAUDE_RECHECK:
+        found = (time.monotonic(), bool(shutil.which("claude")))
+        _claude_found.clear()
+        _claude_found[key] = found
+    return found[1]
+
+
 def resolve(
     data: dict,
     task: str = "default",
@@ -266,7 +287,7 @@ def resolve(
     model = env("PAPERFACT_MODEL") or env("PAPER_DAILY_MODEL") or raw.get("model")
     base = env("PAPERFACT_BASE_URL") or env("PAPER_DAILY_BASE_URL") or raw.get("base_url")
     if backend == "auto":
-        if shutil.which("claude"):
+        if _claude_on_path():
             backend = "cli"
         elif env("ANTHROPIC_API_KEY"):
             backend = "anthropic"

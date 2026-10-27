@@ -11,6 +11,7 @@ from test_workspace_transfer_ui import workspace as _workspace
 
 from paper_daily import pdf_downloads as dl
 from paper_daily import store
+from paper_daily.desktop import ui_state
 from paper_daily.desktop.main import MainWindow
 from paper_daily.desktop.queue_view import DOWNLOAD_ROLE, ROW_HEIGHT, pdf_progress_slot
 
@@ -109,6 +110,8 @@ def test_auto_download_can_be_disabled_persisted_and_resumed(workspace, page):
         settle(manager)
         view._poll_pdfs()
         assert manager.snapshot()["p0"].phase == "cancelled"
+        # View state is written by a background queue; closing the window flushes it.
+        assert ui_state.flush()
         with store.connect() as conn:
             assert store.get_kv(conn, "ui.auto_pdf") is False
         view.enqueue_pdfs()

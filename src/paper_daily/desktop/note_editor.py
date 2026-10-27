@@ -23,8 +23,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from paper_daily.desktop import fonts, md
-from paper_daily.store import connect, get_kv, set_kv
+from paper_daily.desktop import fonts, md, ui_state
+from paper_daily.store import connect
 
 MODES = ("編輯", "分割", "預覽")
 
@@ -90,7 +90,7 @@ class NoteEditor(QDialog):
         self.modes.idClicked.connect(self._set_mode)
 
         with connect() as conn:
-            mode = get_kv(conn, "ui.note_editor_mode", 1)
+            mode = ui_state.read(conn, "ui.note_editor_mode", 1)
         self.modes.button(mode).setChecked(True)
         self._set_mode(mode, remember=False)
         self._render()
@@ -117,5 +117,4 @@ class NoteEditor(QDialog):
         if mode == 1:
             self.split.setSizes([1, 1])
         if remember:
-            with connect() as conn:
-                set_kv(conn, "ui.note_editor_mode", mode)
+            ui_state.save("ui.note_editor_mode", mode)

@@ -30,7 +30,7 @@ content needs, normally 16–22, never more than 24.
 | Limits and corrections | 5–10% | From the verification pass, worded as verified |
 | **啟後 — open problems** | 10–15% | What later work did with the paper, by line; and the important problems still unsolved after it — each with the later works that ran into it and why it matters |
 
-The 承先 and 啟後 parts come from the 引用 tab's analysis (references with their
+The 承先 and 啟後 parts come from the 脈絡 tab's analysis (references with their
 purpose and the sentence that cites them; later work with what it did with this
 paper; the 研究脈絡), which `export` writes to `citations.md`.
 

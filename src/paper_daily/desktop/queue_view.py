@@ -16,6 +16,8 @@ import json
 import re
 import sqlite3
 import time
+from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -50,9 +52,9 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import runtime, venues
-from paper_daily.desktop import ai_style, fonts
+from paper_daily.desktop import ai_style, button_style, fonts, ui_state
 from paper_daily.desktop.focus_scope import scopes
-from paper_daily.store import connect, get_kv, set_kv
+from paper_daily.store import connect
 
 ROW_HEIGHT = 74
 # The pin toggle at the right end of every row.
@@ -95,21 +97,105 @@ def _analysed(paper) -> int:
     return sum((paper.has_dive, paper.has_cites, paper.has_later))
 
 
+NOTE_TAG = re.compile(r"#([^\s#]+)")
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"[\W_]+", "", text.casefold())
+
+
+def note_parts(paper) -> tuple[list[str], str]:
+    """(#tags, the remaining words) of why a paper is on the list.
+
+    An import from a bibliography keeps the citation line as the note -- the title
+    again, give or take punctuation, authors and year -- which says nothing about
+    why the paper is there, so it is not shown."""
+    note = (paper.reason or "").strip()
+    title, said = _plain(paper.title), _plain(note)
+    if not note or (title and (title in said or said in title)):
+        return [], ""
+    lead = said[: len(title)]
+    if len(title) >= 12 and SequenceMatcher(None, lead, title).ratio() >= 0.8:
+        return [], ""
+    return NOTE_TAG.findall(note), " ".join(NOTE_TAG.sub(" ", note).split())
+
+
+def opened_label(stamp: str | None, now: datetime | None = None) -> str | None:
+    """How long ago a paper was opened, as the recent sort's own tag."""
+    try:
+        when = datetime.fromisoformat(stamp) if stamp else None
+    except ValueError:
+        return None
+    if when is None or when.tzinfo is None:
+        return None
+    seconds = ((now or datetime.now(UTC)) - when).total_seconds()
+    if seconds < 0:
+        return None
+    if seconds < 60:
+        return "剛剛開過"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} 分鐘前開過"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)} 小時前開過"
+    if seconds < 30 * 86400:
+        return f"{int(seconds // 86400)} 天前開過"
+    return f"{when.month}/{when.day} 開過"
+
+
+# Stored by id, not position, so adding a sort never changes what a saved choice means.
+# In the menu's order, which is also how much each one matters: the chosen sort
+# decides first, and papers it ties are ordered by the sorts in TIEBREAK, top
+# down, and finally by the list's own order. 自訂順序 is that own order alone,
+# and the only one a drag can change.
 SORTS = [
-    ("自訂順序", None, False),
-    ("引用數 多 → 少", lambda p: p.citations or 0, True),
-    ("時間 新 → 舊", lambda p: (_when(p), p.citations or 0), True),
-    ("時間 舊 → 新", lambda p: (_when(p), -(p.citations or 0)), False),
-    ("依發表處分組", lambda p: venues.group_key(p.venue, p.year), False),
-    ("依論文類型分組", lambda p: (
-        TYPE_ORDER.index(p.paper_type) if p.paper_type in TYPE_ORDER else len(TYPE_ORDER),
-        -(p.year or 0),
+    ("recent", "最近開啟", lambda p: p.opened_at or "", True),
+    ("venue", "依發表處分組", lambda p: venues.group_key(p.venue, p.year), False),
+    ("newest", "時間 新 → 舊", _when, True),
+    ("oldest", "時間 舊 → 新", _when, False),
+    ("citations", "引用數 多 → 少", lambda p: p.citations or 0, True),
+    ("dependents", "被依賴數 多 → 少", lambda p: p.dependents, True),
+    ("read", "最近標記已讀", lambda p: p.read_at or "", True),
+    ("type", "依論文類型分組", lambda p: (
+        TYPE_ORDER.index(p.paper_type) if p.paper_type in TYPE_ORDER else len(TYPE_ORDER)
     ), False),
-    ("待分析的在前", lambda p: (_analysed(p), not p.has_pdf), False),
-    ("被依賴數 多 → 少", lambda p: (p.dependents, p.citations or 0), True),
-    ("最近標記已讀", lambda p: p.read_at or "", True),
-    ("標題 A → Z", lambda p: p.title.lower(), False),
+    ("todo", "待分析的在前", lambda p: (_analysed(p), not p.has_pdf), False),
+    ("title", "標題 A → Z", lambda p: p.title.lower(), False),
+    ("custom", "自訂順序", None, False),
 ]
+SORT_IDS = [sort[0] for sort in SORTS]
+TIEBREAK = ("recent", "venue", "newest", "citations", "dependents", "read", "type", "todo")
+DRAGGABLE = ("custom",)
+
+
+def ordered(rows: list, sort_id: str) -> list:
+    """`rows` ((position, paper), in list order) by the chosen sort, its ties by
+    TIEBREAK, the rest by the list's order. One time direction is used at once."""
+    if sort_id == "custom":
+        return list(rows)
+    times = {"newest", "oldest"}
+    chain = [sort_id] + [
+        s for s in TIEBREAK if s != sort_id and not (s in times and sort_id in times)
+    ]
+    by_id = {sort[0]: sort for sort in SORTS}
+    out = list(rows)
+    # Stable sorts applied least important first leave the most important deciding.
+    for sid in reversed(chain):
+        _id, _label, key, reverse = by_id[sid]
+        out.sort(key=lambda pair, key=key: key(pair[1]), reverse=reverse)
+    return out
+# The tag a sort orders by comes first on every row, so the column being sorted
+# reads straight down the list; the others keep one fixed order behind it.
+SORT_TAG = {
+    "recent": "opened",
+    "citations": "cites",
+    "newest": "venue",
+    "oldest": "venue",
+    "venue": "venue",
+    "type": "type",
+    "todo": "analysis",
+    "dependents": "depends",
+    "read": "read",
+}
 
 
 class PaperListModel(QAbstractListModel):
@@ -189,8 +275,11 @@ class PaperListModel(QAbstractListModel):
             return paper
         if role == DOWNLOAD_ROLE:
             return self.downloads.get(paper.id)
-        if role == Qt.ItemDataRole.ToolTipRole and paper.id in self.downloads:
-            return self.downloads[paper.id].label
+        if role == Qt.ItemDataRole.ToolTipRole:
+            lines = [self.downloads[paper.id].label] if paper.id in self.downloads else []
+            if any(note_parts(paper)):
+                lines.append("閱讀理由：" + (paper.reason or "").strip())
+            return "\n".join(lines) or None
         if role == Qt.ItemDataRole.UserRole:
             return position
         if role == Qt.ItemDataRole.DisplayRole:
@@ -214,42 +303,61 @@ class PaperDelegate(QStyledItemDelegate):
 
     def _tags(self, paper) -> list[tuple[str, str, str]]:
         """(text, foreground, background) for each tag on this row."""
+        return [tag[1:] for tag in self._kinded_tags(paper)]
+
+    def _kinded_tags(self, paper) -> list[tuple[str, str, str, str]]:
+        """(kind, text, foreground, background), in display order: 置頂, then the
+        tag the list is sorted by, then the fixed order, then the reader's notes."""
         p = self.pal
         # A preprint is greyed: whether something passed review is part of what it is.
         ink = p["faint"] if venues.is_preprint(paper.venue) else p["ink"]
-        out = [("置頂", "#ffffff", p["accent"])] if paper.pinned else []
-        out.append((venues.label(paper.venue, paper.year), ink, p["sunk"]))
+        sort = SORT_IDS[self.page.sort.currentIndex()] if self.page else None
+        out = [("venue", venues.label(paper.venue, paper.year), ink, p["sunk"])]
         if paper.award:
-            out.append((paper.award, p["award"], p["awardSoft"]))
+            out.append(("award", paper.award, p["award"], p["awardSoft"]))
         if paper.is_canon:
-            out.append(("canon", p["accent"], p["accentSoft"]))
+            out.append(("canon", "canon", p["accent"], p["accentSoft"]))
         if paper.paper_type:
-            out.append((paper.paper_type, p["muted"], p["sunk"]))
+            out.append(("type", paper.paper_type, p["muted"], p["sunk"]))
         if paper.citations:
-            out.append((f"{paper.citations:,} cites", p["muted"], p["sunk"]))
+            out.append(("cites", f"{paper.citations:,} cites", p["muted"], p["sunk"]))
         if paper.dependents:
-            out.append((f"{paper.dependents} 篇依賴", p["accent"], p["accentSoft"]))
+            out.append(("depends", f"{paper.dependents} 篇依賴", p["accent"], p["accentSoft"]))
         parts = (("講解", paper.has_dive), ("承先", paper.has_cites), ("啟後", paper.has_later))
         if all(ok for _n, ok in parts):
-            out.append(("已分析", p["done"], p["doneSoft"]))
+            out.append(("analysis", "已分析", p["done"], p["doneSoft"]))
         elif not any(ok for _n, ok in parts):
-            out.append(("未分析", p["muted"], p["sunk"]))
+            out.append(("analysis", "未分析", p["muted"], p["sunk"]))
         else:
             missing = "·".join(n for n, ok in parts if not ok)
-            out.append((f"缺 {missing}", p["accent"], p["accentSoft"]))
+            out.append(("analysis", f"缺 {missing}", p["accent"], p["accentSoft"]))
         if not paper.has_pdf:
             # "找不到" once every source was tried: right-click to supply it by hand.
             text = "缺 PDF(找不到,右鍵補)" if paper.pdf_failed else "缺 PDF"
-            out.append((text, p["warn"], p["warnSoft"]))
+            out.append(("pdf", text, p["warn"], p["warnSoft"]))
         else:
-            out.append(("有 PDF", p["done"], p["doneSoft"]))
+            out.append(("pdf", "有 PDF", p["done"], p["doneSoft"]))
+        opened = opened_label(getattr(paper, "opened_at", None)) if sort == "recent" else None
+        if opened:
+            out.append(("opened", opened, p["accent"], p["accentSoft"]))
         if paper.read:
-            out.append(("已讀", p["done"], p["doneSoft"]))
-        elif paper.state == "delivered":
+            out.append(("read", "已讀", p["done"], p["doneSoft"]))
+        elif paper.state == "delivered" and not opened:
             # In a list nothing is delivered: it only means the paper was opened,
             # which is not having read it.
             in_list = bool(self.page) and bool(self.page.win.active_list)
-            out.append(("開過" if in_list else "已送出", p["faint"], p["sunk"]))
+            out.append(("read", "開過" if in_list else "已送出", p["faint"], p["sunk"]))
+        lead = SORT_TAG.get(sort)
+        out.sort(key=lambda tag: tag[0] != lead)
+        if paper.pinned:
+            out.insert(0, ("pin", "置頂", "#ffffff", p["accent"]))
+        # The reader's own words go last and are marked as such; the full note is
+        # the row's tooltip.
+        tags, words = note_parts(paper)
+        out += [("tag", f"#{tag}", p["ai"], p["aiSoft"]) for tag in tags]
+        if words:
+            shown = words if len(words) <= 30 else words[:29] + "…"
+            out.append(("note", f"理由：{shown}", p["muted"], p["surface"]))
         return out
 
     def paint(self, painter: QPainter, option, index) -> None:
@@ -312,7 +420,7 @@ class PaperDelegate(QStyledItemDelegate):
         metrics = QFontMetrics(self.tag_font)
         x = text_left
         y = r.top() + 29
-        for text, fg, bg in self._tags(paper):
+        for _kind, text, fg, bg in self._kinded_tags(paper):
             w = metrics.horizontalAdvance(text) + 10
             if x + w > r.right() - 12 - PIN_W:
                 break
@@ -424,7 +532,7 @@ class QueuePage(QWidget):
 
         self.sort = QComboBox()
         self.sort.setToolTip("重新排序目前顯示的論文。左邊的編號仍然是它原本的位置。")
-        for label, _key, _reverse in SORTS:
+        for _id, label, _key, _reverse in SORTS:
             self.sort.addItem(label)
         self.sort.currentIndexChanged.connect(self._sort_changed)
         controls.addWidget(self.sort)
@@ -440,10 +548,7 @@ class QueuePage(QWidget):
         self.sel_label.setStyleSheet(f"color:{pal['muted']};font-size:12px;")
         ticks.addWidget(self.sel_label)
         button_css = (
-            f"QPushButton{{background:{pal['surface']};color:{pal['ink']};"
-            f"border:1px solid {pal['firm']};border-radius:5px;padding:3px 10px;"
-            f"font-size:12px;}}"
-            f"QPushButton:disabled{{color:{pal['faint']};border-color:{pal['border']};}}"
+            f"{button_style.pressable(pal, pad=(3, 10))}QPushButton{{font-size:12px;}}"
         )
         self._batch_buttons: list[QPushButton] = []
         for text, action, needs_ticks in (
@@ -732,7 +837,13 @@ class QueuePage(QWidget):
             return True
         # The venue as shown, so "miccai" or "預印本" filters the way the row reads.
         where = venues.label(paper.venue, paper.year).lower()
-        return q in paper.title.lower() or q in " ".join(paper.authors).lower() or q in where
+        # The note too, so typing a #tag lists the papers given it.
+        return (
+            q in paper.title.lower()
+            or q in " ".join(paper.authors).lower()
+            or q in where
+            or q in (paper.reason or "").lower()
+        )
 
     def refresh(self) -> None:
         self.export_bundle_button.setEnabled(bool(self.win.active_list))
@@ -773,7 +884,9 @@ class QueuePage(QWidget):
         rows = [
             (i, p) for i, p in enumerate(self.win.papers, 1) if self._matches(p)
         ]
-        label, key, reverse = SORTS[self.sort.currentIndex()]
+        sort_id, label, key, _reverse = SORTS[self.sort.currentIndex()]
+        # Every sort but 自訂順序 breaks ties on when papers were opened.
+        self._load_opened()
         if key is not None:
             # The blurb above just claimed the default order. Say what is actually on
             # screen instead.
@@ -785,7 +898,7 @@ class QueuePage(QWidget):
             # The position shown on each row stays the paper's place in the queue or
             # the list: sorting by citations is a way to look at the same reading
             # order, not a way to renumber it.
-            rows.sort(key=lambda pair: key(pair[1]), reverse=reverse)
+            rows = ordered(rows, sort_id)
             rows = self._pinned_first(rows)
             self._show_rows(rows)
             return
@@ -807,7 +920,7 @@ class QueuePage(QWidget):
         # highlight should follow it there rather than fall back to row one.
         current = self._current_paper()
         self.model.can_reorder = bool(self.win.active_list) and (
-            self.sort.currentIndex() == 0 and not self.search.text().strip()
+            SORT_IDS[self.sort.currentIndex()] in DRAGGABLE and not self.search.text().strip()
             and not any(box.isChecked() for box in (
                 self.f_unread, self.f_history, self.f_todo, self.f_nopdf,
                 self.f_award, self.f_principle, self.f_pdf, self.f_roots,
@@ -815,7 +928,7 @@ class QueuePage(QWidget):
         )
         if self.win.active_list and not self.model.can_reorder:
             self.blurb.setText(self.blurb.text() +
-                " 要拖曳排序，請切回「自訂順序」、清除搜尋與篩選，並取消置頂。")
+                " 要拖曳排序，請選「自訂順序」、清除搜尋與篩選，並取消置頂。")
         self.model.set_rows(rows)
         self._select(current.id if current is not None else getattr(self.win, "_last_paper", None))
         self._say_count(rows)
@@ -832,6 +945,16 @@ class QueuePage(QWidget):
         self.win.papers = [papers[pid] for pid in paper_ids]
         self.blurb.setText("自訂順序已儲存；「下一篇」會依這個順序閱讀。")
         return True
+
+    def _load_opened(self) -> None:
+        try:
+            with connect() as conn:
+                opened = ui_state.prefixed(conn, "ui.paper.opened:")
+        except sqlite3.Error:
+            return
+        for paper in self.win.papers:
+            stamp = opened.get(paper.id)
+            paper.opened_at = stamp if isinstance(stamp, str) else paper.opened_at
 
     def _open_current(self):
         index = self.view.currentIndex()
@@ -864,7 +987,7 @@ class QueuePage(QWidget):
     def enable_downloads(self, manager):
         self.downloads = manager
         with connect() as conn:
-            enabled = bool(get_kv(conn, "ui.auto_pdf", True))
+            enabled = bool(ui_state.read(conn, "ui.auto_pdf", True))
         self.auto_pdf.blockSignals(True)
         self.auto_pdf.setChecked(enabled)
         self.auto_pdf.blockSignals(False)
@@ -880,8 +1003,7 @@ class QueuePage(QWidget):
         self._poll_pdfs()
 
     def _auto_pdf_changed(self, enabled):
-        with connect() as conn:
-            set_kv(conn, "ui.auto_pdf", bool(enabled))
+        ui_state.save("ui.auto_pdf", bool(enabled))
         if self.downloads is not None:
             if enabled:
                 self.enqueue_pdfs(retry=True)
@@ -1056,20 +1178,39 @@ class QueuePage(QWidget):
     def _sort_changed(self, index: int) -> None:
         # Worth remembering: someone who reads a list by citation count reads the
         # next one that way too, and re-picking it on every launch is a chore.
-        with connect() as conn:
-            set_kv(conn, "ui.sort", str(index))
+        ui_state.save("ui.sort.mode", SORT_IDS[index])
         self.refresh()
 
     def restore_sort(self) -> None:
+        # The older position-based "ui.sort" is left behind: the new default is the
+        # recent order, which is what a returning reader looks for first.
         with connect() as conn:
-            stored = get_kv(conn, "ui.sort")
-        if stored and stored.isdigit() and int(stored) < len(SORTS):
-            self.sort.setCurrentIndex(int(stored))
+            stored = ui_state.read(conn, "ui.sort.mode", "recent")
+        self.sort.setCurrentIndex(SORT_IDS.index(stored) if stored in SORT_IDS else 0)
 
     def _open(self, index: QModelIndex) -> None:
         paper = index.data(PAPER_ROLE)
         if paper is not None:
             self.win.open_paper(paper.id)
+
+    def _edit_note(self, paper) -> None:
+        from paper_daily import lists
+
+        tags, words = note_parts(paper)
+        text, accepted = QInputDialog.getMultiLineText(
+            self,
+            "閱讀理由與標籤",
+            "為什麼讀這篇？可加 #標籤；在搜尋框輸入 #標籤 就能只看這些論文。",
+            paper.reason if tags or words else "",
+        )
+        if not accepted:
+            return
+        try:
+            paper.reason = lists.set_note(self.win.active_list, paper.id, text)
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            self.blurb.setText(f"閱讀理由未儲存：{exc}")
+            return
+        self.refresh()
 
     def _menu(self, point) -> None:
         """Right-click: act on one row without opening it.
@@ -1094,6 +1235,9 @@ class QueuePage(QWidget):
             lambda: self.win.set_pinned([paper.id], not paper.pinned)
         )
         if self.win.active_list:
+            menu.addAction("編輯閱讀理由與 #標籤…").triggered.connect(
+                lambda: self._edit_note(paper)
+            )
             menu.addAction("從這個清單移除").triggered.connect(
                 lambda: self.win.remove_paper(paper.id, paper.title)
             )

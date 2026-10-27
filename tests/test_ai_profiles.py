@@ -184,3 +184,22 @@ def test_ai_can_be_disabled_without_removing_the_saved_profiles(clean):
     assert llm.complete_result("paper").text is None
     llm.use_profile("main")
     assert llm.available()
+
+
+def test_auto_backend_asks_for_the_claude_cli_at_most_every_30_seconds(clean, monkeypatch):
+    # Settings are read several times a second while the window is open; walking PATH
+    # each time froze it on Windows.
+    calls = []
+    monkeypatch.setattr(llm.shutil, "which", lambda name: calls.append(name) or "/bin/claude")
+    llm.save_settings(profile="default", backend="auto")
+    assert llm.settings().backend == "cli"
+    assert llm.settings().backend == "cli"
+    assert calls == ["claude"]
+    monkeypatch.setenv("PATH", os.environ.get("PATH", "") + os.pathsep + "elsewhere")
+    llm.settings()
+    assert calls == ["claude", "claude"]
+    from paper_daily import ai_profiles
+
+    monkeypatch.setattr(ai_profiles, "CLAUDE_RECHECK", -1.0)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: calls.append(name))
+    assert llm.settings().backend == "none"

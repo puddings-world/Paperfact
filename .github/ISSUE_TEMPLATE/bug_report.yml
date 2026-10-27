@@ -1,0 +1,50 @@
+name: Bug report
+description: Report an installation or research workflow problem
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public. See [support instructions](https://github.com/puddings-world/Paperfact/blob/main/SUPPORT.md).
+        Do not attach credentials, raw logs, your data folder, or private research.
+        Diagnostic export is available only in builds containing that feature.
+  - type: input
+    id: version
+    attributes:
+      label: Version and installation
+      description: Click the bottom-right version label and copy version information. For older builds, provide the release tag and asset filename.
+      placeholder: App version, installation kind and build commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and CPU
+      placeholder: macOS version + Apple Silicon / Intel, Windows, or Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it fail?
+      options:
+        - Installation / startup
+        - AI login / model selection
+        - AI analysis / question answering
+        - Lists / PDF / reading / slides
+        - Import / export / workspace sync
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps, expected result and actual result
+      description: Include repeatability and the last visible progress stage. Use synthetic examples.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Reviewed diagnostics or screenshots (optional)
+      description: Attach the ZIP from Diagnostics and support. For older releases, describe the visible error with personal information removed. Never attach an unreviewed log.

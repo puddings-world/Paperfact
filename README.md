@@ -128,7 +128,7 @@ The route is saved in the list overview and travels with research bundles.
 flowchart LR
     A["Your list"] -->|"匯出資料包"| B[".paperfact.zip<br/>PDFs · analyses · figures · slides<br/>optional notes and Q&A"]
     B -->|"Send ZIP privately"| C["Colleague previews and imports"]
-    B -->|"Upload to your chosen file host"| E["HTTPS download link + checksum"]
+    B -->|"Upload to your Google Drive or any file host"| E["Link copied to the clipboard"]
     E -->|"網址匯入…"| C
     C --> D["Read offline<br/>continue with their own AI"]
 ```
@@ -141,11 +141,14 @@ packages; **簡報 → 匯出簡報…** separately exports a presentation. Olde
 preview installers may place package actions under **＋ 新增**.
 Available PDF files travel with the research; missing files are reported. AI settings
 and login tokens stay out. This transfers a snapshot; it is not live synchronization.
-**New in 0.4.1:** export a list, upload its ZIP to a file host you choose, then
-use **製作並複製分享連結…**. Your colleague chooses **網址匯入…** on either
-list page, previews the package, and confirms the import. Direct HTTPS downloads
-are supported; for cloud login/preview pages, download in the browser first.
-Paperfact does not upload your research or change sharing permissions.
+**Share through Google Drive:** in the export dialog, enter your colleagues'
+emails (or allow anyone with the link) and choose **上傳到我的 Google Drive
+並複製連結**. Paperfact uploads the package to your own Drive with a progress
+bar, grants read access and copies the link. Sharing the list again updates the
+same file, so the link keeps working. Paperfact can only see the files it uploaded.
+Any other file host still works: save the ZIP, upload it, and use
+**製作並複製分享連結…**. Your colleague chooses **網址匯入…**, previews the
+package, and confirms the import.
 [Share by link →](docs/sharing.md) · [Package contents →](docs/colleague-handoff.md)
 
 | Read on your phone | Take the slides with you |
@@ -182,6 +185,12 @@ The helper starts with your agent host; no cloud service or open port is needed.
 Additional AI analysis is a separate action. The older `import-list` command still
 uses Paperfact's configured AI to parse rough references.
 [How MCP works here, with a call-flow diagram →](docs/local-integration.md)
+
+## Version, updates and support
+
+Click the bottom-right version label to copy build details, check for updates,
+or preview a diagnostic report. Reports stay local until you choose to share them.
+See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenance-0.4.4.md).
 
 ## Go further
 

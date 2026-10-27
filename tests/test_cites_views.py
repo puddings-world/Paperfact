@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from paper_daily import citegraph, followups, store  # noqa: E402
-from paper_daily.desktop import cites_pane  # noqa: E402
+from paper_daily.desktop import cites_pane, ui_state  # noqa: E402
 from paper_daily.desktop.main import LIGHT  # noqa: E402
 
 REFS = [
@@ -118,6 +118,8 @@ def test_the_switch_shows_where_it_is_and_is_remembered(pane):
     assert buttons["graph"].isChecked() and not buttons["list"].isChecked()
     assert pane._graph_face.isVisible() and not pane._list_face.isVisible()
     assert pane._map is not None and pane._map.dots
+    # View state is written by a background queue; closing the window flushes it.
+    assert ui_state.flush()
     with store.connect() as conn:
         assert store.get_kv(conn, "ui.cites_view") == "graph"
     # A new pane, as after a restart, opens on the face last chosen.
@@ -151,7 +153,7 @@ def test_the_map_density_redraws_the_map_alone(pane):
 def test_a_slide_source_is_found_before_its_side_has_finished_building(pane):
     # No settling: the later side has not been made yet.
     message = pane.focus({"id": "later:3", "label": "後續研究：Later work 7 building on it"})
-    assert message == "已跳到「引用」分頁的後續研究這一筆。"
+    assert message == "已跳到「脈絡」分頁的後續研究這一筆。"
     assert pane._side == "later" and pane._side_widgets["later"].isVisible()
     assert pane._side_buttons["later"].isChecked()
 

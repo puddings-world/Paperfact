@@ -11,7 +11,6 @@ the conversation live in the same file as the corpus.
 
 from __future__ import annotations
 
-import faulthandler
 import hashlib
 import html
 import json
@@ -19,7 +18,6 @@ import os
 import sqlite3
 import subprocess
 import sys
-import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,7 +65,16 @@ from paper_daily import (
 )
 from paper_daily import queue as qmod
 from paper_daily.config import DATA_DIR, PDF_DIR, ROOT, ensure_dirs
-from paper_daily.desktop import ai_style, fonts, pdfpane, reading, rich_view, window_events
+from paper_daily.desktop import (
+    ai_style,
+    button_style,
+    fonts,
+    pdfpane,
+    reading,
+    rich_view,
+    ui_state,
+    window_events,
+)
 from paper_daily.desktop.add_dialog import run_add
 from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
 from paper_daily.desktop.analysis_bar import AnalysisBar
@@ -83,7 +90,7 @@ from paper_daily.desktop.note_editor import NoteEditor
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
-from paper_daily.store import connect, get_kv, init_db, now, set_kv
+from paper_daily.store import connect, get_kv, init_db, now
 
 LIGHT = {
     "ground": "#fbfbfd", "surface": "#ffffff", "sunk": "#f2f3f7",
@@ -166,6 +173,8 @@ class Paper:
     # Every source was tried and none had the PDF: it needs a hand.
     pdf_failed: bool = False
     _has_pdf: bool | None = None
+    # When it was last opened here, for the 最近開啟 sort; local view history.
+    opened_at: str | None = None
 
     @property
     def read(self) -> bool:
@@ -761,7 +770,7 @@ class ReaderPage(QWidget):
         self.tabs.addTab(self.figure_pane, "圖表")
 
         self.cites_pane = CitesPane(self.win, pal)
-        self.tabs.addTab(self.cites_pane, "引用")
+        self.tabs.addTab(self.cites_pane, "脈絡")
         scopes(pal["accent"])  # before the slide panels register theirs
         self.presentation_pane = PresentationPane(self)
         self.presentation_pane.source_requested.connect(self._jump_to_source)
@@ -784,6 +793,15 @@ class ReaderPage(QWidget):
             shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
             shortcut.activated.connect(lambda index=index: self._show_numbered_tab(index))
             self._analysis_shortcuts.append(shortcut)
+        # Ctrl+Tab steps through the tabs the way a browser does, so the reader
+        # needs no number. On a Mac, Cmd+Tab belongs to the system: there the
+        # physical Control key does it.
+        for keys, step in (("Tab", 1), ("Shift+Tab", -1)):
+            for modifier in ("Meta",) if fonts.MAC else ("Ctrl",):
+                cycle = QShortcut(QKeySequence(f"{modifier}+{keys}"), self)
+                cycle.setContext(Qt.ShortcutContext.WindowShortcut)
+                cycle.activated.connect(lambda step=step: self.step_tab(step))
+                self._analysis_shortcuts.append(cycle)
         self._number_tabs()
         self._tab_hints = KeyHints(
             self.tabs.tabBar(),
@@ -1008,6 +1026,14 @@ class ReaderPage(QWidget):
         shown = [tabs.widget(i) for i in range(tabs.count()) if tabs.isTabVisible(i)]
         return shown[:9]
 
+    def step_tab(self, step: int) -> None:
+        """The next (or previous) visible tab, wrapping round."""
+        shown = self.numbered_tabs()
+        current = self.tabs.currentWidget()
+        if shown:
+            here = shown.index(current) if current in shown else -step
+            self.tabs.setCurrentWidget(shown[(here + step) % len(shown)])
+
     def _show_numbered_tab(self, number: int) -> None:
         shown = self.numbered_tabs()
         if number < len(shown):
@@ -1025,10 +1051,14 @@ class ReaderPage(QWidget):
         hiding a tab."""
         for index, badge in enumerate(self._tab_badges()):
             name = self.tabs.tabText(index)
-            self.tabs.setTabToolTip(index, f"{name}（{badge}）" if badge else name)
+            cycle = fonts.key("Meta+Tab" if fonts.MAC else "Ctrl+Tab")
+            self.tabs.setTabToolTip(
+                index, f"{name}（{badge}）\n{cycle} 下一個分頁" if badge else name
+            )
 
     def _auto_highlights_changed(self, checked: bool) -> None:
         self.win.remember("auto_highlights", "1" if checked else "0")
+        ui_state.flush()
         if checked:
             self._prepare_reading_highlights()
 
@@ -1510,7 +1540,7 @@ class ReaderPage(QWidget):
         if kind == "citations":
             self.tabs.setCurrentWidget(self.cites_pane)
             self._show_cites_if_visible()
-            status.setText(self.cites_pane.focus(source) or "已切到「引用」分頁。")
+            status.setText(self.cites_pane.focus(source) or "已切到「脈絡」分頁。")
             return
         if kind in ("dive", "close_reading"):
             self.tabs.setCurrentWidget(self.dive_view)
@@ -1837,17 +1867,15 @@ class MainWindow(QWidget):
             f"QCheckBox::indicator:hover{{border-color:{self.pal['accent']};}}"
             f"QCheckBox::indicator:checked{{background:{self.pal['accent']};"
             f"border-color:{self.pal['accent']};image:url({CHECK});}}"
-            f"QPushButton{{background:{self.pal['surface']};color:{self.pal['ink']};"
-            f"border:1px solid {self.pal['firm']};border-radius:5px;padding:6px 12px;}}"
-            f"QPushButton:hover{{border-color:{self.pal['accent']};"
-            f"color:{self.pal['accent']};}}"
-            f"QPushButton:disabled{{color:{self.pal['faint']};}}"
+            f"{button_style.pressable(self.pal)}"
             f"QPushButton::menu-indicator{{image:none;width:0;}}"
             # Settings and navigation: present, but quieter than the reading actions.
             f"QPushButton[ghost=\"true\"]{{background:transparent;border-color:transparent;"
-            f"color:{self.pal['muted']};padding:6px 9px;}}"
+            f"border-bottom:1px solid transparent;color:{self.pal['muted']};padding:6px 9px;}}"
             f"QPushButton[ghost=\"true\"]:hover{{background:{self.pal['sunk']};"
             f"color:{self.pal['ink']};}}"
+            f"QPushButton[ghost=\"true\"]:pressed{{background:{self.pal['firm']};"
+            f"padding:7px 9px 5px 9px;}}"
             f"QPushButton[ghost=\"true\"]:checked{{color:{self.pal['accent']};}}"
             f"QLineEdit{{background:{self.pal['surface']};color:{self.pal['ink']};"
             f"border:1px solid {self.pal['firm']};border-radius:5px;padding:7px;}}"
@@ -1957,9 +1985,7 @@ class MainWindow(QWidget):
         self.next_btn = QPushButton("下一篇")
         self.next_btn.setToolTip(f"下一篇未讀的論文({fonts.key('Ctrl+N')})")
         self.next_btn.setStyleSheet(
-            f"QPushButton{{background:{self.pal['accent']};color:#ffffff;"
-            f"border:1px solid {self.pal['accent']};padding:6px 18px;font-weight:600;}}"
-            f"QPushButton:hover{{color:#ffffff;}}"
+            f"{button_style.pressable_accent(self.pal, 'QPushButton')}"
         )
         self.next_btn.clicked.connect(self.open_next_unread)
         bar.addWidget(self.next_btn)
@@ -2020,7 +2046,9 @@ class MainWindow(QWidget):
         outer.addWidget(self.ready_banner)
         from paper_daily.desktop.update_banner import UpdateBanner
 
-        self.update_banner = UpdateBanner(self.pal)
+        self.update_banner = UpdateBanner(
+            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update
+        )
         self.update_banner.quit_for_update.connect(self.close)
         outer.addWidget(self.update_banner)
         # The nightly run finishes while the window may already be open on
@@ -2062,6 +2090,25 @@ class MainWindow(QWidget):
         self.feedback_btn.setToolTip("自願參與、查看本機紀錄、匯出或撤回；不需要 AI 登入")
         self.feedback_btn.clicked.connect(self._feedback_settings)
         footer.addWidget(self.feedback_btn)
+        self.support_btn = QPushButton("診斷與回報")
+        self.support_btn.setFlat(True)
+        self.support_btn.setStyleSheet(self.feedback_btn.styleSheet())
+        self.support_btn.setToolTip("預覽並匯出診斷包；不會自動上傳")
+        self.support_btn.clicked.connect(self._support)
+        footer.addWidget(self.support_btn)
+        from paper_daily import build_identity
+
+        self.build_identity = build_identity.identity()
+        self.version_btn = QPushButton(build_identity.label(self.build_identity))
+        self.version_btn.setObjectName("appVersion")
+        self.version_btn.setFlat(True)
+        self.version_btn.setStyleSheet(
+            self.feedback_btn.styleSheet() + "font-size:10px;"
+        )
+        self.version_btn.setToolTip(build_identity.describe(self.build_identity))
+        self.version_btn.setAccessibleName("版本與更新")
+        self.version_btn.clicked.connect(self._version_info)
+        footer.addWidget(self.version_btn)
         outer.addLayout(footer)
 
         QShortcut(QKeySequence("Ctrl+N"), self, self.open_next_unread)
@@ -2076,7 +2123,7 @@ class MainWindow(QWidget):
 
         self._restore_layout()
         with connect() as conn:
-            self.active_list = get_kv(conn, "ui.list")
+            self.active_list = ui_state.read(conn, "ui.list")
         self.refresh_lists()
         self.reload()
         self._refresh_ai_summary()
@@ -2086,8 +2133,10 @@ class MainWindow(QWidget):
         self._external_refresh_pending = False
         self.workspace_changes = WorkspaceChanges(self)
         self.workspace_changes.changed.connect(self._external_lists_changed)
-        self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll)
-        self.workspace_changes.timer.timeout.connect(self._poll_external_lists)
+        self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll_in_background)
+        self.workspace_changes.timer.timeout.connect(
+            lambda: self._poll_external_lists(background=True)
+        )
         self._external_lists_changed()
         if open_next:
             self.open_next_unread()
@@ -2145,8 +2194,11 @@ class MainWindow(QWidget):
             read = sum(1 for paper in self.papers if paper.read)
             self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
-    def _poll_external_lists(self):
-        self.workspace_changes.poll()
+    def _poll_external_lists(self, *, background=False):
+        if background:
+            self.workspace_changes.poll_in_background()
+        else:
+            self.workspace_changes.poll()
         if self._external_refresh_pending and QApplication.activeModalWidget() is None:
             self._external_lists_changed()
 
@@ -2155,6 +2207,53 @@ class MainWindow(QWidget):
 
         AnalysisSettings(self, self.pal).exec()
         self.announce_ready()
+
+    def _support(self) -> None:
+        from paper_daily.desktop.support_dialog import SupportDialog
+
+        if getattr(self, "_support_dialog", None) is not None:
+            self._support_dialog.raise_()
+            self._support_dialog.activateWindow()
+            return
+        dialog = SupportDialog(self)
+        self._support_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._support_dialog = None
+            dialog.deleteLater()
+
+    def _version_info(self):
+        from paper_daily.desktop.version_dialog import VersionDialog
+
+        if getattr(self, "_version_dialog", None) is not None:
+            self._version_dialog.raise_()
+            self._version_dialog.activateWindow()
+            return
+        dialog = VersionDialog(self, self.update_banner, self.build_identity, self._support)
+        self._version_dialog = dialog
+
+        def finished(_result):
+            self._version_dialog = None
+            dialog.deleteLater()
+
+        dialog.finished.connect(finished)
+        dialog.show()
+
+    def _prepare_update(self):
+        # Match closeEvent's dialog/operation guards before starting an installer.
+        from paper_daily.desktop.integration_dialog import OperationWorker
+
+        if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
+            return False
+        for name in ("_workspace_dialog", "_review_dialog"):
+            dialog = getattr(self, name, None)
+            if dialog is not None and not dialog.disposed:
+                return False
+        try:
+            return self._prepare_restart()
+        except (OSError, ValueError, sqlite3.Error):
+            return False
 
     def _feedback_settings(self) -> None:
         from paper_daily.desktop.feedback_dialog import FeedbackDialog
@@ -2242,18 +2341,17 @@ class MainWindow(QWidget):
 
     # ---- layout memory ---------------------------------------------------
     def remember(self, key: str, value: str) -> None:
-        with connect() as conn:
-            set_kv(conn, f"ui.{key}", value)
+        ui_state.save(f"ui.{key}", value)
 
     def _restore_layout(self) -> None:
         """Put the window back where it was. Kept in the same database as everything
         else, so there is still exactly one file to move or delete."""
         with connect() as conn:
-            geometry = get_kv(conn, "ui.geometry")
-            split = get_kv(conn, "ui.split")
-            presentation_layout = get_kv(conn, "ui.presentation")
-            top_collapsed = get_kv(conn, "ui.top_collapsed")
-            auto_highlights = get_kv(conn, "ui.auto_highlights")
+            geometry = ui_state.read(conn, "ui.geometry")
+            split = ui_state.read(conn, "ui.split")
+            presentation_layout = ui_state.read(conn, "ui.presentation")
+            top_collapsed = ui_state.read(conn, "ui.top_collapsed")
+            auto_highlights = ui_state.read(conn, "ui.auto_highlights")
         self.reader_page.auto_highlights.setChecked(auto_highlights == "1")
         self.top_toggle.setChecked(top_collapsed == "1")
         if geometry:
@@ -2264,6 +2362,10 @@ class MainWindow(QWidget):
         if presentation_layout:
             with suppress(ValueError, TypeError):
                 self.reader_page.presentation_pane.restore_workspace(json.loads(presentation_layout))
+
+    def _cancel_update(self):
+        # Installation failed: subsequent edits need normal close/save protection.
+        self._closing_with_recovery = False
 
     def _prepare_restart(self) -> bool:
         hub = getattr(self, "activity_hub", None)
@@ -2284,16 +2386,18 @@ class MainWindow(QWidget):
             return False
         if (pane.busy or any(worker.busy for worker in (
                 reader.runner, reader.translate_runner, reader.refine_runner, reader.fetcher,
-        )) or QApplication.activeModalWidget() is not None):
+                getattr(reader, "document_runner", None),
+        ) if worker is not None) or QApplication.activeModalWidget() is not None):
             pane.status.setText("仍有工作或對話視窗，暫不重啟；完成後可再試一次。")
             return False
+        recovered = False
         if not pane.save_changes():
             try:
                 pane.save_recovery()
             except (ValueError, OSError) as exc:
                 pane.status.setText(f"草稿保存失敗，暫不重啟：{exc}")
                 return False
-            self._closing_with_recovery = True
+            recovered = True
         self.remember("restart", json.dumps({
             "paper": reader.paper.id if reader.paper else None,
             "reader": self.stack.currentWidget() is reader,
@@ -2302,11 +2406,15 @@ class MainWindow(QWidget):
             "note": reader.note_edit.toPlainText(), "question": reader.ask_box.text(),
             "pdf_page": reader.pdf.current_page() if reader.pdf.isVisible() else 0,
         }))
+        # A failed flush must keep the current process and its drafts alive.
+        if not ui_state.flush():
+            return False
+        self._closing_with_recovery = recovered
         return True
 
     def _restore_restart(self) -> None:
         with connect() as conn:
-            value = get_kv(conn, "ui.restart")
+            value = ui_state.read(conn, "ui.restart")
         if not value:
             return
         try:
@@ -2423,6 +2531,7 @@ class MainWindow(QWidget):
             return
         self.remember("presentation", json.dumps(pane.workspace_state()))
         self.remember("geometry", self.saveGeometry().toHex().data().decode())
+        ui_state.flush()
         self.update_banner.shutdown()
         super().closeEvent(event)
 
@@ -2503,7 +2612,7 @@ class MainWindow(QWidget):
         """
         # Desktop background spending is opt-in; opening/importing a list only reads it.
         with connect() as conn:
-            if get_kv(conn, "ui.background_analysis") != "1":
+            if ui_state.read(conn, "ui.background_analysis") != "1":
                 return
         if self.analysis_running():
             return
@@ -2576,8 +2685,7 @@ class MainWindow(QWidget):
     def _open_list(self, list_id):
         self.active_list = list_id
         self.refresh_lists()
-        with connect() as conn:
-            set_kv(conn, "ui.list", list_id)
+        ui_state.save("ui.list", list_id)
         self.show_queue()
 
     def _import_bundle(self):
@@ -2637,8 +2745,7 @@ class MainWindow(QWidget):
         if self._switching:
             return
         self.active_list = self.list_picker.currentData()
-        with connect() as conn:
-            set_kv(conn, "ui.list", self.active_list)
+        ui_state.save("ui.list", self.active_list)
         self.show_queue()
         # Switching to a list is the moment to start preparing it: a freshly imported
         # one has no dives and no PDFs, and waiting until a paper is opened means the
@@ -2683,6 +2790,10 @@ class MainWindow(QWidget):
         if box.hasFocus():
             box.clear()
             self.reader_page.pdf.setFocus()
+            return
+        # Inside a nested panel (a slide list inside 簡報), Esc first steps out to
+        # the panel around it; only from the outermost one does it leave the page.
+        if scopes().step_out(self):
             return
         self.go_back()
 
@@ -2730,6 +2841,8 @@ class MainWindow(QWidget):
         if paper.state == "pending":
             self.data.set_state(paper.id, "delivered", list_id=self.active_list)
             paper.state = "delivered"
+        paper.opened_at = now()
+        ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
         self.reader_page.load(paper)
         self._last_paper = paper.id
         self.top_up_dives()
@@ -2996,35 +3109,10 @@ def _hand_off_to_running_instance(
 
 
 def _install_error_log() -> None:
-    """Send unhandled exceptions to data/app.log.
-
-    The reader is launched without a console, so a traceback from inside a Qt slot
-    goes nowhere at all -- the window simply stops responding to a button, which is
-    indistinguishable from the button not being wired up.
-    """
     from paper_daily.config import DATA_DIR
+    from paper_daily.diagnostics import install_error_hooks
 
-    log = DATA_DIR / "app.log"
-
-    def hook(kind, value, tb):
-        import traceback
-
-        with log.open("a", encoding="utf-8") as fh:
-            fh.write(f"{chr(10)}--- {now()} ---{chr(10)}")
-            traceback.print_exception(kind, value, tb, file=fh)
-        sys.__excepthook__(kind, value, tb)
-
-    sys.excepthook = hook
-    # An exception on a worker thread does not reach sys.excepthook at all.
-    threading.excepthook = lambda args: hook(args.exc_type, args.exc_value, args.exc_traceback)
-
-    # And a crash inside Qt itself -- a widget touched from the wrong thread, say --
-    # leaves no Python traceback whatsoever. Without this the window simply vanishes
-    # and there is nothing anywhere to say why.
-    _crash_log = log.open("a", encoding="utf-8")
-    _crash_log.write(f"{chr(10)}--- session {now()} ---{chr(10)}")
-    _crash_log.flush()
-    faulthandler.enable(file=_crash_log, all_threads=True)
+    install_error_hooks(phase="desktop", directory=DATA_DIR)
 
 
 def style(app: QApplication) -> None:
@@ -3081,6 +3169,10 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
     from paper_daily.desktop import ai_access
 
     window.ai_access = ai_access.install(window)
+    from paper_daily import ui_stalls
+    from paper_daily.config import DATA_DIR
+
+    window.stall_watch = ui_stalls.install(DATA_DIR, window)
     window._restore_restart()
     if paper:
         window.open_anywhere(paper)

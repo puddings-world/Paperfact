@@ -222,3 +222,44 @@ def test_parent_window_cannot_close_while_import_worker_is_active(workspace, mon
     dialog.reject()
     window.close()
     window.deleteLater()
+
+
+def test_background_watch_reports_a_commit_without_reading_on_the_gui_thread(
+    workspace, monkeypatch
+):
+    watcher = WorkspaceChanges()
+    watcher.timer.stop()
+    notifications, readers = [], []
+    original = watcher._revision
+
+    def revision():
+        readers.append(threading.current_thread() is threading.main_thread())
+        return original()
+
+    monkeypatch.setattr(watcher, "_revision", revision)
+    watcher.changed.connect(lambda: notifications.append(True))
+    staged = ops.propose("New", [{"title": "One"}])
+    ops.commit(staged["preview_id"], "watch", ["0"])
+    watcher.poll_in_background()
+    watcher.poll_in_background()  # still reading: not started twice
+    deadline = time.monotonic() + 5
+    while not notifications and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert notifications == [True] and readers == [False]
+
+
+def test_the_window_polls_for_list_changes_off_the_gui_thread(workspace, monkeypatch):
+    from paper_daily.desktop.main import MainWindow
+
+    window = MainWindow()
+    try:
+        watcher = window.workspace_changes
+        calls = []
+        monkeypatch.setattr(watcher, "poll", lambda: calls.append("gui"))
+        monkeypatch.setattr(watcher, "poll_in_background", lambda: calls.append("background"))
+        watcher.timer.timeout.emit()
+        assert calls == ["background"]
+    finally:
+        window.close()
+        window.deleteLater()

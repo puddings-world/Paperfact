@@ -33,6 +33,7 @@ pane = _pane
 def wait_for(condition):
     for _ in range(500):
         QTest.qWait(10)
+        time.sleep(0)  # Yield to Python workers without changing the wait bound.
         if condition():
             return
     pytest.fail("fixture work did not finish")
