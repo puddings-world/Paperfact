@@ -117,6 +117,12 @@ opened the lookup runs in the background, and again once its PDF has arrived.
 Right-click any row to act on it without opening it: **從佇列移除** / **從這個清單移除**,
 **插到佇列最前面**, **置頂**, and marking it read or unread.
 
+In a list, **編輯閱讀理由與 #標籤…** rewrites why the paper is on it; the import's
+first draft is only a start. Words in the note show on the row, and each `#tag`
+shows as its own tag: type `#tag` into the search box to see only those papers,
+which keeps several reading lines apart inside one list. Clearing the note
+removes it.
+
 A paper counts as read only when you say so: **標記已讀** in the reader, or the
 right-click menu. Opening one is not reading it, so 只看未讀, 讀過的 and the
 最近標記已讀 sort all ignore it; in a list an opened paper is tagged 開過, and in the

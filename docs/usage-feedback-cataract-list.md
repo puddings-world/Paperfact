@@ -42,3 +42,13 @@ small amount of schema.
 
 Not requested: anything that calls AI during import, or any change to the
 one-paper reading flow, which worked as intended.
+
+## Triage, 2026-10-27
+
+| Request | Decision | Where |
+|---|---|---|
+| 1. Editable reason, tags | Done now: right-click **編輯閱讀理由與 #標籤…** rewrites the list note (`list_papers.citation`, already a synced membership field); `#tags` show on the row and typing `#tag` in the search box filters to them. No schema change. | current |
+| 2. List-level fields matrix | 0.5, with per-list reading goals: a goal declares the columns, 深入分析 fills them with claim-level source links, and the list view shows the matrix with CSV export. Needs the claim-source model first. | 0.5 |
+| 3. Limitation harvest | 0.5, as a reading-goal lens on the existing 清單綜覽 (`list_surveys`): collect limitation / future-work sentences per paper, each linked to its passage. | 0.5 |
+| 4. Venue sweep | 0.5, as an optional list automation module (see agent-workflows.md, 追新論文): given a proceedings index, propose missing papers through the existing preview/commit import. | 0.5 |
+| 5. Datasets as entities | After 0.5: a new entity type touches the sync schema, bundles and mobile; design it once fields (2) show which attributes are needed. | later |

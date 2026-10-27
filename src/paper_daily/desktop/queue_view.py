@@ -95,6 +95,18 @@ def _analysed(paper) -> int:
     return sum((paper.has_dive, paper.has_cites, paper.has_later))
 
 
+NOTE_TAG = re.compile(r"#([^\s#]+)")
+
+
+def note_parts(paper) -> tuple[list[str], str]:
+    """(#tags, the remaining words) of why a paper is on the list. An import from
+    bare titles keeps the title as the note, which says nothing."""
+    note = (paper.reason or "").strip()
+    if not note or note.casefold() == paper.title.strip().casefold():
+        return [], ""
+    return NOTE_TAG.findall(note), " ".join(NOTE_TAG.sub(" ", note).split())
+
+
 SORTS = [
     ("自訂順序", None, False),
     ("引用數 多 → 少", lambda p: p.citations or 0, True),
@@ -218,6 +230,10 @@ class PaperDelegate(QStyledItemDelegate):
         # A preprint is greyed: whether something passed review is part of what it is.
         ink = p["faint"] if venues.is_preprint(paper.venue) else p["ink"]
         out = [("置頂", "#ffffff", p["accent"])] if paper.pinned else []
+        tags, words = note_parts(paper)
+        out += [(f"#{tag}", p["ai"], p["aiSoft"]) for tag in tags]
+        if words:
+            out.append((words if len(words) <= 24 else words[:23] + "…", p["ink"], p["sunk"]))
         out.append((venues.label(paper.venue, paper.year), ink, p["sunk"]))
         if paper.award:
             out.append((paper.award, p["award"], p["awardSoft"]))
@@ -732,7 +748,13 @@ class QueuePage(QWidget):
             return True
         # The venue as shown, so "miccai" or "預印本" filters the way the row reads.
         where = venues.label(paper.venue, paper.year).lower()
-        return q in paper.title.lower() or q in " ".join(paper.authors).lower() or q in where
+        # The note too, so typing a #tag lists the papers given it.
+        return (
+            q in paper.title.lower()
+            or q in " ".join(paper.authors).lower()
+            or q in where
+            or q in (paper.reason or "").lower()
+        )
 
     def refresh(self) -> None:
         self.export_bundle_button.setEnabled(bool(self.win.active_list))
@@ -1071,6 +1093,25 @@ class QueuePage(QWidget):
         if paper is not None:
             self.win.open_paper(paper.id)
 
+    def _edit_note(self, paper) -> None:
+        from paper_daily import lists
+
+        tags, words = note_parts(paper)
+        text, accepted = QInputDialog.getMultiLineText(
+            self,
+            "閱讀理由與標籤",
+            "為什麼讀這篇？可加 #標籤；在搜尋框輸入 #標籤 就能只看這些論文。",
+            paper.reason if tags or words else "",
+        )
+        if not accepted:
+            return
+        try:
+            paper.reason = lists.set_note(self.win.active_list, paper.id, text)
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            self.blurb.setText(f"閱讀理由未儲存：{exc}")
+            return
+        self.refresh()
+
     def _menu(self, point) -> None:
         """Right-click: act on one row without opening it.
 
@@ -1094,6 +1135,9 @@ class QueuePage(QWidget):
             lambda: self.win.set_pinned([paper.id], not paper.pinned)
         )
         if self.win.active_list:
+            menu.addAction("編輯閱讀理由與 #標籤…").triggered.connect(
+                lambda: self._edit_note(paper)
+            )
             menu.addAction("從這個清單移除").triggered.connect(
                 lambda: self.win.remove_paper(paper.id, paper.title)
             )
