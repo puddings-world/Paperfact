@@ -128,10 +128,17 @@ Right-click any row to act on it without opening it: **從佇列移除** / **從
 **插到佇列最前面**, **置頂**, and marking it read or unread.
 
 In a list, **編輯閱讀理由與 #標籤…** rewrites why the paper is on it; the import's
-first draft is only a start. Words in the note show on the row, and each `#tag`
-shows as its own tag: type `#tag` into the search box to see only those papers,
-which keeps several reading lines apart inside one list. Clearing the note
-removes it.
+first draft is only a start. The note shows at the end of the row's tags as
+**理由：…**, with the whole note in the row's tooltip, and each `#tag` shows as its
+own tag: type `#tag` into the search box to see only those papers, which keeps
+several reading lines apart inside one list. A bibliography import keeps each
+citation line as the note; one that only repeats the title is not shown. Clearing
+the note removes it.
+
+The tag a list is sorted by comes first on every row (after 置頂), so the sorted
+column reads straight down: venue for the venue and date sorts, cites, type,
+analysis state, 依賴, 已讀, and for 最近開啟 how long ago the paper was opened
+(**3 小時前開過**). The other tags keep one fixed order behind it.
 
 A paper counts as read only when you say so: **標記已讀** in the reader, or the
 right-click menu. Opening one is not reading it, so 只看未讀, 讀過的 and the
