@@ -139,6 +139,22 @@ def test_sanitized_local_id_collision_is_visible_before_any_legacy_fetch(tmp_pat
         assert reader.resolve(identity).path is None
 
 
+def test_only_an_exact_file_name_match_counts_as_a_collision(tmp_path):
+    # The collision lookup is a LIKE search, where "_" matches any character and case
+    # is ignored; ids it finds that map to another file name must not count.
+    path, _, _, reader, _, _ = prepared(tmp_path, managed=False)
+    with sqlite3.connect(path) as conn:
+        for identity in ("a:b", "aXb", "A_B"):
+            conn.execute(
+                "INSERT INTO papers(id,venue,year,title,title_key,source) "
+                "VALUES(?,'',2026,'A','a','fixture')",
+                (identity,),
+            )
+    found = reader.inspect_many(["a:b", "aXb", "A_B", "zz"])
+    assert [found[i].status == "ambiguous" for i in ("a:b", "aXb", "A_B")] == [False] * 3
+    assert found["zz"].status == "missing"
+
+
 def test_batch_inspection_uses_existing_connection_and_never_verifies_files(tmp_path, monkeypatch):
     path, _, _, reader, _, _ = prepared(tmp_path)
 

@@ -38,6 +38,27 @@ def _connect(path):
     return sqlite3.connect(_owned_path(path).as_uri() + "?mode=ro", uri=True, timeout=5)
 
 
+def _matching(conn, sql, values, *, whole=False):
+    """Run `sql` with its `IN ({})` filled in batches under SQLite's variable limit;
+    the first column of each row, or the whole row with `whole`."""
+    values = list(values)
+    for start in range(0, len(values), 500):
+        batch = values[start : start + 500]
+        for row in conn.execute(sql.format(",".join("?" * len(batch))), batch):
+            yield tuple(row) if whole else row[0]
+
+
+def _aliases(conn, name):
+    """Papers whose PDF file name is `name`. In LIKE, "_" matches any one character,
+    so the file name itself finds every id that could map to it (a superset, as LIKE
+    also ignores ASCII case); the exact mapping then decides."""
+    return sum(
+        1
+        for (identity,) in conn.execute("SELECT id FROM papers WHERE id LIKE ?", (name,))
+        if _safe_name(identity) == name
+    )
+
+
 def _tables(conn):
     return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
@@ -212,16 +233,25 @@ class DocumentReader:
                 return self._legacy_inspection(identities)
             binding, registration = _binding(conn, tables), _registration(conn, tables)
             context = (binding, registration)
-            papers = {row[0] for row in conn.execute("SELECT id FROM papers")}
-            aliases = {}
-            for identity in papers:
-                name = _safe_name(identity)
-                aliases[name] = aliases.get(name, 0) + 1
+            # Every query is limited to the asked-for papers: the reader inspects on
+            # each click, and reading whole tables made a jump to the source take
+            # most of a second in a workspace of ~80,000 papers.
+            papers = set(_matching(conn, "SELECT id FROM papers WHERE id IN ({})", identities))
+            aliases = {name: _aliases(conn, name) for name in {_safe_name(i) for i in papers}}
             mappings = (
-                dict(conn.execute("SELECT local_id,sync_id FROM research_paper_identity"))
+                dict(
+                    _matching(
+                        conn,
+                        "SELECT local_id,sync_id FROM research_paper_identity "
+                        "WHERE local_id IN ({})",
+                        identities,
+                        whole=True,
+                    )
+                )
                 if "research_paper_identity" in tables
                 else {}
             )
+            portables = list(set(mappings.values()))
             history = set()
             for table in (
                 "research_document_desired",
@@ -229,13 +259,21 @@ class DocumentReader:
                 "research_document_intents",
             ):
                 if table in tables:
-                    history.update(row[0] for row in conn.execute(f"SELECT paper_id FROM {table}"))
+                    history.update(
+                        _matching(
+                            conn,
+                            f"SELECT paper_id FROM {table} WHERE paper_id IN ({{}})",
+                            portables,
+                        )
+                    )
             for table in ("paperfact_sync_heads", "paperfact_sync_operations"):
                 if table in tables:
                     history.update(
-                        row[0]
-                        for row in conn.execute(
-                            f"SELECT entity_id FROM {table} WHERE entity_type='paper_document'"
+                        _matching(
+                            conn,
+                            f"SELECT entity_id FROM {table} "
+                            "WHERE entity_type='paper_document' AND entity_id IN ({})",
+                            portables,
                         )
                     )
             result = {}
