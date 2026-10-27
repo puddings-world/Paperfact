@@ -214,3 +214,12 @@ bundles as the permanent fix or overwrite the already-tested version's tag.
 
 References: [PyInstaller bundle generation](https://github.com/pyinstaller/pyinstaller/blob/develop/PyInstaller/building/osx.py)
 and [Apple Launch Services keys](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html).
+
+
+The first 0.4.5 Mac CI run also exposed two existing concurrency problems. The
+PDF progress fixture now waits for the selected paper's progress event, retaining
+all its original assertions. More importantly, a deterministic regression test
+reproduced a stale background preference write committing after a newer flush.
+0.4.6 serializes snapshot/commit operations while keeping UI saves and reads
+nonblocking. Do not dismiss repeated cross-platform failures as runner noise;
+preserve the failure evidence and pin the actual interleaving in a small test.

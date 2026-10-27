@@ -107,3 +107,58 @@ def test_the_writer_thread_survives_a_failed_write(db, monkeypatch):
     while _stored("ui.auto_pdf") is not False and time.monotonic() < deadline:
         time.sleep(0.01)
     assert calls.is_set() and _stored("ui.auto_pdf") is False
+
+
+def test_flush_cannot_be_overtaken_by_an_older_background_write(db, monkeypatch):
+    from contextlib import contextmanager
+
+    assert ui_state.flush()
+    # Drive the two writers explicitly instead of relying on scheduler luck.
+    monkeypatch.setattr(ui_state, "_thread", threading.current_thread())
+    monkeypatch.setattr(ui_state, "_wake", threading.Event())
+    original = store.connect
+    old_entered, release_old = threading.Event(), threading.Event()
+    flush_started, flush_done = threading.Event(), threading.Event()
+    results = []
+
+    @contextmanager
+    def delayed_connect(**kwargs):
+        if threading.current_thread().name == "older-state-writer":
+            old_entered.set()
+            assert release_old.wait(3)
+        with original(**kwargs) as conn:
+            yield conn
+
+    monkeypatch.setattr(store, "connect", delayed_connect)
+    ui_state.save("ui.auto_pdf", True)
+    older = threading.Thread(target=lambda: results.append(ui_state.flush()),
+                             name="older-state-writer")
+    older.start()
+    newer = None
+    try:
+        assert old_entered.wait(2)
+        ui_state.save("ui.auto_pdf", False)
+        with original() as conn:
+            assert ui_state.read(conn, "ui.auto_pdf") is False
+
+        def flush_latest():
+            flush_started.set()
+            results.append(ui_state.flush())
+            flush_done.set()
+
+        newer = threading.Thread(target=flush_latest)
+        newer.start()
+        assert flush_started.wait(2)
+        returned_before_old_finished = flush_done.wait(0.2)
+        release_old.set()
+        older.join(2)
+        newer.join(2)
+        assert not older.is_alive() and not newer.is_alive()
+        assert results == [True, True]
+        assert _stored("ui.auto_pdf") is False
+        assert not returned_before_old_finished
+    finally:
+        release_old.set()
+        older.join(3)
+        if newer is not None:
+            newer.join(3)

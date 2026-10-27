@@ -18,6 +18,7 @@ from paper_daily import store
 
 RETRY_SECONDS = 0.5
 _lock = threading.Lock()
+_write_lock = threading.Lock()
 _wake = threading.Event()
 _pending: dict[tuple[Path, str], object] = {}
 _thread: threading.Thread | None = None
@@ -56,6 +57,14 @@ def _run() -> None:
 
 
 def _write() -> bool:
+    # The worker and a close/restart flush must snapshot and commit in order.
+    # Otherwise an older worker batch can commit AFTER flush's newer values.
+    # Keep save/read on the separate lightweight lock so UI input stays responsive.
+    with _write_lock:
+        return _write_batch()
+
+
+def _write_batch() -> bool:
     with _lock:
         batch = dict(_pending)
     ok = True
