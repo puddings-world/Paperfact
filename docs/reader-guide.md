@@ -100,10 +100,14 @@ It is stored per list, can be edited like a note, and a hand-edited survey is no
 replaced without asking. `survey <list>` writes it from the command line.
 
 The dropdown at the end of that row re-sorts what is on screen. It starts on
-**最近開啟**: the papers you last opened come first, newest first, and the rest keep
-their list order after them, so returning to a list puts you back among what you
-were reading. Dragging a paper there saves the order you see, with the move, as the
-list's **自訂順序** and switches to it (the same drag works in 自訂順序 itself).
+**最近開啟**: the papers you last opened come first, newest first, so returning to a
+list puts you back among what you were reading. The menu lists the sorts in order
+of importance, and that order also settles ties: papers the chosen sort cannot tell
+apart are ordered by 最近開啟, then venue, newest first, citations, dependents, read,
+type and analysis state, and finally by the list's own order. **自訂順序**, last in
+the menu, is that own order alone (the import order until you change it) and the
+only sort where dragging a paper moves it; the order you drag is what 自訂順序
+shows next time and what **下一篇** follows.
 The other sorts: by citations, by date
 either way (year, and the month from the arXiv id within a year), grouped by venue
 (MICCAI, IPCAI, IJCARS, MedIA, TMI … then other venues, preprints last), grouped by
