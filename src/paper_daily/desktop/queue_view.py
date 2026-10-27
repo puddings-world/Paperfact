@@ -50,9 +50,9 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import runtime, venues
-from paper_daily.desktop import ai_style, fonts
+from paper_daily.desktop import ai_style, button_style, fonts, ui_state
 from paper_daily.desktop.focus_scope import scopes
-from paper_daily.store import connect, get_kv, set_kv
+from paper_daily.store import connect
 
 ROW_HEIGHT = 74
 # The pin toggle at the right end of every row.
@@ -107,21 +107,27 @@ def note_parts(paper) -> tuple[list[str], str]:
     return NOTE_TAG.findall(note), " ".join(NOTE_TAG.sub(" ", note).split())
 
 
+# Stored by id, not position, so adding a sort never changes what a saved choice means.
 SORTS = [
-    ("自訂順序", None, False),
-    ("引用數 多 → 少", lambda p: p.citations or 0, True),
-    ("時間 新 → 舊", lambda p: (_when(p), p.citations or 0), True),
-    ("時間 舊 → 新", lambda p: (_when(p), -(p.citations or 0)), False),
-    ("依發表處分組", lambda p: venues.group_key(p.venue, p.year), False),
-    ("依論文類型分組", lambda p: (
+    ("recent", "最近開啟", lambda p: p.opened_at or "", True),
+    ("custom", "自訂順序", None, False),
+    ("citations", "引用數 多 → 少", lambda p: p.citations or 0, True),
+    ("newest", "時間 新 → 舊", lambda p: (_when(p), p.citations or 0), True),
+    ("oldest", "時間 舊 → 新", lambda p: (_when(p), -(p.citations or 0)), False),
+    ("venue", "依發表處分組", lambda p: venues.group_key(p.venue, p.year), False),
+    ("type", "依論文類型分組", lambda p: (
         TYPE_ORDER.index(p.paper_type) if p.paper_type in TYPE_ORDER else len(TYPE_ORDER),
         -(p.year or 0),
     ), False),
-    ("待分析的在前", lambda p: (_analysed(p), not p.has_pdf), False),
-    ("被依賴數 多 → 少", lambda p: (p.dependents, p.citations or 0), True),
-    ("最近標記已讀", lambda p: p.read_at or "", True),
-    ("標題 A → Z", lambda p: p.title.lower(), False),
+    ("todo", "待分析的在前", lambda p: (_analysed(p), not p.has_pdf), False),
+    ("dependents", "被依賴數 多 → 少", lambda p: (p.dependents, p.citations or 0), True),
+    ("read", "最近標記已讀", lambda p: p.read_at or "", True),
+    ("title", "標題 A → Z", lambda p: p.title.lower(), False),
 ]
+SORT_IDS = [sort[0] for sort in SORTS]
+# Orders a drag can start from: the list's own order, and the recent order, which
+# a drag turns into the list's own order.
+DRAGGABLE = ("recent", "custom")
 
 
 class PaperListModel(QAbstractListModel):
@@ -440,7 +446,7 @@ class QueuePage(QWidget):
 
         self.sort = QComboBox()
         self.sort.setToolTip("重新排序目前顯示的論文。左邊的編號仍然是它原本的位置。")
-        for label, _key, _reverse in SORTS:
+        for _id, label, _key, _reverse in SORTS:
             self.sort.addItem(label)
         self.sort.currentIndexChanged.connect(self._sort_changed)
         controls.addWidget(self.sort)
@@ -456,10 +462,7 @@ class QueuePage(QWidget):
         self.sel_label.setStyleSheet(f"color:{pal['muted']};font-size:12px;")
         ticks.addWidget(self.sel_label)
         button_css = (
-            f"QPushButton{{background:{pal['surface']};color:{pal['ink']};"
-            f"border:1px solid {pal['firm']};border-radius:5px;padding:3px 10px;"
-            f"font-size:12px;}}"
-            f"QPushButton:disabled{{color:{pal['faint']};border-color:{pal['border']};}}"
+            f"{button_style.pressable(pal, pad=(3, 10))}QPushButton{{font-size:12px;}}"
         )
         self._batch_buttons: list[QPushButton] = []
         for text, action, needs_ticks in (
@@ -795,7 +798,9 @@ class QueuePage(QWidget):
         rows = [
             (i, p) for i, p in enumerate(self.win.papers, 1) if self._matches(p)
         ]
-        label, key, reverse = SORTS[self.sort.currentIndex()]
+        sort_id, label, key, reverse = SORTS[self.sort.currentIndex()]
+        if sort_id == "recent":
+            self._load_opened()
         if key is not None:
             # The blurb above just claimed the default order. Say what is actually on
             # screen instead.
@@ -829,7 +834,7 @@ class QueuePage(QWidget):
         # highlight should follow it there rather than fall back to row one.
         current = self._current_paper()
         self.model.can_reorder = bool(self.win.active_list) and (
-            self.sort.currentIndex() == 0 and not self.search.text().strip()
+            SORT_IDS[self.sort.currentIndex()] in DRAGGABLE and not self.search.text().strip()
             and not any(box.isChecked() for box in (
                 self.f_unread, self.f_history, self.f_todo, self.f_nopdf,
                 self.f_award, self.f_principle, self.f_pdf, self.f_roots,
@@ -837,7 +842,9 @@ class QueuePage(QWidget):
         )
         if self.win.active_list and not self.model.can_reorder:
             self.blurb.setText(self.blurb.text() +
-                " 要拖曳排序，請切回「自訂順序」、清除搜尋與篩選，並取消置頂。")
+                " 要拖曳排序，請切回「最近開啟」或「自訂順序」、清除搜尋與篩選，並取消置頂。")
+        elif self.model.can_reorder and SORT_IDS[self.sort.currentIndex()] == "recent":
+            self.blurb.setText("最近開啟的在前。拖曳論文會以目前順序存成自訂順序。")
         self.model.set_rows(rows)
         self._select(current.id if current is not None else getattr(self.win, "_last_paper", None))
         self._say_count(rows)
@@ -852,8 +859,25 @@ class QueuePage(QWidget):
             return False
         papers = {paper.id: paper for paper in self.win.papers}
         self.win.papers = [papers[pid] for pid in paper_ids]
+        if SORT_IDS[self.sort.currentIndex()] != "custom":
+            # The drag was made on this order; showing it re-sorted would undo it.
+            self.sort.blockSignals(True)
+            self.sort.setCurrentIndex(SORT_IDS.index("custom"))
+            self.sort.blockSignals(False)
+            ui_state.save("ui.sort.mode", "custom")
+            QTimer.singleShot(0, self, self.refresh)
         self.blurb.setText("自訂順序已儲存；「下一篇」會依這個順序閱讀。")
         return True
+
+    def _load_opened(self) -> None:
+        try:
+            with connect() as conn:
+                opened = ui_state.prefixed(conn, "ui.paper.opened:")
+        except sqlite3.Error:
+            return
+        for paper in self.win.papers:
+            stamp = opened.get(paper.id)
+            paper.opened_at = stamp if isinstance(stamp, str) else paper.opened_at
 
     def _open_current(self):
         index = self.view.currentIndex()
@@ -886,7 +910,7 @@ class QueuePage(QWidget):
     def enable_downloads(self, manager):
         self.downloads = manager
         with connect() as conn:
-            enabled = bool(get_kv(conn, "ui.auto_pdf", True))
+            enabled = bool(ui_state.read(conn, "ui.auto_pdf", True))
         self.auto_pdf.blockSignals(True)
         self.auto_pdf.setChecked(enabled)
         self.auto_pdf.blockSignals(False)
@@ -902,8 +926,7 @@ class QueuePage(QWidget):
         self._poll_pdfs()
 
     def _auto_pdf_changed(self, enabled):
-        with connect() as conn:
-            set_kv(conn, "ui.auto_pdf", bool(enabled))
+        ui_state.save("ui.auto_pdf", bool(enabled))
         if self.downloads is not None:
             if enabled:
                 self.enqueue_pdfs(retry=True)
@@ -1078,15 +1101,15 @@ class QueuePage(QWidget):
     def _sort_changed(self, index: int) -> None:
         # Worth remembering: someone who reads a list by citation count reads the
         # next one that way too, and re-picking it on every launch is a chore.
-        with connect() as conn:
-            set_kv(conn, "ui.sort", str(index))
+        ui_state.save("ui.sort.mode", SORT_IDS[index])
         self.refresh()
 
     def restore_sort(self) -> None:
+        # The older position-based "ui.sort" is left behind: the new default is the
+        # recent order, which is what a returning reader looks for first.
         with connect() as conn:
-            stored = get_kv(conn, "ui.sort")
-        if stored and stored.isdigit() and int(stored) < len(SORTS):
-            self.sort.setCurrentIndex(int(stored))
+            stored = ui_state.read(conn, "ui.sort.mode", "recent")
+        self.sort.setCurrentIndex(SORT_IDS.index(stored) if stored in SORT_IDS else 0)
 
     def _open(self, index: QModelIndex) -> None:
         paper = index.data(PAPER_ROLE)

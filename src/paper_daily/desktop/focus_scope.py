@@ -17,12 +17,14 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QGradient, QLinearGradient, QPainter, QPen, QRegion
-from PySide6.QtWidgets import QApplication, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QLabel, QWidget
 from shiboken6 import isValid
 
 from paper_daily.desktop import window_events
 
 TAG_MS = 1800
+# After its moment on arrival the tag stays, faint, so the keys remain findable.
+TAG_RESTING_OPACITY = 0.45
 # The active panel's outline: a cyan band that drifts once around in FRAME_CYCLE_MS.
 FOCUS_DEEP = "#13a4c4"
 FOCUS_LIGHT = "#9be8f7"
@@ -115,6 +117,24 @@ class FocusScopes(QObject):
         # the panel; the panel's own resizes keep its frame fitted.
         widget.installEventFilter(self)
         return region
+
+    def step_out(self, window: QWidget) -> bool:
+        """Move the keys to the panel around the active one; whether there was one.
+
+        Esc does this first, so the way out of a nested panel is the same key
+        that later leaves the page."""
+        if self.active is None or self.active.widget.window() is not window:
+            return False
+        path = self.path(self.active)
+        if len(path) < 2:
+            return False
+        outer = path[-2]
+        target = outer.target()
+        if target is None:
+            return False
+        target.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._activate(outer)
+        return True
 
     def within(self, widget: QWidget) -> bool:
         """Whether the active panel is `widget` or nested inside it."""
@@ -229,6 +249,13 @@ class FocusScopes(QObject):
             )
 
     def _hide_tag(self) -> None:
+        """Fade the tag to its resting look; `_drop_tag` removes it."""
+        if self._tag is not None:
+            fade = QGraphicsOpacityEffect(self._tag)
+            fade.setOpacity(TAG_RESTING_OPACITY)
+            self._tag.setGraphicsEffect(fade)
+
+    def _drop_tag(self) -> None:
         if self._tag is not None:
             self._tag.hide()
             self._tag.deleteLater()
@@ -236,7 +263,7 @@ class FocusScopes(QObject):
 
     def _clear(self) -> None:
         self._tag_timer.stop()
-        self._hide_tag()
+        self._drop_tag()
         for frame in self._frames.values():
             frame.hide()
             frame.deleteLater()

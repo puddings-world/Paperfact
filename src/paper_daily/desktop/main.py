@@ -65,7 +65,16 @@ from paper_daily import (
 )
 from paper_daily import queue as qmod
 from paper_daily.config import DATA_DIR, PDF_DIR, ROOT, ensure_dirs
-from paper_daily.desktop import ai_style, fonts, pdfpane, reading, rich_view, window_events
+from paper_daily.desktop import (
+    ai_style,
+    button_style,
+    fonts,
+    pdfpane,
+    reading,
+    rich_view,
+    ui_state,
+    window_events,
+)
 from paper_daily.desktop.add_dialog import run_add
 from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
 from paper_daily.desktop.analysis_bar import AnalysisBar
@@ -91,7 +100,7 @@ from paper_daily.desktop.note_editor import NoteEditor
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
-from paper_daily.store import connect, get_kv, init_db, now, set_kv
+from paper_daily.store import connect, get_kv, init_db, now
 
 LIGHT = {
     "ground": "#fbfbfd", "surface": "#ffffff", "sunk": "#f2f3f7",
@@ -175,6 +184,8 @@ class Paper:
     pdf_failed: bool = False
     _has_pdf: bool | None = None
     _document_reader: object | None = None
+    # When it was last opened here, for the 最近開啟 sort; local view history.
+    opened_at: str | None = None
     _document_status: object | None = None
     _loaded_document: object | None = None
 
@@ -988,6 +999,15 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
             shortcut.activated.connect(lambda index=index: self._show_numbered_tab(index))
             self._analysis_shortcuts.append(shortcut)
+        # Ctrl+Tab steps through the tabs the way a browser does, so the reader
+        # needs no number. On a Mac, Cmd+Tab belongs to the system: there the
+        # physical Control key does it.
+        for keys, step in (("Tab", 1), ("Shift+Tab", -1)):
+            for modifier in ("Meta",) if fonts.MAC else ("Ctrl",):
+                cycle = QShortcut(QKeySequence(f"{modifier}+{keys}"), self)
+                cycle.setContext(Qt.ShortcutContext.WindowShortcut)
+                cycle.activated.connect(lambda step=step: self.step_tab(step))
+                self._analysis_shortcuts.append(cycle)
         self._number_tabs()
         self._tab_hints = KeyHints(
             self.tabs.tabBar(),
@@ -1227,6 +1247,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         shown = [tabs.widget(i) for i in range(tabs.count()) if tabs.isTabVisible(i)]
         return shown[:9]
 
+    def step_tab(self, step: int) -> None:
+        """The next (or previous) visible tab, wrapping round."""
+        shown = self.numbered_tabs()
+        current = self.tabs.currentWidget()
+        if shown:
+            here = shown.index(current) if current in shown else -step
+            self.tabs.setCurrentWidget(shown[(here + step) % len(shown)])
+
     def _show_numbered_tab(self, number: int) -> None:
         shown = self.numbered_tabs()
         if number < len(shown):
@@ -1244,7 +1272,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         hiding a tab."""
         for index, badge in enumerate(self._tab_badges()):
             name = self.tabs.tabText(index)
-            self.tabs.setTabToolTip(index, f"{name}（{badge}）" if badge else name)
+            cycle = fonts.key("Meta+Tab" if fonts.MAC else "Ctrl+Tab")
+            self.tabs.setTabToolTip(
+                index, f"{name}（{badge}）\n{cycle} 下一個分頁" if badge else name
+            )
 
     def _auto_highlights_changed(self, checked: bool) -> None:
         self.win.remember("auto_highlights", "1" if checked else "0")
@@ -2281,17 +2312,15 @@ class MainWindow(QWidget):
             f"QCheckBox::indicator:hover{{border-color:{self.pal['accent']};}}"
             f"QCheckBox::indicator:checked{{background:{self.pal['accent']};"
             f"border-color:{self.pal['accent']};image:url({CHECK});}}"
-            f"QPushButton{{background:{self.pal['surface']};color:{self.pal['ink']};"
-            f"border:1px solid {self.pal['firm']};border-radius:5px;padding:6px 12px;}}"
-            f"QPushButton:hover{{border-color:{self.pal['accent']};"
-            f"color:{self.pal['accent']};}}"
-            f"QPushButton:disabled{{color:{self.pal['faint']};}}"
+            f"{button_style.pressable(self.pal)}"
             f"QPushButton::menu-indicator{{image:none;width:0;}}"
             # Settings and navigation: present, but quieter than the reading actions.
             f"QPushButton[ghost=\"true\"]{{background:transparent;border-color:transparent;"
-            f"color:{self.pal['muted']};padding:6px 9px;}}"
+            f"border-bottom:1px solid transparent;color:{self.pal['muted']};padding:6px 9px;}}"
             f"QPushButton[ghost=\"true\"]:hover{{background:{self.pal['sunk']};"
             f"color:{self.pal['ink']};}}"
+            f"QPushButton[ghost=\"true\"]:pressed{{background:{self.pal['firm']};"
+            f"padding:7px 9px 5px 9px;}}"
             f"QPushButton[ghost=\"true\"]:checked{{color:{self.pal['accent']};}}"
             f"QLineEdit{{background:{self.pal['surface']};color:{self.pal['ink']};"
             f"border:1px solid {self.pal['firm']};border-radius:5px;padding:7px;}}"
@@ -2404,9 +2433,7 @@ class MainWindow(QWidget):
         self.next_btn = QPushButton("下一篇")
         self.next_btn.setToolTip(f"下一篇未讀的論文({fonts.key('Ctrl+N')})")
         self.next_btn.setStyleSheet(
-            f"QPushButton{{background:{self.pal['accent']};color:#ffffff;"
-            f"border:1px solid {self.pal['accent']};padding:6px 18px;font-weight:600;}}"
-            f"QPushButton:hover{{color:#ffffff;}}"
+            f"{button_style.pressable_accent(self.pal, 'QPushButton')}"
         )
         self.next_btn.clicked.connect(self.open_next_unread)
         bar.addWidget(self.next_btn)
@@ -2780,8 +2807,7 @@ class MainWindow(QWidget):
 
     # ---- layout memory ---------------------------------------------------
     def remember(self, key: str, value: str) -> None:
-        with connect() as conn:
-            set_kv(conn, f"ui.{key}", value)
+        ui_state.save(f"ui.{key}", value)
 
     def _restore_layout(self) -> None:
         """Put the window back where it was. Kept in the same database as everything
@@ -2841,6 +2867,8 @@ class MainWindow(QWidget):
             "note": reader.note_edit.toPlainText(), "question": reader.ask_box.text(),
             "pdf_page": reader.pdf.current_page() if reader.pdf.isVisible() else 0,
         }))
+        # The next process reads this at once; it cannot wait for the queue.
+        ui_state.flush()
         return True
 
     def _restore_restart(self) -> None:
@@ -2977,6 +3005,7 @@ class MainWindow(QWidget):
             return
         self.remember("presentation", json.dumps(pane.workspace_state()))
         self.remember("geometry", self.saveGeometry().toHex().data().decode())
+        ui_state.flush()
         self.update_banner.shutdown()
         super().closeEvent(event)
 
@@ -3152,8 +3181,7 @@ class MainWindow(QWidget):
     def _open_list(self, list_id):
         self.active_list = list_id
         self.refresh_lists()
-        with connect() as conn:
-            set_kv(conn, "ui.list", list_id)
+        ui_state.save("ui.list", list_id)
         self.show_queue()
 
     def _import_bundle(self):
@@ -3213,8 +3241,7 @@ class MainWindow(QWidget):
         if self._switching:
             return
         self.active_list = self.list_picker.currentData()
-        with connect() as conn:
-            set_kv(conn, "ui.list", self.active_list)
+        ui_state.save("ui.list", self.active_list)
         self.show_queue()
         # Switching to a list is the moment to start preparing it: a freshly imported
         # one has no dives and no PDFs, and waiting until a paper is opened means the
@@ -3259,6 +3286,10 @@ class MainWindow(QWidget):
         if box.hasFocus():
             box.clear()
             self.reader_page.pdf.setFocus()
+            return
+        # Inside a nested panel (a slide list inside 簡報), Esc first steps out to
+        # the panel around it; only from the outermost one does it leave the page.
+        if scopes().step_out(self):
             return
         self.go_back()
 
@@ -3306,6 +3337,8 @@ class MainWindow(QWidget):
         if paper.state == "pending":
             self.data.set_state(paper.id, "delivered", list_id=self.active_list)
             paper.state = "delivered"
+        paper.opened_at = now()
+        ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
         self.reader_page.load(paper)
         self._last_paper = paper.id
         self.top_up_dives()

@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from paper_daily import citegraph, followups, store  # noqa: E402
-from paper_daily.desktop import cites_pane  # noqa: E402
+from paper_daily.desktop import cites_pane, ui_state  # noqa: E402
 from paper_daily.desktop.main import LIGHT  # noqa: E402
 
 REFS = [
@@ -118,6 +118,8 @@ def test_the_switch_shows_where_it_is_and_is_remembered(pane):
     assert buttons["graph"].isChecked() and not buttons["list"].isChecked()
     assert pane._graph_face.isVisible() and not pane._list_face.isVisible()
     assert pane._map is not None and pane._map.dots
+    # View state is written by a background queue; closing the window flushes it.
+    assert ui_state.flush()
     with store.connect() as conn:
         assert store.get_kv(conn, "ui.cites_view") == "graph"
     # A new pane, as after a restart, opens on the face last chosen.

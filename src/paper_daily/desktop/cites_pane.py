@@ -50,10 +50,10 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import citegraph, followups, runtime
-from paper_daily.desktop import ai_style
+from paper_daily.desktop import ai_style, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
-from paper_daily.store import connect, get_kv, set_kv, title_key
+from paper_daily.store import connect, title_key
 
 # Where a reference goes when you are reading the main queue rather than a list.
 SPILLOVER_ID = "extra-reading"
@@ -205,7 +205,7 @@ class CitesPane(QScrollArea):
         self._pending: dict[str, object] = {}
         self._generation = 0
         with connect() as conn:
-            self._view = get_kv(conn, "ui.cites_view", "list")  # or "graph"
+            self._view = ui_state.read(conn, "ui.cites_view", "list")  # or "graph"
         # The links lookup takes a few seconds; the map redraws itself when it is
         # done instead of waiting for the tab to be reopened.
         self._watch = QTimer(self)
@@ -501,8 +501,7 @@ class CitesPane(QScrollArea):
             return
         self._view = view
         self._view_buttons[view].setChecked(True)
-        with connect() as conn:
-            set_kv(conn, "ui.cites_view", view)
+        ui_state.save("ui.cites_view", view)
         self._show_face()
 
     # ---- the two lists ---------------------------------------------------

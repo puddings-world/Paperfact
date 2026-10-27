@@ -7,6 +7,7 @@ from test_workspace_transfer_ui import workspace as _workspace
 
 from paper_daily import analysis_schedule, lists, llm, store
 from paper_daily.desktop.main import MainWindow
+from paper_daily.desktop.queue_view import SORT_IDS
 
 workspace = _workspace
 
@@ -125,7 +126,7 @@ def test_paper_native_drop_persists_and_rejects_stale_or_filtered_drag(workspace
     try:
         window._open_list("alpha")
         page = window.queue_page
-        page.sort.setCurrentIndex(0)
+        page.sort.setCurrentIndex(SORT_IDS.index("custom"))
         page.refresh()
         model = page.model
         data = model.mimeData([model.index(0)])
@@ -133,10 +134,10 @@ def test_paper_native_drop_persists_and_rejects_stale_or_filtered_drag(workspace
         assert papers() == ["p1", "p2", "p3", "p0"]
         assert [p.id for p in window.papers] == papers()
         assert not model.dropMimeData(data, Qt.DropAction.MoveAction, 0, 0, QModelIndex())
-        page.sort.setCurrentIndex(1)
+        page.sort.setCurrentIndex(SORT_IDS.index("citations"))
         assert not model.can_reorder
         assert not model.moveRows(QModelIndex(), 0, 1, QModelIndex(), 4)
-        page.sort.setCurrentIndex(0)
+        page.sort.setCurrentIndex(SORT_IDS.index("custom"))
         data = model.mimeData([model.index(0)])
         window._open_list("beta")
         assert not model.dropMimeData(data, Qt.DropAction.MoveAction, 0, 0, QModelIndex())
@@ -156,7 +157,7 @@ def test_failed_paper_drag_leaves_view_and_database_unchanged(workspace, monkeyp
     try:
         window._open_list("alpha")
         page = window.queue_page
-        page.sort.setCurrentIndex(0)
+        page.sort.setCurrentIndex(SORT_IDS.index("custom"))
         def fail(*args):
             raise sqlite3.OperationalError("fixture locked")
         monkeypatch.setattr(lists, "reorder_papers", fail)

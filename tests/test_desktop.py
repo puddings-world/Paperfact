@@ -78,6 +78,7 @@ class _FakePaper:
 
     def __init__(self, **kw):
         self.title = kw.get("title", "Some Paper")
+        self.reason = kw.get("reason")
         self.authors = kw.get("authors", ["Ada Lovelace"])
         self.award = kw.get("award")
         self.paper_type = kw.get("paper_type", "method")
@@ -248,7 +249,7 @@ def _sorted(label, papers):
     """Apply one of the queue screen's sort options, as refresh() does."""
     from paper_daily.desktop.queue_view import SORTS
 
-    _name, key, reverse = next(s for s in SORTS if s[0] == label)
+    _id, _name, key, reverse = next(s for s in SORTS if s[1] == label)
     rows = list(enumerate(papers, 1))
     rows.sort(key=lambda pair: key(pair[1]), reverse=reverse)
     return rows
