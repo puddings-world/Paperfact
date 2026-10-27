@@ -49,7 +49,7 @@ BACKEND_LABELS = {
     "auto": "自動選擇",
     "cli": "Claude CLI",
     "codex": "Codex CLI（ChatGPT 帳號）",
-    "gemini": "Gemini CLI（Google 帳號）",
+    "gemini": "Gemini CLI（企業版 Google 帳號）",
     "anthropic": "Anthropic API",
     "openai": "OpenAI 相容 API / 本機模型",
     "gateway": "自訂服務 API",
@@ -69,7 +69,7 @@ class AIStatusButton(QPushButton):
     def refresh(self):
         try:
             current = llm.settings()
-            brand = ai_choices.LABELS.get(current.backend, current.backend)
+            brand = ai_choices.brand(current)
             label = (
                 "AI 設定：尚未啟用" if current.backend == "none"
                 else "全域 AI：" + (f"{brand} · " if current.model else "")
@@ -108,7 +108,8 @@ class AISettingsDialog(QDialog):
         for label, preset in (
             ("Claude 帳號登入", "cli"),
             ("Codex / ChatGPT 帳號登入", "codex"),
-            ("Gemini / Google 帳號登入", "gemini"),
+            ("Gemini API 金鑰（Google AI Studio）", "gemini_api"),
+            ("Gemini CLI（企業版 Google 帳號）", "gemini"),
             ("Anthropic API 金鑰", "anthropic"),
             ("OpenAI 相容 API", "openai"),
             ("Ollama 本機模型", "local"),
@@ -298,10 +299,13 @@ class AISettingsDialog(QDialog):
         if not preset:
             return
         self.profile_picker.setCurrentIndex(self.profile_picker.count() - 1)
-        backend = "openai" if preset == "local" else preset
+        backend = "openai" if preset in ("local", "gemini_api") else preset
         self.backend_picker.setCurrentIndex(self.backend_picker.findData(backend))
         self.model_edit.clear()
-        self.base_edit.setText("http://localhost:11434/v1" if preset == "local" else "")
+        self.base_edit.setText(
+            "http://localhost:11434/v1" if preset == "local"
+            else ai_choices.GEMINI_API_URL if preset == "gemini_api" else ""
+        )
         self.requires_key.setChecked(preset != "local")
         self.key_edit.clear()
         self.key_env_edit.clear()

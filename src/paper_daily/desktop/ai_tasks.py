@@ -191,8 +191,7 @@ class AITasksDialog(QDialog):
 
     @staticmethod
     def _account_label(cfg):
-        brand = ai_choices.LABELS.get(cfg.backend, cfg.backend)
-        return f"{brand} · {ai_choices.account_title(cfg)}"
+        return f"{ai_choices.brand(cfg)} · {ai_choices.account_title(cfg)}"
 
     def _resolved(self, task):
         from dataclasses import replace

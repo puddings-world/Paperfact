@@ -132,7 +132,7 @@ def test_account_manager_login_keeps_global_default_and_hides_models(setup):
     widget.show()
     setup.processEvents()
     assert not widget.model_row.isVisible() and not widget.advanced.isVisible()
-    widget.providers["gemini"].click()
+    widget.providers["codex"].click()
     widget.login_button.click()
     assert len(ai_choices.accounts()) == 3
     widget.use_button.click()

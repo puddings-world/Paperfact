@@ -9,8 +9,9 @@ from paper_daily.llm import Settings
 @pytest.mark.parametrize("model", ["", "gemini-2.5-pro", "custom-model"])
 def test_gemini_picker_explains_consumer_access_even_for_default(model):
     hint = ai_choices.model_hint("gemini", model)
-    assert "個人 Google 登入服務已停止" in hint
-    assert "尚未串接 Antigravity" in hint
+    assert "個人 Google 帳號已無法使用 Gemini CLI" in hint
+    # The way forward is named, now that personal accounts connect with a key.
+    assert "API 金鑰" in hint
     assert "不代表帳號已獲授權" in hint
 
 
