@@ -211,3 +211,18 @@ def test_ctrl_numbers_count_only_shown_tabs_and_jumps_find_their_own_tab(window)
     tabs.tabBar().moveTab(tabs.indexOf(reader.ask_tab), 0)
     reader._ask_selection("a passage worth asking about")
     assert tabs.currentWidget() is reader.ask_tab
+
+
+def test_ctrl_tab_steps_through_shown_tabs_and_wraps(window):
+    reader = window.reader_page
+    tabs = reader.tabs
+    tabs.setTabVisible(tabs.indexOf(reader.figure_pane), False)
+    shown = reader.numbered_tabs()
+    tabs.setCurrentWidget(shown[-1])
+    reader.step_tab(1)
+    assert tabs.currentWidget() is shown[0]
+    reader.step_tab(-1)
+    assert tabs.currentWidget() is shown[-1]
+    for _ in shown:
+        reader.step_tab(1)
+        assert tabs.currentWidget() is not reader.figure_pane
