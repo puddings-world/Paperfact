@@ -249,3 +249,21 @@ def test_cli_share_link_is_offline_and_reports_missing_export(tmp_path, monkeypa
     source.write_bytes(package())
     assert cli.cmd_list_share_link(args) == 0
     assert capsys.readouterr().out.strip() == links.make_link(args.url, source)
+
+
+def test_drive_page_link_downloads_the_file_itself(tmp_path, network):
+    requests = network(lambda r: httpx.Response(200, content=package()))
+    links.download("https://drive.google.com/file/d/F1/view?usp=sharing", tmp_path / "p.zip")
+    assert requests[0].url.host == "drive.usercontent.google.com"
+    assert requests[0].url.params["id"] == "F1"
+
+
+def test_restricted_drive_file_explains_how_to_import(tmp_path, network):
+    network(
+        lambda r: httpx.Response(
+            200, text="<html>Sign in</html>", headers={"Content-Type": "text/html"}
+        )
+    )
+    with pytest.raises(ValueError, match="特定帳號"):
+        links.download("https://drive.google.com/file/d/F1/view", tmp_path / "p.zip")
+    assert not list(tmp_path.iterdir())
