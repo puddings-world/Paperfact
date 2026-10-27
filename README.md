@@ -2,8 +2,10 @@
 
 *The perfect way to read papers, take notes, and share ideas.*
 
-Your research workspace: bring papers from any field, read alongside the original,
-and turn your understanding into notes, slides, and a collection you can share.
+Paperfact does the groundwork: what each paper builds on, what it claims, and what
+came after, with explanations linked back to the original passage. You read, check
+and decide, and your understanding becomes notes, slides and collections others can
+verify.
 
 ![Read the original PDF beside an explanation with figures and source references](docs/images/reader.jpg)
 
@@ -187,6 +189,12 @@ uses Paperfact's configured AI to parse rough references.
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.
 - Keep local use and personal AI accounts independent of optional sync.
+- Give each list a reading goal, so its papers open with the depth and background
+  work that goal needs.
+- See where every explanation comes from: each claim links to a passage, or says no
+  source was found.
+- Understand why a paper exists: the gap it fills in earlier work and how later work
+  built on it, quoted from the papers themselves.
 
 These are planned capabilities, not features in v0.4.1.
 [Release scope](docs/roadmap-0.5.0.md) ·
