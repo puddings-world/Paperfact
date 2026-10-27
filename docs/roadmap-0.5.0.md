@@ -41,7 +41,7 @@ sync is an enhancement where supported, not a delivery guarantee.
 
 ## Grounded reading features (planned)
 
-These three planned v0.5 reading features match the README positioning added in
+The first three planned v0.5 reading features match the README positioning added in
 `90f8c60`. They are not claims about the currently published release or complete
 writer enrollment in this development snapshot.
 
@@ -54,6 +54,9 @@ writer enrollment in this development snapshot.
 - **Lineage explanations — why this paper exists:** explain the gap in earlier
   work and how later work built on this paper, grounded in quotations from the
   relevant papers. Distinguish supported statements from inferred relationships.
+- **Analysis audit:** check every AI output against the paper and against the
+  other outputs (quotes, numbers, reference identity, claim grounding, lineage
+  rules), and show the reader each finding. Design: [analysis-audit.md](analysis-audit.md).
 
 Acceptance includes changing a list goal without losing research, inspecting a
 claim against its exact PDF version, showing missing evidence honestly, and
