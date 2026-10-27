@@ -222,3 +222,28 @@ def test_parent_window_cannot_close_while_import_worker_is_active(workspace, mon
     dialog.reject()
     window.close()
     window.deleteLater()
+
+
+def test_background_watch_reports_a_commit_without_reading_on_the_gui_thread(
+    workspace, monkeypatch
+):
+    watcher = WorkspaceChanges()
+    watcher.timer.stop()
+    notifications, readers = [], []
+    original = watcher._revision
+
+    def revision():
+        readers.append(threading.current_thread() is threading.main_thread())
+        return original()
+
+    monkeypatch.setattr(watcher, "_revision", revision)
+    watcher.changed.connect(lambda: notifications.append(True))
+    staged = ops.propose("New", [{"title": "One"}])
+    ops.commit(staged["preview_id"], "watch", ["0"])
+    watcher._poll_in_background()
+    watcher._poll_in_background()  # still reading: not started twice
+    deadline = time.monotonic() + 5
+    while not notifications and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert notifications == [True] and readers == [False]

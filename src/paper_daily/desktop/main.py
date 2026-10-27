@@ -3637,6 +3637,10 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
     from paper_daily.desktop import ai_access
 
     window.ai_access = ai_access.install(window)
+    from paper_daily import ui_stalls
+    from paper_daily.config import DATA_DIR
+
+    window.stall_watch = ui_stalls.install(DATA_DIR, window)
     window._restore_restart()
     if destination is not None:
         focus_workspace(window, destination)
