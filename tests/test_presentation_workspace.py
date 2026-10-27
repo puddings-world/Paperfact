@@ -438,7 +438,7 @@ def test_analysis_and_citation_sources_open_their_own_tabs(pane):
     dive_view = Mock()
     dive_view.find.return_value = True
     cites_pane = Mock()
-    cites_pane.focus.return_value = "已跳到「引用」分頁的參考文獻這一筆。"
+    cites_pane.focus.return_value = "已跳到「脈絡」分頁的參考文獻這一筆。"
     reader = SimpleNamespace(
         pdf=SimpleNamespace(selection=None, isVisible=lambda: False),
         presentation_pane=widget,

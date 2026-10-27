@@ -153,7 +153,7 @@ def test_the_map_density_redraws_the_map_alone(pane):
 def test_a_slide_source_is_found_before_its_side_has_finished_building(pane):
     # No settling: the later side has not been made yet.
     message = pane.focus({"id": "later:3", "label": "後續研究：Later work 7 building on it"})
-    assert message == "已跳到「引用」分頁的後續研究這一筆。"
+    assert message == "已跳到「脈絡」分頁的後續研究這一筆。"
     assert pane._side == "later" and pane._side_widgets["later"].isVisible()
     assert pane._side_buttons["later"].isChecked()
 
