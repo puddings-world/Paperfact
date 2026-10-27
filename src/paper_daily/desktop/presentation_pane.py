@@ -59,7 +59,7 @@ from paper_daily import (
     presentation_export,
     presentation_odp,
     presentations,
-    slide_revise,
+    slide_revision,
 )
 from paper_daily.desktop import ai_style, fonts, script_editor, window_events
 from paper_daily.desktop.ask import AskRunner
@@ -731,7 +731,10 @@ class PresentationPane(QWidget):
         self._show_deck(deck)
         if getattr(deck, "_file_pending", False):
             self.status.setText("較新版本的檔案尚未完整；目前顯示上一份完整簡報。")
-        self._restore_recovery()
+        if getattr(deck, "_recovery_deck", None) is not None:
+            self.status.setText("已還原簡報：可閱讀與匯出；編輯需先建立本機副本。")
+        else:
+            self._restore_recovery()
         if self._first_paper:
             self.settings_button.setChecked(deck is None)
             self._first_paper = False
@@ -881,17 +884,40 @@ class PresentationPane(QWidget):
             or self._cloud_busy
             or self._highlights_busy
         )
-        self.canvas.revise_button.setEnabled(bool(self.deck) and not blocked)
-        self.canvas.revise_button.setText("改寫中…" if self._revising else "AI 改寫這頁")
-        self.generate_button.setEnabled(bool(self.paper_id) and not blocked)
+        readonly = bool(getattr(self.deck, "_recovery_deck", None))
+        self.canvas.view.setInteractive(not readonly)
+        self.canvas.view.setAcceptDrops(not readonly)
+        self.source_picker.setEnabled(not readonly)
+        self.figure.setEnabled(not readonly)
+        for field in (
+            self.slide_title, self.section, self.takeaway, self.bullets, self.speaker_notes
+        ):
+            field.setReadOnly(readonly)
+        self.canvas.revise_button.setEnabled(bool(self.deck) and not blocked and not readonly)
+        retry = self._revision_retry()
+        self.canvas.revise_button.setText(
+            "儲存中…"
+            if self._revising and retry
+            else "改寫中…"
+            if self._revising
+            else "重試儲存"
+            if retry
+            else "AI 改寫這頁"
+        )
+        self.generate_button.setEnabled(bool(self.paper_id) and not blocked and not readonly)
         self.generate_button.setText("重新產生（保留舊稿）" if self.deck else "生成投影片")
         for widget in (self.save_button, self.up, self.down, self.remove, self.add, self.views):
             widget.setEnabled(bool(self.deck) and not blocked)
+        if readonly:
+            for widget in (self.save_button, self.up, self.down, self.remove, self.add):
+                widget.setEnabled(False)
         self.export_button.setEnabled(bool(self.deck) and not blocked)
         self.google_button.setEnabled(bool(self.deck) and not blocked)
         self.outline.setEnabled(not blocked)
-        self.undo_button.setEnabled(bool(self._undo or self._dirty) and not blocked)
-        self.history_button.setEnabled(bool(self.paper_id) and not blocked)
+        self.undo_button.setEnabled(
+            bool(self._undo or self._dirty) and not blocked and not readonly
+        )
+        self.history_button.setEnabled(bool(self.paper_id) and not blocked and not readonly)
         self.materials_button.setEnabled(bool(self.paper_id))
         self.materials_panel.analyze.setEnabled(bool(self.paper_id) and not blocked)
 
@@ -1188,6 +1214,8 @@ class PresentationPane(QWidget):
     def _insert_material(
         self, payload: dict, x: float | None = None, y: float | None = None
     ) -> None:
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         if not self.deck or self._index < 0:
             self._material_feedback("請先生成或新增投影片，再加入素材。")
             return
@@ -1647,6 +1675,9 @@ class PresentationPane(QWidget):
         requires_ai("slides")(type(self)._start_generation_ready)(self)
 
     def _start_generation_ready(self) -> None:
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            self.status.setText("請先建立可編輯本機副本，再重新產生簡報。")
+            return
         if not self.paper_id or self.busy or not self.save_changes():
             return
         try:
@@ -1768,6 +1799,23 @@ class PresentationPane(QWidget):
         self.outline.setCurrentRow(target)
         self.views.setCurrentIndex(0)
 
+    def _revision_retry(self):
+        from paper_daily import store
+
+        job = getattr(self, "_revision_job", None)
+        return bool(
+            job
+            and job.updated is not None
+            and job.record.get("status") in {"candidate", "generated"}
+            and self.deck
+            and self.paper_id == job.deck.paper_id
+            and self._index == job.index
+            and self.deck.to_dict() == job.deck.to_dict()
+            and not self._dirty
+            and self.canvas.revise_instruction.toPlainText().strip() == job.instruction
+            and Path(store.DB_PATH).resolve() == job.database
+        )
+
     def _revise_current_slide(self):
         if not self.deck or self._index < 0 or self.busy or not self.save_changes():
             return
@@ -1777,47 +1825,53 @@ class PresentationPane(QWidget):
             return
         snapshot = self.deck.to_dict()
         paper_id, index = self.paper_id, self._index
+        try:
+            job = (
+                self._revision_job
+                if self._revision_retry()
+                else slide_revision.begin(self.deck, index, instruction)
+            )
+        except (ValueError, OSError) as exc:
+            self.status.setText(f"改寫未開始：{exc}")
+            return
+        self._revision_job = job
         self._revising = True
         self._update_controls()
         self.status.setText(f"正在改寫第 {index + 1} 頁；其餘頁面保留。")
 
         def run(_prompt):
             try:
-                candidate = presentations.deck_from_dict(snapshot)
-                slide, reason = slide_revise.revise(candidate, index, instruction)
-                if slide is None:
-                    return None, reason
-                slide.elements = None
-                candidate.slides[index] = slide
-                return json.dumps(
-                    dict(deck=candidate.to_dict(), summary=reason), ensure_ascii=False
-                ), "ok"
-            except Exception as exc:  # Worker errors must leave the original draft usable.
-                return None, f"單頁改寫失敗：{type(exc).__name__}: {exc}"
+                return slide_revision.run(job)
+            except Exception as exc:
+                return None, f"單頁改寫未完成儲存：{type(exc).__name__}: {exc}"
 
         def done(answer):
+            if self._revision_job is not job:
+                return
             self._revising = False
             self._update_controls()
             if (
-                self.paper_id != paper_id
+                not job.workspace_current()
+                or not job.selected_workspace()
+                or self.paper_id != paper_id
                 or self._index != index
                 or not self.deck
                 or self.deck.to_dict() != snapshot
                 or self._dirty
             ):
                 if self.paper_id == paper_id:
-                    self.status.setText("頁面或內容已變更，這次 AI 結果未套用；原頁保留。")
+                    self.status.setText(
+                        "頁面或內容已變更，AI 結果已保存於原工作區或保留為候選；目前編輯未變動。"
+                    )
                 return
-            try:
-                result = json.loads(answer)
-                updated = presentations.deck_from_dict(result["deck"])
-                updated.edited = True
-                presentations.save_deck(
-                    updated, observation=getattr(self.deck, "_file_observation", None)
+            result = json.loads(answer)
+            if result["status"] != "accepted":
+                self.status.setText(
+                    "改寫結果已保留，原頁未變動。可重試儲存（不再呼叫 AI），或修改指示重新改寫："
+                    + (job.record["reason"] or "")
                 )
-            except (ValueError, OSError) as exc:
-                self.status.setText(f"改寫未儲存，原頁保留：{exc}")
                 return
+            updated = slide_revision.editable_deck(job)
             self._undo.append(snapshot)
             self._undo = self._undo[-20:]
             self._redo.clear()
@@ -1828,6 +1882,8 @@ class PresentationPane(QWidget):
             self.status.setText(result["summary"] + f"（已儲存；{undo} 可復原）")
 
         def failed(reason):
+            if self._revision_job is not job:
+                return
             self._revising = False
             self._update_controls()
             if self.paper_id == paper_id:

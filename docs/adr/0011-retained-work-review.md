@@ -1,7 +1,9 @@
 # ADR 0011: Review retained work without rebasing it implicitly
 
-Status: proposed next UI/operation slice, 2026-10-26. Existing storage and tests
-retain candidates; this document does not claim a shipped review or reapply UI.
+Status: partially implemented in the unreleased v0.5 branch, 2026-10-27.
+Generated SQL and supported remote conflicts have typed application and a desktop
+entry point. See `../research-review.md` for exact coverage. Compound/artifact
+application, durable edited drafts and full workflow integration remain required.
 
 ## Decision
 

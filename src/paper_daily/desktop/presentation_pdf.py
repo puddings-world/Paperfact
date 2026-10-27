@@ -25,6 +25,10 @@ class PdfExport(QObject):
         self.painter = QPainter()
         self.tmp = None
         try:
+            if getattr(deck, "_recovery_deck", None) is not None:
+                from paper_daily.recovery_decks import export_snapshot
+
+                self.deck = export_snapshot(deck)
             with tempfile.NamedTemporaryFile(suffix=".pdf", dir=dest.parent, delete=False) as f:
                 self.tmp = Path(f.name)
             self.writer = QPdfWriter(str(self.tmp))

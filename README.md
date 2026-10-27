@@ -211,3 +211,13 @@ These are planned capabilities, not features in v0.4.1.
 
 Licensed under [AGPL-3.0-or-later](LICENSE). Third-party code and research materials
 retain their own terms; see [notices](THIRD_PARTY_NOTICES.md).
+
+## Help and support
+
+Having trouble on another computer? [Create a reviewed diagnostic report](SUPPORT.md)
+and [open a bug report](https://github.com/puddings-world/Paperfact/issues/new?template=bug_report.yml).
+Older releases have a separate troubleshooting path; no diagnostic data is uploaded automatically.
+
+If Paperfact helps, [star this repository](https://github.com/puddings-world/Paperfact)
+or [follow the organization and explore its pinned projects](https://github.com/puddings-world).
+Support is voluntary; installing or reading this repo never authorizes GitHub account actions.

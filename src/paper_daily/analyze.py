@@ -68,22 +68,94 @@ def _record(paper_id: str, step: str, reason: str | None) -> None:
         set_kv(conn, f"analyze.failed.{step}.{paper_id}", reason)
 
 
-def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, bool]:
+def analyse(
+    paper_id: str, log: Log = print, retry: bool = False, *, database=None, connections=None
+) -> dict[str, bool]:
+    from paper_daily import llm, research_job_lock, store
+
+    database = (database or store.DB_PATH).resolve()
+    connections = connections or llm.capture_connections()
+    with (
+        research_job_lock.claim(database, "analysis", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            log("Paper analysis is already in progress")
+            return {step: False for step in STEPS}
+        return _analyse(paper_id, log, retry, database, connections)
+
+
+def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
     """Make whatever this paper is missing. Returns the status afterwards.
 
     A step that failed before is skipped unless `retry`: a PDF that no source has,
     or a reference list in a format the parser cannot read, fails the same way
     every time until someone supplies the file.
     """
-    from paper_daily import cites, closeread, dive, fetch, followups, resources, venues
+    import sqlite3
+    from contextlib import closing, contextmanager
+
+    from paper_daily import cites, closeread, dive, fetch, followups, llm, resources, store, venues
+    from paper_daily import research_generation as generation
+    from paper_daily.research_lifecycle import ensure_lifecycle, parent_lifecycle
+
+    @contextmanager
+    def scoped_connection():
+        with closing(generation._connect(database)) as connection, connection:
+            yield connection
+
+    with scoped_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        ensure_lifecycle(conn)
+        identity, binding = generation._identity(database), generation._binding(conn)
+        lifecycle = parent_lifecycle(conn, "paper", paper_id)
+
+    def belongs():
+        try:
+            with scoped_connection() as conn:
+                return (
+                    generation._identity(database) == identity
+                    and generation._binding(conn) == binding
+                    and parent_lifecycle(conn, "paper", paper_id) == lifecycle
+                )
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            return False
+
+    def current():
+        return store.DB_PATH.resolve() == database and belongs()
+
+    def record(step, reason):
+        with scoped_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if (
+                generation._identity(database) == identity
+                and generation._binding(conn) == binding
+                and parent_lifecycle(conn, "paper", paper_id) == lifecycle
+            ):
+                set_kv(conn, f"analyze.failed.{step}.{paper_id}", reason)
+
+    def invoke(producer, *args, **kwargs):
+        # Existing integrations may replace a producer with its older, narrower
+        # callable interface. Pass the explicit scope whenever it is supported;
+        # never catch a TypeError raised inside the producer and rerun it.
+        import inspect
+
+        parameters = inspect.signature(producer).parameters
+        variadic = any(p.kind == p.VAR_KEYWORD for p in parameters.values())
+        for name, value in (("database", database), ("connections", connections)):
+            if name in parameters or variadic:
+                kwargs[name] = value
+        return producer(*args, **kwargs)
 
     def todo(step: str) -> bool:
-        with connect() as conn:
+        if not current():
+            return False
+        with scoped_connection() as conn:
             have = status(conn, paper_id)[step]
             gave_up = failed(conn, paper_id, step)
         return not have and (retry or not gave_up)
 
-    with connect() as conn:
+    with scoped_connection() as conn:
         row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
     if row is None:
         log(f"  no paper {paper_id}")
@@ -93,34 +165,39 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
     work_progress.report("取得原文與擷取文字", paper_id=paper_id)
     if todo("pdf"):
         path, _text = fetch.prepare(row)
-        _record(paper_id, "pdf", None if path else "no source had the PDF")
+        record("pdf", None if path else "no source had the PDF")
         log(f"  {'PDF  ' if path else 'no PDF'}  {name}")
 
     # Cheap, and they read the text the PDF step just extracted.
-    with connect() as conn:
-        venues.refresh(conn, [paper_id], log=lambda _m: None)
-        if resources.needs_check(conn, paper_id):
-            resources.find(conn, paper_id)
+    if current():
+        with scoped_connection() as conn:
+            venues.refresh(conn, [paper_id], log=lambda _m: None)
+    if current():
+        with scoped_connection() as conn:
+            if resources.needs_check(conn, paper_id):
+                resources.find(conn, paper_id)
 
     def explain() -> None:
-        if not has_pdf(paper_id):
+        if not current() or not has_pdf(paper_id):
             return
         work_progress.report("撰寫深度講解與逐節精讀", paper_id=paper_id)
         if todo("dive"):
-            with connect() as conn:
+            with scoped_connection() as conn:
                 have = conn.execute("SELECT 1 FROM dives WHERE paper_id=?", (paper_id,))
                 wrote = have.fetchone() is not None
             if not wrote:
                 wrote = dive.dive_ahead(paper_id=paper_id, log=log) > 0
             reason = None if wrote else "the model did not return a dive"
+            if not current():
+                return
             if wrote:
-                with connect() as conn:
+                with scoped_connection() as conn:
                     missing = closeread.get(conn, paper_id) is None
                 if missing:
-                    body, why = closeread.write(paper_id)
+                    body, why = invoke(closeread.write, paper_id)
                     log(f"  {'逐節精讀 ' + format(len(body), ',') if body else why}  {name}")
                     reason = None if body else f"close reading: {why}"
-            _record(paper_id, "dive", reason)
+            record("dive", reason)
         work_progress.report("分析原文重點並連結素材", paper_id=paper_id)
         if todo("highlights"):
             try:
@@ -131,15 +208,20 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
                     ok, why = False, prepared["explanation_reason"]
                 if marks and not marks["mapped"]:
                     why = "重點已保留在素材中，但無法在 PDF 精確定位；請核對原文。"
-                _record(paper_id, "highlights", None if ok else why)
-                log(f"  原文重點 {marks['mapped']}/{marks['total']} 已同步素材  {name}"
-                    if marks else f"  原文重點未完成：{why}  {name}")
+                record("highlights", None if ok else why)
+                log(
+                    f"  原文重點 {marks['mapped']}/{marks['total']} 已同步素材  {name}"
+                    if marks
+                    else f"  原文重點未完成：{why}  {name}"
+                )
             except (ValueError, OSError, RuntimeError) as exc:
-                _record(paper_id, "highlights", str(exc))
+                record("highlights", str(exc))
                 log(f"  原文重點未完成：{exc}  {name}")
         work_progress.report("整理候選研究問題", paper_id=paper_id)
         from paper_daily import research_questions
 
+        if not current():
+            return
         try:
             _questions, why = research_questions.ensure(paper_id)
             log(f"  候選問題：{why}  {name}")
@@ -150,25 +232,38 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
         # The 研究脈絡 is written from the references' verdicts, so 承先 comes first.
         work_progress.report("核對參考文獻與引用關係", paper_id=paper_id)
         if has_pdf(paper_id) and todo("cites"):
-            n = cites.analyse(paper_id, log=log)
-            _record(paper_id, "cites", None if n else "no references could be read")
+            n = invoke(cites.analyse, paper_id, log=log)
+            record("cites", None if n else "no references could be read")
         work_progress.report("查找後續研究與發展脈絡", paper_id=paper_id)
         if todo("later"):
-            followups.analyse(paper_id, log=log)
+            invoke(followups.analyse, paper_id, log=log)
 
     # The explanation and the citations read the same text but not each other, and
     # each spends minutes waiting on a model: side by side, the paper is ready in
     # the time of the longer one instead of the sum.
+    def chain(worker):
+        with llm.connection_scope(connections):
+            worker()
+
     with ThreadPoolExecutor(max_workers=2) as pool:
-        chains = [pool.submit(explain), pool.submit(place)]
+        chains = [pool.submit(chain, explain), pool.submit(chain, place)]
     for chain in chains:
         chain.result()
 
-    with connect() as conn:
+    if not belongs():
+        log("Analysis stopped: original research workspace changed")
+        return {step: False for step in STEPS}
+    if not current():
+        log("Workspace changed; remaining analysis stages were not started")
+    with scoped_connection() as conn:
         state = status(conn, paper_id)
-        work_progress.report("本篇分析結束", sum(state.values()), len(state),
-                             paper_id=paper_id,
-                             outcome=None if all(state.values()) else "partial")
+        work_progress.report(
+            "本篇分析結束",
+            sum(state.values()),
+            len(state),
+            paper_id=paper_id,
+            outcome=None if all(state.values()) else "partial",
+        )
         return state
 
 

@@ -22,7 +22,7 @@ import json
 import re
 from collections.abc import Callable
 
-from paper_daily.store import connect, now
+from paper_daily.store import connect
 
 Log = Callable[[str], None]
 
@@ -216,37 +216,49 @@ def _pack(
     return "\n".join(lines)
 
 
-def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
-    """Work out what each cited paper is doing here, and store it.
+def analyse(
+    paper_id: str, limit: int = 120, log: Log = lambda _m: None, *, database=None, connections=None
+) -> int:
+    from contextlib import closing
 
-    Every reference the publisher lists gets a row, not only the ones whose citing
-    sentence the text extraction found: a reference with no answer at all is the one
-    case where you cannot tell whether it is worth your evening.
-    """
+    from paper_daily import llm, research_job_lock, store
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+    from paper_daily.config import PDF_DIR, TEXT_DIR
+
+    database = (database or store.DB_PATH).resolve()
+    with (
+        research_job_lock.claim(database, "citations", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            log("Citation analysis is already in progress")
+            return 0
+        with closing(generation._connect(database)) as conn:
+            if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
+                return 0
+            context = compound.begin(conn, phase="citations", owner_id=paper_id)
+        context, text, _first = compound.read_text(context, pdf_root=PDF_DIR, text_root=TEXT_DIR)
+        if not text:
+            log("No extracted text; open or download the paper first")
+            return 0
+        return _analyse(context, text, limit, log)
+
+
+def _analyse(context, text, limit, log):
     from paper_daily import llm
-    from paper_daily.config import TEXT_DIR
+    from paper_daily import research_compound as compound
     from paper_daily.enrich import s2
-    from paper_daily.figures import _safe
     from paper_daily.sources import crossref
     from paper_daily.sources.openalex import same_paper
 
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
-        if row is None:
-            log(f"  no paper {paper_id}")
-            return 0
-
-    path = TEXT_DIR / (_safe(paper_id) + ".txt")
-    if not path.exists():
-        log("  no extracted text; run prefetch or open the paper once")
-        return 0
-
+    row = context.paper
     # The publisher's own numbering, when there is a DOI to ask about. Without it a
     # superscript "17" is just a number and the model has to guess the title.
     numbered = crossref.reference_list(row["doi"] or "")
     highest = max((int(k) for k in numbered if k.isdigit()), default=None)
 
-    ctx = contexts(path.read_text(encoding="utf-8"), highest=highest)
+    ctx = contexts(text, highest=highest)
     if not ctx and not numbered:
         log("  no citation markers found in the text")
         return 0
@@ -259,9 +271,9 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
         f"{len(by_doi)} resolved by DOI, {len(refs)} on record at S2"
     )
 
-    body, reason = llm.complete(
-        _pack(row, refs, ctx, numbered, limit), system=INSTRUCTIONS, timeout=900, task="citations"
-    )
+    prompt = _pack(row, refs, ctx, numbered, limit)
+    context = compound.with_prompt(context, prompt)
+    body, reason = llm.complete(prompt, system=INSTRUCTIONS, timeout=900, task="citations")
     if not body:
         log(f"  failed: {reason}")
         return 0
@@ -277,61 +289,50 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
         log(f"  invalid JSON ({e})")
         return 0
 
-    stored: list[str] = []
-    with connect() as conn:
-        for e in entries:
-            if not isinstance(e, dict) or not e.get("key"):
-                continue
-            # The model is asked for the key it was given and sometimes hands back
-            # the bracket it saw in the prompt. "[1]" and "1" are the same reference,
-            # and left alone they become two cards for it.
-            key = str(e["key"]).strip().strip("[]").strip()
-            if key.isdigit():
-                key = str(int(key))
-            known = numbered.get(key) or {}
-            # The publisher's title beats the model's, which is at best a guess from
-            # the citing sentence.
-            title = known.get("title") or e.get("title")
-            match = by_doi.get(known.get("doi") or "") or {}
-            if not match and title:
-                match = _s2_match(refs, title, same_paper)
-            # The S2 record for a DOI carries the real title; the reference list entry
-            # is often a whole citation string with the author block still on it.
-            title = match.get("title") or title
-            conn.execute(
-                "INSERT INTO cites(paper_id, ref_key, title, s2_id, year, venue, "
-                "citations, influential, purpose, gist, verdict, why, contexts_json, "
-                "doi, basis, spec, written_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(paper_id, ref_key) DO UPDATE SET title=excluded.title, "
-                "s2_id=excluded.s2_id, year=excluded.year, venue=excluded.venue, "
-                "citations=excluded.citations, influential=excluded.influential, "
-                "purpose=excluded.purpose, gist=excluded.gist, verdict=excluded.verdict, "
-                "why=excluded.why, contexts_json=excluded.contexts_json, doi=excluded.doi, "
-                "basis=excluded.basis, spec=excluded.spec, written_at=excluded.written_at "
-                # A reference corrected by hand keeps the correction through a rerun.
-                "WHERE cites.edited = 0",
-                (
-                    paper_id, key, title, match.get("paperId"),
-                    match.get("year") or known.get("year"), match.get("venue"),
-                    match.get("citationCount"), 1 if match.get("isInfluential") else 0,
-                    e.get("purpose"), e.get("gist"), e.get("verdict"), e.get("why"),
-                    json.dumps(ctx.get(key, []), ensure_ascii=False),
-                    known.get("doi"), "context" if ctx.get(key) else "title",
-                    CITE_SPEC, now(),
-                ),
-            )
-            stored.append(key)
-        # A re-analysis replaces the answer, so a marker the extraction no longer
-        # produces has to go with it. Upserting alone left the previous run's noise
-        # ("0", a "50" read off ResNet50) sitting in the tab for good.
-        if stored:
-            marks = ",".join("?" * len(stored))
-            conn.execute(
-                f"DELETE FROM cites WHERE paper_id=? AND ref_key NOT IN ({marks})",
-                (paper_id, *stored),
-            )
-        conn.commit()
-    return len(stored)
+    if not isinstance(entries, list):
+        return 0
+    puts = {}
+    originals = {r["ref_key"]: r for r in context.rows}
+    for e in entries:
+        if not isinstance(e, dict) or not e.get("key"):
+            continue
+        key = str(e["key"]).strip().strip("[]").strip()
+        if key.isdigit():
+            key = str(int(key))
+        if not key or originals.get(key, {}).get("edited"):
+            continue
+        known = numbered.get(key) or {}
+        title = known.get("title") or e.get("title")
+        match = by_doi.get(known.get("doi") or "") or {}
+        if not match and title:
+            match = _s2_match(refs, title, same_paper)
+        puts[key] = compound.row(
+            context,
+            key,
+            title=match.get("title") or title,
+            s2_id=match.get("paperId"),
+            year=match.get("year") or known.get("year"),
+            venue=match.get("venue"),
+            citations=match.get("citationCount"),
+            influential=int(bool(match.get("isInfluential"))),
+            purpose=e.get("purpose"),
+            gist=e.get("gist"),
+            verdict=e.get("verdict"),
+            why=e.get("why"),
+            contexts_json=json.dumps(ctx.get(key, []), ensure_ascii=False),
+            doi=known.get("doi"),
+            basis="context" if ctx.get(key) else "title",
+            spec=CITE_SPEC,
+            written_at=context.started_at,
+        )
+    if not puts:
+        return 0
+    deletes = [key for key, old in originals.items() if key not in puts and not old.get("edited")]
+    result = compound.publish(context, puts=list(puts.values()), deletes=deletes)
+    if result.status != "accepted":
+        log(f"{result.reason}; generated result retained: {result.candidate_id}")
+        return 0
+    return len(puts)
 
 
 def _s2_match(refs: list[dict], title: str, same: Callable[[str, str], bool]) -> dict:

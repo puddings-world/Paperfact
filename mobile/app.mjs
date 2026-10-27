@@ -30,6 +30,7 @@ import {
   ReaderView,
   flushDrafts
 } from './view.mjs';
+import { renderChatCards } from './chat-view.mjs';
 const app = document.querySelector('#app');
 let deckURLs = [];
 function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
@@ -399,8 +400,9 @@ function select(list, paper = null) {
   });
 }
 function renderOverview(panel, paper) {
+  renderChatCards(panel, paper, el, t);
   for(const item of paper.research_content ??[]) {
-    if(!['chat', 'resource', 'followup'].includes(item.feature)) continue;
+    if(!['resource', 'followup'].includes(item.feature)) continue;
     const data = item.data;
     const body =[data.title, data.body, data.why, data.context, data.note, data.abstract].filter(value => typeof value === 'string' && value.trim()).join('\n\n');
     panel.append(el(

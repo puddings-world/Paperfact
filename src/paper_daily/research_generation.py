@@ -183,7 +183,22 @@ def begin_generation(conn, *, table, owner_id, key="main", request_id=None, inpu
     reader = input_reader or REGISTRY[table][3]
     if reader not in ("target", REGISTRY[table][3]):
         raise ValueError("Input reader does not match the output feature")
+    from paper_daily.research_lifecycle import ensure_lifecycle, parent_lifecycle
+
+    # Persist epochs before the read snapshot when we own the connection. In a
+    # caller-owned transaction, never commit unrelated work; a rollback also
+    # invalidates epochs initialized there, so later publication fails closed.
     owned = not conn.in_transaction
+    if owned:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        ensure_lifecycle(conn)
+        if owned:
+            conn.commit()
+    except BaseException:
+        if owned:
+            conn.rollback()
+        raise
     if owned:
         conn.execute("BEGIN")
     try:
@@ -209,6 +224,7 @@ def begin_generation(conn, *, table, owner_id, key="main", request_id=None, inpu
             "input_reader": reader,
             "target": _target(conn, table, owner_id),
             "parent_created_at": parent.get("created_at"),
+            "parent_lifecycle": parent_lifecycle(conn, kind, owner_id),
             "observation": sync_capture.observe_target(conn, kind, owner_id, feature, key),
             "inputs": _inputs(conn, reader, owner_id),
             "document": None,
@@ -357,6 +373,11 @@ def _stale(conn, context):
     if _binding(conn) != data["binding"]:
         return "Workspace binding changed"
     kind, _, feature, _ = REGISTRY[data["table"]]
+    from paper_daily.research_lifecycle import parent_lifecycle
+
+    token = data.get("parent_lifecycle")
+    if not token or parent_lifecycle(conn, kind, data["owner_id"]) != token:
+        return "Research owner lifecycle changed or requires explicit review"
     owner = conn.execute(
         f"SELECT * FROM {'papers' if kind == 'paper' else 'lists'} WHERE id=?", (data["owner_id"],)
     ).fetchone()
@@ -425,8 +446,15 @@ def validate_request_record(record):
         "inputs",
         "document",
     }
-    if not isinstance(data, dict) or set(data) != fields:
+    if not isinstance(data, dict) or set(data) not in (fields, fields | {"parent_lifecycle"}):
         raise ValueError("Invalid generation context fields")
+    # Old recovery records remain readable, but cannot automatically publish.
+    # They need explicit target selection in the review workflow.
+    if "parent_lifecycle" in data and (
+        not isinstance(data["parent_lifecycle"], str)
+        or not re.fullmatch(r"[0-9a-f]{32}", data["parent_lifecycle"])
+    ):
+        raise ValueError("Invalid generation parent lifecycle")
     if data.get("version") != 1 or data.get("request_id") != record["request_id"]:
         raise ValueError("Invalid generation receipt identity")
     from paper_daily.sync_content import _stamp

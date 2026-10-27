@@ -333,6 +333,14 @@ class CanvasView(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
+        if getattr(self.parent().deck, "_recovery_deck", None) is not None:
+            if event.matches(QKeySequence.StandardKey.Copy):
+                self.parent().copy_selected()
+            elif event.matches(QKeySequence.StandardKey.SelectAll):
+                self.parent().select_all()
+            else:
+                super().keyPressEvent(event)
+            return
         scene = self.scene()
         focus = scene.focusItem()
         if isinstance(focus, QGraphicsTextItem) and focus.textInteractionFlags():
@@ -629,6 +637,8 @@ class SlideCanvas(QWidget):
         return [obj.snapshot() for obj in self.objects]
 
     def add_text(self):
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         if not self.deck or len(self.objects) >= 60:
             return
         self.finish_editing()
@@ -638,6 +648,8 @@ class SlideCanvas(QWidget):
         self.changed.emit()
 
     def add_object(self, spec: dict) -> bool:
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return False
         if spec.get("kind") == "figure" and not self.can_add_sources([spec["figure"]]):
             return False
         if not self.deck or len(self.objects) >= 60:
@@ -654,6 +666,8 @@ class SlideCanvas(QWidget):
         return True
 
     def edit_table(self, item):
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         text = "\n".join("\t".join(row) for row in item.spec["rows"])
         edited, ok = QInputDialog.getMultiLineText(
             self, "編輯表格", "每行一列，欄位以 Tab 分隔；第一列是表頭。", text
@@ -672,6 +686,8 @@ class SlideCanvas(QWidget):
         self.changed.emit()
 
     def remove_selected(self):
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         selected = [i for i in self.scene.selectedItems() if isinstance(i, CanvasObject)]
         for item in selected:
             self.objects.remove(item)
@@ -681,6 +697,8 @@ class SlideCanvas(QWidget):
             self.changed.emit()
 
     def format_selected(self, **changes):
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         if self._loading:
             return
         selected = [
@@ -775,6 +793,8 @@ class SlideCanvas(QWidget):
         self._paste_objects(objects)
 
     def _paste_objects(self, objects):
+        if getattr(self.deck, "_recovery_deck", None) is not None:
+            return
         if not objects or not self.deck:
             return
         if len(self.objects) + len(objects) > 60:

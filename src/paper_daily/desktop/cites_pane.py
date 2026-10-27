@@ -28,6 +28,7 @@ also added a dozen at a time, and the faces not on screen are built while idle.
 from __future__ import annotations
 
 import html
+import os
 import sqlite3
 import subprocess
 
@@ -135,9 +136,14 @@ def graph_legend(pal: dict[str, str]) -> str:
 
 
 def _spawn(*args: str) -> subprocess.Popen:
+    from paper_daily import store
+
+    env = dict(os.environ)
+    env["PAPERFACT_DATA"] = str(store.DB_PATH.resolve().parent)
     return subprocess.Popen(
         runtime.cli_command(*args),
         cwd=str(ROOT),
+        env=env,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -1006,6 +1012,17 @@ class CitesPane(QScrollArea):
 
     # ---- edits -----------------------------------------------------------
     def _edit_item(self, kind: str, r: dict) -> None:
+        if not self.paper_id:
+            return
+        from paper_daily import store
+
+        original_paper = self.paper_id
+        item_key = r["ref_key"] if kind == "ref" else r["work_id"]
+        with connect() as conn:
+            expected = followups.item_edit_snapshot(conn, original_paper, kind, item_key)
+        if expected.target is None:
+            return
+        r = expected.target
         fields = (
             (("purpose", "與原文的關係"), ("gist", "這篇在做什麼"), ("why", "判斷"))
             if kind == "ref"
@@ -1031,18 +1048,38 @@ class CitesPane(QScrollArea):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
+        status = QLabel()
+        status.setObjectName("research-item-save-status")
+        status.setWordWrap(True)
+        form.addRow(status)
         form.addRow(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted or not self.paper_id:
-            return
-        values = {k: b.toPlainText().strip() for k, b in boxes.items()}
-        values["verdict"] = verdict.currentText()
-        if kind == "ref":
-            followups.edit_reference(self.paper_id, r["ref_key"], **values)
-        else:
-            followups.edit_followup(self.paper_id, r["work_id"], **values)
-        self._reload()
+        saving = False
+
+        def save():
+            nonlocal saving
+            if saving:
+                return
+            saving = True
+            try:
+                values = {k: b.toPlainText().strip() for k, b in boxes.items()}
+                values["verdict"] = verdict.currentText()
+                writer = followups.edit_reference if kind == "ref" else followups.edit_followup
+                writer(original_paper, item_key, expected=expected, **values)
+            except (ValueError, RuntimeError, OSError, sqlite3.Error) as exc:
+                status.setText(f"Not saved. Your draft is retained: {exc}")
+                return
+            finally:
+                saving = False
+            dialog.accept()
+
+        buttons.accepted.connect(save)
+        buttons.rejected.connect(dialog.reject)
+        if (
+            dialog.exec() == QDialog.DialogCode.Accepted
+            and self.paper_id == original_paper
+            and store.DB_PATH.resolve() == expected.database_path
+        ):
+            self._reload()
 
     def _edit_story(self, story: dict) -> None:
         if not self.paper_id:

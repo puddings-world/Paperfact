@@ -163,6 +163,14 @@ def test_full_reader_short_window_keeps_bottom_composer_visible(
         window.resize(1200, 560)
         process(app)
         assert window.height() <= 560
+        assert reader.qa_retained_btn.isVisible()
+        assert window.rect().contains(
+            reader.qa_retained_btn.mapTo(window, reader.qa_retained_btn.rect().bottomRight())
+        )
+        reviewed = []
+        monkeypatch.setattr(reader, "_review_qa", lambda: reviewed.append(True))
+        reader.qa_retained_btn.click()
+        assert reviewed == [True]
         composer = reader.ask_box
         assert composer.isVisible() and composer.isEnabled()
         assert window.rect().contains(composer.mapTo(window, composer.rect().bottomRight()))

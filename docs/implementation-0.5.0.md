@@ -1,6 +1,6 @@
 # v0.5.0 implementation and session handoff
 
-Status: local foundation in development, 2026-10-26. Planning checkpoint: `c6ba6d9`.
+Status: local implementation in development, 2026-10-27. Planning checkpoint: `c6ba6d9`.
 Journal, research adapter, reference service, client and attachment foundations
 exist. Opt-in SQL capture now exercises existing app actions in isolated fixtures;
 user-facing enrollment and complete producer/file capture are still gated.
@@ -51,7 +51,14 @@ Owner/session: Codex, 2026-10-26, `feature/0.5-sync-foundation`.
   handling. Its isolated agent worktree is integrated. Claude launch remains blocked
   by first-use workspace trust; no Claude execution is claimed. Public browser login,
   deck transport, mobile resume and physical-device acceptance remain gated.
-- **S07/S08/S11/S12 implementation pending.** Planning and task ownership are in
+- **S07 partial:** detached backups validate research, operation provenance and file
+  closure, then restore with a fresh identity. Verified legacy PDFs and saved slide
+  results now travel as archive-owned provenance. Bootstrap, retention policy and
+  normal-reader adoption remain required; an archive is not device enrollment.
+- **S08 partial:** retained-work review, durable edited drafts, grouped candidate
+  review and workspace status/backup UI are implemented locally. User-facing
+  onboarding, device management, sync connection, offline pinning and resume UX remain.
+- **S11/S12 implementation pending.** Planning and task ownership are in
   [parallel work](parallel-work-0.5.0.md); the table retains complete acceptance targets.
 - [Delivery decision](adr/0002-sync-delivery-boundaries.md) records the reference-first
   approach and the identity, hosting, encryption and retention gates.
@@ -516,3 +523,260 @@ compound citation/followup/resource producers and observed highlight/question
 artifacts. Workspace enrollment, complete writer coverage, desktop sync status,
 device/storage/backup controls and external deployment/device acceptance remain
 required. No research sync is enabled automatically by these changes.
+
+
+### Retained review and durable questions — integration in progress, 2026-10-27
+
+- The preceding `19a5b86` checkpoint passed the full check: 2,441 Python/desktop,
+  18 frontend, 74 mobile tests and actual mobile-to-Python HTTP interoperability.
+  This is prior-checkpoint evidence, not a full-check claim for the changes below.
+- Integrated hash-verified review service/dialog files and their transaction-owned
+  conflict resolution seam. Research data now opens one pinned review dialog;
+  repeated activation, failure/retry, parent close and workspace change have actual
+  desktop tests. The independent slice passed 214 related tests; the combined
+  entry/dialog check passed 13. These overlapping selections are not additive.
+- Reproduced offline same-ID parent replacement before adding local epochs to
+  generation observations. Twenty new cases failed before the fix. Current
+  lifecycle tests cover both paper and list replacement, metadata changes,
+  caller-owned rollback and legacy recovery records: 22 passed. Legacy records
+  remain readable but need explicit review rather than automatic publication.
+- Integrated durable desktop QA, stable question/answer links, original source
+  provenance, bundle round trips and detached recovery. The independent QA slice
+  passed 126 tests; merged QA/review/question-layout adoption passed 49. Mobile
+  optional-link compatibility and restart/resume UI remain in progress.
+- The review service can copy/export unsupported retained formats, but does not
+  yet apply compound or artifact candidates. Durable edited review drafts remain
+  required. No generic SQL replay or old-device activation is enabled.
+- [ADR 0012](adr/0012-bounded-reading-annotations.md) specifies canonical bounded
+  highlight analyses, explanation links and research questions, with repairable
+  legacy caches. It is a concrete next implementation contract, not completed
+  annotation synchronization.
+
+The next full check must cover the entire merged tree before commit or release.
+Complete writer enrollment, bootstrap, workspace settings/status/devices/storage,
+offline pins/resume/inbox, hosted identity and physical-device acceptance remain
+part of v0.5. The external Claude trust gate has not been bypassed. Independent
+internal-agent handoffs do not constitute execution by that Claude session.
+
+
+### Compound producers and mobile QA integration — 2026-10-27
+
+- Integrated 11 hash-verified compound-owned files. Actual citation, followup,
+  resource and native item-editor paths capture original inputs and preserve
+  manual edits; grouped SQL/outbox/receipts commit together. The independent
+  combined run passed 230 tests. A later lifecycle/cache selection passed 113;
+  its new 200-row fixture was corrected to make the second refresh change data,
+  then passed with the original 400-operation assertion retained.
+- Added typed compound receipts and sidecars to detached recovery. Completed
+  research and stale/storage-failure candidates survive backup; old jobs remain
+  inactive after restore. Hash-only source references fail complete-backup
+  validation. The combined recovery adoption check passed 46 tests.
+- Integrated mobile QA compatibility: explicit per-paper exchange pairing,
+  readable orphan answers, offline persistence and inert text rendering. The
+  independent mobile check passed 91 Node tests, two actual Python HTTP checks
+  and six isolated Edge browser cases. Physical-phone acceptance is still open.
+- The integrated content initializer now rejects a missing caller transaction
+  before creating any table. New rejection/rollback tests plus existing content
+  coverage passed 20 cases. No existing expectation was weakened.
+
+This batch is ready for the mandatory full-tree check. Review draft durability,
+QA restart/resume and typed candidate application, and late single-slide rewrite
+retention continue in isolated worktrees; their in-progress code is not part of
+this checkpoint. The original v0.5 release scope remains unchanged.
+
+
+### Verified checkpoint and retained-work continuation — 2026-10-27
+
+- The pre-continuation tree passed the complete check: 2,670 Python/desktop tests,
+  18 frontend tests, 91 mobile tests and two actual Python HTTP scenarios. The
+  original source hashes matched at restart. This is evidence for that snapshot,
+  not for later integrations. The app was safely reopened without force-killing
+  workers; the locked Windows desktop prevented native visual acceptance.
+- Integrated the exact draft and single-slide handoffs (15 hash-verified files)
+  and the nine-file QA resume/review patch. Shared recovery edits were composed
+  contextually; baseline bytes were retained outside the public source tree.
+- Edited review drafts now retain their displayed base and source across restart.
+  Close/save failure leaves the text visible; concurrent saves retain separate
+  variants. Detached restore archives drafts as provenance, not apply authority.
+- QA restart uses stable question/answer identities and explicit selection of the
+  current available AI route. Completed retained answers have typed review; merely
+  opening a paper or review dialog does not resume generation.
+- The actual single-slide worker retains completed output and its asset closure
+  before the UI callback. A late result cannot replace a different page or paper;
+  delivery retry does not call AI. Backup integration is being completed separately.
+- The first merged review/draft/QA/slide/recovery selection passed 102 tests.
+  Unexpected answer-publication exceptions remain a known restart-retention gate
+  until the supplemental fix and merged full check pass. Existing tests were not
+  weakened. No commit, release, production migration or hosted deployment occurred.
+
+The isolated annotation worktree now exercises an observed question producer with
+captured SQL inputs, verified PDF, original AI route and durable publication. Its
+26 producer/legacy cases and an actual two-desktop -> HTTP -> mobile offline test
+passed. This code is not yet in the canonical checkout. Actual desktop entrypoints,
+legacy-cache adoption/deletion, grouped highlights and explanation links still need
+integration; contract fixtures do not prove complete annotation enrollment.
+
+Remaining release scope is unchanged: complete all writers and source-file closure,
+review every supported retained format, bootstrap/enroll safely, expose workspace
+status/devices/storage/backup/offline pins/resume/inbox, and run the hosted/private
+access and physical-device acceptance gates. The external Claude session still
+requires its owner-controlled trust step; internal agents are not that session.
+
+### Question composer integration regression - 2026-10-27
+
+The integrated retained-work/QA delivery check passed privacy and Ruff, then
+reported 2,756 passing Python cases and two failing short-window layout cases.
+Adding a separate retained-QA action row raised the desktop minimum height above
+the existing 560-pixel regression boundary. The action now shares the suggestion
+toolbar; the original composer-visibility assertions remain unchanged.
+
+A 24-case focused run passes, including both original failing font/layout cases
+and added recovery-button reachability. A fresh full check is required before
+calling this snapshot verified or restarting the development app. Independent
+compound-review, slide-recovery, workspace UI and annotation work stays staged
+outside this checkout until this integration boundary is verified.
+
+## Workspace/recovery integration checkpoint - 2026-10-27
+
+The prior root snapshot passed the complete check with 2,758 Python/desktop cases,
+18 frontend cases, 91 mobile cases and two actual HTTP scenarios. The question
+composer regression was corrected without relaxing either small-window assertion;
+the verified app was safely restarted with its position/draft-preserving protocol.
+
+The next integration adds 22 files from four independently frozen layers:
+
+- Compound candidate review previews grouped citation/follow-up/resource changes,
+  validates displayed versions and applies the group atomically with its receipt.
+  Restoration is decided per item; archived inputs retain their actual provenance.
+- Slide recovery archives bounded typed receipts and verified asset closures.
+  Restored records remain inactive provenance rather than resumable old jobs.
+- Existing source PDFs can satisfy archive closure from explicit trusted workspace
+  PDF roots by exact hash and bounded validation, without modifying live research
+  or creating current-document operations. Missing/corrupt files still fail closed.
+- The desktop workspace dialog reports location, pending/conflict/attachment state
+  and provides complete backup, preview and restore to a new directory. It guards
+  repeated actions, cancellation, workspace changes and concurrent writes. It does
+  not pretend that restored data is already enrolled or connected.
+
+An exact root-derived shadow with all four layers passed 168 selected tests and
+Ruff. The canonical source has been hash-checked against that shadow, preserving
+the small-window fix and all prior uncommitted work. Only added CRLF line endings
+were normalized; logical lines were unchanged. The merged full check is required
+before calling this new snapshot verified, committing or restarting it.
+
+Independent work continues on normal restored-deck reading/edit adoption, explicit
+desktop sync sessions/onboarding, and workspace-owned annotation producers. The
+annotation tree has canonical read/deletion authority, actual question generation
+and a no-AI legacy adoption operation with scoped tests; its desktop adoption entry
+and highlight/link/manual-mark writers are still unfinished. None of that isolated
+annotation code is implicitly covered by this root check.
+
+External gates remain unchanged: production identity/hosting/encryption decisions,
+the physical Windows/Mac/phone journey, cross-platform packaged acceptance and
+public release approval. No real user research, AI account, hosted service or
+credential was exercised by the fixture checks.
+
+
+## Restored reader and explicit sync connection integration - 2026-10-27
+
+The preceding 626-file canonical snapshot passed the complete check: 2,884
+Python/desktop cases, 18 frontend cases, 91 mobile cases and two actual HTTP
+scenarios. Its safe restart preserved the workspace; process health was checked,
+but native visual acceptance remains open.
+
+This next integration composes 27 owned files from frozen restored-reader and
+connection layers. Shared files are patched against the verified baseline rather
+than replaced from an older branch.
+
+- Restored saved decks open in the ordinary canvas, HTML and native PDF exporters
+  using their retained exact PNG/evidence closure. Unknown PDF provenance stays
+  unknown. Original archived decks remain protected; creating an editable local
+  copy is still a separate unfinished requirement.
+- Workspace settings expose an explicit authenticated connection, bounded manual
+  sync and new-device join to a separate directory. Login alone does not enroll or
+  upload existing research. Device credentials stay in memory, outside backups.
+- A completed restore/join can open its own app window. The original window,
+  drafts and workspace remain open. Startup validates the selected database before
+  migrations; provider secrets are not forwarded. Missing editable-copy capability
+  rejects that focus request before launching.
+- A picker defect discovered in integration is fixed: its destination is validated
+  after folder/name selection. Six added action cases cover successful publication,
+  folder/name/confirmation cancellation, blank/invalid names and repeated activation.
+  Existing tests and assertions were preserved.
+
+The isolated combined selection passed: 148 passed in 290.76s (0:04:50).
+Ruff passed. The canonical merged full check is now required; this checkpoint does
+not claim release readiness or native/packaged acceptance. The self-hosted reference
+connection still requires administrator-issued workspace/device credentials.
+
+Parallel annotation work remains isolated: canonical readers, atomic highlight
+publication, a two-stage highlight/link workflow and observed manual marks have
+focused coverage (150, 56 and 135 cases in overlapping selections; 119 mobile cases).
+Typed grouped highlight review and actual material/deep-reading entrypoints remain
+unfinished. Do not merge the annotation registry alone or apply only its analysis
+row through generic review. The workers stopped at provider quota; the primary
+session owns these explicit remaining tasks and preserved their handoff manifests.
+
+Unchanged release gates include complete writer/file enrollment, editable recovery
+copies and their backup closure, secure device issuance/revocation, compatibility
+guards, production identity/hosting and the Windows/Mac/phone acceptance journey.
+No real research upload, paid AI call, credential change or release was performed.
+
+
+## Checkpoint for incoming Claude merges — 2026-10-27
+
+The restored-reader/explicit-connection integration passed the complete local
+check with 2,953 Python/desktop tests. The subsequent diagnostics/support change
+passed privacy, Ruff, 2,981 Python/desktop tests, 18 frontend tests, 91 mobile tests
+and two actual HTTP scenarios. Its 28 new cases use fixture data; no real account,
+research upload or native Mac/Linux upgrade was exercised. The support UI was
+rendered with bundled fonts and inspected, and the desktop restarted safely.
+
+This checkpoint preserves all integrated retained-work, review, QA, workspace,
+restored-reader and diagnostic work currently in `feature/0.5-sync-foundation`.
+Run `scripts/check.py` again on the final checkpoint tree before committing.
+The independently staged annotation and editable-copy worktrees remain outside
+this commit; their unfinished status and prior handoffs still apply.
+
+Incoming merges, to be performed by Claude after this checkpoint:
+
+- `hotfix/0.4.4` (`1f79466`, `f13599c`): RichView note-card opening, note/Q&A
+  cards spanning the column, and Gemini access through an AI Studio key.
+- `feature/drive-share` (`ed2d52c`): list-package sharing through the sharer's own
+  Google Drive with `drive.file`, resumable upload and copied link.
+
+These commits are not implicitly merged by the checkpoint. When resolving shared
+desktop/research changes, preserve both the incoming fixes and the retained-work,
+source/version and active-worker guards. Re-run the full check after merging;
+neither this checkpoint nor an earlier passing suite verifies the merged result.
+
+README `90f8c60` is already an ancestor. Its per-list reading goals, claim-level
+sources and lineage explanations are now explicit planned roadmap scope.
+The next Claude list-recency task follows
+[the local-only recency/shared-order decision](list-recency-handoff.md): local
+visit timestamps and sort mode; existing `workspace_list_order` journal for a
+dragged custom order. Do not extend the membership-scoped `reading_state` payload.
+
+### Update/release automation follow-up (not implemented here)
+
+The owner requested a persistent bottom-right version indicator, timely update
+checks, optional automatic download/apply, and Windows/Mac release acceptance.
+Review confirmed the existing release banner, user-initiated installer path,
+hourly polling with daily successful-result cache, and draft-release build matrix.
+The current Mac artifact selector is ARM64-only; installers remain unsigned.
+
+Next implementation should add an immediate check and bounded shorter cache,
+explicit per-device update policy, verified platform/architecture-matched downloads,
+safe application shutdown and recoverable installer failure. Keep update settings
+and account credentials outside research synchronization. Do not describe hashes
+alone as publisher signing or claim a Windows fixture validates native Mac upgrade.
+
+Use the same synthetic research fixture for both native builds and the owner's
+devices. Record candidate version/commit and artifact hashes with startup, import,
+read, edit, export, diagnostics and previous-version upgrade results. Produce draft
+artifacts first; publish only after the owner has accepted the same Windows/Mac
+candidates. Automated tests must not exercise real AI accounts or private research.
+The existing `verify_built_app.py` harness and CI matrix are starting points, not
+proof that this new automation is complete. No updater implementation, remote CI
+run, signing setup, native-device enrollment or release was performed in this
+planning-only follow-up.

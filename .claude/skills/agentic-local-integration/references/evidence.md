@@ -243,3 +243,28 @@ production enrollment, Mac/phone or hosted service claim. Sidecar retention is n
 automatic candidate application or backup restoration. File-backed producers and
 other AI phases require their own observed inputs and verified publication paths.
 No global skill installation or private content is included.
+
+
+## Offline parent continuity for delayed output (2026-10-27)
+
+Status: validated-local; full integrated check recorded in the implementation ledger.
+
+An unenrolled workspace could delete and recreate a paper with identical metadata
+while generated work was pending. Comparing ID, target content and creation time
+did not detect the new parent. Twenty initial regressions exposed the missing epoch
+or legacy-record policy. The shared helper now installs persistent local epochs
+before observation; replacement/deletion/ID changes invalidate them, while ordinary
+metadata changes preserve them. A caller-owned rollback remains uncommitted and
+cannot authorize later output through an epoch that never became durable.
+
+Generation receipts accept legacy contexts for reading and backup, but automatic
+publication of epoch-less work retains a candidate. Explicit review selects and
+observes a new target. Twenty-two lifecycle cases passed, including identical
+recreated lists and malformed recovery tokens; the earlier combined generation,
+review and lifecycle group passed 80 overlapping cases.
+
+Evidence: `research_lifecycle.py`, `research_generation.py`,
+`tests/test_generation_lifecycle.py`, `tests/test_research_lifecycle.py`.
+Limits: synthetic SQLite workspaces and fake model calls; local epochs are not
+portable sync incarnations, account authorization or proof of historical identity.
+No global installation or deployment was performed.

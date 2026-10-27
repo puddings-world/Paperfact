@@ -275,3 +275,14 @@ Object.assign(messages['zh-TW'], {
   stale_artifact:'下載期間簡報版本已改變，請重試以取得新版。', storage_quota:'離線空間已滿，清除儲存空間前請先匯出本地工作。',
   unsupported_png:'手機閱讀器尚不支援此圖片格式。'
 });
+
+Object.assign(messages.en, {
+  chatQuestion: 'Question', chatAnswer: 'Answer',
+  chatOrphan: 'The linked question is not available on this device.',
+  chatPending: 'No answer has been received for this question.'
+});
+Object.assign(messages['zh-TW'], {
+  chatQuestion: '問題', chatAnswer: '回答',
+  chatOrphan: '此裝置尚無對應的問題內容。',
+  chatPending: '這個問題尚未收到回答。'
+});

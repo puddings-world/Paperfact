@@ -29,7 +29,7 @@ import urllib.parse
 from paper_daily.config import PDF_DIR, TEXT_DIR
 from paper_daily.fetch import _safe_name
 from paper_daily.http import FetchError, fetch_text
-from paper_daily.store import get_kv, now, set_kv
+from paper_daily.store import get_kv
 
 KINDS = {"code": "程式碼", "data": "資料集", "model": "模型", "demo": "Demo", "page": "專案頁"}
 
@@ -275,22 +275,60 @@ def _owner(url: str) -> str:
 
 
 def find(conn, paper_id: str) -> int:
-    """Look for the paper's code and data, and store what was found. Returns how many."""
-    row = conn.execute(
-        "SELECT title, arxiv_id, authors_json FROM papers WHERE id=?", (paper_id,)
-    ).fetchone()
-    if row is None:
-        return 0
-    text_path = TEXT_DIR / f"{_safe_name(paper_id)}.txt"
-    text = text_path.read_text(encoding="utf-8") if text_path.exists() else ""
+    """Publish one observed resource group without committing unrelated caller work."""
+    from contextlib import nullcontext
 
+    from paper_daily import research_compound as compound
+    from paper_daily import research_job_lock
+
+    path = next((r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
+    lock = research_job_lock.claim(path, "resources", paper_id) if path else nullcontext(True)
+    with lock as acquired:
+        if not acquired:
+            return 0
+        if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
+            return 0
+        context = compound.begin(conn, phase="resources", owner_id=paper_id)
+        context, text, first = compound.read_text(context, pdf_root=PDF_DIR, text_root=TEXT_DIR)
+        kept = _collect(context.paper, text, first)
+        curated = {r["url"] for r in context.rows if r["source"] not in ("pdf", "hf", "search")}
+        puts = [
+            compound.row(
+                context,
+                r["url"],
+                **{
+                    k: r[k]
+                    for k in ("kind", "source", "context", "stars", "license", "pushed_at", "note")
+                },
+                own=int(r["own"]),
+                alive=None if r["alive"] is None else int(r["alive"]),
+                checked_at=context.started_at,
+            )
+            for r in kept.values()
+            if r["url"] not in curated
+        ]
+        selected = {r["url"] for r in kept.values()}
+        deletes = [
+            r["url"] for r in context.rows if r["url"] not in selected and r["url"] not in curated
+        ]
+        result = compound.publish(
+            context, puts=puts, deletes=deletes, completion="text" if text else "notext"
+        )
+        if result.status != "accepted":
+            from paper_daily.sync_capture import StaleCaptureError
+
+            raise StaleCaptureError(result.candidate_id)
+        return len(kept)
+
+
+def _collect(row, text, first_text):
     authors = json.loads(row["authors_json"] or "[]")
     candidates = [dict(link, source="pdf") for link in links_in(text)]
     if row["arxiv_id"]:
         candidates += [dict(link, source="hf") for link in _hugging_face(row["arxiv_id"], authors)]
     if not any(c["own"] for c in candidates):
         candidates += [dict(link, source="search") for link in _search(row["title"], authors)]
-    first_page = _first_page(paper_id) if candidates else set()
+    first_page = {c[1].lower() for link in links_in(first_text) if (c := classify(link["url"]))}
 
     kept: dict[str, dict] = {}
     for cand in candidates:
@@ -329,39 +367,38 @@ def find(conn, paper_id: str) -> int:
             **{k: (meta or {}).get(k) for k in ("stars", "license", "pushed_at", "note", "alive")},
         }
 
-    conn.execute("DELETE FROM resources WHERE paper_id=?", (paper_id,))
-    conn.executemany(
-        "INSERT INTO resources(paper_id, url, kind, own, source, context, stars, license, "
-        "pushed_at, note, alive, checked_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            (
-                paper_id,
-                r["url"],
-                r["kind"],
-                int(r["own"]),
-                r["source"],
-                r["context"],
-                r["stars"],
-                r["license"],
-                r["pushed_at"],
-                r["note"],
-                None if r["alive"] is None else int(r["alive"]),
-                now(),
-            )
-            for r in kept.values()
-        ],
-    )
-    # Whether the full text was there to read: a paper checked before its PDF
-    # arrived is worth checking again once it has.
-    set_kv(conn, f"resources:{paper_id}", "text" if text else "notext")
-    conn.commit()
-    return len(kept)
+    return kept
 
 
 def needs_check(conn, paper_id: str) -> bool:
     seen = get_kv(conn, f"resources:{paper_id}")
     if seen is None:
         return True
+    path = next((r[2] for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
+    if path:
+        from paper_daily.document_reader import from_workspace
+
+        reader = from_workspace(path, legacy_root=PDF_DIR)
+        status = reader.inspect(paper_id)
+        if status.managed:
+            document = reader.resolve(paper_id)
+            if not document.available:
+                return False
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='research_compound_requests'"
+            ).fetchone()
+            record = (
+                conn.execute(
+                    "SELECT context_json FROM research_compound_requests WHERE status='accepted' "
+                    "AND json_extract(context_json,'$.phase')='resources' "
+                    "AND json_extract(context_json,'$.owner_id')=? ORDER BY rowid DESC LIMIT 1",
+                    (paper_id,),
+                ).fetchone()
+                if table
+                else None
+            )
+            source = json.loads(record[0]).get("document") if record else None
+            return not source or source["sha256"] != document.sha256
     return seen == "notext" and (TEXT_DIR / f"{_safe_name(paper_id)}.txt").exists()
 
 

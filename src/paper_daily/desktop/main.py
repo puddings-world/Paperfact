@@ -11,7 +11,6 @@ the conversation live in the same file as the corpus.
 
 from __future__ import annotations
 
-import faulthandler
 import hashlib
 import html
 import json
@@ -19,7 +18,6 @@ import os
 import sqlite3
 import subprocess
 import sys
-import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,7 +69,7 @@ from paper_daily.desktop import ai_style, fonts, pdfpane, reading, rich_view, wi
 from paper_daily.desktop.add_dialog import run_add
 from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
 from paper_daily.desktop.analysis_bar import AnalysisBar
-from paper_daily.desktop.ask import AskRunner, build_prompt
+from paper_daily.desktop.ask import AskRunner
 from paper_daily.desktop.cites_pane import CitesPane, _spawn
 from paper_daily.desktop.document_flow import (
     DocumentRunner,
@@ -407,16 +405,80 @@ class Data:
                 conn.commit()
                 return bool(removed)
 
-    def delete_chat(self, chat_ids: list[int]) -> None:
-        with connect() as conn:
-            conn.executemany("DELETE FROM chat WHERE id=?", [(i,) for i in chat_ids])
+    def chat(self, paper_id):
+        from paper_daily.research_chat import history
 
-    def chat(self, paper_id: str) -> list[sqlite3.Row]:
         with connect() as conn:
-            return conn.execute(
-                "SELECT id, role, body, page, anchor FROM chat WHERE paper_id=? ORDER BY id",
-                (paper_id,),
-            ).fetchall()
+            return history(conn, paper_id)
+
+    def chat_snapshot(self, paper_id, chat_ids=None):
+        from paper_daily import research_chat, research_generation, sync_capture
+        from paper_daily.research_lifecycle import ensure_lifecycle, parent_lifecycle
+
+        with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            ensure_lifecycle(conn)
+            rows = {row["id"]: row for row in research_chat.history(conn, paper_id)}
+            chat_ids = list(rows) if chat_ids is None else chat_ids
+            if any(identity not in rows for identity in chat_ids):
+                raise ValueError("Conversation is no longer available")
+            return {
+                "db_path": research_generation._path(conn),
+                "database_identity": research_generation._identity(research_generation._path(conn)),
+                "binding": research_generation._binding(conn),
+                "paper_id": paper_id,
+                "parent_lifecycle": parent_lifecycle(conn, "paper", paper_id),
+                "rows": [
+                    {
+                        "row": rows[identity],
+                        "observation": sync_capture.observe_content(conn, "chat", rows[identity]),
+                    }
+                    for identity in chat_ids
+                ],
+            }
+
+    def delete_chat(self, chat_ids, *, expected=None):
+        from paper_daily import research_chat, research_generation
+
+        if expected is None:
+            with connect() as conn:
+                rows = conn.execute(
+                    "SELECT paper_id FROM chat WHERE id IN ("
+                    + ",".join("?" for _ in chat_ids)
+                    + ")",
+                    chat_ids,
+                ).fetchall()
+            if not rows:
+                return
+            if len({row[0] for row in rows}) != 1:
+                raise ValueError("Select one conversation")
+            expected = self.chat_snapshot(rows[0][0], chat_ids)
+        with connect() as conn:
+            if (
+                research_generation._path(conn) != expected["db_path"]
+                or research_generation._identity(expected["db_path"])
+                != expected["database_identity"]
+                or research_generation._binding(conn) != expected["binding"]
+            ):
+                raise ValueError("Original conversation workspace changed")
+            research_chat.delete_messages(
+                conn, expected["paper_id"], expected["rows"], expected=expected
+            )
+
+    def begin_chat(self, paper_id, question, *, request_id, page=None, anchor=None, document=None):
+        from paper_daily import research_chat
+
+        with connect() as conn:
+            return research_chat.begin_chat(
+                conn,
+                paper_id=paper_id,
+                question=question,
+                request_id=request_id,
+                page=page,
+                anchor=anchor,
+                document=document,
+                legacy_root=PDF_DIR,
+            )
 
     def add_chat(
         self,
@@ -474,16 +536,45 @@ PASSAGE_MARK = "關於這段原文:"
 
 
 def _exchanges(rows) -> list[tuple]:
-    """Pair each question with the answer that followed it: (question, answer),
-    with None for an answer still being written or a question lost to a crash."""
-    out: list[tuple] = []
-    for r in rows:
-        if r["role"] == "user":
-            out.append((r, None))
-        elif out and out[-1][1] is None and out[-1][0] is not None:
-            out[-1] = (out[-1][0], r)
+    """Linked portable turns pair by identity; old rows retain their old order."""
+    rows = [dict(row) for row in rows]
+    users = {
+        row.get("message_id"): row
+        for row in rows
+        if row["role"] == "user" and row.get("message_id")
+    }
+    answers = {}
+    for row in rows:
+        parent = users.get(row.get("reply_to"))
+        if (
+            row["role"] == "assistant"
+            and parent is not None
+            and parent.get("exchange_id") == row.get("exchange_id")
+            and parent.get("paper_id") == row.get("paper_id")
+        ):
+            answers.setdefault(parent["message_id"], []).append(row)
+    consumed = {row["id"] for values in answers.values() for row in values}
+    out = []
+    for row in rows:
+        if row.get("exchange_id"):
+            if row["role"] == "user":
+                matched = answers.get(row.get("message_id"), [])
+                out.extend((row, answer) for answer in matched) if matched else out.append(
+                    (row, None)
+                )
+            elif row["id"] not in consumed:
+                out.append((None, row))
+        elif row["role"] == "user":
+            out.append((row, None))
+        elif (
+            out
+            and out[-1][1] is None
+            and out[-1][0] is not None
+            and not out[-1][0].get("exchange_id")
+        ):
+            out[-1] = (out[-1][0], row)
         else:
-            out.append((None, r))
+            out.append((None, row))
     return out
 
 
@@ -561,6 +652,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self._pending: tuple[int, str] | None = None
         self._open_notes: set[int] = set()
         self.runner = AskRunner(self)
+        self._qa_starting = False
+        self._qa_job = None
+        self._qa_epoch = 0
+        self._qa_drafts = {}
+        self._qa_view_database = None
         # A separate runner: translating a line should not have to wait behind a
         # question that is still being answered.
         self.translate_runner = AskRunner(self)
@@ -811,12 +907,21 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.questions.chosen.connect(self._draft_question)
         self.questions.return_to_draft.connect(self._resume_question_draft)
         self.questions.source_requested.connect(self._jump_to_source)
-        al.addWidget(self.questions)
+        # Keep auxiliary recovery actions beside suggestions, never below the composer.
+        question_tools = QHBoxLayout()
+        question_tools.addWidget(self.questions, 1)
+        self.qa_retained_btn = QPushButton("待完成與保留問答…")
+        self.qa_retained_btn.clicked.connect(lambda: self._review_qa())
+        question_tools.addWidget(self.qa_retained_btn, 0, Qt.AlignmentFlag.AlignTop)
+        al.addLayout(question_tools)
         self.chat_view = rich_view.RichView(pal)
         if not self.chat_view.rich:
             # The fallback transcript scrolls; let it yield space to the composer.
             self.chat_view.view.setMinimumHeight(64)
-        self.runner.result_target = lambda: self.chat_view.setFocus()
+        self.runner.result_target = lambda: (
+            self.chat_view.setFocus()
+            if self._qa_current() and self._qa_epoch == self._qa_submitted_epoch else None
+        )
         self.chat_view.anchorClicked.connect(self._note_action)
         al.addWidget(self.chat_view, 1)
         # A passage chosen with 問這段 waits here until a question is typed for it,
@@ -862,6 +967,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         scopes(pal["accent"])  # before the slide panels register theirs
         self.presentation_pane = PresentationPane(self)
         self.presentation_pane.source_requested.connect(self._jump_to_source)
+        if hasattr(self.presentation_pane, "editable_copy_ready"):
+            self.presentation_pane.editable_copy_ready.connect(self._open_created_workspace)
         self.presentation_pane.highlights_ready.connect(self._highlights_ready)
         self.presentation_pane.highlights_status.connect(self._highlight_status_changed)
         self.presentation_pane.materials_panel.source_requested.connect(self._jump_to_source)
@@ -912,6 +1019,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper: Paper) -> None:
+        from paper_daily import store
+        if self.paper is not None:
+            self._qa_drafts[(self._qa_view_database, self.paper.id)] = self.ask_box.text()
+        self._qa_view_database = Path(store.DB_PATH).resolve()
+        self._qa_epoch += 1
+        self._clear_passage()
+        self._page_context = None
+        self.ask_box.setText(self._qa_drafts.get((self._qa_view_database, paper.id), ""))
         self.paper = paper
         pal = self.win.pal
         self.title.setText(paper.title)
@@ -1151,6 +1266,27 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         pane._analyze_highlights(force=False)
         if pane.busy:
             self._highlight_attempts.add(key)
+
+    def _open_created_workspace(self, value):
+        from paper_daily.workspace_open import destination, open_workspace
+
+        try:
+            selected = destination(value)
+            info = selected.database_path.stat()
+            key = (str(selected.database_path), info.st_dev, info.st_ino, selected.deck_id)
+            opened = getattr(self, "_opened_workspace_copies", set())
+            if key in opened:
+                return False
+            opener = getattr(self, "_workspace_opener", open_workspace)
+            opener(selected)
+        except (OSError, ValueError):
+            self.presentation_pane.status.setText(
+                "新工作區已保留，但無法開啟視窗；可再次嘗試。"
+            )
+            return False
+        self._opened_workspace_copies = opened | {key}
+        self.presentation_pane.status.setText("已要求開啟新工作區；原始簡報與此視窗保留。")
+        return True
 
     def _highlights_ready(self, paper_id: str) -> None:
         if self.paper and self.paper.id == paper_id:
@@ -1484,6 +1620,12 @@ class ReaderPage(ManagedDocumentReader, QWidget):
     def _note_action(self, url) -> None:
         """Every link in the notes and the conversation goes through here."""
         what, _, raw = url.toString().partition(":")
+        if what == "resumeqa":
+            self._resume_qa(raw)
+            return
+        if what == "reviewqa":
+            self._review_qa(raw)
+            return
         if not raw.isdigit():
             return
         ident = int(raw)
@@ -1558,8 +1700,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         answer = next((r for r in rows if int(r["id"]) == chat_id), None)
         if answer is None:
             return
-        earlier = [r for r in rows if int(r["id"]) < chat_id and r["role"] == "user"]
-        question = earlier[-1] if earlier else None
+        question = next(
+            (
+                question
+                for question, reply in _exchanges(rows)
+                if reply is not None and int(reply["id"]) == chat_id
+            ),
+            None,
+        )
 
         quote = " ".join((question["body"] if question else "").split())[:400]
         body = f"> {quote}\n\n{answer['body']}" if quote else answer["body"]
@@ -1577,7 +1725,13 @@ class ReaderPage(ManagedDocumentReader, QWidget):
     def _load_chat(self) -> None:
         assert self.paper
         pal = self.win.pal
-        rows = self.win.data.chat(self.paper.id)
+        self._chat_snapshot = self.win.data.chat_snapshot(self.paper.id)
+        rows = [item["row"] for item in self._chat_snapshot["rows"]]
+        from paper_daily import research_chat
+
+        with connect() as conn:
+            pending = research_chat.pending_requests(conn, self.paper.id)
+        self._qa_pending = {item["user_key"]: item for item in pending}
         if not rows:
             self.chat_view.setHtml(
                 f'<div style="color:{pal["faint"]};font-size:12px;">'
@@ -1602,12 +1756,22 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             shown = " ".join(passage.split())
             head += (
                 f'<div style="color:{pal["muted"]};font-size:11px;margin-top:4px;">'
-                f'{html.escape(shown[:200] + ("…" if len(shown) > 200 else ""))}</div>'
+                f"{html.escape(shown[:200] + ('…' if len(shown) > 200 else ''))}</div>"
             )
         head += "</td>"
         if answer is None:
             body = f'<span style="color:{pal["faint"]};">思考中…</span>'
             links = ""
+            item = (
+                getattr(self, "_qa_pending", {}).get(question.get("message_id"))
+                if question
+                else None
+            )
+            if item:
+                action = "resumeqa" if item["status"] == "prepared" else "reviewqa"
+                label = "選擇目前 AI 繼續" if item["status"] == "prepared" else "檢視保留答案"
+                identity = html.escape(item["request_id"], quote=True)
+                links = f'<a href="{action}:{identity}">{label}</a>&nbsp; '
         else:
             body = self.chat_view.markdown(answer["body"])
             links = (
@@ -1629,12 +1793,23 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         )
 
     def _forget_exchange(self, question_id: int) -> None:
-        """Delete a question and the answer to it. A note kept from it stays."""
-        assert self.paper
-        for question, answer in _exchanges(self.win.data.chat(self.paper.id)):
+        """Delete precisely the exchange that was rendered, not a refreshed replacement."""
+        snapshot = getattr(self, "_chat_snapshot", None)
+        if not self.paper or not snapshot or snapshot["paper_id"] != self.paper.id:
+            return
+        rows = [item["row"] for item in snapshot["rows"]]
+        for question, answer in _exchanges(rows):
             if question is not None and int(question["id"]) == question_id:
                 ids = [question_id] + ([int(answer["id"])] if answer is not None else [])
-                self.win.data.delete_chat(ids)
+                expected = {
+                    **snapshot,
+                    "rows": [item for item in snapshot["rows"] if item["row"]["id"] in ids],
+                }
+                try:
+                    self.win.data.delete_chat(ids, expected=expected)
+                except Exception:
+                    self.ask_status.setText("問答已變更，請重新載入後再刪除。")
+                    return
                 break
         self._load_chat()
 
@@ -1736,7 +1911,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         Qt's PDF view exposes no mouse selection, so the page you are looking at is
         the narrowest passage the reader can actually point at.
         """
-        if not self.paper or not self.pdf.isVisible():
+        if not self.paper or not self.pdf.isVisible() or not loaded_document_valid(self):
             return
         page = self.pdf.current_page()
         text = self.pdf.page_text(page)
@@ -1842,7 +2017,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.note_edit.setFocus()
 
     def _ask_selection(self, text: str) -> None:
-        if not text.strip():
+        if not text.strip() or not loaded_document_valid(self):
             return
         self.tabs.setCurrentWidget(self.ask_tab)
         passage = " ".join(text.split())[:1200]
@@ -1890,7 +2065,6 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             return
         passage, page, anchor = self._passage
         question = question or "解釋這一段在說什麼,以及它為什麼重要。"
-        self._clear_passage()
         self._ask(f"{question}\n\n關於這段原文:\n{passage}", page=page, anchor=anchor)
 
     def _save_note(self) -> None:
@@ -1907,77 +2081,178 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         QTimer.singleShot(2500, self.note_status, lambda: self.note_status.setText(""))
         self._load_notes()
 
-    @requires_ai("ask")
-    def _ask(self, question: str, page: int | None = None, anchor: str | None = None) -> None:
-        if not self.paper:
-            return
-        question = (question or "").strip()
-        if not question:
-            return
-        if self.runner.busy:
-            # Silence here read as "Enter does nothing". Say what is happening.
-            self.ask_status.setText("上一個問題還在處理中,等它回完再問。")
-            return
-        if not llm.available(task="ask"):
-            QMessageBox.warning(
-                self, "還沒有設定模型後端",
-                "問答需要一個後端:安裝 claude CLI(不需要 API key),或設定 "
-                "API 金鑰；也可以從上方「AI 設定」選擇模型。",
-            )
-            return
+    def _ask(self, question: str, page=None, anchor=None) -> None:
+        from uuid import uuid4
 
-        # Acknowledge the keystroke before touching the database. A write can block
-        # for seconds behind a background crawl, and the app runs with no console, so
-        # anything that fails in between is invisible unless it is said here.
-        self.ask_status.setText("AI 正在讀這篇論文…")
+        from paper_daily.desktop.qa_job import ChatJob
+
+        if not self.paper or not isinstance(question, str) or not question.strip():
+            return
+        if self._qa_starting or self.runner.busy:
+            self.ask_status.setText("問答正在執行，請稍候。")
+            return
+        # Reserve before any event pumping, database access or login/preparation.
+        self._qa_starting = True
         self.ask_btn.setEnabled(False)
-        QApplication.processEvents()
-
+        self.ask_status.setText("正在準備原論文的問答…")
+        self._qa_submitted_epoch = self._qa_epoch
+        self._qa_text_snapshot = self.ask_box.text()
+        self._qa_preserve_draft = False
+        if page is None and getattr(self, "_page_context", None):
+            page = self._page_context[0] + 1
         try:
-            self.win.data.add_chat(self.paper.id, "user", question, page, anchor)
-            self.ask_box.clear()
-            self._load_chat()
-        except Exception as e:
-            self.ask_status.setText(f"寫入失敗:{type(e).__name__} — 稍後再試")
+            connections = llm.capture_connections()
+            with llm.connection_scope(connections):
+                cfg = llm.settings(task="ask")
+            retry = self._qa_job
+            from paper_daily import store
+
+            if (
+                retry is not None
+                and getattr(retry.request, "_receipt", None) is not None
+                and retry.result is None
+                and retry.request.data["paper_id"] == self.paper.id
+                and retry.request.db_path == Path(store.DB_PATH).resolve()
+                and retry.request.data["question"] == question.strip()
+            ):
+                job = retry
+            else:
+                request = self.win.data.begin_chat(
+                    self.paper.id,
+                    question.strip(),
+                    request_id=str(uuid4()),
+                    page=page,
+                    anchor=anchor,
+                    document=getattr(self, "_active_document", None),
+                )
+                job = ChatJob(request, connections, cfg)
+            self._qa_job = job
+            self.runner.start("", self._ask_done, self._ask_failed, call=job, task="ask")
+        except Exception:
+            self.ask_status.setText("無法準備問答；問題已保留，請重試。")
             self.ask_btn.setEnabled(True)
+        finally:
+            self._qa_starting = False
+
+    def _resume_qa(self, request_id):
+        from paper_daily import ai_choices, research_chat, store
+        from paper_daily.desktop.qa_job import ChatJob
+
+        if not self.paper or self._qa_starting or self.runner.busy:
             return
-
-        history = [(r["role"], r["body"]) for r in self.win.data.chat(self.paper.id)][:-1]
-        body = self.win.data.full_text(self.paper.id)
-        page_context = getattr(self, "_page_context", None)
-        if page_context:
-            page, page_text = page_context
-            # Put the page first and label it, so the answer is about the passage the
-            # reader is looking at rather than the paper in general.
-            body = "\n\n".join(
-                [
-                    f"[讀者目前正在看第 {page + 1} 頁]",
-                    page_text,
-                    "[全文]",
-                    body or "",
-                ]
+        self._qa_starting = True
+        self.ask_btn.setEnabled(False)
+        path, paper, epoch = Path(store.DB_PATH).resolve(), self.paper.id, self._qa_epoch
+        try:
+            request = research_chat.load_request(path, request_id, resolve_document=False)
+            if request.data["paper_id"] != paper:
+                raise ValueError("Question belongs to another paper")
+            if research_chat.answer_record(request) is not None:
+                self._review_qa(request_id)
+                return
+            retry = self._qa_job
+            if retry and retry.request.request_id == request_id and retry.result is None:
+                job = retry
+                description = "繼續使用這次工作已選擇的 AI："
+            else:
+                connections = llm.capture_connections()
+                with llm.connection_scope(connections):
+                    cfg = llm.settings(task="ask")
+                job = ChatJob(request, connections, cfg, resume=True)
+                description = "重開後將使用目前選擇的 AI 繼續："
+            with llm.connection_scope(job.connections):
+                route = ai_choices.connection_label(job.cfg)
+            choice = QMessageBox.question(
+                self,
+                "繼續未完成問答",
+                description + "\n" + route + "\n\n" + request.data["question"][:500],
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
-            self._page_context = None
-        prompt = build_prompt(
-            self.paper.title, self.paper.venue, self.paper.year, self.paper.abstract,
-            body, history, question,
-        )
-        from paper_daily import ai_choices
+            if choice != QMessageBox.StandardButton.Yes:
+                return
+            if (
+                Path(store.DB_PATH).resolve() != path
+                or not self.paper
+                or self.paper.id != paper
+                or self._qa_epoch != epoch
+            ):
+                raise ValueError("Research view changed")
+            # Recheck identity after the modal event loop; PDF verification stays in the worker.
+            research_chat.load_request(path, request_id, resolve_document=False)
+            self._qa_submitted_epoch = epoch
+            self._qa_text_snapshot = request.data["question"]
+            self._qa_preserve_draft = self.ask_box.text() != request.data["question"]
+            self._qa_job = job
+            self.ask_status.setText("正在繼續原問題；原始問題與帳號選擇已固定。")
+            self.runner.start("", self._ask_done, self._ask_failed, call=job, task="ask")
+        except Exception:
+            self.ask_status.setText(
+                "無法繼續原問題：原工作區、論文、對話或來源已變動。保留內容仍可檢視。"
+            )
+        finally:
+            self._qa_starting = False
+            if not self.runner.busy:
+                self.ask_btn.setEnabled(True)
 
-        self.ask_status.setText(
-            "本次問答：" + ai_choices.connection_label(llm.settings(task="ask"))
-        )
-        self.runner.start(prompt, self._ask_done, self._ask_failed)
+    def _review_qa(self, request_id=None):
+        from paper_daily import store
+        from paper_daily.desktop.qa_review_dialog import ChatReviewDialog
 
-    def _ask_done(self, answer: str) -> None:
-        if self.paper:
-            self.win.data.add_chat(self.paper.id, "assistant", answer)
+        dialog = getattr(self, "_qa_review_dialog", None)
+        if dialog is not None and dialog.isVisible():
+            dialog.raise_()
+            return
+        dialog = ChatReviewDialog(
+            store.DB_PATH,
+            self,
+            paper_id=self.paper.id if self.paper else None,
+            request_id=request_id,
+        )
+        self._qa_review_dialog = dialog
+        dialog.resume_requested.connect(self._resume_qa)
+        dialog.applied.connect(lambda: self._load_chat() if self.paper else None)
+        dialog.show()
+
+    def _qa_current(self):
+        from paper_daily import research_generation, store
+
+        job = self._qa_job
+        if job is None or self.paper is None:
+            return False
+        data = job.request.data
+        try:
+            if (
+                self.paper.id != data["paper_id"]
+                or Path(store.DB_PATH).resolve() != job.request.db_path
+                or research_generation._identity(job.request.db_path) != data["database_identity"]
+            ):
+                return False
+            with connect() as conn:
+                return research_generation._binding(conn) == data["binding"]
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            return False
+
+    def _ask_done(self, _answer: str) -> None:
+        if self._qa_current():
             self._load_chat()
-        self.ask_status.setText("")
+            if self._qa_epoch == self._qa_submitted_epoch:
+                job = self._qa_job
+                if self.ask_box.text() == self._qa_text_snapshot:
+                    self.ask_box.clear()
+                if not getattr(self, "_qa_preserve_draft", False):
+                    self._clear_passage()
+                    self._page_context = None
+                self.ask_status.setText(
+                    "回答已保留待核對；原文或問答內容已變更。"
+                    if job.result.status == "candidate"
+                    else ""
+                )
         self.ask_btn.setEnabled(True)
 
     def _ask_failed(self, message: str) -> None:
-        self.ask_status.setText(message)
+        if self._qa_current() and self._qa_epoch == self._qa_submitted_epoch:
+            self.ask_status.setText(message)
         self.ask_btn.setEnabled(True)
 
 
@@ -2097,6 +2372,9 @@ class MainWindow(QWidget):
         self.export_bundle_action.setToolTip(
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
         data_menu.addSeparator()
+        self.workspace_action = data_menu.addAction("工作區與備份…", self._workspace_settings)
+        self.review_action = data_menu.addAction("審閱保留內容…", self._review_retained)
+        self.review_action.setToolTip("核對未套用的 AI 結果與同步衝突；不會重新呼叫 AI")
         data_menu.addAction("本地整合 · 連接 agent…", self._local_integration)
         self.research_data_button.setMenu(data_menu)
         bar.addWidget(self.research_data_button)
@@ -2233,6 +2511,12 @@ class MainWindow(QWidget):
         self.feedback_btn.setToolTip("自願參與、查看本機紀錄、匯出或撤回；不需要 AI 登入")
         self.feedback_btn.clicked.connect(self._feedback_settings)
         footer.addWidget(self.feedback_btn)
+        self.support_btn = QPushButton("診斷與回報")
+        self.support_btn.setFlat(True)
+        self.support_btn.setStyleSheet(self.feedback_btn.styleSheet())
+        self.support_btn.setToolTip("預覽並匯出診斷包；不會自動上傳")
+        self.support_btn.clicked.connect(self._support)
+        footer.addWidget(self.support_btn)
         outer.addLayout(footer)
 
         QShortcut(QKeySequence("Ctrl+N"), self, self.open_next_unread)
@@ -2280,6 +2564,70 @@ class MainWindow(QWidget):
         self.remember("top_collapsed", "1" if collapsed else "0")
         self._refresh_ai_summary()
 
+    def _workspace_settings(self):
+        from paper_daily import store
+        from paper_daily.desktop.workspace_dialog import WorkspaceDialog
+
+        existing = getattr(self, "_workspace_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            return
+
+        def writers_busy():
+            from PySide6.QtCore import QThread
+
+            from paper_daily.desktop.workspace_dialog import WorkspaceWorker
+
+            return (self.activity_hub.busy or self.analysis_running()
+                    or bool(getattr(self.pdf_downloads, "busy", False))
+                    or any(thread.isRunning() for thread in self.findChildren(QThread)
+                           if not isinstance(thread, WorkspaceWorker)))
+
+        try:
+            dialog = WorkspaceDialog(store.DB_PATH, parent=self,
+                                     current_path=lambda: store.DB_PATH,
+                                     writers_busy=writers_busy)
+        except (OSError, ValueError):
+            QMessageBox.warning(self, "無法開啟工作區", "資料庫目前無法讀取；未變更資料。")
+            return
+        self._workspace_dialog = dialog
+        dialog.open()
+
+    def _review_retained(self):
+        from paper_daily import store
+        from paper_daily.desktop.review_dialog import ReviewDialog
+
+        existing = getattr(self, "_review_dialog", None)
+        if existing is not None and not existing.disposed:
+            if existing.service.path != store.DB_PATH.resolve():
+                if not existing.close():
+                    existing.raise_()
+                    return
+            else:
+                existing.show()
+                existing.raise_()
+                existing.activateWindow()
+                return
+        try:
+            dialog = ReviewDialog(store.DB_PATH, parent=self, language="zh-TW")
+        except (OSError, ValueError, sqlite3.Error) as error:
+            QMessageBox.warning(self, "無法開啟審閱", str(error))
+            return
+        self._review_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.open()
+
+    def _close_stale_review(self):
+        from paper_daily import store
+
+        dialog = getattr(self, "_review_dialog", None)
+        if dialog is None or dialog.disposed or dialog.service.path == store.DB_PATH.resolve():
+            return True
+        # A future draft-flush failure may reject close. Do not destroy the
+        # editor or switch its service to the new workspace in that case.
+        return dialog.close()
+
     def _local_integration(self):
         from paper_daily.desktop.integration_dialog import IntegrationDialog
 
@@ -2321,6 +2669,8 @@ class MainWindow(QWidget):
             self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
     def _poll_external_lists(self):
+        if not self._close_stale_review():
+            return
         self.workspace_changes.poll()
         if self._external_refresh_pending and QApplication.activeModalWidget() is None:
             self._external_lists_changed()
@@ -2330,6 +2680,21 @@ class MainWindow(QWidget):
 
         AnalysisSettings(self, self.pal).exec()
         self.announce_ready()
+
+    def _support(self) -> None:
+        from paper_daily.desktop.support_dialog import SupportDialog
+
+        if getattr(self, "_support_dialog", None) is not None:
+            self._support_dialog.raise_()
+            self._support_dialog.activateWindow()
+            return
+        dialog = SupportDialog(self)
+        self._support_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._support_dialog = None
+            dialog.deleteLater()
 
     def _feedback_settings(self) -> None:
         from paper_daily.desktop.feedback_dialog import FeedbackDialog
@@ -2516,6 +2881,18 @@ class MainWindow(QWidget):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
     def closeEvent(self, event) -> None:
+        workspace = getattr(self, "_workspace_dialog", None)
+        if workspace is not None and not workspace.disposed and not workspace.close():
+            event.ignore()
+            return
+
+        review = getattr(self, "_review_dialog", None)
+        if review is not None and not review.disposed and review.isVisible():
+            # Let the review dialog finish saving or preserve its draft before
+            # the parent window tears down its workers and widgets.
+            review.raise_()
+            event.ignore()
+            return
         from paper_daily.desktop.integration_dialog import OperationWorker
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
@@ -2532,6 +2909,9 @@ class MainWindow(QWidget):
                 board.setFocus()
                 board.setToolTip("尚有背景工作，請等候完成或在原操作區停止。")
             return
+        qa_review = getattr(reader, "_qa_review_dialog", None)
+        if qa_review is not None:
+            qa_review.close()
         downloads = getattr(self, "pdf_downloads", None)
         if downloads is not None and downloads.busy:
             downloads.cancel()
@@ -2612,19 +2992,33 @@ class MainWindow(QWidget):
         return alive and (paper_id is None or self._job_paper == paper_id)
 
     def _spawn_job(self, args: list[str], paper_id: str | None) -> None:
+        workspace = getattr(self, "_workspace_dialog", None)
+        if workspace is not None and not workspace.disposed:
+            return
+
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        from paper_daily import store
         from paper_daily.desktop.activity import begin
 
+        original_database = Path(store.DB_PATH).resolve()
         self._job_paper = paper_id
+
         def show_result():
+            if Path(store.DB_PATH).resolve() != original_database:
+                return
             if paper_id:
                 self.open_anywhere(paper_id)
                 self.reader_page._analysis_finished()
                 self.reader_page.tabs.setCurrentWidget(self.reader_page.dive_view)
                 self.reader_page.dive_view.setFocus()
+
         self._analysis_activity = begin(
-            self.reader_page, "深入分析" if paper_id else "背景分析",
-            key=f"analysis:{paper_id}", result=show_result, paper_id=paper_id)
+            self.reader_page,
+            "深入分析" if paper_id else "背景分析",
+            key=f"analysis:{paper_id}",
+            result=show_result,
+            paper_id=paper_id,
+        )
         if not self._analysis_activity.accepted:
             return
         try:
@@ -2632,10 +3026,18 @@ class MainWindow(QWidget):
                 runtime.cli_command(*args),
                 cwd=str(ROOT),
                 creationflags=flags,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace",
-                env={**os.environ, "PAPERFACT_PROGRESS": "1", "PYTHONUNBUFFERED": "1",
-                     "PYTHONIOENCODING": "utf-8"},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env={
+                    **os.environ,
+                    "PAPERFACT_DATA": str(original_database.parent),
+                    "PAPERFACT_PROGRESS": "1",
+                    "PYTHONUNBUFFERED": "1",
+                    "PYTHONIOENCODING": "utf-8",
+                },
             )
             self.activity_hub.watch_popen(self._analysis_activity, self._dive_job)
         except OSError:
@@ -3139,7 +3541,7 @@ def _force_visible(window: QWidget) -> None:
 
 
 def _hand_off_to_running_instance(
-    open_next: bool, restart: bool = False, paper: str | None = None
+    open_next: bool, restart: bool = False, paper: str | None = None, destination=None
 ) -> bool:
     """If a window is already open, tell it to come forward and return True.
 
@@ -3151,7 +3553,9 @@ def _hand_off_to_running_instance(
     socket.connectToServer(SINGLE_INSTANCE_KEY)
     if not socket.waitForConnected(300):
         return False
-    if paper:
+    if destination is not None:
+        command = b"workspace-open:" + json.dumps(destination.payload()).encode() + b"\n"
+    elif paper:
         command = b"open:" + paper.encode()
     else:
         command = b"restart" if restart else b"next" if open_next else b"show"
@@ -3172,35 +3576,9 @@ def _hand_off_to_running_instance(
 
 
 def _install_error_log() -> None:
-    """Send unhandled exceptions to data/app.log.
+    from paper_daily.diagnostics import install_error_hooks
 
-    The reader is launched without a console, so a traceback from inside a Qt slot
-    goes nowhere at all -- the window simply stops responding to a button, which is
-    indistinguishable from the button not being wired up.
-    """
-    from paper_daily.config import DATA_DIR
-
-    log = DATA_DIR / "app.log"
-
-    def hook(kind, value, tb):
-        import traceback
-
-        with log.open("a", encoding="utf-8") as fh:
-            fh.write(f"{chr(10)}--- {now()} ---{chr(10)}")
-            traceback.print_exception(kind, value, tb, file=fh)
-        sys.__excepthook__(kind, value, tb)
-
-    sys.excepthook = hook
-    # An exception on a worker thread does not reach sys.excepthook at all.
-    threading.excepthook = lambda args: hook(args.exc_type, args.exc_value, args.exc_traceback)
-
-    # And a crash inside Qt itself -- a widget touched from the wrong thread, say --
-    # leaves no Python traceback whatsoever. Without this the window simply vanishes
-    # and there is nothing anywhere to say why.
-    _crash_log = log.open("a", encoding="utf-8")
-    _crash_log.write(f"{chr(10)}--- session {now()} ---{chr(10)}")
-    _crash_log.flush()
-    faulthandler.enable(file=_crash_log, all_threads=True)
+    install_error_hooks(phase="desktop", directory=DATA_DIR)
 
 
 def style(app: QApplication) -> None:
@@ -3228,6 +3606,10 @@ def _finish_smoke(app) -> None:
 
 
 def run(open_next: bool = False, restart: bool = False, paper: str | None = None) -> int:
+    from paper_daily import store
+    from paper_daily.workspace_open import consume_startup, focus_workspace
+
+    destination = consume_startup(store.DB_PATH)
     ensure_dirs()
     init_db()
     _install_error_log()
@@ -3239,7 +3621,7 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
     # Without it the Dock (macOS) and the taskbar show the Python interpreter's icon.
     app.setWindowIcon(QIcon(str(ROOT / "assets" / "paper-daily.ico")))
 
-    if _hand_off_to_running_instance(open_next, restart, paper):
+    if _hand_off_to_running_instance(open_next, restart, paper, destination):
         return 0
 
     smoke = os.environ.get("PAPERFACT_SMOKE_SECONDS")
@@ -3258,7 +3640,9 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
 
     window.ai_access = ai_access.install(window)
     window._restore_restart()
-    if paper:
+    if destination is not None:
+        focus_workspace(window, destination)
+    elif paper:
         window.open_anywhere(paper)
     window.update_banner.check_in_background()
 
@@ -3273,8 +3657,26 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
         if conn is None:
             return
 
+        command_buffer = bytearray()
+
         def handle() -> None:
-            command = bytes(conn.readAll().data())
+            command_buffer.extend(bytes(conn.readAll().data()))
+            command = bytes(command_buffer)
+            if b"workspace-open:".startswith(command) or command.startswith(b"workspace-open:"):
+                from paper_daily.workspace_open import focus_command
+
+                try:
+                    selected = focus_command(command)
+                except (ValueError, OSError, UnicodeError):
+                    conn.disconnectFromServer()
+                    return
+                if selected is None:
+                    return  # Qt may deliver one command across multiple readyRead signals.
+                window.showNormal()
+                _force_visible(window)
+                focus_workspace(window, selected)
+                conn.disconnectFromServer()
+                return
             if command == b"restart":
                 if window._prepare_restart() and window.close():
                     server.close()

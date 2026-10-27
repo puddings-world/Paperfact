@@ -162,9 +162,27 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     if feature in ("manual_highlight", "ai_highlight"):
         _hash(payload["source_document_hash"])
     data = payload["data"]
-    if not isinstance(data, dict) or set(data) != set(fields.split()):
+    allowed = [set(fields.split())]
+    if feature == "chat":
+        allowed.append(allowed[0] | {"exchange_id", "reply_to"})
+    if not isinstance(data, dict) or set(data) not in allowed:
         raise ValueError("Unexpected research-content data fields")
+    if feature == "chat" and "exchange_id" in data:
+        _uuid(data["exchange_id"])
+        if data["reply_to"] is not None:
+            _uuid(data["reply_to"])
+        if (
+            (data["role"] == "user" and data["reply_to"] is not None)
+            or (
+                data["role"] == "assistant"
+                and (data["reply_to"] is None or data["reply_to"] == key)
+            )
+            or data["role"] == "system"
+        ):
+            raise ValueError("Invalid linked conversation role/reference")
     for name, value in data.items():
+        if name in ("exchange_id", "reply_to"):
+            continue
         if name in ("created_at", "written_at", "fetched_at", "checked_at"):
             _stamp(value)
         elif name in ("edited", "hidden", "influential", "own"):
@@ -212,6 +230,11 @@ def initialize_content(conn):
     if not conn.in_transaction:
         raise ValueError("Content initialization requires a caller transaction")
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS research_chat_links(local_id INTEGER "
+        "PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,exchange_id TEXT "
+        "NOT NULL,reply_to TEXT,source_hash TEXT)"
+    )
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS research_content_identity (feature TEXT NOT NULL,"
         "sync_key TEXT NOT NULL,local_id INTEGER,paper_id TEXT NOT NULL,created_at TEXT NOT NULL,"
         "PRIMARY KEY(feature,sync_key),UNIQUE(feature,local_id))"
@@ -239,6 +262,17 @@ def _portable_paper(conn, local_id):
 
 def _row_key(conn, table, row):
     feature = TABLE_FEATURES[table]
+    if (
+        table == "chat"
+        and conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_chat_links'"
+        ).fetchone()
+    ):
+        link = conn.execute(
+            "SELECT message_id FROM research_chat_links WHERE local_id=?", (row["id"],)
+        ).fetchone()
+        if link is not None:
+            return link[0]
     if table == "notes":
         mapped = conn.execute(
             "SELECT sync_id,paper_id,created_at FROM research_note_identity WHERE local_id=?",
@@ -283,13 +317,22 @@ def content_payload(conn, table, row):
     if feature == "ai_highlight":
         key = row["document_hash"] + ":" + key
     data = {field: row[field] for field in fields.split()}
+    if feature == "chat":
+        link = conn.execute(
+            "SELECT exchange_id,reply_to,source_hash FROM research_chat_links WHERE local_id=?",
+            (row["id"],),
+        ).fetchone()
+        if link is not None:
+            data.update(exchange_id=link[0], reply_to=link[1])
     for field in ("anchor", "contexts_json", "reading_json"):
         if field in data and data[field] is not None:
             data[field] = json.loads(data[field])
     source_hash = row.get("document_hash")
+    if feature == "chat" and link is not None:
+        source_hash = link[2]
     if source_hash is None and isinstance(data.get("anchor"), dict):
         source_hash = data["anchor"].get("document_hash")
-    if source_hash is None and feature not in ("manual_highlight", "ai_highlight", "chat"):
+    if source_hash is None and feature not in ("manual_highlight", "ai_highlight"):
         previous = conn.execute(
             "SELECT source_hash FROM research_content_projection WHERE entity_id=?",
             (content_id(scope, feature, key),),
@@ -429,6 +472,8 @@ def write_content(conn, operation):
         parameters.append(source_hash)
     if deleting:
         conn.execute(f"DELETE FROM {table} WHERE {where}", parameters)
+        if feature == "chat" and mapping is not None:
+            conn.execute("DELETE FROM research_chat_links WHERE local_id=?", (mapping[0],))
         if natural == "id":
             conn.execute(
                 "UPDATE research_content_identity SET local_id=NULL WHERE feature=? AND sync_key=?",
@@ -440,6 +485,9 @@ def write_content(conn, operation):
     for field in ("anchor", "contexts_json", "reading_json"):
         if field in data and data[field] is not None:
             data[field] = json.dumps(data[field], ensure_ascii=False, sort_keys=True)
+    linkage = None
+    if feature == "chat" and "exchange_id" in data:
+        linkage = (data.pop("exchange_id"), data.pop("reply_to"))
     stored = dict(data)
     stored[scope_column] = local
     if natural and natural != "id":
@@ -465,6 +513,20 @@ def write_content(conn, operation):
         conn.execute(
             f"UPDATE {table} SET {','.join(column + '=?' for column in columns)} WHERE {where}",
             [*stored.values(), *parameters],
+        )
+    if feature == "chat" and linkage is not None:
+        local_row = conn.execute(
+            "SELECT local_id FROM research_content_identity WHERE feature='chat' AND sync_key=?",
+            (key,),
+        ).fetchone()
+        conn.execute(
+            (
+                "INSERT INTO research_chat_links VALUES(?,?,?,?,?) ON "
+                "CONFLICT(local_id) DO UPDATE SET message_id=excluded.message_id,"
+                "exchange_id=excluded.exchange_id,reply_to=excluded.reply_to,sour"
+                "ce_hash=excluded.source_hash"
+            ),
+            (local_row[0], key, *linkage, source_hash),
         )
     conn.execute(
         "INSERT INTO research_content_projection VALUES(?,?,?,?,?,?,?,?) "

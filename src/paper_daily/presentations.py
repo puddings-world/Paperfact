@@ -309,6 +309,15 @@ def _atomic_json(dest: Path, data: dict) -> None:
 
 
 def figure_bytes(deck: Deck, figure_id: str) -> bytes:
+    if getattr(deck, "_recovery_deck", None) is not None:
+        from paper_daily.recovery_decks import figure_bytes as recovered_figure
+
+        return recovered_figure(deck, figure_id)
+    captured = getattr(deck, "_revision_figures", None)
+    if captured is not None:
+        if figure_id not in captured:
+            raise ValueError("Figure was not available in this revision's captured inputs")
+        return captured[figure_id]
     figure = next((f for f in deck.figures if f["id"] == figure_id), None)
     if not figure:
         raise ValueError("Unknown presentation figure")
@@ -318,16 +327,19 @@ def figure_bytes(deck: Deck, figure_id: str) -> bytes:
         from paper_daily.sync_deck_publication import managed_figure_bytes
 
         return managed_figure_bytes(deck, figure_id)
-    base = _folder(deck.paper_id) / "assets" if asset else FIG_DIR / _safe_name(deck.paper_id)
+    roots = getattr(deck, "_revision_roots", None)
+    figures_root = roots["figures"] if roots else FIG_DIR
+    folder = roots["folder"] if roots else _folder(deck.paper_id)
+    base = folder / "assets" if asset else figures_root / _safe_name(deck.paper_id)
     name = asset or figure.get("file")
     if not isinstance(name, str) or Path(name).name != name or name in (".", ".."):
         raise ValueError("Invalid figure filename")
     target = base / name
     if not asset:
-        target = image_path(deck.paper_id, figure, root=FIG_DIR, historical=True)
+        target = image_path(deck.paper_id, figure, root=figures_root, historical=True)
         if target is None:
             raise ValueError("Presentation figure source is unavailable")
-        base = FIG_DIR
+        base = figures_root
     if not target.resolve().is_relative_to(base.resolve()):
         raise ValueError("Figure path escapes its evidence folder")
     blob = target.read_bytes()
@@ -337,18 +349,59 @@ def figure_bytes(deck: Deck, figure_id: str) -> bytes:
 
 
 def save_deck(deck: Deck, *, observation=None, request_id=None, evidence=None) -> Path:
+    from paper_daily import recovery_decks, store
+
+    observed = observation or getattr(deck, "_file_observation", None) or {}
+    if getattr(deck, "_recovery_deck", None) is not None or observed.get("recovery_readonly"):
+        raise ValueError("Recovered slides are read-only until explicitly copied for editing")
+    database = (
+        getattr(deck, "_revision_database", None) or observed.get("database") or store.DB_PATH
+    )
+    recovery_decks.assert_writable(database, deck.paper_id, deck.mode)
     deck_from_dict(deck.to_dict())
     from paper_daily.sync_deck_publication import publish_deck
 
     saved = publish_deck(
-        deck, observation=observation or getattr(deck, "_file_observation", None),
-        request_id=request_id, evidence=evidence,
+        deck,
+        observation=observation or getattr(deck, "_file_observation", None),
+        request_id=request_id,
+        evidence=evidence,
     )
     if saved is not None:
         return saved
-    dest = _path(deck.paper_id, deck.mode)
+    dest = getattr(deck, "_revision_destination", None) or _path(deck.paper_id, deck.mode)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    lock = dest.parent / ".deck-write.lock"
+    if lock.is_symlink() or getattr(lock, "is_junction", lambda: False)():
+        raise ValueError("Presentation write lock must not be a link")
+    with lock.open("ab"):
+        pass
+    from paper_daily.research_job_lock import claim
+
+    with claim(lock, "deck-save", deck.mode) as acquired:
+        if not acquired:
+            raise ValueError("Another presentation save is in progress; keep this draft and retry")
+        guard = getattr(deck, "_revision_guard", None)
+        if guard is not None and not guard():
+            raise ValueError("Original revision workspace changed; result retained")
+        if hasattr(deck, "_revision_original_hash"):
+            if dest.exists() and dest.stat().st_size > 8 * 1024**2:
+                raise ValueError("Saved presentation exceeds the revision comparison bound")
+            data = dest.read_bytes() if dest.exists() else None
+            actual = hashlib.sha256(data).hexdigest() if data is not None else None
+            if actual != deck._revision_original_hash:
+                if data is not None and json.loads(data) == deck.to_dict():
+                    return dest
+                raise ValueError("Saved deck changed; result retained for review")
+        return _save_legacy_deck(deck, dest)
+
+
+def _save_legacy_deck(deck, dest):
+    """Called only while the shared manual/revision write lock is held."""
     for item in deck.figures:
-        if item["id"] not in used_figures(deck) or item.get("asset"):
+        if item["id"] not in used_figures(deck):
+            continue
+        if item.get("asset") and getattr(deck, "_revision_figures", None) is None:
             continue
         blob = figure_bytes(deck, item["id"])
         name = hashlib.sha256(blob).hexdigest() + ".png"
@@ -366,6 +419,11 @@ def save_deck(deck: Deck, *, observation=None, request_id=None, evidence=None) -
 
 
 def load_deck(paper_id: str, mode: str) -> Deck | None:
+    from paper_daily import recovery_decks, store
+
+    detached, recovered = recovery_decks.load(store.DB_PATH, paper_id, mode)
+    if detached:
+        return recovered
     from paper_daily.sync_deck_publication import load_managed_deck, observe_deck
 
     managed, deck = load_managed_deck(paper_id, mode)
@@ -653,8 +711,13 @@ def generate(
         return None, "請設定 1–120 分鐘的講解時間"
     if not isinstance(audience, str) or len(audience) > 500:
         return None, "聽眾描述過長"
+    from paper_daily import recovery_decks, store
     from paper_daily.sync_deck_publication import observe_deck
 
+    try:
+        recovery_decks.assert_writable(store.DB_PATH, paper_id, mode)
+    except (ValueError, OSError) as exc:
+        return None, str(exc)
     observation = observe_deck(paper_id, mode)
     try:
         evidence = collect_evidence(paper_id, inputs)

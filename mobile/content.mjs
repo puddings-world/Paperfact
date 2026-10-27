@@ -122,8 +122,19 @@ export function validateContent(payload, id, parents) {
   expect(id === contentId(scope, feature, key));
   expect(parents.length === 1 && parents[0].kind === expected && parents[0].id === scope.id);
   hash(source, !['manual_highlight', 'ai_highlight'].includes(feature));
-  closed(data, CONTENT_FIELDS[feature].split(' '));
+  closed(data, CONTENT_FIELDS[feature].split(' '), feature === 'chat' ? ['exchange_id', 'reply_to']: []);
+  if(feature === 'chat') {
+    const linked = Object.hasOwn(data, 'exchange_id');
+    expect(linked === Object.hasOwn(data, 'reply_to'));
+    if(linked) {
+      expect(typeof data.exchange_id === 'string' && UUID.test(data.exchange_id));
+      expect(data.reply_to === null ||(typeof data.reply_to === 'string' && UUID.test(data.reply_to)));
+      expect((data.role === 'user' && data.reply_to === null) ||
+      (data.role === 'assistant' && data.reply_to !== null && data.reply_to !== key));
+    }
+  }
   for(const [name, value] of Object.entries(data)) {
+    if(['exchange_id', 'reply_to'].includes(name)) continue;
     if(['created_at', 'written_at', 'fetched_at', 'checked_at'].includes(name)) stamp(value);
     else if(['edited', 'hidden', 'influential', 'own'].includes(name)) integer(value, 1);
     else if(['year', 'citations', 'stars', 'papers', 'page', 'alive'].includes(name)) integer(value, name === 'alive' ? 1: 2 ** 31 - 1,
@@ -265,4 +276,40 @@ export function suppressSnapshotContent(papers, lists, heads, receipts, highligh
     archived,
     live
   };
+}
+
+/** Pair only inside this paper. Linked orphan answers never use adjacency. */
+export function chatExchanges(paper) {
+  const rows = (paper.research_content ?? []).filter(row => row.feature === 'chat');
+  const linked = row => Object.hasOwn(row.data, 'exchange_id');
+  const users = new Map(rows.filter(row => linked(row) && row.data.role === 'user').map(row => [row.key, row]));
+  const answers = new Map(), matched = new Set();
+  for(const row of rows) {
+    if(!linked(row) || row.data.role !== 'assistant') continue;
+    const question = users.get(row.data.reply_to);
+    if(question?.data.exchange_id !== row.data.exchange_id) continue;
+    if(!answers.has(question.key)) answers.set(question.key, []);
+    answers.get(question.key).push(row);
+    matched.add(row);
+  }
+  const result = [];
+  let pending = null;
+  for(const row of rows) {
+    if(linked(row)) {
+      pending = null;
+      if(row.data.role === 'user') {
+        const replies = answers.get(row.key) ?? [];
+        if(!replies.length) result.push({question: row, answer: null, orphan: false});
+        for(const answer of replies) result.push({question: row, answer, orphan: false});
+      } else if(!matched.has(row)) result.push({question: null, answer: row, orphan: true});
+    } else if(row.data.role === 'user') {
+      pending = {question: row, answer: null, orphan: false};
+      result.push(pending);
+    } else if(row.data.role === 'assistant') {
+      if(pending) pending.answer = row;
+      else result.push({question: null, answer: row, orphan: true});
+      pending = null;
+    } else pending = null;
+  }
+  return result;
 }

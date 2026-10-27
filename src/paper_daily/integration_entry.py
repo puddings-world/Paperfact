@@ -9,6 +9,14 @@ from pathlib import Path
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "diagnostics":
+        from paper_daily.diagnostics import main as diagnostics_main
+
+        return diagnostics_main(argv[1:])
+    if argv and argv[0] == "app":
+        from paper_daily.diagnostics import install_error_hooks
+
+        install_error_hooks(phase="startup")
     if not argv or argv[0] not in ("mcp", "integration"):
         from paper_daily.cli import main as legacy_main
 

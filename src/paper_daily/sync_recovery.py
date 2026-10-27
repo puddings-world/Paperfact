@@ -88,10 +88,37 @@ PROTOCOL = {
     "research_document_intents": "operation_id paper_id target state",
     "research_resolution_intents": "operation_id conflict_sequence request operation",
     "research_action_receipts": "request_id fingerprint result",
+    "research_review_drafts": (
+        "draft_id origin origin_id owner_json preview_json body request_id revision "
+        "updated_at save_order fingerprint"
+    ),
+    "research_parent_lifecycle": "kind entity_id token active",
+    "research_review_receipts": (
+        "request_id fingerprint origin origin_id decision result provenance"
+    ),
     "research_capture_binding": "id workspace device",
     "research_capture_candidates": "id content",
     "research_generation_requests": "request_id context_json row_json status candidate_id reason",
+    "research_chat_requests": (
+        "request_id context_json question_json answer_json status candidate_id reason"
+    ),
+    "research_chat_recovery": (
+        "request_id context_json question_json answer_json status candidate_id reason"
+    ),
+    "research_chat_links": "local_id message_id exchange_id reply_to source_hash",
+    "research_chat_review_receipts": (
+        "request_id fingerprint record_json target_json answer_json result_json"
+    ),
     "research_generation_recovery": "request_id context_json row_json status candidate_id reason",
+    "research_compound_requests": (
+        "request_id context_json mutations_json status candidate_id reason"
+    ),
+    "research_compound_recovery": (
+        "request_id context_json mutations_json status candidate_id reason"
+    ),
+    "research_slide_revision_recovery": "request_id manifest",
+    "research_legacy_source_recovery": "sha256 size media_type",
+    "research_legacy_deck_recovery": "paper_id slot request_id parent_token deck",
     "research_file_desired": "entity_id operation active",
     "research_file_applied": "entity_id operation",
     "research_file_versions": "operation_id entity_id operation",
@@ -226,6 +253,19 @@ class _Records:
         self.local_paper_ids = set()
         self.hidden_pdf, self.hidden_files = set(), set()
         self.pending_ids = set()
+        self.research_sources = set()
+        self.slide_revisions = {}
+        self.legacy_sources = {}
+        self.legacy_decks = {}
+        self.parent_lifecycles = {}
+
+    def _artifact(self, payload):
+        self.artifacts[_json(payload)] = payload
+        if payload["source_document_hash"] is not None:
+            self.research_sources.add(payload["source_document_hash"])
+        self.research_sources.update(
+            item["sha256"] for item in payload["input_versions"]["documents"]
+        )
 
     def row(self, name, row):
         if name in {"research_document_desired", "research_file_desired"}:
@@ -316,8 +356,22 @@ class _Records:
             if target["paper_id"] != row["paper_id"]:
                 raise RecoveryError("Document paper identity differs from its row")
             _add_blob(self.refs, target)
+            self.research_sources.add(target["sha256"])
             if name == "research_document_applied":
                 self.applied_pdf[row["paper_id"]] = target
+        elif name == "research_review_drafts":
+            from paper_daily.research_review_drafts import validate_record
+
+            validate_record(row)
+        elif name == "research_parent_lifecycle":
+            from paper_daily.research_lifecycle import validate_record
+
+            validate_record(row)
+            self.parent_lifecycles[(row["kind"], row["entity_id"])] = row
+        elif name == "research_review_receipts":
+            from paper_daily.research_review import validate_receipt
+
+            validate_receipt(row)
         elif name == "research_capture_candidates":
             candidate = _load(row["content"])
             if not isinstance(candidate, dict) or set(candidate) != {"observations", "mutations"}:
@@ -346,7 +400,7 @@ class _Records:
                 ):
                     raise RecoveryError("Invalid draft base artifact")
                 payload = original["payload"]
-                self.artifacts[_json(payload)] = payload
+                self._artifact(payload)
                 known = {
                     asset["sha256"] + ".png"
                     for asset in payload["assets"]
@@ -365,12 +419,79 @@ class _Records:
             for item in [payload["body"], *payload["assets"]]:
                 _add_blob(self.refs, item)
             _load(row["observation"])
-            self.artifacts[_json(payload)] = payload
+            self._artifact(payload)
+        elif name == "research_legacy_deck_recovery":
+            from paper_daily.recovery_decks import validate_slot
+
+            descriptor = validate_slot(row)
+            key = (row["paper_id"], row["slot"])
+            if key in self.legacy_decks:
+                raise RecoveryError("Duplicate recovered current deck slot")
+            self.legacy_decks[key] = row
+            _add_blob(self.refs, descriptor)
+        elif name == "research_legacy_source_recovery":
+            from paper_daily.sync_legacy_sources import validate_manifest
+
+            validate_manifest(row)
+            if row["sha256"] in self.legacy_sources:
+                raise RecoveryError("Duplicate archive-only source manifest")
+            self.legacy_sources[row["sha256"]] = row
+            _add_blob(self.refs, row)
+        elif name == "research_slide_revision_recovery":
+            from paper_daily import sync_slide_recovery
+
+            manifest = sync_slide_recovery.validate_manifest(row)
+            if manifest["workspace_id"] != self.workspace:
+                raise RecoveryError("Slide receipt belongs to another workspace")
+            if row["request_id"] in self.slide_revisions:
+                raise RecoveryError("Duplicate retained slide revision")
+            self.slide_revisions[row["request_id"]] = row
+            self.research_sources.update(item["sha256"] for item in manifest["sources"])
+            for descriptor in sync_slide_recovery.references(manifest):
+                _add_blob(self.refs, descriptor)
+        elif name in {"research_chat_requests", "research_chat_recovery"}:
+            from paper_daily.research_chat import validate_request_record
+
+            validate_request_record(row)
+            context = _load(row["context_json"])
+            if context["document"] is not None:
+                self.research_sources.add(context["document"]["sha256"])
+            binding = context["binding"]
+            if binding is not None and binding["workspace_id"] != self.workspace:
+                raise RecoveryError("QA receipt belongs to another workspace")
+        elif name == "research_chat_review_receipts":
+            from paper_daily.research_chat_review import source_hashes, validate_receipt
+
+            validate_receipt(row)
+            snapshot = _load(row["target_json"])
+            binding = snapshot["binding"]
+            if binding is not None and binding["workspace_id"] != self.workspace:
+                raise RecoveryError("QA review target belongs to another workspace")
+            self.research_sources.update(source_hashes(row))
+        elif name == "research_chat_links":
+            from paper_daily.research_chat import validate_link
+
+            validate_link(row)
+            if row["source_hash"] is not None:
+                self.research_sources.add(row["source_hash"])
+        elif name in {"research_compound_requests", "research_compound_recovery"}:
+            from paper_daily.research_compound import validate_request_record
+
+            validate_request_record(row)
+            context = _load(row["context_json"])
+            if context["document"] is not None:
+                self.research_sources.add(context["document"]["sha256"])
+            binding = context["binding"]
+            if binding is not None and binding["workspace_id"] != self.workspace:
+                raise RecoveryError("Compound receipt belongs to another workspace")
         elif name in {"research_generation_requests", "research_generation_recovery"}:
             from paper_daily.research_generation import validate_request_record
 
             validate_request_record(row)
-            binding = _load(row["context_json"])["binding"]
+            context = _load(row["context_json"])
+            if context["document"] is not None:
+                self.research_sources.add(context["document"]["sha256"])
+            binding = context["binding"]
             if binding is not None and binding["workspace_id"] != self.workspace:
                 raise RecoveryError("Generation receipt belongs to another workspace")
 
@@ -386,11 +507,17 @@ class _Records:
         for operation in operations:
             if (
                 operation
+                and operation["action"] == "put"
+                and operation["entity_type"] == "paper_document"
+            ):
+                self.research_sources.add(operation["payload"]["sha256"])
+            if (
+                operation
                 and operation["entity_type"] == "research_file"
                 and operation["action"] == "put"
             ):
                 payload = operation["payload"]
-                self.artifacts[_json(payload)] = payload
+                self._artifact(payload)
                 if name == "research_file_applied":
                     if row["entity_id"] != operation["entity_id"]:
                         raise RecoveryError("Applied artifact identity differs from its row")
@@ -424,6 +551,19 @@ class _Records:
         return result
 
     def finish(self):
+        for row in self.legacy_decks.values():
+            parent = self.parent_lifecycles.get(("paper", row["paper_id"]))
+            if (
+                row["paper_id"] not in self.paper_ids
+                or parent is None
+                or not parent["active"]
+                or parent["token"] != row["parent_token"]
+            ):
+                raise RecoveryError(
+                    "Recovered current deck differs from its active paper lifecycle"
+                )
+        if self.research_sources - set(self.refs):
+            raise RecoveryError("Research source PDF lacks a retained document manifest")
         self.pdf_aliases()
         if self.sequence != self.cursor:
             raise RecoveryError("Cursor is not backed by complete retained history")
@@ -440,7 +580,7 @@ class _Records:
                     raise RecoveryError("Acknowledgment does not match retained history")
 
 
-def _legacy_check(root, aliases):
+def _legacy_check(root, aliases, represented=None):
     """Do not label a partial SQL-only archive as a complete existing workspace."""
     if root is None:
         return
@@ -456,6 +596,8 @@ def _legacy_check(root, aliases):
                 continue
             if not path.is_file():
                 raise RecoveryError("Unexpected legacy research entry")
+            if represented and path in represented and _fingerprint(path) == represented[path]:
+                continue
             if (
                 name == "pdf"
                 and path.parent == folder
@@ -475,7 +617,7 @@ def _fingerprint(path):
     return digest.hexdigest(), size
 
 
-def create(database, output, *, blob_store=None, legacy_root=None):
+def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=None):
     """Create a complete archive or leave the source and requested output untouched."""
     source, output = _path(database), _path(output)
     if not source.is_file() or output.exists():
@@ -584,51 +726,106 @@ def create(database, output, *, blob_store=None, legacy_root=None):
                         size=size,
                     )
                 )
-            from paper_daily.research_generation import list_recovery_requests
+            from paper_daily import (
+                research_chat,
+                research_compound,
+                research_generation,
+                sync_slide_recovery,
+            )
+            from paper_daily.sync_legacy_sources import LegacySources
 
-            sidecars = list_recovery_requests(source)
-            if sidecars:
-                name = "research_generation_recovery"
-                if name in present:
-                    raise RecoveryError("Reserved recovery archive table already exists")
-                filename = Path(temporary) / (name + ".jsonl")
-                columns = registry[name][1]
-                with filename.open("wb") as stream:
-                    for row in sidecars:
-                        _check_row(row, columns)
-                        records.row(name, row)
-                        encoded = (_json(row) + "\n").encode()
-                        metadata_bytes += len(encoded)
-                        count += 1
-                        if (
-                            len(encoded) > MAX_ROW
-                            or metadata_bytes > MAX_METADATA
-                            or count > MAX_RECORDS
-                        ):
-                            raise RecoveryError("Recovery metadata exceeds its bounded format")
-                        stream.write(encoded)
-                digest, size = _fingerprint(filename)
-                table_files.append(
-                    dict(
-                        name=name,
-                        section="protocol",
-                        columns=columns,
-                        count=len(sidecars),
-                        sha256=digest,
-                        size=size,
+            if pdf_roots is not None and not isinstance(pdf_roots, (list, tuple)):
+                raise RecoveryError("Explicit PDF roots must be a list of trusted directories")
+            selected_roots = [source.parent / "pdf"]
+            if legacy_root is not None:
+                selected_roots.append(_path(legacy_root) / "pdf")
+            selected_roots.extend(pdf_roots or [])
+            legacy_sources = LegacySources(selected_roots, temporary)
+            legacy_decks = []
+            slide_rows, slide_objects, slide_aliases = sync_slide_recovery.collect(
+                source,
+                [source.parent] + ([legacy_root] if legacy_root is not None else []),
+                temporary,
+                records.refs,
+                blob_store,
+                source_resolver=legacy_sources,
+                legacy_slots=legacy_decks,
+            )
+
+            def adopted_sources():
+                for digest in sorted(records.research_sources):
+                    if digest in records.refs and blob_store is not None:
+                        try:
+                            owned = blob_store.verified_path(
+                                BlobManifest(digest, records.refs[digest])
+                            )
+                        except (OSError, ValueError):
+                            owned = None
+                        if owned is not None:
+                            continue
+                    found = legacy_sources.find(digest, records.refs.get(digest))
+                    if found is None and digest not in records.refs:
+                        raise RecoveryError(
+                            "Original source PDF is missing or changed in the trusted PDF roots"
+                        )
+                return list(legacy_sources.manifests.values())
+
+            for name, loader in (
+                ("research_generation_recovery", research_generation.list_recovery_requests),
+                ("research_chat_recovery", research_chat.list_recovery_requests),
+                ("research_compound_recovery", research_compound.list_recovery_requests),
+                ("research_slide_revision_recovery", lambda _source: slide_rows),
+                ("research_legacy_deck_recovery", lambda _source: legacy_decks),
+                ("research_legacy_source_recovery", lambda _source: adopted_sources()),
+            ):
+                sidecars = loader(source)
+                if sidecars:
+                    if name in present:
+                        raise RecoveryError("Reserved recovery archive table already exists")
+                    filename = Path(temporary) / (name + ".jsonl")
+                    columns = registry[name][1]
+                    with filename.open("wb") as stream:
+                        for row in sidecars:
+                            _check_row(row, columns)
+                            records.row(name, row)
+                            encoded = (_json(row) + "\n").encode()
+                            metadata_bytes += len(encoded)
+                            count += 1
+                            if (
+                                len(encoded) > MAX_ROW
+                                or metadata_bytes > MAX_METADATA
+                                or count > MAX_RECORDS
+                            ):
+                                raise RecoveryError("Recovery metadata exceeds its bounded format")
+                            stream.write(encoded)
+                    digest, size = _fingerprint(filename)
+                    table_files.append(
+                        dict(
+                            name=name,
+                            section="protocol",
+                            columns=columns,
+                            count=len(sidecars),
+                            sha256=digest,
+                            size=size,
+                        )
                     )
-                )
             records.finish()
-            _legacy_check(source.parent, records.pdf_aliases())
+            represented = {**slide_aliases, **legacy_sources.aliases}
+            _legacy_check(source.parent, records.pdf_aliases(), represented)
             if legacy_root is not None and _path(legacy_root) != source.parent:
-                _legacy_check(legacy_root, records.pdf_aliases())
+                _legacy_check(legacy_root, records.pdf_aliases(), represented)
             objects = []
             for digest, size in sorted(records.refs.items()):
-                if blob_store is None:
+                if digest in slide_objects:
+                    path = slide_objects[digest]
+                elif digest in legacy_sources.objects:
+                    path = legacy_sources.objects[digest]
+                elif blob_store is not None:
+                    path = blob_store.verified_path(BlobManifest(digest, size))
+                else:
                     raise RecoveryError(
                         "Referenced research bytes require an explicit owned BlobStore"
                     )
-                path = blob_store.verified_path(BlobManifest(digest, size))
                 if path is None:
                     raise RecoveryError("Referenced historical or pending bytes are unavailable")
                 objects.append((dict(sha256=digest, size=size), path))
@@ -831,6 +1028,20 @@ def inspect(package):
 
         for payload in records.artifacts.values():
             validate_closure(payload, lambda row: archive.read("objects/" + row["sha256"]))
+        from paper_daily.sync_slide_recovery import read_retained
+
+        for row in records.slide_revisions.values():
+            read_retained(row, lambda item: archive.read("objects/" + item["sha256"]))
+        from paper_daily.recovery_decks import legacy_snapshot
+
+        for row in records.legacy_decks.values():
+            legacy_snapshot(
+                row, records.slide_revisions, lambda item: archive.read("objects/" + item["sha256"])
+            )
+        from paper_daily.sync_legacy_sources import validate_pdf
+
+        for row in records.legacy_sources.values():
+            validate_pdf(archive.read("objects/" + row["sha256"]))
         return manifest
 
 
@@ -844,6 +1055,9 @@ def _detached_files(stage, records):
         folder = stage / "pdf"
         folder.mkdir(exist_ok=True)
         shutil.copyfile(stage / "objects" / digest, folder / name)
+    from paper_daily.recovery_decks import restore_legacy
+
+    restore_legacy(stage, records.legacy_decks, records.slide_revisions)
     for operation in records.applied_files.values():
         if operation["entity_id"] in records.hidden_files:
             continue
@@ -868,11 +1082,16 @@ def _detached_files(stage, records):
                 target = folder / "assets" / (asset["sha256"] + ".png")
             elif asset["role"] == "evidence":
                 evidence = _load(source.read_bytes())
+                if evidence.get("source_hash") != raw.get("source_hash"):
+                    raise RecoveryError("Evidence identity differs from its applied deck")
                 if not isinstance(evidence["source_hash"], str) or not HASH.fullmatch(
                     evidence["source_hash"]
                 ):
-                    raise RecoveryError("Detached evidence needs an exact hash identity")
-                target = folder / "evidence" / (evidence["source_hash"] + ".json")
+                    from paper_daily.sync_slide_recovery import recovered_evidence_target
+
+                    target = recovered_evidence_target(folder, raw, asset)
+                else:
+                    target = folder / "evidence" / (evidence["source_hash"] + ".json")
             else:
                 raise RecoveryError("Unsupported detached asset role")
             target.parent.mkdir(exist_ok=True)
@@ -924,10 +1143,15 @@ def restore_detached(package, destination):
                     str(uuid4()),
                 ),
             )
+            conn.execute(
+                "CREATE TABLE research_chat_links(local_id INTEGER PRIMARY "
+                "KEY,message_id TEXT NOT NULL UNIQUE,exchange_id TEXT NOT "
+                "NULL,reply_to TEXT,source_hash TEXT)"
+            )
             for table in manifest["tables"]:
                 for index, row in enumerate(_table_rows(archive, table)):
                     records.row(table["name"], row)
-                    if table["section"] == "research":
+                    if table["section"] == "research" or table["name"] == "research_chat_links":
                         columns = ",".join('"' + name + '"' for name in table["columns"])
                         placeholders = ",".join("?" for _ in table["columns"])
                         conn.execute(
@@ -945,6 +1169,14 @@ def restore_detached(package, destination):
             for item in manifest["blobs"]:
                 with (objects / item["sha256"]).open("xb") as output:
                     _stream(archive, "objects/" + item["sha256"], item, output)
+            from paper_daily.sync_slide_recovery import read_retained
+
+            for row in records.slide_revisions.values():
+                read_retained(row, lambda item: (objects / item["sha256"]).read_bytes())
+            from paper_daily.sync_legacy_sources import validate_pdf
+
+            for row in records.legacy_sources.values():
+                validate_pdf(objects / row["sha256"])
             conn.commit()
             if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 raise RecoveryError("Restored research database failed integrity checking")
@@ -964,6 +1196,7 @@ def main(argv=None):
     backup.add_argument("output", type=Path)
     backup.add_argument("--blob-root", type=Path)
     backup.add_argument("--legacy-root", type=Path)
+    backup.add_argument("--pdf-root", type=Path, action="append", dest="pdf_roots")
     check = commands.add_parser("inspect")
     check.add_argument("package", type=Path)
     restore = commands.add_parser("restore-detached")
@@ -977,6 +1210,7 @@ def main(argv=None):
                 args.output,
                 blob_store=BlobStore(args.blob_root) if args.blob_root else None,
                 legacy_root=args.legacy_root,
+                pdf_roots=args.pdf_roots,
             )
         elif args.command == "inspect":
             result = inspect(args.package)

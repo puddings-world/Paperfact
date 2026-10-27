@@ -303,6 +303,13 @@ class CaptureConnection(sqlite3.Connection):
         if action == sqlite3.SQLITE_SAVEPOINT and first == "BEGIN" and not self.in_transaction:
             # RELEASE of a top-level SAVEPOINT commits without Connection.commit().
             return sqlite3.SQLITE_DENY
+        if first == "research_parent_lifecycle" and action in (
+            sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE
+        ):
+            from paper_daily.research_lifecycle import TRIGGERS
+
+            if trigger in TRIGGERS:
+                return sqlite3.SQLITE_OK
         if action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE) and (
             self._capture_failed or (first or "").startswith(("paperfact_sync_", "research_"))
         ):

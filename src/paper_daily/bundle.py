@@ -208,6 +208,24 @@ def export(
             for table in ("notes", "chat"):
                 rows = _rows(conn, f"SELECT * FROM {table} WHERE paper_id IN ({marks_sql})", ids)
                 tables[table] = [{k: v for k, v in r.items() if k != "id"} for r in rows]
+                if table == "chat":
+                    from paper_daily.research_chat import history
+
+                    by_id = {row["id"]: row for pid in ids for row in history(conn, pid)}
+                    for source, exported in zip(rows, tables[table], strict=True):
+                        linked = by_id[source["id"]]
+                        if linked.get("message_id"):
+                            exported.update(
+                                {
+                                    key: linked[key]
+                                    for key in (
+                                        "message_id",
+                                        "exchange_id",
+                                        "reply_to",
+                                        "source_hash",
+                                    )
+                                }
+                            )
         keys = [k.format(pid=pid) for pid in ids for k in KV_KEYS]
         kv = _rows(conn, f"SELECT * FROM kv WHERE key IN ({','.join('?' * len(keys))})", keys)
 
@@ -222,8 +240,11 @@ def export(
             pdfs[pid] = (
                 dict(sha256=_sha256(blob), bytes=len(blob), url=None) if blob is not None else None
             )
-            if (captured[pid] is not None and blob is not None
-                    and pdfs[pid]["sha256"] != captured[pid].sha256):
+            if (
+                captured[pid] is not None
+                and blob is not None
+                and pdfs[pid]["sha256"] != captured[pid].sha256
+            ):
                 raise ValueError("The verified document changed during export")
         else:
             pdfs[pid] = pdf_record(row, log)
@@ -231,13 +252,13 @@ def export(
     # regenerated locally from the exported PDF; curated decks retain their own assets.
     files = {
         relative: DATA_DIR / relative
-        for pid in ids for relative in _paper_files(pid, derivatives=captured[pid] is None)
+        for pid in ids
+        for relative in _paper_files(pid, derivatives=captured[pid] is None)
     }
     if with_pdfs:
-        files.update({
-            Path("pdf") / f"{_safe_name(pid)}.pdf": paths[pid]
-            for pid, rec in pdfs.items() if rec
-        })
+        files.update(
+            {Path("pdf") / f"{_safe_name(pid)}.pdf": paths[pid] for pid, rec in pdfs.items() if rec}
+        )
     manifest = {
         "format": FORMAT,
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -265,8 +286,11 @@ def export(
             _validated(z)
         from paper_daily.document_reader import document_current
 
-        if any(item.managed and not document_current(item)
-               for item in captured.values() if item is not None and item.available):
+        if any(
+            item.managed and not document_current(item)
+            for item in captured.values()
+            if item is not None and item.available
+        ):
             raise ValueError("The selected document version changed during export; retry")
         os.replace(staged, out)
     finally:
@@ -391,6 +415,14 @@ def _validated(z):
         ):
             raise ValueError("資料包缺少清單資訊")
         ids = {p["id"] for p in tables["papers"]}
+        from paper_daily.research_chat import validate_shared_turn
+
+        linked_ids = set()
+        for turn in tables.get("chat", []):
+            if validate_shared_turn(turn):
+                if turn["message_id"] in linked_ids:
+                    raise ValueError("Duplicate shared conversation identity")
+                linked_ids.add(turn["message_id"])
         if any(m["paper_id"] not in ids for m in manifest["members"]):
             raise ValueError("清單內有缺少資料的論文")
         for table in (*PER_PAPER, "pdf_ai_highlights", "pdf_highlights", "notes", "chat"):
@@ -585,12 +617,22 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             # the middle would pair a question with the wrong answer, so only a
             # paper with no conversation here yet receives one.
             talked = {r[0] for r in conn.execute("SELECT DISTINCT paper_id FROM chat")}
-            fresh = [r for r in tables.get("chat", []) if r["paper_id"] not in talked]
+            from paper_daily.research_chat import import_shared_turn
+
+            fresh = [
+                r
+                for r in tables.get("chat", [])
+                if not r.get("message_id") and r["paper_id"] not in talked
+            ]
             report["chat"] = _insert(conn, "chat", fresh, replace=False)
+            for turn in tables.get("chat", []):
+                if turn.get("message_id"):
+                    report["chat"] += import_shared_turn(conn, turn)
             from paper_daily.document_reader import document_current
 
-            if any(not document_current(item) for pid, item in managed.items()
-                   if pid not in conflicts):
+            if any(
+                not document_current(item) for pid, item in managed.items() if pid not in conflicts
+            ):
                 raise ValueError("The document version changed during import; retry")
             report["files"] = staged.install()
     if pdfs:

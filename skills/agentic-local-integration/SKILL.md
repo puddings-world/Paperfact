@@ -65,6 +65,11 @@ buttons serialize through a server just to share behavior.
   and PDF version through completion; current global settings are not a destination.
   If that database has been replaced or rebound, preserve the result outside its
   replacement rather than inserting even a conflict candidate into the wrong store.
+- A delayed offline job can outlive deletion and recreation of the same local ID.
+  Capture a persistent local parent epoch before observing work; an ID or creation
+  timestamp alone cannot prove continuity. Installation must not commit unrelated
+  caller work. Old records without epochs stay readable but need explicit reviewed
+  reattachment, rather than a retrospectively assigned identity.
 - Close database/file handles explicitly before workspace replacement. In Python,
   a SQLite connection context manages its transaction, not its lifetime; a read-only
   helper can still retain a Windows file lock. Verify replacement with actual handles,

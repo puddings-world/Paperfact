@@ -60,9 +60,27 @@ TOTAL_LIMIT = 60_000
 
 def evidence(deck: Deck) -> dict:
     """The evidence this deck was generated from, or a fresh collection of it."""
-    snapshot = _folder(deck.paper_id) / "evidence" / (deck.source_hash + ".json")
+    if getattr(deck, "_recovery_deck", None) is not None:
+        from paper_daily.recovery_decks import evidence as recovered_evidence
+
+        return recovered_evidence(deck)
+    pinned = getattr(deck, "_revision_evidence", None)
+    if pinned is not None:
+        return pinned
+    roots = getattr(deck, "_revision_roots", None)
+    folder = roots["folder"] if roots else _folder(deck.paper_id)
+    snapshot = folder / "evidence" / (deck.source_hash + ".json")
     if deck.source_hash and snapshot.exists():
         return json.loads(snapshot.read_text(encoding="utf-8"))
+    if roots:
+        # A revision may use only this deck's evidence, never freshly collect a
+        # different paper/PDF after navigation or a workspace change.
+        return {
+            "sources": deck.sources,
+            "figures": deck.figures,
+            "coverage": deck.coverage,
+            "source_hash": deck.source_hash,
+        }
     inputs = set(deck.generation.get("inputs") or ("original", "dive"))
     return collect_evidence(deck.paper_id, inputs)
 
@@ -102,6 +120,11 @@ def revise(
     deck: Deck, index: int, instruction: str, cfg: Settings | None = None
 ) -> tuple[Slide | None, str]:
     """A rewritten slide and a one-line summary, or None and the reason."""
+    if getattr(deck, "_recovery_deck", None) is not None:
+        return None, (
+            "Recovered slides need an editable local copy and fresh source context "
+            "before AI revision"
+        )
     instruction = (instruction or "").strip()
     if not instruction:
         return None, "請先寫下這一頁要怎麼改"
@@ -138,8 +161,12 @@ def revise(
             for f in deck.figures
         ],
     }
+    prompt = json.dumps(payload, ensure_ascii=False)
+    before_model = getattr(deck, "_revision_before_model", None)
+    if before_model is not None:
+        before_model(prompt, REVISE_INSTRUCTIONS)
     result = llm.complete_result(
-        json.dumps(payload, ensure_ascii=False),
+        prompt,
         system=REVISE_INSTRUCTIONS,
         timeout=300,
         cfg=cfg,

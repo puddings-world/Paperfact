@@ -33,7 +33,7 @@ from collections.abc import Callable
 from paper_daily import llm
 from paper_daily.http import FetchError, fetch_text
 from paper_daily.sources.openalex import API, MAILTO, _abstract, _venue, same_paper
-from paper_daily.store import connect, get_kv, now, set_kv, title_key
+from paper_daily.store import connect, get_kv, now, title_key
 
 Log = Callable[[str], None]
 
@@ -224,14 +224,30 @@ def merge(openalex: list[dict], s2: list[dict]) -> list[dict]:
     return merged
 
 
-def fetch(paper_id: str, log: Log = lambda _m: None) -> int:
-    """Record every work that cites this paper. Returns how many."""
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT id, title, doi, s2_id, arxiv_id FROM papers WHERE id=?", (paper_id,)
-        ).fetchone()
-    if row is None:
-        raise ValueError(f"no paper {paper_id}")
+def fetch(paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None) -> int:
+    from contextlib import closing
+
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+
+    database = (database or store.DB_PATH).resolve()
+    with (
+        research_job_lock.claim(database, "followups", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            log("Followup research is already in progress")
+            return 0
+        with closing(generation._connect(database)) as conn:
+            context = compound.begin(conn, phase="fetch", owner_id=paper_id)
+        return _fetch(context, log)
+
+
+def _fetch(context, log):
+    from paper_daily import research_compound as compound
+
+    row = context.paper
     wid = work_id(row)
     openalex = _citing_openalex(wid) if wid else []
     s2 = _citing_s2(row)
@@ -240,30 +256,32 @@ def fetch(paper_id: str, log: Log = lambda _m: None) -> int:
         return 0
     works = merge(openalex, s2 or [])
 
-    stamp = now()
-    with connect() as conn:
-        # Recorded even when nothing cites it yet, so "none" reads as an answer and
-        # not as "never asked".
-        set_kv(conn, f"followups.checked.{paper_id}", stamp)
-        for w in works:
-            conn.execute(
-                "INSERT INTO followups(paper_id, work_id, title, year, venue, doi, citations, "
-                "abstract, arxiv_id, contexts_json, fetched_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(paper_id, work_id) DO UPDATE SET "
-                "citations=excluded.citations, fetched_at=excluded.fetched_at, "
-                "abstract=COALESCE(followups.abstract, excluded.abstract), "
-                "doi=COALESCE(followups.doi, excluded.doi), "
-                "arxiv_id=COALESCE(followups.arxiv_id, excluded.arxiv_id), "
-                "contexts_json=COALESCE(excluded.contexts_json, followups.contexts_json)",
-                (
-                    paper_id, w["id"], w.get("title") or "(untitled)", w.get("year"),
-                    w.get("venue"), w.get("doi"), w.get("citations"), w.get("abstract"),
-                    w.get("arxiv_id"),
-                    json.dumps(w["contexts"], ensure_ascii=False) if w.get("contexts") else None,
-                    stamp,
-                ),
+    originals = {r["work_id"]: r for r in context.rows}
+    puts = {}
+    for work in works:
+        key = work["id"]
+        old = originals.get(key)
+        if old and old.get("edited"):
+            continue
+        values = {"citations": work.get("citations"), "fetched_at": context.started_at}
+        if old is None:
+            values.update(
+                title=work.get("title") or "(untitled)",
+                year=work.get("year"),
+                venue=work.get("venue"),
             )
-        conn.commit()
+        for name in ("abstract", "doi", "arxiv_id"):
+            values[name] = (old or {}).get(name) or work.get(name)
+        values["contexts_json"] = (
+            json.dumps(work["contexts"], ensure_ascii=False)
+            if work.get("contexts")
+            else (old or {}).get("contexts_json")
+        )
+        puts[key] = compound.row(context, key, **values)
+    result = compound.publish(context, puts=list(puts.values()), completion=context.started_at)
+    if result.status != "accepted":
+        log(f"{result.reason}; lookup result retained: {result.candidate_id}")
+        return 0
     log(f"  {len(works)} citing work(s): {len(openalex)} from OpenAlex, {len(s2 or [])} from S2")
     return len(works)
 
@@ -276,25 +294,38 @@ def _json(text: str, opener: str, closer: str):
     return json.loads(text[start : end + 1])
 
 
-def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
-    """Say what each citing work does with this paper and whether to read it.
+def judge(
+    paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None
+) -> tuple[int, str]:
+    from contextlib import closing
 
-    Only rows never judged with a relation, and never corrected by hand.
-    Returns (how many, reason when none).
-    """
-    with connect() as conn:
-        paper = conn.execute(
-            "SELECT title, venue, year, abstract FROM papers WHERE id=?", (paper_id,)
-        ).fetchone()
-        rows = conn.execute(
-            "SELECT * FROM followups WHERE paper_id=? AND relation IS NULL AND edited=0 "
-            "ORDER BY citations DESC",
-            (paper_id,),
-        ).fetchall()
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+
+    database = (database or store.DB_PATH).resolve()
+    with (
+        research_job_lock.claim(database, "followups", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            return 0, "Followup research is already in progress"
+        with closing(generation._connect(database)) as conn:
+            context = compound.begin(conn, phase="judge", owner_id=paper_id)
+        return _judge(context, log)
+
+
+def _judge(context, log):
+    from paper_daily import research_compound as compound
+
+    paper = context.paper
+    rows = sorted(
+        (r for r in context.rows if r["relation"] is None and not r["edited"]),
+        key=lambda r: -(r["citations"] or 0),
+    )
     if not rows:
         return 0, "nothing to judge"
-
-    done, reason = 0, ""
+    puts, reason = {}, ""
     for start in range(0, len(rows), JUDGE_BATCH):
         batch = rows[start : start + JUDGE_BATCH]
         lines = [
@@ -311,9 +342,9 @@ def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
             for c in json.loads(r["contexts_json"] or "[]")[:3]:
                 lines.append(f"    引用句:{c[:400]}")
             lines.append(f"    摘要:{(r['abstract'] or '(無摘要)')[:500]}")
-        text, reason = llm.complete(
-            "\n".join(lines), system=JUDGE_SYSTEM, timeout=900, task="followups"
-        )
+        prompt = "\n".join(lines)
+        context = compound.with_prompt(context, prompt)
+        text, reason = llm.complete(prompt, system=JUDGE_SYSTEM, timeout=900, task="followups")
         if not text:
             break
         try:
@@ -321,23 +352,34 @@ def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
         except ValueError:
             reason = "the model's answer was not a JSON array"
             continue
-        with connect() as conn:
-            for v in verdicts:
-                try:
-                    r = batch[int(v["id"])]
-                except (KeyError, ValueError, IndexError, TypeError):
+
+        if not isinstance(verdicts, list):
+            reason = "the model's answer was not a JSON array"
+            continue
+        for v in verdicts:
+            try:
+                index = int(v["id"])
+                if index < 0:
                     continue
-                if v.get("verdict") not in VERDICTS:
-                    continue
-                conn.execute(
-                    "UPDATE followups SET verdict=?, why=?, relation=? "
-                    "WHERE paper_id=? AND work_id=? AND edited=0",
-                    (v["verdict"], v.get("why"), v.get("relation"), paper_id, r["work_id"]),
-                )
-                done += 1
-            conn.commit()
-    log(f"  {done} followup(s) judged")
-    return done, ("" if done else reason)
+                r = batch[index]
+            except (KeyError, ValueError, IndexError, TypeError):
+                continue
+            if v.get("verdict") not in VERDICTS:
+                continue
+            puts[r["work_id"]] = compound.row(
+                context,
+                r["work_id"],
+                verdict=v["verdict"],
+                why=v.get("why"),
+                relation=v.get("relation"),
+            )
+    if not puts:
+        return 0, reason
+    result = compound.publish(context, puts=list(puts.values()))
+    if result.status != "accepted":
+        return 0, f"{result.reason}; generated result retained: {result.candidate_id}"
+    log(f"  {len(puts)} followup(s) judged")
+    return len(puts), ""
 
 
 def overview_inputs(conn, paper_id, *, limit=2000):
@@ -368,17 +410,19 @@ def overview_inputs(conn, paper_id, *, limit=2000):
     }
 
 
-def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
+def overview(
+    paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None
+) -> tuple[bool, str]:
     from contextlib import closing
 
     from paper_daily import research_generation as generation
     from paper_daily import research_job_lock, store
 
-    database = store.DB_PATH.resolve()
+    database = (database or store.DB_PATH).resolve()
     with research_job_lock.claim(database, "context", paper_id) as acquired:
         if not acquired:
             return False, "overview is already in progress"
-        with llm.connection_scope():
+        with llm.connection_scope(connections):
             cfg = llm.settings(task="overview")
             with closing(generation._connect(database)) as conn:
                 if conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone() is None:
@@ -448,19 +492,44 @@ def _write_overview(context, cfg, log):
     return True, ""
 
 
-def analyse(paper_id: str, log: Log = lambda _m: None) -> int:
-    fetch(paper_id, log)
-    done, reason = judge(paper_id, log)
-    if reason and reason != "nothing to judge":
-        log(f"  judging skipped: {reason}")
-    wrote, why = overview(paper_id, log)
-    if not wrote and why != "edited by hand":
-        log(f"  overview skipped: {why}")
-    from paper_daily import citegraph
+def analyse(paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None) -> int:
+    from contextlib import closing
 
-    # No model call, a few requests: the map is ready whenever the lists are.
-    citegraph.links(paper_id, log)
-    return done
+    from paper_daily import citegraph, research_job_lock, store
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+
+    database = (database or store.DB_PATH).resolve()
+    connections = connections or llm.capture_connections()
+    with (
+        research_job_lock.claim(database, "followups", paper_id) as acquired,
+        llm.connection_scope(connections),
+    ):
+        if not acquired:
+            log("Followup research is already in progress")
+            return 0
+        with closing(generation._connect(database)) as conn:
+            observed = compound.begin(conn, phase="fetch", owner_id=paper_id)
+        original_scope = observed
+        _fetch(observed, log)
+        if not compound.scope_current(original_scope):
+            log("Original research owner changed; remaining phases skipped")
+            return 0
+        with closing(generation._connect(database)) as conn:
+            observed = compound.begin(conn, phase="judge", owner_id=paper_id)
+        done, reason = _judge(observed, log)
+        if reason and reason != "nothing to judge":
+            log(f"  judging skipped: {reason}")
+        if not compound.scope_current(original_scope):
+            log("Original research owner changed; remaining phases skipped")
+            return done
+        wrote, why = overview(paper_id, log, database=database, connections=connections)
+        if not wrote and why != "edited by hand":
+            log(f"  overview skipped: {why}")
+        # The older graph enrichment writer has no explicit workspace contract.
+        if store.DB_PATH.resolve() == database and compound.scope_current(original_scope):
+            citegraph.links(paper_id, log)
+        return done
 
 
 def ahead(count: int = 3, log: Log = lambda _m: None) -> int:
@@ -577,30 +646,54 @@ def checked(conn, paper_id: str) -> str | None:
 
 
 # ---- corrections by hand ----------------------------------------------------------
-def edit_followup(paper_id: str, work_id: str, **fields) -> None:
-    allowed = {k: v for k, v in fields.items() if k in ("verdict", "relation", "why")}
-    if not allowed:
-        return
-    sets = ", ".join(f"{k}=?" for k in allowed)
-    with connect() as conn:
-        conn.execute(
-            f"UPDATE followups SET {sets}, edited=1 WHERE paper_id=? AND work_id=?",
-            (*allowed.values(), paper_id, work_id),
-        )
-        conn.commit()
+def item_edit_snapshot(conn, paper_id, kind, key):
+    from paper_daily.research_compound import begin
+
+    if kind not in ("ref", "followup", "later"):
+        raise ValueError("Unknown research item kind")
+    return begin(
+        conn,
+        phase="edit_reference" if kind == "ref" else "edit_followup",
+        owner_id=paper_id,
+        key=key,
+    )
 
 
-def edit_reference(paper_id: str, ref_key: str, **fields) -> None:
-    allowed = {k: v for k, v in fields.items() if k in ("verdict", "purpose", "gist", "why")}
+def _edit_item(paper_id, key, kind, expected, fields):
+    from paper_daily import research_compound as compound
+    from paper_daily.sync_capture import StaleCaptureError
+
+    names = (
+        ("verdict", "purpose", "gist", "why") if kind == "ref" else ("verdict", "relation", "why")
+    )
+    allowed = {k: v for k, v in fields.items() if k in names}
     if not allowed:
         return
-    sets = ", ".join(f"{k}=?" for k in allowed)
-    with connect() as conn:
-        conn.execute(
-            f"UPDATE cites SET {sets}, edited=1 WHERE paper_id=? AND ref_key=?",
-            (*allowed.values(), paper_id, ref_key),
-        )
-        conn.commit()
+    if expected is None:
+        with connect() as conn:
+            expected = item_edit_snapshot(conn, paper_id, kind, key)
+    phase = "edit_reference" if kind == "ref" else "edit_followup"
+    if (
+        expected.owner_id != paper_id
+        or expected.data["phase"] != phase
+        or expected.data["key"] != key
+    ):
+        raise ValueError("Research edit belongs to another row")
+    if expected.target is None:
+        raise ValueError("Research item no longer exists")
+    result = compound.publish(
+        expected, puts=[compound.row(expected, key, edited=1, **allowed)], manual=True
+    )
+    if result.status != "accepted":
+        raise StaleCaptureError(result.candidate_id)
+
+
+def edit_followup(paper_id: str, work_id: str, *, expected=None, **fields) -> None:
+    _edit_item(paper_id, work_id, "followup", expected, fields)
+
+
+def edit_reference(paper_id: str, ref_key: str, *, expected=None, **fields) -> None:
+    _edit_item(paper_id, ref_key, "ref", expected, fields)
 
 
 def overview_edit_snapshot(conn, paper_id):

@@ -1,6 +1,8 @@
 # v0.5.0 — Research across devices
 
-Status: in development, unreleased, 2026-10-26. Published baseline: v0.4.1.
+Status: in development, unreleased, 2026-10-27. Published beta baseline: v0.4.3.
+The separate v0.4.3 release contains the question-input/layout and native-startup
+hotfix; it does not enable the unfinished v0.5 synchronization features.
 The reference service, managed PDF reader, partial app-writer capture and independent
 mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
@@ -36,6 +38,31 @@ accounted for. Conflicting edits remain recoverable.
 Reading position is a resume suggestion, not a command to jump the active reader.
 Mobile sync runs reliably on launch, foreground return, and reconnect. Background
 sync is an enhancement where supported, not a delivery guarantee.
+
+## Grounded reading features (planned)
+
+These three planned v0.5 reading features match the README positioning added in
+`90f8c60`. They are not claims about the currently published release or complete
+writer enrollment in this development snapshot.
+
+- **Per-list reading goals:** give each list an editable research goal and intended
+  depth/background, so its papers can be read and analyzed for that purpose.
+  Preserve the user's goal separately from generated analysis and manual notes.
+- **Claim-level sources:** connect each explanation claim to an inspectable passage
+  in the correct source document, or explicitly show that no source was found.
+  Keep document identity and anchors with the claim; never invent a citation.
+- **Lineage explanations — why this paper exists:** explain the gap in earlier
+  work and how later work built on this paper, grounded in quotations from the
+  relevant papers. Distinguish supported statements from inferred relationships.
+
+Acceptance includes changing a list goal without losing research, inspecting a
+claim against its exact PDF version, showing missing evidence honestly, and
+preserving the goal/source/lineage provenance across supported sharing and sync.
+Their schemas, producer enrollment and UI acceptance remain planned work.
+
+The next list-recency improvement is initially local-only reading state. Dragging
+still commits the explicit shared custom order. See the concrete
+[list recency and ordering handoff](list-recency-handoff.md) before implementing it.
 
 ## Companion features
 
@@ -78,7 +105,7 @@ polish. Workspace relocation is a separate migration task, not a folder-picker s
 4. **D — Public beta:** package all desktop platforms from one tag, document the
    service's privacy/cost limits, and run the complete user journey.
 
-Keep v0.4.1 available during development. Set the package version to v0.5.0 only
+Keep v0.4.3 available during development. Set the package version to v0.5.0 only
 when preparing a release candidate. Mark the initial release as a GitHub prerelease;
 the existing updater recognizes numeric `vX.Y.Z` tags.
 

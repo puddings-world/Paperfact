@@ -38,8 +38,13 @@ not encryption or anonymization.
 
 Unknown research schema, unflushed capture state, incomplete history, missing or
 corrupt bytes, unpinned draft assets, and unclassified legacy research files block
-creation. Legacy PDF aliases are recognized only through an exact applied manifest
-and portable-to-local paper mapping. Other legacy text, figures, brief files,
+creation. Applied PDF aliases are recognized through an exact manifest and
+portable-to-local mapping. Required original legacy PDFs can also be adopted into
+the archive, without live enrollment, by exact hash from trusted workspace PDF
+roots. Use `pdf_roots=[...]` or repeated `--pdf-root` for explicitly owned external
+directories; embedded receipt paths are never followed. See
+[archive-only legacy source adoption](legacy-source-recovery.md).
+Other legacy text, figures, brief files,
 presentation histories/drafts and research JSON files require migration first.
 There is no misleading “metadata complete” backup mode.
 

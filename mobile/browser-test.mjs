@@ -181,6 +181,51 @@ await check('Verified offline deck renders slide image, speaker notes and source
   assert(!doc.querySelector('.slide-page textarea'),'read-only viewer unexpectedly editable');
   store.close();
 });
+await check('Linked QA persists across IndexedDB reopen and actual UI reload without mispairing or HTML execution', async()=> {
+  const {contentId} = await import('./ids.mjs');
+  const {chatExchanges} = await import('./content.mjs');
+  const uid=n=>'20000000-0000-4000-8000-'+String(n).padStart(12,'0');
+  const store=await IndexedStore.open('demo-workspace','demo-phone');
+  const before=await store.read(), events=[];
+  const turns=[[3,'assistant',101,1,'First answer <img src=x onerror=alert(1)>'],
+    [2,'user',102,null,'Same question'],[4,'assistant',102,2,'Second answer'],
+    [1,'user',101,null,'Same question'],[5,'assistant',103,6,'Orphan answer']];
+  for(const [id,role,exchange,reply,body] of turns) {
+    const payload={scope:{kind:'paper',id:PAPER},feature:'chat',key:uid(id),source_document_hash:null,
+      data:{role,body,created_at:'2026-10-27T00:00:00Z',page:null,anchor:null,
+        exchange_id:uid(exchange),reply_to:reply===null?null:uid(reply)}};
+    const operation={version:2,operation_id:'browser-chat-'+id,workspace_id:'demo-workspace',device_id:'demo-desktop',
+      entity_type:'research_content',entity_id:contentId(payload.scope,'chat',payload.key),action:'put',
+      base_revision:0,depends_on:null,payload,incarnation:'browser-chat-'+id,
+      parents:[{kind:'paper',id:PAPER,incarnation:PAPER+'-created'}],structure_revision:0};
+    const sequence=before.cursor+events.length+1;
+    events.push({sequence,outcome:'accepted',operation,head:{revision:sequence,operation}});
+  }
+  await store.update(state=>receive(state,[events[0]]));
+  store.close();
+  const reopened=await IndexedStore.open('demo-workspace','demo-phone');
+  assert(chatExchanges(projection(await reopened.read()).papers.find(p=>p.id===PAPER))[0].orphan,'answer incorrectly paired before question');
+  await reopened.update(state=>receive(state,events.slice(1)));
+  const after=await reopened.read();
+  assert(JSON.stringify(after.outbox)===JSON.stringify(before.outbox),'receive created outbound work');
+  const authority=await IndexedStore.open('demo-workspace','fixture-authority');
+  await authority.update(state=>receive(state,events)); authority.close(); reopened.close();
+  const frame=document.querySelector('#reader');
+  const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+  frame.contentWindow.location.reload(); await loaded;
+  await until(()=>frame.contentDocument.querySelector('.paper-card') || frame.contentDocument.querySelector('#tab-overview'));
+  const doc=frame.contentDocument;doc.querySelector('.paper-card')?.click();doc.querySelector('#tab-overview').click();
+  await until(()=>doc.querySelectorAll('.chat-exchange').length===3);
+  const cards=[...doc.querySelectorAll('.chat-exchange')];
+  assert(cards[0].querySelector('.chat-question').textContent==='Same question','question lost');
+  assert(cards[0].querySelector('.chat-answer').textContent==='Second answer','interleaved answer mispaired');
+  assert(cards[1].querySelector('.chat-answer').textContent===turns[0][4],'answer markup changed');
+  assert(!cards[1].querySelector('img'),'model HTML executed');
+  assert(!cards[2].querySelector('.chat-question') && cards[2].querySelector('.muted'),'orphan attached to another question');
+  assert(!(doc.querySelector('.chat-exchange textarea') || doc.querySelector('.chat-exchange button')),'receive exposed AI action');
+  const cached=await caches.match(new URL('./chat-view.mjs',location.href));
+  assert(cached,'offline conversation module missing');
+});
 document.body.dataset.result = results.some(line => line.startsWith('FAIL')) ? 'fail': 'pass';
 result.textContent = results.join('\n') + '\n' + document.body.dataset.result.toUpperCase();
 async function saveCurrent(engine, id, paperId, body, options = {}) {

@@ -714,8 +714,61 @@ class SyncClient:
 
         return self.journal.apply(operation, write)
 
+    def conflict_observation_in(self, conn, sequence):
+        """Capture the exact canonical/parent/pending state displayed by a review."""
+        self.journal._binding(conn)
+        target = conn.execute(
+            "SELECT i.event,c.resolved_by FROM paperfact_sync_inbox i "
+            "JOIN paperfact_sync_conflicts c ON c.sequence=i.sequence WHERE i.sequence=?",
+            (sequence,),
+        ).fetchone()
+        if target is None:
+            raise ValueError("Unknown conflict sequence")
+        event = json.loads(validate_event(json.loads(target["event"]), self.journal.workspace_id))
+        operation = event["operation"]
+        key = (operation["entity_type"], operation["entity_id"])
+        head = conn.execute(
+            "SELECT revision,operation FROM paperfact_sync_heads "
+            "WHERE entity_type=? AND entity_id=?",
+            key,
+        ).fetchone()
+        graph = self._optimistic_graph(conn)[0]
+        state = graph.get(key)
+        parents = [
+            {"ref": ref, "current": graph.get((ref["kind"], ref["id"]))}
+            for ref in (state or operation).get("parents", [])
+        ]
+        return {
+            "event": event, "resolved_by": target["resolved_by"],
+            "head": dict(head) if head else None, "state": state, "parents": parents,
+            "outstanding": self._outstanding(conn, key),
+        }
+
     def resolve_conflict(
         self, sequence, *, choice="incoming", payload=None, operation_id=None, restore=False
+    ):
+        return self._resolve_conflict(
+            sequence, choice=choice, payload=payload, operation_id=operation_id, restore=restore
+        )
+
+    def resolve_conflict_in(self, conn, sequence, *, expected, **options):
+        """Resolve against a displayed observation inside the caller's transaction.
+
+        No commit occurs here. The caller can atomically record its review decision.
+        expected is obtained from conflict_observation_in, never recaptured on Save.
+        """
+        databases = conn.execute("PRAGMA database_list").fetchall()
+        main = next((row[2] for row in databases if row[1] == "main"), None)
+        if (not conn.in_transaction or not main
+                or Path(main).resolve() != self.journal.path.resolve()):
+            raise ValueError("A transaction in the original workspace is required")
+        if not isinstance(expected, dict):
+            raise ValueError("A displayed conflict observation is required")
+        return self._resolve_conflict(sequence, connection=conn, expected=expected, **options)
+
+    def _resolve_conflict(
+        self, sequence, *, choice="incoming", payload=None, operation_id=None, restore=False,
+        connection=None, expected=None
     ):
         """Save an explicit resolution; acceptance in the event stream closes the conflict.
 
@@ -749,9 +802,10 @@ class SyncClient:
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("Invalid resolution payload") from exc
-        conn = self.journal._connect()
+        conn = connection if connection is not None else self.journal._connect()
         try:
-            conn.execute("BEGIN")
+            if connection is None:
+                conn.execute("BEGIN")
             self.journal._binding(conn)
             previous = None
             if operation_id is not None:
@@ -776,6 +830,9 @@ class SyncClient:
                     raise ValueError("Resolution retry changed its choice or payload")
                 operation = json.loads(previous["operation"])
             else:
+                if (expected is not None
+                        and self.conflict_observation_in(conn, sequence) != expected):
+                    raise ValueError("Displayed conflict changed; your draft is retained")
                 target = conn.execute(
                     "SELECT i.event,c.resolved_by FROM paperfact_sync_inbox i "
                     "JOIN paperfact_sync_conflicts c ON c.sequence=i.sequence WHERE i.sequence=?",
@@ -849,9 +906,12 @@ class SyncClient:
                     raise ValueError("Explicit incarnation restore requires version 2")
                 operation = json.loads(canonical_operation(operation))
         finally:
-            conn.close()
+            if connection is None:
+                conn.close()
 
         def write_resolution(conn, value):
+            if expected is not None and self.conflict_observation_in(conn, sequence) != expected:
+                raise ValueError("Displayed conflict changed; your draft is retained")
             row = conn.execute(
                 "SELECT resolved_by FROM paperfact_sync_conflicts WHERE operation_id=?",
                 (value["resolution_of"],),
@@ -895,7 +955,10 @@ class SyncClient:
                 (value["operation_id"], sequence, request, canonical_operation(value)),
             )
 
-        result = self.journal.apply(operation, write_resolution)
+        result = (
+            self.journal.apply(operation, write_resolution) if connection is None
+            else self.journal.apply_in(connection, operation, write_resolution)
+        )
         return {"operation_id": operation["operation_id"], **result}
 
     @staticmethod

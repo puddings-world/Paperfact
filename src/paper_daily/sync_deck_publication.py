@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing, contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
@@ -59,17 +61,33 @@ def _retain_original_draft(observation, deck):
     return identity
 
 
-def runtime():
+_CAPTURED_RUNTIME = ContextVar("deck_publication_runtime", default=())
+
+
+@contextmanager
+def publication_scope(client):
+    """Pin an explicitly captured workspace; None means an unbound legacy workspace."""
+    token = _CAPTURED_RUNTIME.set((client,))
+    try:
+        yield
+    finally:
+        _CAPTURED_RUNTIME.reset(token)
+
+
+def runtime(*, database=None):
     """No implicit enrollment or database creation; credentials never enter this seam."""
+    captured = _CAPTURED_RUNTIME.get()
+    if captured and database is None:
+        return captured[0]
     from paper_daily import store
     from paper_daily.sync_client import SyncClient
     from paper_daily.sync_journal import Journal
     from paper_daily.sync_research import research_order_writer, research_writer
 
-    path = Path(store.DB_PATH)
+    path = Path(database if database is not None else store.DB_PATH)
     if not path.is_file():
         return None
-    with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as conn:
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as conn:
         if not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name='research_sync_binding'"
         ).fetchone():

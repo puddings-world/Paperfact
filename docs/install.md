@@ -186,3 +186,5 @@ to the source branch alone is not a release and does not produce this notice.
 The v0.3.0 and older installers ignored all beta releases. Those users need one
 manual installation of a build containing the updated checker. Publishing this
 source fix does not update binaries that have already been downloaded.
+
+For startup failures and problems on another computer, see [Troubleshooting and diagnostic reports](../SUPPORT.md).

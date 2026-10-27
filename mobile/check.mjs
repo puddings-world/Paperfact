@@ -26,4 +26,8 @@ if(pythonIndex >= 0) {
   }
   );
   if(integration.status !== 0) process.exit(integration.status ?? 1);
+  const chat = spawnSync(process.execPath,
+    ['chat-service-check.mjs', process.argv[pythonIndex + 1], ...(coreIndex >= 0 ? [process.argv[coreIndex + 1]]: [])],
+    {cwd, stdio: 'inherit'});
+  if(chat.status !== 0) process.exit(chat.status ?? 1);
 }

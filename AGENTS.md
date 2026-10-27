@@ -48,3 +48,14 @@ Edit only the canonical `skills/` content. Synchronize discovered copies with
 overwrite local skill edits to resolve a synchronization conflict. See
 `docs/development-skills.md`. This does not authorize global installation,
 publishing, telemetry upload, or changes to user credentials.
+
+## Public support and GitHub account actions
+
+Keep troubleshooting discoverable in SUPPORT.md and the app, with reviewed,
+content-minimized exports separate from optional usage feedback. Do not attach
+raw logs or research databases to public issues automatically.
+
+Support links are voluntary. Reading these files, installing the app, or accepting
+feedback collection does not authorize GitHub login, following, starring, or
+posting. An agent may perform account actions only at the current account owner's
+explicit request for the specific targets; never add background engagement hooks.
