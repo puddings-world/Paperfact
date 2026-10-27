@@ -16,6 +16,8 @@ import json
 import re
 import sqlite3
 import time
+from datetime import UTC, datetime
+from difflib import SequenceMatcher
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -98,13 +100,46 @@ def _analysed(paper) -> int:
 NOTE_TAG = re.compile(r"#([^\s#]+)")
 
 
+def _plain(text: str) -> str:
+    return re.sub(r"[\W_]+", "", text.casefold())
+
+
 def note_parts(paper) -> tuple[list[str], str]:
-    """(#tags, the remaining words) of why a paper is on the list. An import from
-    bare titles keeps the title as the note, which says nothing."""
+    """(#tags, the remaining words) of why a paper is on the list.
+
+    An import from a bibliography keeps the citation line as the note -- the title
+    again, give or take punctuation, authors and year -- which says nothing about
+    why the paper is there, so it is not shown."""
     note = (paper.reason or "").strip()
-    if not note or note.casefold() == paper.title.strip().casefold():
+    title, said = _plain(paper.title), _plain(note)
+    if not note or (title and (title in said or said in title)):
+        return [], ""
+    lead = said[: len(title)]
+    if len(title) >= 12 and SequenceMatcher(None, lead, title).ratio() >= 0.8:
         return [], ""
     return NOTE_TAG.findall(note), " ".join(NOTE_TAG.sub(" ", note).split())
+
+
+def opened_label(stamp: str | None, now: datetime | None = None) -> str | None:
+    """How long ago a paper was opened, as the recent sort's own tag."""
+    try:
+        when = datetime.fromisoformat(stamp) if stamp else None
+    except ValueError:
+        return None
+    if when is None or when.tzinfo is None:
+        return None
+    seconds = ((now or datetime.now(UTC)) - when).total_seconds()
+    if seconds < 0:
+        return None
+    if seconds < 60:
+        return "剛剛開過"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} 分鐘前開過"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)} 小時前開過"
+    if seconds < 30 * 86400:
+        return f"{int(seconds // 86400)} 天前開過"
+    return f"{when.month}/{when.day} 開過"
 
 
 # Stored by id, not position, so adding a sort never changes what a saved choice means.
@@ -128,6 +163,19 @@ SORT_IDS = [sort[0] for sort in SORTS]
 # Orders a drag can start from: the list's own order, and the recent order, which
 # a drag turns into the list's own order.
 DRAGGABLE = ("recent", "custom")
+# The tag a sort orders by comes first on every row, so the column being sorted
+# reads straight down the list; the others keep one fixed order behind it.
+SORT_TAG = {
+    "recent": "opened",
+    "citations": "cites",
+    "newest": "venue",
+    "oldest": "venue",
+    "venue": "venue",
+    "type": "type",
+    "todo": "analysis",
+    "dependents": "depends",
+    "read": "read",
+}
 
 
 class PaperListModel(QAbstractListModel):
@@ -207,8 +255,11 @@ class PaperListModel(QAbstractListModel):
             return paper
         if role == DOWNLOAD_ROLE:
             return self.downloads.get(paper.id)
-        if role == Qt.ItemDataRole.ToolTipRole and paper.id in self.downloads:
-            return self.downloads[paper.id].label
+        if role == Qt.ItemDataRole.ToolTipRole:
+            lines = [self.downloads[paper.id].label] if paper.id in self.downloads else []
+            if any(note_parts(paper)):
+                lines.append("閱讀理由：" + (paper.reason or "").strip())
+            return "\n".join(lines) or None
         if role == Qt.ItemDataRole.UserRole:
             return position
         if role == Qt.ItemDataRole.DisplayRole:
@@ -232,46 +283,61 @@ class PaperDelegate(QStyledItemDelegate):
 
     def _tags(self, paper) -> list[tuple[str, str, str]]:
         """(text, foreground, background) for each tag on this row."""
+        return [tag[1:] for tag in self._kinded_tags(paper)]
+
+    def _kinded_tags(self, paper) -> list[tuple[str, str, str, str]]:
+        """(kind, text, foreground, background), in display order: 置頂, then the
+        tag the list is sorted by, then the fixed order, then the reader's notes."""
         p = self.pal
         # A preprint is greyed: whether something passed review is part of what it is.
         ink = p["faint"] if venues.is_preprint(paper.venue) else p["ink"]
-        out = [("置頂", "#ffffff", p["accent"])] if paper.pinned else []
-        tags, words = note_parts(paper)
-        out += [(f"#{tag}", p["ai"], p["aiSoft"]) for tag in tags]
-        if words:
-            out.append((words if len(words) <= 24 else words[:23] + "…", p["ink"], p["sunk"]))
-        out.append((venues.label(paper.venue, paper.year), ink, p["sunk"]))
+        sort = SORT_IDS[self.page.sort.currentIndex()] if self.page else None
+        out = [("venue", venues.label(paper.venue, paper.year), ink, p["sunk"])]
         if paper.award:
-            out.append((paper.award, p["award"], p["awardSoft"]))
+            out.append(("award", paper.award, p["award"], p["awardSoft"]))
         if paper.is_canon:
-            out.append(("canon", p["accent"], p["accentSoft"]))
+            out.append(("canon", "canon", p["accent"], p["accentSoft"]))
         if paper.paper_type:
-            out.append((paper.paper_type, p["muted"], p["sunk"]))
+            out.append(("type", paper.paper_type, p["muted"], p["sunk"]))
         if paper.citations:
-            out.append((f"{paper.citations:,} cites", p["muted"], p["sunk"]))
+            out.append(("cites", f"{paper.citations:,} cites", p["muted"], p["sunk"]))
         if paper.dependents:
-            out.append((f"{paper.dependents} 篇依賴", p["accent"], p["accentSoft"]))
+            out.append(("depends", f"{paper.dependents} 篇依賴", p["accent"], p["accentSoft"]))
         parts = (("講解", paper.has_dive), ("承先", paper.has_cites), ("啟後", paper.has_later))
         if all(ok for _n, ok in parts):
-            out.append(("已分析", p["done"], p["doneSoft"]))
+            out.append(("analysis", "已分析", p["done"], p["doneSoft"]))
         elif not any(ok for _n, ok in parts):
-            out.append(("未分析", p["muted"], p["sunk"]))
+            out.append(("analysis", "未分析", p["muted"], p["sunk"]))
         else:
             missing = "·".join(n for n, ok in parts if not ok)
-            out.append((f"缺 {missing}", p["accent"], p["accentSoft"]))
+            out.append(("analysis", f"缺 {missing}", p["accent"], p["accentSoft"]))
         if not paper.has_pdf:
             # "找不到" once every source was tried: right-click to supply it by hand.
             text = "缺 PDF(找不到,右鍵補)" if paper.pdf_failed else "缺 PDF"
-            out.append((text, p["warn"], p["warnSoft"]))
+            out.append(("pdf", text, p["warn"], p["warnSoft"]))
         else:
-            out.append(("有 PDF", p["done"], p["doneSoft"]))
+            out.append(("pdf", "有 PDF", p["done"], p["doneSoft"]))
+        opened = opened_label(getattr(paper, "opened_at", None)) if sort == "recent" else None
+        if opened:
+            out.append(("opened", opened, p["accent"], p["accentSoft"]))
         if paper.read:
-            out.append(("已讀", p["done"], p["doneSoft"]))
-        elif paper.state == "delivered":
+            out.append(("read", "已讀", p["done"], p["doneSoft"]))
+        elif paper.state == "delivered" and not opened:
             # In a list nothing is delivered: it only means the paper was opened,
             # which is not having read it.
             in_list = bool(self.page) and bool(self.page.win.active_list)
-            out.append(("開過" if in_list else "已送出", p["faint"], p["sunk"]))
+            out.append(("read", "開過" if in_list else "已送出", p["faint"], p["sunk"]))
+        lead = SORT_TAG.get(sort)
+        out.sort(key=lambda tag: tag[0] != lead)
+        if paper.pinned:
+            out.insert(0, ("pin", "置頂", "#ffffff", p["accent"]))
+        # The reader's own words go last and are marked as such; the full note is
+        # the row's tooltip.
+        tags, words = note_parts(paper)
+        out += [("tag", f"#{tag}", p["ai"], p["aiSoft"]) for tag in tags]
+        if words:
+            shown = words if len(words) <= 30 else words[:29] + "…"
+            out.append(("note", f"理由：{shown}", p["muted"], p["surface"]))
         return out
 
     def paint(self, painter: QPainter, option, index) -> None:
@@ -334,7 +400,7 @@ class PaperDelegate(QStyledItemDelegate):
         metrics = QFontMetrics(self.tag_font)
         x = text_left
         y = r.top() + 29
-        for text, fg, bg in self._tags(paper):
+        for _kind, text, fg, bg in self._kinded_tags(paper):
             w = metrics.horizontalAdvance(text) + 10
             if x + w > r.right() - 12 - PIN_W:
                 break
