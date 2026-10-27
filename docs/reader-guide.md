@@ -50,15 +50,20 @@ A click anywhere in a panel, its background included, gives that panel the keys;
 innermost panel wins. A key goes to that panel first and then outward, so every
 panel on the way is live: the innermost is framed in bright blue, the panels around
 it faintly, and the path with the inner panel's keys (分析 › 簡報 › 投影片視角 · ←/→)
-shows in its corner for a moment when you arrive. Window keys work everywhere (Ctrl+1 to
-Ctrl+6 switch the analysis tabs, counting only the tabs shown, Ctrl+N, Ctrl+F); panel keys only in their panel
+shows in its corner when you arrive, then stays there faintly so the keys can be
+looked up again. Esc steps out of a nested panel to the one around it (from
+投影片視角 to 簡報); from the outermost panel it goes back to the list as before.
+Window keys work everywhere (Ctrl+Tab and Ctrl+Shift+Tab step through the analysis
+tabs, wrapping round; Ctrl+1 to Ctrl+6 jump to one, counting only the tabs shown;
+Ctrl+N, Ctrl+F); panel keys only in their panel
 (←/→ switch slide views only in 投影片視角, ↑↓ change slides in 頁面目錄, and A / D / R
 toggle the slide list, toggle the materials and restore the layout anywhere in 簡報). Hold
 Ctrl for a moment to see each tab's key; in 投影片視角 holding Alt shows where Alt+←
 and Alt+→ lead.
 
 **On macOS** every Ctrl shortcut is the same key with ⌘ (⌘N, ⌘F, ⌘1–⌘9, ⌘-wheel
-zoom). Back and forward are ⌘[ and ⌘], and the next / previous match is ⌘G / ⇧⌘G
+zoom). Stepping through tabs uses the Control key itself (⌃Tab / ⌃⇧Tab), since ⌘Tab
+switches applications. Back and forward are ⌘[ and ⌘], and the next / previous match is ⌘G / ⇧⌘G
 instead of F3. Tooltips and menus show the keys the way the running platform writes
 them.
 
@@ -94,7 +99,12 @@ dives under it, and it says how many papers it had to read from the abstract alo
 It is stored per list, can be edited like a note, and a hand-edited survey is not
 replaced without asking. `survey <list>` writes it from the command line.
 
-The dropdown at the end of that row re-sorts what is on screen: by citations, by date
+The dropdown at the end of that row re-sorts what is on screen. It starts on
+**最近開啟**: the papers you last opened come first, newest first, and the rest keep
+their list order after them, so returning to a list puts you back among what you
+were reading. Dragging a paper there saves the order you see, with the move, as the
+list's **自訂順序** and switches to it (the same drag works in 自訂順序 itself).
+The other sorts: by citations, by date
 either way (year, and the month from the arXiv id within a year), grouped by venue
 (MICCAI, IPCAI, IJCARS, MedIA, TMI … then other venues, preprints last), grouped by
 paper type, unanalysed first, by how many queued papers depend on it, by when you last

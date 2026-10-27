@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import lists
-from paper_daily.desktop import fonts
+from paper_daily.desktop import button_style, fonts
 
 STATS_ROLE = Qt.ItemDataRole.UserRole + 1
 CARD_HEIGHT = 78
@@ -151,13 +151,8 @@ class ListOverview(QWidget):
         self.setObjectName("listOverview")
         self.setStyleSheet(
             f"#listOverview{{background:{pal['ground']};}}"
-            f"#listOverview QPushButton{{background:{pal['surface']};color:{pal['ink']};"
-            f"border:1px solid {pal['firm']};border-radius:6px;padding:6px 14px;}}"
-            f"#listOverview QPushButton:hover{{border-color:{pal['accent']};}}"
-            f"#listOverview QPushButton:disabled{{color:{pal['faint']};"
-            f"border-color:{pal['border']};}}"
-            f"#listOverview QPushButton#primary{{background:{pal['accent']};color:#ffffff;"
-            f"border-color:{pal['accent']};font-weight:600;}}"
+            f"{button_style.pressable(pal, '#listOverview QPushButton', (6, 14))}"
+            f"{button_style.pressable_accent(pal, '#listOverview QPushButton#primary', (6, 14))}"
             f"#listOverview QListWidget{{background:transparent;border:none;outline:none;}}"
             f"#emptyCard{{background:{pal['surface']};border:1px dashed {pal['firm']};"
             f"border-radius:10px;}}"

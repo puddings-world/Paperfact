@@ -22,3 +22,13 @@ def isolated_model_catalog(monkeypatch):
     from paper_daily import model_catalog
 
     monkeypatch.setattr(model_catalog, "_catalogs", {})
+
+
+@pytest.fixture(autouse=True)
+def isolated_ui_state():
+    """Queued view state belongs to the test that wrote it."""
+    yield
+    from paper_daily.desktop import ui_state
+
+    with ui_state._lock:
+        ui_state._pending.clear()
