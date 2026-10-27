@@ -195,6 +195,10 @@ pre.mermaid {{ background:{p["surface"]}; text-align:center; font-family:inherit
 pre.mermaid.drawn {{ overflow-x:auto; }}
 table {{ border-collapse:collapse; margin:0 0 1.2em; font-size:14px; display:block;
   overflow-x:auto; max-width:100%; }}
+/* Note and Q&A cards are tables so the plain fallback view can draw them; here
+   they span the column and keep one outer border. */
+table.note-card {{ display:table; width:100%; overflow:visible; margin:0 0 8px; }}
+table.note-card > tbody > tr > td {{ border:0; }}
 th,td {{ border:1px solid {p["border"]}; padding:6px 10px; text-align:left;
   vertical-align:top; }}
 th {{ background:{p["sunk"]}; font-weight:650; }}

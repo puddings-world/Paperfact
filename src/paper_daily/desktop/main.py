@@ -1300,7 +1300,7 @@ class ReaderPage(QWidget):
                 f'<a href="toggle:{note_id}" style="color:{pal["muted"]};">收合</a></div>'
             )
         return (
-            '<table width="100%" cellpadding="10" cellspacing="0" '
+            '<table class="note-card" width="100%" cellpadding="10" cellspacing="0" '
             f'style="margin-bottom:8px;border:1px solid {pal["border"]};">'
             f'<tr><td bgcolor="{pal["surface"]}">{head}{meta}{back}{inside}</td></tr></table>'
         )
@@ -1370,9 +1370,7 @@ class ReaderPage(QWidget):
             self._load_notes()
         elif what == "toggle":
             self._open_notes.symmetric_difference_update({ident})
-            keep = self.note_log.verticalScrollBar().value()
             self._load_notes()
-            self.note_log.verticalScrollBar().setValue(keep)
         elif what == "delq":
             self._forget_exchange(ident)
         elif what == "keep":
@@ -1471,7 +1469,7 @@ class ReaderPage(QWidget):
                 "刪除這組問答</a>"
             )
         return (
-            '<table width="100%" cellpadding="10" cellspacing="0" '
+            '<table class="note-card" width="100%" cellpadding="10" cellspacing="0" '
             f'style="margin-bottom:12px;border:1px solid {pal["border"]};">'
             f"<tr>{head}</tr>"
             f'<tr><td bgcolor="{pal["surface"]}">'
