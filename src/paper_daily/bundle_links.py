@@ -7,7 +7,7 @@ import socket
 import time
 import zipfile
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -49,6 +49,31 @@ def parse_link(value: str) -> tuple[str, str | None]:
             raise ValueError("分享網址的校驗碼格式不正確；請向分享者取得完整連結。")
         digest = match[1].lower()
     return urlunsplit((url.scheme, url.netloc, url.path, url.query, "")), digest
+
+
+DRIVE_HOSTS = (
+    "drive.google.com",
+    "drive.usercontent.google.com",
+    "docs.google.com",
+    "accounts.google.com",
+)
+DRIVE_FILE = re.compile(r"/file/d/([A-Za-z0-9_-]+)(?:/.*)?")
+
+
+def drive_download_url(file_id: str) -> str:
+    # The usercontent host skips the virus-scan page Drive shows for large files.
+    return f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t"
+
+
+def drive_direct(url: str) -> str:
+    """A Drive page link (".../file/d/ID/view", "open?id=ID") as the file itself."""
+    parts = urlsplit(url)
+    if parts.hostname != "drive.google.com":
+        return url
+    match = DRIVE_FILE.fullmatch(parts.path)
+    ids = parse_qs(parts.query).get("id", [])
+    file_id = match[1] if match else ids[0] if ids else ""
+    return drive_download_url(file_id) if re.fullmatch(r"[A-Za-z0-9_-]+", file_id) else url
 
 
 def public_destination(url: str) -> None:
@@ -106,6 +131,7 @@ def download(
 ) -> Path:
     """Bounded, cancellable download; errors do not disclose signed query strings."""
     current, expected = parse_link(url)
+    current = drive_direct(current)
     target = Path(target)
     partial = target.with_name(target.name + ".part")
     started = time.monotonic()
@@ -144,6 +170,11 @@ def download(
                             f"下載失敗（HTTP {response.status_code}）；請確認連結有效且可下載。"
                         )
                     if "text/html" in response.headers.get("content-type", "").lower():
+                        if urlsplit(current).hostname in DRIVE_HOSTS:
+                            raise ValueError(
+                                "這個 Google Drive 檔案只分享給特定帳號。請在瀏覽器開啟連結、"
+                                "下載 ZIP，再用『匯入研究資料包…』匯入。"
+                            )
                         raise ValueError(
                             "這是網頁預覽或登入頁；請先在瀏覽器下載 ZIP，再匯入研究資料包。"
                         )

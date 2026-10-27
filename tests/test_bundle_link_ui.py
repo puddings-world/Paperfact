@@ -215,3 +215,53 @@ def test_share_link_failure_keeps_clipboard_and_allows_retry(workspace, monkeypa
     pending.finish()
     assert QApplication.clipboard().text().endswith(bundle_links.file_digest(source))
     widget.deleteLater()
+
+
+def test_drive_share_uploads_a_fresh_package_and_copies_its_link(workspace, monkeypatch):
+    from paper_daily import drive_share, google_slides
+
+    app, root = workspace
+    monkeypatch.setattr(google_slides, "read_client", lambda: {})
+    widget = BundleDialog(list_id="x", list_name="Example")
+    pending = Pending()
+    widget.runner = pending
+    QApplication.clipboard().setText("unchanged")
+    widget._drive_share()
+    assert not pending.busy and "email" in widget.status.text()
+    widget.emails.setText("a@x.org, typo")
+    widget._drive_share()
+    assert not pending.busy and "typo" in widget.status.text()
+
+    exported = {}
+
+    def export(list_id, out, *, notes, with_pdfs, log):
+        out.write_bytes(b"package")
+        exported.update(list_id=list_id, notes=notes, with_pdfs=with_pdfs)
+
+    def publish(list_id, path, google, *, name, emails, anyone, progress, cancelled):
+        assert path.read_bytes() == b"package" and google == "signed in"
+        progress(7, 7)
+        return {
+            "link": "https://drive.google.com/file/d/F/view",
+            "file_id": "F",
+            "replaced": False,
+            "emails": emails,
+        }
+
+    monkeypatch.setattr(research_service, "export_bundle", export)
+    monkeypatch.setattr(drive_share, "session", lambda: "signed in")
+    monkeypatch.setattr(drive_share, "publish", publish)
+    widget.emails.setText("a@x.org")
+    widget.pdfs.setChecked(True)
+    widget._drive_share()
+    assert pending.busy and not widget.drive_button.isEnabled()
+    widget.reject()
+    assert widget.cancel_upload.is_set()
+    widget.cancel_upload.clear()
+    pending.finish()
+    app.processEvents()
+    assert exported == {"list_id": "x", "notes": True, "with_pdfs": True}
+    assert QApplication.clipboard().text() == "https://drive.google.com/file/d/F/view"
+    assert "a@x.org" in widget.status.text() and widget.drive_button.isEnabled()
+    assert widget.upload_bar.value() == 7 and not widget.drive_open.isHidden()
+    widget.deleteLater()
