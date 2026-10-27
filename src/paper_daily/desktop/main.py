@@ -974,7 +974,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.tabs.addTab(self.figure_pane, "圖表")
 
         self.cites_pane = CitesPane(self.win, pal)
-        self.tabs.addTab(self.cites_pane, "引用")
+        self.tabs.addTab(self.cites_pane, "脈絡")
         scopes(pal["accent"])  # before the slide panels register theirs
         self.presentation_pane = PresentationPane(self)
         self.presentation_pane.source_requested.connect(self._jump_to_source)
@@ -1867,7 +1867,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         if kind == "citations":
             self.tabs.setCurrentWidget(self.cites_pane)
             self._show_cites_if_visible()
-            status.setText(self.cites_pane.focus(source) or "已切到「引用」分頁。")
+            status.setText(self.cites_pane.focus(source) or "已切到「脈絡」分頁。")
             return
         if kind in ("dive", "close_reading"):
             self.tabs.setCurrentWidget(self.dive_view)

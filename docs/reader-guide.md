@@ -334,7 +334,7 @@ window — navigation, ticking, pinning — stays blue or grey.
   **刪除這組問答** removes one exchange, and a note kept from it stays. Which answers
   are worth keeping is a judgement, so it is a button rather than something that
   happens to every answer.
-- **引用** reads as summary first, then detail, and places the paper in its field
+- **脈絡** reads as summary first, then detail, and places the paper in its field
   rather than in this corpus. The corpus is three ML conferences plus the lists
   imported by hand, so a lineage drawn inside it showed Cataract-1K one ancestor out of
   forty references and five descendants out of forty-seven.
@@ -344,6 +344,14 @@ window — navigation, ticking, pinning — stays blue or grey.
   open — and **接下來必讀**, the handful of papers backwards (承先) and forwards (啟後)
   that matter most, in reading order, title and reason only. Both are one model call
   over the two lists below, stored per paper and editable.
+
+  The switch at the right of that row, **全域 / 作者團隊**, narrows both lists to
+  the paper's own team: the earlier and later work that shares an author or a research
+  institution with it. Authors and institutions come from OpenAlex by their ids, so a
+  shared surname is not a match; each kept card says why (**同作者：…**, **同機構：…**),
+  and a line under the switch counts how many works OpenAlex could identify. The
+  first switch looks them up in the background (a few seconds per list, then cached);
+  全域 is the default. The map view is not filtered.
 
   Below it, one switch between two itemised lists, each sortable:
 
