@@ -1279,6 +1279,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     def _auto_highlights_changed(self, checked: bool) -> None:
         self.win.remember("auto_highlights", "1" if checked else "0")
+        # The analysis job reads this from the database in its own process.
+        ui_state.flush()
         if checked:
             self._prepare_reading_highlights()
 
@@ -2556,7 +2558,7 @@ class MainWindow(QWidget):
 
         self._restore_layout()
         with connect() as conn:
-            self.active_list = get_kv(conn, "ui.list")
+            self.active_list = ui_state.read(conn, "ui.list")
         self.refresh_lists()
         self.reload()
         self._refresh_ai_summary()
@@ -2813,11 +2815,11 @@ class MainWindow(QWidget):
         """Put the window back where it was. Kept in the same database as everything
         else, so there is still exactly one file to move or delete."""
         with connect() as conn:
-            geometry = get_kv(conn, "ui.geometry")
-            split = get_kv(conn, "ui.split")
-            presentation_layout = get_kv(conn, "ui.presentation")
-            top_collapsed = get_kv(conn, "ui.top_collapsed")
-            auto_highlights = get_kv(conn, "ui.auto_highlights")
+            geometry = ui_state.read(conn, "ui.geometry")
+            split = ui_state.read(conn, "ui.split")
+            presentation_layout = ui_state.read(conn, "ui.presentation")
+            top_collapsed = ui_state.read(conn, "ui.top_collapsed")
+            auto_highlights = ui_state.read(conn, "ui.auto_highlights")
         self.reader_page.auto_highlights.setChecked(auto_highlights == "1")
         self.top_toggle.setChecked(top_collapsed == "1")
         if geometry:
@@ -2873,7 +2875,7 @@ class MainWindow(QWidget):
 
     def _restore_restart(self) -> None:
         with connect() as conn:
-            value = get_kv(conn, "ui.restart")
+            value = ui_state.read(conn, "ui.restart")
         if not value:
             return
         try:
@@ -3108,7 +3110,7 @@ class MainWindow(QWidget):
         """
         # Desktop background spending is opt-in; opening/importing a list only reads it.
         with connect() as conn:
-            if get_kv(conn, "ui.background_analysis") != "1":
+            if ui_state.read(conn, "ui.background_analysis") != "1":
                 return
         if self.analysis_running():
             return
