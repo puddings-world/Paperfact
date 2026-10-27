@@ -7,6 +7,7 @@ import json
 import re
 
 from paper_daily import llm
+from paper_daily.answer_content import reading_text
 from paper_daily.config import DATA_DIR
 from paper_daily.presentations import _atomic_json
 from paper_daily.store import connect
@@ -17,6 +18,7 @@ CACHE_DIR = DATA_DIR / "reading-links"
 def sections(dive, close):
     result = []
     for kind, text in (("dive", dive), ("close", close)):
+        text = reading_text(text, legacy_dive=kind == "dive")
         if not text:
             continue
         parts = re.split(r"(?m)(?=^#{1,6}\s+)", text.replace("\r", ""))

@@ -1,5 +1,16 @@
 # Troubleshooting and support
 
+## Compare versions first
+
+The bottom-right version label stays visible while reading. Click it to copy
+the app version, build commit, installation kind and OS/CPU, check for updates,
+or open **Diagnostics and support**. Source checkouts are explicitly marked as
+development builds; their commit alone does not prove there are no local edits.
+
+For a problem on another computer, copy this information from the affected app,
+then describe the last action and expected/actual result. Installing source code
+on one computer does not change the installed application on another.
+
 ## Create a diagnostic report
 
 In builds containing this feature, open **診斷與回報 / Diagnostics and support**
@@ -8,8 +19,9 @@ Nothing is uploaded automatically. The exported JSON is exactly the preview.
 Changing account or opening another paper does not add account or paper data to it.
 
 The report contains app/install version, OS and CPU architecture, dependency
-versions, command availability, and bounded error types and recognized app stack
-locations. It does **not** attach raw logs, paths, credentials, environment variables,
+versions, command availability, bounded error types and recognized app stack
+locations. When available, it also includes bounded UI-stall durations and
+recognized app frame locations; it excludes raw watchdog text and function names. It does **not** attach raw logs, paths, credentials, environment variables,
 prompts, answers, PDFs, notes, research databases or usage-event exports.
 Command availability is not proof of login or remaining quota. Logs can contain
 older failures; caught AI errors and OS-level launch failures may be absent.

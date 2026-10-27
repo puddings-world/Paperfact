@@ -1,5 +1,27 @@
 # Development reference
 
+## Maintenance and development branches
+
+- `master` is the daily-use 0.4.x line. Fixes and UX polish land here first and
+  ship as 0.4.4, 0.4.5, and subsequent maintenance releases.
+- `feature/0.5-sync-foundation` holds unfinished 0.5 work and identifies itself
+  as `0.5.0.dev`. Merge `master` into it regularly; merge it back only for 0.5.0.
+- Use separate checkouts and virtual environments. A branch switch in the
+  checkout used by a running app or MCP server is not a deployment method.
+- Run development with `PAPERFACT_DATA` pointing to an independent copy. Use
+  SQLite backup for a live database, real copies for attachments, and no shared
+  writable links. Do not copy sync device identity or account credentials.
+- Daily GUI, CLI, MCP and scheduled jobs must all use the maintenance executable
+  and daily workspace. Explicit `--workspace` overrides also need review.
+- Already-running processes keep their old paths and imported code. Save work
+  and restart them after changing the checkout or data configuration.
+- Published updates belong to installed maintenance copies. Development builds
+  follow Git; they must not offer a released installer as a development update.
+- A development snapshot is disposable and does not synchronize changes back.
+  Move wanted research using reviewed list-package export/import, not by
+  replacing the daily database with a development database.
+
+
 This file describes the current implementation, including its bundled ML workflow.
 See [the architecture](architecture.md) and [the workflow design](agent-workflows.md)
 for the separation between working services and planned extension points.
@@ -124,9 +146,60 @@ Run the complete check with the environment's Python:
 .\.venv\Scripts\python.exe scripts/check.py
 ```
 
-On macOS/Linux, use `.venv/bin/python scripts/check.py`. This checks Ruff, all
-Python tests, and all JavaScript tests; a failure stops the check with a nonzero
-exit status. Node.js is required even when changing only desktop code.
+On macOS/Linux, use `.venv/bin/python scripts/check.py`. The default `full`
+profile runs privacy, Ruff, all Python/desktop tests, frontend tests, and mobile
+domain/service integration tests. Node.js is required for this complete gate.
+A failure stops the check with a nonzero exit status.
+
+During development, run the smallest explicit selection that covers the change
+and its callers. Include normal, failure, cancellation and stale-result behavior
+where applicable. Do not run the full suite after each edit:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check.py --profile focused --python tests/test_check_script.py
+.\.venv\Scripts\python.exe scripts/check.py --profile focused --frontend tests/test_gemini_usage.mjs
+.\.venv\Scripts\python.exe scripts/check.py --profile focused --mobile
+.\.venv\Scripts\python.exe scripts/check.py --profile docs
+```
+
+Replace example test paths with the relevant existing files. Python selections
+also accept a pytest `::test_name` suffix. Combine selections to cover boundaries.
+The `docs` profile checks usage instructions, distribution contracts, and this
+check runner; it is an iteration shortcut, not a docs-only commit exemption.
+Every profile scans all committable files and runs Ruff across the repository.
+Python-only focused/docs runs do not need Node. Empty or invalid selections fail;
+the full profile cannot be narrowed with selection flags.
+
+Once the change is coherent, freeze the candidate and run the full check once
+before declaring completion, committing, or pushing. Re-run after relevant code,
+test, dependency or configuration changes; record any concurrent edits explicitly.
+A focused pass never substitutes for the final full gate. Native Windows/Mac
+installation, previous-version upgrade, and real provider checks are separate
+acceptance steps; fixture success does not prove them.
+
+The runner stops on the first failing test and prints actual stage durations and
+pytest's 20 slowest test phases. After 60 seconds in one test, pytest prints thread
+stacks to help diagnose a stall; this is a diagnostic warning, not an estimated
+completion time or an automatic pass. Keep those raw debugging logs local.
+The latest report is marked running before work starts, so a forcibly killed
+process cannot leave the previous run's success looking current.
+Pytest percentages count completed cases within its own phase, not elapsed time,
+coverage, or completion of the whole check. `build/check-latest.json` records the
+latest run's scope, durations and outcome, including failure or interruption.
+It contains no environment values or raw test output and is ignored by Git.
+This local report is a debugging aid, not a signed certificate or a substitute
+for recording the tested commit and test counts. Preserve the terminal log when
+investigating slow cases. Profile first; only parallelize tests after proving
+their isolation, especially Qt application state and subprocess fixtures.
+
+A Windows reproduction on 2026-10-27 exposed worker starvation in the activity
+test's repeated Qt event pumps: the unmodified fixture failed after 317.06s.
+Yielding Python execution between pumps let both worker outcomes pass in a
+diagnostic experiment; adding `time.sleep(0)` to that test helper then passed all
+30 activity cases in 11.27s. The visible-result assertions, loop bound and worker
+timeout were unchanged. This is local evidence for that helper, not proof that
+every slow UI test has the same cause; do not extend timeouts or patch every wait
+without reproducing the relevant failure.
 
 The check starts with a privacy scan of every file a commit could pick up (tracked,
 plus new files that are not ignored). It fails on common credential shapes

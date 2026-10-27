@@ -337,6 +337,16 @@ def complete_result(
             text=None,
             reason="AI reply was truncated; increase the token limit or reduce context",
         )
+    if result.text is not None:
+        from paper_daily.answer_content import final_text
+
+        cleaned = final_text(result.text)
+        result = replace(
+            result, text=cleaned,
+            reason=result.reason if cleaned is not None else (
+                "AI 回覆未包含完整正文，請重試；尚未儲存為分析結果。"
+            ),
+        )
     _record(result, task, int((time.monotonic() - start) * 1000), cfg)
     from paper_daily import usage_cache
 

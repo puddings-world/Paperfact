@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -14,7 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from paper_daily import diagnostics
+from paper_daily import build_identity, diagnostics
 
 ISSUE_URL = "https://github.com/puddings-world/Paperfact/issues/new?template=bug_report.yml"
 REPO_URL = "https://github.com/puddings-world/Paperfact"
@@ -48,13 +49,16 @@ class SupportDialog(QDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         row = QHBoxLayout()
+        self.copy_button = QPushButton("複製版本資訊")
+        self.copy_button.clicked.connect(self.copy_version)
         self.refresh_button = QPushButton("重新讀取")
         self.refresh_button.clicked.connect(self.refresh)
         self.export_button = QPushButton("匯出診斷包…")
         self.export_button.clicked.connect(self.export_report)
         self.issue_button = QPushButton("開啟 GitHub 回報表單")
         self.issue_button.clicked.connect(lambda: self.open_link(ISSUE_URL))
-        for button in (self.refresh_button, self.export_button, self.issue_button):
+        for button in (self.copy_button, self.refresh_button,
+                       self.export_button, self.issue_button):
             row.addWidget(button)
         layout.addLayout(row)
         support = QHBoxLayout()
@@ -70,6 +74,11 @@ class SupportDialog(QDialog):
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
         self.refresh()
+
+    def copy_version(self):
+        if self.report is not None:
+            QApplication.clipboard().setText(build_identity.describe(self.report["build"]))
+            self.status.setText("已複製版本與建置資訊，可貼到回報表單。")
 
     def refresh(self):
         if self._busy:

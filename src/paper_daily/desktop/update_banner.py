@@ -20,6 +20,7 @@ class _Relay(QObject):
     check_failed = Signal()
     progress = Signal(int, int)
     downloaded = Signal(object)
+    verified = Signal()
     failed = Signal(str)
 
 
@@ -33,12 +34,19 @@ class UpdateBanner(QFrame):
     """One notice per release; never change the reader's selection or focus."""
 
     quit_for_update = Signal()
+    check_status = Signal(bool, str)
 
-    def __init__(self, palette: dict[str, str]):
+    def __init__(self, palette: dict[str, str], *, prepare_install=None, cancel_install=None):
         super().__init__()
         self.release: updates.Release | None = None
         self._checking = self._downloading = self._closed = False
         self._dismissed = None
+        self._prepare_install = prepare_install
+        self._cancel_install = cancel_install
+        self._ready = None
+        self._installing = False
+        self._verifying = False
+        self._manual_check = False
         self._messages = []
         self._message_index = 0
         self._relay = _Relay(self)
@@ -46,9 +54,10 @@ class UpdateBanner(QFrame):
         self._relay.check_failed.connect(self._check_failed)
         self._relay.progress.connect(self._progress)
         self._relay.downloaded.connect(self._downloaded)
+        self._relay.verified.connect(self._verified)
         self._relay.failed.connect(self._failed)
         self._poll = QTimer(self)
-        self._poll.setInterval(60 * 60 * 1000)
+        self._poll.setInterval(15 * 60 * 1000)
         self._poll.timeout.connect(self.check_in_background)
         self._rotate = QTimer(self)
         self._rotate.setInterval(6000)
@@ -82,19 +91,27 @@ class UpdateBanner(QFrame):
         row.addWidget(self.later)
         self.hide()
 
-    def check_in_background(self):
-        if self._closed or self._checking or self._downloading:
+    def check_in_background(self, *, force=False):
+        if self._closed or self._checking:
+            return
+        if self._downloading or self._ready is not None or self._installing:
+            if force:
+                self.show()
+                self.check_status.emit(False, "已有更新下載中或等待安裝，請查看上方公告。")
             return
         self._poll.start()
         self._checking = True
+        self._manual_check = force
+        self.check_status.emit(True, "正在檢查更新…")
         relay = self._relay
         channel = updates.default_channel()
 
         def work():
             try:
                 with connect() as conn:
-                    release = updates.check(conn, channel=channel)
-                    if release is not None and updates.snoozed(conn, release):
+                    options = {"channel": channel, **({"force": True} if force else {})}
+                    release = updates.check(conn, **options)
+                    if not force and release is not None and updates.snoozed(conn, release):
                         release = None
             except (OSError, sqlite3.Error, ValueError, TypeError, KeyError):
                 _emit(relay.check_failed)
@@ -105,21 +122,32 @@ class UpdateBanner(QFrame):
 
     def _check_failed(self):
         self._checking = False
+        if not self._closed:
+            self.check_status.emit(False, "暫時無法檢查更新，請確認網路後重試。")
 
     def _found(self, release):
         self._checking = False
-        if self._closed or self._downloading:
+        if self._closed:
             return
+        if self._downloading or self._ready is not None or self._installing:
+            self.check_status.emit(False, "已有更新下載中或等待安裝，請查看上方公告。")
+            return
+        self.check_status.emit(
+            False,
+            f"找到 Paperfact {release.version}，請查看上方公告。"
+            if release
+            else "目前沒有符合更新頻道的新版本。",
+        )
         if release is None:
             self._rotate.stop()
             self.hide()
             return
-        if self._dismissed == (release.version, updates.date.today()):
+        if not self._manual_check and self._dismissed == (release.version, updates.date.today()):
             return
         self.offer(release)
 
     def offer(self, release):
-        if self._closed or self._downloading:
+        if self._closed or self._downloading or self._ready is not None or self._installing:
             return
         if self.release == release and not self.isHidden():
             return
@@ -157,6 +185,8 @@ class UpdateBanner(QFrame):
         if (
             self._closed
             or self._downloading
+            or self._ready is not None
+            or self._installing
             or not self.isVisible()
             or self.underMouse()
             or (focused is not None and (focused is self or self.isAncestorOf(focused)))
@@ -168,7 +198,10 @@ class UpdateBanner(QFrame):
 
     def start_install(self):
         release = self.release
-        if release is None or self._closed or self._downloading:
+        if release is None or self._closed or self._downloading or self._installing:
+            return
+        if self._ready is not None:
+            self._apply_ready()
             return
         asset = updates.asset_for(release)
         if not updates.can_install() or asset is None:
@@ -183,13 +216,27 @@ class UpdateBanner(QFrame):
         relay = self._relay
 
         def work():
+            if self._closed:
+                return
             try:
+                digest = release.digests.get(name, "")
+                if not digest:
+                    raise ValueError("此版本缺少驗證資訊，請從發布頁下載。")
                 dest = updates.download_dir() / name
                 path = updates.download(
                     url, dest, lambda done, total: _emit(relay.progress, done, total)
                 )
-            except (OSError, updates.httpx.HTTPError) as exc:
-                _emit(relay.failed, str(exc) or type(exc).__name__)
+                updates.verify_download(path, digest)
+            except (OSError, ValueError, updates.httpx.HTTPError) as exc:
+                from paper_daily import diagnostics
+
+                diagnostics.record_exception(type(exc), exc.__traceback__, phase="background")
+                _emit(
+                    relay.failed,
+                    str(exc)
+                    if isinstance(exc, ValueError)
+                    else "下載或驗證失敗，請檢查網路及可用空間後重試。",
+                )
                 return
             _emit(relay.downloaded, path)
 
@@ -204,16 +251,57 @@ class UpdateBanner(QFrame):
     def _downloaded(self, path: Path):
         if self._closed:
             return
+        self._downloading = False
+        self._ready = path
+        self._verified()
+
+    def _apply_ready(self):
+        if self._closed or self._installing or self._verifying or self._ready is None:
+            return
+        self._verifying = True
+        self.install.setEnabled(False)
+        self.later.setEnabled(False)
+        self.label.setText("正在重新驗證下載檔案…")
+        path, digest = self._ready, self.release.digests.get(self._ready.name, "")
+        relay = self._relay
+
+        def work():
+            try:
+                updates.verify_download(path, digest)
+            except (OSError, ValueError):
+                _emit(relay.failed, "下載檔案驗證失敗，請重新下載。")
+                return
+            _emit(relay.verified)
+
+        threading.Thread(target=work, name="update-verify", daemon=True).start()
+
+    def _verified(self):
+        self._verifying = False
+        if self._closed or self._installing or self._ready is None:
+            return
+        if self._prepare_install is not None and not self._prepare_install():
+            self.label.setText("新版已下載並驗證；請先完成背景工作、儲存並關閉對話視窗，再按更新。")
+            self.install.setText("完成後更新並重啟")
+            self.install.setEnabled(True)
+            self.later.setEnabled(True)
+            return
+        self._installing = True
         try:
-            updates.launch_installer(path)
-        except OSError as exc:
-            self._failed(str(exc))
+            updates.launch_installer(self._ready)
+        except (OSError, ValueError) as exc:
+            if self._cancel_install is not None:
+                self._cancel_install()
+            self._installing = False
+            self._ready = None
+            self._failed(str(exc) if isinstance(exc, ValueError) else "無法啟動安裝程式，請重試。")
             return
         self.label.setText("下載完成，Paperfact 會關閉、安裝新版，然後自己重新開啟。")
         self.quit_for_update.emit()
 
     def _failed(self, reason):
         self._downloading = False
+        self._verifying = False
+        self._ready = None
         if self._closed:
             return
         self._rotate.stop()
@@ -227,7 +315,7 @@ class UpdateBanner(QFrame):
         QDesktopServices.openUrl(QUrl(page))
 
     def _snooze(self):
-        if self._downloading:
+        if self._downloading or self._verifying or self._installing:
             return
         if self.release is not None:
             with connect() as conn:

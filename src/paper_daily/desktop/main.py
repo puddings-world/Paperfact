@@ -974,7 +974,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.tabs.addTab(self.figure_pane, "圖表")
 
         self.cites_pane = CitesPane(self.win, pal)
-        self.tabs.addTab(self.cites_pane, "引用")
+        self.tabs.addTab(self.cites_pane, "脈絡")
         scopes(pal["accent"])  # before the slide panels register theirs
         self.presentation_pane = PresentationPane(self)
         self.presentation_pane.source_requested.connect(self._jump_to_source)
@@ -1279,6 +1279,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     def _auto_highlights_changed(self, checked: bool) -> None:
         self.win.remember("auto_highlights", "1" if checked else "0")
+        # The analysis job reads this from the database in its own process.
+        ui_state.flush()
         if checked:
             self._prepare_reading_highlights()
 
@@ -1865,7 +1867,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         if kind == "citations":
             self.tabs.setCurrentWidget(self.cites_pane)
             self._show_cites_if_visible()
-            status.setText(self.cites_pane.focus(source) or "已切到「引用」分頁。")
+            status.setText(self.cites_pane.focus(source) or "已切到「脈絡」分頁。")
             return
         if kind in ("dive", "close_reading"):
             self.tabs.setCurrentWidget(self.dive_view)
@@ -2494,7 +2496,9 @@ class MainWindow(QWidget):
         outer.addWidget(self.ready_banner)
         from paper_daily.desktop.update_banner import UpdateBanner
 
-        self.update_banner = UpdateBanner(self.pal)
+        self.update_banner = UpdateBanner(
+            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update
+        )
         self.update_banner.quit_for_update.connect(self.close)
         outer.addWidget(self.update_banner)
         # The nightly run finishes while the window may already be open on
@@ -2542,6 +2546,19 @@ class MainWindow(QWidget):
         self.support_btn.setToolTip("預覽並匯出診斷包；不會自動上傳")
         self.support_btn.clicked.connect(self._support)
         footer.addWidget(self.support_btn)
+        from paper_daily import build_identity
+
+        self.build_identity = build_identity.identity()
+        self.version_btn = QPushButton(build_identity.label(self.build_identity))
+        self.version_btn.setObjectName("appVersion")
+        self.version_btn.setFlat(True)
+        self.version_btn.setStyleSheet(
+            self.feedback_btn.styleSheet() + "font-size:10px;"
+        )
+        self.version_btn.setToolTip(build_identity.describe(self.build_identity))
+        self.version_btn.setAccessibleName("版本與更新")
+        self.version_btn.clicked.connect(self._version_info)
+        footer.addWidget(self.version_btn)
         outer.addLayout(footer)
 
         QShortcut(QKeySequence("Ctrl+N"), self, self.open_next_unread)
@@ -2556,7 +2573,7 @@ class MainWindow(QWidget):
 
         self._restore_layout()
         with connect() as conn:
-            self.active_list = get_kv(conn, "ui.list")
+            self.active_list = ui_state.read(conn, "ui.list")
         self.refresh_lists()
         self.reload()
         self._refresh_ai_summary()
@@ -2820,11 +2837,11 @@ class MainWindow(QWidget):
         """Put the window back where it was. Kept in the same database as everything
         else, so there is still exactly one file to move or delete."""
         with connect() as conn:
-            geometry = get_kv(conn, "ui.geometry")
-            split = get_kv(conn, "ui.split")
-            presentation_layout = get_kv(conn, "ui.presentation")
-            top_collapsed = get_kv(conn, "ui.top_collapsed")
-            auto_highlights = get_kv(conn, "ui.auto_highlights")
+            geometry = ui_state.read(conn, "ui.geometry")
+            split = ui_state.read(conn, "ui.split")
+            presentation_layout = ui_state.read(conn, "ui.presentation")
+            top_collapsed = ui_state.read(conn, "ui.top_collapsed")
+            auto_highlights = ui_state.read(conn, "ui.auto_highlights")
         self.reader_page.auto_highlights.setChecked(auto_highlights == "1")
         self.top_toggle.setChecked(top_collapsed == "1")
         if geometry:
@@ -2835,6 +2852,42 @@ class MainWindow(QWidget):
         if presentation_layout:
             with suppress(ValueError, TypeError):
                 self.reader_page.presentation_pane.restore_workspace(json.loads(presentation_layout))
+
+    def _version_info(self):
+        from paper_daily.desktop.version_dialog import VersionDialog
+
+        if getattr(self, "_version_dialog", None) is not None:
+            self._version_dialog.raise_()
+            self._version_dialog.activateWindow()
+            return
+        dialog = VersionDialog(self, self.update_banner, self.build_identity, self._support)
+        self._version_dialog = dialog
+
+        def finished(_result):
+            self._version_dialog = None
+            dialog.deleteLater()
+
+        dialog.finished.connect(finished)
+        dialog.show()
+
+    def _prepare_update(self):
+        # Match closeEvent's dialog/operation guards before starting an installer.
+        from paper_daily.desktop.integration_dialog import OperationWorker
+
+        if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
+            return False
+        for name in ("_workspace_dialog", "_review_dialog"):
+            dialog = getattr(self, name, None)
+            if dialog is not None and not dialog.disposed:
+                return False
+        try:
+            return self._prepare_restart()
+        except (OSError, ValueError, sqlite3.Error):
+            return False
+
+    def _cancel_update(self):
+        # Installation failed: subsequent edits need normal close/save protection.
+        self._closing_with_recovery = False
 
     def _prepare_restart(self) -> bool:
         hub = getattr(self, "activity_hub", None)
@@ -2859,13 +2912,14 @@ class MainWindow(QWidget):
         ) if worker is not None) or QApplication.activeModalWidget() is not None):
             pane.status.setText("仍有工作或對話視窗，暫不重啟；完成後可再試一次。")
             return False
+        recovered = False
         if not pane.save_changes():
             try:
                 pane.save_recovery()
             except (ValueError, OSError) as exc:
                 pane.status.setText(f"草稿保存失敗，暫不重啟：{exc}")
                 return False
-            self._closing_with_recovery = True
+            recovered = True
         self.remember("restart", json.dumps({
             "paper": reader.paper.id if reader.paper else None,
             "reader": self.stack.currentWidget() is reader,
@@ -2874,13 +2928,15 @@ class MainWindow(QWidget):
             "note": reader.note_edit.toPlainText(), "question": reader.ask_box.text(),
             "pdf_page": reader.pdf.current_page() if reader.pdf.isVisible() else 0,
         }))
-        # The next process reads this at once; it cannot wait for the queue.
-        ui_state.flush()
+        # A failed flush must keep the current process and its drafts alive.
+        if not ui_state.flush():
+            return False
+        self._closing_with_recovery = recovered
         return True
 
     def _restore_restart(self) -> None:
         with connect() as conn:
-            value = get_kv(conn, "ui.restart")
+            value = ui_state.read(conn, "ui.restart")
         if not value:
             return
         try:
@@ -3115,7 +3171,7 @@ class MainWindow(QWidget):
         """
         # Desktop background spending is opt-in; opening/importing a list only reads it.
         with connect() as conn:
-            if get_kv(conn, "ui.background_analysis") != "1":
+            if ui_state.read(conn, "ui.background_analysis") != "1":
                 return
         if self.analysis_running():
             return

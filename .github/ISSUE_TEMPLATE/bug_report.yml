@@ -12,7 +12,8 @@ body:
     id: version
     attributes:
       label: Version and installation
-      placeholder: Release tag and asset filename, or source commit
+      description: Click the bottom-right version label and copy version information. For older builds, provide the release tag and asset filename.
+      placeholder: App version, installation kind and build commit
     validations:
       required: true
   - type: input

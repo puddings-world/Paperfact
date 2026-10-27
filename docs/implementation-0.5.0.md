@@ -780,3 +780,50 @@ The existing `verify_built_app.py` harness and CI matrix are starting points, no
 proof that this new automation is complete. No updater implementation, remote CI
 run, signing setup, native-device enrollment or release was performed in this
 planning-only follow-up.
+
+
+## Testing and installed-Mac status — 2026-10-27
+
+Public GitHub release metadata still lists v0.4.3 beta as the latest published
+build, including `Paperfact-0.4.3-macos-arm64.dmg`. Local development commits do
+not update an installed copy. The owner uses Apple Silicon; the installed version
+has not yet been reported. Do not offer Intel artifacts or infer native acceptance.
+
+The incoming fixes are now present as `10cdcd4` (note cards), `a0f1b11` (Gemini
+AI Studio key), and `65df04e` (personal Drive package sharing). Diagnostics and
+reviewed report export are in checkpoint `df5e5c6`. These are development-branch
+capabilities, not claims about the v0.4.3 binary. Subsequent UI-stall, queued view
+state and asynchronous refresh fixes are also now committed on this branch.
+
+The reference synchronization implementation and mobile fixture tests remain
+subject to the release gates above. Drive package sharing is a snapshot transfer,
+not continuous multi-device sync. The existing update notice and user-initiated
+installer do not implement the requested automatic download/apply policy.
+The maintenance work now adds a visible version/build footer, immediate and
+15-minute checks, verified downloads, draft/worker preflight and Mac rollback
+guards. Fixture tests cover those paths; Windows/Mac candidate installation and
+upgrade acceptance remain required before public release. See
+[maintenance acceptance](maintenance-release.md) for the scoped release gate.
+
+For an existing Mac installation: export important list packages, quit normally,
+then replace only the application with an accepted ARM64 build. Preserve
+`~/Library/Application Support/Paperfact` (or the configured `PAPERFACT_DATA`).
+Older builds without diagnostics export can provide version, CPU, reproduction
+steps and a reviewed error excerpt from local `app.log`; never upload the whole
+research folder. New builds can preview/export the minimized diagnostic report.
+
+The test runner now supports explicit focused/docs iteration profiles while
+retaining the complete default gate. It records stage timings and prints slow
+pytest phases. This changes execution cadence, not the tested behavior or assertions.
+Verification evidence is recorded after the final full run; these notes alone
+do not claim that run or any native Mac upgrade has passed.
+
+
+Focused verification of the testing change: 33 runner cases and the combined
+44-case docs profile passed. A full attempt exposed an existing activity-worker
+wait failure; its isolated reproduction failed in 317.06s. Cooperative Python
+thread yielding in that fixture's Qt wait preserved its assertions and bounds;
+the complete activity module then passed 30 cases in 11.27s. The runner now stops
+at the first failure, prints diagnostic stacks after 60s in one test, and marks
+the local report running before execution. Full revalidation follows this fix;
+none of these fixture checks constitute native Mac upgrade acceptance.

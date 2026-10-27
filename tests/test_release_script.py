@@ -27,3 +27,18 @@ def test_versions_compare_as_numbers():
 def test_the_package_version_is_one_the_update_check_understands():
     assert updates.parse_version(__version__) is not None
     assert release.VERSION_LINE.search(release.INIT.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("current,target", [
+    ("0.5.0.dev", "0.5.0"), ("0.5.0.dev0", "0.5.0"), ("0.4.4", "0.4.5"),
+])
+def test_a_development_line_can_be_promoted_without_skipping_its_release(current, target):
+    release.validate_release(current, target)
+
+
+@pytest.mark.parametrize("current,target", [
+    ("0.5.0.dev", "0.4.5"), ("0.5.0", "0.5.0"), ("0.5.0.dev", "0.5.0.dev1"),
+])
+def test_release_promotion_does_not_allow_downgrades_or_development_tags(current, target):
+    with pytest.raises(SystemExit):
+        release.validate_release(current, target)

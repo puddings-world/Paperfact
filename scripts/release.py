@@ -39,6 +39,15 @@ def set_version(text: str, version: str) -> str:
     return VERSION_LINE.sub(f'__version__ = "{version}"', text, count=1)
 
 
+def validate_release(current: str, version: str) -> None:
+    """A development line may be promoted to its corresponding final version."""
+    development = re.fullmatch(r"(\d+\.\d+\.\d+)\.dev\d*", current)
+    previous = parse(development[1] if development else current)
+    target = parse(version)
+    if target < previous or (target == previous and not development):
+        raise SystemExit(f"{version} is not above the current {current}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("version", help="the new version, X.Y.Z")
@@ -47,8 +56,7 @@ def main() -> int:
 
     raw = INIT.read_bytes().decode()
     current = VERSION_LINE.search(raw).group(1)
-    if parse(args.version) <= parse(current):
-        raise SystemExit(f"{args.version} is not above the current {current}")
+    validate_release(current, args.version)
     if git("status", "--porcelain"):
         raise SystemExit("the working tree has uncommitted changes; commit or set them aside first")
     tag = f"v{args.version}"

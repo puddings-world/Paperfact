@@ -16,7 +16,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from paper_daily import __version__, runtime
+from paper_daily import __version__, build_identity, runtime
 
 LIMIT = 256 * 1024
 MAX_EVENTS = 40
@@ -53,6 +53,10 @@ MODULES = frozenset(
         "paper_daily.desktop.presentation_pane",
         "paper_daily.desktop.pdfpane",
         "paper_daily.desktop.activity",
+        "paper_daily.desktop.workspace_changes",
+        "paper_daily.document_reader",
+        "paper_daily.updates",
+        "paper_daily.desktop.update_banner",
     }
 )
 KNOWN_LOG_FILES = ("app.log", "app.log.1", "app-fault.log", "startup.log")
@@ -221,6 +225,24 @@ def collect(directory=None):
                 events.extend(_legacy(text))
         except OSError:
             sources[name] = "unreadable"
+    stalls = []
+    for name in ("ui-stalls.log.1", "ui-stalls.log"):
+        try:
+            text = _tail(directory / name)
+            sources[name] = "available" if text is not None else "unavailable"
+            current = None
+            for line in (text or "").splitlines():
+                header = re.search(r"\bstall (\d{1,9}) ms \(stack in \d+/\d+ samples\)$", line)
+                if header:
+                    current = {"duration_ms": min(int(header[1]), 3600000), "frames": []}
+                    stalls.append(current)
+                elif current is not None:
+                    frame = re.fullmatch(r"  ([\w.]+):[^:\n]*:(\d{1,6})", line)
+                    if frame and frame[1] in MODULES and 0 < int(frame[2]) <= 100000:
+                        current["frames"].append({"module": frame[1], "line": int(frame[2])})
+                        current["frames"] = current["frames"][-8:]
+        except OSError:
+            sources[name] = "unreadable"
     packages = {}
     for name in ("PySide6", "PySide6-Essentials", "PyMuPDF", "httpx"):
         try:
@@ -234,6 +256,7 @@ def collect(directory=None):
         "app": "Paperfact",
         "version": __version__,
         "install": "release" if runtime.FROZEN else "source",
+        "build": build_identity.identity(),
         "system": {
             "os": {"win32": "Windows", "darwin": "macOS", "linux": "Linux"}.get(
                 sys.platform, "other"
@@ -252,6 +275,7 @@ def collect(directory=None):
         },
         "logs": sources,
         "errors": events[-MAX_EVENTS:],
+        "ui_stalls": stalls[-20:],
         "limits": [
             "No raw messages, environment, paths, account identifiers or research content.",
             "No upload. This report is not guaranteed anonymous when shared.",

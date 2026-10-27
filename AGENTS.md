@@ -15,6 +15,14 @@ repeated activation, switching paper/account while work is pending, and closing
 while a worker is active. Assert saved content and visible state, not just that
 the handler ran. A repeated click must not create duplicate jobs or data.
 
+During iteration, use `scripts/check.py --profile focused --python tests/test_*.py`
+with explicit relevant file paths (replace the placeholder; do not select the
+entire suite by habit). Frontend/mobile selections and a docs profile are described
+in [development](docs/development.md). These are partial checks, never release
+evidence. Inspect stage durations and slow-test output before optimizing or
+parallelizing. Freeze a coherent candidate for the full gate rather than restarting
+it after every small edit; record concurrent changes and revalidate affected inputs.
+
 Run the full check before declaring a change complete, committing, or pushing:
 
 ```powershell

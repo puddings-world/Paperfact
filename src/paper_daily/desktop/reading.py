@@ -18,6 +18,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QImageReader
 
 from paper_daily import reading_links
+from paper_daily.answer_content import final_text, reading_text
 from paper_daily.closeread import MARKER
 from paper_daily.desktop import md, rich_html
 from paper_daily.materials import exhibit_key
@@ -58,9 +59,23 @@ def render(
     links=None,
     rich: bool = False,
 ) -> str:
-    """HTML for the whole explanation."""
+    """HTML for the whole explanation, including read-only legacy cleanup."""
+    old_dive, old_close = dive, close
+    dive = reading_text(dive, legacy_dive=True) or ""
+    close = reading_text(close)
+    notice = ""
+    if (old_dive and not dive) or (old_close and not close):
+        notice = _md(
+            "**先前的 AI 回覆未包含完整正文，已隱藏格式異常的內容。** "
+            "請重新分析；原始儲存資料未被覆寫。", palette, rich,
+        )
+    elif old_dive and final_text(old_dive) is None:
+        notice = _md(
+            "_先前回覆格式異常，以下保留可辨識的正式章節；原始資料未改動。_",
+            palette, rich,
+        )
     if highlights:
-        return _with_evidence(dive, close, figures, palette, highlights, links, rich)
+        return notice + _with_evidence(dive, close, figures, palette, highlights, links, rich)
     text = dive
     if close:
         text += "\n\n---\n\n# 逐節精讀\n\n" + close
@@ -87,7 +102,7 @@ def render(
         shown.add(key)
         chunk = []
     out.append(_md("\n".join(chunk), palette, rich))
-    return "".join(out)
+    return notice + "".join(out)
 
 
 def _evidence_card(index, item, explanation, pal, rich=False):

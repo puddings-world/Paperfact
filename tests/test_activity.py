@@ -33,6 +33,9 @@ pane = _pane
 def wait_for(condition):
     for _ in range(500):
         QTest.qWait(10)
+        # Let Python workers run between Qt event pumps; keep the same bound
+        # and visible-state assertion instead of extending timeouts on failure.
+        time.sleep(0)
         if condition():
             return
     pytest.fail("fixture work did not finish")
