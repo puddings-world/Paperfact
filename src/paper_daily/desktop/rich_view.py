@@ -54,6 +54,10 @@ def _web_view(owner: RichView, palette: dict[str, str]):
     # Everything the page needs is on disk; nothing it shows should reach out.
     settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
     view.page().setBackgroundColor(QColor(palette["ground"]))
+    # A web view draws through the GPU only once it holds a page. The first one to
+    # do so in an already shown window makes Qt recreate that window, which blinks
+    # it out of sight; loading an empty page now lets the window start that way.
+    view.setHtml("")
     return view
 
 
