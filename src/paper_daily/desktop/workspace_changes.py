@@ -20,7 +20,7 @@ class WorkspaceChanges(QObject):
         self._read.connect(self._apply)
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
-        self.timer.timeout.connect(self._poll_in_background)
+        self.timer.timeout.connect(self.poll_in_background)
         self.timer.start()
 
     def _revision(self):
@@ -40,7 +40,7 @@ class WorkspaceChanges(QObject):
         except (sqlite3.Error, OSError):
             return None
 
-    def _poll_in_background(self):
+    def poll_in_background(self):
         # Opening a large database can wait on the disk; done on the GUI thread
         # every two seconds it froze the window for up to half a second.
         if self._reading:

@@ -2566,8 +2566,10 @@ class MainWindow(QWidget):
         self._external_refresh_pending = False
         self.workspace_changes = WorkspaceChanges(self)
         self.workspace_changes.changed.connect(self._external_lists_changed)
-        self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll)
-        self.workspace_changes.timer.timeout.connect(self._poll_external_lists)
+        self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll_in_background)
+        self.workspace_changes.timer.timeout.connect(
+            lambda: self._poll_external_lists(background=True)
+        )
         self._external_lists_changed()
         if open_next:
             self.open_next_unread()
@@ -2693,10 +2695,15 @@ class MainWindow(QWidget):
             read = sum(1 for paper in self.papers if paper.read)
             self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
-    def _poll_external_lists(self):
+    def _poll_external_lists(self, *, background=False):
         if not self._close_stale_review():
             return
-        self.workspace_changes.poll()
+        # On the timer the read runs off the GUI thread, where opening the database
+        # froze the window for half a second; a change it finds arrives as `changed`.
+        if background:
+            self.workspace_changes.poll_in_background()
+        else:
+            self.workspace_changes.poll()
         if self._external_refresh_pending and QApplication.activeModalWidget() is None:
             self._external_lists_changed()
 
