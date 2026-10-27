@@ -105,11 +105,17 @@ def verify(built, out):
             integration['appimage'] = verify_integration(
                 [appimage, '--cli'], out / 'appimage-workspace',
                 {**empty, 'APPIMAGE_EXTRACT_AND_RUN': '1'})
+    if sys.platform == 'darwin':
+        # Launch Services + Cocoa, separate from offscreen startup/data checks.
+        run('mac-foreground', ['/usr/bin/swift', ROOT / 'scripts/verify_mac_app.swift', built],
+            {**recipient, 'QT_QPA_PLATFORM': 'cocoa', 'PAPERFACT_SMOKE_SECONDS': '45'})
     result = {'passed': True, 'research_files_preserved': files, 'integration': integration,
               'checks': ['version', 'doctor', 'first-use', 'import', 'duplicate-import',
                          'reader', 'export', 'file-fidelity', 'share-link-checksum',
                          'json-cli', 'mcp-stdio', 'mcp-retry'],
               'limitations': 'No real provider login, model call or Google Slides export.'}
+    if sys.platform == 'darwin':
+        result['checks'].append('mac-launch-services-foreground')
     (out / 'report.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result))
     return result

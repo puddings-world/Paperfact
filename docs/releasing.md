@@ -183,3 +183,34 @@ resolved). The same pictures locally:
 
 `--demo` builds a throwaway workspace (`scripts/demo_workspace.py`): one list and
 one paper with a generated PDF and a deep dive, written for the purpose.
+
+## macOS foreground-app acceptance (0.4.5)
+
+A console helper in a GUI bundle must not turn the enclosing app into a background
+process. PyInstaller's COLLECT inherits `console` from the last EXE; BUNDLE then
+uses it to default `LSBackgroundOnly` to true. Paperfact 0.4.4 collected the CLI
+last, so offscreen startup and data round-trip checks passed while macOS treated
+the installed reader as background-only.
+
+- Set `LSBackgroundOnly=false` and `LSUIElement=false` explicitly in the bundle
+  spec, before PyInstaller signs it. Keep `CFBundleExecutable=Paperfact`; retain
+  `paperfact-cli` for background operations.
+- `build_app.py` validates the emitted and DMG-staged Info.plist and both entry
+  points. Invalid flags stop packaging before an existing candidate is replaced.
+- `verify_built_app.py` additionally launches the generated reader fixture through
+  Launch Services with Cocoa. `verify_mac_app.swift` requires a regular activation
+  policy, actual active-app state, and normal termination. The macOS job fails if
+  these checks fail; an offscreen pass cannot substitute for them.
+- `tests/test_mac_packaging.py` covers explicit foreground overrides, invalid or
+  missing flags, wrong entry points, missing executables, and corrupt staging.
+- On the owner's Mac, still check Finder launch, Dock/Cmd-Tab activation, typing
+  into Q&A, switching away/back, and normal quit/reopen. CI activation is not proof
+  that every input method or existing workspace behaves correctly.
+
+Evidence status: unit checks validated locally; native release acceptance is
+recorded in `acceptance-macos/mac-foreground.log` for each built commit. This is a
+project packaging lesson, not a new global skill. Do not modify installed signed
+bundles as the permanent fix or overwrite the already-tested version's tag.
+
+References: [PyInstaller bundle generation](https://github.com/pyinstaller/pyinstaller/blob/develop/PyInstaller/building/osx.py)
+and [Apple Launch Services keys](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html).

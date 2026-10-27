@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
@@ -102,7 +103,29 @@ def executables(built: Path) -> tuple[Path, Path]:
     return folder / f"Paperfact{ext}", folder / f"paperfact-cli{ext}"
 
 
+def verify_mac_bundle(built: Path) -> None:
+    """Reject a background/agent app before smoke tests or DMG creation.
+
+    Check the emitted bundle, not only the spec: PyInstaller supplies defaults
+    based on both collected executables. Do not patch a plist after code signing.
+    """
+    with (built / "Contents" / "Info.plist").open("rb") as source:
+        info = plistlib.load(source)
+    for key in ("LSBackgroundOnly", "LSUIElement"):
+        if info.get(key) is not False:
+            raise ValueError(f"{key} must be explicitly false for the Paperfact desktop app")
+    if info.get("CFBundleExecutable") != "Paperfact":
+        raise ValueError("The app must launch Paperfact, not the CLI helper")
+    if info.get("CFBundlePackageType") != "APPL":
+        raise ValueError("Paperfact must be an APPL bundle")
+    for name in ("Paperfact", "paperfact-cli"):
+        if not (built / "Contents" / "MacOS" / name).is_file():
+            raise ValueError(f"Missing bundled executable: {name}")
+
+
 def smoke(built: Path) -> None:
+    if PLATFORM == "darwin":
+        verify_mac_bundle(built)
     gui, cli = executables(built)
     out = subprocess.run([cli, "--version"], capture_output=True, text=True, check=True)
     if __version__ not in out.stdout:
@@ -154,10 +177,12 @@ def windows_installer(built: Path) -> Path:
 
 
 def mac_dmg(built: Path) -> Path:
+    verify_mac_bundle(built)
     stage = WORK / "dmg"
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
     run("ditto", built, stage / built.name)
+    verify_mac_bundle(stage / built.name)
     (stage / "Applications").symlink_to("/Applications")
     out = DIST / artifact_name()
     out.unlink(missing_ok=True)

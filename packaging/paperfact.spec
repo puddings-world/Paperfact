@@ -104,6 +104,10 @@ if sys.platform == "darwin":
         bundle_identifier="io.github.puddings-world.paperfact",
         version=__version__,
         info_plist={
+            # COLLECT inherits console=True from the CLI twin. Override its
+            # background-only default for the enclosing GUI bundle, before signing.
+            "LSBackgroundOnly": False,
+            "LSUIElement": False,
             "CFBundleExecutable": "Paperfact",
             "CFBundleDisplayName": "Paperfact",
             "CFBundleShortVersionString": __version__,
