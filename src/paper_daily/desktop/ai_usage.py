@@ -143,7 +143,7 @@ class AIUsageDialog(QDialog):
         self.resize(560, 520)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 22, 22, 20)
-        title = QLabel(ai_choices.LABELS.get(cfg.backend, cfg.backend) + " · 帳號用量")
+        title = QLabel(ai_choices.brand(cfg) + " · 帳號用量")
         title.setStyleSheet("font-size:20px;font-weight:600;")
         layout.addWidget(title)
         self.account = QLabel("正在確認帳號…")

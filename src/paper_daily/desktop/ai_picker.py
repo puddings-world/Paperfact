@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import ai_accounts, ai_choices, llm, model_catalog, usage_cache
+from paper_daily import ai_accounts, ai_choices, ai_providers, llm, model_catalog, usage_cache
 from paper_daily.desktop.ai_usage import UsageSummary
 from paper_daily.desktop.ask import AskRunner
 from paper_daily.desktop.settings_style import apply as style_settings
@@ -156,17 +157,21 @@ class AIPickerDialog(QDialog):
         footer.addWidget(self.use_button)
         layout.addLayout(footer)
         current = llm.settings(task=task or "default")
-        backend = current.backend if current.backend in self.providers else "cli"
+        backend = self._provider(current) if self._provider(current) in self.providers else "cli"
         self._select(backend, check=False, selected=current.profile)
-        if task and current.backend == backend:
+        if task and self._provider(current) == backend:
             self._fill_models(current.model)
-        if current.backend not in self.providers:
+        if self._provider(current) not in self.providers:
             self.notice.setText("目前使用 API 或其他設定；按下套用按鈕才會切換。")
         QTimer.singleShot(0, self._inspect)
         self.usage_timer = QTimer(self)
         self.usage_timer.setInterval(500)
         self.usage_timer.timeout.connect(self._cached_usage)
         self.usage_timer.start()
+
+    @staticmethod
+    def _provider(cfg):
+        return "gemini" if ai_choices.is_gemini_api(cfg) else cfg.backend
 
     def _cached_usage(self):
         if self.cfg and self._authenticated is not False:
@@ -204,12 +209,20 @@ class AIPickerDialog(QDialog):
         self._models = model_catalog.models(self.cfg)
         if self.cfg.backend == "gemini":
             self._models = ai_accounts.models(self.cfg)
+        if ai_choices.uses_key(self.cfg):
+            self._models = []
         self._fill_models(self.cfg.model)
-        self.account_status.setText("帳號尚未確認")
-        self.login_button.setText("新增帳號")
+        keyed = ai_choices.uses_key(self.cfg)
+        self.account_status.setText(
+            ai_choices.account_title(self.cfg) if keyed else "帳號尚未確認"
+        )
+        self.login_button.setText(
+            ("更換 API 金鑰…" if self.cfg.api_key else "輸入 API 金鑰…") if keyed else "新增帳號"
+        )
         self.logout_action.setEnabled(bool(self.cfg.account_id))
         self.manage_button.setToolTip(
             "暱稱、登出與移除連線" if self.cfg.account_id
+            else "移除此連線會一併刪除 Paperfact 保存的金鑰。" if keyed
             else "本機共用登入由官方 CLI 管理；新增帳號可使用獨立登入。"
         )
         self.notice.clear()
@@ -227,7 +240,11 @@ class AIPickerDialog(QDialog):
 
     def _fill_models(self, selected):
         self.model.clear()
-        self.model.addItem(ai_choices.model_option_label(self.cfg.backend, "", cfg=self.cfg), "")
+        # A key-based service has no account default to fall back on: a model is chosen.
+        if not ai_choices.uses_key(self.cfg):
+            self.model.addItem(
+                ai_choices.model_option_label(self.cfg.backend, "", cfg=self.cfg), ""
+            )
         for model in self._models:
             self.model.addItem(
                 ai_choices.model_option_label(self.cfg.backend, model, cfg=self.cfg), model
@@ -263,6 +280,9 @@ class AIPickerDialog(QDialog):
         if not self.cfg:
             return
         cfg, epoch = self.cfg, self._epoch
+        if ai_choices.uses_key(cfg):
+            self._inspect_key(cfg, epoch)
+            return
         if not usage_cache.cache.peek(cfg):
             self.usage.reset(cfg)
         try:
@@ -335,6 +355,53 @@ class AIPickerDialog(QDialog):
 
         self.runner.start("", done, failed, call=inspect)
 
+    def _inspect_key(self, cfg, epoch):
+        """A key has no plan quota to show; checking it means listing its models."""
+        self.usage.reset(cfg)
+        self.usage.show_result(
+            {"windows": [], "message": "API 金鑰按用量計費；費用請在服務商的帳單頁查看。"},
+            None,
+        )
+        self._authenticated = bool(cfg.api_key)
+        if not cfg.api_key:
+            self.account_status.setText(
+                "請按「輸入 API 金鑰…」，貼上 Google AI Studio（aistudio.google.com）的金鑰。"
+            )
+            return
+        self.account_status.setText("正在確認 API 金鑰…")
+
+        def check(_prompt):
+            models, message = ai_providers.list_models(cfg)
+            return json.dumps({"models": models, "message": message}), "ok"
+
+        def done(text):
+            if epoch != self._epoch:
+                self._schedule_inspection()
+                return
+            result = json.loads(text)
+            self._authenticated = bool(result["models"])
+            self.account_status.setText(
+                ai_choices.account_title(cfg) if result["models"] else result["message"]
+            )
+            selected = self._model() or cfg.model or self._suggested(result["models"])
+            self._models = result["models"]
+            self._fill_models(selected)
+
+        def failed(reason):
+            if epoch == self._epoch:
+                self.account_status.setText(reason)
+
+        self.runner.start("", done, failed, call=check)
+
+    @staticmethod
+    def _suggested(models):
+        """The strongest model the key lists, so "use" works without a choice first."""
+        for wanted in ("argon", "pro", "flash"):
+            match = next((m for m in models if wanted in m and "preview" not in m), None)
+            if match:
+                return match
+        return models[0] if models else ""
+
     def _refresh_usage(self):
         # Repeated refresh clicks do not queue another status/quota request.
         if not self.runner.busy:
@@ -369,6 +436,9 @@ class AIPickerDialog(QDialog):
             return
         self.runner.cancel_read()
         self._epoch += 1
+        if ai_choices.uses_key(self.cfg):
+            self._enter_key()
+            return
         try:
             ai_accounts.command(self.cfg.backend)
         except ValueError:
@@ -400,6 +470,27 @@ class AIPickerDialog(QDialog):
 
         self.auth_runner.start(
             "", done, failed, call=lambda _prompt: ai_accounts.auth(cfg, "login")
+        )
+
+    def _enter_key(self):
+        key, accepted = QInputDialog.getText(
+            self,
+            "Gemini API 金鑰",
+            "到 aistudio.google.com 建立 API 金鑰後貼上。\n"
+            "按用量計費；Google AI Pro / Ultra 訂閱額度不適用。金鑰只存在這台電腦。",
+            QLineEdit.EchoMode.Password,
+        )
+        if not accepted or not key.strip():
+            return
+        try:
+            saved = ai_choices.save_gemini_key(key, self._model(), profile=self.cfg.profile)
+        except (ValueError, OSError) as exc:
+            self.notice.setText(str(exc))
+            return
+        self._select("gemini", selected=saved.profile)
+        self.notice.setText(
+            "金鑰已保存，可回到功能頁選用。" if self.accounts_only
+            else f"選好模型後，按「{self.use_button.text()}」。"
         )
 
     def _rename(self):
@@ -469,7 +560,7 @@ class AIPickerDialog(QDialog):
             self.notice.setText(str(exc))
             return
         self.runner.cancel_read()
-        self._select(self.cfg.backend)
+        self._select(self._provider(self.cfg))
 
     def _use(self):
         if self.auth_runner.busy:
@@ -478,8 +569,14 @@ class AIPickerDialog(QDialog):
         if self.accounts_only:
             self.accept()
             return
+        if ai_choices.uses_key(self.cfg) and not (self.cfg.api_key and self._model()):
+            self.notice.setText(
+                "請先輸入 API 金鑰。" if not self.cfg.api_key else "請選擇要使用的模型。"
+            )
+            return
         try:
-            ai_accounts.command(self.cfg.backend)
+            if not ai_choices.uses_key(self.cfg):
+                ai_accounts.command(self.cfg.backend)
             if self.task:
                 llm.save_task_choices({self.task: (self.cfg, self._model())})
             else:
@@ -497,7 +594,7 @@ class AIPickerDialog(QDialog):
         cfg, model = self.cfg, self._model()
         dialog = AITasksDialog(self)
         dialog.exec()
-        self._select(cfg.backend, selected=cfg.profile)
+        self._select(self._provider(cfg), selected=cfg.profile)
         self._fill_models(model)
 
     def _feedback(self):

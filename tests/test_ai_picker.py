@@ -59,7 +59,8 @@ def test_browsing_services_does_not_change_active_account(picker):
     widget.providers["codex"].click()
     widget.providers["gemini"].click()
     assert llm.SETTINGS_PATH.read_bytes() == before
-    assert widget.cfg.backend == "gemini"
+    # Gemini opens on the API-key connection: personal accounts can no longer use the CLI.
+    assert ai_choices.is_gemini_api(widget.cfg)
 
 
 def test_select_model_then_use_preserves_account_and_task_overrides(picker):
@@ -75,10 +76,10 @@ def test_select_model_then_use_preserves_account_and_task_overrides(picker):
 
 def test_new_service_needs_no_profile_name_and_custom_models_work(picker):
     widget, _app = picker
-    widget.providers["gemini"].click()
+    widget.providers["codex"].click()
     widget.model.setEditText("future-model")
     widget.use_button.click()
-    assert llm.settings().backend == "gemini"
+    assert llm.settings().backend == "codex"
     assert llm.settings().model == "future-model"
     assert llm.settings().profile
 
@@ -99,7 +100,7 @@ def test_login_creates_separate_account_without_replacing_default(picker, monkey
         return "登入完成", "ok"
 
     monkeypatch.setattr(ai_accounts, "auth", auth)
-    widget.providers["gemini"].click()
+    widget.providers["codex"].click()
     widget.login_button.click()
     logged_in = next(cfg for cfg, action in calls if action == "login")
     assert logged_in.account_id and logged_in.cli_home
@@ -158,10 +159,10 @@ def test_usage_is_inline_for_browsed_account_without_switching_default(picker):
     # User-requested replacement of the separate usage dialog action.
     widget, _app = picker
     before = llm.SETTINGS_PATH.read_bytes()
-    widget.providers["gemini"].click()
+    widget.providers["codex"].click()
     # Plan is now always visible, including an explicit unknown state.
     assert widget.usage.isVisible()
-    assert widget.usage.quota_status.text() == "gemini quota\n方案：官方未提供"
+    assert widget.usage.quota_status.text() == "codex quota\n方案：官方未提供"
     assert "15 次呼叫" in widget.usage.local.text()
     assert "總量未知" in widget.usage.local.text()
     assert "輸入 0" not in widget.usage.local.text()
@@ -199,7 +200,7 @@ def test_stale_usage_cannot_appear_under_another_account(picker, monkeypatch):
     callbacks = []
     monkeypatch.setattr(widget.runner, "start", lambda *a, **kw: callbacks.append(a[1]))
     widget._inspect()
-    widget._select("gemini", check=False)
+    widget._select("codex", check=False)
     assert "15 次呼叫" not in widget.usage.local.text()
     callbacks[0](json.dumps({
         "account": "wrong@example.org", "models": [],
@@ -208,7 +209,7 @@ def test_stale_usage_cannot_appear_under_another_account(picker, monkeypatch):
     }))
     assert "wrong" not in widget.usage.quota_status.text()
     assert "999" not in widget.usage.local.text()
-    assert widget.usage.backend == "gemini"
+    assert widget.usage.backend == "codex"
 
 
 @pytest.mark.parametrize("model", ["sonnet", "opus", "haiku", "fable"])

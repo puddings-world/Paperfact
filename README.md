@@ -31,11 +31,12 @@ sources, export a PDF, or create an editable Google Slides copy. [Slides guide �
 AI screenshots use demo accounts and simulated usage; model access depends on your
 provider. Reading saved research needs no AI login.
 
-**Gemini status:** Google ended Gemini CLI access for individual Google accounts
-(free, AI Pro and AI Ultra). Paperfact has not yet integrated Antigravity. Use
-Claude or Codex for the personal-account workflow for now.
-[Google's notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)
-· [Account and model help](docs/ai-setup.md)
+**Gemini:** choose **Gemini → 輸入 API 金鑰…** and paste a key from
+[Google AI Studio](https://aistudio.google.com/app/apikey); Gemini 4 Argon is offered when
+your key's tier includes it. Keys are billed per use; an AI Pro or Ultra subscription
+does not cover them, because Google ended Gemini CLI for personal accounts and does
+not allow third-party tools to use Antigravity's subscription login.
+[Account and model help](docs/ai-setup.md)
 
 ## Start here
 

@@ -7,15 +7,25 @@ Run terminal examples from the repository root.
 
 ## Choose your AI
 
-**Gemini consumer access is unavailable through the current adapter.** Google
-ended Gemini CLI service for individual free, AI Pro and AI Ultra accounts on
-June 18, 2026. A saved Google login does not restore that access. Google's successor
-is Antigravity; Paperfact does not yet have an Antigravity adapter. For the personal
-account workflow, choose Claude or Codex for now. Licensed Code Assist/API access
-has separate eligibility; do not infer it from a saved email or model menu.
-See [Google's deprecation notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals).
+**Gemini uses an API key.** Google ended Gemini CLI service for individual free,
+AI Pro and AI Ultra accounts on June 18, 2026
+([notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)),
+and Google staff have said that third-party tools may not drive its successor,
+Antigravity, with a subscription login. So **Gemini** in the picker asks for a key:
 
-1. Click the toolbar's **全域 AI** button and choose **Claude**, **Codex**, or **Gemini**.
+1. Create a key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. **全域 AI → Gemini → 輸入 API 金鑰…**, paste it. Paperfact lists the models the
+   key can use and preselects the strongest (Gemini 4 Argon when the key's tier has it).
+3. **設為全域預設**, or assign it to single features under **進階設定**.
+
+The key is billed per use by Google; an AI Pro or Ultra subscription does not cover
+it. It is stored only in this computer's AI settings and never exported. **更換 API
+金鑰…** replaces it in place, keeping feature assignments. Workspace accounts with
+Code Assist can still add the Gemini CLI as **Gemini CLI（企業版 Google 帳號）** in
+**進階設定 → 快速新增連線**.
+
+1. Click the toolbar's **全域 AI** button and choose **Claude**, **Codex**, or **Gemini**
+   (Gemini: see above).
 2. Press **新增帳號** and complete the provider's browser flow. If its official
    CLI is missing, the button opens the installation instructions. An existing local
    login can also be used; signing in again creates a separate account and keeps it.
@@ -155,9 +165,9 @@ model or other tasks. Reading lists and research records remain independent.
 | --- | --- |
 | `cli` | Claude CLI on PATH, signed in; an optional model is forwarded to the CLI |
 | `codex` | Codex CLI on PATH, signed in; an optional model is forwarded to `codex exec` |
-| `gemini` | Gemini CLI with Google login; model passed to headless generation with tools denied |
+| `gemini` | Gemini CLI with a Workspace Google login; model passed to headless generation with tools denied |
 | `anthropic` | Anthropic Messages API with your own key and model |
-| `openai` | OpenAI-compatible API, including explicitly configured local servers |
+| `openai` | OpenAI-compatible API, including Gemini API keys and explicitly configured local servers |
 | `gateway` | A custom service with its own account token, endpoint and model |
 
 All desktop and pipeline AI features go through `llm.complete`. Nightly generation
