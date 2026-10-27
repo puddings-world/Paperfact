@@ -143,26 +143,46 @@ def opened_label(stamp: str | None, now: datetime | None = None) -> str | None:
 
 
 # Stored by id, not position, so adding a sort never changes what a saved choice means.
+# In the menu's order, which is also how much each one matters: the chosen sort
+# decides first, and papers it ties are ordered by the sorts in TIEBREAK, top
+# down, and finally by the list's own order. 自訂順序 is that own order alone,
+# and the only one a drag can change.
 SORTS = [
     ("recent", "最近開啟", lambda p: p.opened_at or "", True),
-    ("custom", "自訂順序", None, False),
-    ("citations", "引用數 多 → 少", lambda p: p.citations or 0, True),
-    ("newest", "時間 新 → 舊", lambda p: (_when(p), p.citations or 0), True),
-    ("oldest", "時間 舊 → 新", lambda p: (_when(p), -(p.citations or 0)), False),
     ("venue", "依發表處分組", lambda p: venues.group_key(p.venue, p.year), False),
+    ("newest", "時間 新 → 舊", _when, True),
+    ("oldest", "時間 舊 → 新", _when, False),
+    ("citations", "引用數 多 → 少", lambda p: p.citations or 0, True),
+    ("dependents", "被依賴數 多 → 少", lambda p: p.dependents, True),
+    ("read", "最近標記已讀", lambda p: p.read_at or "", True),
     ("type", "依論文類型分組", lambda p: (
-        TYPE_ORDER.index(p.paper_type) if p.paper_type in TYPE_ORDER else len(TYPE_ORDER),
-        -(p.year or 0),
+        TYPE_ORDER.index(p.paper_type) if p.paper_type in TYPE_ORDER else len(TYPE_ORDER)
     ), False),
     ("todo", "待分析的在前", lambda p: (_analysed(p), not p.has_pdf), False),
-    ("dependents", "被依賴數 多 → 少", lambda p: (p.dependents, p.citations or 0), True),
-    ("read", "最近標記已讀", lambda p: p.read_at or "", True),
     ("title", "標題 A → Z", lambda p: p.title.lower(), False),
+    ("custom", "自訂順序", None, False),
 ]
 SORT_IDS = [sort[0] for sort in SORTS]
-# Orders a drag can start from: the list's own order, and the recent order, which
-# a drag turns into the list's own order.
-DRAGGABLE = ("recent", "custom")
+TIEBREAK = ("recent", "venue", "newest", "citations", "dependents", "read", "type", "todo")
+DRAGGABLE = ("custom",)
+
+
+def ordered(rows: list, sort_id: str) -> list:
+    """`rows` ((position, paper), in list order) by the chosen sort, its ties by
+    TIEBREAK, the rest by the list's order. One time direction is used at once."""
+    if sort_id == "custom":
+        return list(rows)
+    times = {"newest", "oldest"}
+    chain = [sort_id] + [
+        s for s in TIEBREAK if s != sort_id and not (s in times and sort_id in times)
+    ]
+    by_id = {sort[0]: sort for sort in SORTS}
+    out = list(rows)
+    # Stable sorts applied least important first leave the most important deciding.
+    for sid in reversed(chain):
+        _id, _label, key, reverse = by_id[sid]
+        out.sort(key=lambda pair, key=key: key(pair[1]), reverse=reverse)
+    return out
 # The tag a sort orders by comes first on every row, so the column being sorted
 # reads straight down the list; the others keep one fixed order behind it.
 SORT_TAG = {
@@ -864,9 +884,9 @@ class QueuePage(QWidget):
         rows = [
             (i, p) for i, p in enumerate(self.win.papers, 1) if self._matches(p)
         ]
-        sort_id, label, key, reverse = SORTS[self.sort.currentIndex()]
-        if sort_id == "recent":
-            self._load_opened()
+        sort_id, label, key, _reverse = SORTS[self.sort.currentIndex()]
+        # Every sort but 自訂順序 breaks ties on when papers were opened.
+        self._load_opened()
         if key is not None:
             # The blurb above just claimed the default order. Say what is actually on
             # screen instead.
@@ -878,7 +898,7 @@ class QueuePage(QWidget):
             # The position shown on each row stays the paper's place in the queue or
             # the list: sorting by citations is a way to look at the same reading
             # order, not a way to renumber it.
-            rows.sort(key=lambda pair: key(pair[1]), reverse=reverse)
+            rows = ordered(rows, sort_id)
             rows = self._pinned_first(rows)
             self._show_rows(rows)
             return
@@ -908,9 +928,7 @@ class QueuePage(QWidget):
         )
         if self.win.active_list and not self.model.can_reorder:
             self.blurb.setText(self.blurb.text() +
-                " 要拖曳排序，請切回「最近開啟」或「自訂順序」、清除搜尋與篩選，並取消置頂。")
-        elif self.model.can_reorder and SORT_IDS[self.sort.currentIndex()] == "recent":
-            self.blurb.setText("最近開啟的在前。拖曳論文會以目前順序存成自訂順序。")
+                " 要拖曳排序，請選「自訂順序」、清除搜尋與篩選，並取消置頂。")
         self.model.set_rows(rows)
         self._select(current.id if current is not None else getattr(self.win, "_last_paper", None))
         self._say_count(rows)
@@ -925,13 +943,6 @@ class QueuePage(QWidget):
             return False
         papers = {paper.id: paper for paper in self.win.papers}
         self.win.papers = [papers[pid] for pid in paper_ids]
-        if SORT_IDS[self.sort.currentIndex()] != "custom":
-            # The drag was made on this order; showing it re-sorted would undo it.
-            self.sort.blockSignals(True)
-            self.sort.setCurrentIndex(SORT_IDS.index("custom"))
-            self.sort.blockSignals(False)
-            ui_state.save("ui.sort.mode", "custom")
-            QTimer.singleShot(0, self, self.refresh)
         self.blurb.setText("自訂順序已儲存；「下一篇」會依這個順序閱讀。")
         return True
 
