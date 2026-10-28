@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
+import time
+from collections import OrderedDict
 from contextlib import suppress
 from copy import deepcopy
+from dataclasses import asdict
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QRectF, QSignalBlocker, QSize, Qt, QTimer, QUrl, Signal
@@ -69,6 +73,29 @@ from paper_daily.desktop.materials_panel import MaterialsPanel
 from paper_daily.desktop.script_editor import ScriptPage
 from paper_daily.desktop.slide_canvas import MATERIAL_MIME, SlideCanvas
 from paper_daily.slide_layout import elements_for, table_box, text_box, validate_elements
+
+# A thumbnail takes 20-30 ms to draw, so a deck drawn in one go held the window for
+# half a second on every switch to the tab. They are drawn a few per event-loop
+# turn, and remembered by what they show, so a deck seen before costs nothing.
+THUMBNAIL_BUDGET = 0.012
+THUMBNAIL_CACHE_SIZE = 240
+_thumbnails: OrderedDict[str, QPixmap] = OrderedDict()
+
+
+def _thumbnail_key(deck: presentations.Deck, index: int) -> str:
+    slide = deck.slides[index]
+    # The footer shows the page number, the page count and the sources' labels.
+    shown = {
+        "paper": deck.paper_id,
+        "slide": asdict(slide),
+        "page": index,
+        "pages": len(deck.slides),
+        "sources": [s for s in deck.sources if s["id"] in slide.sources],
+        "figures": deck.figures,
+    }
+    return hashlib.sha1(
+        json.dumps(shown, sort_keys=True, ensure_ascii=False, default=str).encode()
+    ).hexdigest()
 
 
 class _StatusLabel(QLabel):
@@ -269,6 +296,14 @@ class PresentationPane(QWidget):
         self.outline.setWordWrap(True)
         self._thumbnail_canvas = SlideCanvas(self)
         self._thumbnail_canvas.hide()
+        blank = QPixmap(288, 162)
+        blank.fill(Qt.GlobalColor.white)
+        self._blank_thumbnail = QIcon(blank)
+        self._thumbnail_queue: list[int] = []
+        self._thumbnail_timer = QTimer(self)
+        self._thumbnail_timer.setSingleShot(True)
+        self._thumbnail_timer.setInterval(0)
+        self._thumbnail_timer.timeout.connect(self._draw_queued_thumbnails)
         left_layout.addWidget(self.outline)
         order = QToolBar()
         order.setMovable(False)
@@ -810,6 +845,8 @@ class PresentationPane(QWidget):
         self._canvas_dirty = self._layout_reset = False
         self.canvas.load(None, 0)
         self.deck, self._index, self._dirty = deck, -1, False
+        self._thumbnail_queue = []
+        self._thumbnail_timer.stop()
         self.outline.clear()
         for field in (
             self.slide_title,
@@ -829,11 +866,23 @@ class PresentationPane(QWidget):
         if deck:
             for item in deck.figures:
                 self.figure.addItem(item.get("label", item["id"]), item["id"])
+            # One repaint for the whole tree rather than one per source (often 100+).
+            self.source_picker.setUpdatesEnabled(False)
             for source in deck.sources:
-                self._add_source_item(source["id"], source.get("label", source["id"]))
+                self._add_source_item(source["id"], source.get("label", source["id"]), source)
+            self.source_picker.setUpdatesEnabled(True)
             for i, slide in enumerate(deck.slides):
                 self.outline.addItem(f"{i + 1}. {slide.title}")
-                self._thumbnail(i)
+                cached = _thumbnails.get(_thumbnail_key(deck, i))
+                # A white page of the same size until it is drawn: the list keeps
+                # its layout and nothing moves when the picture arrives.
+                self.outline.item(i).setIcon(
+                    QIcon(cached) if cached is not None else self._blank_thumbnail
+                )
+                if cached is None:
+                    self._thumbnail_queue.append(i)
+            if self._thumbnail_queue:
+                self._thumbnail_timer.start()
             if reset_options:
                 self.count.setValue(len(deck.slides))
                 self.minutes.setValue(deck.minutes)
@@ -1026,8 +1075,9 @@ class PresentationPane(QWidget):
             )
             self._add_source_item(sid, label)
 
-    def _add_source_item(self, sid, label):
-        source = next((s for s in self.deck.sources if s["id"] == sid), {}) if self.deck else {}
+    def _add_source_item(self, sid, label, source=None):
+        if source is None:
+            source = next((s for s in self.deck.sources if s["id"] == sid), {}) if self.deck else {}
         group = {
             "abstract": "原文與摘要",
             "original": "原文與摘要",
@@ -1231,17 +1281,47 @@ class PresentationPane(QWidget):
         self.canvas.view.setFocus()
         self._material_feedback("已加入並選取新物件；可拖曳調整位置，稍後自動儲存。", True)
 
+    def _draw_queued_thumbnails(self) -> None:
+        """Draw waiting thumbnails until the turn's budget is spent, the one on
+        screen first and then down the list as it is read."""
+        if not self.deck:
+            self._thumbnail_queue = []
+            return
+        start = time.perf_counter()
+        while self._thumbnail_queue:
+            if self._index in self._thumbnail_queue:
+                self._thumbnail_queue.remove(self._index)
+                index = self._index
+            else:
+                index = self._thumbnail_queue.pop(0)
+            if index < min(len(self.deck.slides), self.outline.count()):
+                self._thumbnail(index)
+            if time.perf_counter() - start >= THUMBNAIL_BUDGET:
+                break
+        if self._thumbnail_queue:
+            self._thumbnail_timer.start()
+
     def _thumbnail(self, index: int) -> None:
         if not self.deck:
             return
-        self._thumbnail_canvas.load(self.deck, index)
-        image = QPixmap(288, 162)
-        image.fill(Qt.GlobalColor.white)
-        painter = QPainter(image)
-        self._thumbnail_canvas.scene.render(
-            painter, QRectF(0, 0, 288, 162), QRectF(0, 0, 1200, 675)
-        )
-        painter.end()
+        key = _thumbnail_key(self.deck, index)
+        image = _thumbnails.get(key)
+        if image is None:
+            self._thumbnail_canvas.load(self.deck, index)
+            image = QPixmap(288, 162)
+            image.fill(Qt.GlobalColor.white)
+            painter = QPainter(image)
+            self._thumbnail_canvas.scene.render(
+                painter, QRectF(0, 0, 288, 162), QRectF(0, 0, 1200, 675)
+            )
+            painter.end()
+            _thumbnails[key] = image
+            if len(_thumbnails) > THUMBNAIL_CACHE_SIZE:
+                _thumbnails.popitem(last=False)
+        else:
+            _thumbnails.move_to_end(key)
+        if index in self._thumbnail_queue:
+            self._thumbnail_queue.remove(index)
         self.outline.item(index).setIcon(QIcon(image))
 
     def _canvas_changed(self) -> None:

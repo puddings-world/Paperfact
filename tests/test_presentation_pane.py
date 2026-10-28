@@ -9,12 +9,13 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent, Qt  # noqa: E402
+from PySide6.QtCore import QCoreApplication, QEvent, QSize, Qt  # noqa: E402
 from PySide6.QtGui import QFont, QFontDatabase  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from paper_daily import llm, presentations  # noqa: E402
 from paper_daily.ai_types import Settings  # noqa: E402
+from paper_daily.desktop import presentation_pane  # noqa: E402
 from paper_daily.desktop.presentation_pane import PresentationPane  # noqa: E402
 
 
@@ -51,6 +52,8 @@ def pane(tmp_path, monkeypatch):
         "2026-10-12",
     )
     presentations.save_deck(deck)
+    # Thumbnails are remembered by content for the whole session; each test starts cold.
+    presentation_pane._thumbnails.clear()
     widget = PresentationPane()
     widget.load(deck.paper_id, deck.paper_title)
     yield widget, deck, app, tmp_path
@@ -73,10 +76,89 @@ def test_hidden_deck_load_defers_thumbnails_until_the_tab_is_shown(pane, monkeyp
     assert widget.paper_id == deck.paper_id and widget.deck is None
     assert not rendered
     widget.show()
-    app.processEvents()
+    drain(app, widget)
     assert widget.deck.paper_id == deck.paper_id
-    assert rendered == list(range(len(deck.slides)))
+    assert sorted(rendered) == list(range(len(deck.slides)))
     widget.hide()
+
+
+def drain(app, widget):
+    for _ in range(500):
+        app.processEvents()
+        if not widget._thumbnail_timer.isActive():
+            return
+
+
+def drawn(widget, index):
+    """A drawn thumbnail has the slide's blue edge; the placeholder is white."""
+    image = widget.outline.item(index).icon().pixmap(QSize(288, 162)).toImage()
+    edge = image.pixelColor(1, image.height() // 2)
+    return edge.blue() > 150 and edge.red() < 100
+
+
+def counting_thumbnail_loads(widget, monkeypatch):
+    loads = []
+    original = widget._thumbnail_canvas.load
+    monkeypatch.setattr(
+        widget._thumbnail_canvas, "load", lambda deck, i: (loads.append(i), original(deck, i))
+    )
+    return loads
+
+
+def test_opening_a_deck_draws_its_thumbnails_after_showing_it(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    presentation_pane._thumbnails.clear()
+    monkeypatch.setattr(presentation_pane, "THUMBNAIL_BUDGET", 0)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget._show_deck(None)
+    widget.load(deck.paper_id, deck.paper_title)
+    # Loading draws nothing itself; the list already holds every page, as placeholders.
+    assert loads == [] and widget.outline.count() == len(deck.slides)
+    assert not any(drawn(widget, i) for i in range(len(deck.slides)))
+    app.processEvents()
+    assert len(loads) < len(deck.slides)
+    drain(app, widget)
+    assert sorted(loads) == list(range(len(deck.slides)))
+    assert all(drawn(widget, i) for i in range(len(deck.slides)))
+
+
+def test_a_deck_seen_before_shows_its_thumbnails_at_once(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    drain(app, widget)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget.mode.setCurrentIndex(widget.mode.findData("notes"))
+    widget.mode.setCurrentIndex(widget.mode.findData("guide"))
+    assert all(drawn(widget, i) for i in range(len(deck.slides)))
+    drain(app, widget)
+    assert loads == []
+
+
+def test_an_edited_or_moved_slide_gets_a_new_thumbnail(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    drain(app, widget)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget.slide_title.setText("新的標題")
+    assert widget.save_changes()
+    assert loads == [0]
+    loads.clear()
+    widget._move(1)
+    drain(app, widget)
+    # Only the two pages that changed place are drawn again: their page numbers moved.
+    assert sorted(loads) == [0, 1]
+    assert all(drawn(widget, i) for i in range(len(widget.deck.slides)))
+
+
+def test_removing_a_slide_while_thumbnails_are_drawn_finishes_the_new_deck(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    presentation_pane._thumbnails.clear()
+    monkeypatch.setattr(presentation_pane, "THUMBNAIL_BUDGET", 0)
+    widget._show_deck(presentations.load_deck(deck.paper_id, "guide"))
+    app.processEvents()
+    widget.outline.setCurrentRow(2)
+    widget._remove()
+    drain(app, widget)
+    assert widget.outline.count() == len(deck.slides) - 1
+    assert all(drawn(widget, i) for i in range(widget.outline.count()))
 
 
 def test_editing_and_switching_modes_keeps_independent_decks(pane):
