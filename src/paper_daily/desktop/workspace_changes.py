@@ -1,7 +1,7 @@
 """Observe committed workspace changes from all writers without reloading editors."""
 
 import sqlite3
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -17,6 +17,9 @@ class WorkspaceChanges(QObject):
         super().__init__(parent)
         self.revision = self._revision()
         self._reading = False
+        # One thread kept for the reads: starting a new one every two seconds held
+        # the window for tens of milliseconds whenever the machine was busy.
+        self._reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="workspace-revision")
         self._read.connect(self._apply)
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
@@ -53,7 +56,7 @@ class WorkspaceChanges(QObject):
             with suppress(RuntimeError):
                 self._read.emit(revision)
 
-        threading.Thread(target=read, name="workspace-revision", daemon=True).start()
+        self._reader.submit(read)
 
     def _apply(self, revision):
         self._reading = False

@@ -371,12 +371,22 @@ def search_papers(conn: sqlite3.Connection, text: str, limit: int = 20) -> list[
     ).fetchall()
 
 
+# Databases this process has already prepared. The data folders and WAL mode stay
+# once made, and making sure of them on every connection doubled its cost: the
+# window opens dozens per paper.
+_prepared: set[str] = set()
+
+
 @contextmanager
 def connect(*, timeout: float = 30, path=None) -> Iterator[sqlite3.Connection]:
-    ensure_dirs()
-    conn = sqlite3.connect(path or DB_PATH, timeout=timeout)
+    target = str(path or DB_PATH)
+    if target not in _prepared:
+        ensure_dirs()
+    conn = sqlite3.connect(target, timeout=timeout)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    if target not in _prepared:
+        conn.execute("PRAGMA journal_mode=WAL")
+        _prepared.add(target)
     conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
