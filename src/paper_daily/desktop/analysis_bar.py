@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from paper_daily import analyze
 from paper_daily.desktop import ai_style
+from paper_daily.desktop.off_thread import OffThread
 from paper_daily.store import connect
 
 # The parts the tabs show, named after the tabs; the PDF and the marked passages
@@ -82,6 +83,7 @@ class AnalysisBar(QWidget):
         self._poll = QTimer(self)
         self._poll.setInterval(2000)
         self._poll.timeout.connect(self.refresh)
+        self._status = OffThread(self)
 
     def show_paper(self, paper_id: str) -> None:
         self.paper_id = paper_id
@@ -101,9 +103,21 @@ class AnalysisBar(QWidget):
     def refresh(self) -> None:
         if not self.paper_id:
             return
-        with connect() as conn:
-            state = analyze.status(conn, self.paper_id)
-            failures = {s: analyze.failed(conn, self.paper_id, s) or "" for s in state}
+        paper_id = self.paper_id
+
+        def read():
+            # Whether the marked passages are current is checked against the whole
+            # PDF's text: half a second on the window's thread for a long paper.
+            with connect() as conn:
+                state = analyze.status(conn, paper_id)
+                failures = {s: analyze.failed(conn, paper_id, s) or "" for s in state}
+            return state, failures
+
+        self._status.run("status", read, lambda found: self._show(paper_id, *found))
+
+    def _show(self, paper_id: str, state: dict, failures: dict) -> None:
+        if paper_id != self.paper_id:
+            return
         mine = self.win.analysis_running(self.paper_id)
         activity = getattr(self.win, "_analysis_activity", None)
         if mine and activity is not None:

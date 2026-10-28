@@ -15,6 +15,12 @@ from paper_daily.desktop.main import MainWindow, ReaderPage, palette
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+def _loaded(widget, app):
+    """Saved highlights are matched to words on a worker; wait for them to land."""
+    assert widget.prepare.wait()
+    app.processEvents()
+
+
 @pytest.fixture
 def reader(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
@@ -31,7 +37,7 @@ def reader(tmp_path, monkeypatch):
     widget.resize(1300, 850)
     widget.show()
     widget._load_pdf()
-    app.processEvents()
+    _loaded(widget, app)
     yield widget, app, pdf_path
     widget.close()
     widget.deleteLater()
@@ -53,6 +59,7 @@ def test_highlight_add_reload_remove_and_document_scope(reader):
     assert not pdf_highlights.list_marks("another-paper", fingerprint)
     assert not pdf_highlights.list_marks(widget.paper.id, "different-file")
     widget._load_pdf()
+    _loaded(widget, app)
     assert len(selection._marks) == 1
     assert selection.focus(selection.find(0, "beta"))
     selection.erase_highlight.emit()
@@ -272,3 +279,28 @@ def test_showing_reader_retries_preparation_after_hidden_load(reader, monkeypatc
     widget.show()
     app.processEvents()
     assert calls
+
+
+def test_a_mark_drawn_before_the_saved_ones_arrive_is_kept(reader, monkeypatch):
+    # Opening a paper reads its saved highlights on a worker; one drawn at once is
+    # saved against the right file and not wiped when the older list lands.
+    import threading
+
+    widget, app, _path = reader
+    selection = widget.pdf.selection
+    gate, real = threading.Event(), pdf_highlights.list_marks
+
+    def slow(paper_id, fingerprint):
+        found = real(paper_id, fingerprint)
+        gate.wait(5)
+        return found
+
+    monkeypatch.setattr(pdf_highlights, "list_marks", slow)
+    widget._load_pdf()
+    assert widget._pdf_fingerprint
+    selection.focus(selection.find(0, "Alpha beta"))
+    widget._highlight_selection()
+    gate.set()
+    _loaded(widget, app)
+    assert len(real(widget.paper.id, widget._pdf_fingerprint)) == 1
+    assert len(selection._marks) == 1

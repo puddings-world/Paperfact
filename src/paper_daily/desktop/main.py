@@ -87,6 +87,7 @@ from paper_daily.desktop.focus_scope import scopes
 from paper_daily.desktop.import_dialog import run_import
 from paper_daily.desktop.key_hints import KeyHints
 from paper_daily.desktop.note_editor import NoteEditor
+from paper_daily.desktop.off_thread import OffThread, warm_up
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
@@ -485,6 +486,8 @@ class ReaderPage(QWidget):
         # Its own runner: Google failing hands over to it before that thread has quit.
         self.refine_runner = AskRunner(self)
         self.fetcher = FetchRunner(self)
+        self.prepare = OffThread(self)
+        QTimer.singleShot(1500, warm_up)
         self._res_job: subprocess.Popen | None = None
         self._res_poll = QTimer(self)
         self._res_poll.setInterval(800)
@@ -833,6 +836,11 @@ class ReaderPage(QWidget):
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper: Paper) -> None:
+        if self.paper is None or self.paper.id != paper.id:
+            # The dive and the conversation are filled in once typeset; until then
+            # the last paper's must not show under this one's title.
+            self.dive_view.setHtml("")
+            self.chat_view.setHtml("")
         self.paper = paper
         pal = self.win.pal
         self.title.setText(paper.title)
@@ -947,8 +955,8 @@ class ReaderPage(QWidget):
                 f"{self.pdf.page_count()} 頁 · {pdfpane.backend_name()}"
             )
             self.open_external.setEnabled(True)
-            self._load_highlights(path)
-            QTimer.singleShot(0, self._prepare_reading_highlights)
+            # The AI highlight check follows once the saved ones are in.
+            self._load_highlights(path, background=True)
             return
 
         self.pdf.hide()
@@ -1088,14 +1096,50 @@ class ReaderPage(QWidget):
                 count = sum(mark.get("origin") == "ai" for mark, _words in selection._marks)
                 self.pdf_note.setText(f"已同步 {count} 段 AI 重點（綠色）與素材。")
 
-    def _load_highlights(self, path: Path) -> None:
+    def _load_highlights(self, path: Path, *, background: bool = False) -> None:
+        """Show the saved highlights. Opening a paper asks in the background: finding
+        each highlight's words reads the pages it covers, a third of a second on a
+        well-marked paper."""
         selection = getattr(self.pdf, "selection", None)
         self._pdf_fingerprint = None
         if selection is None or not self.paper:
+            self.prepare.cancel("highlights")
             return
+        paper = self.paper
         try:
-            self._pdf_fingerprint = pdf_highlights.document_hash(path)
-            marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
+            # Here, not on the worker: a highlight drawn the moment the paper opens
+            # is saved against it. Hashing the file takes milliseconds.
+            fingerprint = self._pdf_fingerprint = pdf_highlights.document_hash(path)
+        except OSError as exc:
+            self.prepare.cancel("highlights")
+            self.highlight_status.setText(f"螢光標記無法載入：{exc}")
+            return
+
+        def read():
+            try:
+                marks = pdf_highlights.list_marks(paper.id, fingerprint)
+            except (sqlite3.Error, ValueError) as exc:
+                return exc
+            pages = {page for mark in marks
+                     for page in range(mark["anchor"]["p0"], mark["anchor"]["p1"] + 1)}
+            words = {}
+            if background and pages:
+                from paper_daily.desktop.pdfselect import words_in
+
+                words = words_in(path, pages)
+            if background:
+                # What the 簡報 tab's highlight check reads next, read here first.
+                from paper_daily import paper_highlights
+
+                paper_highlights.read_original(paper.id)
+            return marks, words
+
+        def show(result):
+            if isinstance(result, Exception):
+                self.highlight_status.setText(f"螢光標記無法載入：{result}")
+                return
+            marks, words = result
+            selection.prime(words)
             selection.set_highlights(marks)
             ai = sum(mark.get("origin") == "ai" for mark in marks)
             manual = len(marks) - ai
@@ -1103,8 +1147,14 @@ class ReaderPage(QWidget):
                 f"原文重點：AI {ai} 段（綠色） · 手動 {manual} 段（黃色）"
                 if marks else "尚未標註原文重點；可按「分析／補上標註」。"
             )
-        except (OSError, sqlite3.Error, ValueError) as exc:
-            self.highlight_status.setText(f"螢光標記無法載入：{exc}")
+            if background:
+                self._prepare_reading_highlights()
+
+        if background:
+            self.prepare.run("highlights", read, show)
+        else:
+            self.prepare.cancel("highlights")
+            show(read())
 
     def _highlight_selection(self) -> None:
         selection = getattr(self.pdf, "selection", None)
@@ -1160,28 +1210,38 @@ class ReaderPage(QWidget):
         pal = self.win.pal
         body = self.win.data.dive(self.paper.id)
         if body:
-            from paper_daily.figures import extract
+            paper, rich = self.paper, self.dive_view.rich
 
-            with connect() as conn:
-                close = closeread.get(conn, self.paper.id)
-            # Only the close reading places figures, and only an extracted figure
-            # can be placed, so the PDF is read for them only when both exist.
-            figures = (
-                extract(self.paper.id, self.paper.pdf_path, cached_only=True)
-                if close and self.paper.has_pdf
-                else []
-            )
-            from paper_daily import paper_highlights, reading_links
+            def typeset():
+                from paper_daily import paper_highlights, reading_links
+                from paper_daily.figures import extract
 
-            self._dive_highlights = paper_highlights.cached(self.paper.id)
-            links = (reading_links.cached(self.paper.id, reading_links.sections(body, close),
-                                          self._dive_highlights)
-                     if self._dive_highlights else None)
-            self.dive_view.setHtml(reading.render(
-                body, close, figures, pal, highlights=self._dive_highlights, links=links,
-                rich=self.dive_view.rich,
-            ))
+                with connect() as conn:
+                    close = closeread.get(conn, paper.id)
+                # Only the close reading places figures, and only an extracted figure
+                # can be placed, so the PDF is read for them only when both exist.
+                figures = (
+                    extract(paper.id, paper.pdf_path, cached_only=True)
+                    if close and paper.has_pdf
+                    else []
+                )
+                # Checking the highlights against the original reads the whole PDF.
+                highlights = paper_highlights.cached(paper.id)
+                links = (reading_links.cached(paper.id, reading_links.sections(body, close),
+                                              highlights)
+                         if highlights else None)
+                return highlights, reading.render(
+                    body, close, figures, pal, highlights=highlights, links=links, rich=rich,
+                )
+
+            def show(result):
+                self._dive_highlights, page = result
+                self.dive_view.setHtml(page)
+
+            self.prepare.run("dive", typeset, show)
             return
+        self.prepare.cancel("dive")
+        self._dive_highlights = None
         parts = []
         if self.paper.abstract:
             parts.append("## Abstract\n\n" + self.paper.abstract)
@@ -1456,15 +1516,23 @@ class ReaderPage(QWidget):
     def _load_chat(self) -> None:
         assert self.paper
         pal = self.win.pal
-        rows = self.win.data.chat(self.paper.id)
-        if not rows:
-            self.chat_view.setHtml(
-                f'<div style="color:{pal["faint"]};font-size:12px;">'
-                "問答紀錄 · 尚無對話。可在底部自行輸入，或先選擇提問建議。</div>"
-            )
-            return
-        chunks = [self._exchange(q, a) for q, a in _exchanges(rows)]
-        self.chat_view.setHtml("<h3>問答紀錄</h3>" + "".join(chunks), at_end=True)
+        paper_id = self.paper.id
+
+        # Reading and typesetting a long conversation took a third of a second.
+        def typeset():
+            rows = self.win.data.chat(paper_id)
+            return "".join(self._exchange(q, a) for q, a in _exchanges(rows)) if rows else None
+
+        def show(cards):
+            if cards is None:
+                self.chat_view.setHtml(
+                    f'<div style="color:{pal["faint"]};font-size:12px;">'
+                    "問答紀錄 · 尚無對話。可在底部自行輸入，或先選擇提問建議。</div>"
+                )
+                return
+            self.chat_view.setHtml("<h3>問答紀錄</h3>" + cards, at_end=True)
+
+        self.prepare.run("chat", typeset, show)
 
     def _exchange(self, question, answer) -> str:
         """One question and its answer as a card: the question as its header."""
@@ -2944,16 +3012,27 @@ class MainWindow(QWidget):
 
     def in_queue(self, paper_id: str) -> bool:
         """Whether promote() can move this paper: pending in the main queue, viewed there."""
-        if self.active_list:
-            with connect() as conn:
-                return conn.execute(
-                    "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=? "
-                    "AND state='pending'", (self.active_list, paper_id)
-                ).fetchone() is not None
+        return paper_id in self.waiting([paper_id])
+
+    def waiting(self, paper_ids: list[str]) -> set[str]:
+        """Which of these papers promote() can move, in one query: the 脈絡 tab asks
+        for every work it lists."""
+        ids = list(dict.fromkeys(paper_ids))
+        if not ids:
+            return set()
+        marks = ",".join("?" * len(ids))
         with connect() as conn:
-            return conn.execute(
-                "SELECT 1 FROM queue WHERE paper_id=? AND state='pending'", (paper_id,)
-            ).fetchone() is not None
+            if self.active_list:
+                rows = conn.execute(
+                    f"SELECT paper_id FROM list_papers WHERE list_id=? AND state='pending' "
+                    f"AND paper_id IN ({marks})", (self.active_list, *ids)
+                )
+            else:
+                rows = conn.execute(
+                    f"SELECT paper_id FROM queue WHERE state='pending' AND paper_id IN ({marks})",
+                    ids,
+                )
+            return {r[0] for r in rows}
 
     def remove_paper(self, paper_id: str, title: str) -> None:
         """Take a paper out of whatever is on screen.

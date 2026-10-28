@@ -172,6 +172,30 @@ def _level_words(page) -> list[tuple[int, tuple]]:
     return [(i, w) for i, w in enumerate(words) if (w[5], w[6]) not in slanted]
 
 
+def _page_words(doc, page: int) -> list[Word]:
+    if not 0 <= page < doc.page_count:
+        return []
+    try:
+        raw = _level_words(doc[page])
+    except Exception:
+        raw = []
+    # PyMuPDF returns (x0, y0, x1, y1, word, block, line, word_no) already in
+    # reading order, which is what makes "everything between these two points"
+    # mean what it means on screen.
+    # The index counts the slanted words it skips, so a note anchored before
+    # they were dropped still points at the same words.
+    return [Word(page, w[0], w[1], w[2], w[3], w[4], i) for i, w in raw]
+
+
+def words_in(path, pages) -> dict[int, list[Word]]:
+    """The words of these pages, read from the file itself so that it can be done
+    away from the window's thread; `SelectionOverlay.prime` takes the result."""
+    import pymupdf
+
+    with pymupdf.open(path) as doc:
+        return {page: _page_words(doc, page) for page in sorted(pages)}
+
+
 class SelectionOverlay(QWidget):
     """Transparent layer that turns a drag into a passage of text."""
 
@@ -240,22 +264,14 @@ class SelectionOverlay(QWidget):
     def words_on(self, page: int) -> list[Word]:
         if page in self._words:
             return self._words[page]
-        out: list[Word] = []
-        if self._doc is not None and 0 <= page < self._doc.page_count:
-            try:
-                raw = _level_words(self._doc[page])
-            except Exception:
-                raw = []
-            # PyMuPDF returns (x0, y0, x1, y1, word, block, line, word_no) already in
-            # reading order, which is what makes "everything between these two points"
-            # mean what it means on screen.
-            # The index counts the slanted words it skips, so a note anchored before
-            # they were dropped still points at the same words.
-            out = [
-                Word(page, w[0], w[1], w[2], w[3], w[4], i) for i, w in raw
-            ]
+        out = _page_words(self._doc, page) if self._doc is not None else []
         self._words[page] = out
         return out
+
+    def prime(self, words: dict[int, list[Word]]) -> None:
+        """Take words already read elsewhere (`words_in`) for the open document."""
+        for page, found in words.items():
+            self._words.setdefault(page, found)
 
     # ---- selection -------------------------------------------------------
     def _nearest(self, page: int, x: float, y: float) -> Word | None:
