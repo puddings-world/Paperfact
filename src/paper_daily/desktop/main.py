@@ -87,7 +87,7 @@ from paper_daily.desktop.focus_scope import scopes
 from paper_daily.desktop.import_dialog import run_import
 from paper_daily.desktop.key_hints import KeyHints
 from paper_daily.desktop.note_editor import NoteEditor
-from paper_daily.desktop.off_thread import OffThread, warm_up
+from paper_daily.desktop.off_thread import OffThread
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
@@ -487,7 +487,6 @@ class ReaderPage(QWidget):
         self.refine_runner = AskRunner(self)
         self.fetcher = FetchRunner(self)
         self.prepare = OffThread(self)
-        QTimer.singleShot(1500, warm_up)
         self._res_job: subprocess.Popen | None = None
         self._res_poll = QTimer(self)
         self._res_poll.setInterval(800)

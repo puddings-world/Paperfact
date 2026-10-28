@@ -90,16 +90,3 @@ class OffThread(QObject):
             raise result.error
         apply(result)
 
-
-def warm_up() -> None:
-    """Import, on a spare thread, what the first paper opened would otherwise wait
-    for: PyMuPDF alone took a quarter to half a second."""
-
-    def load() -> None:
-        import pymupdf  # noqa: F401
-
-        from paper_daily.desktop import rich_html
-
-        rich_html.markdown("**warm**")
-
-    threading.Thread(target=load, name="warm-up", daemon=True).start()
