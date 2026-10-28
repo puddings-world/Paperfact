@@ -3,6 +3,15 @@
 How a version of Paperfact reaches the people using it: the installers, the
 release notes that announce it, and the update banner that installs it.
 
+## Version numbers
+
+The version number changes only for a public release. Fixes made before a
+candidate is published join that candidate under the same number; candidate
+builds are told apart by their source commit and build (`build-info.json`, the
+version dialog), not by new patch numbers. The next patch number starts with the
+first fix after a public release. A second-number bump (0.5) belongs to the
+feature branch that develops it.
+
 ## Cutting a release
 
 For the first public beta, use a candidate branch and **workflow_dispatch** to
