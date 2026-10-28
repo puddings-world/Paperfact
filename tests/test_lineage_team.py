@@ -101,7 +101,6 @@ def test_a_paper_openalex_cannot_find_matches_nothing(openalex):
 
 
 def test_the_switch_filters_both_sides_and_labels_why(pane, monkeypatch):
-    pane.settle()
     result = {
         "refs": {"7": {"authors": ["Ada"], "institutions": []}},
         "later": {"w3": {"authors": [], "institutions": ["NTU"]}},
@@ -114,12 +113,12 @@ def test_the_switch_filters_both_sides_and_labels_why(pane, monkeypatch):
     end = time.monotonic() + 5
     while pane._team_data is None and time.monotonic() < end:
         QApplication.processEvents()
-    pane.settle()
-    assert _titles(pane, "refs") == ["referencenumber7onmatrixfunctions"]
-    assert _titles(pane, "later") == ["laterwork3buildingonit"]
-    card = pane._cards[("title", "referencenumber7onmatrixfunctions")][1]
-    assert "同作者：Ada" in card.layout().itemAt(0).widget().text()
-    assert "參考文獻 1 篇、後續研究 1 篇" in pane._team_note.text()
+    assert [r["ref_key"] for r in pane._rows["refs"]] == ["7"]
+    assert [r["work_id"] for r in pane._rows["later"]] == ["w3"]
+    page = pane._list_view.view.toPlainText()
+    assert "同作者：Ada" in page and "Reference number 7 on matrix functions" in page
+    assert "Reference number 8 on matrix functions" not in page
+    assert "參考文獻 1 篇、後續研究 1 篇" in page
     pane._set_team("all")
-    pane.settle()
-    assert len(_titles(pane, "refs")) == 40 and not pane._team_note.isVisible()
+    assert len(_titles(pane, "refs")) == 40 and len(pane._rows["refs"]) == 40
+    assert "OpenAlex 查到" not in pane._list_view.view.toPlainText()

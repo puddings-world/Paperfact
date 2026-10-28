@@ -19,19 +19,21 @@ Both lists can also be read as one map (引用圖, see cite_graph.py): the same 
 as circles sized by citations, with the citations among them drawn in.
 
 條列 and 引用圖 are two faces of one switch, and 參考文獻 / 後續研究 two sides of the
-list. Each is built once per paper and kept: flipping only shows the other one.
-Rebuilding on every flip took two to four seconds on a paper with 60 references
-and 120 later works, nearly all of it in making the cards' widgets, so cards are
-also added a dozen at a time, and the faces not on screen are built while idle.
+list. 條列 is one page in a web view holding both sides, so flipping between them
+only shows the other; the map is made the first time it is asked for and kept.
+As widgets, a card cost Qt ten milliseconds or more to show, and a lineage of a
+hundred and more cards held the window for a second whichever way they were made.
 """
 
 from __future__ import annotations
 
 import html
+import json
 import subprocess
 import threading
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -49,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import citegraph, followups, lineage_team, runtime
-from paper_daily.desktop import ai_style, ui_state
+from paper_daily.desktop import ai_style, rich_view, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
 from paper_daily.store import connect, title_key
@@ -75,9 +77,6 @@ ROOT = runtime.bundle_root()
 # Neighbours per side the map shows before 全部畫出 is asked for: past this the
 # labels no longer fit and the shape is lost in the crowd.
 GRAPH_LIMIT = 30
-# Cards made per turn of the event loop: enough that a list fills in well under a
-# second, few enough that scrolling and clicks are never held up.
-CHUNK = 12
 
 
 def coverage(
@@ -144,6 +143,127 @@ def _spawn(*args: str) -> subprocess.Popen:
     )
 
 
+def _esc(value) -> str:
+    return html.escape(str(value or ""))
+
+
+def _say(text: str, colour: str, size: float) -> str:
+    return f'<div style="color:{colour};font-size:{size}px;margin:4px 0;">{_esc(text)}</div>'
+
+
+def _box(inner: str, pal: dict[str, str]) -> str:
+    """A bordered panel, as a table so the plain fallback view draws it too."""
+    return (
+        f'<table class="box" width="100%" cellspacing="0" cellpadding="12" '
+        f'style="margin-bottom:12px;border:1px solid {pal["border"]};">'
+        f'<tr><td bgcolor="{pal["surface"]}" style="background:{pal["surface"]};">'
+        f"{inner}</td></tr></table>"
+    )
+
+
+def _ai_link(href: str, label: str, primary: bool = False) -> str:
+    # The spark and the violet that every button starting AI work carries.
+    return f'<div><a class="ai{" primary" if primary else ""}" href="{href}">✦ {label}</a></div>'
+
+
+def _segments(name: str, options, current: str, pal: dict[str, str], *, action: str | None = None,
+              hidden: bool = False, title: str = "") -> str:
+    """Joined switches, one lit, as links."""
+    links = "".join(
+        f'<a id="seg-{name}-{key}" class="{"on" if key == current else ""}" '
+        f'href="cite:{action or name}:{key}">'
+        + (f"<b>{label}</b>" if key == current else label) + "</a>"
+        for label, key in options
+    )
+    shown = ' style="display:none;"' if hidden else ""
+    return f'<span class="seg" id="{name}" title="{_esc(title)}"{shown}>{links}</span>'
+
+
+def _page_css(pal: dict[str, str]) -> str:
+    p = pal
+    return f"""
+.cites {{ font-size:13px; line-height:1.6; }}
+.cites table {{ display:table; width:100%; overflow:visible; margin:0 0 10px; font-size:inherit;
+  border-collapse:separate; border-spacing:0; }}
+.cites table td {{ border:0; padding:0; vertical-align:top; }}
+.cites table.box, .cites table.card {{ border-radius:6px; overflow:hidden; }}
+.cites table.box > tbody > tr > td {{ padding:12px 16px; }}
+.cites table.card td.edge {{ width:3px; }}
+.cites table.card td.body {{ padding:11px 14px 12px; }}
+.cites table.card.flash td.body {{ background:{p["accentSoft"]} !important; }}
+.cites table.card.flash {{ outline:1px solid {p["accent"]}; }}
+.cites table.fields {{ width:auto; margin:6px 0 0; }}
+.cites table.fields td {{ padding:0 0 5px; font-size:12.5px; background:transparent !important; }}
+.cites table.fields td.name {{ white-space:nowrap; padding-right:4px; }}
+.cites .quote {{ border-left:2px solid {p["border"]}; padding-left:9px; }}
+.cites .actions a.btn, .cites .actions .done {{ display:inline-block; margin:8px 6px 0 0; }}
+.cites a.btn {{ padding:2px 10px; border:1px solid {p["firm"]}; border-radius:4px;
+  background:{p["surface"]}; color:{p["ink"]}; font-size:11.5px; text-decoration:none; }}
+.cites a.btn:hover {{ border-color:{p["accent"]}; color:{p["accent"]}; text-decoration:none; }}
+.cites a.ai {{ display:inline-block; margin:8px 0 2px; padding:3px 11px 2px;
+  border:1px solid {p["ai"]}; border-bottom-width:2px; border-radius:6px;
+  background:{p["aiSoft"]}; color:{p["ai"]}; font-weight:600; font-size:12px; }}
+.cites a.ai.primary {{ background:{p["ai"]}; color:{p["onAi"]}; }}
+.cites a.ai:hover {{ text-decoration:none; filter:brightness(1.08); }}
+.cites .bar {{ line-height:2.3; }}
+.cites .seg {{ display:inline-block; white-space:nowrap; margin-right:6px; }}
+.cites .seg a {{ display:inline-block; padding:2px 13px; line-height:1.7;
+  border:1px solid {p["firm"]}; border-left-width:0; background:{p["surface"]};
+  color:{p["muted"]}; font-size:12px; font-weight:600; text-decoration:none; }}
+.cites .seg a b {{ font-weight:600; }}
+.cites .seg a:first-child {{ border-left-width:1px; border-radius:4px 0 0 4px; }}
+.cites .seg a:last-child {{ border-radius:0 4px 4px 0; }}
+.cites .seg a:hover {{ background:{p["sunk"]}; text-decoration:none; }}
+.cites .seg a.on {{ background:{p["accent"]}; color:#ffffff; border-color:{p["accent"]}; }}
+"""
+
+
+_PAGE_SCRIPT = """
+var sideScroll = {};
+function showSide(s) {
+  var refs = document.getElementById('side-refs');
+  var was = refs && refs.style.display === 'none' ? 'later' : 'refs';
+  sideScroll[was] = window.scrollY;
+  ['refs', 'later'].forEach(function (k) {
+    var on = k === s;
+    ['side-' + k, 'order-' + k].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = on ? '' : 'none';
+    });
+    var b = document.getElementById('seg-side-' + k);
+    if (b) b.className = on ? 'on' : '';
+  });
+  // Back where this side was left; the first time, at the top of its cards.
+  var bar = document.querySelector('.cites .bar');
+  var start = bar ? bar.getBoundingClientRect().top + window.scrollY : 0;
+  if (sideScroll[s] !== undefined) window.scrollTo(0, sideScroll[s]);
+  else if (window.scrollY > start) window.scrollTo(0, start);
+}
+function flash(id) {
+  var el = document.getElementById(id);
+  if (!el) return false;
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('flash');
+  setTimeout(function () { el.classList.remove('flash'); }, 1800);
+  return true;
+}
+function mark(id, text) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var done = document.createElement('span');
+  done.className = 'done';
+  done.textContent = text;
+  el.replaceWith(done);
+}
+function say(id, text) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = text ? '' : 'none';
+}
+"""
+
+
 class _Text(QLabel):
     """A wrapped label that remembers its height at a width.
 
@@ -170,7 +290,7 @@ class _Text(QLabel):
         return height
 
 
-class CitesPane(QScrollArea):
+class CitesPane(QWidget):
     # (generation, result) from the author/institution lookup thread.
     team_ready = Signal(int, object)
     team_progress = Signal(int, int, int)
@@ -185,7 +305,7 @@ class CitesPane(QScrollArea):
         self._team = "all"
         self._team_data: dict | None = None
         self._team_loading = False
-        self._team_note: QLabel | None = None
+        self._team_progress = ""
         self._paper_info: dict = {}
         self.team_ready.connect(self._team_done)
         self.team_progress.connect(self._team_step)
@@ -196,20 +316,19 @@ class CitesPane(QScrollArea):
         self._later_order = "verdict"  # or "cited", "new"
         self._links_job: subprocess.Popen | None = None
         # What is on the page, so a source cited by a slide can be found again:
-        # ("ref", marker) and ("title", normalised title) -> (side, card).
-        self._cards: dict[tuple[str, str], tuple[str, QFrame]] = {}
+        # ("ref", marker) and ("title", normalised title) -> (side, the card's anchor).
+        self._cards: dict[tuple[str, str], tuple[str, str]] = {}
+        # Per side, the works in the order shown: a card's links name it by place.
+        self._rows: dict[str, list[dict]] = {}
+        # What a card's link says once it has been used, by (action, work).
+        self._done: dict[tuple[str, int], str] = {}
+        self._waiting: set[str] = set()
         self._map: CiteMap | None = None
         self._graph_all = False
         self._coverage = ""
         self._data: dict | None = None
-        self._list_face: QWidget | None = None
         self._graph_face: QWidget | None = None
         self._graph_note: QLabel | None = None
-        # Per side: the box its cards go in, and the cards still to be made.
-        self._boxes: dict[str, QVBoxLayout] = {}
-        self._side_widgets: dict[str, QWidget] = {}
-        self._orders: dict[str, QWidget] = {}
-        self._pending: dict[str, object] = {}
         self._generation = 0
         with connect() as conn:
             self._view = ui_state.read(conn, "ui.cites_view", "list")  # or "graph"
@@ -219,20 +338,46 @@ class CitesPane(QScrollArea):
         self._watch.setInterval(1500)
         self._watch.timeout.connect(self._links_done)
 
-        self.setWidgetResizable(True)
-        self._inner = QWidget()
-        self._layout = QVBoxLayout(self._inner)
-        self._layout.setContentsMargins(18, 16, 18, 24)
-        self._layout.setSpacing(10)
-        self.setWidget(self._inner)
-        self.setStyleSheet(f"QScrollArea{{background:{palette['ground']};border:0;}}")
+        self.setObjectName("citesPane")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.setStyleSheet(f"#citesPane{{background:{palette['ground']};}}")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        top = QHBoxLayout()
+        top.setContentsMargins(18, 12, 18, 6)
         self._view_bar, self._view_buttons = self._segmented(
             (("條列", "list"), ("引用圖", "graph")), self._view, self._set_view
         )
         self._view_bar.setToolTip("同一份承先啟後資料的兩種看法，切換不會重新整理")
         self._view_bar.hide()
-        self._layout.addWidget(self._view_bar, 0, Qt.AlignmentFlag.AlignLeft)
+        top.addWidget(self._view_bar)
+        top.addStretch(1)
+        outer.addLayout(top)
+
+        # 條列 is one page in a web view: a lineage is a hundred cards or more, and
+        # as widgets each one cost Qt ten milliseconds or more to show, so the tab
+        # took a second to appear and the rest stuttered in. The page lays itself
+        # out away from the window's thread.
+        self._list_view = rich_view.RichView(palette)
+        self._list_view.anchorClicked.connect(self._link)
+        self._page_ready = True
+        self._waiting_js: list[str] = []
+        if self._list_view.rich:
+            self._list_view.view.loadFinished.connect(self._page_loaded)
+        outer.addWidget(self._list_view, 1)
+
+        self._area = QScrollArea()
+        self._area.setWidgetResizable(True)
+        self._area.setStyleSheet(f"QScrollArea{{background:{palette['ground']};border:0;}}")
+        self._inner = QWidget()
+        self._layout = QVBoxLayout(self._inner)
+        self._layout.setContentsMargins(18, 4, 18, 24)
+        self._layout.setSpacing(10)
+        self._area.setWidget(self._inner)
         self._layout.addStretch(1)
+        self._area.hide()
+        outer.addWidget(self._area, 1)
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper_id: str) -> None:
@@ -259,33 +404,495 @@ class CitesPane(QScrollArea):
             counts["citation_count"] if counts else None,
         )
         self._data = {"refs": refs, "later": later, "story": story, "asked": asked}
+        # Which works already here are waiting in the queue, for 插到最前面.
+        self._waiting = self.win.waiting(
+            [r["here"]["id"] for r in refs + later if r["here"] and not r["here"]["read"]]
+        )
         self._view_bar.show()
+        self._render()
         self._show_face()
         if self._team == "team":
             self._start_team()
-        # The other face, and the other side of the list, are made while nothing
-        # else is happening, so the first flip to them is as quick as the rest.
-        generation = self._generation
-        QTimer.singleShot(300, lambda: self._prepare_rest(generation))
 
-    def _prepare_rest(self, generation: int) -> None:
-        if generation != self._generation or self._data is None:
+    def _clear(self) -> None:
+        """Drop the page and the map; the switch above them stays."""
+        self._generation += 1
+        self._cards, self._rows, self._done = {}, {}, {}
+        self._map = None
+        self._graph_note = None
+        if self._graph_face is not None:
+            # Out of the layout but still a child: until the deferred delete runs
+            # it keeps painting where it was, over the new page (seen on macOS).
+            self._layout.removeWidget(self._graph_face)
+            self._graph_face.hide()
+            self._graph_face.deleteLater()
+        self._graph_face = None
+
+    def _show_face(self) -> None:
+        """Show the face the switch is on; the map is made the first time it is."""
+        if self._data is None:
             return
-        if self._list_face is None:
-            self._build_list_face()
-        for side in ("refs", "later"):
-            if side not in self._boxes or self._boxes[side].count() == 0:
-                self._fill_side(side)
-        if self._graph_face is None:
-            self._build_graph_face()
+        if self._view == "graph":
+            if self._graph_face is None:
+                self._build_graph_face()
+            self._list_view.hide()
+            self._area.show()
+            self._graph_face.show()
+            self._fit()
+            QTimer.singleShot(0, self._fit)
+        else:
+            self._area.hide()
+            self._list_view.show()
+
+    def _set_view(self, view: str) -> None:
+        if view == self._view:
+            return
+        self._view = view
+        self._view_buttons[view].setChecked(True)
+        ui_state.save("ui.cites_view", view)
         self._show_face()
+
+    # ---- the page of 條列 -------------------------------------------------
+    def _render(self, keep_scroll: bool = False) -> None:
+        """Write the whole page: the summary, the switches and both sides, the
+        side not chosen hidden, so flipping between them only shows the other.
+        The plain fallback view has no scripts; it gets the chosen side alone."""
+        if self._data is None:
+            return
+        self._cards = {}
+        rich = self._list_view.rich
+        body = [f"<style>{_page_css(self.pal)}</style>"] if rich else []
+        body += ['<div class="cites">', self._story_html(), self._bar_html()]
+        for side in ("refs", "later"):
+            rows = self._side_rows(side)
+            self._rows[side] = rows
+            for index, r in enumerate(rows):
+                self._remember(side, f"c-{side}-{index}", r)
+            if rich or side == self._side:
+                body.append(self._side_html(side, rows))
+        body.append("</div>")
+        if rich:
+            body.append(f"<script>{_PAGE_SCRIPT}</script>")
+            self._page_ready = False
+        self._list_view.setHtml("".join(body), keep_scroll=keep_scroll)
+
+    def _page_loaded(self, _ok: bool) -> None:
+        self._page_ready = True
+        waiting, self._waiting_js = self._waiting_js, []
+        for code in waiting:
+            self._list_view.view.page().runJavaScript(code)
+
+    def _js(self, code: str) -> None:
+        """Run a script on the page, once it has loaded."""
+        if not self._list_view.rich:
+            return
+        if self._page_ready:
+            self._list_view.view.page().runJavaScript(code)
+        else:
+            self._waiting_js.append(code)
+
+    def _side_rows(self, side: str) -> list[dict]:
+        if side == "refs":
+            rows = self._team_rows("refs", self._data["refs"])
+            if self._ref_order == "number":
+                rows = sorted(rows, key=lambda r: (
+                    int(r["ref_key"]) if str(r.get("ref_key")).isdigit() else 10**6,
+                    str(r.get("ref_key")),
+                ))
+            return rows
+        rows = self._team_rows("later", self._data["later"])
+        if self._later_order == "cited":
+            rows = sorted(rows, key=lambda r: -(r.get("citations") or 0))
+        elif self._later_order == "new":
+            rows = sorted(rows, key=lambda r: -(r.get("year") or 0))
+        return rows
+
+    def _story_html(self) -> str:
+        pal, data = self.pal, self._data
+        story = data["story"]
+        parts = [
+            f'<div style="font-size:14px;font-weight:600;color:{pal["ink"]};">研究脈絡'
+            + ('&nbsp;&nbsp;<a class="btn" href="cite:story-edit">編輯</a>' if story else "")
+            + "</div>",
+            _say("依據：" + self._coverage + (" · 已手動修改" if story and story["edited"] else ""),
+                 pal["faint"], 11.5),
+        ]
+        if story and story["summary"]:
+            parts.append(_say(story["summary"], pal["ink"], 13))
+        if story and story["reading"]:
+            parts.append(
+                f'<div style="color:{pal["muted"]};font-size:12px;font-weight:600;'
+                f'margin-top:6px;">接下來必讀</div>'
+            )
+            for i, x in enumerate(story["reading"], 1):
+                parts.append(
+                    f'<div style="font-size:12.5px;margin:0 0 6px;color:{pal["ink"]};">{i}. '
+                    f'<span style="color:{pal["faint"]};">[{_esc(x.get("direction"))}]</span> '
+                    f"<b>{_esc(x['title'])}</b><br>"
+                    f'<span style="color:{pal["muted"]};">{_esc(x.get("why"))}</span></div>'
+                )
+        judged = sum(1 for r in data["refs"] if r.get("verdict"))
+        if self._busy():
+            parts.append(_say(
+                "正在深入分析：讀參考文獻、查後續研究並整理脈絡…約三到六分鐘，"
+                "完成後這個分頁會自己更新。", pal["muted"], 12.5,
+            ))
+        elif not story:
+            need = [] if judged else ["分析參考文獻"]
+            need += [] if data["asked"] else ["查後續研究"]
+            parts.append(_say(
+                "還沒整理。深入分析會" + ("先" + "、".join(need) + "，" if need else "")
+                + "再寫成脈絡，同時補上這篇還沒有的深度講解。", pal["muted"], 12.5,
+            ))
+            parts.append(_ai_link("cite:run-all", "深入分析", primary=True))
+        else:
+            parts.append(_ai_link("cite:refresh", "重新查後續研究並更新脈絡"))
+        return _box("".join(parts), pal)
+
+    def _bar_html(self) -> str:
+        data = self._data
+        sides = _segments("side", (
+            (f"參考文獻 {sum(1 for r in data['refs'] if r.get('ref_key'))}", "refs"),
+            (f"後續研究 {len(data['later'])}", "later"),
+        ), self._side, self.pal)
+        orders = "".join(
+            _segments(f"order-{side}", options, current, self.pal, action="order",
+                      hidden=side != self._side)
+            for side, options, current in (
+                ("refs", (("值得讀的排前面", "verdict"), ("照論文編號", "number")),
+                 self._ref_order),
+                ("later", (("值得讀的排前面", "verdict"), ("被引用最多", "cited"),
+                           ("最新", "new")), self._later_order),
+            )
+        )
+        team = _segments("team", (("全域", "all"), ("作者團隊", "team")), self._team, self.pal,
+                         title="作者團隊：只看和這篇有共同作者或同一研究機構的前作與後續研究"
+                               "（作者與機構資料來自 OpenAlex）")
+        note = self._team_note()
+        return (
+            f'<div class="bar">{sides}&nbsp;&nbsp;{orders}&nbsp;&nbsp;{team}</div>'
+            f'<div id="team-note" style="color:{self.pal["faint"]};font-size:11.5px;'
+            f'margin:6px 0 0;{"" if note else "display:none;"}">{_esc(note)}</div>'
+        )
+
+    def _side_html(self, side: str, rows: list[dict]) -> str:
+        pal = self.pal
+        shown = "" if side == self._side else "display:none;"
+        parts = [f'<div id="side-{side}" style="margin-top:10px;{shown}">']
+        if side == "refs":
+            judged = [r for r in rows if r.get("verdict")]
+            if not judged:
+                if self._busy():
+                    parts.append(_say(
+                        "正在讀這篇的引用句並判斷每一筆的用途…一篇大約一兩分鐘。", pal["muted"], 13
+                    ))
+                else:
+                    parts.append(_say(
+                        "還沒分析這篇的參考文獻。分析會把每一處引用的句子抓出來,判斷這篇「為什麼」"
+                        "引用它——當 baseline、資料來源、方法出處、被推翻的說法,還是背景鋪陳——"
+                        "再給一個值不值得讀的判斷。", pal["muted"], 13,
+                    ))
+                    parts.append(_ai_link("cite:run-cites", "分析這篇的參考文獻", primary=True))
+            else:
+                # Say how many verdicts rest on a citing sentence and how many on a
+                # title alone: the second kind is a much weaker answer.
+                quoted = sum(1 for r in judged if r.get("basis") == "context")
+                worth = sum(1 for r in judged if r.get("verdict") in ("必讀", "值得"))
+                parts.append(_say(
+                    f"{len(judged)} 筆 · {quoted} 筆讀得到引用句,"
+                    f"{len(judged) - quoted} 筆只能從標題判斷 · "
+                    f"其中 {worth} 筆是這篇建立在其上、值得往下讀的", pal["faint"], 11.5,
+                ))
+        elif not rows:
+            asked = self._data["asked"]
+            if self._busy():
+                text = "正在向 OpenAlex 和 Semantic Scholar 查引用這篇的論文…"
+            elif asked:
+                text = f"目前沒有論文引用它(OpenAlex 與 Semantic Scholar 都查過,{asked[:10]})。"
+            else:
+                text = "還沒查。會向 OpenAlex 和 Semantic Scholar 查整個領域裡引用這篇的論文。"
+            parts.append(_say(text, pal["muted"], 13))
+            if not asked and not self._busy():
+                parts.append(_ai_link("cite:run-followups", "查後續研究", primary=True))
+        else:
+            with_ctx = sum(1 for r in rows if r.get("contexts"))
+            parts.append(_say(
+                f"{len(rows)} 篇 · {with_ctx} 篇讀得到它引用這篇的原句,其餘依摘要或標題判斷",
+                pal["faint"], 11.5,
+            ))
+        parts.extend(self._card_html(side, index, r) for index, r in enumerate(rows))
+        parts.append("</div>")
+        return "".join(parts)
+
+    def _card_html(self, side: str, index: int, r: dict) -> str:
+        pal = self.pal
+        anchor = f"c-{side}-{index}"
+        verdict = r.get("verdict") or ""
+        fg, bg = VERDICT_COLOURS.get(verdict, ("muted", "sunk"))
+        parts = []
+        match = (self._team_data or {}).get(side, {}).get(
+            r.get("ref_key") if side == "refs" else r.get("work_id")
+        )
+        if self._team == "team" and match:
+            said = []
+            if match["authors"]:
+                said.append("同作者：" + "、".join(match["authors"]))
+            if match["institutions"]:
+                said.append("同機構：" + "、".join(match["institutions"]))
+            parts.append(_say(" · ".join(said), pal["accent"], 11.5))
+        pill = (
+            f'<span style="background:{pal[bg]};color:{pal[fg]};font-weight:600;">'
+            f"&nbsp;{_esc(verdict)}&nbsp;</span> " if verdict else ""
+        )
+        if side == "refs":
+            key = f"[{r['ref_key']}] " if r.get("ref_key") else ""
+            title = key + (r.get("title") or "(無法辨識是哪一篇)")
+            fields = (("與原文的關係", r.get("purpose")), ("這篇在做什麼", r.get("gist")),
+                      ("判斷", r.get("why")))
+            quote = "原文引用它的句子"
+        else:
+            title = r.get("title") or ""
+            fields = (("與原文的關係", r.get("relation")), ("判斷", r.get("why")))
+            quote = "它引用原文的句子"
+        parts.append(
+            f'<div style="font-size:13.5px;color:{pal["ink"]};">{pill}<b>{_esc(title)}</b></div>'
+        )
+        meta = self._meta(r)
+        if meta:
+            parts.append(_say(meta, pal["faint"], 11))
+        rows = [(label, value) for label, value in fields if value]
+        if rows:
+            parts.append(
+                '<table class="fields" cellspacing="0" cellpadding="0" style="margin-top:6px;">'
+                + "".join(
+                    f'<tr><td class="name" style="color:{pal["accent"]};">{label}&nbsp;&nbsp;</td>'
+                    f'<td style="color:{pal["muted"]};">{_esc(value)}</td></tr>'
+                    for label, value in rows
+                )
+                + "</table>"
+            )
+        if r.get("contexts"):
+            parts.append(
+                f'<div class="quote" style="color:{pal["faint"]};font-size:11.5px;'
+                f'margin-top:4px;">{quote}:「{_esc(r["contexts"][0][:320])}」</div>'
+            )
+        elif side == "later" and not r.get("abstract"):
+            parts.append(_say("沒有摘要也沒有引用句,只能從標題判斷。", pal["faint"], 11.5))
+        parts.append(self._actions_html(side, index, r))
+        return (
+            f'<a name="{anchor}"></a>'
+            f'<table id="{anchor}" class="card" width="100%" cellspacing="0" cellpadding="0" '
+            f'style="margin-bottom:10px;border:1px solid {pal["border"]};">'
+            f'<tr><td class="edge" width="3" bgcolor="{pal[fg]}"></td>'
+            f'<td class="body" bgcolor="{pal["surface"]}">{"".join(parts)}</td></tr></table>'
+        )
+
+    def _actions_html(self, side: str, index: int, r: dict) -> str:
+        here = r.get("here")
+        title = r.get("title") or ""
+        # When the model cannot tell which paper a marker points at, it says so in
+        # prose rather than inventing a title. Offering to look that up would send a
+        # sentence to Semantic Scholar and file whatever came back.
+        looks_like_title = len([w for w in title.split() if w.isascii()]) >= 3 and len(title) > 15
+        links = []
+        if here:
+            links.append(("open", "已讀 · 開啟" if here["read"] else "開啟"))
+            # Following the context only works if you can act on it: a paper this
+            # one rests on is useless 3000 rows down the queue.
+            if not here["read"] and here["id"] in self._waiting:
+                links.append(("lift", "插到最前面"))
+        elif r.get("doi") or r.get("s2_id") or looks_like_title:
+            links.append(("add", "加入清單"))
+        if side == "later" or r.get("ref_key"):
+            links.append(("edit", "編輯"))
+        out = []
+        for action, label in links:
+            done = self._done.get((action, id(r)))
+            if done:
+                out.append(
+                    f'<span class="done" style="color:{self.pal["faint"]};">{_esc(done)}</span>'
+                )
+            else:
+                out.append(
+                    f'<a class="btn" id="a-{action}-{side}-{index}" '
+                    f'href="cite:{action}:{side}:{index}">{label}</a>'
+                )
+        return f'<div class="actions">{"&nbsp; ".join(out)}</div>' if out else ""
+
+    def _link(self, url) -> None:
+        """Every link on the page of 條列 comes here."""
+        parts = url.toString().split(":")
+        if parts[0] != "cite":
+            if url.scheme() in ("http", "https"):
+                QDesktopServices.openUrl(url)
+            return
+        action = parts[1] if len(parts) > 1 else ""
+        value = parts[2] if len(parts) > 2 else ""
+        if action == "side" and value in ("refs", "later"):
+            self._set_side(value)
+        elif action == "order" and value:
+            self._set_order(value)
+        elif action == "team" and value in ("all", "team"):
+            self._set_team(value)
+        elif action == "story-edit" and self._data and self._data["story"]:
+            self._edit_story(self._data["story"])
+        elif action == "run-all":
+            self._run_all()
+        elif action == "refresh":
+            self._refresh_context()
+        elif action == "run-cites":
+            self._run_cites()
+        elif action == "run-followups":
+            self._run_followups()
+        elif len(parts) == 4 and parts[3].isdigit():
+            rows = self._rows.get(value, [])
+            index = int(parts[3])
+            if index < len(rows):
+                self._act(action, value, index, rows[index])
+
+    def _act(self, action: str, side: str, index: int, r: dict) -> None:
+        here = r.get("here")
+        if action == "open" and here:
+            self.win.open_paper(here["id"])
+        elif action == "lift" and here:
+            self.win.promote(here["id"])
+            self._mark(action, side, index, r, "已插到最前面")
+        elif action == "add":
+            # The import runs for a few seconds against Semantic Scholar; the
+            # switcher picks it up on the next refresh rather than blocking reading.
+            where = self._send_to_list({"title": r.get("title") or "", "doi": r.get("doi")})
+            self._mark(action, side, index, r, f"已送到「{where}」")
+        elif action == "edit":
+            self._edit_item("ref" if side == "refs" else "later", r)
+
+    def _mark(self, action: str, side: str, index: int, r: dict, text: str) -> None:
+        self._done[(action, id(r))] = text
+        if self._list_view.rich:
+            self._js(f"mark({json.dumps(f'a-{action}-{side}-{index}')}, {json.dumps(text)})")
+        else:
+            self._render(keep_scroll=True)
+
+    def _set_side(self, side: str) -> None:
+        if side == self._side:
+            return
+        self._side = side
+        if self._data is None:
+            return
+        if self._list_view.rich:
+            self._js(f"showSide({json.dumps(side)})")
+        else:
+            self._render()
+
+    def _set_order(self, order: str) -> None:
+        if self._side == "refs":
+            self._ref_order = order
+        else:
+            self._later_order = order
+        self._render()
+
+    # ---- the paper's own team ---------------------------------------------
+    def _set_team(self, team: str) -> None:
+        if team == self._team:
+            return
+        self._team = team
+        if team == "team" and self._team_data is None:
+            self._start_team()
+        self._render(keep_scroll=True)
+
+    def _team_step(self, generation: int, done: int, total: int) -> None:
+        if generation == self._generation and self._team == "team":
+            self._team_progress = f"正在向 OpenAlex 查作者與機構…{done}/{total}"
+            self._js(f"say('team-note', {json.dumps(self._team_progress)})")
+
+    def _team_done(self, generation: int, result: dict) -> None:
+        if generation != self._generation:
+            return
+        self._team_data, self._team_loading = result, False
+        if self._team == "team":
+            self._render(keep_scroll=True)
+
+    def _team_note(self) -> str:
+        data = self._team_data
+        if self._team != "team":
+            return ""
+        if data is None:
+            return self._team_progress or "正在向 OpenAlex 查作者與機構…"
+        if not data.get("own"):
+            return "OpenAlex 找不到這篇論文，無法比對作者與機構。"
+        shown = len(data["refs"]) + len(data["later"])
+        return (
+            f"和這篇有共同作者或同一機構的：參考文獻 {len(data['refs'])} 篇、"
+            f"後續研究 {len(data['later'])} 篇（OpenAlex 查到 {data['known']}/"
+            f"{data['total']} 篇的作者資料）"
+            + ("" if shown else "。這篇的團隊沒有出現在它的承先啟後裡。")
+        )
+
+    # ---- finding one work again ---------------------------------------------
+    def _remember(self, side: str, anchor: str, r: dict) -> None:
+        if side == "refs" and r.get("ref_key"):
+            self._cards[("ref", str(r["ref_key"]))] = (side, anchor)
+        if r.get("title"):
+            self._cards.setdefault(("title", title_key(r["title"])), (side, anchor))
+
+    def focus(self, source: dict) -> str:
+        """Show the work a slide cites, in whichever view is open. Returns what
+        happened, for the status line.
+
+        A deck names a reference by its marker (cite:12) and a later work by its
+        position in the list at generation time (later:3), which moves as the
+        field is asked again -- so a later work is found by its title instead.
+        """
+        sid = str(source.get("id") or "")
+        label = str(source.get("label") or "")
+        if sid == "context":
+            if self._view == "graph":
+                self._area.verticalScrollBar().setValue(0)
+            else:
+                self._list_view.scroll_to_top()
+            return "已跳到「脈絡」分頁最上方的研究脈絡。"
+        if sid.startswith("cite:"):
+            side, key = "refs", ("ref", sid.removeprefix("cite:"))
+            title = label.split("] ", 1)[1] if "] " in label else ""
+        elif sid.startswith("later:"):
+            side, key = "later", None
+            title = label.split("：", 1)[1] if "：" in label else label
+        else:
+            return ""
+        wanted = [k for k in (key, ("title", title_key(title)) if title else None) if k]
+        if self._view == "graph":
+            self._show_face()
+            dot = self._find_dot(side, sid, title)
+            if dot is None and not self._graph_all:
+                # The map draws the most telling neighbours first; the one asked
+                # for may be among those left out.
+                self._set_density(True)
+                dot = self._find_dot(side, sid, title)
+            if dot is None:
+                return (
+                    "引用圖上找不到這一篇（可能是內文找不到引用句，沒有畫在圖上）；"
+                    "切到條列可以看到。"
+                )
+            self._map.pin(dot)
+            QTimer.singleShot(60, lambda: self._area.ensureWidgetVisible(self._map))
+            return f"已在引用圖上標示：{dot.node.title[:60]}"
+        self._show_face()
+        hit = next((self._cards[k] for k in wanted if k in self._cards), None)
+        if hit is None:
+            return "「脈絡」分頁裡找不到這一篇；簡報產生之後，引用分析可能重新整理過。"
+        side, anchor = hit
+        self._set_side(side)
+        if self._list_view.rich:
+            self._js(f"flash({json.dumps(anchor)})")
+        else:
+            self._list_view.view.scrollToAnchor(anchor)
+        return "已跳到「脈絡」分頁的" + ("參考文獻" if side == "refs" else "後續研究") + "這一筆。"
 
     def _fit(self) -> None:
         # A scroll area does not re-measure wrapped text that is replaced while it is
         # on screen: the page stays the height of the window and every card is
         # squeezed to a line. A minimum height measured at the real width holds it.
         self._layout.activate()
-        width = self.viewport().width()
+        width = self._area.viewport().width()
         self._inner.setMinimumHeight(max(0, self._inner.heightForWidth(width)))
 
     def resizeEvent(self, event) -> None:
@@ -295,44 +902,6 @@ class CitesPane(QScrollArea):
     def _reload(self) -> None:
         if self.paper_id:
             self.load(self.paper_id)
-
-    def _clear(self) -> None:
-        """Drop both faces; the switch above them stays."""
-        self._generation += 1
-        self._pending = {}
-        self._boxes = {}
-        self._side_widgets = {}
-        self._orders = {}
-        self._cards = {}
-        self._map = None
-        self._graph_note = None
-        for face in (self._list_face, self._graph_face):
-            if face is not None:
-                # Out of the layout but still a child: until the deferred delete
-                # runs it keeps painting where it was, over the new page (seen on
-                # macOS when switching to the map).
-                self._layout.removeWidget(face)
-                face.hide()
-                face.deleteLater()
-        self._list_face = self._graph_face = None
-
-    def _show_face(self) -> None:
-        """Show the face the switch is on, making it first if it was never made."""
-        if self._data is None:
-            return
-        if self._view == "graph":
-            if self._graph_face is None:
-                self._build_graph_face()
-            face, other = self._graph_face, self._list_face
-        else:
-            if self._list_face is None:
-                self._build_list_face()
-            face, other = self._list_face, self._graph_face
-        if other is not None:
-            other.hide()
-        face.show()
-        self._fit()
-        QTimer.singleShot(0, self._fit)
 
     def _face(self) -> tuple[QWidget, QVBoxLayout]:
         face = QWidget()
@@ -345,6 +914,7 @@ class CitesPane(QScrollArea):
         return face, layout
 
     # ---- small parts -----------------------------------------------------
+
     def _label(
         self, text: str, size: float = 12.5, colour: str = "muted", rich: bool = False
     ) -> QLabel:
@@ -368,15 +938,6 @@ class CitesPane(QScrollArea):
             f"font-size:11.5px;"
         )
         return button
-
-    def _pill(self, verdict: str | None) -> str:
-        if not verdict:
-            return ""
-        fg, bg = VERDICT_COLOURS.get(verdict, ("muted", "sunk"))
-        return (
-            f"<span style='background:{self.pal[bg]};color:{self.pal[fg]};"
-            f"font-weight:600;'>&nbsp;{verdict}&nbsp;</span> "
-        )
 
     def _frame(self, accent: str | None = None) -> tuple[QFrame, QVBoxLayout]:
         pal = self.pal
@@ -413,7 +974,8 @@ class CitesPane(QScrollArea):
             or bool(self.paper_id and self.win.analysis_running(self.paper_id))
         )
 
-    # ---- 研究脈絡 ---------------------------------------------------------
+    # ---- 研究脈絡 and the switches, for the map --------------------------------
+
     def _story(self, story: dict | None, refs: list, later: list, asked: str | None) -> QWidget:
         box, layout = self._frame()
         head = QHBoxLayout()
@@ -472,7 +1034,6 @@ class CitesPane(QScrollArea):
             layout.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return box
 
-    # ---- switches --------------------------------------------------------
     def _segmented(self, options, current: str, pick) -> tuple[QWidget, dict]:
         """Joined buttons, one lit: the states side by side rather than a button
         whose label is the state it is not in. Restyled by Qt on toggle, never
@@ -508,108 +1069,6 @@ class CitesPane(QScrollArea):
             buttons[key] = b
         return bar, buttons
 
-    def _set_view(self, view: str) -> None:
-        if view == self._view:
-            return
-        self._view = view
-        self._view_buttons[view].setChecked(True)
-        ui_state.save("ui.cites_view", view)
-        self._show_face()
-
-    # ---- the two lists ---------------------------------------------------
-    def _build_list_face(self) -> None:
-        data = self._data
-        face, layout = self._face()
-        self._list_face = face
-        layout.addWidget(self._story(data["story"], data["refs"], data["later"], data["asked"]))
-        bar = QWidget()
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(0, 6, 0, 0)
-        row.setSpacing(10)
-        sides, self._side_buttons = self._segmented(
-            (
-                (f"參考文獻 {sum(1 for r in data['refs'] if r.get('ref_key'))}", "refs"),
-                (f"後續研究 {len(data['later'])}", "later"),
-            ),
-            self._side, self._set_side,
-        )
-        row.addWidget(sides)
-        orders = {
-            "refs": (("值得讀的排前面", "verdict"), ("照論文編號", "number")),
-            "later": (("值得讀的排前面", "verdict"), ("被引用最多", "cited"), ("最新", "new")),
-        }
-        for side, options in orders.items():
-            current = self._ref_order if side == "refs" else self._later_order
-            widget, _buttons = self._segmented(options, current, self._set_order)
-            self._orders[side] = widget
-            widget.setVisible(side == self._side)
-            row.addWidget(widget)
-        row.addStretch(1)
-        team, self._team_buttons = self._segmented(
-            (("全域", "all"), ("作者團隊", "team")), self._team, self._set_team
-        )
-        team.setToolTip(
-            "作者團隊：只看和這篇有共同作者或同一研究機構的前作與後續研究"
-            "（作者與機構資料來自 OpenAlex）"
-        )
-        row.addWidget(team)
-        layout.addWidget(bar)
-        self._team_note = self._label("", 11.5, "faint")
-        self._team_note.setVisible(False)
-        layout.addWidget(self._team_note)
-        for side in ("refs", "later"):
-            holder = QWidget()
-            box = QVBoxLayout(holder)
-            box.setContentsMargins(0, 0, 0, 0)
-            box.setSpacing(10)
-            holder.setVisible(side == self._side)
-            layout.addWidget(holder)
-            self._boxes[side] = box
-            self._side_widgets[side] = holder
-        self._fill_side(self._side)
-
-    def _set_side(self, side: str) -> None:
-        if side == self._side:
-            return
-        self._side = side
-        if self._list_face is None:
-            return
-        self._side_buttons[side].setChecked(True)
-        for key in ("refs", "later"):
-            self._orders[key].setVisible(key == side)
-            self._side_widgets[key].setVisible(key == side)
-        if self._boxes[side].count() == 0:
-            self._fill_side(side)
-        self._fit()
-
-    def _measure(self, side: str) -> None:
-        """Lay out a hidden side's cards now, while idle, so the first switch to it
-        finds every height already measured. Shown and hidden again within one
-        call, so nothing is painted in between."""
-        holder = self._side_widgets.get(side)
-        if holder is None or not self.isVisible() or self._list_face is None:
-            return
-        if not self._list_face.isVisible():
-            return
-        holder.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
-        holder.show()
-        self._layout.activate()
-        self._inner.heightForWidth(self.viewport().width())
-        holder.hide()
-        holder.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
-        self._fit()
-
-    # ---- the paper's own team ---------------------------------------------
-    def _set_team(self, team: str) -> None:
-        if team == self._team:
-            return
-        self._team = team
-        if self._list_face is not None:
-            self._team_buttons[team].setChecked(True)
-        if team == "team" and self._team_data is None:
-            self._start_team()
-        self._refill()
-
     def _start_team(self) -> None:
         if self._team_loading or self._data is None:
             return
@@ -626,47 +1085,6 @@ class CitesPane(QScrollArea):
             self.team_ready.emit(generation, result)
 
         threading.Thread(target=look, name="lineage-team", daemon=True).start()
-        self._say_team()
-
-    def _team_step(self, generation: int, done: int, total: int) -> None:
-        if generation == self._generation and self._team_note is not None:
-            self._team_note.setText(f"正在向 OpenAlex 查作者與機構…{done}/{total}")
-
-    def _team_done(self, generation: int, result: dict) -> None:
-        if generation != self._generation:
-            return
-        self._team_data, self._team_loading = result, False
-        if self._team == "team":
-            self._refill()
-
-    def _refill(self) -> None:
-        for side in ("refs", "later"):
-            if side in self._boxes:
-                self._fill_side(side)
-        self._say_team()
-        self._fit()
-
-    def _say_team(self) -> None:
-        note = self._team_note
-        if note is None:
-            return
-        data = self._team_data
-        if self._team != "team":
-            note.setVisible(False)
-            return
-        if data is None:
-            note.setText("正在向 OpenAlex 查作者與機構…")
-        elif not data.get("own"):
-            note.setText("OpenAlex 找不到這篇論文，無法比對作者與機構。")
-        else:
-            shown = len(data["refs"]) + len(data["later"])
-            note.setText(
-                f"和這篇有共同作者或同一機構的：參考文獻 {len(data['refs'])} 篇、"
-                f"後續研究 {len(data['later'])} 篇（OpenAlex 查到 {data['known']}/"
-                f"{data['total']} 篇的作者資料）"
-                + ("" if shown else "。這篇的團隊沒有出現在它的承先啟後裡。")
-            )
-        note.setVisible(True)
 
     def _team_rows(self, side: str, rows: list) -> list:
         """The side's rows under the 作者團隊 filter; all of them under 全域."""
@@ -676,140 +1094,8 @@ class CitesPane(QScrollArea):
         key = "ref_key" if side == "refs" else "work_id"
         return [r for r in rows if r.get(key) in found]
 
-    def _set_order(self, order: str) -> None:
-        if self._side == "refs":
-            self._ref_order = order
-        else:
-            self._later_order = order
-        self._fill_side(self._side)
-
-    def _fill_side(self, side: str) -> None:
-        """(Re)make one side's cards: the heading at once, the cards a dozen at a
-        time."""
-        box = self._boxes.get(side)
-        if box is None:
-            return
-        while box.count():
-            item = box.takeAt(0)
-            if item.widget():
-                item.widget().hide()
-                item.widget().deleteLater()
-        self._cards = {k: v for k, v in self._cards.items() if v[0] != side}
-        data = self._data
-        rows = (
-            self._ref_rows(box, self._team_rows("refs", data["refs"])) if side == "refs"
-            else self._later_rows(box, self._team_rows("later", data["later"]), data["asked"])
-        )
-        make = self._ref_card if side == "refs" else self._later_card
-        cards = ((r, make) for r in rows)
-        self._pending[side] = cards
-        generation = self._generation
-
-        def step() -> None:
-            if generation != self._generation or self._pending.get(side) is not cards:
-                return
-            for _ in range(CHUNK):
-                if not self._add_card(side, box, cards):
-                    self._pending.pop(side, None)
-                    if side != self._side:
-                        self._measure(side)
-                    break
-            else:
-                QTimer.singleShot(0, step)
-            if self._side_widgets[side].isVisible():
-                self._fit()
-
-        step()
-
-    def _add_card(self, side: str, box: QVBoxLayout, cards) -> bool:
-        nxt = next(cards, None)
-        if nxt is None:
-            return False
-        r, make = nxt
-        card = make(r)
-        match = (self._team_data or {}).get(side, {}).get(
-            r.get("ref_key") if side == "refs" else r.get("work_id")
-        )
-        if self._team == "team" and match:
-            said = []
-            if match["authors"]:
-                said.append("同作者：" + "、".join(match["authors"]))
-            if match["institutions"]:
-                said.append("同機構：" + "、".join(match["institutions"]))
-            card.layout().insertWidget(0, self._label(" · ".join(said), 11.5, "accent"))
-        self._remember(side, card, r.get("title"), r.get("ref_key") if side == "refs" else None)
-        box.addWidget(card)
-        return True
-
-    def _complete(self, side: str) -> None:
-        """Make the rest of a side's cards now, for a jump to one of them."""
-        cards = self._pending.pop(side, None)
-        if cards is not None:
-            while self._add_card(side, self._boxes[side], cards):
-                pass
-        self._fit()
-
-    def _ref_rows(self, box: QVBoxLayout, refs: list) -> list:
-        judged = [r for r in refs if r.get("verdict")]
-        if not judged:
-            if self._busy():
-                box.addWidget(self._label(
-                    "正在讀這篇的引用句並判斷每一筆的用途…一篇大約一兩分鐘。", 13
-                ))
-            else:
-                box.addWidget(self._label(
-                    "還沒分析這篇的參考文獻。分析會把每一處引用的句子抓出來,判斷這篇「為什麼」"
-                    "引用它——當 baseline、資料來源、方法出處、被推翻的說法,還是背景鋪陳——"
-                    "再給一個值不值得讀的判斷。",
-                    13,
-                ))
-                go = self._ai_button("分析這篇的參考文獻", primary=True)
-                go.clicked.connect(self._run_cites)
-                box.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
-        else:
-            # Say how many verdicts rest on a citing sentence and how many on a title
-            # alone: the second kind is a much weaker answer.
-            quoted = sum(1 for r in judged if r.get("basis") == "context")
-            worth = sum(1 for r in judged if r.get("verdict") in ("必讀", "值得"))
-            box.addWidget(self._label(
-                f"{len(judged)} 筆 · {quoted} 筆讀得到引用句,"
-                f"{len(judged) - quoted} 筆只能從標題判斷 · "
-                f"其中 {worth} 筆是這篇建立在其上、值得往下讀的",
-                11.5, "faint",
-            ))
-        if self._ref_order == "number":
-            refs = sorted(refs, key=lambda r: (
-                int(r["ref_key"]) if str(r.get("ref_key")).isdigit() else 10**6,
-                str(r.get("ref_key")),
-            ))
-        return refs
-
-    def _later_rows(self, box: QVBoxLayout, later: list, asked: str | None) -> list:
-        if not later:
-            if self._busy():
-                text = "正在向 OpenAlex 和 Semantic Scholar 查引用這篇的論文…"
-            elif asked:
-                text = f"目前沒有論文引用它(OpenAlex 與 Semantic Scholar 都查過,{asked[:10]})。"
-            else:
-                text = "還沒查。會向 OpenAlex 和 Semantic Scholar 查整個領域裡引用這篇的論文。"
-            box.addWidget(self._label(text, 13))
-            if not asked and not self._busy():
-                go = self._ai_button("查後續研究", primary=True)
-                go.clicked.connect(self._run_followups)
-                box.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
-            return []
-        if self._later_order == "cited":
-            later = sorted(later, key=lambda r: -(r.get("citations") or 0))
-        elif self._later_order == "new":
-            later = sorted(later, key=lambda r: -(r.get("year") or 0))
-        with_ctx = sum(1 for r in later if r.get("contexts"))
-        box.addWidget(self._label(
-            f"{len(later)} 篇 · {with_ctx} 篇讀得到它引用這篇的原句,其餘依摘要或標題判斷",
-            11.5, "faint",
-        ))
-        return later
-
     # ---- the map -----------------------------------------------------------
+
     def _build_graph_face(self) -> None:
         data = self._data
         face, layout = self._face()
@@ -888,9 +1174,10 @@ class CitesPane(QScrollArea):
         # As tall as the map needs at this width, up to the window's height, so a
         # small map does not sit in a field of white.
         rect = view.scene().sceneRect()
-        width = max(1.0, self.viewport().width() - 40.0)
+        width = max(1.0, self._area.viewport().width() - 40.0)
         needed = rect.height() * min(1.0, width / max(rect.width(), 1.0)) + 12
-        view.setFixedHeight(int(min(max(needed, 360), max(460, self.viewport().height() - 60))))
+        tallest = max(460, self._area.viewport().height() - 60)
+        view.setFixedHeight(int(min(max(needed, 360), tallest)))
         layout.addWidget(view)
 
     def _density(self, refs: int, later: int) -> QWidget:
@@ -913,62 +1200,6 @@ class CitesPane(QScrollArea):
         ), 1)
         return bar
 
-    # ---- finding one work again ---------------------------------------------
-    def _remember(self, side: str, card: QFrame, title: str | None, marker=None) -> None:
-        if marker:
-            self._cards[("ref", str(marker))] = (side, card)
-        if title:
-            self._cards.setdefault(("title", title_key(title)), (side, card))
-
-    def focus(self, source: dict) -> str:
-        """Show the work a slide cites, in whichever view is open. Returns what
-        happened, for the status line.
-
-        A deck names a reference by its marker (cite:12) and a later work by its
-        position in the list at generation time (later:3), which moves as the
-        field is asked again -- so a later work is found by its title instead.
-        """
-        sid = str(source.get("id") or "")
-        label = str(source.get("label") or "")
-        if sid == "context":
-            self.verticalScrollBar().setValue(0)
-            return "已跳到「脈絡」分頁最上方的研究脈絡。"
-        if sid.startswith("cite:"):
-            side, key = "refs", ("ref", sid.removeprefix("cite:"))
-            title = label.split("] ", 1)[1] if "] " in label else ""
-        elif sid.startswith("later:"):
-            side, key = "later", None
-            title = label.split("：", 1)[1] if "：" in label else label
-        else:
-            return ""
-        wanted = [k for k in (key, ("title", title_key(title)) if title else None) if k]
-        if self._view == "graph":
-            self._show_face()
-            dot = self._find_dot(side, sid, title)
-            if dot is None and not self._graph_all:
-                # The map draws the most telling neighbours first; the one asked
-                # for may be among those left out.
-                self._set_density(True)
-                dot = self._find_dot(side, sid, title)
-            if dot is None:
-                return (
-                    "引用圖上找不到這一篇（可能是內文找不到引用句，沒有畫在圖上）；"
-                    "切到條列可以看到。"
-                )
-            self._map.pin(dot)
-            QTimer.singleShot(60, lambda: self.ensureWidgetVisible(self._map))
-            return f"已在引用圖上標示：{dot.node.title[:60]}"
-        self._show_face()
-        self._set_side(side)
-        self._complete(side)
-        hit = next((self._cards[k] for k in wanted if k in self._cards), None)
-        if hit is None:
-            return "「脈絡」分頁裡找不到這一篇；簡報產生之後，引用分析可能重新整理過。"
-        card = hit[1]
-        QTimer.singleShot(60, lambda: self.ensureWidgetVisible(card, 0, 60))
-        self._flash(card)
-        return "已跳到「脈絡」分頁的" + ("參考文獻" if side == "refs" else "後續研究") + "這一筆。"
-
     def _find_dot(self, side: str, sid: str, title: str):
         if self._map is None:
             return None
@@ -987,16 +1218,6 @@ class CitesPane(QScrollArea):
             ),
             None,
         )
-
-    def _flash(self, card: QFrame) -> None:
-        rest = card.styleSheet()
-        card.setStyleSheet(
-            # Same border width as at rest: a thicker one changes the card's size
-            # and the column, which measures its height once, overlaps the next card.
-            rest + f"QFrame#card{{border:1px solid {self.pal['accent']};"
-            f"background:{self.pal['accentSoft']};}}"
-        )
-        QTimer.singleShot(1800, lambda: card.setStyleSheet(rest))
 
     def _set_density(self, everything: bool) -> None:
         if everything == self._graph_all:
@@ -1024,6 +1245,7 @@ class CitesPane(QScrollArea):
             self._graph_note.setText(f"「{node.label}」已送到「{where}」,幾秒後會出現在清單裡。")
 
     # ---- cards -----------------------------------------------------------
+
     def _meta(self, r: dict) -> str:
         meta = [str(x) for x in (r.get("year"), (r.get("venue") or "")[:44]) if x]
         if r.get("citations"):
@@ -1034,92 +1256,10 @@ class CitesPane(QScrollArea):
             meta.append("文中未抓到引用句")
         if r.get("edited"):
             meta.append("已手動修改")
-        return " · ".join(html.escape(m) for m in meta)
-
-    def _fields(self, layout: QVBoxLayout, pairs) -> None:
-        for label, value in pairs:
-            if value:
-                layout.addWidget(self._label(
-                    f"<span style='color:{self.pal['accent']};'>{label}</span>　"
-                    f"{html.escape(value)}",
-                    12.5, rich=True,
-                ))
-
-    def _ref_card(self, r: dict) -> QWidget:
-        fg, _bg = VERDICT_COLOURS.get(r.get("verdict") or "", ("muted", "sunk"))
-        box, layout = self._frame(fg)
-        key = f"[{html.escape(str(r['ref_key']))}] " if r.get("ref_key") else ""
-        name = html.escape(r.get("title") or "(無法辨識是哪一篇)")
-        layout.addWidget(self._label(
-            f"{self._pill(r.get('verdict'))}<b>{key}{name}</b>"
-            f"<br><span style='color:{self.pal['faint']};font-size:11px;'>{self._meta(r)}</span>",
-            13.5, "ink", rich=True,
-        ))
-        self._fields(layout, (
-            ("與原文的關係", r.get("purpose")),
-            ("這篇在做什麼", r.get("gist")),
-            ("判斷", r.get("why")),
-        ))
-        if r.get("contexts"):
-            layout.addWidget(self._quote("原文引用它的句子", r["contexts"][0]))
-        layout.addLayout(self._actions(r, editable=bool(r.get("ref_key")), kind="ref"))
-        return box
-
-    def _later_card(self, r: dict) -> QWidget:
-        fg, _bg = VERDICT_COLOURS.get(r.get("verdict") or "", ("muted", "sunk"))
-        box, layout = self._frame(fg)
-        layout.addWidget(self._label(
-            f"{self._pill(r.get('verdict'))}<b>{html.escape(r.get('title') or '')}</b>"
-            f"<br><span style='color:{self.pal['faint']};font-size:11px;'>{self._meta(r)}</span>",
-            13.5, "ink", rich=True,
-        ))
-        self._fields(layout, (("與原文的關係", r.get("relation")), ("判斷", r.get("why"))))
-        if r.get("contexts"):
-            layout.addWidget(self._quote("它引用原文的句子", r["contexts"][0]))
-        elif not r.get("abstract"):
-            layout.addWidget(self._label("沒有摘要也沒有引用句,只能從標題判斷。", 11.5, "faint"))
-        layout.addLayout(self._actions(r, editable=True, kind="later"))
-        return box
-
-    def _quote(self, label: str, text: str) -> QLabel:
-        q = self._label(f"{label}:「{text[:320]}」", 11.5, "faint")
-        q.setStyleSheet(
-            q.styleSheet() + f"border-left:2px solid {self.pal['border']};padding-left:9px;"
-        )
-        return q
-
-    def _actions(self, r: dict, editable: bool, kind: str) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(6)
-        here = r.get("here")
-        title = r.get("title") or ""
-        # When the model cannot tell which paper a marker points at, it says so in
-        # prose rather than inventing a title. Offering to look that up would send a
-        # sentence to Semantic Scholar and file whatever came back.
-        looks_like_title = len([w for w in title.split() if w.isascii()]) >= 3 and len(title) > 15
-        if here:
-            go = self._button("已讀 · 開啟" if here["read"] else "開啟")
-            go.clicked.connect(lambda _=False, pid=here["id"]: self.win.open_paper(pid))
-            row.addWidget(go)
-            # Following the context only works if you can act on it: a paper this one
-            # rests on is useless 3000 rows down the queue.
-            if not here["read"] and self.win.in_queue(here["id"]):
-                lift = self._button("插到最前面")
-                lift.clicked.connect(lambda _=False, pid=here["id"], b=lift: self._promote(pid, b))
-                row.addWidget(lift)
-        elif r.get("doi") or r.get("s2_id") or looks_like_title:
-            add = self._button("加入清單")
-            target = {"title": title, "doi": r.get("doi")}
-            add.clicked.connect(lambda _=False, x=target, b=add: self._add(x, b))
-            row.addWidget(add)
-        if editable:
-            edit = self._button("編輯")
-            edit.clicked.connect(lambda _=False, x=r, k=kind: self._edit_item(k, x))
-            row.addWidget(edit)
-        row.addStretch(1)
-        return row
+        return " · ".join(meta)
 
     # ---- edits -----------------------------------------------------------
+
     def _edit_item(self, kind: str, r: dict) -> None:
         fields = (
             (("purpose", "與原文的關係"), ("gist", "這篇在做什麼"), ("why", "判斷"))
@@ -1194,6 +1334,7 @@ class CitesPane(QScrollArea):
         self._reload()
 
     # ---- background work -------------------------------------------------
+
     @requires_ai("citations")
     def _run_cites(self) -> None:
         if not self.paper_id or self._running(self._cites_job):
@@ -1222,18 +1363,6 @@ class CitesPane(QScrollArea):
             return
         self._follow_job = _spawn("followups", self.paper_id, "--with-cites")
         self._reload()
-
-    def _promote(self, paper_id: str, button: QPushButton) -> None:
-        self.win.promote(paper_id)
-        button.setEnabled(False)
-        button.setText("已插到最前面")
-
-    def _add(self, row: dict, button: QPushButton) -> None:
-        """Resolve the reference and put it in a list, without blocking the window."""
-        button.setEnabled(False)
-        # The import runs for a few seconds against Semantic Scholar; the switcher
-        # picks it up on the next refresh rather than blocking the reading.
-        button.setText(f"已送到「{self._send_to_list(row)}」")
 
     def _send_to_list(self, row: dict) -> str:
         """Start adding a work to the open list; returns the list's name."""
