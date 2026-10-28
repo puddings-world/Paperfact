@@ -16,15 +16,29 @@ search.
 from __future__ import annotations
 
 import html
+import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
 
+from paper_daily import figures as figure_store
 from paper_daily.figures import Figure, extract
 
 MAX_WIDTH = 720
+# Entries are added a few at a time, each turn of the event loop spending at most
+# this long, so a paper with thirty figures never holds the window still.
+SLICE_SECONDS = 0.012
+
+
+def decode(path: Path) -> QImage:
+    """The figure as it will be shown, scaled here: QImage, unlike QPixmap, may be
+    made off the GUI thread, and a smooth scale of a large render is the slow part."""
+    image = QImage(str(path))
+    if not image.isNull() and image.width() > MAX_WIDTH:
+        image = image.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
+    return image
 
 
 def toc_html(figures: list[Figure], pal: dict[str, str]) -> str:
@@ -38,7 +52,8 @@ def toc_html(figures: list[Figure], pal: dict[str, str]) -> str:
 
 
 class _ExtractWorker(QObject):
-    finished = Signal(str, list)
+    # paper id, figures, their decoded images, and whether they were made just now
+    finished = Signal(str, list, list, bool)
 
     def __init__(self, paper_id: str, pdf_path: Path) -> None:
         super().__init__()
@@ -46,11 +61,13 @@ class _ExtractWorker(QObject):
         self._pdf_path = pdf_path
 
     def run(self) -> None:
+        cached = figure_store.is_cached(self._paper_id)
         try:
             figures = extract(self._paper_id, self._pdf_path)
         except Exception:
             figures = []
-        self.finished.emit(self._paper_id, figures)
+        images = [decode(fig.path) for fig in figures]
+        self.finished.emit(self._paper_id, figures, images, not cached and bool(figures))
 
 
 class _ClickableImage(QLabel):
@@ -65,6 +82,9 @@ class _ClickableImage(QLabel):
 class FigurePane(QScrollArea):
     jump = Signal(int, str)  # 1-based page, caption
     ready = Signal(str)
+    # Only when the figures were extracted now: the close reading places figures,
+    # and a dive rendered before they existed has to be rendered again.
+    extracted = Signal(str)
 
     def __init__(self, palette: dict[str, str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -85,6 +105,8 @@ class FigurePane(QScrollArea):
         # The paper's figures by label, pinned above the scrolling list: a paper with
         # twenty of them was a long scroll to find the one the explanation named.
         self._entries: list[QWidget] = []
+        self._waiting: list[tuple[Figure, QImage | None]] = []
+        self._generation = 0
         self._toc = QLabel(self)
         self._toc.setTextFormat(Qt.TextFormat.RichText)
         self._toc.setWordWrap(True)
@@ -117,7 +139,7 @@ class FigurePane(QScrollArea):
         self._worker = _ExtractWorker(paper_id, pdf_path)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._show)
+        self._worker.finished.connect(self._extracted)
         self._worker.finished.connect(self._thread.quit)
         self._thread.finished.connect(self._next_request)
         self._thread.start()
@@ -126,8 +148,15 @@ class FigurePane(QScrollArea):
         if self._requested:
             self.load(*self._requested)
 
+    def _extracted(self, paper_id, figures, images, fresh) -> None:
+        self._show(paper_id, figures, images)
+        if fresh and paper_id == self._paper_id:
+            self.extracted.emit(paper_id)
+
     def _clear(self) -> None:
+        self._generation += 1
         self._entries = []
+        self._waiting = []
         self._toc.hide()
         self.setViewportMargins(0, 0, 0, 0)
         while self._layout.count():
@@ -142,7 +171,9 @@ class FigurePane(QScrollArea):
         self._layout.addWidget(label)
         self._layout.addStretch(1)
 
-    def _show(self, paper_id: str, figures: list[Figure]) -> None:
+    def _show(
+        self, paper_id: str, figures: list[Figure], images: list[QImage] | None = None
+    ) -> None:
         # The reader may have moved on while the extraction was running.
         if paper_id != self._paper_id:
             return
@@ -161,18 +192,44 @@ class FigurePane(QScrollArea):
         count.setStyleSheet(f"color:{self.pal['faint']};font-size:11px;")
         self._layout.addWidget(count)
 
-        for fig in figures:
-            entry = self._entry(fig)
-            self._entries.append(entry)
-            self._layout.addWidget(entry)
         self._layout.addStretch(1)
         self._toc.setText(toc_html(figures, self.pal))
         self._toc.show()
         self._place_toc()
-        self.ready.emit(paper_id)
+        if images is None:
+            images = [None] * len(figures)
+        self._waiting = list(zip(figures, images, strict=True))
+        self._add_some(self._generation, paper_id)
+
+    def _add_some(self, generation: int, paper_id: str) -> None:
+        if generation != self._generation:
+            return
+        until = time.perf_counter() + SLICE_SECONDS
+        while self._waiting and time.perf_counter() < until:
+            self._add_entry()
+        if self._waiting:
+            QTimer.singleShot(0, lambda: self._add_some(generation, paper_id))
+        else:
+            self.ready.emit(paper_id)
+
+    def _add_entry(self) -> None:
+        fig, image = self._waiting.pop(0)
+        entry = self._entry(fig, image)
+        self._entries.append(entry)
+        # Above the closing stretch. A layout shows a widget added to a shown page
+        # only on a later turn, and a hidden one has no place yet; it already has
+        # its parent here, so showing it now makes no window of its own.
+        self._layout.insertWidget(self._layout.count() - 1, entry)
+        entry.show()
 
     def scroll_to(self, index: int) -> None:
         """Bring entry `index` to the top of the list, under the contents line."""
+        while index >= len(self._entries) and self._waiting:
+            self._add_entry()
+        # Entries arrive after the list is first laid out; a jump straight after
+        # one must see the list at its full height, not the height before it.
+        self._layout.activate()
+        QApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
         self.verticalScrollBar().setValue(self._entries[index].y())
 
     def _place_toc(self) -> None:
@@ -186,7 +243,7 @@ class FigurePane(QScrollArea):
         super().resizeEvent(event)
         self._place_toc()
 
-    def _entry(self, fig: Figure) -> QWidget:
+    def _entry(self, fig: Figure, image_data: QImage | None = None) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 8, 0, 8)
@@ -206,13 +263,10 @@ class FigurePane(QScrollArea):
         image.setCursor(Qt.CursorShape.PointingHandCursor)
         image.setToolTip("點圖跳到原文中的位置")
         image.clicked.connect(lambda f=fig: self.jump.emit(f.page, f.caption))
-        pixmap = QPixmap(str(fig.path))
-        if not pixmap.isNull():
-            if pixmap.width() > MAX_WIDTH:
-                pixmap = pixmap.scaledToWidth(
-                    MAX_WIDTH, Qt.TransformationMode.SmoothTransformation
-                )
-            image.setPixmap(pixmap)
+        if image_data is None:
+            image_data = decode(fig.path)
+        if not image_data.isNull():
+            image.setPixmap(QPixmap.fromImage(image_data))
         image.setStyleSheet("background:#ffffff;")
         image.setAlignment(Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(image)

@@ -769,7 +769,7 @@ class ReaderPage(QWidget):
 
         self.figure_pane = FigurePane(pal)
         self.figure_pane.jump.connect(self._jump_to_figure)
-        self.figure_pane.ready.connect(self._figures_ready)
+        self.figure_pane.extracted.connect(self._figures_ready)
         self.tabs.addTab(self.figure_pane, "圖表")
 
         self.cites_pane = CitesPane(self.win, pal)
@@ -2206,6 +2206,9 @@ class MainWindow(QWidget):
             lambda: self._poll_external_lists(background=True)
         )
         self._external_lists_changed()
+        from paper_daily.desktop import warm_up
+
+        QTimer.singleShot(warm_up.DELAY_MS, warm_up.start)
         if open_next:
             self.open_next_unread()
         elif not self.papers and self.list_picker.count() == 0:

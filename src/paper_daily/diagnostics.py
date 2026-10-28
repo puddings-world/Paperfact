@@ -8,7 +8,6 @@ import json
 import os
 import platform
 import re
-import shutil
 import sys
 import tempfile
 import threading
@@ -16,7 +15,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from paper_daily import __version__, build_identity, runtime
+from paper_daily import __version__, build_identity, executables, runtime
 
 LIMIT = 256 * 1024
 MAX_EVENTS = 40
@@ -85,6 +84,24 @@ def _regular(path):
 def _version(value):
     match = re.match(r"\d+(?:\.\d+){0,3}", str(value))
     return match[0] if match else "unknown"
+
+
+PACKAGES = ("PySide6", "PySide6-Essentials", "PyMuPDF", "httpx")
+_packages: dict = {}
+
+
+def package_version(name):
+    """Installed packages do not change while the app runs, and reading their
+    metadata scans site-packages: the diagnostics dialog took half a second to open.
+    Keyed by the lookup too, so a test's stand-in is asked afresh."""
+    key = (importlib.metadata.version, name)
+    if key not in _packages:
+        try:
+            _packages[key] = _version(importlib.metadata.version(name))
+        except importlib.metadata.PackageNotFoundError:
+            # Bundled modules can exist without distribution metadata.
+            _packages[key] = "version-unavailable"
+    return _packages[key]
 
 
 def _event(value):
@@ -243,13 +260,7 @@ def collect(directory=None):
                         current["frames"] = current["frames"][-8:]
         except OSError:
             sources[name] = "unreadable"
-    packages = {}
-    for name in ("PySide6", "PySide6-Essentials", "PyMuPDF", "httpx"):
-        try:
-            packages[name] = _version(importlib.metadata.version(name))
-        except importlib.metadata.PackageNotFoundError:
-            # Bundled modules can exist without distribution metadata.
-            packages[name] = "version-unavailable"
+    packages = {name: package_version(name) for name in PACKAGES}
     machine = platform.machine().lower()
     return {
         "schema_version": 1,
@@ -271,7 +282,7 @@ def collect(directory=None):
         },
         "packages": packages,
         "agent_commands_found": {
-            name: shutil.which(name) is not None for name in ("claude", "codex", "gemini")
+            name: executables.which(name) is not None for name in ("claude", "codex", "gemini")
         },
         "logs": sources,
         "errors": events[-MAX_EVENTS:],

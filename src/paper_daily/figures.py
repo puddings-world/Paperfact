@@ -130,6 +130,10 @@ def _drawn_bounds(page) -> list[tuple[float, float, float, float]]:
     return boxes
 
 
+def is_cached(paper_id: str) -> bool:
+    return (FIG_DIR / _safe(paper_id) / "index.json").exists()
+
+
 def extract(
     paper_id: str, pdf_path: Path, force: bool = False, *, cached_only=False
 ) -> list[Figure]:

@@ -122,3 +122,67 @@ def test_the_figures_tab_lists_every_figure_and_jumps_to_the_one_picked(tmp_path
     assert toc.isHidden() and widget.viewportMargins().top() == 0
     widget.deleteLater()
     app.processEvents()
+
+
+def test_many_figures_are_added_a_few_per_turn_and_all_arrive(tmp_path, monkeypatch):
+    # Thirty figures made at once held the window still for over half a second
+    # after the 圖表 tab was opened.
+    import time
+
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from paper_daily.desktop import figure_pane
+    from paper_daily.desktop.main import LIGHT
+
+    app = QApplication.instance() or QApplication([])
+    made = figure_pane.FigurePane._entry
+
+    def slow(self, fig, image=None):
+        time.sleep(0.005)
+        return made(self, fig, image)
+
+    monkeypatch.setattr(figure_pane.FigurePane, "_entry", slow)
+    found = [
+        figures.Figure("p", f"Figure {i}", "Caption.", 1, tmp_path / "absent.png")
+        for i in range(30)
+    ]
+    widget = figure_pane.FigurePane(LIGHT)
+    ready = []
+    widget.ready.connect(ready.append)
+    widget._paper_id = "p"
+    started = time.perf_counter()
+    widget._show("p", found)
+    assert time.perf_counter() - started < 0.1
+    assert 0 < len(widget._entries) < len(found) and ready == []
+    # The contents line names every figure from the start, and a jump to one not
+    # yet made makes the rest first.
+    assert "Figure 29" in widget._toc.text()
+    widget.scroll_to(29)
+    assert len(widget._entries) == len(found)
+    for _ in range(100):
+        if ready:
+            break
+        QTest.qWait(10)
+    assert ready == ["p"]
+    widget.deleteLater()
+    app.processEvents()
+
+
+def test_figures_ask_for_the_dive_again_only_when_extracted_just_now(tmp_path, monkeypatch):
+    # The close reading places figures, so a dive rendered before they existed is
+    # rendered again; one rendered from the cache already had them, and redoing it
+    # froze the 圖表 tab.
+    from paper_daily.desktop import figure_pane
+
+    monkeypatch.setattr(figures, "FIG_DIR", tmp_path)
+    found = [figures.Figure("p", "Figure 1", "Caption.", 1, tmp_path / "absent.png")]
+    monkeypatch.setattr(figure_pane, "extract", lambda pid, pdf: found)
+    results = []
+    worker = figure_pane._ExtractWorker("p", tmp_path / "paper.pdf")
+    worker.finished.connect(lambda *args: results.append(args[3]))
+    worker.run()
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "index.json").write_text("[]")
+    worker.run()
+    assert results == [True, False]
