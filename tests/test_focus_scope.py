@@ -85,6 +85,29 @@ def test_every_panel_on_the_key_path_is_lit_the_inner_one_strongest(window):
     assert scopes._tag.text() == "outer › inner · keys"
 
 
+def test_the_band_drifts_on_arrival_then_rests(window, monkeypatch):
+    # Drifting for as long as a panel had the keys repainted the window twenty times
+    # a second for hours: an untouched reader cost seven percent of a core.
+    from paper_daily.desktop import focus_scope
+
+    window["inner_edit"].setFocus()
+    _pump()
+    frame = window["scopes"]._frames[window["inner"]]
+    assert frame._timer.isActive()
+    monkeypatch.setattr(
+        frame, "window", lambda: type("W", (), {"isActiveWindow": lambda self: True})()
+    )
+    steps = focus_scope.FRAME_DRIFT_MS // focus_scope.FRAME_TICK_MS
+    for _ in range(steps - 1):
+        frame._advance()
+    assert frame._timer.isActive()
+    frame._advance()
+    assert not frame._timer.isActive()
+    resting = frame.phase
+    _pump()
+    assert frame.phase == resting
+
+
 def test_the_path_runs_outermost_first_whatever_the_registration_order():
     app = QApplication.instance() or QApplication([])
     win = QWidget()

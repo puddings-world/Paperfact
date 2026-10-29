@@ -52,7 +52,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import runtime, venues
-from paper_daily.desktop import ai_style, button_style, fonts, ui_state
+from paper_daily.desktop import ai_style, button_style, fonts, pdf_warm, ui_state
 from paper_daily.desktop.focus_scope import scopes
 from paper_daily.store import connect
 
@@ -653,6 +653,10 @@ class QueuePage(QWidget):
         )
         self.view.clicked.connect(self._open)
         self.view.activated.connect(self._open)
+        # The pointer resting on a row, or the keys moving onto it, comes before
+        # the click or Enter that opens it.
+        self.view.entered.connect(self._warm)
+        self.view.selectionModel().currentChanged.connect(lambda now, _before: self._warm(now))
         self.view.viewport().installEventFilter(self)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.view.customContextMenuRequested.connect(self._menu)
@@ -1192,6 +1196,11 @@ class QueuePage(QWidget):
         paper = index.data(PAPER_ROLE)
         if paper is not None:
             self.win.open_paper(paper.id)
+
+    def _warm(self, index: QModelIndex) -> None:
+        paper = index.data(PAPER_ROLE)
+        if paper is not None and paper.has_pdf:
+            pdf_warm.warm(paper.pdf_path)
 
     def _edit_note(self, paper) -> None:
         from paper_daily import lists

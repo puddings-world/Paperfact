@@ -15,7 +15,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from paper_daily import __version__, build_identity, executables, runtime
+from paper_daily import __version__, build_identity, executables, runtime, ui_stalls
 
 LIMIT = 256 * 1024
 MAX_EVENTS = 40
@@ -168,6 +168,27 @@ def record_exception(kind, tb, *, phase="desktop", directory=None):
         return False  # Diagnostic storage must never break the user's operation.
 
 
+def _stall_context(line):
+    """Only the watchdog's fixed vocabulary and numbers survive into a report."""
+    found = re.fullmatch(
+        r"  context state=(\w+) open=(\d{1,6}(?:\.\d)?)h widgets=(\d{1,7}|\?) before=(\S+)",
+        line,
+    )
+    if not found:
+        return None
+    before = []
+    for token in found[4].split(",")[-8:]:
+        event = re.fullmatch(r"([a-z-]+)@-(\d{1,3}(?:\.\d)?)s", token)
+        if event and event[1] in ui_stalls.EVENTS:
+            before.append({"event": event[1], "seconds_before": float(event[2])})
+    return {
+        "state": found[1] if found[1] in ui_stalls.STATES else "unknown",
+        "open_hours": float(found[2]),
+        "widgets": None if found[3] == "?" else int(found[3]),
+        "before": before,
+    }
+
+
 def _tail(path):
     if not _regular(path) or not path.is_file():
         return None
@@ -253,6 +274,8 @@ def collect(directory=None):
                 if header:
                     current = {"duration_ms": min(int(header[1]), 3600000), "frames": []}
                     stalls.append(current)
+                elif current is not None and line.startswith("  context "):
+                    current["context"] = _stall_context(line)
                 elif current is not None:
                     frame = re.fullmatch(r"  ([\w.]+):[^:\n]*:(\d{1,6})", line)
                     if frame and frame[1] in MODULES and 0 < int(frame[2]) <= 100000:

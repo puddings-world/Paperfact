@@ -6,8 +6,10 @@ of a second to a second and a half with the window frozen. The page now switches
 once and each part is filled in when it is ready.
 
 Only the newest request of each kind is applied, so a paper left before its dive
-was typeset never overwrites the next one. Every OffThread shares one worker, which
-keeps the requests in order and never has two of them reading PDFs at once.
+was typeset never overwrites the next one. The OffThreads of one lane share one
+worker, which keeps their requests in order and never has two of them reading PDFs
+at once; a poll that can wait on the disk gets a lane of its own, so it never holds
+up a paper being opened.
 """
 
 from __future__ import annotations
@@ -18,14 +20,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Signal
 
-_POOL: ThreadPoolExecutor | None = None
+_POOLS: dict[str, ThreadPoolExecutor] = {}
 
 
-def _pool() -> ThreadPoolExecutor:
-    global _POOL
-    if _POOL is None:
-        _POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="reader-prepare")
-    return _POOL
+def _pool(lane: str) -> ThreadPoolExecutor:
+    if lane not in _POOLS:
+        _POOLS[lane] = ThreadPoolExecutor(max_workers=1, thread_name_prefix=lane)
+    return _POOLS[lane]
 
 
 class _Failed:
@@ -36,8 +37,9 @@ class _Failed:
 class OffThread(QObject):
     _finished = Signal(str, int, object)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, *, lane: str = "reader-prepare") -> None:
         super().__init__(parent)
+        self._lane = lane
         self._latest: dict[str, int] = {}
         self._idle = threading.Event()
         self._idle.set()
@@ -69,7 +71,7 @@ class OffThread(QObject):
                     if not self._pending:
                         self._idle.set()
 
-        _pool().submit(job)
+        _pool(self._lane).submit(job)
 
     def cancel(self, kind: str) -> int:
         """Forget any request of this kind still under way; returns the new token."""

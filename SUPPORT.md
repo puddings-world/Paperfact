@@ -21,7 +21,10 @@ Changing account or opening another paper does not add account or paper data to 
 The report contains app/install version, OS and CPU architecture, dependency
 versions, command availability, bounded error types and recognized app stack
 locations. When available, it also includes bounded UI-stall durations and
-recognized app frame locations; it excludes raw watchdog text and function names. It does **not** attach raw logs, paths, credentials, environment variables,
+recognized app frame locations; it excludes raw watchdog text and function names.
+Each stall also carries its context from a fixed list: whether the app was in front,
+hours since it opened, the widget count, and window-system events in the ten seconds
+before it (screen, font or colour changes, resizes). It does **not** attach raw logs, paths, credentials, environment variables,
 prompts, answers, PDFs, notes, research databases or usage-event exports.
 Command availability is not proof of login or remaining quota. Logs can contain
 older failures; caught AI errors and OS-level launch failures may be absent.

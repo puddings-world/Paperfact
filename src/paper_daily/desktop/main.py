@@ -15,6 +15,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -183,9 +184,7 @@ class Paper:
 
     @property
     def pdf_path(self) -> Path:
-        import re
-
-        return PDF_DIR / (re.sub(r"[^A-Za-z0-9._-]", "_", self.id) + ".pdf")
+        return PDF_DIR / _pdf_name(self.id)
 
     @property
     def has_pdf(self) -> bool:
@@ -194,6 +193,24 @@ class Paper:
         if self._has_pdf is None:
             self._has_pdf = self.pdf_path.exists()
         return self._has_pdf
+
+
+_UNSAFE_IN_NAME = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _pdf_name(paper_id: str) -> str:
+    return _UNSAFE_IN_NAME.sub("_", paper_id) + ".pdf"
+
+
+def _pdf_names() -> set[str]:
+    """The PDFs on disk, from one listing of the folder. Asking each paper in turn
+    was a stat() per paper: half a second for a list of five thousand, every time
+    the list was shown."""
+    try:
+        with os.scandir(PDF_DIR) as entries:
+            return {entry.name for entry in entries}
+    except OSError:
+        return set()
 
 
 def _row_to_paper(r: sqlite3.Row) -> Paper:
@@ -259,7 +276,11 @@ class Data:
                 rows = conn.execute(self.LIST_SQL, (list_id, limit))
             else:
                 rows = conn.execute(self.QUEUE_SQL, (limit,))
-            return [_row_to_paper(r) for r in rows]
+            papers = [_row_to_paper(r) for r in rows]
+        on_disk = _pdf_names()
+        for paper in papers:
+            paper._has_pdf = _pdf_name(paper.id) in on_disk
+        return papers
 
     def pins(self, scope: str) -> set[str]:
         with connect() as conn:

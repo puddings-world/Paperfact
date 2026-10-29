@@ -584,3 +584,33 @@ def test_a_d_r_toggle_the_panels_but_type_into_text(pane, monkeypatch):
     QTest.keyClick(widget.speaker_notes, Qt.Key.Key_A)
     assert "a" in widget.speaker_notes.toPlainText()
     assert widget.outline_button.isChecked()
+
+
+def test_opening_the_slides_tab_collects_materials_off_the_windows_thread(pane, monkeypatch):
+    # Collecting reads the PDF's text: half a second frozen the first time 簡報 opened.
+    import threading
+    import time
+
+    widget, deck, app, tmp = pane
+    gate, threads = threading.Event(), []
+
+    def collect(pid):
+        threads.append(threading.current_thread() is threading.main_thread())
+        gate.wait(5)
+        return materials.Materials(pid)
+
+    monkeypatch.setattr(presentation_pane.materials, "collect", collect)
+    widget.materials_button.setChecked(True)
+    widget.hide()
+    widget.load("ref:paper", "測試論文", defer=True)
+    threads.clear()
+    started = time.perf_counter()
+    widget.show()
+    app.processEvents()
+    assert time.perf_counter() - started < 2
+    assert widget.materials_panel.paper_id is None
+    gate.set()
+    assert widget._materials_read.wait()
+    app.processEvents()
+    assert threads == [False]
+    assert widget.materials_panel.paper_id == "ref:paper"

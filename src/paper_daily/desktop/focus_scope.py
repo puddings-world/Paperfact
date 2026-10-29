@@ -30,6 +30,10 @@ FOCUS_DEEP = "#13a4c4"
 FOCUS_LIGHT = "#9be8f7"
 FRAME_TICK_MS = 50
 FRAME_CYCLE_MS = 2600
+# The band drifts on arrival and then rests. Drifting for as long as the panel had
+# the keys repainted the window twenty times a second for hours: seven percent of a
+# core on an untouched reader, and on a Mac the whole window recomposited each time.
+FRAME_DRIFT_MS = 2 * FRAME_CYCLE_MS
 # Clear of a vertical scroll bar at the panel's right edge.
 TAG_INSET = 22
 
@@ -45,7 +49,8 @@ class Region:
 class _Frame(QWidget):
     """The panel's outline. The panel with the keys gets a light-to-deep cyan band
     drifting slowly around it, so it reads as "keys go here" rather than as an error;
-    the panels around it a faint still line."""
+    the panels around it a faint still line. The band moves for a moment on arrival,
+    then stays still."""
 
     def __init__(self, parent: QWidget, inner: bool) -> None:
         super().__init__(parent)
@@ -54,6 +59,7 @@ class _Frame(QWidget):
         self.phase = 0.0
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setGeometry(parent.rect())
+        self._ticks_left = FRAME_DRIFT_MS // FRAME_TICK_MS
         if inner:
             self._timer = QTimer(self)
             self._timer.setInterval(FRAME_TICK_MS)
@@ -69,6 +75,9 @@ class _Frame(QWidget):
     def _advance(self) -> None:
         if not self.window().isActiveWindow():
             return
+        self._ticks_left -= 1
+        if self._ticks_left <= 0:
+            self._timer.stop()
         self.phase = (self.phase + FRAME_TICK_MS / FRAME_CYCLE_MS) % 1.0
         self.update()
 

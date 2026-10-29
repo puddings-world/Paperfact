@@ -8,10 +8,22 @@ from pathlib import Path
 
 from paper_daily.store import connect, now
 
+# Opening a paper asks for its PDF's hash several times (highlights, slide
+# materials, their positions), each a read of the whole file; a file that has not
+# changed keeps its hash.
+_hashes: dict[tuple[str, int, int], str] = {}
+
 
 def document_hash(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    if key not in _hashes:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if len(_hashes) > 256:
+            _hashes.clear()
+        _hashes[key] = digest
+    return _hashes[key]
 
 
 def list_marks(paper_id: str, fingerprint: str) -> list[dict]:

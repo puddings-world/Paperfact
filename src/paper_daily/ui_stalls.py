@@ -4,6 +4,12 @@ A timer on the GUI thread beats every 50 ms; a watcher thread notices when the b
 stop and records where the GUI thread is meanwhile. Only code locations are written
 (module, function, line), never paper text, notes or settings, to a bounded local
 file. The common stack across a stall's samples names the slow step.
+
+Qt's own work (layout, text shaping, painting) has no Python frame, so each stall
+also records its context from a fixed vocabulary: whether the app was in front, how
+long it had been open, how many widgets existed, and which window-system events
+came just before (a screen waking up, fonts or colours changing, a resize). That
+tells a relayout after waking from an accumulation over a long session.
 """
 
 from __future__ import annotations
@@ -11,7 +17,7 @@ from __future__ import annotations
 import sys
 import threading
 import time
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime
 from pathlib import Path
 
@@ -20,6 +26,24 @@ SAMPLE_EVERY = 0.02
 BEAT_EVERY_MS = 50
 LIMIT = 512 * 1024
 DEPTH = 14
+RECENT_SECONDS = 10.0
+COUNT_WIDGETS_EVERY_MS = 60_000
+EVENTS = frozenset(
+    {
+        "app-active",
+        "app-inactive",
+        "app-hidden",
+        "app-suspended",
+        "screen-added",
+        "screen-removed",
+        "screen-changed",
+        "fonts-changed",
+        "colors-changed",
+        "window-resized",
+        "window-state",
+    }
+)
+STATES = frozenset({"active", "inactive", "hidden", "suspended", "unknown"})
 
 
 def _where(frame, prefix: str = "paper_daily") -> tuple[str, ...]:
@@ -52,6 +76,10 @@ class Watchdog:
         self.beat = clock()
         self.samples: Counter[tuple[str, ...]] = Counter()
         self.stall_started = None
+        self.opened = clock()
+        self.state = "unknown"
+        self.widgets: int | None = None
+        self.recent: deque[tuple[float, str]] = deque(maxlen=16)
         self.stopped = threading.Event()
         self._thread = threading.Thread(target=self._run, name="ui-stall-watch", daemon=True)
 
@@ -63,6 +91,28 @@ class Watchdog:
 
     def heartbeat(self) -> None:
         self.beat = self.clock()
+
+    def note(self, event: str) -> None:
+        """Remember a window-system event (one of EVENTS) for the next stall."""
+        if event in EVENTS:
+            self.recent.append((self.clock(), event))
+            if event.startswith("app-"):
+                self.state = event[4:]
+
+    def context(self) -> str:
+        start = self.stall_started if self.stall_started is not None else self.clock()
+        before = [
+            f"{event}@-{start - at:.1f}s"
+            for at, event in list(self.recent)
+            if 0 <= start - at <= RECENT_SECONDS
+        ]
+        parts = [
+            f"state={self.state}",
+            f"open={(start - self.opened) / 3600:.1f}h",
+            f"widgets={self.widgets if self.widgets is not None else '?'}",
+            f"before={','.join(before) or '-'}",
+        ]
+        return "  context " + " ".join(parts)
 
     def check(self) -> None:
         """One watcher step; separate from the loop so tests can drive it."""
@@ -84,12 +134,14 @@ class Watchdog:
     def _write(self, seconds: float) -> None:
         stack, hits = self.samples.most_common(1)[0]
         total = sum(self.samples.values())
+        context = self.context()
         self.samples.clear()
         self.stall_started = None
         lines = [
             f"{datetime.now().isoformat(timespec='seconds')} stall {seconds * 1000:.0f} ms "
             f"(stack in {hits}/{total} samples)",
             *(f"  {where}" for where in stack),
+            context,
             "",
         ]
         try:
@@ -101,9 +153,67 @@ class Watchdog:
             pass
 
 
+def _follow_window_system(watchdog: Watchdog, app, parent) -> None:
+    from PySide6.QtCore import QEvent, QObject, Qt, QTimer
+
+    states = {
+        Qt.ApplicationState.ApplicationActive: "active",
+        Qt.ApplicationState.ApplicationInactive: "inactive",
+        Qt.ApplicationState.ApplicationHidden: "hidden",
+        Qt.ApplicationState.ApplicationSuspended: "suspended",
+    }
+    watchdog.state = states.get(app.applicationState(), "unknown")
+    app.applicationStateChanged.connect(
+        lambda state: watchdog.note("app-" + states.get(state, "unknown"))
+    )
+
+    def follow(screen) -> None:
+        for signal in (screen.geometryChanged, screen.logicalDotsPerInchChanged):
+            signal.connect(lambda *_: watchdog.note("screen-changed"))
+
+    for screen in app.screens():
+        follow(screen)
+    app.screenAdded.connect(lambda screen: (watchdog.note("screen-added"), follow(screen)))
+    app.screenRemoved.connect(lambda _screen: watchdog.note("screen-removed"))
+    app.primaryScreenChanged.connect(lambda _screen: watchdog.note("screen-changed"))
+    app.fontDatabaseChanged.connect(lambda: watchdog.note("fonts-changed"))
+    app.styleHints().colorSchemeChanged.connect(lambda _scheme: watchdog.note("colors-changed"))
+
+    def count() -> None:
+        watchdog.widgets = len(app.allWidgets())
+
+    count()
+    counter = QTimer(parent)
+    counter.setInterval(COUNT_WIDGETS_EVERY_MS)
+    counter.timeout.connect(count)
+    counter.start()
+    watchdog.counter = counter
+    if parent is None:
+        return
+
+    class Resizes(QObject):
+        # A drag-resize sends dozens of events a second; one note per second is
+        # enough to place it before a stall.
+        last = None
+
+        def eventFilter(self, watched, event):  # noqa: N802
+            if event.type() == QEvent.Type.Resize:
+                now = watchdog.clock()
+                if self.last is None or now - self.last >= 1.0:
+                    self.last = now
+                    watchdog.note("window-resized")
+            elif event.type() == QEvent.Type.WindowStateChange:
+                watchdog.note("window-state")
+            return False
+
+    watchdog.resizes = Resizes(parent)
+    parent.installEventFilter(watchdog.resizes)
+
+
 def install(directory: Path, parent=None) -> Watchdog:
     """Start watching the calling (GUI) thread; the timer lives as long as `parent`."""
     from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
 
     watchdog = Watchdog(Path(directory) / "ui-stalls.log")
     timer = QTimer(parent)
@@ -111,5 +221,8 @@ def install(directory: Path, parent=None) -> Watchdog:
     timer.timeout.connect(watchdog.heartbeat)
     timer.start()
     watchdog.timer = timer
+    app = QApplication.instance()
+    if app is not None:
+        _follow_window_system(watchdog, app, parent)
     watchdog.start()
     return watchdog

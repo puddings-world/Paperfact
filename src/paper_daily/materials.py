@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -186,14 +187,30 @@ def place_exhibits(exhibits: list[dict], body: str | None) -> None:
             item.setdefault("section", _section_at(sections, chosen[0]))
 
 
+# The text of the last few PDFs read. Reading it holds the interpreter for the
+# whole page, which stalls the window even from a worker thread, and 簡報 asks again
+# each time a paper is reopened.
+_page_texts: OrderedDict[tuple[str, int, int], list[tuple[int | None, str]]] = OrderedDict()
+PAGE_TEXTS_KEPT = 8
+
+
 def _pages(paper_id: str) -> list[tuple[int | None, str]]:
     pdf_path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
     if pdf_path.exists():
         import pymupdf
 
         try:
+            stat = pdf_path.stat()
+            key = (str(pdf_path), stat.st_mtime_ns, stat.st_size)
+            if key in _page_texts:
+                _page_texts.move_to_end(key)
+                return _page_texts[key]
             with pymupdf.open(pdf_path) as doc:
-                return [(i + 1, doc[i].get_text()) for i in range(min(len(doc), MAX_PAGES))]
+                pages = [(i + 1, doc[i].get_text()) for i in range(min(len(doc), MAX_PAGES))]
+            _page_texts[key] = pages
+            while len(_page_texts) > PAGE_TEXTS_KEPT:
+                _page_texts.popitem(last=False)
+            return pages
         except (RuntimeError, ValueError, OSError):
             pass
     cached = TEXT_DIR / (_safe_name(paper_id) + ".txt")

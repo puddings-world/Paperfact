@@ -70,6 +70,7 @@ from paper_daily.desktop.ask import AskRunner
 from paper_daily.desktop.focus_scope import scopes
 from paper_daily.desktop.key_hints import KeyHints, keycap
 from paper_daily.desktop.materials_panel import MaterialsPanel
+from paper_daily.desktop.off_thread import OffThread
 from paper_daily.desktop.script_editor import ScriptPage
 from paper_daily.desktop.slide_canvas import MATERIAL_MIME, SlideCanvas
 from paper_daily.slide_layout import elements_for, table_box, text_box, validate_elements
@@ -440,6 +441,7 @@ class PresentationPane(QWidget):
             surface.installEventFilter(self)
         split.addWidget(self.views)
         self.materials_panel = MaterialsPanel()
+        self._materials_read = OffThread(self)
         self.materials_panel.hide()
         self.materials_panel.chosen.connect(self._insert_material)
         self.materials_panel.analyze_requested.connect(self._analyze_highlights)
@@ -739,7 +741,7 @@ class PresentationPane(QWidget):
             or self._highlights_busy
         )
 
-    def load(self, paper_id: str, title: str, *, defer=False) -> None:
+    def load(self, paper_id: str, title: str, *, defer=False, background=False) -> None:
         self._pending_load = None
         self.paper_id = paper_id
         self._undo.clear()
@@ -752,7 +754,10 @@ class PresentationPane(QWidget):
             self._pending_load = (paper_id, title)
             return
         if self.materials_button.isChecked():
-            self._load_materials()
+            if background:
+                self._materials_for = None
+                self.materials_panel.clear()
+            self._load_materials(background=background)
         else:
             self._materials_for = None
             self.materials_panel.clear()
@@ -772,7 +777,7 @@ class PresentationPane(QWidget):
         super().showEvent(event)
         pending = getattr(self, "_pending_load", None)
         if pending:
-            self.load(*pending)
+            self.load(*pending, background=True)
 
     def _recovery_path(self):
         return presentations._folder(self.paper_id) / f"{self._mode}-recovery.json"
@@ -973,16 +978,35 @@ class PresentationPane(QWidget):
         else:
             self.status.setText("這篇尚無可用原圖，請先加入原文 PDF 並抽取圖表。")
 
-    def _load_materials(self) -> None:
+    def _load_materials(self, *, background: bool = False) -> None:
         if not self.paper_id:
             return
-        try:
-            found = materials.collect(self.paper_id)
-        except (ValueError, OSError) as exc:
-            self.materials_panel.load(None)
-            self.status.setText(f"素材讀取失敗：{exc}")
+        paper_id = self.paper_id
+
+        def collect():
+            try:
+                return materials.collect(paper_id), None
+            except (ValueError, OSError) as exc:
+                return None, exc
+
+        if background:
+            # Collecting reads the PDF's text: half a second on the window's thread
+            # the first time 簡報 was opened for a paper.
+            self._materials_read.run(
+                "materials", collect, lambda done: self._show_materials(paper_id, *done)
+            )
             return
-        self._materials_for = self.paper_id
+        self._materials_read.cancel("materials")
+        self._show_materials(paper_id, *collect())
+
+    def _show_materials(self, paper_id: str, found, error) -> None:
+        if paper_id != self.paper_id:
+            return
+        if error is not None:
+            self.materials_panel.load(None)
+            self.status.setText(f"素材讀取失敗：{error}")
+            return
+        self._materials_for = paper_id
         self.materials_panel.load(found)
 
     def _highlight_status(self, text):
