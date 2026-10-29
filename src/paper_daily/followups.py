@@ -270,10 +270,7 @@ def fetch(paper_id: str, log: Log = lambda _m: None) -> int:
 
 # ---- judging --------------------------------------------------------------------
 def _json(text: str, opener: str, closer: str):
-    start, end = text.find(opener), text.rfind(closer)
-    if start < 0 or end < start:
-        raise ValueError("no JSON in the answer")
-    return json.loads(text[start : end + 1])
+    return llm.reply_json(text, list if opener == "[" else dict, dict if opener == "[" else None)
 
 
 def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
@@ -319,7 +316,7 @@ def judge(paper_id: str, log: Log = lambda _m: None) -> tuple[int, str]:
         try:
             verdicts = _json(text, "[", "]")
         except ValueError:
-            reason = "the model's answer was not a JSON array"
+            reason = "AI 回覆格式無法解析"
             continue
         with connect() as conn:
             for v in verdicts:
@@ -357,7 +354,15 @@ def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
     keep_refs = [r for r in refs if r.get("verdict") in ("必讀", "值得")][:30]
     keep_later = [r for r in later if r.get("verdict") in ("必讀", "值得")][:30]
     if not keep_refs and not keep_later:
-        return False, "nothing judged yet to build an overview from"
+        # A paper whose references are all background still sits somewhere in its
+        # field; insisting on 必讀/值得 left the story unwritten for good while the
+        # tab kept offering to write it.
+        keep_refs = [r for r in refs if r.get("verdict")][:30]
+        keep_later = [r for r in later if r.get("verdict")][:30]
+    if not keep_refs and not keep_later:
+        with connect() as conn:
+            set_kv(conn, f"followups.overview.none.{paper_id}", now())
+        return False, NOTHING_TO_TELL
 
     lines = [
         f"論文:{paper['title']}({paper['venue']} {paper['year']})",
@@ -383,7 +388,9 @@ def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
     try:
         data = _json(text, "{", "}")
     except ValueError:
-        return False, "the model's answer was not a JSON object"
+        return False, "AI 回覆格式無法解析"
+    if not str(data.get("summary") or "").strip():
+        return False, "AI 沒有寫出研究脈絡"
     reading = [
         {"title": str(x.get("title") or ""), "direction": str(x.get("direction") or ""),
          "why": str(x.get("why") or "")}
@@ -403,19 +410,59 @@ def overview(paper_id: str, log: Log = lambda _m: None) -> tuple[bool, str]:
     return True, ""
 
 
-def analyse(paper_id: str, log: Log = lambda _m: None) -> int:
-    fetch(paper_id, log)
-    done, reason = judge(paper_id, log)
+# Neither a judged reference nor a judged citing work: there is nothing to tell, and
+# that is an answer rather than a step left to do.
+NOTHING_TO_TELL = "沒有已判讀的參考文獻或後續研究可整理成脈絡"
+
+
+def done(conn, paper_id: str) -> bool:
+    """啟後 is done once the field was asked and the 研究脈絡 exists, or there was
+    nothing to write it from. Asking alone said done while the tab still offered to
+    write the story."""
+    if get_kv(conn, f"followups.checked.{paper_id}") is None:
+        return False
+    if conn.execute("SELECT 1 FROM paper_context WHERE paper_id=?", (paper_id,)).fetchone():
+        return True
+    return get_kv(conn, f"followups.overview.none.{paper_id}") is not None
+
+
+def nothing_to_tell(conn, paper_id: str) -> bool:
+    return get_kv(conn, f"followups.overview.none.{paper_id}") is not None
+
+
+def analyse(paper_id: str, log: Log = lambda _m: None, overview_too: bool = True) -> int:
+    """Ask the field, judge what came back and, unless the caller writes it later
+    with more in hand, the 研究脈絡. Returns how many citing works were judged."""
+    return analyse_result(paper_id, log, overview_too)[0]
+
+
+def analyse_result(
+    paper_id: str, log: Log = lambda _m: None, overview_too: bool = True
+) -> tuple[int, str]:
+    """Like `analyse`, with the reason the 啟後 part is not finished ("" when it is)."""
+    try:
+        fetch(paper_id, log)
+    except FetchError as e:
+        log(f"  followups not fetched: {e}")
+        return 0, "查詢後續研究的服務暫時無法連線，請稍後再試"
+    judged, reason = judge(paper_id, log)
+    failure = ""
     if reason and reason != "nothing to judge":
         log(f"  judging skipped: {reason}")
-    wrote, why = overview(paper_id, log)
-    if not wrote and why != "edited by hand":
-        log(f"  overview skipped: {why}")
+        failure = f"後續研究判讀未完成：{reason}"
+    if overview_too:
+        wrote, why = overview(paper_id, log)
+        if not wrote and why not in ("edited by hand", NOTHING_TO_TELL):
+            log(f"  overview skipped: {why}")
+            failure = failure or f"研究脈絡未完成：{why}"
     from paper_daily import citegraph
 
     # No model call, a few requests: the map is ready whenever the lists are.
-    citegraph.links(paper_id, log)
-    return done
+    try:
+        citegraph.links(paper_id, log)
+    except FetchError as e:
+        log(f"  citation map skipped: {e}")
+    return judged, failure
 
 
 def ahead(count: int = 3, log: Log = lambda _m: None) -> int:

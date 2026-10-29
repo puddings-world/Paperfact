@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QVBoxLayout,
 )
+from shiboken6 import isValid
 
 from paper_daily import runtime, survey
 from paper_daily.desktop import ai_style, md
@@ -61,6 +62,14 @@ class SurveyDialog(QDialog):
             f"border:1px solid {palette['border']};padding:18px;font-size:14px;}}"
         )
         layout.addWidget(self.view, 1)
+        self._shown_running = False
+        from paper_daily.desktop.activity import hub_for
+
+        # A rewrite started from an earlier copy of this dialog keeps running after
+        # it closes; the hub is the only place that knows.
+        self._hub = hub_for(parent) if parent is not None else None
+        if self._hub is not None:
+            self._hub.changed.connect(self._hub_changed)
         self._load()
 
     def _load(self) -> None:
@@ -74,7 +83,8 @@ class SurveyDialog(QDialog):
                 "lp.paper_id WHERE lp.list_id=? AND d.paper_id IS NULL",
                 (self.list_id,),
             ).fetchone()[0]
-        running = self.job is not None
+        running = self._running()
+        self._shown_running = running
         self.run_btn.setEnabled(not running)
         self.run_btn.setText(
             "撰寫中…" if running else ("重新撰寫綜覽" if stored else "撰寫清單綜覽")
@@ -111,6 +121,18 @@ class SurveyDialog(QDialog):
         if running:
             self.status.setText("正在撰寫綜覽…一次讀完整份清單,約五到十分鐘。")
 
+    def _running(self) -> bool:
+        key = f"survey:{self.list_id}"
+        return self.job is not None or (
+            self._hub is not None
+            and isValid(self._hub)
+            and any(j.key == key and j.state == "running" for j in self._hub.jobs.values())
+        )
+
+    def _hub_changed(self) -> None:
+        if isValid(self) and self._running() != self._shown_running:
+            self._load()
+
     def _run(self) -> None:
         from paper_daily.desktop.ai_access import requires_ai
 
@@ -125,6 +147,16 @@ class SurveyDialog(QDialog):
         if stored and stored["edited"]:
             answer = QMessageBox.question(
                 self, "重新撰寫綜覽", "這份綜覽手動修改過,重新撰寫會取代你的修改。要繼續嗎?"
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            args.append("--force")
+        elif stored and stored["spec"] == survey.ROADMAP_SPEC:
+            answer = QMessageBox.question(
+                self,
+                "重新撰寫綜覽",
+                "目前的綜覽是建立清單時的研究路線(選入理由與搜尋紀錄),"
+                "重新撰寫會取代它。要繼續嗎?",
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return

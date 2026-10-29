@@ -74,7 +74,7 @@ def prepare(paper_id, analysis, cfg=None):
         return None, "深度講解完成後會連結原文依據。"
     old = cached(paper_id, parts, analysis)
     if old:
-        return old, "cached"
+        return old, "cached" if old.get("links") else old.get("reason", "cached")
     payload = {
         "sections": [dict(id=p["id"], title=p["title"], text=p["text"][:4000]) for p in parts],
         "quotes": [dict(index=i, **item) for i, item in enumerate(analysis["items"])],
@@ -96,12 +96,14 @@ def prepare(paper_id, analysis, cfg=None):
     )
     if not answer.text:
         return None, answer.reason
+    key = _key(parts, analysis)
     try:
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", answer.text.strip())
-        raw = json.loads(text)
+        raw = llm.reply_json(answer.text, expect=dict)
         ids = {p["id"] for p in parts}
         links, used = [], set()
-        for item in raw["links"]:
+        for item in raw.get("links") or []:
+            if not isinstance(item, dict):
+                continue
             quote = item.get("quote")
             if (
                 type(quote) is not int
@@ -116,10 +118,23 @@ def prepare(paper_id, analysis, cfg=None):
             links.append(
                 dict(quote=quote, section=item["section"], explanation=item["explanation"][:1200])
             )
-        if not links:
-            return None, "尚未找到可核對的講解連結；原文重點仍保留。"
-        result = dict(key=_key(parts, analysis), links=links)
-        _atomic_json(_path(paper_id), result)
-        return result, "ok"
-    except (ValueError, TypeError, KeyError, AttributeError) as exc:
-        return None, f"講解連結格式無效：{exc}"
+    except (ValueError, TypeError, AttributeError):
+        links, reason = [], "講解連結的 AI 回覆格式無法解析；原文重點仍保留，可按補標重試。"
+    else:
+        reason = "ok" if links else "尚未找到可核對的講解連結；原文重點仍保留。"
+    # An answered request is kept even when it linked nothing: the same sections and
+    # quotes would be sent again on every open. Only an explicit retry forgets it.
+    result = dict(key=key, links=links) if links else dict(key=key, links=[], reason=reason)
+    _atomic_json(_path(paper_id), result)
+    return result, reason
+
+
+def forget_unlinked(paper_id):
+    """Let an explicit retry ask again after an answer that linked nothing."""
+    path = _path(paper_id)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(data, dict) and not data.get("links"):
+        path.unlink(missing_ok=True)

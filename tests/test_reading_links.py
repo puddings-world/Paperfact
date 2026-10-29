@@ -58,3 +58,47 @@ def test_unlinked_quotes_are_explicit_and_never_invent_section_support():
     assert "尚未對應到講解段落" in rendered
     assert "Important limit" in rendered
     assert "與這段講解的關係" not in rendered
+
+
+def test_an_answer_that_links_nothing_is_not_requested_on_every_open(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
+    monkeypatch.setattr(reading_links, "CACHE_DIR", tmp_path / "links")
+    store.init_db()
+    with store.connect() as conn:
+        conn.execute("INSERT INTO dives VALUES ('p','## Method\nThe comparison.','now',NULL)")
+    analysis = dict(source_hash="pdf1", items=[dict(text="Original", page=1, reason="理由")])
+    replies = iter(["These quotes do not support any section.", '說明：{"links": []}'])
+    calls = []
+
+    def model(*args, **kwargs):
+        calls.append(1)
+        return Completion(next(replies))
+
+    monkeypatch.setattr(reading_links.llm, "complete_result", model)
+    result, reason = reading_links.prepare("p", analysis)
+    assert result["links"] == [] and "格式無法解析" in reason
+    again, reason = reading_links.prepare("p", analysis)
+    assert again["links"] == [] and "格式無法解析" in reason and len(calls) == 1
+    parts = reading_links._context("p")
+    assert reading_links.cached("p", parts, analysis) is not None
+    reading_links.forget_unlinked("p")
+    result, reason = reading_links.prepare("p", analysis)
+    assert result["links"] == [] and "尚未找到" in reason and len(calls) == 2
+
+
+def test_found_links_survive_an_explicit_retry_and_prose_around_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
+    monkeypatch.setattr(reading_links, "CACHE_DIR", tmp_path / "links")
+    store.init_db()
+    with store.connect() as conn:
+        conn.execute("INSERT INTO dives VALUES ('p','## Method\nThe comparison.','now',NULL)")
+    analysis = dict(source_hash="pdf1", items=[dict(text="Original", page=1, reason="理由")])
+    link = dict(quote=0, section="dive:0", explanation="支撐方法段落")
+    monkeypatch.setattr(
+        reading_links.llm,
+        "complete_result",
+        lambda *a, **k: Completion("結果如下 [1]：\n" + json.dumps({"links": [link]})),
+    )
+    assert reading_links.prepare("p", analysis)[0]["links"] == [link]
+    reading_links.forget_unlinked("p")
+    assert reading_links.prepare("p", analysis)[1] == "cached"

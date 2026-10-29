@@ -43,6 +43,13 @@ def save(conn, settings: dict) -> dict:
     return load(conn)
 
 
+def automatic(conn) -> bool:
+    """Whether the reader lets analysis run without a press. The nightly rewrite of
+    older dives and citations spends model calls too, and ran under 只在我按的時候."""
+    settings = load(conn)
+    return bool(settings["every"] and (settings["queue"] or settings["lists"]))
+
+
 def due(settings: dict, last_run: str | None, today: date) -> bool:
     if not settings["every"] or not (settings["queue"] or settings["lists"]):
         return False

@@ -50,7 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import citegraph, followups, lineage_team, runtime
+from paper_daily import analyze, citegraph, cites, followups, lineage_team, runtime
 from paper_daily.desktop import ai_style, rich_view, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
@@ -73,6 +73,35 @@ VERDICT_COLOURS = {
 }
 
 ROOT = runtime.bundle_root()
+
+def story_note(data: dict) -> tuple[str, str | None]:
+    """What the 研究脈絡 box says under the story, and which button it offers.
+
+    It promised "深入分析會…再寫成脈絡" for papers where nothing would be written
+    -- every reference judged background, or the last attempt failed -- so the
+    button finished in a second and the promise stood unchanged.
+    """
+    story, judged = data.get("story"), sum(1 for r in data["refs"] if r.get("verdict"))
+    partial = (
+        "參考文獻只分析了一部分；深入分析會補齊其餘的。" if data.get("partial") else ""
+    )
+    if story:
+        return partial, "run-all" if partial else "refresh"
+    if data.get("why"):
+        return f"上次沒有完成：{data['why']}{partial}", "run-all"
+    if data.get("untold"):
+        return (
+            "這篇目前沒有已判讀的參考文獻或後續研究，沒有可整理成脈絡的內容。" + partial,
+            "run-all" if partial else None,
+        )
+    need = [] if judged and not partial else ["分析參考文獻"]
+    need += [] if data.get("asked") else ["查後續研究"]
+    return (
+        "還沒整理。深入分析會" + ("先" + "、".join(need) + "，" if need else "")
+        + "再寫成脈絡，同時補上這篇還沒有的深度講解。",
+        "run-all",
+    )
+
 
 # Neighbours per side the map shows before 全部畫出 is asked for: past this the
 # labels no longer fit and the shape is lost in the crowd.
@@ -388,6 +417,9 @@ class CitesPane(QWidget):
             later = followups.for_paper(conn, paper_id)
             story = followups.overview_for(conn, paper_id)
             asked = followups.checked(conn, paper_id)
+            untold = followups.nothing_to_tell(conn, paper_id)
+            partial = bool(refs) and not cites.complete(conn, paper_id)
+            why = analyze.failed(conn, paper_id, "later") or analyze.failed(conn, paper_id, "cites")
             for r in refs + later:
                 r["here"] = followups.in_corpus(
                     conn, r.get("doi"), r.get("title"), r.get("corpus_id")
@@ -403,7 +435,8 @@ class CitesPane(QWidget):
             counts["reference_count"] if counts else None,
             counts["citation_count"] if counts else None,
         )
-        self._data = {"refs": refs, "later": later, "story": story, "asked": asked}
+        self._data = {"refs": refs, "later": later, "story": story, "asked": asked,
+                      "untold": untold, "partial": partial, "why": why}
         # Which works already here are waiting in the queue, for 插到最前面.
         self._waiting = self.win.waiting(
             [r["here"]["id"] for r in refs + later if r["here"] and not r["here"]["read"]]
@@ -531,22 +564,19 @@ class CitesPane(QWidget):
                     f"<b>{_esc(x['title'])}</b><br>"
                     f'<span style="color:{pal["muted"]};">{_esc(x.get("why"))}</span></div>'
                 )
-        judged = sum(1 for r in data["refs"] if r.get("verdict"))
         if self._busy():
             parts.append(_say(
                 "正在深入分析：讀參考文獻、查後續研究並整理脈絡…約三到六分鐘，"
                 "完成後這個分頁會自己更新。", pal["muted"], 12.5,
             ))
-        elif not story:
-            need = [] if judged else ["分析參考文獻"]
-            need += [] if data["asked"] else ["查後續研究"]
-            parts.append(_say(
-                "還沒整理。深入分析會" + ("先" + "、".join(need) + "，" if need else "")
-                + "再寫成脈絡，同時補上這篇還沒有的深度講解。", pal["muted"], 12.5,
-            ))
-            parts.append(_ai_link("cite:run-all", "深入分析", primary=True))
         else:
-            parts.append(_ai_link("cite:refresh", "重新查後續研究並更新脈絡"))
+            text, action = story_note(data)
+            if text:
+                parts.append(_say(text, pal["muted"], 12.5))
+            if action == "run-all":
+                parts.append(_ai_link("cite:run-all", "深入分析", primary=True))
+            elif action == "refresh":
+                parts.append(_ai_link("cite:refresh", "重新查後續研究並更新脈絡"))
         return _box("".join(parts), pal)
 
     def _bar_html(self) -> str:
@@ -967,11 +997,13 @@ class CitesPane(QWidget):
     def _running(job: subprocess.Popen | None) -> bool:
         return job is not None and job.poll() is None
 
+    def lookups_running(self) -> bool:
+        """This tab's own reference or later-work job, apart from 深入分析."""
+        return self._running(self._follow_job) or self._running(self._cites_job)
+
     def _busy(self) -> bool:
-        return (
-            self._running(self._follow_job)
-            or self._running(self._cites_job)
-            or bool(self.paper_id and self.win.analysis_running(self.paper_id))
+        return self.lookups_running() or bool(
+            self.paper_id and self.win.analysis_running(self.paper_id)
         )
 
     # ---- 研究脈絡 and the switches, for the map --------------------------------
@@ -989,7 +1021,6 @@ class CitesPane(QWidget):
             head.addWidget(edit)
         layout.addLayout(head)
 
-        judged = sum(1 for r in refs if r.get("verdict"))
         layout.addWidget(self._label(
             "依據：" + self._coverage
             + (" · 已手動修改" if story and story["edited"] else ""),
@@ -1018,20 +1049,18 @@ class CitesPane(QWidget):
                 "正在深入分析：讀參考文獻、查後續研究並整理脈絡…約三到六分鐘，"
                 "完成後這個分頁會自己更新。"
             ))
-        elif not story:
-            need = [] if judged else ["分析參考文獻"]
-            need += [] if asked else ["查後續研究"]
-            layout.addWidget(self._label(
-                "還沒整理。深入分析會" + ("先" + "、".join(need) + "，" if need else "")
-                + "再寫成脈絡，同時補上這篇還沒有的深度講解。"
-            ))
-            go = self._ai_button("深入分析", primary=True)
-            go.clicked.connect(self._run_all)
-            layout.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
         else:
-            again = self._ai_button("重新查後續研究並更新脈絡")
-            again.clicked.connect(self._refresh_context)
-            layout.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
+            text, action = story_note(self._data)
+            if text:
+                layout.addWidget(self._label(text))
+            if action == "run-all":
+                go = self._ai_button("深入分析", primary=True)
+                go.clicked.connect(self._run_all)
+                layout.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
+            elif action == "refresh":
+                again = self._ai_button("重新查後續研究並更新脈絡")
+                again.clicked.connect(self._refresh_context)
+                layout.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return box
 
     def _segmented(self, options, current: str, pick) -> tuple[QWidget, dict]:

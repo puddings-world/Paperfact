@@ -216,6 +216,23 @@ def _post(url: str, headers: dict, payload: dict, timeout: int) -> tuple[dict | 
     return None, "AI endpoint unavailable"
 
 
+_FAILURE_KINDS = (
+    ("policy", ("使用政策", "policy")),
+    ("limit", ("usage limit", "rate limit", "quota", "credits", "用量", "http 429", "http 402")),
+    ("auth", ("sign in", "authenticat", "credential rejected", "登入", "api_key", "http 401")),
+    ("timeout", ("timed out", "逾時")),
+)
+
+
+def failure_kind(reason: str) -> str:
+    """A coarse, content-free class of a failed call for the usage log."""
+    low = (reason or "").lower()
+    for kind, needles in _FAILURE_KINDS:
+        if any(needle in low for needle in needles):
+            return kind
+    return "error"
+
+
 def _record(result: Completion, task: str, elapsed_ms: int, cfg: Settings) -> None:
     record = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -229,6 +246,7 @@ def _record(result: Completion, task: str, elapsed_ms: int, cfg: Settings) -> No
         "usage": asdict(result.usage),
         "finish_reason": result.finish_reason,
         "success": result.text is not None,
+        "failure": None if result.text is not None else failure_kind(result.reason),
         "elapsed_ms": elapsed_ms,
     }
     # Prompts, answers, endpoint URLs, API keys, and error bodies never enter this log.
@@ -391,3 +409,32 @@ def available(task: str = "default") -> bool:
     except (ValueError, OSError):
         return False
     return cfg.backend in _PROVIDERS
+
+
+_FENCE = re.compile(r"^\s*```[\w-]*\s*|\s*```\s*$")
+
+
+def reply_json(text: str, expect: type = dict, items: type | None = None):
+    """The first JSON value of type `expect` in a model's reply.
+
+    Models wrap JSON in fences or put a sentence before it, and that sentence often
+    holds brackets of its own ("A 區 [12]"): taking the first "[" to the last "]"
+    turned those replies into parse errors. Every candidate opening is tried in turn;
+    with `items`, a list only counts when its entries have that type, so "[12]"
+    is not mistaken for the answer.
+    """
+    text = _FENCE.sub("", text or "")
+    opener = "[" if expect is list else "{"
+    decoder = json.JSONDecoder()
+    start = text.find(opener)
+    while start >= 0:
+        try:
+            value, _end = decoder.raw_decode(text, start)
+        except ValueError:
+            value = None
+        if isinstance(value, expect) and (
+            items is None or all(isinstance(v, items) for v in value)
+        ):
+            return value
+        start = text.find(opener, start + 1)
+    raise ValueError("AI 回覆中沒有可讀的 JSON")

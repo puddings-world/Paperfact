@@ -47,24 +47,30 @@ def context(paper_id):
 
 
 def validate(items, pages):
-    if not isinstance(items, list) or not 1 <= len(items) <= 6:
-        raise ValueError("候選問題須為 1–6 題")
-    result, seen = [], set()
+    """The grounded questions; one unverifiable question costs only itself."""
+    if not isinstance(items, list) or not items:
+        raise ValueError("AI 沒有提出候選問題")
+    result, seen, dropped = [], set(), []
     for item in items:
         if not isinstance(item, dict):
-            raise ValueError("問題格式錯誤")
+            dropped.append("問題格式錯誤")
+            continue
         values = {key: item.get(key) for key in ("question", "why", "evidence")}
         if any(not isinstance(value, str) or not value.strip() for value in values.values()):
-            raise ValueError("問題缺少理由或原文依據")
+            dropped.append("問題缺少理由或原文依據")
+            continue
         question, why, quote = (values[key].strip() for key in ("question", "why", "evidence"))
         quote = paper_highlights.normalize(quote)
         source = next((p for p in pages if quote in paper_highlights.normalize(p["text"])), None)
         if len(quote) < 15 or source is None or len(question) > 280 or len(why) > 800:
-            raise ValueError("候選問題的原文依據無法核對")
+            dropped.append("候選問題的原文依據無法核對")
+            continue
         if question.casefold() not in seen:
             result.append(dict(question=question, why=why, evidence=quote, page=source["page"]))
             seen.add(question.casefold())
-    return result
+    if not result:
+        raise ValueError(dropped[0] if dropped else "AI 沒有提出候選問題")
+    return result[:6]
 
 
 def ensure(paper_id, *, force=False):
@@ -103,12 +109,14 @@ def _ensure(paper_id, *, force=False):
     result = dict(paper_id=paper_id, source_hash=key, items=[])
     if reply.text:
         try:
-            data = json.loads(
-                reply.text.strip().removeprefix("```json").removesuffix("```").strip()
-            )
-            result["items"] = validate(data.get("questions"), source["pages"])
-        except (ValueError, AttributeError) as exc:
-            result["reason"] = str(exc)
+            data = llm.reply_json(reply.text, expect=dict)
+        except ValueError:
+            result["reason"] = "AI 回覆格式無法解析"
+        else:
+            try:
+                result["items"] = validate(data.get("questions"), source["pages"])
+            except ValueError as exc:
+                result["reason"] = str(exc)
     else:
         result["reason"] = reply.reason
     # Failed refreshes preserve the last useful result; automatic failures are cached.

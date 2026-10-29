@@ -55,6 +55,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import (
+    claims,
     closeread,
     llm,
     pdf_highlights,
@@ -319,7 +320,7 @@ class Data:
         with connect() as conn:
             return conn.execute(
                 "SELECT id, body, created_at, kind, page, anchor FROM notes "
-                "WHERE paper_id=? ORDER BY created_at DESC",
+                "WHERE paper_id=? ORDER BY created_at DESC, id DESC",
                 (paper_id,),
             ).fetchall()
 
@@ -365,13 +366,13 @@ class Data:
         body: str,
         page: int | None = None,
         anchor: str | None = None,
-    ) -> None:
+    ) -> int:
         with connect() as conn:
-            conn.execute(
+            return conn.execute(
                 "INSERT INTO chat(paper_id, role, body, created_at, page, anchor) "
                 "VALUES (?,?,?,?,?,?)",
                 (paper_id, role, body, now(), page, anchor),
-            )
+            ).lastrowid
 
     def full_text(self, paper_id: str) -> str | None:
         import re
@@ -411,6 +412,16 @@ def _split_quote(body: str) -> tuple[str, str]:
 
 # How a question about a selected passage is put to the model (see _ask_passage).
 PASSAGE_MARK = "關於這段原文:"
+
+
+def _answered_history(rows) -> list[tuple[str, str]]:
+    """The conversation the model is shown: a question that never got its answer
+    would read to it as one the reader dropped, so it is left out."""
+    history = []
+    for question, answer in _exchanges(rows):
+        if question is not None and answer is not None:
+            history += [(question["role"], question["body"]), (answer["role"], answer["body"])]
+    return history
 
 
 def _exchanges(rows) -> list[tuple]:
@@ -506,6 +517,13 @@ class ReaderPage(QWidget):
         self.translate_runner = AskRunner(self)
         # Its own runner: Google failing hands over to it before that thread has quit.
         self.refine_runner = AskRunner(self)
+        # (paper id, chat row) of the question being answered: only that one is
+        # "thinking"; any other unanswered question failed or was lost to a crash.
+        self._asking: tuple[str, int] | None = None
+        # What the translation panel currently waits for; a reply for anything else
+        # arrived after the reader moved on.
+        self._translating: tuple | None = None
+        self._retrying: tuple[str, int] | None = None
         self.fetcher = FetchRunner(self)
         self.prepare = OffThread(self)
         self._res_job: subprocess.Popen | None = None
@@ -586,6 +604,8 @@ class ReaderPage(QWidget):
         self.auto_highlights.setChecked(True)
         self.auto_highlights.toggled.connect(self._auto_highlights_changed)
         self._highlight_attempts = set()
+        # Opening papers must not reopen a login prompt the reader already dismissed.
+        self._highlight_login_offered = False
         bar.addWidget(self.auto_highlights)
         self.find_box = QLineEdit()
         self.find_box.setPlaceholderText(f"搜尋內文 ({fonts.key(QKeySequence.StandardKey.Find)})")
@@ -719,6 +739,17 @@ class ReaderPage(QWidget):
         self.note_status.setStyleSheet(f"color:{pal['faint']};font-size:11px;")
         note_bar.addWidget(self.note_status)
         note_bar.addStretch(1)
+        self.claims_btn = QPushButton("AI 整理核心論點")
+        self.claims_btn.setToolTip(
+            "從已核對的原文重點挑出這篇立足的 3–5 個論點，各做成一張可跳回原文的筆記卡；"
+            "你改過的卡片會保留。"
+        )
+        self.claims_btn.clicked.connect(self._make_claims)
+        ai_style.mark(self.claims_btn, pal)
+        self.claims_btn.hide()
+        note_bar.addWidget(self.claims_btn)
+        self._claims_work = OffThread(self, lane="claims")
+        self._claims_for: str | None = None
         nl.addLayout(note_bar)
         self.note_log = rich_view.RichView(pal)
         self.note_log.anchorClicked.connect(self._note_action)
@@ -861,6 +892,11 @@ class ReaderPage(QWidget):
             # the last paper's must not show under this one's title.
             self.dive_view.setHtml("")
             self.chat_view.setHtml("")
+            # A page or passage chosen to ask about belongs to the paper it came from.
+            self._page_context = None
+            self._clear_passage()
+            self._translating = None
+            self._retrying = None
         self.paper = paper
         pal = self.win.pal
         self.title.setText(paper.title)
@@ -1024,6 +1060,9 @@ class ReaderPage(QWidget):
         if self.presentation_pane.busy:
             self.highlight_status.setText("正在處理這篇論文；完成後可再補標。")
             return
+        from paper_daily import reading_links
+
+        reading_links.forget_unlinked(self.paper.id)
         self.presentation_pane._analyze_highlights(force=False)
 
     def _selected_highlight_material(self):
@@ -1102,9 +1141,27 @@ class ReaderPage(QWidget):
             self.highlight_status.setText("正在處理論文，稍後同步原文重點與素材。")
             QTimer.singleShot(1000, self._prepare_reading_highlights)
             return
+        # Recorded before anything can fail or prompt: an attempt that ended in a
+        # login prompt or an error is not repeated on every open.
+        self._highlight_attempts.add(key)
+        paper_id = self.paper.id
+        from paper_daily import paper_highlights
+
+        with connect() as conn:
+            if paper_highlights.is_prepared(conn, paper_id):
+                return
+        analysis = paper_highlights.cached(paper_id)
+        if analysis is None and not llm.available(task="paper_highlights"):
+            if self._highlight_login_offered:
+                self.highlight_status.setText(
+                    "自動重點需要 AI；請先在 AI 設定登入，再按「分析／補上標註」。"
+                )
+                return
+            self._highlight_login_offered = True
         pane._analyze_highlights(force=False)
-        if pane.busy:
-            self._highlight_attempts.add(key)
+        if pane.busy and analysis is not None:
+            # The pane's wording is for a fresh analysis; this one reuses it.
+            self.highlight_status.setText("沿用已保存的原文重點，正在同步標記並連結深度講解。")
 
     def _highlights_ready(self, paper_id: str) -> None:
         if self.paper and self.paper.id == paper_id:
@@ -1344,9 +1401,47 @@ class ReaderPage(QWidget):
     # A long answer kept as a note turns the tab back into the wall of text the
     # cards exist to avoid, so a card shows its opening and opens on request.
 
+    def _show_claims_button(self) -> None:
+        """Offered once the paper has enough verified highlights to pick from."""
+        with connect() as conn:
+            ready = len(claims.highlights(conn, self.paper.id)) >= 3
+            made = claims.has_cards(conn, self.paper.id)
+        busy = self._claims_for == self.paper.id
+        self.claims_btn.setVisible(ready or busy)
+        self.claims_btn.setEnabled(not busy)
+        self.claims_btn.setText(
+            "整理中…" if busy else "AI 重新整理核心論點" if made else "AI 整理核心論點"
+        )
+
+    @requires_ai("paper_highlights")
+    def _make_claims(self) -> None:
+        if not self.paper or self._claims_for:
+            return
+        paper_id = self._claims_for = self.paper.id
+        with connect() as conn:
+            again = claims.has_cards(conn, paper_id)
+        self.note_status.setText("AI 正在從原文重點挑出核心論點…")
+        self._show_claims_button()
+
+        def done(result) -> None:
+            self._claims_for = None
+            made, why = result
+            if self.paper and self.paper.id == paper_id:
+                self.note_status.setText(f"已整理 {made} 張核心論點卡" if made else why)
+                self._load_notes()
+
+        def work():
+            try:
+                return claims.write(paper_id, force=again)
+            except (ValueError, OSError, RuntimeError) as exc:
+                return 0, f"核心論點未完成：{type(exc).__name__}"
+
+        self._claims_work.run("claims", work, done)
+
     def _load_notes(self) -> None:
         assert self.paper
         pal = self.win.pal
+        self._show_claims_button()
         rows = self.win.data.notes(self.paper.id)
         if not rows:
             self.note_log.setHtml(
@@ -1369,16 +1464,18 @@ class ReaderPage(QWidget):
         note_id = int(row["id"])
         kind = row["kind"] or "note"
         asked = kind == "ask"
-        accent = pal["accent"] if asked else pal["award"]
-        tint = pal["accentSoft"] if asked else pal["awardSoft"]
+        by_ai = asked or kind == claims.KIND
+        accent = pal["accent"] if by_ai else pal["award"]
+        tint = pal["accentSoft"] if by_ai else pal["awardSoft"]
         headline, passage, content = note_headline(row["body"] or "", kind)
         opened = note_id in self._open_notes
 
         stamp = (row["created_at"] or "")[:16].replace("T", " ")
         where = f" · 第 {row['page']} 頁" if row["page"] else ""
+        label = "問 AI" if asked else "AI 論點" if kind == claims.KIND else "手寫"
         chip = (
             f'<span style="background:{tint};color:{accent};font-size:10px;">'
-            f'&nbsp;{"問 AI" if asked else "手寫"}&nbsp;</span>'
+            f"&nbsp;{label}&nbsp;</span>"
         )
         meta = (
             f'<div style="color:{pal["faint"]};font-size:10px;margin-top:3px;">'
@@ -1483,6 +1580,8 @@ class ReaderPage(QWidget):
             self._load_notes()
         elif what == "delq":
             self._forget_exchange(ident)
+        elif what == "retry":
+            self._retry_question(ident)
         elif what == "keep":
             self._keep_answer(ident)
 
@@ -1539,9 +1638,14 @@ class ReaderPage(QWidget):
         paper_id = self.paper.id
 
         # Reading and typesetting a long conversation took a third of a second.
+        asking = self._asking[1] if self._asking and self._asking[0] == paper_id else None
+
         def typeset():
             rows = self.win.data.chat(paper_id)
-            return "".join(self._exchange(q, a) for q, a in _exchanges(rows)) if rows else None
+            return (
+                "".join(self._exchange(q, a, asking) for q, a in _exchanges(rows))
+                if rows else None
+            )
 
         def show(cards):
             if cards is None:
@@ -1554,7 +1658,7 @@ class ReaderPage(QWidget):
 
         self.prepare.run("chat", typeset, show)
 
-    def _exchange(self, question, answer) -> str:
+    def _exchange(self, question, answer, asking: int | None = None) -> str:
         """One question and its answer as a card: the question as its header."""
         pal = self.win.pal
         asked, _, passage = (question["body"] if question else "").partition(PASSAGE_MARK)
@@ -1572,9 +1676,15 @@ class ReaderPage(QWidget):
                 f'{html.escape(shown[:200] + ("…" if len(shown) > 200 else ""))}</div>'
             )
         head += "</td>"
-        if answer is None:
+        if answer is None and question is not None and int(question["id"]) == asking:
             body = f'<span style="color:{pal["faint"]};">思考中…</span>'
             links = ""
+        elif answer is None:
+            body = f'<span style="color:{pal["faint"]};">未完成，可重試</span>'
+            links = (
+                f'<a href="retry:{int(question["id"])}" style="color:{pal["accent"]};">'
+                "重新提問</a>&nbsp;&nbsp; "
+            ) if question is not None else ""
         else:
             body = self.chat_view.markdown(answer["body"])
             links = (
@@ -1604,6 +1714,22 @@ class ReaderPage(QWidget):
                 self.win.data.delete_chat(ids)
                 break
         self._load_chat()
+
+    def _retry_question(self, question_id: int) -> None:
+        """Put an unanswered question back in the box; sending it stays the reader's
+        click, and the unanswered one is replaced when it is sent."""
+        assert self.paper
+        for question, answer in _exchanges(self.win.data.chat(self.paper.id)):
+            if question is None or answer is not None or int(question["id"]) != question_id:
+                continue
+            asked, _, passage = question["body"].partition(PASSAGE_MARK)
+            if passage.strip():
+                self._ask_selection(passage.strip(), where=(question["page"], question["anchor"]))
+            self._retrying = (self.paper.id, question_id)
+            self.tabs.setCurrentWidget(self.ask_tab)
+            self.ask_box.setText(asked.strip())
+            self.ask_box.setFocus()
+            return
 
     def _figures_ready(self, paper_id):
         if self.paper and self.paper.id == paper_id:
@@ -1700,7 +1826,7 @@ class ReaderPage(QWidget):
         if not text.strip():
             self.pdf_note.setText(f"第 {page + 1} 頁沒有可抽取的文字")
             return
-        self._page_context = (page, text)
+        self._page_context = (self.paper.id, page, text)
         self.tabs.setCurrentWidget(self.ask_tab)
         self.ask_box.setText(f"請解釋第 {page + 1} 頁在講什麼,以及它在整篇論文裡的作用。")
         self.ask_box.setFocus()
@@ -1730,12 +1856,28 @@ class ReaderPage(QWidget):
             return
         overlay = self.pdf.selection
         overlay.show_result("翻譯中…", text[:160] + ("…" if len(text) > 160 else ""))
+        request = self._translating = self._translation_request(text)
+
+        def failed(_reason):
+            if self._translation_wanted(request):
+                self._translate_with_model(text)
+
         self.translate_runner.start(
             text,
-            lambda answer: overlay.show_result("Google 翻譯", answer, refinable=True),
-            lambda _reason: self._translate_with_model(text),
+            lambda answer: self._show_translation(request, "Google 翻譯", answer, refinable=True),
+            failed,
             call=translate.machine, task="translate",
         )
+
+    def _translation_request(self, text: str) -> tuple:
+        return (self.paper.id if self.paper else None, self._where()[1], text)
+
+    def _translation_wanted(self, request: tuple) -> bool:
+        return request == self._translating == self._translation_request(request[2])
+
+    def _show_translation(self, request: tuple, title: str, body: str, **kwargs) -> None:
+        if self._translation_wanted(request):
+            self.pdf.selection.show_result(title, body, **kwargs)
 
     def _translate_with_model(self, text: str) -> None:
         if not text.strip() or self.refine_runner.busy:
@@ -1743,14 +1885,15 @@ class ReaderPage(QWidget):
         overlay = self.pdf.selection
         overlay.show_result("AI 精譯中…",
                             text[:160] + ("…" if len(text) > 160 else ""))
+        request = self._translating = self._translation_request(text)
         prompt = (
             "把下面這段論文原文翻成繁體中文。技術名詞、模型名稱、資料集名稱保留英文,"
             "數學用 Unicode 純文字,絕不使用 LaTeX。只輸出譯文,不要前言。\n\n" + text
         )
         self.refine_runner.start(
             prompt,
-            lambda answer: overlay.show_result("AI 精譯", answer.strip()),
-            lambda reason: overlay.show_result("翻不出來", reason),
+            lambda answer: self._show_translation(request, "AI 精譯", answer.strip()),
+            lambda reason: self._show_translation(request, "翻不出來", reason),
             task="translate",
         )
 
@@ -1788,12 +1931,12 @@ class ReaderPage(QWidget):
         self.note_edit.setTextCursor(cursor)
         self.note_edit.setFocus()
 
-    def _ask_selection(self, text: str) -> None:
+    def _ask_selection(self, text: str, where: tuple | None = None) -> None:
         if not text.strip():
             return
         self.tabs.setCurrentWidget(self.ask_tab)
         passage = " ".join(text.split())[:1200]
-        page, anchor = self._where()
+        page, anchor = where or self._where()
         self._passage = (passage, page, anchor)
         pal = self.win.pal
         short = passage if len(passage) <= 160 else passage[:160] + "…"
@@ -1880,8 +2023,13 @@ class ReaderPage(QWidget):
         self.ask_btn.setEnabled(False)
         QApplication.processEvents()
 
+        paper = self.paper
         try:
-            self.win.data.add_chat(self.paper.id, "user", question, page, anchor)
+            retrying, self._retrying = self._retrying, None
+            if retrying and retrying[0] == paper.id:
+                self._forget_exchange(retrying[1])
+            asked = self.win.data.add_chat(paper.id, "user", question, page, anchor)
+            self._asking = (paper.id, asked)
             self.ask_box.clear()
             self._load_chat()
         except Exception as e:
@@ -1889,11 +2037,12 @@ class ReaderPage(QWidget):
             self.ask_btn.setEnabled(True)
             return
 
-        history = [(r["role"], r["body"]) for r in self.win.data.chat(self.paper.id)][:-1]
-        body = self.win.data.full_text(self.paper.id)
+        rows = self.win.data.chat(paper.id)
+        history = _answered_history(row for row in rows if row["id"] != asked)
+        body = self.win.data.full_text(paper.id)
         page_context = getattr(self, "_page_context", None)
-        if page_context:
-            page, page_text = page_context
+        if page_context and page_context[0] == paper.id:
+            _paper_id, page, page_text = page_context
             # Put the page first and label it, so the answer is about the passage the
             # reader is looking at rather than the paper in general.
             body = "\n\n".join(
@@ -1906,26 +2055,39 @@ class ReaderPage(QWidget):
             )
             self._page_context = None
         prompt = build_prompt(
-            self.paper.title, self.paper.venue, self.paper.year, self.paper.abstract,
-            body, history, question,
+            paper.title, paper.venue, paper.year, paper.abstract, body, history, question,
         )
         from paper_daily import ai_choices
 
         self.ask_status.setText(
             "本次問答：" + ai_choices.connection_label(llm.settings(task="ask"))
         )
-        self.runner.start(prompt, self._ask_done, self._ask_failed)
+        self.runner.start(
+            prompt,
+            lambda answer: self._ask_done(answer, paper.id),
+            lambda message: self._ask_failed(message, paper.id),
+        )
 
-    def _ask_done(self, answer: str) -> None:
-        if self.paper:
-            self.win.data.add_chat(self.paper.id, "assistant", answer)
+    def _ask_done(self, answer: str, paper_id: str) -> None:
+        """The answer belongs to the paper it was asked about, even if the reader
+        has moved on since."""
+        self._asking = None
+        self.win.data.add_chat(paper_id, "assistant", answer)
+        self.ask_btn.setEnabled(True)
+        if self.paper and self.paper.id == paper_id:
             self._load_chat()
-        self.ask_status.setText("")
-        self.ask_btn.setEnabled(True)
+            self.ask_status.setText("")
+        else:
+            self.ask_status.setText("先前論文的問題已回覆，回到該篇即可查看。")
 
-    def _ask_failed(self, message: str) -> None:
-        self.ask_status.setText(message)
+    def _ask_failed(self, message: str, paper_id: str) -> None:
+        self._asking = None
         self.ask_btn.setEnabled(True)
+        if self.paper and self.paper.id == paper_id:
+            self._load_chat()
+            self.ask_status.setText(message)
+        else:
+            self.ask_status.setText(f"先前論文的問題未完成：{message}")
 
 
 class MainWindow(QWidget):
@@ -2675,6 +2837,11 @@ class MainWindow(QWidget):
         what already exists, it loses nothing it had finished.
         """
         if self.queue_page._job is not None:
+            self.activity_board.setFocus()
+            return
+        # The 脈絡 tab's own reference job writing the same rows: the second run's
+        # clean-up would prune what the first one stored.
+        if self.reader_page.cites_pane.lookups_running():
             self.activity_board.setFocus()
             return
         if self.analysis_running(paper_id):

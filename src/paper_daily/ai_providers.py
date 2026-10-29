@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -118,15 +119,53 @@ class ClaudeCLI:
         except OSError as exc:
             return Completion(None, f"could not run claude: {type(exc).__name__}")
         answer = (proc.stdout or "").strip()
-        if proc.returncode == 0 and answer:
+        # `claude -p` prints refusals and API failures to stdout and may still exit 0.
+        if proc.returncode == 0 and answer and not _CLI_ERROR.match(answer):
             return Completion(answer, model=cfg.model)
-        # CLI stderr can contain prompts or credentials; keep failures categorical.
-        err = (proc.stderr or "").lower()
-        if "authenticate" in err or "oauth" in err or "login" in err:
-            return Completion(None, "claude authentication failed -- run 'claude' to sign in again")
+        reason = _cli_failure("claude", answer, proc.stderr or "")
+        if reason:
+            return Completion(None, reason)
+        if _CLI_ERROR.match(answer):
+            return Completion(None, "claude CLI 失敗：" + _snippet(answer))
         return Completion(
             None, f"claude CLI failed (exit {proc.returncode})" if proc.returncode else "no output"
         )
+
+
+_CLI_ERROR = re.compile(r"(API Error|Error:|Execution error)", re.IGNORECASE)
+# Checked in order: a policy refusal often also says "400", and a limit message may
+# mention the account it belongs to.
+_CLI_CATEGORIES = (
+    (
+        ("usage policy", "violat", "safety", "content filter", "flagged", "refus"),
+        "{name} 拒絕此請求（內容安全或使用政策）；請調整內容後重試",
+    ),
+    (
+        ("rate limit", "rate_limit", "usage limit", "limit reached", "quota", "429",
+         "credit balance", "out of credits", "overloaded", "529"),
+        "已達 {name} 用量或速率上限（usage limit）；請稍後再試或改用其他帳號",
+    ),
+    (
+        ("authenticat", "oauth", "login", "log in", "401", "invalid api key", "unauthorized"),
+        "{name} 登入已失效；請重新登入（sign in again）",
+    ),
+)
+_SECRET = re.compile(r"(?i)(bearer\s+\S+|sk-[\w-]+|[\w-]{24,})")
+
+
+def _cli_failure(name: str, stdout: str, stderr: str) -> str | None:
+    """A short category for a failed CLI call; stderr may hold prompts or keys, so its
+    text is only matched, never shown."""
+    low = f"{stdout}\n{stderr}".lower()
+    for needles, message in _CLI_CATEGORIES:
+        if any(needle in low for needle in needles):
+            return message.format(name=name)
+    return None
+
+
+def _snippet(text: str, limit: int = 160) -> str:
+    line = _SECRET.sub("…", text.strip().splitlines()[0])
+    return line if len(line) <= limit else line[: limit - 1] + "…"
 
 
 class CodexCLI:
@@ -167,7 +206,9 @@ class CodexCLI:
                 )
                 if proc.returncode:
                     return Completion(
-                        None, f"Codex CLI failed (exit {proc.returncode}); check login"
+                        None,
+                        _cli_failure("Codex", proc.stdout or "", proc.stderr or "")
+                        or f"Codex CLI failed (exit {proc.returncode}); check login",
                     )
                 answer = output.read_text(encoding="utf-8").strip() if output.exists() else ""
                 return Completion(answer or None, "ok" if answer else "Codex returned no answer")

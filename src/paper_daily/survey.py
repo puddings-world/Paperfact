@@ -24,6 +24,9 @@ from paper_daily.store import connect, init_db, now
 Log = Callable[[str], None]
 
 SURVEY_SPEC = "2026-10-survey"
+# research_plan.commit stores the topic roadmap in the survey slot; it holds the
+# selection reasons and search log, which a rewrite from the dives cannot recover.
+ROADMAP_SPEC = "topic-roadmap-v1"
 
 # The whole digest goes into one call. A list of 40 papers at this budget is about
 # 4k characters each, enough for the parts of a dive that carry the field.
@@ -150,9 +153,11 @@ def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tupl
     """Write the list's survey. Returns (written, reason)."""
     init_db()
     with connect() as conn:
-        old = conn.execute("SELECT edited FROM list_surveys WHERE list_id=?", (list_id,)).fetchone()
-        if old and old["edited"] and not force:
+        old = _state(conn, list_id)
+        if old and old[1] and not force:
             return False, "edited by hand (pass --force to replace it)"
+        if old and old[2] == ROADMAP_SPEC and not force:
+            return False, "keeps the topic roadmap from list creation (pass --force to replace it)"
         text, count = build_input(conn, list_id)
     if not count:
         return False, f"no papers in list {list_id}"
@@ -163,6 +168,12 @@ def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tupl
     if len(body) < 2000:
         return False, f"reply too short to be a survey: {body.splitlines()[0][:120]}"
     with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        # The call runs for up to half an hour; an edit saved meanwhile is newer than
+        # this reply and must win.
+        if _state(conn, list_id) != old:
+            conn.rollback()
+            return False, "the survey was edited while it was being written; kept the edit"
         conn.execute(
             "INSERT INTO list_surveys(list_id, body, papers, spec, written_at, edited) "
             "VALUES (?,?,?,?,?,0) ON CONFLICT(list_id) DO UPDATE SET body=excluded.body, "
@@ -173,6 +184,13 @@ def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tupl
         conn.commit()
     log(f"  survey written: {len(body):,} characters")
     return True, "ok"
+
+
+def _state(conn, list_id: str) -> tuple | None:
+    row = conn.execute(
+        "SELECT body, edited, spec, written_at FROM list_surveys WHERE list_id=?", (list_id,)
+    ).fetchone()
+    return tuple(row) if row else None
 
 
 def get(conn, list_id: str) -> dict | None:

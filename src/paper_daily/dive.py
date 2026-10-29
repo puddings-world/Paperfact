@@ -14,8 +14,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from paper_daily import brief, llm
-from paper_daily.store import connect, init_db, now
+from paper_daily import brief, closeread, llm
+from paper_daily.store import connect, get_kv, init_db, now, set_kv
 
 Log = Callable[[str], None]
 
@@ -158,6 +158,12 @@ def _select(conn, count: int, paper_id: str | None, list_id: str | None, rewrite
         ).fetchall()
 
     have_dive = "d.paper_id IS NOT NULL AND COALESCE(d.spec,'') != ?" if rewrite else None
+    # A paper the model keeps refusing was picked again every night, each time a
+    # paid call ending in the same refusal.
+    have_dive = (
+        f"({have_dive or 'd.paper_id IS NULL'}) "
+        "AND NOT EXISTS (SELECT 1 FROM kv WHERE kv.key = 'dive.gave_up.' || p.id)"
+    )
     args: list = [DIVE_SPEC] if rewrite else []
 
     if list_id:
@@ -257,6 +263,7 @@ def dive_ahead(
             if _fatal(reason):
                 log("  stopping: nothing will succeed until the login is renewed")
                 break
+            _note_failure(paper_id_, reason, log)
             continue
         with connect() as conn:
             conn.execute(
@@ -265,10 +272,38 @@ def dive_ahead(
                 "written_at=excluded.written_at, spec=excluded.spec",
                 (paper_id_, body, now(), DIVE_SPEC),
             )
+        with connect() as conn:
+            set_kv(conn, f"dive.failures.{paper_id_}", None)
+            set_kv(conn, f"dive.gave_up.{paper_id_}", None)
+            # 講解 is the dive and the close reading together; rolling dives forward
+            # without the second half left hundreds of papers explained halfway.
+            missing = closeread.get(conn, paper_id_) is None
         written += 1
         log(f"    stored {len(body)} chars [{label}]")
+        if missing:
+            close, why = closeread.write(paper_id_)
+            log(f"    逐節精讀 {len(close):,} chars" if close else f"    逐節精讀未完成：{why}")
         _prepare_highlights(paper_id_, log)
     return written
+
+
+# Retrying these cannot help: the same text meets the same policy.
+REFUSALS = ("safeguard", "usage policy", "flagged", "違反使用政策", "安全機制")
+GIVE_UP_AFTER = 3
+
+
+def _note_failure(paper_id: str, reason: str, log: Log) -> None:
+    """Count a failed dive; past a refusal or a few failures, stop picking the paper.
+
+    The 深入分析 button still writes it on request: `paper_id` bypasses the skip.
+    """
+    with connect() as conn:
+        seen = get_kv(conn, f"dive.failures.{paper_id}") or {}
+        count = int(seen.get("count", 0)) + 1
+        set_kv(conn, f"dive.failures.{paper_id}", {"count": count, "reason": reason[:300]})
+        if count >= GIVE_UP_AFTER or any(r in reason.lower() for r in REFUSALS):
+            set_kv(conn, f"dive.gave_up.{paper_id}", now())
+            log(f"    not picking this paper again on its own ({count} failure(s))")
 
 
 def _prepare_highlights(paper_id: str, log: Log):
@@ -294,7 +329,8 @@ def _prepare_highlights(paper_id: str, log: Log):
     if marks and not marks["mapped"]:
         reason = "重點已保留在素材中，但無法在 PDF 精確定位；請核對原文。"
     with connect() as conn:
-        set_kv(conn, f"analyze.failed.highlights.{paper_id}", None if ok else reason)
+        transient = not ok and paper_highlights.transient(reason)
+        set_kv(conn, f"analyze.failed.highlights.{paper_id}", None if ok or transient else reason)
     log(f"    原文重點 {marks['mapped']}/{marks['total']} 段已標記並同步素材"
         if marks else f"    原文重點未完成（講解已保存）：{reason}")
 

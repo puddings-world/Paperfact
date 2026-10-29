@@ -81,23 +81,25 @@ def parse_bibliography(raw: str, log: Log = lambda _m: None, *, strict=False) ->
         log(f"  {reason}; falling back to blank-line splitting")
         return _fallback_parse(text)
 
-    # The model is told not to fence the output, but a stray ```json is cheap to undo
-    # and expensive to debug.
-    body = re.sub(r"^```(?:json)?\s*|\s*```$", "", body).strip()
-    start, end = body.find("["), body.rfind("]")
-    if start == -1 or end == -1:
+    try:
+        entries = llm.reply_json(body, list, items=dict)
+    except ValueError as e:
         if strict:
-            raise ValueError("AI 未回傳有效參考文獻清單，請重試。")
+            raise ValueError("AI 未回傳有效參考文獻清單，請重試。") from e
         log(f"  parse produced no JSON array: {body[:120]}")
         return _fallback_parse(text)
-    try:
-        entries = json.loads(body[start : end + 1])
-    except json.JSONDecodeError as e:
-        if strict:
-            raise ValueError("AI 回傳格式無法解析，請重試。") from e
-        log(f"  parse produced invalid JSON ({e}); falling back")
-        return _fallback_parse(text)
-    return [e for e in entries if isinstance(e, dict) and e.get("title")]
+    return [e for e in entries if e.get("title")]
+
+
+def _year(*values) -> int:
+    """The first usable year; citations write "2021a", "n.d." or "in press"."""
+    for value in values:
+        if type(value) is int and value > 0:
+            return value
+        found = re.search(r"(?<!\d)(1[89]|20|21)\d{2}(?!\d)", str(value or ""))
+        if found:
+            return int(found.group())
+    return 0
 
 
 def _paper_from_match(entry: dict, match: dict | None) -> dict:
@@ -112,7 +114,7 @@ def _paper_from_match(entry: dict, match: dict | None) -> dict:
             "id": "ref:" + (match.get("paperId") or title_key(title))[:24],
             "title_key": title_key(title),
             "venue": (match.get("venue") or entry.get("venue") or "arXiv")[:120],
-            "year": int(match.get("year") or entry.get("year") or 0),
+            "year": _year(match.get("year"), entry.get("year")),
             "title": title,
             "authors_json": json.dumps(names or entry.get("authors") or [], ensure_ascii=False),
             "abstract": match.get("abstract"),
@@ -131,7 +133,7 @@ def _paper_from_match(entry: dict, match: dict | None) -> dict:
         "id": "ref:" + title_key(entry["title"])[:24],
         "title_key": title_key(entry["title"]),
         "venue": (entry.get("venue") or "unknown")[:120],
-        "year": int(entry.get("year") or 0),
+        "year": _year(entry.get("year")),
         "title": entry["title"],
         "authors_json": json.dumps(entry.get("authors") or [], ensure_ascii=False),
         "abstract": entry.get("abstract"),

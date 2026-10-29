@@ -61,6 +61,9 @@ def test_a_paper_no_source_has_does_not_hold_up_every_night(db, monkeypatch):
         # What reads the text cannot start either; 啟後 needs only the title.
         assert analyze.left(conn, "a") == ["later"]
         store.set_kv(conn, "followups.checked.a", "2026-10-18")
+        # Asked, but the 研究脈絡 is not written yet: still something left.
+        assert analyze.left(conn, "a") == ["later"]
+        store.set_kv(conn, "followups.overview.none.a", "2026-10-18")
         assert analyze.left(conn, "a") == []
         assert analyze.upcoming(conn, 1) == ["c"]
         # The button asks again regardless.
@@ -93,13 +96,14 @@ def test_the_explanation_and_the_citations_are_made_side_by_side(db, monkeypatch
 
     def read_references(pid, log):
         citing.set()
-        return 12
+        return 12, ""
 
     monkeypatch.setattr(dive, "dive_ahead", write_dive)
     monkeypatch.setattr(closeread, "write", lambda pid: ("close reading", "ok"))
-    monkeypatch.setattr(cites, "analyse", read_references)
+    monkeypatch.setattr(cites, "analyse_result", read_references)
     monkeypatch.setattr(
-        followups, "analyse", lambda pid, log: seen.setdefault("later", citing.is_set())
+        followups, "analyse_result",
+        lambda pid, log, overview_too: (seen.setdefault("later", citing.is_set()), ""),
     )
     monkeypatch.setattr(
         paper_highlights, "prepare_reading",

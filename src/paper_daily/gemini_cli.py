@@ -159,7 +159,15 @@ class GeminiCLI:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 if proc.returncode:
-                    return Completion(None, "Gemini 未完成回覆；請檢查登入、模型或額度")
+                    from paper_daily.ai_providers import _cli_failure
+
+                    # The category (policy, limit, login) is what says whether a
+                    # retry can help; the generic line left people retrying blind.
+                    return Completion(
+                        None,
+                        _cli_failure("Gemini", proc.stdout or "", proc.stderr or "")
+                        or "Gemini 未完成回覆；請檢查登入、模型或額度",
+                    )
                 data = json.loads(proc.stdout)
                 answer = data.get("response") if isinstance(data, dict) else None
                 if (

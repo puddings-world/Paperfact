@@ -32,6 +32,12 @@ def test_status_says_what_exists(monkeypatch, tmp_path):
         "INSERT INTO close_readings(paper_id, body, written_at) VALUES ('ref:a', 'x', 'now')"
     )
     store.set_kv(conn, "followups.checked.ref:a", "2026-10-08")
+    # Asking the field is half of 啟後; the 研究脈絡 written from it is the rest.
+    assert analyze.status(conn, "ref:a")["later"] is False
+    conn.execute(
+        "INSERT INTO paper_context(paper_id, summary, reading_json, written_at, edited) "
+        "VALUES ('ref:a', 'story', '[]', 'now', 0)"
+    )
     state = analyze.status(conn, "ref:a")
     assert state == {"pdf": True, "dive": True, "highlights": False, "cites": False, "later": True}
     assert analyze.summary(state) == "原文✓ 講解✓ 原文重點✗ 承先✗ 啟後✓"

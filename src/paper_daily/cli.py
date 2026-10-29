@@ -533,10 +533,20 @@ def cmd_backfill(args) -> int:
     return 0
 
 
+def _analysis_is_automatic() -> bool:
+    from paper_daily import analysis_schedule
+
+    with connect() as conn:
+        return analysis_schedule.automatic(conn)
+
+
 def cmd_dive_ahead(args) -> int:
     """Write deep dives for the next few papers, so there is always one ready."""
     from paper_daily import dive
 
+    if args.scheduled and not _analysis_is_automatic():
+        print("skipped: analysis runs only when 深入分析 is pressed")
+        return 0
     n = dive.dive_ahead(
         count=args.n, log=_log, paper_id=args.paper, list_id=args.list,
         rewrite=args.rewrite, jobs=args.jobs,
@@ -758,7 +768,9 @@ def cmd_share(args) -> int:
         if not args.ids:
             print("share draft needs at least one paper id", file=sys.stderr)
             return 2
-        made = share.draft(args.ids, slug=args.slug, with_compare=args.compare)
+        made = share.draft(
+            args.ids, slug=args.slug, with_compare=args.compare, force=args.force
+        )
         print(f"draft: {made['path']}")
         if made["path"].name == "draft.new.md":
             print("  draft.md already exists and was left alone; merge what you want from this one")
@@ -997,6 +1009,9 @@ def cmd_cites_ahead(args) -> int:
     """Analyse citations for the next few papers that have none."""
     from paper_daily import cites
 
+    if args.scheduled and not _analysis_is_automatic():
+        print("skipped: analysis runs only when 深入分析 is pressed")
+        return 0
     n = cites.analyse_ahead(count=args.n, rewrite=args.rewrite, log=_log)
     print(f"{n} paper(s) analysed")
     return 0
@@ -1273,6 +1288,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--slug", default=None, help="folder name under data/share/")
     sp.add_argument("--compare", action="store_true",
                     help="draft: have the model write the side-by-side from the dives")
+    sp.add_argument("--force", action="store_true",
+                    help="draft: ask for a new comparison even when draft.md exists")
     sp.set_defaults(func=cmd_share)
 
     sp = sub.add_parser("backfill", help="fill in missing authors, abstracts and ids")
@@ -1289,6 +1306,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="rewrite dives written before the current spec, in queue order")
     sp.add_argument("--jobs", type=int, default=1,
                     help="how many dives to write at once (each one waits on the model)")
+    sp.add_argument("--scheduled", action="store_true",
+                    help="do nothing when the reader's 分析排程 is 只在我按的時候")
     sp.set_defaults(func=cmd_dive_ahead)
 
     sp = sub.add_parser("import-list", help="import a bibliography as a reading list")
@@ -1405,6 +1424,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("n", nargs="?", type=int, default=2)
     sp.add_argument("--rewrite", action="store_true",
                     help="redo papers analysed under an older specification")
+    sp.add_argument("--scheduled", action="store_true",
+                    help="do nothing when the reader's 分析排程 is 只在我按的時候")
     sp.set_defaults(func=cmd_cites_ahead)
 
     sp = sub.add_parser("lists", help="show the reading lists")

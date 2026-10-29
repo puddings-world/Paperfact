@@ -22,7 +22,7 @@ import json
 import re
 from collections.abc import Callable
 
-from paper_daily.store import connect, now
+from paper_daily.store import connect, get_kv, now, set_kv
 
 Log = Callable[[str], None]
 
@@ -216,14 +216,77 @@ def _pack(
     return "\n".join(lines)
 
 
+# Below this share of the references asked about, the answer is a fragment: a reply
+# that stopped early or skipped most of the list. One such reply once stood for a
+# whole paper -- 1 card of 22 -- and, counted as done, was never asked again.
+COMPLETE_SHARE = 0.8
+
+
+def _coverage_key(paper_id: str) -> str:
+    return f"cites.coverage.{paper_id}"
+
+
+def complete(conn, paper_id: str) -> bool:
+    """Whether the stored answer covers the paper's references, not merely exists."""
+    rows = conn.execute("SELECT COUNT(*) FROM cites WHERE paper_id=?", (paper_id,)).fetchone()[0]
+    if not rows:
+        return False
+    coverage = get_kv(conn, _coverage_key(paper_id))
+    if isinstance(coverage, dict) and coverage.get("sent"):
+        return coverage.get("answered", 0) >= COMPLETE_SHARE * coverage["sent"]
+    # Answers from before coverage was recorded: judge them against the markers in
+    # the text, leniently, since the markers include some noise the model rightly
+    # dropped.
+    from paper_daily.config import TEXT_DIR
+    from paper_daily.figures import _safe
+
+    path = TEXT_DIR / (_safe(paper_id) + ".txt")
+    try:
+        markers = len(contexts(path.read_text(encoding="utf-8")))
+    except OSError:
+        return True
+    return markers < 8 or rows >= markers / 2
+
+
+def _ask(row, refs, ctx, numbered, limit) -> tuple[list[dict] | None, str]:
+    from paper_daily import llm
+
+    body, reason = llm.complete(
+        _pack(row, refs, ctx, numbered, limit), system=INSTRUCTIONS, timeout=900, task="citations"
+    )
+    if not body:
+        return None, reason
+    try:
+        return llm.reply_json(body, list, dict), ""
+    except ValueError as e:
+        return None, str(e)
+
+
+def _key(raw) -> str:
+    # The model is asked for the key it was given and sometimes hands back the
+    # bracket it saw in the prompt. "[1]" and "1" are the same reference, and left
+    # alone they become two cards for it.
+    key = str(raw).strip().strip("[]").strip()
+    return str(int(key)) if key.isdigit() else key
+
+
 def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
+    """How many references were stored; `analyse_result` also says why not all."""
+    return analyse_result(paper_id, limit, log)[0]
+
+
+def analyse_result(
+    paper_id: str, limit: int = 120, log: Log = lambda _m: None
+) -> tuple[int, str]:
     """Work out what each cited paper is doing here, and store it.
 
     Every reference the publisher lists gets a row, not only the ones whose citing
     sentence the text extraction found: a reference with no answer at all is the one
     case where you cannot tell whether it is worth your evening.
+
+    Returns (rows stored, reason). The reason is empty only when the answer covers
+    the references; a partial answer keeps what it has and says how much is missing.
     """
-    from paper_daily import llm
     from paper_daily.config import TEXT_DIR
     from paper_daily.enrich import s2
     from paper_daily.figures import _safe
@@ -234,12 +297,12 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
         row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
         if row is None:
             log(f"  no paper {paper_id}")
-            return 0
+            return 0, "找不到這篇論文"
 
     path = TEXT_DIR / (_safe(paper_id) + ".txt")
     if not path.exists():
         log("  no extracted text; run prefetch or open the paper once")
-        return 0
+        return 0, "還沒有擷取到原文文字"
 
     # The publisher's own numbering, when there is a DOI to ask about. Without it a
     # superscript "17" is just a number and the model has to guess the title.
@@ -249,7 +312,7 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
     ctx = contexts(path.read_text(encoding="utf-8"), highest=highest)
     if not ctx and not numbered:
         log("  no citation markers found in the text")
-        return 0
+        return 0, "原文中找不到引用標號，也沒有出版社提供的參考文獻清單"
     refs = s2.references(row["s2_id"]) if row["s2_id"] else []
     # A DOI resolves a reference exactly; a citation string from the publisher's list
     # is a poor search query, because the author block outweighs the title in it.
@@ -259,35 +322,31 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
         f"{len(by_doi)} resolved by DOI, {len(refs)} on record at S2"
     )
 
-    body, reason = llm.complete(
-        _pack(row, refs, ctx, numbered, limit), system=INSTRUCTIONS, timeout=900, task="citations"
-    )
-    if not body:
+    sent = list(ctx)[:limit] + [k for k in numbered if k not in ctx][:120]
+    entries, reason = _ask(row, refs, ctx, numbered, limit)
+    if entries is None:
         log(f"  failed: {reason}")
-        return 0
-
-    body = re.sub(r"^```(?:json)?\s*|\s*```$", "", body.strip())
-    start, end = body.find("["), body.rfind("]")
-    if start == -1 or end == -1:
-        log(f"  no JSON array in the reply: {body[:120]}")
-        return 0
-    try:
-        entries = json.loads(body[start : end + 1])
-    except json.JSONDecodeError as e:
-        log(f"  invalid JSON ({e})")
-        return 0
+        return 0, reason
+    answered = {_key(e["key"]) for e in entries if e.get("key")}
+    missing = [k for k in sent if k not in answered]
+    if missing and len(missing) < len(sent):
+        # A long list is where a reply runs out before the end. Asking again for
+        # just the rest costs one short call instead of the whole list.
+        log(f"  {len(missing)} of {len(sent)} references unanswered; asking for those")
+        more, _why = _ask(
+            row, refs, {k: ctx[k] for k in missing if k in ctx},
+            {k: v for k, v in numbered.items() if k in missing}, limit,
+        )
+        entries += [e for e in more or [] if e.get("key") and _key(e["key"]) in missing]
 
     stored: list[str] = []
     with connect() as conn:
         for e in entries:
-            if not isinstance(e, dict) or not e.get("key"):
+            if not e.get("key"):
                 continue
-            # The model is asked for the key it was given and sometimes hands back
-            # the bracket it saw in the prompt. "[1]" and "1" are the same reference,
-            # and left alone they become two cards for it.
-            key = str(e["key"]).strip().strip("[]").strip()
-            if key.isdigit():
-                key = str(int(key))
+            key = _key(e["key"])
+            if key in stored:
+                continue
             known = numbered.get(key) or {}
             # The publisher's title beats the model's, which is at best a guess from
             # the citing sentence.
@@ -321,17 +380,28 @@ def analyse(paper_id: str, limit: int = 120, log: Log = lambda _m: None) -> int:
                 ),
             )
             stored.append(key)
+        answered_sent = sum(1 for k in sent if k in stored)
+        whole = bool(stored) and answered_sent >= COMPLETE_SHARE * max(1, len(sent))
         # A re-analysis replaces the answer, so a marker the extraction no longer
         # produces has to go with it. Upserting alone left the previous run's noise
-        # ("0", a "50" read off ResNet50) sitting in the tab for good.
-        if stored:
+        # ("0", a "50" read off ResNet50) sitting in the tab for good. Only a whole
+        # answer may prune: a fragment would delete the good rows it failed to repeat.
+        if whole:
             marks = ",".join("?" * len(stored))
             conn.execute(
                 f"DELETE FROM cites WHERE paper_id=? AND ref_key NOT IN ({marks})",
                 (paper_id, *stored),
             )
+        set_kv(conn, _coverage_key(paper_id), {"sent": len(sent), "answered": answered_sent})
         conn.commit()
-    return len(stored)
+    if not stored:
+        return 0, "AI 回覆中沒有任何一筆參考文獻"
+    if not whole:
+        log(f"  partial: {answered_sent} of {len(sent)} references answered")
+        return len(stored), (
+            f"AI 只分析了 {answered_sent}/{len(sent)} 筆參考文獻，可再按深入分析補齊"
+        )
+    return len(stored), ""
 
 
 def _s2_match(refs: list[dict], title: str, same: Callable[[str, str], bool]) -> dict:

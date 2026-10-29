@@ -98,9 +98,11 @@ def write(paper_id: str, timeout: int = 1800) -> tuple[str | None, str]:
     body, reason = llm.complete(pack, system=CLOSE_INSTRUCTIONS, timeout=timeout, task="dive")
     if not body:
         return None, reason
-    # A refusal or an "I cannot read the text" is short; a section-by-section
-    # reading of even a four-page paper is not.
-    if len(body) < 3000:
+    # A refusal or an "I cannot read the text" is short and has no sections; a
+    # section-by-section reading of a four-page workshop paper can be short too, but
+    # it is made of `## ` sections. A fixed 3,000 characters failed those for good.
+    sections = sum(1 for ln in body.splitlines() if ln.startswith("## "))
+    if len(body) < 3000 and not (sections and len(body) >= 600):
         return None, f"reply too short to be a close reading: {body.splitlines()[0][:120]}"
     with connect() as conn:
         conn.execute(

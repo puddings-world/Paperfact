@@ -145,6 +145,101 @@ def test_failed_chunk_does_not_save_partial_analysis(original, monkeypatch):
     assert not highlights._path("paper").exists()
 
 
+def test_reply_with_prose_before_the_json_is_read(original, monkeypatch):
+    reply = fake_reply({"items": [choice(1)]})
+    reply.text = "以下是我挑選的重點（共 [1] 項）：\n```json\n" + reply.text + "\n```"
+    monkeypatch.setattr(highlights.llm, "complete_result", lambda *a, **k: reply)
+    result, reason = highlights.generate("paper")
+    assert reason == "ok" and result["items"][0]["text"] == PAGES[1]["text"]
+
+
+def test_unreadable_reply_gives_a_short_retryable_reason_and_keeps_old_result(
+    original, monkeypatch
+):
+    monkeypatch.setattr(
+        highlights.llm, "complete_result", lambda *a, **k: fake_reply({"items": [choice()]})
+    )
+    highlights.generate("paper")
+    old = highlights._path("paper").read_bytes()
+    reply = fake_reply({})
+    reply.text = "I could not find anything worth highlighting."
+    monkeypatch.setattr(highlights.llm, "complete_result", lambda *a, **k: reply)
+    result, reason = highlights.generate("paper", force=True)
+    assert result is None and "Expecting value" not in reason
+    assert "格式無法解析" in reason and highlights.transient(reason)
+    assert highlights._path("paper").read_bytes() == old
+
+
+def test_one_invalid_item_is_dropped_without_losing_the_valid_ones(original, monkeypatch):
+    items = [choice(0), dict(choice(1), ids=[99]), dict(choice(1), kind="claim")]
+    monkeypatch.setattr(
+        highlights.llm, "complete_result", lambda *a, **k: fake_reply({"items": items})
+    )
+    result, reason = highlights.generate("paper")
+    assert reason == "ok" and [i["text"] for i in result["items"]] == [PAGES[0]["text"]]
+
+
+def test_a_chunk_with_only_invalid_items_does_not_sink_a_long_paper(original, monkeypatch):
+    monkeypatch.setattr(highlights, "CHUNK_CHARS", 1100)
+    pages = [dict(p, text=("Context " * 75) + p["text"]) for p in PAGES]
+    monkeypatch.setattr(highlights, "read_original", lambda _id: pages)
+    replies = iter(
+        [
+            fake_reply({"items": [choice()]}),
+            fake_reply({"items": [dict(choice(), ids=[99])]}),
+            fake_reply({"ids": [0, 7]}),
+        ]
+    )
+    monkeypatch.setattr(highlights.llm, "complete_result", lambda *a, **k: next(replies))
+    result, reason = highlights.generate("paper")
+    assert reason == "ok" and [i["page"] for i in result["items"]] == [1]
+
+
+def test_retry_after_a_failed_chunk_does_not_pay_for_finished_chunks(original, monkeypatch):
+    monkeypatch.setattr(highlights, "CHUNK_CHARS", 1100)
+    pages = [dict(p, text=("Context " * 75) + p["text"]) for p in PAGES]
+    monkeypatch.setattr(highlights, "read_original", lambda _id: pages)
+    prompts = []
+
+    def failing(prompt, **kwargs):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            return fake_reply({"items": [choice()]})
+        return SimpleNamespace(text=None, reason="timed out after 900s")
+
+    monkeypatch.setattr(highlights.llm, "complete_result", failing)
+    result, reason = highlights.generate("paper")
+    assert result is None and highlights.transient(reason) and "timed out" in reason
+    assert not highlights._path("paper").exists()
+    prompts.clear()
+
+    def answering(prompt, **kwargs):
+        prompts.append(prompt)
+        return fake_reply({"items": [choice()]} if len(prompts) == 1 else {"ids": [1, 0]})
+
+    monkeypatch.setattr(highlights.llm, "complete_result", answering)
+    result, reason = highlights.generate("paper")
+    assert reason == "ok" and len(prompts) == 2
+    assert "2/2" in prompts[0] and "1/2" not in prompts[0]
+    assert {i["page"] for i in result["items"]} == {1, 2}
+
+
+def test_permanent_failures_are_not_marked_transient(original, monkeypatch):
+    monkeypatch.setattr(
+        highlights.llm,
+        "complete_result",
+        lambda *a, **k: SimpleNamespace(text=None, reason="HTTP 401: credential rejected"),
+    )
+    reason = highlights.generate("paper")[1]
+    assert reason == "HTTP 401: credential rejected" and not highlights.transient(reason)
+    monkeypatch.setattr(
+        highlights.llm,
+        "complete_result",
+        lambda *a, **k: SimpleNamespace(text=None, reason="HTTP 429: rate limit exceeded"),
+    )
+    assert highlights.transient(highlights.generate("paper")[1])
+
+
 def test_no_original_means_no_model_call(original, monkeypatch):
     monkeypatch.setattr(highlights, "read_original", lambda _id: [])
     monkeypatch.setattr(

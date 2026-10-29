@@ -272,11 +272,17 @@ def compare(facts: list[dict]) -> tuple[str | None, str]:
     return llm.complete(prompt, system=COMPARE_SYSTEM, timeout=600, task="compare")
 
 
-def draft(paper_ids: list[str], slug: str | None = None, with_compare: bool = False) -> dict:
+def draft(
+    paper_ids: list[str],
+    slug: str | None = None,
+    with_compare: bool = False,
+    force: bool = False,
+) -> dict:
     """Lay the papers out as one Markdown file to edit. Never overwrites an edit."""
     slug = slug or slug_for(paper_ids)
     out_dir = SHARE_DIR / slug
     out_dir.mkdir(parents=True, exist_ok=True)
+    edited = (out_dir / "draft.md").exists()
 
     sections, facts = [], []
     with connect() as conn:
@@ -290,13 +296,20 @@ def draft(paper_ids: list[str], slug: str | None = None, with_compare: bool = Fa
     failed = ""
     if len(facts) > 1:
         doc += ["## 對讀", "", _facts_table(facts), ""]
-        if with_compare:
+        if with_compare and edited and not force:
+            # build only reads draft.md, so a comparison written to draft.new.md is
+            # paid for and then never shown unless the reader merges it by hand.
+            failed = (
+                "draft.md 已存在，未重新付費產生 AI 對照；"
+                "要重做請先移走 draft.md"
+            )
+        elif with_compare:
             text, reason = compare(facts)
             if not text:
                 failed = reason
             else:
                 doc += [
-                    '<p class="provenance">以下由 AI 依兩篇的深度講解整理,'
+                    '<p class="provenance">以下由 AI 依各篇的深度講解整理,'
                     "未逐條對照原文。</p>",
                     "",
                     text.strip(),

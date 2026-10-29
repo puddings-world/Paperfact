@@ -127,3 +127,74 @@ def test_the_database_is_not_held_open_across_the_model_call(monkeypatch, conn, 
     body, reason = dive._generate_for("p1")
     assert (body is not None, reason) == (True, "ok")
     assert during == [0], "no connection may be open while the model is answering"
+
+
+def test_a_dive_rolled_forward_gets_its_close_reading_too(conn, monkeypatch):
+    _dive(conn, "p1", "old-spec")
+    monkeypatch.setattr(dive, "init_db", lambda: None)
+    monkeypatch.setattr(dive, "_generate_for", lambda pid: ("講解" * 500, "ok"))
+    monkeypatch.setattr(dive, "_prepare_highlights", lambda pid, log: None)
+    written = []
+    monkeypatch.setattr(
+        dive.closeread, "write", lambda pid: (written.append(pid), ("逐節", "ok"))[1]
+    )
+    assert dive.dive_ahead(1, rewrite=True) == 1
+    assert written == ["p1"]
+
+
+def test_a_paper_the_model_keeps_refusing_is_not_picked_every_night(conn, monkeypatch):
+    monkeypatch.setattr(dive, "init_db", lambda: None)
+    monkeypatch.setattr(
+        dive, "_generate_for",
+        lambda pid: (None, "API Error: safeguards flagged this session"),
+    )
+    dive.dive_ahead(1)
+    assert [r["id"] for r in dive._select(conn, 3, None, None, False)] == ["p2", "p3"]
+    # Asked for by name -- the 深入分析 button -- it is still written.
+    assert [r["id"] for r in dive._select(conn, 1, "p1", None, False)] == ["p1"]
+
+
+def test_a_paper_that_fails_a_few_times_is_set_aside(conn, monkeypatch):
+    monkeypatch.setattr(dive, "init_db", lambda: None)
+    monkeypatch.setattr(dive, "_generate_for", lambda pid: (None, "claude CLI failed (exit 1)"))
+    for _ in range(dive.GIVE_UP_AFTER - 1):
+        dive.dive_ahead(1)
+        assert [r["id"] for r in dive._select(conn, 1, None, None, False)] == ["p1"]
+    dive.dive_ahead(1)
+    assert [r["id"] for r in dive._select(conn, 1, None, None, False)] == ["p2"]
+
+
+def test_the_nightly_rewrite_respects_only_when_i_press(conn, monkeypatch):
+    from paper_daily import analysis_schedule, cites, cli
+
+    called = []
+    monkeypatch.setattr(dive, "dive_ahead", lambda **k: called.append("dive") or 0)
+    monkeypatch.setattr(cites, "analyse_ahead", lambda **k: called.append("cites") or 0)
+    with store.connect() as c:
+        analysis_schedule.save(c, {**analysis_schedule.DEFAULTS, "every": 0})
+    cli.main(["dive-ahead", "6", "--rewrite", "--scheduled"])
+    cli.main(["cites-ahead", "2", "--rewrite", "--scheduled"])
+    assert called == []
+    with store.connect() as c:
+        analysis_schedule.save(c, {**analysis_schedule.DEFAULTS, "every": 1})
+    cli.main(["dive-ahead", "6", "--rewrite", "--scheduled"])
+    cli.main(["cites-ahead", "2", "--rewrite", "--scheduled"])
+    assert called == ["dive", "cites"]
+
+
+def test_a_highlight_run_that_timed_out_is_tried_again_later(conn, monkeypatch, tmp_path):
+    from paper_daily import paper_highlights
+
+    monkeypatch.setattr(paper_highlights, "PDF_DIR", tmp_path)
+    (tmp_path / f"{paper_highlights._safe_name('p1')}.pdf").write_bytes(b"%PDF")
+    with store.connect() as c:
+        store.set_kv(c, "ui.auto_highlights", "1")
+    cases = ((paper_highlights.TRANSIENT + "逾時", False), ("沒有可讀取的原文文字", True))
+    for reason, kept in cases:
+        monkeypatch.setattr(
+            paper_highlights, "prepare_reading", lambda pid, reason=reason: (None, reason)
+        )
+        dive._prepare_highlights("p1", lambda _m: None)
+        with store.connect() as c:
+            recorded = store.get_kv(c, "analyze.failed.highlights.p1")
+        assert (recorded is not None) is bool(kept)

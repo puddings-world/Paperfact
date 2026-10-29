@@ -42,8 +42,11 @@ def has_pdf(paper_id: str) -> bool:
 
 
 def status(conn, paper_id: str) -> dict[str, bool]:
-    """Which parts exist. 啟後 counts once the field was asked, even if nobody cites
-    the paper yet: a preprint from last month has no later work to find."""
+    """Which parts exist. 啟後 counts once the field was asked and its 研究脈絡 is
+    written, even if nobody cites the paper yet: a preprint from last month has no
+    later work to find. 承先 counts once the answer covers the references."""
+    from paper_daily import cites, followups
+
     one = lambda sql: conn.execute(sql, (paper_id,)).fetchone() is not None  # noqa: E731
     return {
         "pdf": has_pdf(paper_id),
@@ -53,8 +56,8 @@ def status(conn, paper_id: str) -> dict[str, bool]:
             "WHERE d.paper_id=?"
         ),
         "highlights": paper_highlights.is_prepared(conn, paper_id),
-        "cites": one("SELECT 1 FROM cites WHERE paper_id=? LIMIT 1"),
-        "later": get_kv(conn, f"followups.checked.{paper_id}") is not None,
+        "cites": cites.complete(conn, paper_id),
+        "later": followups.done(conn, paper_id),
     }
 
 
@@ -131,12 +134,23 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
                     ok, why = False, prepared["explanation_reason"]
                 if marks and not marks["mapped"]:
                     why = "重點已保留在素材中，但無法在 PDF 精確定位；請核對原文。"
-                _record(paper_id, "highlights", None if ok else why)
+                # A timeout or a busy service is worth another try tonight; recorded
+                # as a failure it kept the paper out of every later run.
+                transient = not ok and paper_highlights.transient(why)
+                _record(paper_id, "highlights", None if ok or transient else why)
                 log(f"  原文重點 {marks['mapped']}/{marks['total']} 已同步素材  {name}"
                     if marks else f"  原文重點未完成：{why}  {name}")
             except (ValueError, OSError, RuntimeError) as exc:
                 _record(paper_id, "highlights", str(exc))
                 log(f"  原文重點未完成：{exc}  {name}")
+        work_progress.report("整理核心論點筆記卡", paper_id=paper_id)
+        from paper_daily import claims
+
+        try:
+            made, why = claims.write(paper_id)
+            log(f"  核心論點 {made} 張  {name}" if made else f"  核心論點：{why}  {name}")
+        except (ValueError, OSError, RuntimeError) as exc:
+            log(f"  核心論點未完成：{type(exc).__name__}  {name}")
         work_progress.report("整理候選研究問題", paper_id=paper_id)
         from paper_daily import research_questions
 
@@ -146,15 +160,18 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
         except (ValueError, OSError, RuntimeError) as exc:
             log(f"  候選問題未完成：{type(exc).__name__}  {name}")
 
+    later = todo("later")
+
     def place() -> None:
         # The 研究脈絡 is written from the references' verdicts, so 承先 comes first.
         work_progress.report("核對參考文獻與引用關係", paper_id=paper_id)
         if has_pdf(paper_id) and todo("cites"):
-            n = cites.analyse(paper_id, log=log)
-            _record(paper_id, "cites", None if n else "no references could be read")
+            _n, why = cites.analyse_result(paper_id, log=log)
+            _record(paper_id, "cites", why or None)
         work_progress.report("查找後續研究與發展脈絡", paper_id=paper_id)
-        if todo("later"):
-            followups.analyse(paper_id, log=log)
+        if later:
+            _n, why = followups.analyse_result(paper_id, log=log, overview_too=False)
+            _record(paper_id, "later", why or None)
 
     # The explanation and the citations read the same text but not each other, and
     # each spends minutes waiting on a model: side by side, the paper is ready in
@@ -163,6 +180,17 @@ def analyse(paper_id: str, log: Log = print, retry: bool = False) -> dict[str, b
         chains = [pool.submit(explain), pool.submit(place)]
     for chain in chains:
         chain.result()
+
+    # Last, with both chains in: the story is told from the deep dive as well as the
+    # verdicts, and written beside the dive it was told from "深度講解開頭：(無)".
+    with connect() as conn:
+        story_missing = not followups.done(conn, paper_id)
+        asked = get_kv(conn, f"followups.checked.{paper_id}") is not None
+    if asked and story_missing and later:
+        work_progress.report("整理研究脈絡", paper_id=paper_id)
+        wrote, why = followups.overview(paper_id, log)
+        told = wrote or why in ("edited by hand", followups.NOTHING_TO_TELL)
+        _record(paper_id, "later", None if told else f"研究脈絡未完成：{why}")
 
     with connect() as conn:
         state = status(conn, paper_id)

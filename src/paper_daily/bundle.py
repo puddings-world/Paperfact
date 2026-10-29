@@ -40,7 +40,10 @@ FORMAT = 1
 
 # Tables holding one paper's analyses, keyed by paper_id.
 PER_PAPER = ("dives", "close_readings", "cites", "followups", "paper_context", "resources")
-KV_KEYS = ("citegraph.{pid}", "followups.checked.{pid}", "resources:{pid}")
+KV_KEYS = (
+    "citegraph.{pid}", "followups.checked.{pid}", "followups.overview.none.{pid}",
+    "cites.coverage.{pid}", "resources:{pid}",
+)
 
 
 def _digest(paper_id: str) -> str:

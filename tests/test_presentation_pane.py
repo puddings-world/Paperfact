@@ -622,3 +622,25 @@ def test_form_figure_replacement_preserves_geometry_without_duplicate_figures(pa
     assert "原圖讀取失敗" in widget.preview.toPlainText()
     widget.figure.setCurrentIndex(0)
     assert not any(o["kind"] == "figure" for o in widget.canvas.snapshot())
+
+
+def test_an_autosave_after_generation_cannot_overwrite_the_new_deck(pane):
+    from uuid import uuid4
+
+    widget, deck, _app, tmp = pane
+    widget._generating = True
+    widget.slide_title.setText("生成期間的修改")
+    assert widget._dirty and widget._autosave.isActive()
+    fresh = presentations.deck_from_dict(deck.to_dict())
+    fresh.deck_id = uuid4().hex
+    fresh.title = "新產生的簡報"
+    widget._generated(json.dumps(fresh.to_dict(), ensure_ascii=False))
+    widget._save_canvas()
+    widget._autosave.timeout.emit()
+    saved = presentations.load_deck(deck.paper_id, "guide")
+    assert saved.deck_id == fresh.deck_id and saved.title == "新產生的簡報"
+    assert widget.deck.title == "新產生的簡報"
+    # The edit typed during generation went into the old deck's history entry.
+    history = presentations._folder(deck.paper_id) / "history"
+    archived = [json.loads(p.read_text(encoding="utf-8")) for p in history.glob("guide-*.json")]
+    assert [a["slides"][0]["title"] for a in archived] == ["生成期間的修改"]

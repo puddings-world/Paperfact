@@ -47,6 +47,11 @@ class _QuestionDetails(QScrollArea):
         return QSize(0, 32)
 
 
+def _retry_hint(reason, kept=False):
+    state = "本文建議未更新，保留先前建議" if kept else "本文建議未產生"
+    return f"{state}：{reason.rstrip('。')}。可按「AI 更新建議」重試。"
+
+
 def question_preview(question):
     """A bounded navigation label; the full question is always in the preview."""
     text = " ".join(question.split())
@@ -147,10 +152,14 @@ class ResearchQuestions(QWidget):
             finally:
                 self._switching_paper = False
         self.paper_id = paper_id
-        self._fill(research_questions.cached(paper_id).get("items", []))
-        self.status.setText("已保存本文建議；選擇後可編輯，送出才會詢問 AI。"
-                            if self.picker.count()
-                            else "完成深入分析後，這裡會提供本文專屬的提問建議。")
+        saved = research_questions.cached(paper_id)
+        self._fill(saved.get("items", []))
+        if self.picker.count():
+            self.status.setText("已保存本文建議；選擇後可編輯，送出才會詢問 AI。")
+        elif saved.get("reason"):
+            self.status.setText(_retry_hint(saved["reason"]))
+        else:
+            self.status.setText("完成深入分析後，這裡會提供本文專屬的提問建議。")
         if self.isVisible():
             QTimer.singleShot(0, self.generate)
 
@@ -245,9 +254,12 @@ class ResearchQuestions(QWidget):
                 return
             if value:
                 self._fill(json.loads(value)["items"])
-            self.status.setText(
-                "本文建議已更新；瀏覽並選擇後可編輯，送出才會詢問 AI。" if value else reason
-            )
+                self.status.setText("本文建議已更新；瀏覽並選擇後可編輯，送出才會詢問 AI。")
+            elif research_questions.cached(pid).get("reason"):
+                # A failure the cache now holds is not retried on its own.
+                self.status.setText(_retry_hint(reason, kept=bool(self.picker.count())))
+            else:
+                self.status.setText(reason)
 
         self.runner.start(
             "", lambda value: finish(value=value), lambda why: finish(reason=why), call=call

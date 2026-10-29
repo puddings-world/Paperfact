@@ -27,6 +27,8 @@ def _page():
         paper=SimpleNamespace(id="p1"),
         _open_notes=set(),
         note_log=rich_view.RichView(pal),
+        # The 核心論點 button has its own test (test_claim_cards_view.py).
+        _show_claims_button=lambda: None,
     )
     page._card = lambda row: ReaderPage._card(page, row)
     page._load_notes = lambda: ReaderPage._load_notes(page)

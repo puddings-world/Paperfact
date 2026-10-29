@@ -1032,7 +1032,12 @@ class PresentationPane(QWidget):
         paper_id = self.paper_id
         self._highlights_busy = True
         self._update_controls()
-        self._highlight_status("AI 正在讀取原文、比較研究重要性並核對引句；舊結果暫時保留。")
+        # From the cache nothing is asked of the AI; saying it was read the paper
+        # made every reopen look like a paid call.
+        self._highlight_status(
+            "正在把已分析的原文重點標到 PDF 上…" if cached is not None
+            else "AI 正在讀取原文、比較研究重要性並核對引句；舊結果暫時保留。"
+        )
 
         def analyze(_prompt):
             try:
@@ -1716,6 +1721,7 @@ class PresentationPane(QWidget):
             slide_count=self.count.value(),
             inputs={k for k, box in self.inputs.items() if box.isChecked()},
             cfg=cfg,
+            save=False,
         )
         self._generating = True
         self._update_controls()
@@ -1737,7 +1743,18 @@ class PresentationPane(QWidget):
         except (ValueError, TypeError) as exc:
             self._failed(str(exc))
             return
-        if deck.paper_id == self.paper_id and deck.mode == self._mode:
+        showing = deck.paper_id == self.paper_id and deck.mode == self._mode
+        # Edits typed while the deck was generated belong to the old deck: flush them
+        # first so save_deck archives them in its history instead of losing them.
+        if showing and not self.save_changes():
+            with suppress(ValueError, OSError):
+                self.save_recovery()
+        try:
+            presentations.save_deck(deck)
+        except (ValueError, OSError) as exc:
+            self._failed(str(exc))
+            return
+        if showing:
             self._undo.clear()
             self._redo.clear()
             self._show_deck(deck)

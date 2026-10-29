@@ -3,7 +3,7 @@
 import time
 from functools import wraps
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from shiboken6 import isValid
 
 from paper_daily import ai_accounts, ai_choices, llm
@@ -45,6 +45,8 @@ class AccessBridge(QObject):
         self.runner.activity_label = "檢查 AI 登入"
         self.good = {}
         self.dialog = None
+        self._queue = []
+        self._current = None
         self.needed.connect(self.show_login)
 
     def check(self, cfg, task):
@@ -82,10 +84,26 @@ class AccessBridge(QObject):
         self.dialog.open()
 
     def run(self, owner, tasks, callback):
-        if self.runner.busy:
+        key = (id(owner), tuple(tasks))
+        if self._current is not None and not self.runner.busy:
+            # The runner was stopped (window closing) without delivering a result.
+            self._current = None
+        # Another feature's request waits for the running check instead of being
+        # dropped; a repeated click of the same feature is the only thing ignored.
+        if key != self._current and all(key != queued[0] for queued in self._queue):
+            scope = _scope(owner)
+            was_visible = owner.isVisible() if hasattr(owner, "isVisible") else False
+            self._queue.append((key, owner, tasks, callback, scope, was_visible))
+        self._drain()
+
+    def _drain(self):
+        if self._current is not None or not self._queue:
             return
-        scope = _scope(owner)
-        was_visible = owner.isVisible() if hasattr(owner, "isVisible") else False
+        if self.runner.busy:
+            QTimer.singleShot(20, self, self._drain)
+            return
+        key, owner, tasks, callback, scope, was_visible = self._queue.pop(0)
+        self._current = key
 
         def call(_):
             for task in tasks:
@@ -94,11 +112,16 @@ class AccessBridge(QObject):
                     return None, reason
             return "ready", "ok"
 
+        def finished():
+            self._current = None
+            self._drain()
+
         def done(_):
+            finished()
             if isValid(owner) and _scope(owner) == scope and (not was_visible or owner.isVisible()):
                 callback()
 
-        self.runner.start("", done, lambda _reason: None, call=call)
+        self.runner.start("", done, lambda _reason: finished(), call=call)
 
 
 def install(parent):
