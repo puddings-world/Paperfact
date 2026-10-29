@@ -76,8 +76,12 @@ def test_a_running_watchdog_records_a_real_freeze(tmp_path, monkeypatch):
     watch.start()
     try:
         time.sleep(0.3)  # the main thread is "the GUI" and stops beating
-        watch.heartbeat()
-        time.sleep(0.1)
+        # Beat steadily afterwards, as the GUI does: on a loaded machine the watcher
+        # may first wake after one lone beat has already gone stale.
+        end = time.monotonic() + 2
+        while not (tmp_path / "ui-stalls.log").exists() and time.monotonic() < end:
+            watch.heartbeat()
+            time.sleep(0.01)
     finally:
         watch.stop()
     assert "test_a_running_watchdog_records_a_real_freeze" in (
