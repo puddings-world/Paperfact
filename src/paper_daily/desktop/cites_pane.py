@@ -29,8 +29,12 @@ from __future__ import annotations
 
 import html
 import json
+import secrets
 import subprocess
 import threading
+import weakref
+from dataclasses import dataclass
+from types import MappingProxyType
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QDesktopServices
@@ -49,8 +53,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
-from paper_daily import analyze, citegraph, cites, followups, lineage_team, runtime
+from paper_daily import analyze, citegraph, cites, followups, lineage_team, runtime, store
 from paper_daily.desktop import ai_style, rich_view, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
@@ -196,11 +201,11 @@ def _ai_link(href: str, label: str, primary: bool = False) -> str:
 
 
 def _segments(name: str, options, current: str, pal: dict[str, str], *, action: str | None = None,
-              hidden: bool = False, title: str = "") -> str:
+              hidden: bool = False, title: str = "", href=None) -> str:
     """Joined switches, one lit, as links."""
     links = "".join(
         f'<a id="seg-{name}-{key}" class="{"on" if key == current else ""}" '
-        f'href="cite:{action or name}:{key}">'
+        f'href="{_esc(href(action or name, key))}">'
         + (f"<b>{label}</b>" if key == current else label) + "</a>"
         for label, key in options
     )
@@ -319,6 +324,33 @@ class _Text(QLabel):
         return height
 
 
+@dataclass(frozen=True)
+class _PageScope:
+    paper_id: str
+    generation: int
+    nonce: str
+    database: tuple
+    active_list: str | None
+
+
+@dataclass(frozen=True)
+class _PageAction:
+    scope: _PageScope
+    command: str
+    arguments: tuple[str, ...]
+    identity: tuple[str, str] | None
+    payload: str | None
+
+
+def _database_identity() -> tuple:
+    path = store.DB_PATH.resolve()
+    try:
+        stat = path.stat()
+    except OSError:
+        return (str(path), None, None)
+    return str(path), stat.st_dev, stat.st_ino
+
+
 class CitesPane(QWidget):
     # (generation, result) from the author/institution lookup thread.
     team_ready = Signal(int, object)
@@ -329,6 +361,9 @@ class CitesPane(QWidget):
         self.win = window
         self.pal = palette
         self.paper_id: str | None = None
+        self._page_scope: _PageScope | None = None
+        self._page_actions = MappingProxyType({})
+        self._dispatching: set[str] = set()
         # 全域 shows the whole lineage; 作者團隊 only work sharing an author or an
         # institution with this paper, as OpenAlex lists them.
         self._team = "all"
@@ -450,6 +485,7 @@ class CitesPane(QWidget):
     def _clear(self) -> None:
         """Drop the page and the map; the switch above them stays."""
         self._generation += 1
+        self._invalidate_page()
         self._cards, self._rows, self._done = {}, {}, {}
         self._map = None
         self._graph_note = None
@@ -492,10 +528,16 @@ class CitesPane(QWidget):
         The plain fallback view has no scripts; it gets the chosen side alone."""
         if self._data is None:
             return
+        self._invalidate_page()
+        scope = _PageScope(self.paper_id, self._generation, secrets.token_hex(16),
+                           _database_identity(), getattr(self.win, "active_list", None))
+        self._page_scope = scope
+        self._building_actions = {}
         self._cards = {}
         rich = self._list_view.rich
         body = [f"<style>{_page_css(self.pal)}</style>"] if rich else []
-        body += ['<div class="cites">', self._story_html(), self._bar_html()]
+        body += [f'<div class="cites" id="paperfact-cites" data-frame="{scope.nonce}">',
+                 self._story_html(), self._bar_html()]
         for side in ("refs", "later"):
             rows = self._side_rows(side)
             self._rows[side] = rows
@@ -507,22 +549,88 @@ class CitesPane(QWidget):
         if rich:
             body.append(f"<script>{_PAGE_SCRIPT}</script>")
             self._page_ready = False
-        self._list_view.setHtml("".join(body), keep_scroll=keep_scroll)
+        self._page_actions = MappingProxyType(self._building_actions)
+        self._building_actions = None
+        owner = weakref.ref(self)
 
-    def _page_loaded(self, _ok: bool) -> None:
-        self._page_ready = True
-        waiting, self._waiting_js = self._waiting_js, []
-        for code in waiting:
-            self._list_view.view.page().runJavaScript(code)
+        def current():
+            widget = owner()
+            return widget is not None and widget._frame_current(scope)
+
+        self._list_view.setHtml("".join(body), keep_scroll=keep_scroll, current=current)
+
+    def _invalidate_page(self) -> None:
+        self._page_scope = None
+        self._page_actions = MappingProxyType({})
+        self._page_ready = False
+        self._waiting_js = []
+
+    def _frame_current(self, scope: _PageScope) -> bool:
+        return (isValid(self) and self._page_scope is scope
+                and self.paper_id == scope.paper_id and self._generation == scope.generation
+                and _database_identity() == scope.database
+                and getattr(self.win, "active_list", None) == scope.active_list)
+
+    def _action_href(self, command: str, *arguments: str, row: dict | None = None) -> str:
+        scope = self._page_scope
+        assert scope is not None and self._building_actions is not None
+        token = secrets.token_hex(12)
+        identity = None
+        if row is not None:
+            key = (row.get("ref_key") or row.get("work_id") or row.get("corpus_id")
+                   or row.get("doi") or row.get("s2_id") or row.get("title") or "")
+            identity = (arguments[0] if arguments else "story", str(key))
+        self._building_actions[token] = _PageAction(
+            scope, command, tuple(arguments), identity,
+            json.dumps(row, ensure_ascii=False, sort_keys=True) if row is not None else None,
+        )
+        return f"cite:{scope.nonce}:{token}"
+
+    def _page_loaded(self, ok: bool) -> None:
+        scope = self._page_scope
+        if not ok or scope is None or not self._frame_current(scope):
+            return
+        owner = weakref.ref(self)
+
+        def ready(nonce):
+            widget = owner()
+            if (widget is None or not widget._frame_current(scope)
+                    or nonce != scope.nonce):
+                return
+            widget._page_ready = True
+            waiting, widget._waiting_js = widget._waiting_js, []
+            for captured, code in waiting:
+                if captured is scope:
+                    widget._run_js(scope, code)
+
+        self._list_view.view.page().runJavaScript(
+            "document.getElementById('paperfact-cites')?.dataset.frame || null", ready,
+        )
+
+    def _run_js(self, scope: _PageScope, code: str) -> None:
+        if not self._frame_current(scope):
+            return
+        self._list_view.view.page().runJavaScript(
+            "(() => { const root = document.getElementById('paperfact-cites'); "
+            f"if (!root || root.dataset.frame !== {json.dumps(scope.nonce)}) return; "
+            + code + " })()"
+        )
 
     def _js(self, code: str) -> None:
-        """Run a script on the page, once it has loaded."""
-        if not self._list_view.rich:
+        """Run only on the render that requested the command, after its DOM is ready."""
+        scope = self._page_scope
+        if not self._list_view.rich or scope is None or not self._frame_current(scope):
             return
         if self._page_ready:
-            self._list_view.view.page().runJavaScript(code)
+            self._run_js(scope, code)
         else:
-            self._waiting_js.append(code)
+            self._waiting_js.append((scope, code))
+
+    def closeEvent(self, event) -> None:
+        self._generation += 1
+        self._invalidate_page()
+        self._watch.stop()
+        super().closeEvent(event)
 
     def _side_rows(self, side: str) -> list[dict]:
         if side == "refs":
@@ -543,9 +651,11 @@ class CitesPane(QWidget):
     def _story_html(self) -> str:
         pal, data = self.pal, self._data
         story = data["story"]
+        edit_href = self._action_href("story-edit", row=story) if story else ""
         parts = [
             f'<div style="font-size:14px;font-weight:600;color:{pal["ink"]};">研究脈絡'
-            + ('&nbsp;&nbsp;<a class="btn" href="cite:story-edit">編輯</a>' if story else "")
+            + (f'&nbsp;&nbsp;<a class="btn" href="{edit_href}">編輯</a>'
+               if story else "")
             + "</div>",
             _say("依據：" + self._coverage + (" · 已手動修改" if story and story["edited"] else ""),
                  pal["faint"], 11.5),
@@ -574,9 +684,9 @@ class CitesPane(QWidget):
             if text:
                 parts.append(_say(text, pal["muted"], 12.5))
             if action == "run-all":
-                parts.append(_ai_link("cite:run-all", "深入分析", primary=True))
+                parts.append(_ai_link(self._action_href("run-all"), "深入分析", primary=True))
             elif action == "refresh":
-                parts.append(_ai_link("cite:refresh", "重新查後續研究並更新脈絡"))
+                parts.append(_ai_link(self._action_href("refresh"), "重新查後續研究並更新脈絡"))
         return _box("".join(parts), pal)
 
     def _bar_html(self) -> str:
@@ -584,10 +694,11 @@ class CitesPane(QWidget):
         sides = _segments("side", (
             (f"參考文獻 {sum(1 for r in data['refs'] if r.get('ref_key'))}", "refs"),
             (f"後續研究 {len(data['later'])}", "later"),
-        ), self._side, self.pal)
+        ), self._side, self.pal, href=self._action_href)
         orders = "".join(
             _segments(f"order-{side}", options, current, self.pal, action="order",
-                      hidden=side != self._side)
+                      hidden=side != self._side,
+                      href=lambda action, value, side=side: self._action_href(action, side, value))
             for side, options, current in (
                 ("refs", (("值得讀的排前面", "verdict"), ("照論文編號", "number")),
                  self._ref_order),
@@ -596,6 +707,7 @@ class CitesPane(QWidget):
             )
         )
         team = _segments("team", (("全域", "all"), ("作者團隊", "team")), self._team, self.pal,
+                         href=self._action_href,
                          title="作者團隊：只看和這篇有共同作者或同一研究機構的前作與後續研究"
                                "（作者與機構資料來自 OpenAlex）")
         note = self._team_note()
@@ -622,7 +734,8 @@ class CitesPane(QWidget):
                         "引用它——當 baseline、資料來源、方法出處、被推翻的說法,還是背景鋪陳——"
                         "再給一個值不值得讀的判斷。", pal["muted"], 13,
                     ))
-                    parts.append(_ai_link("cite:run-cites", "分析這篇的參考文獻", primary=True))
+                    parts.append(_ai_link(self._action_href("run-cites"),
+                                          "分析這篇的參考文獻", primary=True))
             else:
                 # Say how many verdicts rest on a citing sentence and how many on a
                 # title alone: the second kind is a much weaker answer.
@@ -643,7 +756,8 @@ class CitesPane(QWidget):
                 text = "還沒查。會向 OpenAlex 和 Semantic Scholar 查整個領域裡引用這篇的論文。"
             parts.append(_say(text, pal["muted"], 13))
             if not asked and not self._busy():
-                parts.append(_ai_link("cite:run-followups", "查後續研究", primary=True))
+                parts.append(_ai_link(self._action_href("run-followups"),
+                                      "查後續研究", primary=True))
         else:
             with_ctx = sum(1 for r in rows if r.get("contexts"))
             parts.append(_say(
@@ -745,58 +859,85 @@ class CitesPane(QWidget):
             else:
                 out.append(
                     f'<a class="btn" id="a-{action}-{side}-{index}" '
-                    f'href="cite:{action}:{side}:{index}">{label}</a>'
+                    f'href="{self._action_href(action, side, str(index), row=r)}">{label}</a>'
                 )
         return f'<div class="actions">{"&nbsp; ".join(out)}</div>' if out else ""
 
     def _link(self, url) -> None:
-        """Every link on the page of 條列 comes here."""
-        parts = url.toString().split(":")
-        if parts[0] != "cite":
+        """Dispatch only an action owned by the exact currently rendered page."""
+        if url.scheme() != "cite":
             if url.scheme() in ("http", "https"):
                 QDesktopServices.openUrl(url)
             return
-        action = parts[1] if len(parts) > 1 else ""
-        value = parts[2] if len(parts) > 2 else ""
-        if action == "side" and value in ("refs", "later"):
-            self._set_side(value)
-        elif action == "order" and value:
-            self._set_order(value)
-        elif action == "team" and value in ("all", "team"):
-            self._set_team(value)
-        elif action == "story-edit" and self._data and self._data["story"]:
-            self._edit_story(self._data["story"])
-        elif action == "run-all":
+        parts = url.toString().split(":")
+        if len(parts) != 3:
+            return
+        scope = self._page_scope
+        entry = self._page_actions.get(parts[2])
+        if (scope is None or parts[1] != scope.nonce or entry is None
+                or entry.scope is not scope or not self._frame_current(scope)):
+            return
+        action, arguments = entry.command, entry.arguments
+        if action == "side" and len(arguments) == 1 and arguments[0] in ("refs", "later"):
+            self._set_side(arguments[0])
+        elif action == "order" and len(arguments) == 2:
+            side, order = arguments
+            allowed = {"refs": ("verdict", "number"), "later": ("verdict", "cited", "new")}
+            if side == self._side and order in allowed.get(side, ()):
+                self._set_order(order)
+        elif action == "team" and len(arguments) == 1 and arguments[0] in ("all", "team"):
+            self._set_team(arguments[0])
+        elif not arguments and action == "story-edit" and entry.payload is not None:
+            self._edit_story(json.loads(entry.payload))
+        elif not arguments and action == "run-all":
             self._run_all()
-        elif action == "refresh":
+        elif not arguments and action == "refresh":
             self._refresh_context()
-        elif action == "run-cites":
+        elif not arguments and action == "run-cites":
             self._run_cites()
-        elif action == "run-followups":
+        elif not arguments and action == "run-followups":
             self._run_followups()
-        elif len(parts) == 4 and parts[3].isdigit():
-            rows = self._rows.get(value, [])
-            index = int(parts[3])
-            if index < len(rows):
-                self._act(action, value, index, rows[index])
+        elif (action in ("open", "lift", "add", "edit") and len(arguments) == 2
+              and arguments[0] in ("refs", "later") and arguments[1].isdigit()
+              and entry.payload is not None and entry.identity is not None):
+            token = parts[2]
+            if token in self._dispatching:
+                return
+            self._dispatching.add(token)
+            try:
+                self._act(action, arguments[0], int(arguments[1]), json.loads(entry.payload))
+            finally:
+                self._dispatching.discard(token)
+            if action in ("add", "lift") and self._frame_current(scope):
+                self._page_actions = MappingProxyType(
+                    {key: value for key, value in self._page_actions.items() if key != token}
+                )
 
     def _act(self, action: str, side: str, index: int, r: dict) -> None:
+        scope = self._page_scope
         here = r.get("here")
         if action == "open" and here:
             self.win.open_paper(here["id"])
         elif action == "lift" and here:
             self.win.promote(here["id"])
-            self._mark(action, side, index, r, "已插到最前面")
+            self._mark(action, side, index, r, "已插到最前面", scope=scope)
         elif action == "add":
             # The import runs for a few seconds against Semantic Scholar; the
             # switcher picks it up on the next refresh rather than blocking reading.
             where = self._send_to_list({"title": r.get("title") or "", "doi": r.get("doi")})
-            self._mark(action, side, index, r, f"已送到「{where}」")
+            self._mark(action, side, index, r, f"已送到「{where}」", scope=scope)
         elif action == "edit":
             self._edit_item("ref" if side == "refs" else "later", r)
 
-    def _mark(self, action: str, side: str, index: int, r: dict, text: str) -> None:
-        self._done[(action, id(r))] = text
+    def _mark(self, action: str, side: str, index: int, r: dict, text: str, *,
+              scope: _PageScope) -> None:
+        if not self._frame_current(scope):
+            return
+        rows = self._rows.get(side, [])
+        if not 0 <= index < len(rows) or rows[index] != r:
+            return
+        current = rows[index]
+        self._done[(action, id(current))] = text
         if self._list_view.rich:
             self._js(f"mark({json.dumps(f'a-{action}-{side}-{index}')}, {json.dumps(text)})")
         else:
@@ -1290,6 +1431,8 @@ class CitesPane(QWidget):
     # ---- edits -----------------------------------------------------------
 
     def _edit_item(self, kind: str, r: dict) -> None:
+        original_paper, database, generation = self.paper_id, _database_identity(), self._generation
+        r = json.loads(json.dumps(r))
         fields = (
             (("purpose", "與原文的關係"), ("gist", "這篇在做什麼"), ("why", "判斷"))
             if kind == "ref"
@@ -1318,17 +1461,21 @@ class CitesPane(QWidget):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted or not self.paper_id:
+        if (dialog.exec() != QDialog.DialogCode.Accepted or not original_paper
+                or _database_identity() != database):
             return
         values = {k: b.toPlainText().strip() for k, b in boxes.items()}
         values["verdict"] = verdict.currentText()
         if kind == "ref":
-            followups.edit_reference(self.paper_id, r["ref_key"], **values)
+            followups.edit_reference(original_paper, r["ref_key"], **values)
         else:
-            followups.edit_followup(self.paper_id, r["work_id"], **values)
-        self._reload()
+            followups.edit_followup(original_paper, r["work_id"], **values)
+        if self.paper_id == original_paper and self._generation == generation:
+            self._reload()
 
     def _edit_story(self, story: dict) -> None:
+        original_paper, database, generation = self.paper_id, _database_identity(), self._generation
+        story = json.loads(json.dumps(story))
         dialog = QDialog(self)
         dialog.setWindowTitle("編輯研究脈絡")
         dialog.resize(640, 540)
@@ -1348,7 +1495,8 @@ class CitesPane(QWidget):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addWidget(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted or not self.paper_id:
+        if (dialog.exec() != QDialog.DialogCode.Accepted or not original_paper
+                or _database_identity() != database):
             return
         items = []
         for line in reading.toPlainText().splitlines():
@@ -1359,8 +1507,9 @@ class CitesPane(QWidget):
                     "title": parts[1],
                     "why": parts[2] if len(parts) > 2 else "",
                 })
-        followups.edit_overview(self.paper_id, summary.toPlainText().strip(), items)
-        self._reload()
+        followups.edit_overview(original_paper, summary.toPlainText().strip(), items)
+        if self.paper_id == original_paper and self._generation == generation:
+            self._reload()
 
     # ---- background work -------------------------------------------------
 

@@ -4,6 +4,7 @@ every card, two to four seconds on a paper with 60 references and 120 later
 works; as widgets, even made once, the cards held the window for a second."""
 
 import os
+from html.parser import HTMLParser
 from types import SimpleNamespace
 
 import pytest
@@ -180,19 +181,34 @@ def test_a_slide_source_finds_its_card_on_the_other_side(pane):
     assert 'id="seg-side-later" class="on"' in pane._list_view._body
 
 
+def _current_href(widget, anchor):
+    class Links(HTMLParser):
+        href = None
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "a" and attrs.get("id") == anchor:
+                self.href = attrs["href"]
+
+    links = Links()
+    links.feed(widget._list_view._body)
+    assert links.href is not None
+    return QUrl(links.href)
+
+
 def test_a_card_opens_lifts_or_adds_its_work(pane, monkeypatch):
     spawned = []
     monkeypatch.setattr(cites_pane, "_spawn", lambda *args: spawned.append(args))
     refs = pane._rows["refs"]
     here = next(i for i, r in enumerate(refs) if r["here"])
     assert "插到最前面" in _page(pane)
-    pane._link(QUrl(f"cite:open:refs:{here}"))
+    pane._link(_current_href(pane, f"a-open-refs-{here}"))
     assert pane.opened == ["ICLR:2024:ref3"]
-    pane._link(QUrl(f"cite:lift:refs:{here}"))
+    pane._link(_current_href(pane, f"a-lift-refs-{here}"))
     assert pane.promoted == ["ICLR:2024:ref3"]
     assert "已插到最前面" in _page(pane)
     other = next(i for i, r in enumerate(refs) if not r["here"])
-    pane._link(QUrl(f"cite:add:refs:{other}"))
+    pane._link(_current_href(pane, f"a-add-refs-{other}"))
     assert spawned == [("list-add", "my-list", refs[other]["title"])]
     assert "已送到「my-list」" in _page(pane)
     # A link to a card that is no longer there does nothing.
@@ -201,9 +217,9 @@ def test_a_card_opens_lifts_or_adds_its_work(pane, monkeypatch):
 
 
 def test_the_sides_and_orders_switch_from_their_links(pane):
-    pane._link(QUrl("cite:side:later"))
+    pane._link(_current_href(pane, "seg-side-later"))
     assert pane._side == "later" and "Later work 3 building on it" in _page(pane)
-    pane._link(QUrl("cite:order:cited"))
+    pane._link(_current_href(pane, "seg-order-later-cited"))
     assert [r["work_id"] for r in pane._rows["later"]][0] == "w24"
 
 
