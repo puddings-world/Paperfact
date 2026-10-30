@@ -12,6 +12,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QPushButton
 
 from paper_daily import __version__, runtime, updates
+from paper_daily.desktop.window_workspace import WindowWorkspace
 from paper_daily.store import connect
 
 
@@ -36,8 +37,10 @@ class UpdateBanner(QFrame):
     quit_for_update = Signal()
     check_status = Signal(bool, str)
 
-    def __init__(self, palette: dict[str, str], *, prepare_install=None, cancel_install=None):
+    def __init__(self, palette: dict[str, str], *, prepare_install=None, cancel_install=None,
+                 owner=None):
         super().__init__()
+        self._workspace_owner = owner if owner is not None else WindowWorkspace.capture()
         self.release: updates.Release | None = None
         self._checking = self._downloading = self._closed = False
         self._dismissed = None
@@ -91,8 +94,21 @@ class UpdateBanner(QFrame):
         row.addWidget(self.later)
         self.hide()
 
+    def _current(self):
+        return not self._closed and self._workspace_owner.current()
+
+    def _scope_status(self):
+        if not self._closed:
+            self.check_status.emit(
+                False, "Workspace changed. Return to the original workspace to check updates."
+            )
+
     def check_in_background(self, *, force=False):
-        if self._closed or self._checking:
+        if not self._current():
+            if force:
+                self._scope_status()
+            return
+        if self._checking:
             return
         if self._downloading or self._ready is not None or self._installing:
             if force:
@@ -105,10 +121,17 @@ class UpdateBanner(QFrame):
         self.check_status.emit(True, "正在檢查更新…")
         relay = self._relay
         channel = updates.default_channel()
+        owner, database = self._workspace_owner, self._workspace_owner.database
 
         def work():
+            if not owner.current():
+                _emit(relay.found, None)
+                return
             try:
-                with connect() as conn:
+                with connect(path=database) as conn:
+                    if not owner.current():
+                        _emit(relay.found, None)
+                        return
                     options = {"channel": channel, **({"force": True} if force else {})}
                     release = updates.check(conn, **options)
                     if not force and release is not None and updates.snoozed(conn, release):
@@ -122,12 +145,16 @@ class UpdateBanner(QFrame):
 
     def _check_failed(self):
         self._checking = False
-        if not self._closed:
+        if not self._current():
+            self._scope_status()
+            return
+        if self._current():
             self.check_status.emit(False, "暫時無法檢查更新，請確認網路後重試。")
 
     def _found(self, release):
         self._checking = False
-        if self._closed:
+        if not self._current():
+            self._scope_status()
             return
         if self._downloading or self._ready is not None or self._installing:
             self.check_status.emit(False, "已有更新下載中或等待安裝，請查看上方公告。")
@@ -147,7 +174,7 @@ class UpdateBanner(QFrame):
         self.offer(release)
 
     def offer(self, release):
-        if self._closed or self._downloading or self._ready is not None or self._installing:
+        if not self._current() or self._downloading or self._ready is not None or self._installing:
             return
         if self.release == release and not self.isHidden():
             return
@@ -183,7 +210,7 @@ class UpdateBanner(QFrame):
     def _cycle(self):
         focused = QApplication.focusWidget()
         if (
-            self._closed
+            not self._current()
             or self._downloading
             or self._ready is not None
             or self._installing
@@ -198,7 +225,7 @@ class UpdateBanner(QFrame):
 
     def start_install(self):
         release = self.release
-        if release is None or self._closed or self._downloading or self._installing:
+        if release is None or not self._current() or self._downloading or self._installing:
             return
         if self._ready is not None:
             self._apply_ready()
@@ -216,7 +243,8 @@ class UpdateBanner(QFrame):
         relay = self._relay
 
         def work():
-            if self._closed:
+            if not self._current():
+                _emit(relay.failed, "")
                 return
             try:
                 digest = release.digests.get(name, "")
@@ -243,20 +271,21 @@ class UpdateBanner(QFrame):
         threading.Thread(target=work, name="update-download", daemon=True).start()
 
     def _progress(self, done, total):
-        if self.release is None or self._closed:
+        if self.release is None or not self._current():
             return
         size = f"{done / 1e6:.0f} / {total / 1e6:.0f} MB" if total else f"{done / 1e6:.0f} MB"
         self.label.setText(f"正在下載 Paperfact {self.release.version}… {size}")
 
     def _downloaded(self, path: Path):
+        self._downloading = False
         if self._closed:
             return
-        self._downloading = False
         self._ready = path
-        self._verified()
+        if self._current():
+            self._verified()
 
     def _apply_ready(self):
-        if self._closed or self._installing or self._verifying or self._ready is None:
+        if not self._current() or self._installing or self._verifying or self._ready is None:
             return
         self._verifying = True
         self.install.setEnabled(False)
@@ -277,13 +306,17 @@ class UpdateBanner(QFrame):
 
     def _verified(self):
         self._verifying = False
-        if self._closed or self._installing or self._ready is None:
+        if not self._current() or self._installing or self._ready is None:
             return
         if self._prepare_install is not None and not self._prepare_install():
             self.label.setText("新版已下載並驗證；請先完成背景工作、儲存並關閉對話視窗，再按更新。")
             self.install.setText("完成後更新並重啟")
             self.install.setEnabled(True)
             self.later.setEnabled(True)
+            return
+        if not self._current():
+            if self._cancel_install is not None:
+                self._cancel_install()
             return
         self._installing = True
         try:
@@ -302,7 +335,7 @@ class UpdateBanner(QFrame):
         self._downloading = False
         self._verifying = False
         self._ready = None
-        if self._closed:
+        if not self._current():
             return
         self._rotate.stop()
         self.label.setText(f"更新沒有完成：{reason}。可以按「看更新內容」到發布頁手動下載。")
@@ -311,14 +344,20 @@ class UpdateBanner(QFrame):
         self.later.setEnabled(True)
 
     def _open_page(self):
+        if not self._current():
+            return
         page = self.release.page if self.release else updates.RELEASES_PAGE
         QDesktopServices.openUrl(QUrl(page))
 
     def _snooze(self):
+        if not self._current():
+            self._rotate.stop()
+            self.hide()
+            return
         if self._downloading or self._verifying or self._installing:
             return
         if self.release is not None:
-            with connect() as conn:
+            with connect(path=self._workspace_owner.database) as conn:
                 updates.snooze(conn, self.release)
             self._dismissed = (self.release.version, updates.date.today())
         self._rotate.stop()

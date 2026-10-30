@@ -93,6 +93,7 @@ from paper_daily.desktop.off_thread import OffThread
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
+from paper_daily.desktop.window_workspace import WindowWorkspace, current_for
 from paper_daily.store import connect, get_kv, init_db, now
 
 LIGHT = {
@@ -2093,6 +2094,8 @@ class ReaderPage(QWidget):
 class MainWindow(QWidget):
     def __init__(self, open_next: bool = False) -> None:
         super().__init__()
+        self._workspace_owner = WindowWorkspace.capture()
+        self.destroyed.connect(self._workspace_owner.close)
         self.pal = palette()
         self.data = Data()
         self.papers: list[Paper] = []
@@ -2287,13 +2290,14 @@ class MainWindow(QWidget):
         self.account_status = AccountStatus(self, self._refresh_ai_summary)
         from paper_daily.desktop.analysis_settings import ReadyBanner
 
-        self.ready_banner = ReadyBanner(self.pal)
+        self.ready_banner = ReadyBanner(self.pal, owner=self._workspace_owner)
         self.ready_banner.open_paper.connect(self.open_anywhere)
         outer.addWidget(self.ready_banner)
         from paper_daily.desktop.update_banner import UpdateBanner
 
         self.update_banner = UpdateBanner(
-            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update
+            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update,
+            owner=self._workspace_owner
         )
         self.update_banner.quit_for_update.connect(self.close)
         outer.addWidget(self.update_banner)
@@ -2413,6 +2417,8 @@ class MainWindow(QWidget):
         IntegrationDialog(self).exec()
 
     def _external_lists_changed(self):
+        if not current_for(self):
+            return
         # Keep the open paper, editor contents, selection and keyboard focus intact.
         self._external_refresh_pending = True
         if (QApplication.activeModalWidget() is not None
@@ -2428,6 +2434,8 @@ class MainWindow(QWidget):
         self._external_refresh_pending = False
 
     def _refresh_external_list_views(self):
+        if not current_for(self):
+            return
         self.refresh_lists()
         self.lists_page.refresh(preserve_state=True)
         if self.stack.currentWidget() is self.queue_page:
@@ -2444,6 +2452,8 @@ class MainWindow(QWidget):
             self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
     def _poll_external_lists(self, *, background=False):
+        if not current_for(self):
+            return
         if background:
             self.workspace_changes.poll_in_background()
         else:
@@ -2513,7 +2523,10 @@ class MainWindow(QWidget):
         """Say which papers the scheduled analysis finished, once per batch."""
         from paper_daily import analysis_schedule
 
-        with connect() as conn:
+        if not current_for(self):
+            return
+
+        with connect(path=self._workspace_owner.database) as conn:
             ids = analysis_schedule.unseen(conn)
             titles = {
                 r["id"]: r["title"]
@@ -2522,6 +2535,8 @@ class MainWindow(QWidget):
                     ids,
                 )
             } if ids else {}
+        if not current_for(self):
+            return
         if not ids:
             self.ready_banner.hide()
             return
@@ -2590,7 +2605,8 @@ class MainWindow(QWidget):
 
     # ---- layout memory ---------------------------------------------------
     def remember(self, key: str, value: str) -> None:
-        ui_state.save(f"ui.{key}", value)
+        if current_for(self):
+            ui_state.save(f"ui.{key}", value)
 
     def _restore_layout(self) -> None:
         """Put the window back where it was. Kept in the same database as everything
@@ -2617,6 +2633,9 @@ class MainWindow(QWidget):
         self._closing_with_recovery = False
 
     def _prepare_restart(self) -> bool:
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
         hub = getattr(self, "activity_hub", None)
         if hub is not None and hub.busy:
             return False
@@ -2640,13 +2659,20 @@ class MainWindow(QWidget):
             pane.status.setText("仍有工作或對話視窗，暫不重啟；完成後可再試一次。")
             return False
         recovered = False
-        if not pane.save_changes():
+        saved = pane.save_changes()
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not saved:
             try:
                 pane.save_recovery()
             except (ValueError, OSError) as exc:
                 pane.status.setText(f"草稿保存失敗，暫不重啟：{exc}")
                 return False
             recovered = True
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
         self.remember("restart", json.dumps({
             "paper": reader.paper.id if reader.paper else None,
             "reader": self.stack.currentWidget() is reader,
@@ -2656,6 +2682,9 @@ class MainWindow(QWidget):
             "pdf_page": reader.pdf.current_page() if reader.pdf.isVisible() else 0,
         }))
         # A failed flush must keep the current process and its drafts alive.
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
         if not ui_state.flush():
             return False
         self._closing_with_recovery = recovered
@@ -2679,7 +2708,8 @@ class MainWindow(QWidget):
                 selection = getattr(reader.pdf, "selection", None)
                 page = state.get("pdf_page", 0)
                 if selection and type(page) is int and 0 <= page < reader.pdf.page_count():
-                    QTimer.singleShot(0, selection, lambda: selection.scroll_to_page(page))
+                    QTimer.singleShot(0, selection, lambda: selection.scroll_to_page(page)
+                                      if current_for(self) else None)
                 if not pane._dirty and 0 <= state.get("slide", -1) < pane.outline.count():
                     pane.outline.setCurrentRow(state["slide"])
                 pane.views.setCurrentIndex(state.get("view", 0))
@@ -2696,8 +2726,70 @@ class MainWindow(QWidget):
         except (ValueError, TypeError, KeyError):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
+    def _workspace_drafts(self) -> bool:
+        reader = self.reader_page
+        for name, getter in (("note_edit", "toPlainText"), ("ask_box", "text")):
+            editor = getattr(reader, name, None)
+            if editor is not None and getattr(editor, getter)():
+                return True
+        if any(getattr(reader, "_qa_drafts", {}).values()):
+            return True
+        pane = reader.presentation_pane
+        if any(getattr(pane, key, False) for key in ("_dirty", "_canvas_dirty", "_layout_reset")):
+            return True
+        instruction = getattr(getattr(pane, "canvas", None), "revise_instruction", None)
+        return bool((instruction is not None and instruction.toPlainText())
+                    or QApplication.activeModalWidget() is not None)
+
+    def _workspace_changed_notice(self) -> None:
+        message = (
+            "Workspace changed. Copy unsaved text, or return to the original workspace "
+            "to save and close."
+        )
+        banner = getattr(self, "ready_banner", None)
+        if banner is not None:
+            banner.ids = []
+            banner.label.setText(message)
+            banner.read.setEnabled(False)
+            banner.show()
+        reader = getattr(self, "reader_page", None)
+        for name in ("note_status", "ask_status"):
+            label = getattr(reader, name, None)
+            if label is not None:
+                label.setText(message)
+
+    def _stop_window_observers(self) -> None:
+        owner = getattr(self, "_workspace_owner", None)
+        if owner is not None:
+            owner.close()
+        timer = getattr(self, "_ready_poll", None)
+        if timer is not None:
+            timer.stop()
+        observer = getattr(self, "workspace_changes", None)
+        timer = getattr(observer, "timer", None)
+        if timer is not None:
+            timer.stop()
+
+    def _close_changed_workspace(self, event) -> bool:
+        if current_for(self):
+            return False
+        if self._workspace_drafts():
+            self._workspace_changed_notice()
+            event.ignore()
+        else:
+            self._stop_window_observers()
+            self.update_banner.shutdown()
+            self.workspace_changes.close()
+            super().closeEvent(event)
+        return True
+
     def closeEvent(self, event) -> None:
         from paper_daily.desktop.integration_dialog import OperationWorker
+
+        if not current_for(self) and self._workspace_drafts():
+            self._workspace_changed_notice()
+            event.ignore()
+            return
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
             event.ignore()
@@ -2744,7 +2836,12 @@ class MainWindow(QWidget):
             self.reader_page.tabs.setCurrentWidget(pane)
             event.ignore()
             return
-        if not getattr(self, "_closing_with_recovery", False) and not pane.save_changes():
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        saved = getattr(self, "_closing_with_recovery", False) or pane.save_changes()
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        if not saved:
             event.ignore()
             if getattr(self, "_close_dialog", None):
                 self._close_dialog.raise_()
@@ -2778,9 +2875,16 @@ class MainWindow(QWidget):
             # A modal exec inside closeEvent can re-enter native window teardown.
             box.open()
             return
+        if MainWindow._close_changed_workspace(self, event):
+            return
         self.remember("presentation", json.dumps(pane.workspace_state()))
+        if MainWindow._close_changed_workspace(self, event):
+            return
         self.remember("geometry", self.saveGeometry().toHex().data().decode())
+        if MainWindow._close_changed_workspace(self, event):
+            return
         ui_state.flush()
+        MainWindow._stop_window_observers(self)
         self.update_banner.shutdown()
         self.workspace_changes.close()
         super().closeEvent(event)
@@ -2795,11 +2899,15 @@ class MainWindow(QWidget):
         return alive and (paper_id is None or self._job_paper == paper_id)
 
     def _spawn_job(self, args: list[str], paper_id: str | None) -> None:
+        if not current_for(self):
+            return
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         from paper_daily.desktop.activity import begin
 
         self._job_paper = paper_id
         def show_result():
+            if not current_for(self):
+                return
             if paper_id:
                 self.open_anywhere(paper_id)
                 self.reader_page._analysis_finished()
@@ -2866,6 +2974,8 @@ class MainWindow(QWidget):
         paper opened only to glance at should not spend a model call.
         """
         # Desktop background spending is opt-in; opening/importing a list only reads it.
+        if not current_for(self):
+            return
         with connect() as conn:
             if ui_state.read(conn, "ui.background_analysis") != "1":
                 return

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import analysis_schedule
+from paper_daily.desktop.window_workspace import WindowWorkspace
 from paper_daily.store import connect, get_kv, set_kv
 
 # The window's own top-up while it is open (MainWindow.top_up_dives), opt-in.
@@ -123,8 +124,9 @@ class ReadyBanner(QFrame):
 
     open_paper = Signal(str)
 
-    def __init__(self, palette: dict[str, str]):
+    def __init__(self, palette: dict[str, str], *, owner=None):
         super().__init__()
+        self._workspace_owner = owner if owner is not None else WindowWorkspace.capture()
         self.ids: list[str] = []
         self.setObjectName("readyBanner")
         self.setStyleSheet(
@@ -153,6 +155,9 @@ class ReadyBanner(QFrame):
         self.hide()
 
     def show_batch(self, ids: list[str], titles: dict[str, str]) -> None:
+        if not self._workspace_owner.current():
+            return
+        self.read.setEnabled(True)
         self.ids = ids
         names = "、".join(f"《{titles.get(pid, pid)[:48]}》" for pid in ids[:3])
         more = f"等 {len(ids)} 篇" if len(ids) > 3 else ""
@@ -160,12 +165,18 @@ class ReadyBanner(QFrame):
         self.show()
 
     def _read(self) -> None:
+        if not self._workspace_owner.current():
+            self.hide()
+            return
         first = self.ids[0] if self.ids else None
         self._dismiss()
-        if first:
+        if first and self._workspace_owner.current():
             self.open_paper.emit(first)
 
     def _dismiss(self) -> None:
-        with connect() as conn:
+        if not self._workspace_owner.current():
+            self.hide()
+            return
+        with connect(path=self._workspace_owner.database) as conn:
             analysis_schedule.mark_seen(conn)
         self.hide()
