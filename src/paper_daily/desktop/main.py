@@ -2162,14 +2162,14 @@ class MainWindow(QWidget):
         outer.setSpacing(0)
 
         # Where you are on the left (back, which list, what to add to it); what to do
-        # with the paper on the right. Settings stay quiet between the two.
-        bar = QHBoxLayout()
+        # with the paper next. Preserve the list/research and AI/reading order,
+        # wrapping whole controls rather than growing beyond a laptop screen.
+        bar = FlowLayout()
         bar.setContentsMargins(16, 8, 12, 8)
         bar.setSpacing(6)
         brand = QLabel("Paperfact")
         brand.setFont(fonts.font(fonts.SERIF, 13, QFont.Weight.DemiBold))
         bar.addWidget(brand)
-        bar.addSpacing(10)
         self.back_btn = ghost(QPushButton("← 清單"))
         self.back_btn.setToolTip(
             f"回到清單({fonts.key(QKeySequence.StandardKey.Back)},或滑鼠側鍵)"
@@ -2210,9 +2210,7 @@ class MainWindow(QWidget):
 
         self.progress = QLabel("")
         self.progress.setStyleSheet(f"color:{self.pal['muted']};font-size:12px;")
-        bar.addSpacing(6)
         bar.addWidget(self.progress)
-        bar.addStretch(1)
         from paper_daily.desktop.ai_dialog import AIStatusButton
 
         self.ai_picker = AIStatusButton(self)
@@ -2225,9 +2223,7 @@ class MainWindow(QWidget):
         divider = QFrame()
         divider.setFixedSize(1, 22)
         divider.setStyleSheet(f"background:{self.pal['border']};")
-        bar.addSpacing(4)
         bar.addWidget(divider)
-        bar.addSpacing(4)
         self.read_btn = QPushButton("標記已讀")
         self.read_btn.clicked.connect(self._toggle_read)
         self.read_btn.hide()
@@ -2786,6 +2782,7 @@ class MainWindow(QWidget):
         self.remember("geometry", self.saveGeometry().toHex().data().decode())
         ui_state.flush()
         self.update_banner.shutdown()
+        self.workspace_changes.close()
         super().closeEvent(event)
 
     # Papers kept analysed ahead of the reading while the window is open.
