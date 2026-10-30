@@ -903,14 +903,15 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         al.setContentsMargins(14, 12, 14, 12)
         al.setSpacing(8)
         al.addWidget(QLabel("通用提問範本 · 點選後可編輯"))
-        seeds = QHBoxLayout()
-        seeds.setSpacing(6)
+        from paper_daily.desktop.research_tasks import button as research_task_button
+
+        seeds = FlowLayout(spacing=6)
         for label, question in SEED_QUESTIONS:
             btn = QPushButton(label)
             btn.setToolTip(question)
             btn.clicked.connect(lambda _=False, q=question: self._draft_question(q))
             seeds.addWidget(btn)
-        seeds.addStretch(1)
+        seeds.addWidget(research_task_button(self))
         al.addLayout(seeds)
         from paper_daily.desktop.research_questions import ResearchQuestions
 

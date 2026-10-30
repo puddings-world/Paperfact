@@ -827,3 +827,54 @@ the complete activity module then passed 30 cases in 11.27s. The runner now stop
 at the first failure, prints diagnostic stacks after 60s in one test, and marks
 the local report running before execution. Full revalidation follows this fix;
 none of these fixture checks constitute native Mac upgrade acceptance.
+
+## Professional reading continuation — 2026-10-30
+
+The owner requested continued v0.5 implementation and research workflows suitable
+for professional academic users. Current canonical checkout is still 00ffe0d;
+maintenance master is 94566d1. Independent annotation/identity/mobile worktrees
+must be inventoried before integration; an asynchronous clarification asks where
+the owner's newer v0.5 work is active.
+
+An attempted no-commit maintenance merge exposed semantic conflicts in observed
+AI publication, managed PDF identity and durable Q&A. It was safely aborted after
+saving an ignored integration diff, leaving the original v0.5 source intact.
+No maintenance changes are claimed integrated by this checkpoint.
+
+The first independent implementation is a provider-neutral professional research
+task menu in the existing Q&A pane, with editable preview, explicit draft
+replacement, stale-context/closing guards, and wrapping quick-question controls.
+Focused check: privacy, Ruff, 26 Python/UI cases passed. A full candidate check is
+required before commit or marking the slice complete. No provider login or model
+call was exercised. See [professional workflows](professional-research-workflows.md)
+for documented source patterns, implemented boundaries, UX and remaining work.
+
+This is not v0.5 completion. Existing sync, producer/file enrollment, hosted identity,
+recovery and physical-device gates remain as recorded above. Keep package identity
+0.5.0.dev and use the copied development workspace; do not operate on daily research.
+
+
+Continuation status: the initial full run was explicitly interrupted after visual
+inspection found a non-wrapping native input dialog. The replacement preview has
+editable wrapped text, Chinese actions and a regression check for horizontal
+overflow. The final focused selection passed 26 tests. Full validation is being
+rerun; no full pass, commit, merge completion or release is claimed yet.
+
+Read-only worktree inventory found substantial uncommitted work in annotations,
+producers, compound and retained-review worktrees, plus a 2026-10-29 identity
+commit. Do not merge those directories wholesale or discard local changes. Confirm
+the owner's current active v0.5 workspace before continuing shared integration.
+
+
+### Verified professional-task checkpoint
+
+The frozen candidate passed the complete `scripts/check.py` gate: 3,155 Python
+and desktop tests, 18 frontend tests, 91 mobile domain tests and two actual Python
+HTTP integration scenarios. Privacy and Ruff passed. Total 1,460.0 seconds.
+All captured candidate input hashes matched after completion. Log:
+`build/professional-research-full.log`; input manifest:
+`build/professional-research-inputs.json` (ignored local evidence).
+The preview was rendered and inspected with a synthetic reader. No real provider
+login, paid inference, production research, native Mac or physical phone was used.
+This completes the task-drafting slice, not the full v0.5 release. Prior pending
+entries above describe the pre-verification state; the full gate is now passed.
