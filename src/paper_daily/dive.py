@@ -21,12 +21,20 @@ Log = Callable[[str], None]
 
 # Bumped when the specification below changes, so `dive-ahead --rewrite` can tell
 # which dives are already on the current one.
-DIVE_SPEC = "2026-10-front-matter"
+DIVE_SPEC = "2026-10-research-evidence"
 
 # The canonical specification of what a deep dive is. `.claude/commands/paper-today.md`
 # describes the same thing for the interactive path; keep them in step.
 DIVE_INSTRUCTIONS = """\
-你是一位嚴謹的 ML 研究導讀者。下面是一篇論文的 briefing pack,請據此寫一份深度講解。
+你是一位嚴謹的跨領域學術研究導讀者。下面是一篇論文的 briefing pack,請據此寫一份深度講解。
+
+研究判讀規則:
+- 先依原文辨識研究類型與研究問題，再使用適合該研究設計的檢核。
+  理論證明、定量實驗、觀察研究、質性研究與文獻綜述不可套用同一組品質分數。
+- 區分作者主張、實際觀察或證明、你的推論與尚無依據的部分。引用存在不等於主張受支持。
+- 原文有樣本數、效應、單位與不確定性時一併呈現；未報告不等於零，推算值必須標明。
+- 不把關聯寫成因果，不把重現計畫寫成已重現。缺少全文、引句或後續論文時明列證據缺口。
+- 引文與頁碼須能回到正確版本核對；不要用整體分數代替可核對的理由。
 
 輸出規則:
 - 用繁體中文,技術名詞、論文標題、作者名保留英文。
@@ -55,12 +63,12 @@ DIVE_INSTRUCTIONS = """\
 帶讀者讀懂 Introduction、Background、Related Work(以及 Preliminaries、Motivation
 這類放在方法之前的章節)。讀者要靠這一段掌握這篇的敘事:研究當下處在什麼狀態、
 作者怎麼把問題框出來、站在誰的肩膀上又和誰劃清界線。這是導讀,不是摘要:
-依照論文自己的順序走,把每一步論證講清楚,寫到讀者不必回頭讀那幾頁也能說出
-作者的論點。用下面五個小節(### 標題),每一節都要具體:
+依照論文自己的順序走,把每一步論證講清楚,寫到讀者能掌握
+作者的論點，也能回到原文核對證據。用下面五個小節(### 標題),每一節都要具體:
 
 ### 研究當下的狀態
-這篇寫成時這個領域的現況:主流做法與代表作、大家用的資料集與 benchmark、
-典型的數字水準、業界或臨床的實際需求,以及大家默認的假設。以論文前導章節實際
+這篇寫成時這個領域的現況:主流做法與代表作、適用的資料或研究對象、
+實際需求與大家默認的假設。原文有資料集、benchmark 或量化水準時才具體列出。以論文前導章節實際
 寫到的為準,點名它引用的工作(保留引用編號,例如 [12])。
 
 ### 作者的論證怎麼推進
@@ -89,26 +97,33 @@ pack 說全文無法取得時,這一段只依摘要寫,並在開頭明說;不要
 這篇賴以成立的那一個想法。兩句話說不清楚就表示你還沒抓到。
 
 ## 方法
-機制上怎麼運作,關鍵式子用 LaTeX 寫出來。解釋每個部件為什麼在那裡,而不只是它是什麼。
+先說明研究設計與它能回答的問題，再拆解方法、適用假設與可重現步驟。
+依研究類型核對樣本或材料、比較或控制、測量與分析、統計不確定性，
+或定理條件與證明、質性取樣與編碼、綜述的檢索和納排標準。
+只討論適用且原文有依據的項目；未報告之處明列為缺口。關鍵式子用 LaTeX。
+解釋每個部件為什麼在那裡，而不只是它是什麼。
 
 ## 機制圖解
-把上面的方法畫成一張 mermaid 流程圖:資料或梯度怎麼流、關鍵張量的形狀或位元寬在哪裡變、
-這篇動的是哪一個方塊(在那個節點的文字前加 ★)。圖下面三到五行說明怎麼讀這張圖。
-機制是純數學、沒有結構可畫時,改畫量之間的關係(例如誤差隨 bit 數的走勢),並說明為什麼。
+用適合該研究的 mermaid 圖，例如取樣、介入、資料分析、論證或篩選流程。
+只有原文確實討論模型、梯度或張量時才畫那些元件；不可硬套神經網路或量化架構。
+標出本文實際改動的部件，並說明圖怎麼讀。沒有適合的機制圖時明說，改列關鍵關係。
 
 ## 證據
-實驗實際證明了什麼,以及同樣重要的——沒有證明什麼。點名撐起論證的 baseline 與 ablation,
-並指名 pack 裡列出的圖表編號(例如「Table 3 的 4-bit 那一列」),讓讀者可以自己去核對。
+資料、觀察、推導或實驗實際支持了什麼，以及沒有支持什麼。
+有比較、敏感度分析、控制或 ablation 時具體核對；不把關聯寫成因果。
+指向 pack 已列出的圖表、定理或原文段落，讓讀者可以自己核對。
 
 ## 該看哪三張圖
 從 pack 的 Figures and tables 裡挑三個最值得停下來看的,每個寫:編號與頁數、
 要看的是哪一條線或哪一格、看出來會改變什麼判斷。挑不出三個就說明為什麼。
 
 ## 限制與反駁
-誠實的弱點。一個嚴格的審稿人會從哪裡切入?
+分開列出作者自述限制與讀者可提出的反駁，每項附上依據或明標為推論。
+說明結論成立的範圍、未回答的問題，以及一個能檢驗關鍵主張的後續步驟。
 
 ## 血緣位置
-承接 pack 裡列出的前作,以及它後來啟用了什麼。
+根據 pack 已提供的前作和後續工作解釋研究缺口與改變；引用某篇不等於沿用或支持它。
+關係有原文依據時指出依據，僅推測時標明推論。沒有相關全文時，不編造研究血緣。
 
 ## 三個討論問題
 依「回答之後對理解的改變程度」排序。
@@ -192,9 +207,10 @@ def _select(conn, count: int, paper_id: str | None, list_id: str | None, rewrite
 class DiveResult(tuple):
     """Compatible (body, reason), with the durable publication outcome attached."""
 
-    def __new__(cls, body, reason, publication=None):
+    def __new__(cls, body, reason, publication=None, annotation=None):
         result = super().__new__(cls, (body, reason))
         result.publication = publication
+        result.annotation = annotation
         return result
 
 
@@ -202,6 +218,7 @@ class DiveCompletion(tuple):
     def __new__(cls, paper_id, result, label):
         value = super().__new__(cls, (paper_id, *result, label))
         value.publication = getattr(result, "publication", None)
+        value.annotation = getattr(result, "annotation", None)
         return value
 
 
@@ -233,6 +250,12 @@ def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None
                     return DiveResult(
                         None, "prepared input provenance is required for enrolled research"
                     )
+            from paper_daily.manual_highlight_ops import capture_owner
+
+            annotation = None
+            if (isinstance(prepared, brief.PreparedPack) and prepared.document is not None
+                    and prepared.document.available):
+                annotation = (capture_owner(database, paper_id), prepared.document.sha256)
             body, reason = _from_pack(pack, timeout, cfg=cfg)
         if body is None:
             return DiveResult(None, reason)
@@ -243,7 +266,7 @@ def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None
             return DiveResult(
                 None, f"{result.reason}; generated result retained: {result.candidate_id}", result
             )
-        return DiveResult(body, "ok", result)
+        return DiveResult(body, "ok", result, annotation)
 
 
 def edit_snapshot(conn, paper_id):
@@ -319,6 +342,21 @@ def dive_ahead(
         # Custom legacy iterators keep the four-item interface. Observe their
         # fallback targets before execution, in the same explicit workspace.
         fallback = {row["id"]: edit_snapshot(conn, row["id"]) for row in rows}
+        auto_highlights = store.get_kv(conn, "ui.auto_highlights") == "1"
+    # Compatibility iterators lack their own source receipt. Observe their owner
+    # and available PDF before starting work; never resolve a later global target.
+    from paper_daily import paper_highlights
+    from paper_daily.document_reader import from_workspace
+    from paper_daily.manual_highlight_ops import capture_owner
+
+    legacy_root = paper_highlights.PDF_DIR
+    fallback_annotations = {}
+    for row in rows if auto_highlights else []:
+        document = from_workspace(database, legacy_root=legacy_root).resolve(row["id"])
+        if document.available:
+            fallback_annotations[row["id"]] = (
+                capture_owner(database, row["id"]), document.sha256
+            )
     if not rows:
         log("  nothing to write: every paper in scope is already on the current spec")
         return 0
@@ -344,28 +382,54 @@ def dive_ahead(
                 continue
         written += 1
         log(f"    stored {len(body)} chars [{label}]")
-        # The optional legacy highlight pipeline is not workspace-bound yet.
-        # Never dispatch it into a newly selected workspace after completion.
-        if store.DB_PATH.resolve() == database and fallback[paper_id_].data["binding"] is None:
-            _prepare_highlights(paper_id_, log)
+        annotation = getattr(completion, "annotation", None)
+        if annotation is None and getattr(completion, "publication", None) is None:
+            annotation = fallback_annotations.get(paper_id_)
+        if annotation is not None:
+            _prepare_highlights(
+                paper_id_, log, database=database, connections=connections,
+                owner=annotation[0], expected_document_hash=annotation[1], legacy_root=legacy_root,
+            )
     return written
 
 
-def _prepare_highlights(paper_id: str, log: Log):
-    from paper_daily import paper_highlights
+def _prepare_highlights(paper_id: str, log: Log, *, database=None, connections=None,
+                        owner=None, expected_document_hash=None, legacy_root=None):
+    import sqlite3
+    from contextlib import closing
+    from pathlib import Path
+
+    from paper_daily import paper_highlights, reading_annotation_jobs, store
+    from paper_daily import research_generation as generation
+    from paper_daily.document_reader import from_workspace
+    from paper_daily.manual_highlight_ops import capture_owner
     from paper_daily.store import get_kv, set_kv
 
-    with connect() as conn:
-        # Off until the reader ticks it, as the toolbar shows on a fresh install;
-        # a missing key once meant on here and spent AI quota behind an unticked box.
-        if get_kv(conn, "ui.auto_highlights") != "1":
-            return
-    path = paper_highlights.PDF_DIR / (paper_highlights._safe_name(paper_id) + ".pdf")
-    if not path.exists():
+    database = Path(database or store.DB_PATH).resolve(strict=True)
+    legacy_root = Path(legacy_root or paper_highlights.PDF_DIR)
+    try:
+        with closing(generation._connect(database)) as conn:
+            if owner is not None:
+                owner.check(conn)
+            # Opt-in belongs to the original workspace, even after a global switch.
+            if get_kv(conn, "ui.auto_highlights") != "1":
+                return
+    except (ValueError, OSError, sqlite3.DatabaseError) as exc:
+        log(f"    Highlight preparation skipped: {exc}")
         return
     try:
-        prepared, reason = paper_highlights.prepare_reading(paper_id)
-    except (ValueError, OSError, RuntimeError) as exc:
+        if owner is None:
+            owner = capture_owner(database, paper_id)
+        if expected_document_hash is None:
+            document = from_workspace(database, legacy_root=legacy_root).resolve(paper_id)
+            if not document.available:
+                return
+            expected_document_hash = document.sha256
+        prepared, reason = reading_annotation_jobs.prepare(
+            database, paper_id, legacy_root=legacy_root, connections=connections,
+            owner=owner, expected_document_hash=expected_document_hash,
+        )
+    except (ValueError, OSError, RuntimeError, sqlite3.DatabaseError) as exc:
         prepared, reason = None, str(exc)
     marks = prepared.get("marks") if prepared else None
     ok = bool(marks and marks["mapped"])
@@ -373,8 +437,15 @@ def _prepare_highlights(paper_id: str, log: Log):
         ok, reason = False, prepared["explanation_reason"]
     if marks and not marks["mapped"]:
         reason = "重點已保留在素材中，但無法在 PDF 精確定位；請核對原文。"
-    with connect() as conn:
-        set_kv(conn, f"analyze.failed.highlights.{paper_id}", None if ok else reason)
+    try:
+        with closing(generation._connect(database)) as conn, conn:
+            # A deleted/recreated paper cannot receive a late failure marker either.
+            if owner is not None:
+                owner.check(conn)
+            set_kv(conn, f"analyze.failed.highlights.{paper_id}", None if ok else reason)
+    except (ValueError, OSError, sqlite3.DatabaseError) as exc:
+        log(f"    Highlight status not applied to a changed research owner: {exc}")
+        return
     log(f"    原文重點 {marks['mapped']}/{marks['total']} 段已標記並同步素材"
         if marks else f"    原文重點未完成（講解已保存）：{reason}")
 

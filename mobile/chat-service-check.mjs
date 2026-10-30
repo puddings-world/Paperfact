@@ -24,6 +24,10 @@ try {
   const initial=await store.read();assert.equal(initial.cursor,ready.events);assert.deepEqual(initial.outbox,[]);
   const paper=projection(initial).papers[0], exchanges=chatExchanges(paper);
   assert.deepEqual(exchanges.map(e=>[e.question.data.body,e.answer.data.body]),[['Same question','First answer'],['Same question','Second answer']]);
+  const questions=paper.research_content.filter(r=>r.feature==='research_questions');
+  assert.equal(questions.length,1);
+  assert.deepEqual(questions[0].data,ready.questions.data);
+  assert.equal(questions[0].source_document_hash,ready.questions.source_document_hash);
   const actual=paper.research_content.filter(r=>r.feature==='chat').map(r=>({message_id:r.key,exchange_id:r.data.exchange_id,reply_to:r.data.reply_to,body:r.data.body})).sort((a,b)=>a.message_id.localeCompare(b.message_id));
   const shared=ready.shared.map(r=>({message_id:r.message_id,exchange_id:r.exchange_id,reply_to:r.reply_to,body:r.body})).sort((a,b)=>a.message_id.localeCompare(b.message_id));
   assert.deepEqual(actual,shared,'Bundle and synchronized mobile turn identities diverged');
@@ -32,9 +36,10 @@ try {
   const reopened=new MemoryStore('qa-workspace','phone',JSON.parse(JSON.stringify(await store.read())));
   const offline=new Engine(reopened,{transport:new Proxy({}, {get(){throw new Error('Offline render attempted network');}})});
   assert.deepEqual(chatExchanges(projection(await offline.store.read()).papers[0]),exchanges);
+  assert.deepEqual(projection(await offline.store.read()).papers[0].research_content, paper.research_content);
   assert.deepEqual((await reopened.read()).outbox,[]);
   assert(calls.every(key=>['session_info','pull'].includes(key)),JSON.stringify(calls));
-  console.log('PASS desktop QA producer → HTTP → mobile pairing, shared bundle IDs, offline restart, retry without AI/upload');
+  console.log('PASS desktop QA and grounded question producers → HTTP → mobile pairing, shared bundle IDs, offline restart, retry without AI/upload');
 } finally {
   child.stdin.end('\n');
   if(child.exitCode===null) await new Promise(resolve=>{child.once('exit',resolve);setTimeout(()=>{child.kill();resolve();},5000).unref();});

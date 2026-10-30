@@ -15,10 +15,15 @@ from uuid import uuid4
 
 CORE = {"papers", "lists", "list_papers", "notes", "kv"}
 RESEARCH = CORE | {
+    "paper_claim_sets",
     "dives",
+    "paper_highlight_analysis",
+    "paper_reading_links",
+    "paper_research_questions",
     "close_readings",
     "paper_context",
     "list_surveys",
+    "list_reading_goals",
     "cites",
     "followups",
     "resources",
@@ -192,14 +197,18 @@ def observe_target(conn, scope_kind, owner_id, feature, key="main"):
     scope = {"kind": scope_kind, "id": identity}
     token = observe(conn, "research_content", content_id(scope, feature, key))
     if not token["parents"]:
-        parent = conn._capture_client._optimistic_graph(conn)[0].get((scope_kind, identity))
+        state = conn._capture_client._optimistic_graph(conn)[0]
+        payload = {"scope": scope, "feature": feature, "key": key}
         token["parents"] = [
             {
-                "kind": scope_kind,
-                "id": identity,
-                "incarnation": parent["incarnation"] if parent else None,
-                "active": bool(parent and parent["active"]),
+                "kind": kind,
+                "id": parent_id,
+                "incarnation": state[(kind, parent_id)]["incarnation"]
+                if (kind, parent_id) in state
+                else None,
+                "active": bool(state.get((kind, parent_id), {}).get("active")),
             }
+            for kind, parent_id in _content().parent_identities(payload)
         ]
     return token
 
@@ -208,15 +217,17 @@ def _content_parent(conn, table, row, token):
     if token["kind"] != "research_content" or token["parents"]:
         return token
     payload = _content().content_payload(conn, table, row)
-    scope = payload["scope"]
-    state = conn._capture_client._optimistic_graph(conn)[0].get((scope["kind"], scope["id"]))
+    state = conn._capture_client._optimistic_graph(conn)[0]
     token["parents"] = [
         {
-            "kind": scope["kind"],
-            "id": scope["id"],
-            "incarnation": state["incarnation"] if state else None,
-            "active": bool(state and state["active"]),
+            "kind": kind,
+            "id": identity,
+            "incarnation": state[(kind, identity)]["incarnation"]
+            if (kind, identity) in state
+            else None,
+            "active": bool(state.get((kind, identity), {}).get("active")),
         }
+        for kind, identity in _content().parent_identities(payload)
     ]
     return token
 
@@ -457,6 +468,13 @@ def install(conn, *, workspace_id, device_id):
         journal = conn._capture_client.journal
         if (journal.workspace_id, journal.device_id) != (workspace_id, device_id):
             raise CaptureError("Capture belongs to another workspace/device")
+        # Explicit repeat installation also migrates the closed optional content
+        # tables and installs their triggers within the caller's transaction.
+        with suppress_capture(conn):
+            content = _content()
+            if content:
+                content.initialize_content(conn)
+            _install_triggers(conn)
         return
     identity = conn.execute(
         "SELECT workspace,device FROM paperfact_sync_identity WHERE id=1"
@@ -489,6 +507,11 @@ def install(conn, *, workspace_id, device_id):
     if content:
         content.initialize_content(conn)
         content.enroll_content_identities(conn)
+    _install_triggers(conn)
+    conn._activate()
+
+
+def _install_triggers(conn):
     for table in sorted(RESEARCH):
         columns = [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')]
         if not columns:
@@ -509,7 +532,6 @@ def install(conn, *, workspace_id, device_id):
                 f'AFTER {action} ON "{table}" BEGIN '
                 f"SELECT paperfact_capture('{table}',{old},{new}); END"
             )
-    conn._activate()
 
 
 def capture_existing(conn):
@@ -634,6 +656,36 @@ def _flush(conn):
     if content:
         content.enroll_content_identities(conn)
     client = conn._capture_client
+    # A reading goal is a list property. Its SQL cascade is part of deleting the
+    # same list, not an independent content editor. Retain its delete in history
+    # before the parent's tombstone, without inventing a delayed edit observation.
+    deleted_lists = {
+        json.loads(row["before_json"])["id"]
+        for row in rows
+        if row["table_name"] == "lists" and row["before_json"] and not row["after_json"]
+    }
+    cascaded_goals = {
+        _keys(conn, "list_reading_goals", json.loads(row["before_json"]))[0]
+        for row in rows
+        if row["table_name"] == "list_reading_goals"
+        and row["before_json"]
+        and not row["after_json"]
+        and json.loads(row["before_json"])["list_id"] in deleted_lists
+    }
+    deleted_members = {
+        (json.loads(row["before_json"])["list_id"], json.loads(row["before_json"])["paper_id"])
+        for row in rows
+        if row["table_name"] == "list_papers" and row["before_json"] and not row["after_json"]
+    }
+    cascaded_pins = {
+        _keys(conn, "pins", json.loads(row["before_json"]))[0]
+        for row in rows
+        if row["table_name"] == "pins"
+        and row["before_json"]
+        and not row["after_json"]
+        and (json.loads(row["before_json"])["scope"], json.loads(row["before_json"])["paper_id"])
+        in deleted_members
+    }
     actions, orders = {}, set()
     for entry in rows:
         table = entry["table_name"]
@@ -676,6 +728,11 @@ def _flush(conn):
             "reading_state": 2,
             "list_order": 3,
         }.get(kind, 1)
+        if kind == "research_content" and (
+            _payload_value.get("feature") == "list_pin"
+            or (action == "delete" and (kind, _identity) in cascaded_pins)
+        ):
+            rank = 2
         return (0, rank) if action == "put" else (1, -rank)
 
     for (kind, identity), (action, payload) in sorted(actions.items(), key=priority):
@@ -687,7 +744,13 @@ def _flush(conn):
         base = next(
             (row for row in bases if (row["kind"], row["entity_id"]) == (kind, identity)), None
         )
-        requires_base = (kind in ("note", "research_content") and current is not None) or (
+        reference_edge = kind == "research_content" and (
+            payload.get("feature") == "reference_edge"
+            or (current and current["payload"].get("feature") == "reference_edge")
+        )
+        requires_base = (
+            kind in ("note", "research_content") and current is not None and not reference_edge
+        ) or (
             kind == "research_content"
             and payload.get("feature")
             in {
@@ -700,7 +763,8 @@ def _flush(conn):
                 "ai_highlight",
             }
         )
-        if requires_base and (base is None or base["expected"] is None):
+        cascading_goal = action == "delete" and (kind, identity) in (cascaded_goals | cascaded_pins)
+        if requires_base and not cascading_goal and (base is None or base["expected"] is None):
             _retain_candidate(conn, rows, [dict(base)] if base else [])
         # A SQL INSERT cannot silently restore an old graph incarnation.
         op = client.new_graph_operation_in(conn, kind, identity, payload, action=action)

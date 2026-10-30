@@ -2,7 +2,7 @@
 import {copy,own,put} from './store.mjs';
 import {active,keyOf,stable,validateOperation} from './domain.mjs';
 import {CHUNK} from './transport.mjs';
-import {artifactJSON,validateArtifact,validateDeck,validateEvidence,validatePNG,requireArtifact} from './artifacts.mjs';
+import {artifactJSON,validateArtifact,validateDeck,validateEvidence,validatePNG,validateOriginalSource,validateOriginalPDF,requireArtifact} from './artifacts.mjs';
 export const ARTIFACT_CACHE_BYTES = 128 * 1024 ** 2;
 export const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))]
   .map(value=>value.toString(16).padStart(2,'0')).join('');
@@ -24,6 +24,9 @@ function current(state,target) {
 }
 async function closure(state,target) {
   validateArtifact(target.payload,target.entity_id,target.parents);
+  const descriptors=new Map([target.payload.body,...target.payload.assets].map(row=>[row.sha256,row]));
+  requireArtifact([...descriptors.values()].reduce((n,row)=>n+row.size,0)<=ARTIFACT_CACHE_BYTES,
+    'storage_quota');
   const blobs=new Map();
   for (const descriptor of [target.payload.body,...target.payload.assets]) {
     if (blobs.has(descriptor.sha256)) continue;
@@ -32,6 +35,11 @@ async function closure(state,target) {
     const bytes=joined(file);
     requireArtifact(await digest(bytes)===descriptor.sha256,'corrupt_file');
     blobs.set(descriptor.sha256,bytes);
+  }
+  if (target.payload.feature === 'original_source') {
+    const body=validateOriginalSource(blobs.get(target.payload.body.sha256),target.payload);
+    validateOriginalPDF(blobs.get(body.document_hash));
+    return {body,blobs,verification_scope:'exact_bytes'};
   }
   const body=validateDeck(artifactJSON(blobs.get(target.payload.body.sha256)),target.payload);
   for (const asset of target.payload.assets) {
@@ -48,6 +56,8 @@ export async function downloadArtifact(engine,id,token,generation) {
   validateArtifact(target.payload,id,target.parents);
   const unique=new Map([target.payload.body,...target.payload.assets].map(row=>[row.sha256,row]));
   let done=0; const total=[...unique.values()].reduce((n,row)=>n+row.size,0);
+  // Wire support is independent of this device's existing bounded artifact cache.
+  requireArtifact(total <= ARTIFACT_CACHE_BYTES,'storage_quota');
   for (const description of unique.values()) {
     const state=await engine.store.read(); engine.check(generation); current(state,target);
     const existing=own(state.artifactFiles ?? {},description.sha256);
@@ -94,10 +104,11 @@ export async function downloadArtifact(engine,id,token,generation) {
   });
   engine.onChange('file_ready'); return id;
 }
-export async function readArtifact(engine,id) {
+export async function readArtifact(engine,id,feature = 'deck') {
+  requireArtifact(['deck','original_source'].includes(feature));
   const generation=engine.generation, state=await engine.store.read();
   const target=artifactTarget(state,id), applied=own(state.appliedArtifacts ?? {},id)?.operation;
-  requireArtifact(target && applied && target.incarnation===applied.incarnation && stable(target.parents)===stable(applied.parents),'artifact_unavailable');
+  requireArtifact(target && target.payload.feature===feature && applied && applied.payload.feature===feature && target.incarnation===applied.incarnation && stable(target.parents)===stable(applied.parents),'artifact_unavailable');
   validateOperation(applied,state.workspace);
   requireArtifact(applied.entity_type==='research_file' && applied.entity_id===id && applied.action==='put');
   const result=await closure(state,applied);

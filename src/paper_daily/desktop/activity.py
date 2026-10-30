@@ -25,7 +25,8 @@ from shiboken6 import isValid
 
 from paper_daily import work_progress
 
-TASKS = dict(ask="論文問答", translate="翻譯", dive="深入分析", list_parse="建立研究清單",
+TASKS = dict(claims="Extract claim evidence",
+             ask="論文問答", translate="翻譯", dive="深入分析", list_parse="建立研究清單",
              citations="引用分析", followups="後續研究", overview="研究脈絡", compare="比較論文",
              survey="清單綜覽", slides="製作簡報", paper_highlights="分析原文重點")
 OWNER_LABELS = dict(BundleDialog="研究資料包匯入／匯出", ImportListDialog="建立研究清單",

@@ -155,6 +155,17 @@ class SyncSession:
         self.state = "disconnected"
         self.last_success = None
 
+    @property
+    def busy(self):
+        """Whether this session already owns a metadata or attachment job."""
+        return self._running.locked()
+
+    @property
+    def generation(self):
+        """Opaque process-local consent epoch; contains no credential."""
+        with self._state:
+            return self._generation
+
     def summary(self):
         with self._state:
             return {
@@ -333,3 +344,81 @@ class SyncSession:
                 }
             finally:
                 files.close()
+
+
+    def prepare_offline(self, local_paper_ids, ticket, progress=lambda _value: None, *,
+                        steps=64, seconds=20):
+        """Download selected current attachments only; never push/pull research or pin.
+
+        Metadata must already be present locally. Existing transfer receipts/offsets
+        provide retry/resume. Byte/source verification status remains a separate action.
+        """
+        if (type(steps) is not int or not 1 <= steps <= 256
+                or isinstance(seconds, bool) or not isinstance(seconds, (int, float))
+                or not 0 < seconds <= 60):
+            raise ValueError("Invalid selected-download work budget")
+        from paper_daily.workspace_offline import OfflineService
+        from paper_daily.workspace_sync_files import AttachmentSteps
+
+        with self._job():
+            offline = OfflineService(self.workspace.path,
+                                     current_path=self.workspace.current_path)
+            plan = offline.plan(local_paper_ids, ticket)
+            selected = [row["paper_id"] for row in plan["papers"]]
+            portable = [row["portable_id"] for row in plan["papers"]]
+            if not selected:
+                return {"state": "empty", "paper_ids": [], "portable_ids": [],
+                        "partial": False, "verification_required": True, "attachments": None}
+
+            def signature(value):
+                return [(row["paper_id"], row["portable_id"], row["pdf"]["target"],
+                         [(item["entity_id"], item["operation"]) for item in row["artifacts"]],
+                         row["artifact_inventory_available"]) for row in value["papers"]]
+
+            expected = signature(plan)
+            with self.authorized(ticket) as (transport, token, identity, live):
+                if offline.identity != identity:
+                    raise EnrollmentRequired("The selected workspace does not match the connection")
+
+                def selected_live():
+                    live()
+                    try:
+                        current = offline.plan(selected, ticket)
+                    except (sqlite3.Error, OSError, ValueError) as error:
+                        raise SyncStopped(
+                            "Selected research changed; retry from the current view"
+                        ) from error
+                    if signature(current) != expected:
+                        raise SyncStopped("Selected attachment targets changed")
+
+                selected_live()
+                guarded = GuardedTransport(transport, selected_live)
+                client = self._client(identity, selected_live)
+                deadline = time.monotonic() + seconds
+                with self._state:
+                    self.state = "syncing"
+                files = AttachmentSteps(client, guarded, token, selected_live, progress,
+                                        budget=steps, deadline=deadline)
+                try:
+                    progress({"stage": "offline_download", "selected": len(selected),
+                              "steps": 0})
+                    download = files.download_selected(portable)
+                    selected_live()
+                    status = {**files.status(paper_ids=portable), **download}
+                    missing = sum(row["pdf"]["target"] is None for row in plan["papers"])
+                    inventory = all(row["artifact_inventory_available"] for row in plan["papers"])
+                    partial = bool(status["pending"] or status["failed"]
+                                   or status["remaining_targets"] or missing
+                                   or not inventory or not status["storage_registered"])
+                    selected_live()
+                    with self._state:
+                        if self._generation != live.generation:
+                            raise SyncStopped("The connection session changed")
+                        self.state = "connected"
+                    # Do not advance last_success: no metadata sync took place.
+                    return {"state": "partial" if partial else "downloaded",
+                            "paper_ids": selected, "portable_ids": portable,
+                            "attachments": status, "missing_pdf_manifests": missing,
+                            "partial": partial, "verification_required": True}
+                finally:
+                    files.close()

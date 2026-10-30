@@ -4,6 +4,7 @@ import time
 
 from paper_daily.sync_blobs import BlobStore
 from paper_daily.sync_file_transfers import FileTransfers
+from paper_daily.sync_files import file_id
 from paper_daily.sync_transfers import DocumentTransfers
 from paper_daily.workspace_service import Cancelled, _binding, _paths, _tables
 from paper_daily.workspace_sync import SyncStopped
@@ -90,37 +91,83 @@ class AttachmentSteps:
             return self._step(self.artifact, operation, upload=True)
         return True
 
-    def download_pending(self):
+    @staticmethod
+    def _selection(paper_ids):
+        if paper_ids is None:
+            return None
+        if not isinstance(paper_ids, (list, tuple)) or len(paper_ids) > 100:
+            raise ValueError("Select at most 100 portable papers")
+        if any(not isinstance(identity, str) for identity in paper_ids):
+            raise ValueError("Expected portable paper UUIDs")
+        selected = list(dict.fromkeys(paper_ids))
+        for identity in selected:
+            file_id(identity, "deck", "notes")  # Canonical portable UUID validation.
+        return selected
+
+    @classmethod
+    def _scope(cls, paper_ids, *, artifacts=False):
+        selected = cls._selection(paper_ids)
+        if selected is None:
+            return "", []
+        values = selected
+        if not values:
+            return " AND 0", []
+        column = "json_extract(d.operation,'$.payload.paper_id')" if artifacts else "d.paper_id"
+        return f" AND {column} IN ({','.join('?' for _ in values)})", values
+
+    def download_selected(self, paper_ids):
+        """Explicitly recheck/download selected targets, including previously applied files."""
+        return self.download_pending(paper_ids=paper_ids, include_applied=True)
+
+    def download_pending(self, *, paper_ids=None, include_applied=False):
         # Exact target comparisons skip already applied objects, so the first
         # page cannot permanently starve later papers/assets on repeated clicks.
+        if type(include_applied) is not bool:
+            raise ValueError("Applied-file selection must be boolean")
+        pdf_scope, pdf_args = self._scope(paper_ids)
+        file_scope, file_args = self._scope(paper_ids, artifacts=True)
+        pdf_pending = "" if include_applied else " AND (a.target IS NULL OR a.target!=d.target)"
+        file_pending = ("" if include_applied
+                        else " AND (a.operation IS NULL OR a.operation!=d.operation)")
+        pdf_limit, file_limit = (64, 64) if paper_ids is None else (100, 200)
         with self.client.journal.transaction() as conn:
             pdfs = conn.execute(
                 "SELECT d.paper_id FROM research_document_desired d LEFT JOIN "
-                "research_document_applied a USING(paper_id) WHERE d.active=1 AND "
-                "(a.target IS NULL OR a.target!=d.target) ORDER BY d.paper_id LIMIT 64"
+                "research_document_applied a USING(paper_id) WHERE d.active=1"
+                + pdf_pending + pdf_scope + f" ORDER BY d.paper_id LIMIT {pdf_limit}", pdf_args,
             ).fetchall()
             files = conn.execute(
                 "SELECT d.entity_id FROM research_file_desired d LEFT JOIN "
-                "research_file_applied a USING(entity_id) WHERE d.active=1 AND "
-                "(a.operation IS NULL OR a.operation!=d.operation) ORDER BY d.entity_id LIMIT 64"
+                "research_file_applied a USING(entity_id) WHERE d.active=1"
+                + file_pending + file_scope + f" ORDER BY d.entity_id LIMIT {file_limit}",
+                file_args,
             ).fetchall()
-        for coordinator, rows in ((self.pdf, pdfs), (self.artifact, files)):
-            for row in rows:
-                if not self.remaining:
-                    return
-                self._step(coordinator, row[0], upload=False)
+        targets = [(coordinator, row[0])
+                   for coordinator, rows in ((self.pdf, pdfs), (self.artifact, files))
+                   for row in rows]
+        completed, attempted = 0, 0
+        for coordinator, identity in targets:
+            if (not self.remaining
+                    or (self.deadline is not None and time.monotonic() >= self.deadline)):
+                break
+            attempted += 1
+            completed += self._step(coordinator, identity, upload=False)
+        return {"transfer_targets": len(targets), "completed_targets": completed,
+                "attempted_targets": attempted, "remaining_targets": len(targets) - completed}
 
-    def status(self):
+    def status(self, *, paper_ids=None):
+        pdf_scope, pdf_args = self._scope(paper_ids)
+        file_scope, file_args = self._scope(paper_ids, artifacts=True)
         with self.client.journal.transaction() as conn:
             pending = conn.execute(
                 "SELECT COUNT(*) FROM research_document_desired d LEFT JOIN "
                 "research_document_applied a USING(paper_id) WHERE d.active=1 "
-                "AND (a.target IS NULL OR a.target!=d.target)"
+                "AND (a.target IS NULL OR a.target!=d.target)" + pdf_scope, pdf_args,
             ).fetchone()[0]
             pending += conn.execute(
                 "SELECT COUNT(*) FROM research_file_desired d LEFT JOIN "
                 "research_file_applied a USING(entity_id) WHERE d.active=1 "
-                "AND (a.operation IS NULL OR a.operation!=d.operation)"
+                "AND (a.operation IS NULL OR a.operation!=d.operation)" + file_scope, file_args,
             ).fetchone()[0]
         return {
             "steps": self.steps,

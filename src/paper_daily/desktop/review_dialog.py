@@ -434,8 +434,11 @@ class ReviewDialog(QDialog):
             self.draft.setReadOnly(True)
         for button in (self.keep, self.copy, self.export_button, self.refresh, self.target_button):
             button.setEnabled(loaded)
+        from paper_daily.research_annotation_review import remote_group
+
         self.target_button.setEnabled(
-            loaded and self.preview.data["origin"] in {"generation", "sidecar", *COMPOUND_ORIGINS}
+            loaded and (self.preview.data["origin"] in {"generation", "sidecar", *COMPOUND_ORIGINS}
+                        or remote_group(self.preview.data))
         )
         if resumed == "foreign":
             self.keep.setEnabled(False)

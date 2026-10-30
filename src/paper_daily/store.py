@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
+from paper_daily.annotation_content import SCHEMA as ANNOTATION_SCHEMA
 from paper_daily.config import DB_PATH, ensure_dirs
 from paper_daily.workspace_revision import SCHEMA as REVISION_SCHEMA
 
@@ -266,6 +267,17 @@ CREATE TABLE IF NOT EXISTS close_readings (
 
 -- A reading list read as one field (survey.py): its history, lines of work,
 -- datasets, progress and open problems, written across every paper in the list.
+CREATE TABLE IF NOT EXISTS list_reading_goals (
+    list_id TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    written_at TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS list_goal_parent_delete AFTER DELETE ON lists
+BEGIN
+    DELETE FROM list_reading_goals WHERE list_id=OLD.id;
+END;
+
 CREATE TABLE IF NOT EXISTS list_surveys (
     list_id     TEXT PRIMARY KEY,
     body        TEXT NOT NULL,
@@ -294,6 +306,12 @@ CREATE TABLE IF NOT EXISTS pins (
     pinned_at TEXT NOT NULL,
     PRIMARY KEY (scope, paper_id)
 );
+
+-- A list pin belongs to this membership, never a later re-addition of the pair.
+CREATE TRIGGER IF NOT EXISTS paperfact_pin_membership_delete
+AFTER DELETE ON list_papers BEGIN
+    DELETE FROM pins WHERE scope=OLD.list_id AND paper_id=OLD.paper_id;
+END;
 
 -- The code, data and models a paper releases (own=1) or points to (own=0), from its
 -- text, Hugging Face's paper page, or a GitHub search (see resources.py).
@@ -329,7 +347,7 @@ CREATE TABLE IF NOT EXISTS chat (
     anchor     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_chat_paper ON chat(paper_id, id);
-""" + REVISION_SCHEMA
+""" + ANNOTATION_SCHEMA + REVISION_SCHEMA
 
 
 def now() -> str:
@@ -439,6 +457,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     ):
         if column not in have:
             conn.execute(f"ALTER TABLE followups ADD COLUMN {column} {ddl}")
+
+
+    from paper_daily.annotation_content import initialize
+
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
+    initialize(conn)
 
 
 PAPER_FIELDS = (

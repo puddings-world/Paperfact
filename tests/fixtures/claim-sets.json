@@ -1,0 +1,509 @@
+[
+  {
+    "name": "closed snapshot claim set",
+    "valid": true,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "duplicate claim IDs",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          },
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "semantic certification forbidden",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "verified",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "unknown confidence forbidden",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ],
+            "confidence": 0.99
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "unresolved source cannot activate anchor",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "missing",
+                  "reason": "quote_not_found",
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "source digest mismatch",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  },
+  {
+    "name": "unknown account metadata forbidden",
+    "valid": false,
+    "body": {
+      "format": "paperfact.claim-set.v1",
+      "recipe": "claim-extraction.v1",
+      "inputs": {
+        "dive": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "close_reading": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "generation": {
+        "task": "claims",
+        "backend": "fixture",
+        "requested_model": "requested",
+        "returned_model": "actual",
+        "account_id": "private"
+      },
+      "report": {
+        "format": "paperfact.claim-evidence.report.v1",
+        "source": {
+          "document_hash": "7bf5f85f2201f07b2a2240ff2a446e960e7d086ed29c2ad9b092d1b39250f445",
+          "paper_id": "paper"
+        },
+        "normalization": "nfkc-whitespace-soft-hyphen-wrap.v1",
+        "page_count": 1,
+        "claims": [
+          {
+            "id": "4939b95bbbe8fba364d8272e615bcb9ed4aa17cf7d5ff086797d2d31bbe373ed",
+            "text": "The study enrolled a single-center cohort.",
+            "atomicity": "caller_supplied",
+            "judgment": {
+              "reason": "No external validity appraisal yet.",
+              "status": "unresolved",
+              "authority": "caller"
+            },
+            "semantic_validation": "not_performed",
+            "passages": [
+              {
+                "id": "3f0e5d572a4a5feb7ea0bd872c4646307a1f970178c09ce2ebe341b54cba4025",
+                "proposal_id": "d5bfa869733b9e10e2777c8be366064bdcb15e66d3ef5074257b2dc5c30ee56b",
+                "quote": "The study enrolled 50 participants in a single center.",
+                "location": {
+                  "state": "located",
+                  "reason": null,
+                  "anchor": {
+                    "p0": 0,
+                    "o0": 0,
+                    "p1": 0,
+                    "o1": 8
+                  },
+                  "page": 1,
+                  "candidates": [],
+                  "truncated": false
+                },
+                "citation_identity": {
+                  "state": "not_requested",
+                  "reason": null,
+                  "proposed": null
+                }
+              }
+            ]
+          }
+        ],
+        "verification_scope": "original_snapshot",
+        "id": "eb63d589e5bd10f8e0c62dac189e396f22e868a2afbb21232d5fc7c7148ea81b"
+      }
+    }
+  }
+]

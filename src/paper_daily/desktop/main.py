@@ -60,6 +60,7 @@ from paper_daily import (
     pocket,
     resources,
     runtime,
+    store,
     translate,
     venues,
 )
@@ -310,16 +311,20 @@ class Data:
             return {r[0] for r in rows}
 
     def set_pin(self, scope: str, paper_id: str, on: bool) -> None:
+        self.set_pins(scope, [paper_id], on)
+
+    def set_pins(self, scope: str, paper_ids: list[str], on: bool) -> None:
+        from paper_daily.list_pins import set_pinned
+
+        if not isinstance(paper_ids, (list, tuple)) or len(paper_ids) > 200:
+            raise ValueError("Select at most 200 papers")
+        if any(not isinstance(paper_id, str) or not paper_id for paper_id in paper_ids):
+            raise ValueError("Select valid paper identities")
+        if not paper_ids:
+            return
         with connect() as conn:
-            if on:
-                conn.execute(
-                    "INSERT OR IGNORE INTO pins(scope, paper_id, pinned_at) VALUES (?,?,?)",
-                    (scope, paper_id, now()),
-                )
-            else:
-                conn.execute(
-                    "DELETE FROM pins WHERE scope=? AND paper_id=?", (scope, paper_id)
-                )
+            for paper_id in dict.fromkeys(paper_ids):
+                set_pinned(conn, scope, paper_id, on)
 
     def dive(self, paper_id: str) -> str | None:
         with connect() as conn:
@@ -834,6 +839,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         ai_style.mark(self.prepare_highlights, pal)
         highlight_actions.addWidget(self.browse_highlights)
         highlight_actions.addWidget(self.prepare_highlights)
+        self.stop_highlights = QPushButton("\u505c\u6b62")
+        self.stop_highlights.clicked.connect(
+            lambda: self.presentation_pane._cancel_highlights())
+        self.stop_highlights.hide()
+        highlight_actions.addWidget(self.stop_highlights)
         left_layout.addWidget(highlights)
         left.setMinimumWidth(240)
 
@@ -915,7 +925,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         al.addLayout(seeds)
         from paper_daily.desktop.research_questions import ResearchQuestions
 
-        self.questions = ResearchQuestions(palette=pal)
+        self.questions = ResearchQuestions(palette=pal, database=lambda: store.DB_PATH)
         self.questions.chosen.connect(self._draft_question)
         self.questions.return_to_draft.connect(self._resume_question_draft)
         self.questions.source_requested.connect(self._jump_to_source)
@@ -1049,6 +1059,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self._page_context = None
         self.ask_box.setText(self._qa_drafts.get((self._qa_view_database, paper.id), ""))
         self.paper = paper
+        from paper_daily.desktop import highlight_actions
+
+        highlight_actions.capture(self, paper, self._qa_view_database)
         pal = self.win.pal
         self.title.setText(paper.title)
         if hasattr(self.win, "compact_title"):
@@ -1352,7 +1365,12 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             active = getattr(self, "_active_document", None)
             known = active.sha256 if active is not None and active.path == path else None
             self._pdf_fingerprint = fingerprint or known or pdf_highlights.document_hash(path)
-            marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
+            if hasattr(self, "_highlight_owner"):
+                from paper_daily.desktop import highlight_actions
+
+                marks = highlight_actions.load(self, path, self._pdf_fingerprint)
+            else:
+                marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
             selection.set_highlights(marks)
             ai = sum(mark.get("origin") == "ai" for mark in marks)
             manual = len(marks) - ai
@@ -1364,6 +1382,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self.highlight_status.setText(f"螢光標記無法載入：{exc}")
 
     def _highlight_selection(self) -> None:
+        if hasattr(self, "_highlight_owner"):
+            from paper_daily.desktop import highlight_actions
+
+            return highlight_actions.apply(self)
         if not loaded_document_valid(self):
             self.pdf_note.setText(document_message("invalid"))
             return
@@ -1385,6 +1407,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.pdf_note.setText("螢光標記已保存並同步素材。")
 
     def _erase_selection_highlights(self) -> None:
+        if hasattr(self, "_highlight_owner"):
+            from paper_daily.desktop import highlight_actions
+
+            return highlight_actions.apply(self, erase=True)
         if not loaded_document_valid(self):
             self.pdf_note.setText(document_message("invalid"))
             return
@@ -2401,6 +2427,7 @@ class MainWindow(QWidget):
             "匯出目前清單資料包…", self._export_bundle)
         self.export_bundle_action.setToolTip(
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
+        self.reading_goal_action = data_menu.addAction("清單研究目的…", self._edit_reading_goal)
         data_menu.addSeparator()
         self.workspace_action = data_menu.addAction("工作區與備份…", self._workspace_settings)
         self.offline_action = data_menu.addAction("離線準備所選論文…", self._offline_selected)
@@ -2533,6 +2560,12 @@ class MainWindow(QWidget):
 
         footer = QHBoxLayout()
         footer.setContentsMargins(12, 0, 12, 0)
+        self.sync_status_btn = QPushButton("自動同步已關閉")
+        self.sync_status_btn.setObjectName("workspaceSyncStatus")
+        self.sync_status_btn.setFlat(True)
+        self.sync_status_btn.setToolTip("開啟工作區設定以連線及選擇同步方式")
+        self.sync_status_btn.clicked.connect(self._workspace_settings)
+        footer.addWidget(self.sync_status_btn)
         footer.addStretch(1)
         self.feedback_btn = QPushButton("使用資料與回饋")
         self.feedback_btn.setFlat(True)
@@ -2674,10 +2707,34 @@ class MainWindow(QWidget):
         # editor or switch its service to the new workspace in that case.
         return dialog.close()
 
+    def _edit_reading_goal(self):
+        from paper_daily import store
+        from paper_daily.desktop.reading_goals import ReadingGoalDialog
+
+        existing = getattr(self, "_goal_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            return
+        if not self.active_list:
+            QMessageBox.information(self, "清單研究目的", "請先開啟一份清單。")
+            return
+        try:
+            dialog = ReadingGoalDialog(store.DB_PATH, self.active_list, self,
+                                       current_path=lambda: store.DB_PATH)
+        except (OSError, ValueError, sqlite3.Error):
+            QMessageBox.warning(self, "清單研究目的", "無法開啟目前清單，請重新選擇後重試。")
+            return
+        self._goal_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.open()
+
     def _offline_selected(self):
         from paper_daily import store
         from paper_daily.desktop.offline_dialog import OfflineDialog
         from paper_daily.desktop.queue_view import PAPER_ROLE
+        from paper_daily.desktop.sync_connection_dialog import open_offline_connection
 
         existing = getattr(self, "_offline_dialog", None)
         if existing is not None and not existing.disposed:
@@ -2699,8 +2756,14 @@ class MainWindow(QWidget):
                                     "請先在清單選擇 1–100 篇論文，或開啟一篇論文。")
             return
         try:
-            dialog = OfflineDialog(store.DB_PATH, selected, self,
-                                   current_path=lambda: store.DB_PATH, language="zh-TW")
+            dialog = OfflineDialog(
+                store.DB_PATH, selected, self,
+                current_path=lambda: store.DB_PATH, language="zh-TW",
+                session_provider=lambda: getattr(self, "_workspace_sync_session", None),
+                open_connection=lambda parent: open_offline_connection(
+                    self, parent, parent.path, current_path=lambda: store.DB_PATH,
+                    language="zh-TW"),
+            )
         except (OSError, ValueError, sqlite3.Error):
             QMessageBox.warning(self, "離線準備",
                                 "無法讀取工作區，請重試。")
@@ -2913,7 +2976,8 @@ class MainWindow(QWidget):
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
             return False
-        for name in ("_workspace_dialog", "_review_dialog", "_offline_dialog"):
+        for name in ("_workspace_dialog", "_review_dialog", "_offline_dialog", "_goal_dialog",
+                     "_claim_dialog"):
             dialog = getattr(self, name, None)
             if dialog is not None and not dialog.disposed:
                 return False
@@ -2927,6 +2991,11 @@ class MainWindow(QWidget):
         self._closing_with_recovery = False
 
     def _prepare_restart(self) -> bool:
+        automatic = getattr(self, "_continuous_sync", None)
+        if automatic is not None:
+            automatic.stop()
+            if automatic.busy:
+                return False
         hub = getattr(self, "activity_hub", None)
         if hub is not None and hub.busy:
             return False
@@ -2941,7 +3010,8 @@ class MainWindow(QWidget):
         reader = self.reader_page
         pane = reader.presentation_pane
         questions = getattr(reader, "questions", None)
-        if questions is not None and questions.runner.busy:
+        if questions is not None and (questions.runner.busy
+                                     or getattr(questions, "adoption_busy", False)):
             return False
         if (pane.busy or any(worker.busy for worker in (
                 reader.runner, reader.translate_runner, reader.refine_runner, reader.fetcher,
@@ -3007,6 +3077,15 @@ class MainWindow(QWidget):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
     def closeEvent(self, event) -> None:
+        claims = getattr(self, "_claim_dialog", None)
+        if claims is not None and not claims.disposed and not claims.close():
+            event.ignore()
+            return
+        goal = getattr(self, "_goal_dialog", None)
+        if goal is not None and not goal.disposed and goal.isVisible():
+            goal.raise_()
+            event.ignore()
+            return
         offline = getattr(self, "_offline_dialog", None)
         if offline is not None and not offline.disposed and not offline.close():
             event.ignore()
@@ -3062,7 +3141,8 @@ class MainWindow(QWidget):
             event.ignore()
             return
         questions = getattr(self.reader_page, "questions", None)
-        if questions is not None and questions.runner.busy:
+        if questions is not None and (questions.runner.busy
+                                     or getattr(questions, "adoption_busy", False)):
             questions.status.setText("候選問題正在儲存，完成後即可關閉。")
             event.ignore()
             return
@@ -3499,10 +3579,25 @@ class MainWindow(QWidget):
         else:
             self.set_marked([*self._marked, paper_id])
 
-    def set_pinned(self, paper_ids: list[str], on: bool) -> None:
-        for paper_id in paper_ids:
-            self.data.set_pin(self.active_list or "queue", paper_id, on)
-        self.reload()
+    def set_pinned(self, paper_ids: list[str], on: bool) -> bool:
+        try:
+            self.data.set_pins(self.active_list or "queue", paper_ids, on)
+        except (ValueError, sqlite3.Error, OSError, RuntimeError):
+            self._pin_notice("未能更新釘選；清單可能已變更或暫時無法寫入。請重新整理後重試。")
+            return False
+        previous = self.papers
+        try:
+            self.reload()
+        except (ValueError, sqlite3.Error, OSError, RuntimeError):
+            self.papers = previous
+            self._pin_notice("釘選已儲存，但畫面暫時無法更新；請重新整理。")
+        return True
+
+    def _pin_notice(self, message: str) -> None:
+        self.progress.setText(message)
+        hub = getattr(self, "activity_hub", None)
+        if hub is not None:
+            hub.begin(self, "更新釘選", "list-pin-notice").finish(False, message)
 
     def show_pocket(self) -> None:
         PocketDialog(self).exec()

@@ -19,22 +19,14 @@ _SEAL = object()
 def _identity(path, stream=None):
     for entry in (path, *path.parents):
         _no_link(entry)
-    info = path.stat()
     if not path.is_file():
         raise ValueError("Artifact entry is not a regular file")
-    identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    if stream is not None:
-        opened = os.fstat(stream.fileno())
-        handle_identity = (
-            opened.st_dev,
-            opened.st_ino,
-            opened.st_size,
-            opened.st_mtime_ns,
-            opened.st_ctime_ns,
-        )
-        if handle_identity != identity:
-            raise ValueError("Artifact path and open handle identity changed")
-    return identity
+    from paper_daily.file_change import version
+
+    try:
+        return version(path, stream=stream)
+    except OSError as error:
+        raise ValueError("Artifact path or handle identity changed or is unavailable") from error
 
 
 @dataclass(frozen=True, init=False)
@@ -85,6 +77,10 @@ def verify_closure(store, operation):
     for row in referenced_blobs(operation):
         manifest = BlobManifest(row["sha256"], row["size"])
         path = store._path(manifest)
+        # Reject an impossible size before opening even a metadata-only handle.
+        # The guarded identity and bounded read below still close the race.
+        if path.stat().st_size != manifest.size:
+            raise ValueError("Artifact size differs from its manifest")
         identity = _identity(path)
         if identity[2] != manifest.size:
             raise ValueError("Artifact size differs from its manifest")
@@ -328,16 +324,20 @@ def materialize(store, root, operation):
     verified, body, blobs = verify_closure(store, operation)
     directory = version_directory(root, operation)
     directory.mkdir(parents=True, exist_ok=True)
-    raw = body["deck"]
-    descriptors = {row["id"]: row for row in operation["payload"]["assets"]}
-    for figure in raw["figures"]:
-        description = descriptors[figure.pop("asset_id")]
-        figure["asset"] = description["sha256"] + ".png"
-    deck_from_dict(raw)
-    files = {"deck.json": canonical_json(raw)}
-    for description in operation["payload"]["assets"]:
-        suffix = ".png" if description["role"] == "figure" else ".json"
-        files[description["sha256"] + suffix] = blobs[description["sha256"]]
+    if operation["payload"]["feature"] == "original_source":
+        files = {"source.json": canonical_json(body),
+                 "source.pdf": blobs[body["document_hash"]]}
+    else:
+        raw = body["deck"]
+        descriptors = {row["id"]: row for row in operation["payload"]["assets"]}
+        for figure in raw["figures"]:
+            description = descriptors[figure.pop("asset_id")]
+            figure["asset"] = description["sha256"] + ".png"
+        deck_from_dict(raw)
+        files = {"deck.json": canonical_json(raw)}
+        for description in operation["payload"]["assets"]:
+            suffix = ".png" if description["role"] == "figure" else ".json"
+            files[description["sha256"] + suffix] = blobs[description["sha256"]]
     for name, data in files.items():
         destination = directory / name
         _no_link(destination)

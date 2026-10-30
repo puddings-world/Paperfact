@@ -149,13 +149,26 @@ def begin(conn, *, phase, owner_id, key=None):
             if not parent["active"] or parent["incarnation"] is None:
                 raise ValueError("Research owner is not ready for synchronized writes")
             state, _touches, _own = conn._capture_client._optimistic_graph(conn)
-            for (kind, identity), value in state.items():
-                if kind == "research_content" and any(
-                    p["kind"] == "paper" and p["id"] == portable for p in value["parents"]
-                ):
-                    if len(tokens) >= MAX_ROWS:
-                        raise ValueError("Research observation exceeds its graph limit")
-                    tokens[identity] = sync_capture.observe(conn, kind, identity)
+            # Graph state intentionally carries lifecycle only, not payloads.
+            # The existing projection inventory retains typed natural identities,
+            # including tombstones, so an old target still cannot be revived.
+            targets = [row[0] for row in conn.execute(
+                "SELECT entity_id FROM research_content_projection "
+                "WHERE feature=? AND scope_kind='paper' AND scope_id=? LIMIT ?",
+                (TABLES[table][0], portable, MAX_ROWS + 1),
+            )]
+            if len(targets) > MAX_ROWS:
+                raise ValueError("Research observation exceeds its graph limit")
+            for identity in targets:
+                value = state.get(("research_content", identity))
+                if value is None:
+                    continue
+                parents = value["parents"]
+                if len(parents) != 1 or (
+                    parents[0]["kind"], parents[0]["id"]
+                ) != ("paper", portable):
+                    raise ValueError("Research target has another dependency closure")
+                tokens[identity] = sync_capture.observe(conn, "research_content", identity)
         data = {
             "version": 1,
             "request_id": str(uuid4()),
@@ -302,6 +315,15 @@ def row(context, key, /, **values):
     return result
 
 
+def citation_answered(value):
+    """A reference key/title alone is not an explanation of its research role."""
+    return (
+        value.get("verdict") in ("必讀", "值得", "參考", "略過")
+        and all(isinstance(value.get(k), str) and value[k].strip()
+                for k in ("purpose", "gist", "why"))
+    )
+
+
 def _validate(context, mutations):
     if not isinstance(mutations, dict) or set(mutations) != {"puts", "deletes", "completion"}:
         raise ValueError("Unexpected compound mutation fields")
@@ -346,6 +368,29 @@ def _validate(context, mutations):
     elif phase == "resources":
         if completion not in ("text", "notext"):
             raise ValueError("Resource completion requires its input mode")
+    elif phase == "citations" and completion is not None:
+        if not isinstance(completion, dict) or set(completion) != {"kind", "sent", "answered"}:
+            raise ValueError("Invalid typed citation coverage")
+        if completion["kind"] != "citation_coverage":
+            raise ValueError("Unknown citation coverage kind")
+        for name in ("sent", "answered"):
+            values = completion[name]
+            if not isinstance(values, list) or len(values) > MAX_ROWS:
+                raise ValueError("Citation coverage exceeds its limit")
+            if any(not isinstance(k, str) or not k or len(k) > 4096 for k in values):
+                raise ValueError("Invalid citation coverage key")
+            if sorted(set(values)) != values:
+                raise ValueError("Citation coverage keys must be unique and sorted")
+        source = context.data["document"] or context.data["text_source"]
+        if not source or not source.get("sha256") or not context.data["prompts"]:
+            raise ValueError("Citation coverage requires its captured source and model input")
+        sent, answered = set(completion["sent"]), set(completion["answered"])
+        edited = {r[column] for r in context.rows if r.get("edited") and citation_answered(r)}
+        explained = {r[column] for r in puts if citation_answered(r)}
+        if not sent or answered != (explained | edited) & sent or set(keys) - sent:
+            raise ValueError("Citation coverage differs from observed and published references")
+        if deletes and len(answered) * 5 < len(sent) * 4:
+            raise ValueError("Partial citation analysis cannot prune prior research")
     elif completion is not None:
         raise ValueError("Unexpected research completion flag")
     if phase not in ("citations", "resources") and deletes:
@@ -424,7 +469,14 @@ def _stale(conn, context, mutations):
         return "Research inputs or owner changed"
     if _inventory(conn, context.table, context.owner_id, data["key"]) != context.rows:
         return "Research feature inventory changed"
-    for key in [r[TABLES[context.table][1]] for r in mutations["puts"]] + mutations["deletes"]:
+    putting = {r[TABLES[context.table][1]] for r in mutations["puts"]}
+    for key in list(putting) + mutations["deletes"]:
+        observed = _token(context, key)
+        if (
+            key in putting and observed is not None and observed["incarnation"] is not None
+            and not observed["active"]
+        ):
+            return "Research target was deleted; explicit restore is required"
         if sync_capture.observe_target(
             conn, "paper", context.owner_id, TABLES[context.table][0], key
         ) != _token(context, key):
@@ -648,7 +700,9 @@ def _apply(conn, context, mutations):
             + f') ON CONFLICT(paper_id,"{column}") DO UPDATE SET {updates}',
             tuple(value.values()),
         )
-    if mutations["completion"] is not None:
+    # Citation coverage stays inside the atomic observed receipt. It is derived
+    # completion evidence, not a legacy KV writer or a separate shared domain.
+    if mutations["completion"] is not None and context.data["phase"] in ("fetch", "resources"):
         from paper_daily.store import set_kv
 
         prefix = "resources:" if context.data["phase"] == "resources" else "followups.checked."

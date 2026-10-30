@@ -70,7 +70,10 @@ def test_the_scheduled_run_follows_the_settings_and_records_what_it_finished(db,
     ))
     monkeypatch.setattr(analyze, "analyse_many",
                         lambda ids, jobs, log: analysed.append(list(ids)) or len(ids))
-    monkeypatch.setattr(analyze, "status", lambda conn, pid: {"dive": pid != "b"})
+    def checked_status(conn, pid, *, verify_sources=False):
+        assert verify_sources
+        return {"dive": pid != "b"}
+    monkeypatch.setattr(analyze, "status", checked_status)
     with store.connect() as conn:
         analysis_schedule.save(conn, {"every": 2, "queue": 2, "lists": 1, "notify": True})
     today = date(2026, 10, 19)

@@ -22,6 +22,7 @@ _HASH = re.compile(r"[0-9a-fA-F]{64}")
 _SOURCE_FIELDS = {
     "lists": ("id", "name", "note"),
     "list_papers": ("list_id", "paper_id", "position", "state"),
+    "pins": ("scope", "paper_id", "pinned_at"),
     "papers": ("id", "title", "authors_json", "year", "doi", "page_url"),
     "notes": ("id", "paper_id", "body", "created_at", "kind", "page", "anchor"),
     "dives": ("paper_id", "body", "written_at"),
@@ -240,6 +241,14 @@ def _project(conn, workspace_id, max_records, max_bytes):
             "analysis_sections": [],
             "citations": [],
         }
+    pin_rows = {
+        (row["scope"], row["paper_id"]): _reading_timestamp(_text(row["pinned_at"]))
+        for row in conn.execute(
+            "SELECT pin.scope,pin.paper_id,pin.pinned_at FROM pins pin "
+            "JOIN list_papers lp ON lp.list_id=pin.scope AND lp.paper_id=pin.paper_id "
+            "WHERE pin.scope!='queue'"
+        )
+    }
     for row in conn.execute(
         "SELECT list_id,paper_id,position,state FROM list_papers ORDER BY list_id,position,paper_id"
     ):
@@ -250,6 +259,11 @@ def _project(conn, workspace_id, max_records, max_bytes):
                 "paper_id": row["paper_id"],
                 "position": _integer(row["position"]),
                 "state": _text(row["state"]),
+                **(
+                    {"pinned": True, "pinned_at": pin_rows[(row["list_id"], row["paper_id"])]}
+                    if (row["list_id"], row["paper_id"]) in pin_rows
+                    else {}
+                ),
             }
         )
     for table, key, body, kind, collection in (

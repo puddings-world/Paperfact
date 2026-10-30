@@ -43,6 +43,10 @@ buttons serialize through a server just to share behavior.
   research or its cursor. Bind completed bytes only after rechecking the exact
   target version, parent incarnation and active session; stale work may populate a
   private cache but cannot activate the wrong document.
+- Validate the requested source before a cache fast path, not only before remote
+  work. A cache entry from another source cannot satisfy a version-pinned request;
+  explicitly known deletion is not missing work to regenerate. Keep semantic
+  verification separate from merely locating a quote.
 - Keep activation of a new document separate from retaining an already-open
   verified version. A background revision should announce a choice without moving
   focus or discarding drafts. Key derived assets and their references by source
@@ -70,6 +74,12 @@ buttons serialize through a server just to share behavior.
   timestamp alone cannot prove continuity. Installation must not commit unrelated
   caller work. Old records without epochs stay readable but need explicit reviewed
   reattachment, rather than a retrospectively assigned identity.
+- Treat a cached byte proof as a captured file version, not permanent trust.
+  Reuse needs source/owner guards and reliable platform mutation observations;
+  creation or rounded timestamps can alias same-size rapid writes. Keep initial
+  hashes and independent transfer-byte checks. If change tracking is unavailable,
+  require fresh verification or report unavailable. Test restored mtime and
+  same-clock-tick writes; do not hide the failure by sleeping in the test.
 - Close database/file handles explicitly before workspace replacement. In Python,
   a SQLite connection context manages its transaction, not its lifetime; a read-only
   helper can still retain a Windows file lock. Verify replacement with actual handles,

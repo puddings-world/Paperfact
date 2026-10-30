@@ -1,3 +1,5 @@
+import { pinBadge } from './list-pins.mjs';
+import { renderReadingGoal } from './reading-goal.mjs';
 import {
   IndexedStore,
   own,
@@ -31,6 +33,7 @@ import {
   flushDrafts
 } from './view.mjs';
 import { renderChatCards } from './chat-view.mjs';
+import { renderAnnotations } from './annotations.mjs';
 const app = document.querySelector('#app');
 let deckURLs = [];
 function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
@@ -338,6 +341,7 @@ function render() {
       class: 'subtitle'
     }, collection?.note ?? t('tagline'))
     );
+    renderReadingGoal(main, collection, el, t);
     const selected = collection ? collection.members.map(m => data.papers.find(p => p.id === m.paper_id)).filter(Boolean): data.papers;
     if(! selected.length) main.append(el('div', {
       class: 'empty'
@@ -355,7 +359,7 @@ function render() {
       {},
       el('div', {
         class: 'paper-title'
-      }, entry.title),
+      }, entry.title, pinBadge(member, el, t)),
       el('div', {
         class: 'paper-meta'
       }, [entry.authors?.[0], entry.year].filter(Boolean).join(' · '))
@@ -401,6 +405,7 @@ function select(list, paper = null) {
 }
 function renderOverview(panel, paper) {
   renderChatCards(panel, paper, el, t);
+  renderAnnotations(panel, paper, el, t);
   for(const item of paper.research_content ??[]) {
     if(!['resource', 'followup'].includes(item.feature)) continue;
     const data = item.data;

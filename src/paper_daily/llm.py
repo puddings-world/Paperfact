@@ -216,6 +216,22 @@ def _post(url: str, headers: dict, payload: dict, timeout: int) -> tuple[dict | 
     return None, "AI endpoint unavailable"
 
 
+_FAILURE_KINDS = (
+    ("policy", ("policy", "使用政策")),
+    ("limit", ("usage limit", "rate limit", "quota", "credits", "用量", "http 429", "http 402")),
+    ("auth", ("sign in", "authenticat", "credential rejected", "登入", "api_key", "http 401")),
+    ("timeout", ("timed out", "逾時")),
+)
+
+
+def failure_kind(reason: str) -> str:
+    """A bounded, content-free category for a failed call's local usage receipt."""
+    low = (reason or "").lower()
+    return next(
+        (kind for kind, needles in _FAILURE_KINDS if any(n in low for n in needles)), "error"
+    )
+
+
 def _record(result: Completion, task: str, elapsed_ms: int, cfg: Settings) -> None:
     record = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -229,6 +245,7 @@ def _record(result: Completion, task: str, elapsed_ms: int, cfg: Settings) -> No
         "usage": asdict(result.usage),
         "finish_reason": result.finish_reason,
         "success": result.text is not None,
+        "failure": None if result.text is not None else failure_kind(result.reason),
         "elapsed_ms": elapsed_ms,
     }
     # Prompts, answers, endpoint URLs, API keys, and error bodies never enter this log.

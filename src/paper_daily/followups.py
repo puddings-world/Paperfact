@@ -492,7 +492,18 @@ def _write_overview(context, cfg, log):
     return True, ""
 
 
-def analyse(paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None) -> int:
+def done(conn, paper_id: str) -> bool:
+    """Retrieval alone is not a completed later-work explanation."""
+    if get_kv(conn, f"followups.checked.{paper_id}") is None:
+        return False
+    row = conn.execute("SELECT summary FROM paper_context WHERE paper_id=?", (paper_id,)).fetchone()
+    return bool(row and isinstance(row[0], str) and row[0].strip())
+
+
+def analyse(
+    paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None,
+    overview_too: bool = True,
+) -> int:
     from contextlib import closing
 
     from paper_daily import citegraph, research_job_lock, store
@@ -523,9 +534,10 @@ def analyse(paper_id: str, log: Log = lambda _m: None, *, database=None, connect
         if not compound.scope_current(original_scope):
             log("Original research owner changed; remaining phases skipped")
             return done
-        wrote, why = overview(paper_id, log, database=database, connections=connections)
-        if not wrote and why != "edited by hand":
-            log(f"  overview skipped: {why}")
+        if overview_too:
+            wrote, why = overview(paper_id, log, database=database, connections=connections)
+            if not wrote and why != "edited by hand":
+                log(f"  overview skipped: {why}")
         # The older graph enrichment writer has no explicit workspace contract.
         if store.DB_PATH.resolve() == database and compound.scope_current(original_scope):
             citegraph.links(paper_id, log)

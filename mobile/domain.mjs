@@ -1,3 +1,4 @@
+import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
 import { validateArtifact } from './artifacts.mjs';
 import {
   copy,
@@ -42,6 +43,35 @@ function boundedText(value, limit, nullable = false) {
   requireThat((nullable && value === null) ||(typeof value === 'string' &&[...value].length <= limit));
 }
 function parentShape(op) {
+  const pin = op.entity_type === 'research_content' &&
+    ((op.action === 'put' && op.payload?.feature === 'list_pin') ||
+    (op.action === 'delete' && op.parents.length === 3));
+  if(pin) {
+    requireThat(op.parents.length === 3 && stable(op.parents.map(p=>p.kind)) === stable(['list','paper','membership']));
+    for(const p of op.parents) { closed(p,['kind','id','incarnation']); identifier(p.id); identifier(p.incarnation); }
+    const [list,paper,member]=op.parents;
+    requireThat(list.id !== 'queue' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(paper.id));
+    requireThat(member.id === uuid5Name('paperfact:membership:' + asciiJSON([list.id,paper.id])));
+    requireThat(op.entity_id === contentId({kind:'list',id:list.id},'list_pin',paper.id));
+    return;
+  }
+  const edge = op.entity_type === 'research_content' &&
+    ((op.action === 'put' && op.payload?.feature === 'reference_edge') ||
+    (op.action === 'delete' && op.parents.length === 2));
+  if(edge) {
+    requireThat(op.parents.length >= 1 && op.parents.length <= 2);
+    const seen = new Set();
+    for(const p of op.parents) {
+      closed(p,['kind','id','incarnation']);
+      requireThat(p.kind === 'paper' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(p.id));
+      identifier(p.incarnation);
+      requireThat(!seen.has(p.id)); seen.add(p.id);
+    }
+    requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.entity_id));
+    if(op.action === 'delete') requireThat(op.entity_id === contentId(
+      {kind:'paper',id:op.parents[0].id},'reference_edge',op.parents[1].id));
+    return;
+  }
   if(['research_content','research_file'].includes(op.entity_type)) {
     requireThat(op.parents.length === 1 && (op.entity_type === 'research_file' ? ['paper'] : ['paper','list']).includes(op.parents[0].kind));
     closed(op.parents[0], ['kind', 'id', 'incarnation']);
@@ -412,7 +442,17 @@ export function validateProjection(value, workspace) {
   };
   result.lists = value.lists.map(row =>({
     ...pick(row, ['id', 'name', 'note']),
-    members: (row.members ??[]).map(member => pick(member, ['id', 'paper_id', 'position', 'state'])),
+    members: (row.members ??[]).map(member => {
+      if(Object.hasOwn(member,'pinned')) {
+        requireThat(typeof member.pinned === 'boolean');
+        if(member.pinned) {
+          boundedText(member.pinned_at,64);
+          requireThat(/(Z|[+-]\d\d:\d\d)$/.test(member.pinned_at) && Number.isFinite(Date.parse(member.pinned_at)));
+        } else requireThat(member.pinned_at === null || member.pinned_at === undefined);
+      }
+      if(Object.hasOwn(member,'pinned_at')) requireThat(Object.hasOwn(member,'pinned'));
+      return pick(member, ['id', 'paper_id', 'position', 'state','pinned','pinned_at']);
+    }),
     analysis_sections: sections(row.analysis_sections)
   }));
   result.papers = value.papers.map(row =>({
@@ -505,7 +545,10 @@ export function projection(state) {
     }))],
     highlights: [...contentHighlights, ...snapshotHighlights.live],
     imported_highlights: snapshotHighlights.archived,
-    decks: rows('research_file').map(({operation: op}) => ({id: op.entity_id, paper_id: op.payload.paper_id,
+    original_sources: rows('research_file').filter(({operation: op}) => op.payload.feature === 'original_source')
+      .map(({operation: op}) => ({id:op.entity_id,paper_id:op.payload.paper_id,
+        document_hash:op.payload.slot,operation_id:op.operation_id,editable:false})),
+    decks: rows('research_file').filter(({operation: op}) => op.payload.feature === 'deck').map(({operation: op}) => ({id: op.entity_id, paper_id: op.payload.paper_id,
       slot: op.payload.slot, operation_id: op.operation_id, editable: false}))
   };
 }

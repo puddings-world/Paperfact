@@ -75,6 +75,16 @@ def prepare(paper_id, analysis, cfg=None):
     old = cached(paper_id, parts, analysis)
     if old:
         return old, "cached"
+    result, reason = produce(parts, analysis, cfg=cfg)
+    if result is not None:
+        _atomic_json(_path(paper_id), result)
+    return result, reason
+
+
+def produce(parts, analysis, cfg=None):
+    """Link captured explanation sections and quotes without global reads or writes."""
+    if not parts:
+        return None, "深度講解完成後會連結原文依據。"
     payload = {
         "sections": [dict(id=p["id"], title=p["title"], text=p["text"][:4000]) for p in parts],
         "quotes": [dict(index=i, **item) for i, item in enumerate(analysis["items"])],
@@ -119,7 +129,6 @@ def prepare(paper_id, analysis, cfg=None):
         if not links:
             return None, "尚未找到可核對的講解連結；原文重點仍保留。"
         result = dict(key=_key(parts, analysis), links=links)
-        _atomic_json(_path(paper_id), result)
         return result, "ok"
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         return None, f"講解連結格式無效：{exc}"

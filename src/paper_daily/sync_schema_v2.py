@@ -132,19 +132,59 @@ def canonical_operation(value: dict) -> str:
     if not isinstance(payload, dict):
         raise ValueError("Payload must be an object")
     parents = value["parents"]
-    if not isinstance(parents, list) or len(parents) > (3 if kind == "reading_state" else 2):
+    pin_closure = kind == "research_content" and (
+        (action == "put" and payload.get("feature") == "list_pin")
+        or (action == "delete" and isinstance(parents, list) and len(parents) == 3)
+    )
+    if not isinstance(parents, list) or len(parents) > (
+        3 if kind == "reading_state" or pin_closure else 2
+    ):
         raise ValueError("Invalid parent references")
+    edge_closure = kind == "research_content" and (
+        (action == "put" and payload.get("feature") == "reference_edge")
+        or (action == "delete" and len(parents) == 2)
+    )
     refs = {}
+    seen = set()
     for parent in parents:
         if not isinstance(parent, dict) or set(parent) != {"kind", "id", "incarnation"}:
             raise ValueError("Invalid parent reference")
-        if parent["kind"] not in ("list", "paper", "membership") or parent["kind"] in refs:
+        if (
+            parent["kind"] not in ("list", "paper", "membership")
+            or (parent["kind"] in refs and not edge_closure)
+            or (parent["kind"], parent["id"]) in seen
+        ):
             raise ValueError("Duplicate or unsupported parent kind")
         _identifier(parent["id"])
         _identifier(parent["incarnation"])
         if parent["kind"] in ("paper", "membership"):
             _uuid(parent["id"])
+        seen.add((parent["kind"], parent["id"]))
         refs[parent["kind"]] = parent
+    if edge_closure:
+        if not parents or any(p["kind"] != "paper" for p in parents):
+            raise ValueError("Reference edge requires only its distinct paper endpoints")
+        if action == "delete" and len(parents) == 2:
+            from paper_daily.sync_content import content_id
+
+            expected_edge = content_id(
+                {"kind": "paper", "id": parents[0]["id"]}, "reference_edge", parents[1]["id"]
+            )
+            if value["entity_id"] != expected_edge:
+                raise ValueError("Reference deletion has reversed or unrelated endpoints")
+    if pin_closure:
+        from paper_daily.sync_content import content_id
+
+        if [p["kind"] for p in parents] != ["list", "paper", "membership"]:
+            raise ValueError("List pin requires its ordered list, paper and membership closure")
+        if refs["list"]["id"] == "queue":
+            raise ValueError("Legacy queue pins require migration")
+        member = membership_id(refs["list"]["id"], refs["paper"]["id"])
+        pin = content_id(
+            {"kind": "list", "id": refs["list"]["id"]}, "list_pin", refs["paper"]["id"]
+        )
+        if refs["membership"]["id"] != member or value["entity_id"] != pin:
+            raise ValueError("List pin identity differs from its membership pair")
     expected = {
         "list": set(),
         "paper": set(),
@@ -155,7 +195,13 @@ def canonical_operation(value: dict) -> str:
         "workspace_list_order": set(),
         "paper_document": {"paper"},
         "research_file": {"paper"},
-        "research_content": set(refs) if set(refs) in ({"paper"}, {"list"}) else {"invalid"},
+        "research_content": (
+            {"list", "paper", "membership"}
+            if pin_closure
+            else set(refs)
+            if set(refs) in ({"paper"}, {"list"})
+            else {"invalid"}
+        ),
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")

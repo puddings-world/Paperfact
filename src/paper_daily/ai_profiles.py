@@ -45,6 +45,7 @@ TASKS = (
     "survey",
     "slides",
     "paper_highlights",
+    "claims",
 )
 
 

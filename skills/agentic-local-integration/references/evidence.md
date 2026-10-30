@@ -268,3 +268,51 @@ Evidence: `research_lifecycle.py`, `research_generation.py`,
 Limits: synthetic SQLite workspaces and fake model calls; local epochs are not
 portable sync incarnations, account authorization or proof of historical identity.
 No global installation or deployment was performed.
+
+## Source-pinned cache lookup and deletion knowledge (2026-10-30)
+
+Status: validated-local focused fixtures; combined full gate pending in the
+implementation ledger. This is project evidence, not a global installation.
+
+The annotation pipeline's existing-source cache returned PDF A before checking
+an explicit expected PDF B. Moving identity checks before the fast path makes
+bad displayed hashes fail before a model call, permits explicit regeneration for
+verified B, and preserves known canonical deletion instead of resurrecting an
+old compatibility cache. Analysis and automatic dive producers carry their
+original source identity through completion rather than recapturing a newer PDF.
+
+Evidence: six parameterized source-cache cases in
+`tests/test_reading_annotation_source_cache.py`; actual pipeline cases in
+`tests/test_analyze_annotations.py` and `tests/test_dive_annotations.py`.
+The source/workflow/UI selection passed 42 cases. Selections overlap and are not
+a unique full-suite count. The combined integration ledger records subsequent
+project checks.
+
+Limits: real synthetic PDFs with simulated providers; no actual account, paid
+call, hosted sync, or Mac/phone acceptance. A located source quote does not prove
+that its associated claim is supported. Standalone legacy compatibility helpers
+have a separate API and are not a substitute for source-pinned production calls.
+
+## Native file revisions for cached proof reuse (2026-10-30)
+
+Status: validated-local focused Windows filesystem fixtures; whole-project
+integration gate remains required. No global skill installation.
+
+An actual managed PDF retained offline-ready status after a same-size mutation
+and restored mtime. Adding Windows ChangeTime initially passed 132 affected cases,
+but a later combined run exposed a same-clock-tick collision. The failing assertion
+was preserved. The final local observation supplements timestamps with the per-file
+USN revision; unavailable/unknown records fail closed. Initial byte hashing,
+bounded reads and path/handle checks remain. Thirty-two rapid restored-mtime
+writes and closed native-record parsing are covered.
+
+Evidence: file_change.py, test_file_change.py and
+test_offline_proof_file_change.py; 44 affected cases passed in 65.79 seconds.
+The subsequent source/claims/offline/controller selection passed 144 Python cases
+and 198 mobile cases, with four actual authenticated HTTP runners. Selections
+overlap; do not sum them.
+
+Limits: native observations were tested on the development Windows filesystem,
+not every Windows/removable/network filesystem or native Mac/phone. Metadata
+and USN observations do not defend against a hostile filesystem/kernel that can
+forge all version data. No credentials, private papers or real provider calls.

@@ -84,6 +84,23 @@ class OfflineService:
                 artifact_ids = [(slot, file_id(portable, 'deck', slot))
                                 for slot in ('notes', 'guide')]
                 pdf = desired_document(conn, portable)
+                required_originals = set()
+                if 'paper_claim_sets' in tables:
+                    claim = conn.execute(
+                        'SELECT * FROM paper_claim_sets WHERE paper_id=?', (local,),
+                    ).fetchone()
+                    if claim:
+                        from paper_daily import annotation_content
+
+                        columns = [item[1] for item in
+                                   conn.execute('PRAGMA table_info(paper_claim_sets)')]
+                        saved = dict(zip(columns, claim, strict=True))
+                        annotation_content.validate_row('claims', saved)
+                        required = saved['document_hash']
+                        if pdf is None or required != pdf['sha256']:
+                            entity = file_id(portable, 'original_source', required)
+                            artifact_ids.append((required, entity))
+                            required_originals.add(entity)
                 applied = applied_document(conn, portable)
                 state = ('missing_manifest' if pdf is None else 'unbound'
                          if applied != pdf else 'stale' if not _paper_current(conn, pdf)
@@ -101,10 +118,15 @@ class OfflineService:
                                 raise ValueError('Stored artifact operation exceeds bounds')
                         operation = desired_file(conn, entity)
                         if operation is None:
+                            if entity in required_originals:
+                                artifacts.append({'entity_id': entity, 'slot': slot,
+                                                  'operation': None, 'state': 'missing_manifest',
+                                                  'source_state': 'original'})
                             continue
                         bound = applied_file(conn, entity)
                         source = operation['payload']['source_document_hash']
-                        source_state = ('unknown' if source is None else 'current'
+                        source_state = ('original' if entity in required_originals else
+                                        'unknown' if source is None else 'current'
                                         if pdf and source == pdf['sha256'] else 'mismatch')
                         artifacts.append({
                             'entity_id': entity, 'slot': slot, 'operation': operation,
@@ -212,6 +234,8 @@ class OfflineService:
             if target:
                 manifests[target['sha256']] = target['size']
             for artifact in paper['artifacts']:
+                if artifact['operation'] is None:
+                    continue
                 for row in referenced_blobs(artifact['operation']):
                     old = manifests.setdefault(row['sha256'], row['size'])
                     if old != row['size']:
@@ -237,6 +261,12 @@ class OfflineService:
         if len(rows) != 1 or tuple(rows[0]) != expected:
             raise WorkspaceChanged('Blob store ownership differs from the active workspace')
         return store
+
+    def verification(self, paper_ids, ticket=None):
+        """Create a process-local resumable pass over this exact selected scope."""
+        from paper_daily.workspace_offline_verification import OfflineVerification
+
+        return OfflineVerification(self, paper_ids, ticket=ticket)
 
     def status(self, paper_ids, ticket=None, *, max_bytes=MAX_BYTES,
                max_assets=MAX_ASSETS, seconds=10):
@@ -301,7 +331,7 @@ class OfflineService:
             paper['ready'] = (paper['pdf']['state'] == 'verified'
                               and paper['artifact_inventory_available']
                               and all(row['state'] == 'verified'
-                                      and row['source_state'] == 'current'
+                                      and row['source_state'] in {'current', 'original'}
                                       for row in paper['artifacts']))
         verified = {row['sha256']: row['size']
                     for item, _proof, _target, rows in proofs if item['state'] == 'verified'

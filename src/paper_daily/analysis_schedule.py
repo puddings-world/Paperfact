@@ -43,6 +43,12 @@ def save(conn, settings: dict) -> dict:
     return load(conn)
 
 
+def automatic(conn) -> bool:
+    """Whether scheduled rewrites may spend model calls without a user action."""
+    settings = load(conn)
+    return bool(settings["every"] and (settings["queue"] or settings["lists"]))
+
+
 def due(settings: dict, last_run: str | None, today: date) -> bool:
     if not settings["every"] or not (settings["queue"] or settings["lists"]):
         return False
@@ -92,7 +98,9 @@ def run(jobs: int = 2, log=print, today: date | None = None) -> list[str] | None
     if ids:
         analyze.analyse_many(ids, jobs=jobs, log=log)
     with connect() as conn:
-        complete = [pid for pid in ids if all(analyze.status(conn, pid).values())]
+        complete = [
+            pid for pid in ids if all(analyze.status(conn, pid, verify_sources=True).values())
+        ]
         set_kv(conn, LAST_RUN, today.isoformat())
         if complete:
             set_kv(conn, BATCH, {"at": now(), "ids": complete})

@@ -1,0 +1,262 @@
+[
+  {
+    "name": "research_questions",
+    "feature": "research_questions",
+    "valid": true,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 3
+        }
+      ]
+    }
+  },
+  {
+    "name": "highlight_analysis",
+    "feature": "highlight_analysis",
+    "valid": true,
+    "body": {
+      "items": [
+        {
+          "text": "The study only includes one experimental population.",
+          "page": 3,
+          "kind": "limitation",
+          "reason": "Defines the population boundary.",
+          "source": "page:3"
+        }
+      ],
+      "coverage": {
+        "pages": 4,
+        "empty_pages": [],
+        "chunks": 1,
+        "has_page_numbers": true
+      }
+    }
+  },
+  {
+    "name": "reading_links",
+    "feature": "reading_links",
+    "valid": true,
+    "body": {
+      "analysis_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "links": [
+        {
+          "quote": 0,
+          "section": "dive:0",
+          "explanation": "The quote qualifies the explanation's claim."
+        }
+      ]
+    }
+  },
+  {
+    "name": "research_questions rejects receipts",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 3
+        }
+      ],
+      "generation": {
+        "profile": "private"
+      }
+    }
+  },
+  {
+    "name": "highlight_analysis rejects receipts",
+    "feature": "highlight_analysis",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "text": "The study only includes one experimental population.",
+          "page": 3,
+          "kind": "limitation",
+          "reason": "Defines the population boundary.",
+          "source": "page:3"
+        }
+      ],
+      "coverage": {
+        "pages": 4,
+        "empty_pages": [],
+        "chunks": 1,
+        "has_page_numbers": true
+      },
+      "generation": {
+        "profile": "private"
+      }
+    }
+  },
+  {
+    "name": "reading_links rejects receipts",
+    "feature": "reading_links",
+    "valid": false,
+    "body": {
+      "analysis_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "links": [
+        {
+          "quote": 0,
+          "section": "dive:0",
+          "explanation": "The quote qualifies the explanation's claim."
+        }
+      ],
+      "generation": {
+        "profile": "private"
+      }
+    }
+  },
+  {
+    "name": "invalid page 0",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 0
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page -1",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": -1
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page True",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page 1.5",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 1.5
+        }
+      ]
+    }
+  },
+  {
+    "name": "invalid page 1",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "What assumption limits this result?",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": "1"
+        }
+      ]
+    }
+  },
+  {
+    "name": "unicode length 280",
+    "feature": "research_questions",
+    "valid": true,
+    "body": {
+      "items": [
+        {
+          "question": "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 3
+        }
+      ]
+    }
+  },
+  {
+    "name": "unicode length 281",
+    "feature": "research_questions",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "question": "🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪🧪",
+          "why": "The experiment covers only one population.",
+          "evidence": "The study only includes one experimental population.",
+          "page": 3
+        }
+      ]
+    }
+  },
+  {
+    "name": "contradictory source",
+    "feature": "highlight_analysis",
+    "valid": false,
+    "body": {
+      "items": [
+        {
+          "text": "The study only includes one experimental population.",
+          "page": 3,
+          "kind": "limitation",
+          "reason": "Defines the population boundary.",
+          "source": "page:4"
+        }
+      ],
+      "coverage": {
+        "pages": 4,
+        "empty_pages": [],
+        "chunks": 1,
+        "has_page_numbers": true
+      }
+    }
+  },
+  {
+    "name": "duplicate linked quote",
+    "feature": "reading_links",
+    "valid": false,
+    "body": {
+      "analysis_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "links": [
+        {
+          "quote": 0,
+          "section": "dive:0",
+          "explanation": "The quote qualifies the explanation's claim."
+        },
+        {
+          "quote": 0,
+          "section": "dive:0",
+          "explanation": "The quote qualifies the explanation's claim."
+        }
+      ]
+    }
+  }
+]

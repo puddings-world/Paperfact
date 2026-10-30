@@ -15,7 +15,7 @@ def test_actual_pipeline_separates_pending_venue_and_resource_transactions(drive
     path, _client, document, _calls, install, _invoke = driver
     install("resources")
     monkeypatch.setattr(analyze, "PDF_DIR", document.path.parent)
-    monkeypatch.setattr(analyze, "status", lambda *_: {key: True for key in analyze.STEPS})
+    monkeypatch.setattr(analyze, "status", lambda *_, **_kw: {key: True for key in analyze.STEPS})
     monkeypatch.setattr(
         venues,
         "refresh",
@@ -41,7 +41,9 @@ def test_pipeline_stops_unconverted_stages_after_workspace_switch(driver, monkey
         conn.executescript(store.SCHEMA)
     install("resources", lambda: monkeypatch.setattr(store, "DB_PATH", other))
     monkeypatch.setattr(analyze, "PDF_DIR", document.path.parent)
-    monkeypatch.setattr(analyze, "status", lambda *_: {key: key == "pdf" for key in analyze.STEPS})
+    monkeypatch.setattr(
+        analyze, "status", lambda *_, **_kw: {key: key == "pdf" for key in analyze.STEPS}
+    )
     monkeypatch.setattr(venues, "refresh", lambda *_a, **_k: None)
     for module, name in (
         (dive, "dive_ahead"),
@@ -64,7 +66,7 @@ def test_pipeline_stops_unconverted_stages_after_workspace_switch(driver, monkey
 def test_resource_failure_is_not_reported_as_complete_analysis(driver, monkeypatch):
     path, _client, _document, _calls, install, _invoke = driver
     install("resources")
-    monkeypatch.setattr(analyze, "status", lambda *_: {key: True for key in analyze.STEPS})
+    monkeypatch.setattr(analyze, "status", lambda *_, **_kw: {key: True for key in analyze.STEPS})
     monkeypatch.setattr(venues, "refresh", lambda *_a, **_k: None)
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute(

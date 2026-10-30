@@ -42,6 +42,7 @@ TASK_LABELS = {
     "compare": "論文比較",
     "slides": "論文簡報",
     "paper_highlights": "原文研究重點",
+    "claims": "Claim evidence",
     "survey": "清單綜覽",
 }
 BACKEND_LABELS = {

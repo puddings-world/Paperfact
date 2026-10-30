@@ -32,6 +32,10 @@ def test_status_says_what_exists(monkeypatch, tmp_path):
         "INSERT INTO close_readings(paper_id, body, written_at) VALUES ('ref:a', 'x', 'now')"
     )
     store.set_kv(conn, "followups.checked.ref:a", "2026-10-08")
+    assert not analyze.status(conn, "ref:a")["later"]
+    conn.execute(
+        "INSERT INTO paper_context(paper_id,summary,written_at) VALUES ('ref:a','Context','now')"
+    )
     state = analyze.status(conn, "ref:a")
     assert state == {"pdf": True, "dive": True, "highlights": False, "cites": False, "later": True}
     assert analyze.summary(state) == "原文✓ 講解✓ 原文重點✗ 承先✗ 啟後✓"
@@ -88,9 +92,13 @@ def test_a_bare_arxiv_id_is_read_from_arxiv(monkeypatch):
 
 
 def test_existing_deep_analysis_still_prepares_missing_highlights(monkeypatch, tmp_path):
-    from paper_daily import cites, paper_highlights, resources, venues
+    from paper_daily import cites, llm, paper_highlights, reading_annotation_jobs, resources, venues
 
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
+    monkeypatch.setattr(analyze, "PDF_DIR", tmp_path)
+    from test_research_generation import pdf
+
+    pdf(tmp_path / "paper.pdf")
     store.init_db()
     with store.connect() as conn:
         store.upsert_papers(
@@ -101,22 +109,34 @@ def test_existing_deep_analysis_still_prepares_missing_highlights(monkeypatch, t
             "INSERT INTO close_readings(paper_id,body,written_at) VALUES ('paper','close','now')"
         )
         store.set_kv(conn, "followups.checked.paper", "now")
-    ready, calls = [], []
+        conn.execute(
+            "INSERT INTO paper_context(paper_id,summary,written_at) "
+            "VALUES ('paper','Context','now')"
+        )
+    ready, calls, scopes = [], [], []
+    connections = {"fixture": "captured-provider"}
+    monkeypatch.setattr(llm, "capture_connections", lambda: connections)
     monkeypatch.setattr(analyze, "has_pdf", lambda pid: True)
     monkeypatch.setattr(paper_highlights, "is_prepared", lambda conn, pid: bool(ready))
     monkeypatch.setattr(venues, "refresh", lambda *a, **kw: None)
     monkeypatch.setattr(resources, "needs_check", lambda *a: False)
     monkeypatch.setattr(cites, "analyse", lambda *a, **kw: 0)
 
-    def prepare(pid):
+    def prepare(database, pid, *, legacy_root, connections, owner, expected_document_hash):
         calls.append(pid)
+        assert owner.database == database and owner.paper_id == pid
+        import hashlib
+        source_hash = hashlib.sha256((legacy_root / "paper.pdf").read_bytes()).hexdigest()
+        assert expected_document_hash == source_hash
+        scopes.append((database, legacy_root, connections))
         ready.append(True)
         return {"marks": {"mapped": 2, "total": 2}}, "ok"
 
-    monkeypatch.setattr(paper_highlights, "prepare_reading", prepare)
+    monkeypatch.setattr(reading_annotation_jobs, "prepare", prepare)
     with store.connect() as conn:
         assert analyze.pending(conn, ["paper"]) == ["paper"]
     result = analyze.analyse("paper", log=lambda *a: None)
     assert calls == ["paper"] and result["highlights"] and result["dive"]
+    assert scopes == [(store.DB_PATH, analyze.PDF_DIR, connections)]
     analyze.analyse("paper", log=lambda *a: None)
     assert calls == ["paper"]

@@ -73,8 +73,8 @@ def remove(paper_id: str, fingerprint: str, ids: list[int]) -> None:
         )
 
 
-def sync_ai(paper_id: str, path: Path, analysis: dict) -> dict:
-    """Locate full verified quotes; never approximate using only their opening words."""
+def locate(path: Path, analysis: dict) -> tuple[str, list, list]:
+    """Return exact anchors without changing research; the caller owns publication."""
     import pymupdf
 
     from paper_daily.paper_highlights import normalize
@@ -115,6 +115,12 @@ def sync_ai(paper_id: str, path: Path, analysis: dict) -> dict:
             marks.append((key, anchor, item))
     if fingerprint != document_hash(path):
         raise ValueError("定位期間 PDF 已變更，請重試。")
+    return fingerprint, marks, unmatched
+
+
+def sync_ai(paper_id: str, path: Path, analysis: dict) -> dict:
+    """Locate full verified quotes; never approximate using only their opening words."""
+    fingerprint, marks, unmatched = locate(path, analysis)
     with connect() as conn:
         for key, anchor, item in marks:
             conn.execute(

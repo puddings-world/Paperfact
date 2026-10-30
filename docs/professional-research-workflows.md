@@ -1,7 +1,8 @@
 # Professional research workflows for v0.5
 
-Status: implementation direction, 2026-10-30. This document distinguishes the
-working task-drafting entry point from proposed agent execution and release gates.
+Status: in development, 2026-10-30. Task drafting, per-list purposes and a bounded
+claim-extraction workflow are implemented in the local candidate. This document
+distinguishes those operations from optional future agents and release gates.
 It does not expand the v0.5 release into autonomous experimentation.
 
 ## Product outcome
@@ -28,6 +29,20 @@ or independent endorsement of vendor accuracy claims.
   Adopt explicit criteria and traceable extraction cells. An exploratory reading
   list is not automatically a systematic review or PRISMA-compliant search.
 
+Additional primary references checked on 2026-10-30:
+
+- [OpenScholar](https://arxiv.org/abs/2411.14199) documents retrieval, cited synthesis
+  and a self-feedback loop. Reuse explicit evidence retrieval/validation boundaries;
+  benchmark results do not certify this application's models or source coverage.
+- The [Asta interaction study](https://arxiv.org/abs/2602.23335) reports users
+  revisiting saved outputs and cited evidence nonlinearly. Our design inference is
+  saved-first cards, stable source links and preserved drafts, rather than a
+  compulsory linear wizard. This is not permission to copy its data-collection model.
+- [PRISMA 2020](https://www.prisma-statement.org/prisma-2020) supplies systematic-review
+  reporting checklists and flow diagrams. Preserve criteria, exclusion reasons and
+  search history if building that optional workflow; ordinary exploratory lists
+  must not be advertised as a completed systematic review.
+
 ## Reader-facing flow
 
 1. Open a paper and see the original beside its saved explanation.
@@ -50,7 +65,7 @@ extensions. These are provider-independent drafting templates, not an autonomous
 agent runtime. Prompt requests for quotations are not verified anchors and must
 not receive a "verified" badge until the source validator accepts them.
 
-## Professional analysis contract (next implementation)
+## Professional analysis contract
 
 | Component | Required content | Integrity rule |
 |---|---|---|
@@ -64,7 +79,32 @@ not receive a "verified" badge until the source validator accepts them.
 | Reproduction | Materials, procedure, parameters, validation and missing inputs | A plan is not a successful replication; no implicit code execution |
 | Research proposal | Hypothesis, falsifier, minimal test, resource needs | Label speculative proposals; novelty requires a separate literature search |
 
-## Bounded agent execution (proposed)
+## Implemented bounded claim workflow (local candidate)
+
+The optional **Review claims against the original** entry opens saved content
+without login or AI calls. Explicit generation captures the selected Claims
+account/model, paper lifetime, deep/close reading inputs and exact PDF snapshot.
+One bounded completion proposes consequential assertions, limitations and quoted
+passages; deterministic validation locates quotes or records missing/ambiguous
+evidence. Empty output fails without replacing prior work. This does not prove
+that a quotation semantically supports a proposed judgment.
+
+Publication uses the existing observed-generation boundary. Concurrent edits,
+paper/source changes or known deletion retain work for review. Restoring a
+deleted set requires a separate default-Cancel confirmation and new incarnation;
+force alone never restores it. Saved cards refresh off the GUI thread and never
+replace unsent notes/questions. Source navigation verifies the actual loaded
+original again; a current PDF is not substituted for a prior version.
+
+The claim set and its declared original source survive supported list packages
+and complete backups. Typed historical-source transfer and portable original-version
+inspection have integrated fixture coverage. The viewer opens the exact old source
+separately while preserving the current PDF and drafts. Unbound ownership and
+complete first-enrollment migration remain required follow-ons. Mobile displays
+saved proposals and distinct verified original artifacts without AI execution;
+physical-device offline acceptance remains open.
+
+## Further bounded agent execution (proposed)
 
 Use existing shared operations behind UI/CLI/MCP, not separate implementations.
 An action captures the workspace, selected papers, document versions, research

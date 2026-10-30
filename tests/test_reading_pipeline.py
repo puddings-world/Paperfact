@@ -1,7 +1,9 @@
 import subprocess
 import sys
 
-from paper_daily import dive, paper_highlights, store
+from test_research_generation import pdf
+
+from paper_daily import dive, paper_highlights, reading_annotation_jobs, store
 
 
 def test_reading_lock_serializes_processes_and_releases_after_exception(tmp_path, monkeypatch):
@@ -32,14 +34,21 @@ def test_background_dive_prepares_highlights_and_honors_opt_out(tmp_path, monkey
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "papers.db")
     monkeypatch.setattr(paper_highlights, "PDF_DIR", tmp_path)
     store.init_db()
-    (tmp_path / "paper.pdf").write_bytes(b"test")
+    with store.connect() as conn:
+        store.upsert_papers(
+            conn, [dict(id="paper", title="Paper", venue="test", year=2026, source="test")]
+        )
+    pdf(tmp_path / "paper.pdf")
     calls = []
 
-    def prepare(pid):
+    def prepare(database, pid, **kwargs):
+        assert database == store.DB_PATH.resolve()
+        assert kwargs["owner"].paper_id == pid
+        assert len(kwargs["expected_document_hash"]) == 64
         calls.append(pid)
         return {"marks": {"mapped": 2, "total": 2}}, "ok"
 
-    monkeypatch.setattr(paper_highlights, "prepare_reading", prepare)
+    monkeypatch.setattr(reading_annotation_jobs, "prepare", prepare)
     messages = []
     # A fresh install shows the box unticked, so nothing may be spent yet.
     dive._prepare_highlights("paper", messages.append)
@@ -63,8 +72,10 @@ def test_background_highlight_failure_is_recorded_without_losing_dive(tmp_path, 
             conn, [dict(id="paper", title="Paper", venue="test", year=2026, source="test")]
         )
         store.set_kv(conn, "ui.auto_highlights", "1")
-    (tmp_path / "paper.pdf").write_bytes(b"test")
-    monkeypatch.setattr(paper_highlights, "prepare_reading", lambda *a: (None, "AI unavailable"))
+    pdf(tmp_path / "paper.pdf")
+    monkeypatch.setattr(
+        reading_annotation_jobs, "prepare", lambda *a, **kw: (None, "AI unavailable")
+    )
     monkeypatch.setattr(dive, "_run", lambda *a: iter([("paper", "saved dive", "ok", "Paper")]))
     messages = []
     assert dive.dive_ahead(paper_id="paper", log=messages.append) == 1
@@ -82,10 +93,15 @@ def test_unmatched_quotes_are_reported_as_missing_marks(tmp_path, monkeypatch):
     monkeypatch.setattr(paper_highlights, "PDF_DIR", tmp_path)
     store.init_db()
     with store.connect() as conn:
+        store.upsert_papers(
+            conn, [dict(id="paper", title="Paper", venue="test", year=2026, source="test")]
+        )
         store.set_kv(conn, "ui.auto_highlights", "1")
-    (tmp_path / "paper.pdf").write_bytes(b"test")
+    pdf(tmp_path / "paper.pdf")
     monkeypatch.setattr(
-        paper_highlights, "prepare_reading", lambda *a: ({"marks": {"mapped": 0, "total": 2}}, "ok")
+        reading_annotation_jobs,
+        "prepare",
+        lambda *a, **kw: ({"marks": {"mapped": 0, "total": 2}}, "ok"),
     )
     dive._prepare_highlights("paper", lambda *a: None)
     with store.connect() as conn:

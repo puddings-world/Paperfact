@@ -1,8 +1,8 @@
 # v0.5.0 — Research across devices
 
-Status: in development, unreleased, 2026-10-27. Published beta baseline: v0.4.3.
-The separate v0.4.3 release contains the question-input/layout and native-startup
-hotfix; it does not enable the unfinished v0.5 synchronization features.
+Status: in development, unreleased; updated 2026-10-30. The independently
+maintained v0.4.x releases remain the daily-use line. They do not enable unfinished
+v0.5 synchronization. See `delivery-status-0.5.md` for current implementation evidence.
 The reference service, managed PDF reader, partial app-writer capture and independent
 mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
@@ -61,7 +61,13 @@ writer enrollment in this development snapshot.
 Acceptance includes changing a list goal without losing research, inspecting a
 claim against its exact PDF version, showing missing evidence honestly, and
 preserving the goal/source/lineage provenance across supported sharing and sync.
-Their schemas, producer enrollment and UI acceptance remain planned work.
+Per-list purpose editing, sharing, capture and mobile display are in the current
+local candidate. Source-pinned claim extraction, deterministic quote-location
+checks, saved-first cards and portable original-version inspection also have
+fixture coverage. Quote location does not certify semantic support. Unbound
+original ownership, grounded lineage, the complete analysis audit, full producer
+enrollment and physical-device acceptance remain open; task templates do not
+satisfy those gates.
 
 The next list-recency improvement is initially local-only reading state. Dragging
 still commits the explicit shared custom order. See the concrete
@@ -108,7 +114,7 @@ polish. Workspace relocation is a separate migration task, not a folder-picker s
 4. **D — Public beta:** package all desktop platforms from one tag, document the
    service's privacy/cost limits, and run the complete user journey.
 
-Keep v0.4.3 available during development. Set the package version to v0.5.0 only
+Keep the stable v0.4.x maintenance release available during development. Set the package version to v0.5.0 only
 when preparing a release candidate. Mark the initial release as a GitHub prerelease;
 the existing updater recognizes numeric `vX.Y.Z` tags.
 

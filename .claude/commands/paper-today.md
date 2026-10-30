@@ -33,6 +33,13 @@ displayed equation — because the reader and the pocket page typeset it with
 KaTeX. (This is the one exception to the global plain-Unicode rule: the dive is
 read in the app, never in the terminal.)
 
+Use the paper's actual study design: theoretical, empirical, observational,
+qualitative or review. Separate author claims, observations/proofs, inference and
+missing evidence. Unreported is not zero; a located quote is not semantic proof.
+Do not infer causation, replication or influence without the necessary sources.
+The canonical executable specification is `dive.DIVE_INSTRUCTIONS`; its current
+recipe is `2026-10-research-evidence`. Existing saved explanations remain available.
+
 Structure:
 
 1. **一句話結論** — what this paper actually established, in one sentence.
@@ -51,17 +58,16 @@ Structure:
    full text, say so and work from the abstract only.
 3. **核心洞見** — the single idea the paper turns on. If you cannot name it in two
    sentences, you have not found it yet.
-4. **方法** — how it works mechanically, with the key equations in LaTeX. Explain
-   why each piece is there, not just what it is.
-5. **機制圖解** — the method as a ```mermaid flowchart: how data or
-   gradients flow, where a tensor's shape or bit width changes, and which block this
-   paper actually touches (start that node's text with ★). Three to five lines under it on how to read
-   it. Where the mechanism is pure maths with no structure to draw, plot the
-   relationship between the quantities instead and say why.
-6. **證據** — what the experiments actually demonstrate, and just as importantly
-   what they do *not*. Name the baselines and the ablations that carry the argument,
-   and cite the exhibit numbers from the pack's **Figures and tables** section
-   ("Table 3 的 4-bit 那一列") so the reader can check them in the 圖表 tab.
+4. **方法** — identify the study design, assumptions and reproducible steps.
+   Apply relevant checks for samples/materials, controls, measurement/analysis and
+   uncertainty, theorem conditions/proofs, qualitative sampling/coding or review
+   search/eligibility criteria. Mark unreported items; use equations when relevant.
+5. **機制圖解** — show the actual sampling, intervention, analysis, proof or
+   screening workflow. Model/gradient/tensor details apply only when the paper has
+   them. If no useful mechanism diagram exists, explain the key relations instead.
+6. **證據** — what the data, observations, proof or experiment supports and does
+   not support. Report applicable comparisons, controls, uncertainty and sensitivity
+   checks; point to provided figures, tables, theorems or source passages.
 7. **該看哪三張圖** — the three exhibits worth stopping on: number and page, which
    line or cell to look at, and what seeing it changes.
 8. **限制與反駁** — the honest weaknesses. Where would a sharp reviewer push?

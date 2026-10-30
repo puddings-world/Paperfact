@@ -533,10 +533,20 @@ def cmd_backfill(args) -> int:
     return 0
 
 
+def _analysis_is_automatic() -> bool:
+    from paper_daily import analysis_schedule
+
+    with connect() as conn:
+        return analysis_schedule.automatic(conn)
+
+
 def cmd_dive_ahead(args) -> int:
     """Write deep dives for the next few papers, so there is always one ready."""
     from paper_daily import dive
 
+    if getattr(args, "scheduled", False) and not _analysis_is_automatic():
+        print("skipped: analysis runs only on an explicit user action")
+        return 0
     n = dive.dive_ahead(
         count=args.n, log=_log, paper_id=args.paper, list_id=args.list,
         rewrite=args.rewrite, jobs=args.jobs,
@@ -1028,6 +1038,9 @@ def cmd_cites_ahead(args) -> int:
     """Analyse citations for the next few papers that have none."""
     from paper_daily import cites
 
+    if getattr(args, "scheduled", False) and not _analysis_is_automatic():
+        print("skipped: analysis runs only on an explicit user action")
+        return 0
     n = cites.analyse_ahead(count=args.n, rewrite=args.rewrite, log=_log)
     print(f"{n} paper(s) analysed")
     return 0
@@ -1324,6 +1337,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="rewrite dives written before the current spec, in queue order")
     sp.add_argument("--jobs", type=int, default=1,
                     help="how many dives to write at once (each one waits on the model)")
+    sp.add_argument("--scheduled", action="store_true",
+                    help="skip automatic rewrites when analysis is manual-only")
     sp.set_defaults(func=cmd_dive_ahead)
 
     sp = sub.add_parser("import-list", help="import a bibliography as a reading list")
@@ -1447,6 +1462,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("n", nargs="?", type=int, default=2)
     sp.add_argument("--rewrite", action="store_true",
                     help="redo papers analysed under an older specification")
+    sp.add_argument("--scheduled", action="store_true",
+                    help="skip automatic rewrites when analysis is manual-only")
     sp.set_defaults(func=cmd_cites_ahead)
 
     sp = sub.add_parser("lists", help="show the reading lists")

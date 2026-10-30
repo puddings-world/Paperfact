@@ -330,7 +330,8 @@ export class Engine {
     this.downloads.set(key,job);
     return job;
   }
-  async deck(id) { return readArtifact(this,id); }
+  async deck(id) { return readArtifact(this,id,'deck'); }
+  async originalSource(id) { return readArtifact(this,id,'original_source'); }
   async exportLocal() {
     const state = await this.store.read();
     return {

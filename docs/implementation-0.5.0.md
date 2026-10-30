@@ -935,3 +935,179 @@ device-local retention intent, guarded desktop selection/close behavior and the
 read-only duplicate detector. It does not include the separate selective-download,
 annotation or per-list-purpose candidates, production enrollment, cache eviction,
 or physical-device acceptance. No owner research or credentials were used.
+
+### Combined annotation, offline-download and reading-purpose candidate
+
+After verified checkpoint `63732ee`, frozen independent candidates were merged
+contextually. Before-images and exact incoming/source hashes are retained in
+ignored `build/*-applied.json` receipts; no original dirty worktree was overwritten.
+Four reading-goal/annotation capability conflicts were resolved by retaining both
+registries and both mobile modules.
+
+The cross-feature selection passed **128 Python cases in 165.03 seconds**. The
+merged PWA passed **123 cases and two actual Python HTTP scenarios**. Its first
+manual command used a relative child-interpreter path and failed to spawn; the
+correct absolute-interpreter/core command passed. This was invocation evidence,
+not a product-code repair. The actual purpose dialog was rendered and inspected
+using the app's bundled fonts.
+
+The candidate includes version-2 package capability checks for goals, canonical
+annotations and deletion markers; legacy packages stay format 1 when possible.
+No app version was bumped. First-enrollment preparation remains supported-subset
+only: runtime adoption/maintenance locking, legacy refs/pins/queue/logs and
+unmigrated decks/files remain explicit blockers. The complete gate is required
+before committing this combined candidate.
+
+### Professional evidence and field-neutral future deep dives
+
+The bounded `research_evidence.verify` service was integrated from a frozen
+three-file candidate. It distinguishes deterministic quote location from caller
+semantic judgment and unresolved external citation identity. Actual PDF fixtures
+cover owner/hash mismatch, ambiguity, anchors, mutation, bounds and cancellation.
+Its provider, persistence, mobile and desktop adapters are not yet implemented.
+
+The future deep-dive recipe is now `2026-10-research-evidence`, with study-type
+appraisal, explicit uncertainty/missing data and supported-versus-inferred prose.
+The fixed reading section structure remains; mandatory ML/tensor/bit assumptions
+were removed. This internal recipe tag is not an app release-version bump.
+Normal selection preserves existing saved dives; explicit/current background
+rewrite settings continue to control regeneration.
+
+Professional evidence, request, existing-dive/content and docs checks passed
+**93 Python cases in 77.46 seconds**. New model-boundary tests use simulated output;
+they verify request/routing/preservation, not real scientific accuracy. The actual
+purpose dialog was visually checked after normal app font initialization.
+The combined complete gate is the next step; production/device gates remain open.
+
+
+### Expanded research integration and regression repair
+
+The pending candidate now includes membership-bound list pins, portable reference
+edges, complete remote annotation-analysis review, resumable offline verification
+and the maintenance Mac foreground packaging fix. Applied-file receipts and
+before-images remain in ignored `build/`. Existing main-window publication and
+Q&A guards were preserved through contextual edits; no original worktree or daily
+research was replaced.
+
+The first combined full gate stopped at 451 passed / one failure. Its unchanged
+bundle-recovery test detected a real schema idempotence regression: unconditional
+annotation-trigger replacement changed an exact database rollback snapshot.
+Initialization now compares trigger definitions and migrates only obsolete ones
+inside the caller transaction. The rollback test was retained. Subsequent focused
+selections passed 103 schema/reference/enrollment cases and 112 pin/capture/schema/
+goal cases (overlapping). Other selections passed 96 resumable verification cases,
+52 remote-review cases and 20 packaging cases. Mobile integration passed 156 cases
+and two actual Python HTTP scenarios. A new frozen full gate is still required.
+
+Citation-context wording now identifies bibliography direction without claiming
+historical influence. Per-list goal changes invalidate displays transactionally.
+Private nested Claude worktrees are excluded from committable files. This is not
+a public release, native Mac acceptance, production enrollment or real-model
+scientific validation. The app version remains `0.5.0.dev`.
+
+
+### Claims, continuous desktop sync and maintenance integration
+
+Typed claim extraction/restoration, immutable-source package/backup closure and
+saved-first desktop/mobile views were integrated from frozen independent
+manifests. Eleven contextual conflicts preserved current reference/pin parents,
+conditional schema setup, both goal/claim invalidation domains and complete remote
+annotation review. Unrelated main-window bytes and guards were retained.
+
+Combined claims/pin/goal selection: 166 passed (257.17s). PWA: 184 passed and
+three actual HTTP scenarios. Polished light/dark/Traditional Chinese cards were
+visually inspected with bundled fonts; 88 merged UI tests passed (134.75s).
+Disclosures consume Space/Return/Enter without falling through to Generate.
+Continuous sync uses an explicit process-session toggle and one guarded worker;
+85 merged tests passed (83.44s), then 23 controller/status cases (64.32s).
+Fresh committed changes show Waiting; counts are labeled as the last sync pass.
+
+Maintenance completion/scheduling/preference/WebEngine/status changes passed
+155 merged tests (179.76s). The child selection of 281 overlaps and is not added.
+Citation target observations are phase-specific so reference edges/list pins do
+not invalidate unrelated output tokens; deleted targets retain candidates.
+
+The second full gate stopped at 718 passed / one failure (490.85s): optional
+content initialization unconditionally installed a pin trigger on absent base
+tables. Conditional installation repaired it; unchanged rollback and pin tests
+passed a 43-case selection. A separate Windows same-size/restored-mtime proof
+repro was recorded red before the native file-change repair. A combined complete
+gate remains mandatory. No public release or owner database was used.
+
+
+### Windows same-size file mutation invalidates cached proofs
+
+A real fixture reproduced false offline readiness after changing PDF bytes and
+restoring mtime (build/native-proof-before.log). Native file-version observations
+now include Windows ChangeTime; initial proof hashing and all byte-transfer
+checks remain. Existing size-before-open and error contracts were preserved.
+The affected 132-case selection passed (205.55s), privacy/Ruff clean. This is a
+Windows filesystem regression result, not native Mac/removable-drive acceptance.
+The following complete gate remains required before commit.
+
+
+### Historical originals and native revision integration
+
+The frozen 20-file source core and 10-file mobile adapter were integrated; a
+three-way artifact merge retained native file observations and size-before-open
+checks. Saved claims can declare original A while primary B remains selected;
+selected transfers, immutable source ownership, private provenance archives and
+mobile source/deck separation are explicit. Native revision parsing rejects
+unknown or unavailable formats. A timestamp-only repair was insufficient for a
+same-clock-tick write, so the original assertion was retained and per-file USN
+observation added.
+
+The coherent selection passed 144 Python cases (180.94s), 198 mobile cases and
+four actual HTTP runners (six reported acceptance checkpoints). Another 44-case
+native revision selection passed (65.79s); selections overlap. Only text line
+endings were aligned with existing HEAD LF conventions afterward, preserving
+skill copies/golden data and every source value. Exact before/after receipts
+remain under ignored build/. Full-gate outcomes are recorded in the associated
+checkpoint commit and ignored run ledger; do not infer one from focused counts.
+
+Remaining local work includes typed old-job/lifecycle/deletion migration,
+captured-workspace package import/export closure, source-version desktop access,
+grounded lineage, secure remembered connection/device UX and editable recovery.
+The service operation and physical Windows/Mac/phone journeys remain release
+gates. No public release, research upload or production migration was performed.
+
+
+### Portable original inspection and captured package imports
+
+The portable source viewer passed 108 merged cases; a separate 44-case selection
+verified that inspection of missing stores creates neither blob directories nor
+indexes. The explicit read-only window retains immutable verified PDF bytes and
+never substitutes the current PDF or changes drafts. Unbound/private/imported
+original ownership remains a separate required follow-on.
+
+A full gate stopped at 808 passed / one failure because an eager optional private
+archive appeared in a fresh replacement database. The archive now initializes only
+when valid records are retained. Explicit recovery preserves an archive-declared
+empty compatibility table without granting new ownership. The unchanged
+fresh-database, recovery and enrollment selection passed 112 cases (178.11s).
+
+Captured-workspace imports now dispatch to one typed graph/file transaction.
+Current PDFs, declared original versions, used deck assets and research content
+are verified before ownership is committed; cancellation, child failure and late
+commit failure retain existing data. Unsupported legacy scopes and ambiguous
+updated archives remain explicit refusals. The desktop mapping review is still
+required. Native Windows file-version tokens contain a nested tuple; a JSON
+round-trip initially falsely rejected unchanged archives. The comparison now uses
+canonical serialization, with regression cases for both unchanged and genuinely
+changed native tokens. Existing stale-source/archive guards remain unchanged.
+The following frozen full gate, not these focused selections, is the commit gate.
+
+
+### Actual owner-bound material UI regression coverage
+
+A complete gate stopped at 1,653 passed / one failure (905.17s). Legacy material
+fixtures created only a presentation/PDF widget and changed its paper ID directly.
+The source-bound workflow deliberately requires a real loaded research owner.
+Those fixtures now create isolated paper records and use the actual load/capture
+actions; their original delayed-result and failed-result preservation assertions
+remain. The missing-AI case simulates the login request instead of opening account
+UI, and a new case requires refusal when no owner is bound. Established failure
+and AI-settings wording was restored in production rather than weakening the
+existing message assertions. The combined seven-file reader/material/highlight
+selection passed 97 cases (95.08s); privacy scanning and Ruff passed. The following
+frozen complete gate remains the commit boundary.

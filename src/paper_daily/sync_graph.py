@@ -122,9 +122,10 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
             not found["active"] or found["incarnation"] != parent["incarnation"]
         ) and not retirement:
             parents_match = False
-    if kind == "reading_state" and not _reading_closure(
-        get_entity, get_receipt, operation, retirement
-    ):
+    membership_child = kind == "reading_state" or (
+        kind == "research_content" and any(p["kind"] == "membership" for p in operation["parents"])
+    )
+    if membership_child and not _reading_closure(get_entity, get_receipt, operation, retirement):
         parents_match = False
     if not parents_match:
         return False

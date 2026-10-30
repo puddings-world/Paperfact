@@ -417,9 +417,13 @@ class WorkspaceDialog(QDialog):
                 session.disconnect()
             session = SyncSession(self.service.path, current_path=self.service.current_path)
             owner._workspace_sync_session = session
+        from paper_daily.desktop.continuous_sync import controller_for
+        from paper_daily.desktop.sync_connection_dialog import _background_busy
+
+        automatic = controller_for(owner, session, blocked=lambda: _background_busy(owner))
         dialog = SyncConnectionDialog(session, self, language="zh-TW" if self.zh else "en",
                                       writers_busy=self.writers_busy,
-                                      open_workspace=self._open_workspace)
+                                      open_workspace=self._open_workspace, automatic=automatic)
         self._sync_dialog = dialog
         dialog.finished.connect(self._sync_closed)
         dialog.open()

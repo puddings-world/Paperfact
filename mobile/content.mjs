@@ -1,11 +1,12 @@
 /** Read-only mirror of the closed SQL content contract. No model or file access. */
-import {
-  contentId
-} from './ids.mjs';
+import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
+import { ANNOTATION_FEATURES, validateAnnotations } from './annotations.mjs';
+import { validateClaims } from './claims.mjs';
 const HASH = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 export const CONTENT_FIELDS = {
+  ...Object.fromEntries(ANNOTATION_FEATURES.map(feature => [feature, 'body_json source_hash document_hash written_at'])),
   dive: 'body written_at spec',
   close_reading: 'body spec written_at',
   citation: 'title s2_id year venue citations influential purpose gist verdict why contexts_json doi basis spec edited written_at',
@@ -15,7 +16,10 @@ export const CONTENT_FIELDS = {
   manual_highlight: 'anchor quote created_at',
   ai_highlight: 'analysis_hash anchor quote reason hidden',
   chat: 'role body created_at page anchor',
-  list_survey: 'body papers spec written_at edited'
+  list_survey: 'body papers spec written_at edited',
+  reading_goal: 'body written_at',
+  reference_edge: 'influential',
+  list_pin: 'pinned_at'
 };
 const bytes = value => new TextEncoder().encode(value).length;
 function expect(value) {
@@ -100,14 +104,14 @@ export function validateContent(payload, id, parents) {
   } = payload;
   expect(typeof feature === 'string' && Object.hasOwn(CONTENT_FIELDS, feature));
   closed(scope, ['kind', 'id']);
-  const expected = feature === 'list_survey' ? 'list': 'paper';
+  const expected = ['list_survey', 'reading_goal', 'list_pin'].includes(feature) ? 'list': 'paper';
   expect(scope.kind === expected && typeof scope.id === 'string' && ID.test(scope.id));
   if(expected === 'paper') expect(UUID.test(scope.id));
   text(key, 4096, {
     nullable: false,
     nonempty: true
   });
-  if(['dive', 'close_reading', 'context', 'list_survey'].includes(feature)) expect(key === 'main');
+  if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal', ...ANNOTATION_FEATURES].includes(feature)) expect(key === 'main');
   if(['manual_highlight', 'chat'].includes(feature)) expect(UUID.test(key));
   if(feature === 'resource') {
     expect(/^https?:\/\//i.test(key));
@@ -120,7 +124,17 @@ export function validateContent(payload, id, parents) {
     expect(['http:', 'https:'].includes(url.protocol) && url.hostname && ! url.username && ! url.password);
   }
   expect(id === contentId(scope, feature, key));
-  expect(parents.length === 1 && parents[0].kind === expected && parents[0].id === scope.id);
+  const endpoints = [[expected, scope.id]];
+  if(feature === 'reference_edge') {
+    expect(UUID.test(key) && source === null);
+    if(key !== scope.id) endpoints.push(['paper',key]);
+  }
+  if(feature === 'list_pin') {
+    expect(scope.id !== 'queue' && UUID.test(key) && source === null);
+    endpoints.push(['paper',key],['membership',uuid5Name('paperfact:membership:' + asciiJSON([scope.id,key]))]);
+  }
+  expect(parents.length === endpoints.length && parents.every((p,index) =>
+    p.kind === endpoints[index][0] && p.id === endpoints[index][1]));
   hash(source, !['manual_highlight', 'ai_highlight'].includes(feature));
   closed(data, CONTENT_FIELDS[feature].split(' '), feature === 'chat' ? ['exchange_id', 'reply_to']: []);
   if(feature === 'chat') {
@@ -135,7 +149,7 @@ export function validateContent(payload, id, parents) {
   }
   for(const [name, value] of Object.entries(data)) {
     if(['exchange_id', 'reply_to'].includes(name)) continue;
-    if(['created_at', 'written_at', 'fetched_at', 'checked_at'].includes(name)) stamp(value);
+    if(['created_at', 'written_at', 'fetched_at', 'checked_at', 'pinned_at'].includes(name)) stamp(value);
     else if(['edited', 'hidden', 'influential', 'own'].includes(name)) integer(value, 1);
     else if(['year', 'citations', 'stars', 'papers', 'page', 'alive'].includes(name)) integer(value, name === 'alive' ? 1: 2 ** 31 - 1,
     true);
@@ -143,7 +157,12 @@ export function validateContent(payload, id, parents) {
       validateAnchor(value);
       if(['manual_highlight', 'ai_highlight'].includes(feature)) expect(value !== null);
       if(value?.document_hash !== null && value?.document_hash !== undefined) expect(value.document_hash === source);
-    } else if(name === 'analysis_hash') hash(value);
+    } else if(name === 'document_hash') { hash(value, true); expect(value === source); }
+    else if(name === 'body_json') {
+      if(feature === 'claims') validateClaims(value,data.document_hash);
+      else validateAnnotations(feature, value);
+    }
+    else if(['analysis_hash', 'source_hash'].includes(name)) hash(value);
     else if(name === 'contexts_json') {
       if(value !== null) {
         expect(Array.isArray(value) && value.length <= 200);
@@ -169,6 +188,12 @@ export function validateContent(payload, id, parents) {
     }
     );
   }
+  if(feature === 'claims') expect(data.source_hash.length === 64);
+  if(feature === 'reading_goal') {
+    expect(source === null);
+    text(data.body, 8000, { nullable: false });
+    expect([...data.body].length <= 2000);
+  }
   if(feature === 'chat') expect(['user', 'assistant', 'system'].includes(data.role));
   if(feature === 'ai_highlight') expect(key.startsWith(source + ':'));
   // Python's payload bound uses its default separator spaces, not compact JSON.
@@ -177,7 +202,7 @@ export function validateContent(payload, id, parents) {
   expect(bytes(pythonJSON(payload)) <= 240 * 1024);
 }
 export function projectContent(papers, lists, rows) {
-  const highlights =[];
+  const highlights =[], markInputs = new Map();
   for(const row of rows) {
     const {
       scope,
@@ -188,6 +213,14 @@ export function projectContent(papers, lists, rows) {
     } = row.operation.payload;
     const target =(scope.kind === 'paper' ? papers: lists).find(item => item.id === scope.id);
     if(! target) continue;
+    if(feature === 'list_pin') {
+      const member = target.members?.find(item => item.paper_id === key);
+      if(member) { member.pinned = true; member.pinned_at = data.pinned_at; }
+    }
+    if(feature === 'reference_edge') {
+      target.references ??=[];
+      target.references.push({paper_id:key,influential:data.influential,revision:row.revision});
+    }
     target.research_content ??=[];
     target.research_content.push({
       id: row.operation.entity_id,
@@ -197,12 +230,13 @@ export function projectContent(papers, lists, rows) {
       source_document_hash: source,
       revision: row.revision
     });
-    if(['dive', 'close_reading', 'context', 'list_survey'].includes(feature)) {
+    if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal'].includes(feature)) {
       const kind = {
         dive: 'deep_reading',
         close_reading: 'close_reading',
         context: 'context',
-        list_survey: 'survey'
+        list_survey: 'survey',
+        reading_goal: 'reading_goal'
       }
       [feature];
       target.analysis_sections =(target.analysis_sections ??[]).filter(section => section.kind !== kind);
@@ -220,6 +254,7 @@ export function projectContent(papers, lists, rows) {
         source_document_hash: source
       });
     } else if(['manual_highlight', 'ai_highlight'].includes(feature)) {
+      markInputs.set(row.operation.entity_id, data);
       const anchor = data.anchor;
       highlights.push({
         id: row.operation.entity_id,
@@ -241,7 +276,18 @@ export function projectContent(papers, lists, rows) {
       });
     }
   }
-  return highlights;
+  return highlights.filter(mark => {
+    if(mark.origin !== 'ai') return true;
+    const paper = papers.find(item => item.id === mark.paper_id);
+    const layer = paper?.research_content?.find(item => item.feature === 'highlight_analysis');
+    if(!layer) return !paper?.highlight_analysis_known;
+    // Identical input digests can produce different selections. The current
+    // quote and page must still be present, as well as both source identities.
+    return mark.pdf_hash === layer.data.document_hash &&
+      markInputs.get(mark.id).analysis_hash === layer.data.source_hash &&
+      layer.data.body_json.items.some(item => item.text === mark.quote &&
+        item.page === mark.anchor.p0 + 1 && mark.anchor.p1 === mark.anchor.p0);
+  });
 }
 export function suppressSnapshotContent(papers, lists, heads, receipts, highlights) {
   const coveredHighlights = new Set();
@@ -262,10 +308,23 @@ export function suppressSnapshotContent(papers, lists, heads, receipts, highligh
       dive: 'deep_reading',
       close_reading: 'close_reading',
       context: 'context',
-      list_survey: 'survey'
+      list_survey: 'survey',
+        reading_goal: 'reading_goal'
     }
     [feature];
     if(kind) target.analysis_sections =(target.analysis_sections ??[]).filter(section => section.kind !== kind);
+    if(ANNOTATION_FEATURES.includes(feature)) {
+      target.research_content = (target.research_content ?? []).filter(item => item.feature !== feature);
+      if(feature === 'highlight_analysis') {
+        target.highlight_analysis_known = true;
+        coveredHighlights.add(scope.id + '/ai');
+      }
+    }
+    if(feature === 'list_pin') {
+      const member = target.members?.find(item => item.paper_id === key);
+      if(member) { member.pinned = false; delete member.pinned_at; }
+    }
+    if(feature === 'reference_edge') target.references = (target.references ?? []).filter(item => item.paper_id !== key);
     if(feature === 'citation') target.citations =(target.citations ??[]).filter(citation => citation.ref_key !== key);
     if(['manual_highlight', 'ai_highlight'].includes(feature)) coveredHighlights.add(scope.id + '/' +(feature === 'ai_highlight' ? 'ai': 'manual'));
   }

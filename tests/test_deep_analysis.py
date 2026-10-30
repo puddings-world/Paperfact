@@ -45,7 +45,7 @@ def db(tmp_path, monkeypatch):
 def test_the_night_takes_unread_papers_in_reading_order_that_lack_something(db, monkeypatch):
     done = {"a"}
     monkeypatch.setattr(
-        analyze, "status", lambda conn, pid: EVERYTHING if pid in done else dict(NOTHING)
+        analyze, "status", lambda conn, pid, **kwargs: EVERYTHING if pid in done else dict(NOTHING)
     )
     with store.connect() as conn:
         # a is complete and b already read; c (tonight's, delivered) comes first.
@@ -61,24 +61,32 @@ def test_a_paper_no_source_has_does_not_hold_up_every_night(db, monkeypatch):
         # What reads the text cannot start either; 啟後 needs only the title.
         assert analyze.left(conn, "a") == ["later"]
         store.set_kv(conn, "followups.checked.a", "2026-10-18")
+        assert analyze.left(conn, "a") == ["later"]
+        store.set_kv(conn, "analyze.failed.later.a", "No judged work is available for an overview")
         assert analyze.left(conn, "a") == []
         assert analyze.upcoming(conn, 1) == ["c"]
         # The button asks again regardless.
-        assert analyze.left(conn, "a", retry=True) == ["pdf", "dive", "highlights", "cites"]
+        assert analyze.left(conn, "a", retry=True) == [
+            "pdf", "dive", "highlights", "cites", "later"
+        ]
 
 
 def test_the_explanation_and_the_citations_are_made_side_by_side(db, monkeypatch):
+    from test_research_generation import pdf
+
     from paper_daily import (
         cites,
         closeread,
         dive,
         fetch,
         followups,
-        paper_highlights,
+        reading_annotation_jobs,
         resources,
         venues,
     )
 
+    monkeypatch.setattr(analyze, "PDF_DIR", db)
+    pdf(db / "a.pdf")
     citing = threading.Event()
     seen = {}
     monkeypatch.setattr(analyze, "has_pdf", lambda pid: True)
@@ -102,15 +110,17 @@ def test_the_explanation_and_the_citations_are_made_side_by_side(db, monkeypatch
         followups, "analyse", lambda pid, log: seen.setdefault("later", citing.is_set())
     )
     monkeypatch.setattr(
-        paper_highlights, "prepare_reading",
-        lambda pid: ({"marks": {"mapped": 3, "total": 3}}, "ok"),
+        reading_annotation_jobs, "prepare",
+        lambda database, pid, **kwargs: ({"marks": {"mapped": 3, "total": 3}}, "ok"),
     )
-    from paper_daily import research_questions
+    from paper_daily import research_question_jobs
 
     questions = []
-    monkeypatch.setattr(
-        research_questions, "ensure", lambda pid: (questions.append(pid), "fixture")
-    )
+    def ensure_questions(database, pid, **kwargs):
+        assert database == store.DB_PATH.resolve()
+        questions.append(pid)
+        return [], "fixture"
+    monkeypatch.setattr(research_question_jobs, "ensure", ensure_questions)
     analyze.analyse("a", log=lambda _m: None)
     assert seen == {"side_by_side": True, "later": True}
     assert questions == ["a"]

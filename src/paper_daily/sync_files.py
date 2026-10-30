@@ -101,7 +101,9 @@ def read_json(data):
 
 def file_id(paper_id, feature, slot):
     uuid(paper_id)
-    if feature != "deck" or slot not in ("notes", "guide"):
+    if feature == "original_source":
+        digest(slot)
+    elif feature != "deck" or slot not in ("notes", "guide"):
         raise ValueError("Unsupported research-file feature/slot")
     identity = json.dumps([paper_id, feature, slot], separators=(",", ":"))
     return str(uuid5(NAMESPACE_URL, "paperfact:research-file:" + identity))
@@ -180,6 +182,11 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     digest(payload["source_document_hash"], nullable=True)
     validate_input_versions(payload["input_versions"])
     closed(payload["body"], {"sha256", "size", "media_type"})
+    if payload["feature"] == "original_source":
+        from paper_daily.sync_source_files import validate_manifest
+
+        validate_manifest(payload)
+        return
     rows = payload["assets"]
     if not isinstance(rows, list) or len(rows) > 256:
         raise ValueError("Artifact supports at most 256 assets")
@@ -252,6 +259,10 @@ def validate_closure(payload, read_blob):
             ):
                 raise ValueError("Artifact closure bytes do not match their manifest")
             blobs[key] = data
+    if payload["feature"] == "original_source":
+        from paper_daily.sync_source_files import validate_source_closure
+
+        return validate_source_closure(payload, blobs)
     from paper_daily.sync_deck_files import validate_deck_closure
 
     return validate_deck_closure(payload, blobs)

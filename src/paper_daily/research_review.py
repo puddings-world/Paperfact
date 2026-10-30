@@ -57,6 +57,22 @@ def digest(value):
     return hashlib.sha256(encode(value).encode("utf-8")).hexdigest()
 
 
+SOURCE_AWARE_REASON = "Claim sets require source-aware review"
+
+
+def _source_aware_required(view):
+    scope = view.get("scope") or {}
+    retained = view.get("retained")
+    return (scope.get("table") == "paper_claim_sets"
+            or (view.get("origin") == "remote" and isinstance(retained, dict)
+                and retained.get("feature") == "claims"))
+
+
+def _source_aware_block(view):
+    view.update(apply=False, editable=False, reason=SOURCE_AWARE_REASON)
+    return view
+
+
 def _tables(conn):
     return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
@@ -340,6 +356,20 @@ class ResearchReview:
                     source_hash=(original["document"] or {}).get("sha256"),
                     scope={"table": context.table, "owner_id": context.owner_id},
                 )
+                if _source_aware_required(view):
+                    _source_aware_block(view)
+                    self._check(conn)
+                    serialized = encode(view)
+                    return Preview(serialized, hmac.new(
+                        self._seal_key, serialized.encode(), "sha256").hexdigest())
+                from paper_daily import research_annotation_review
+
+                if research_annotation_review.handles(record):
+                    view.update(research_annotation_review.preview(conn, record))
+                    self._check(conn)
+                    serialized = encode(view)
+                    return Preview(serialized, hmac.new(
+                        self._seal_key, serialized.encode(), "sha256").hexdigest())
                 try:
                     displayed = generation.begin_generation(
                         conn, table=context.table, owner_id=context.owner_id, input_reader="target"
@@ -439,14 +469,30 @@ class ResearchReview:
                     and parents_current
                     and parents_same
                     and (state["state"] or {}).get("active", True)
+                    and not (
+                        incoming["entity_type"] == "research_content"
+                        and incoming["payload"].get("feature") in {
+                            "highlight_analysis", "ai_highlight"
+                        }
+                    )
                 )
                 view.update(
                     apply=capable,
                     editable=capable,
                     reason=""
                     if capable
+                    else "Highlight conflicts require complete grouped source review"
+                    if incoming["entity_type"] == "research_content"
+                    and incoming["payload"].get("feature") in {"highlight_analysis", "ai_highlight"}
                     else "Conflict needs synchronization or an explicit supported target choice",
                 )
+                if _source_aware_required(view):
+                    _source_aware_block(view)
+                if (incoming["entity_type"] == "research_content"
+                        and incoming["payload"].get("feature") == "highlight_analysis"):
+                    from paper_daily import research_annotation_review
+
+                    view.update(research_annotation_review.remote_preview(conn, state))
             elif origin == "capture":
                 value = json.loads(record["content"])
                 original, current, retained = _capture_preview(conn, value)
@@ -509,7 +555,10 @@ class ResearchReview:
 
     def targets(self, preview, *, after="", limit=30):
         data = self._verify_preview(preview)
-        if data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}:
+        from paper_daily.research_annotation_review import remote_group
+
+        if (data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}
+                and not remote_group(data)):
             raise ValueError("Explicit target selection is not available for this origin")
         if type(limit) is not int or not 1 <= limit <= 100 or not isinstance(after, str):
             raise ValueError("Invalid target page")
@@ -520,11 +569,17 @@ class ResearchReview:
         )
         root, title = ("papers", "title") if kind == "paper" else ("lists", "name")
         with closing(self._connect()) as conn:
-            rows = conn.execute(
-                f'SELECT id,substr("{title}",1,200) AS title FROM "{root}" '
-                "WHERE id>? ORDER BY id LIMIT ?",
-                (after, limit + 1),
-            ).fetchall()
+            if remote_group(data):
+                rows = conn.execute(
+                    'SELECT id,substr(title,1,200) AS title FROM papers WHERE id=? AND id>?',
+                    (data["scope"]["owner_id"], after),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f'SELECT id,substr("{title}",1,200) AS title FROM "{root}" '
+                    "WHERE id>? ORDER BY id LIMIT ?",
+                    (after, limit + 1),
+                ).fetchall()
         items = [dict(row) for row in rows[:limit]]
         return {"items": items, "next": items[-1]["id"] if len(rows) > limit else None}
 
@@ -535,7 +590,15 @@ class ResearchReview:
         displayed target row and its new local epoch are rechecked on application.
         """
         data = self._verify_preview(preview)
-        if data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}:
+        if _source_aware_required(data):
+            _source_aware_block(data)
+            serialized = encode(data)
+            return Preview(serialized, hmac.new(
+                self._seal_key, serialized.encode(), "sha256").hexdigest())
+        from paper_daily.research_annotation_review import remote_group
+
+        if (data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}
+                and not remote_group(data)):
             raise ValueError("Explicit target selection is not available for this origin")
         if not isinstance(target_id, str) or not target_id:
             raise ValueError("Select a research target")
@@ -544,6 +607,17 @@ class ResearchReview:
             record = self._record(conn, data["origin"], data["id"])
             if digest(record) != data["record_hash"]:
                 raise ValueError("Retained result changed; reload it first")
+            if remote_group(data):
+                from paper_daily import research_annotation_review
+
+                state = conn._capture_client.conflict_observation_in(conn, int(data["id"]))
+                data.update(research_annotation_review.remote_preview(
+                    conn, state, owner=target_id, confirmed=True))
+                data["resume_state"] = "ready"
+                self._check(conn)
+                serialized = encode(data)
+                return Preview(serialized, hmac.new(
+                    self._seal_key, serialized.encode(), "sha256").hexdigest())
             if data["origin"] in COMPOUND_ORIGINS:
                 from paper_daily import research_compound_review
 
@@ -562,6 +636,16 @@ class ResearchReview:
                 return Preview(
                     serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
                 )
+            from paper_daily import research_annotation_review
+
+            if research_annotation_review.handles(record):
+                data.update(research_annotation_review.preview(
+                    conn, record, owner=target_id, confirmed=True))
+                data["resume_state"] = "ready"
+                self._check(conn)
+                serialized = encode(data)
+                return Preview(serialized, hmac.new(
+                    self._seal_key, serialized.encode(), "sha256").hexdigest())
             original = generation.GenerationContext(record["context_json"])
             table = original.table
             kind, column, _feature, _reader = generation.REGISTRY[table]
@@ -653,6 +737,8 @@ class ResearchReview:
                 return result
             if data.get("resume_state", "ready") != "ready":
                 raise ValueError("Saved draft needs refreshed review before application")
+            if _source_aware_required(data):
+                raise ValueError(SOURCE_AWARE_REASON)
             if not data["apply"]:
                 raise ValueError(data["reason"])
             if data["requires_confirmation"] and confirm_target is not True:
@@ -673,6 +759,19 @@ class ResearchReview:
                 research_compound_review.apply_in(conn, record, data, receipt)
                 return result
             if data["origin"] in {"generation", "sidecar"}:
+                from paper_daily import research_annotation_review
+
+                if research_annotation_review.handles(record):
+                    if body is not None:
+                        raise ValueError("Highlights require typed grouped application")
+                    result = {"decision": "applied", "operation_id": None}
+
+                    def receipt():
+                        self._receipt(conn, request_id, fingerprint, data, result)
+                        self._check(conn)
+
+                    research_annotation_review.apply_in(conn, record, data, receipt)
+                    return result
                 expected = generation.GenerationContext(data["expected"])
                 kind = generation.REGISTRY[expected.table][0]
                 if (
@@ -729,7 +828,25 @@ class ResearchReview:
                     conn.commit()
                     return result
             if data["origin"] == "remote":
+                from paper_daily import research_annotation_review
+
+                if research_annotation_review.remote_group(data):
+                    if body is not None:
+                        raise ValueError("Highlights require typed grouped application")
+                    result = {"decision": "applied", "operation_id": None}
+
+                    def receipt(operation_id):
+                        result["operation_id"] = operation_id
+                        self._receipt(conn, request_id, fingerprint, data, result)
+                        self._check(conn)
+
+                    research_annotation_review.apply_remote_in(conn, data, request_id, receipt)
+                    return result
                 payload = json.loads(encode(data["retained"]))
+                if data["scope"]["kind"] == "research_content" and payload.get("feature") in {
+                    "highlight_analysis", "ai_highlight"
+                }:
+                    raise ValueError("Highlight conflicts require complete grouped source review")
                 if body is not None:
                     target = payload.get("data", payload)
                     field = "body" if "body" in target else "summary"
@@ -802,7 +919,8 @@ class ResearchReview:
             "format": "paperfact.review-text.v1",
             "origin": data["origin"],
             "source_document_hash": data["source_hash"],
-            "content": _export_content(data["retained"]),
+            "content": (_claim_export(data["retained"]) if _source_aware_required(data)
+                        else _export_content(data["retained"])),
         }
         if body is not None:
             if not isinstance(body, str):
@@ -818,6 +936,27 @@ class ResearchReview:
         # Exclusive create: never overwrite a research file or an existing export.
         with Path(destination).open("x", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
+
+
+def _claim_export(value):
+    """Export only validated readable claim text, never report/source provenance."""
+    from paper_daily import annotation_content
+
+    row = value.get("data", value) if isinstance(value, dict) else {}
+    raw = row.get("body_json") if isinstance(row, dict) else None
+    if isinstance(raw, dict):
+        raw = encode(raw)
+    try:
+        body = annotation_content.decode("claims", raw)
+    except (ValueError, TypeError, KeyError):
+        return {"unavailable": "Claim content could not be validated for readable export"}
+    return {"claims": [
+        {"text": claim["text"],
+         "judgment": {"status": claim["judgment"]["status"],
+                      "reason": claim["judgment"]["reason"]},
+         "passages": [{"quote": item["quote"], "location": item["location"]["state"]}
+                      for item in claim["passages"]]}
+        for claim in body["report"]["claims"]]}
 
 
 def _export_content(value):
@@ -848,9 +987,16 @@ def _export_content(value):
         "work_id",
     }
     result = {key: value[key] for key in keys & value.keys() if isinstance(value[key], str)}
-    for key in ("data", "payload", "slides", "new", "old", "row", "rows", "puts", "deletes"):
+    for key in ("data", "payload", "slides", "new", "old", "row", "rows", "puts", "deletes",
+                "analysis", "marks", "unmatched", "body_json", "items", "links"):
         if key in value:
-            result[key] = _export_content(value[key])
+            nested = value[key]
+            if key == "body_json" and isinstance(nested, str):
+                try:
+                    nested = json.loads(nested)
+                except ValueError:
+                    nested = None
+            result[key] = _export_content(nested)
     return result
 
 

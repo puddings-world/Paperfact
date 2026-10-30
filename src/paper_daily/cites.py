@@ -271,6 +271,7 @@ def _analyse(context, text, limit, log):
         f"{len(by_doi)} resolved by DOI, {len(refs)} on record at S2"
     )
 
+    sent = sorted(set(list(ctx)[:limit] + [key for key in numbered if key not in ctx][:120]))
     prompt = _pack(row, refs, ctx, numbered, limit)
     context = compound.with_prompt(context, prompt)
     body, reason = llm.complete(prompt, system=INSTRUCTIONS, timeout=900, task="citations")
@@ -281,7 +282,7 @@ def _analyse(context, text, limit, log):
     body = re.sub(r"^```(?:json)?\s*|\s*```$", "", body.strip())
     start, end = body.find("["), body.rfind("]")
     if start == -1 or end == -1:
-        log(f"  no JSON array in the reply: {body[:120]}")
+        log("  no JSON array in the reply")
         return 0
     try:
         entries = json.loads(body[start : end + 1])
@@ -299,7 +300,10 @@ def _analyse(context, text, limit, log):
         key = str(e["key"]).strip().strip("[]").strip()
         if key.isdigit():
             key = str(int(key))
-        if not key or originals.get(key, {}).get("edited"):
+        if (
+            key not in sent or originals.get(key, {}).get("edited")
+            or not compound.citation_answered(e)
+        ):
             continue
         known = numbered.get(key) or {}
         title = known.get("title") or e.get("title")
@@ -327,12 +331,109 @@ def _analyse(context, text, limit, log):
         )
     if not puts:
         return 0
-    deletes = [key for key, old in originals.items() if key not in puts and not old.get("edited")]
-    result = compound.publish(context, puts=list(puts.values()), deletes=deletes)
+    edited = {key for key, old in originals.items()
+              if old.get("edited") and compound.citation_answered(old)}
+    answered = sorted((set(puts) | edited) & set(sent))
+    whole = len(answered) * 5 >= len(sent) * 4
+    deletes = [
+        key for key, old in originals.items()
+        if whole and key not in puts and not old.get("edited")
+    ]
+    result = compound.publish(
+        context, puts=list(puts.values()), deletes=deletes,
+        completion={"kind": "citation_coverage", "sent": sent, "answered": answered},
+    )
     if result.status != "accepted":
         log(f"{result.reason}; generated result retained: {result.candidate_id}")
         return 0
+    if not whole:
+        log(f"Partial citation analysis: {len(answered)}/{len(sent)} references answered")
     return len(puts)
+
+
+def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
+    """Read bounded local completion evidence; unknown legacy rows stay unknown.
+
+    Source verification is opt-in for worker callers only. Synchronous metadata
+    callers never hash a PDF or claim current-source completeness. Verification
+    reuses the existing bounded exact-byte check, not a path/mtime cache.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+    from paper_daily.research_lifecycle import parent_lifecycle
+
+    unknown = {"state": "unknown", "sent": None, "answered": None,
+               "reason": "Citation coverage has not been verified for the current source"}
+    try:
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_compound_requests'"
+        ).fetchone():
+            return unknown
+        found = conn.execute(
+            "SELECT request_id,context_json,mutations_json,status,candidate_id,reason "
+            "FROM research_compound_requests WHERE status='accepted' "
+            "AND length(context_json)<=? AND length(mutations_json)<=? "
+            "AND CASE WHEN json_valid(context_json) THEN "
+            "json_extract(context_json,'$.phase')='citations' AND "
+            "json_extract(context_json,'$.owner_id')=? ELSE 0 END ORDER BY rowid DESC LIMIT 1",
+            (compound.MAX_BYTES, compound.MAX_BYTES, paper_id),
+        ).fetchone()
+        if found is None:
+            return unknown
+        record = dict(zip(("request_id", "context_json", "mutations_json", "status",
+                           "candidate_id", "reason"), found, strict=True))
+        compound.validate_request_record(record)
+        data, mutations = json.loads(record["context_json"]), json.loads(record["mutations_json"])
+        evidence = mutations["completion"]
+        if not isinstance(evidence, dict) or evidence.get("kind") != "citation_coverage":
+            return unknown
+        context = compound.Context(record["context_json"], _connection=conn)
+        path = next(
+            (row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"), ""
+        )
+        if (
+            (str(Path(path).resolve()) if path else None) != data["db_path"]
+            or (generation._identity(path) if path else None) != data["database_identity"]
+            or generation._binding(conn) != data["binding"]
+            or parent_lifecycle(conn, "paper", paper_id) != data["parent_lifecycle"]
+            or compound._paper(conn, paper_id, "citations") != data["paper"]
+        ):
+            return unknown
+        if data["parent"] is not None:
+            from paper_daily import sync_capture
+
+            parent = sync_capture.observe(conn, "paper", data["portable"])
+            if any(parent[key] != data["parent"][key] for key in ("incarnation", "active")):
+                return unknown
+        if not verify_source:
+            return {**unknown, "state": "unverified", "reason": "Checking citation source coverage"}
+        source = data["document"] or data["text_source"]
+        if not source or not source.get("sha256") or not compound._input_current(context):
+            return unknown
+        saved = {row["ref_key"]: dict(row) for row in conn.execute(
+            "SELECT * FROM cites WHERE paper_id=? LIMIT ?", (paper_id, compound.MAX_ROWS + 1)
+        )}
+        expected_rows = {row["ref_key"]: row for row in data["rows"]}
+        expected_rows.update({row["ref_key"]: row for row in mutations["puts"]})
+        if len(saved) > compound.MAX_ROWS or any(
+            saved.get(key) != expected_rows.get(key) for key in evidence["answered"]
+        ):
+            return unknown
+        sent, answered = len(evidence["sent"]), len(evidence["answered"])
+        if not compound.scope_current(context):
+            return unknown
+        whole = answered * 5 >= sent * 4
+        return {"state": "complete" if whole else "partial", "sent": sent, "answered": answered,
+                "reason": "" if whole else f"Citation analysis covers {answered}/{sent} references"}
+    except (OSError, ValueError, TypeError, KeyError, sqlite3.DatabaseError):
+        return unknown
+
+
+def complete(conn, paper_id: str, *, verify_source: bool = False) -> bool:
+    return coverage(conn, paper_id, verify_source=verify_source)["state"] == "complete"
 
 
 def _s2_match(refs: list[dict], title: str, same: Callable[[str, str], bool]) -> dict:

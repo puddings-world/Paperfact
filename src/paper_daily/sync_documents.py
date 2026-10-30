@@ -200,10 +200,12 @@ def write_document(conn, operation):
 def _identity(path):
     for entry in (path, *path.parents):
         _no_link(entry)
-    info = path.stat()
+    path.stat()  # Preserve missing-file semantics before the regular-file guard.
     if not path.is_file():
         raise BlobError("Document object must be a regular file")
-    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    from paper_daily.file_change import version
+
+    return version(path)
 
 
 @dataclass(frozen=True, init=False)

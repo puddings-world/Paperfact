@@ -69,12 +69,12 @@ Log "venues"
 Log "resources"
 & $py -m paper_daily resources --list all 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
 Log "cites-ahead --rewrite"
-& $py -m paper_daily cites-ahead 2 --rewrite 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
+& $py -m paper_daily cites-ahead 2 --rewrite --scheduled 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
 
 # Then bring older dives onto the current specification, in queue order. A few a
 # night means a spec change reaches the papers about to be read without a marathon.
 Log "dive-ahead --rewrite"
-& $py -m paper_daily dive-ahead 6 --rewrite --jobs 2 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
+& $py -m paper_daily dive-ahead 6 --rewrite --jobs 2 --scheduled 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
 
 # All AI generation above uses the selected profile through paper_daily.llm.
 # /paper-today remains available manually in Claude Code for agent-driven discussion.

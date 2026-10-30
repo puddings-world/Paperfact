@@ -334,8 +334,10 @@ class SyncClient:
                 raise ValueError("A child deletion needs its known parent identities")
             requested = []
         elif kind == "research_content" and action == "put":
-            scope = payload.get("scope", {})
-            requested = [(scope.get("kind"), scope.get("id"))]
+            from paper_daily.sync_content import parent_identities, validate_payload
+
+            validate_payload(payload, entity_id=entity_id)
+            requested = parent_identities(payload)
         elif kind == "list_order" and action == "put":
             requested = [("list", entity_id)]
         elif action == "delete":
@@ -487,14 +489,14 @@ class SyncClient:
                 raise ValueError("Content retirement no longer matches its conflict")
             return
         graph, _, _ = self._optimistic_graph(conn)
-        parent = operation["parents"][0]
-        current = graph.get((parent["kind"], parent["id"]))
-        if (
-            current is None
-            or not current["active"]
-            or current["incarnation"] != parent["incarnation"]
-        ):
-            raise ValueError("Research content requires its exact active parent")
+        for parent in operation["parents"]:
+            current = graph.get((parent["kind"], parent["id"]))
+            if (
+                current is None
+                or not current["active"]
+                or current["incarnation"] != parent["incarnation"]
+            ):
+                raise ValueError("Research content requires every exact active parent")
 
     def _guard_document_parent(self, conn, operation):
         if operation["version"] != 2 or operation["entity_type"] not in (
@@ -618,7 +620,10 @@ class SyncClient:
         return parents
 
     def _guard_reading_parents(self, conn, operation):
-        if operation["version"] != 2 or operation["entity_type"] != "reading_state":
+        pin = operation["entity_type"] == "research_content" and any(
+            p["kind"] == "membership" for p in operation.get("parents", [])
+        )
+        if operation["version"] != 2 or (operation["entity_type"] != "reading_state" and not pin):
             return
         if operation["action"] == "delete" and operation.get("resolution_of"):
             from paper_daily.sync_graph import check_preconditions
@@ -636,7 +641,12 @@ class SyncClient:
                 raise ValueError("Reading state retirement no longer matches its conflict")
             return
         state, _, _ = self._optimistic_graph(conn)
-        parents = self._reading_parents(state, operation["entity_id"])
+        member_id = (
+            next(p["id"] for p in operation["parents"] if p["kind"] == "membership")
+            if pin
+            else operation["entity_id"]
+        )
+        parents = self._reading_parents(state, member_id)
         if self._parent_keys(parents) != self._parent_keys(operation["parents"]):
             raise ValueError("Reading state parent closure differs from its membership")
 

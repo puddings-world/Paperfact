@@ -38,6 +38,7 @@ desktop.ini
 # Claude
 .claude/cache/
 .claude/debug/
+.claude/worktrees/
 
 # paper-daily local data (DB, PDFs, extracted text, daily briefs)
 /data/

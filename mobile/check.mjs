@@ -30,4 +30,12 @@ if(pythonIndex >= 0) {
     ['chat-service-check.mjs', process.argv[pythonIndex + 1], ...(coreIndex >= 0 ? [process.argv[coreIndex + 1]]: [])],
     {cwd, stdio: 'inherit'});
   if(chat.status !== 0) process.exit(chat.status ?? 1);
+  const claims = spawnSync(process.execPath,
+    ['claim-service-check.mjs', process.argv[pythonIndex + 1], ...(coreIndex >= 0 ? [process.argv[coreIndex + 1]]: [])],
+    {cwd, stdio: 'inherit'});
+  if(claims.status !== 0) process.exit(claims.status ?? 1);
+  const sources = spawnSync(process.execPath,
+    ['source-service-check.mjs', process.argv[pythonIndex + 1], ...(coreIndex >= 0 ? [process.argv[coreIndex + 1]]: [])],
+    {cwd, stdio: 'inherit'});
+  if(sources.status !== 0) process.exit(sources.status ?? 1);
 }

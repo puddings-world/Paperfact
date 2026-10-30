@@ -49,6 +49,11 @@ class FakeService:
             return self.hooks['plan'](ticket)
         return copy.deepcopy(self.value)
 
+    def verification(self, papers, ticket=None):
+        # Test seam changed from a stateless check to an explicit verification
+        # session; the same visible-state and cancellation assertions still apply.
+        return SimpleNamespace(advance=lambda current, **kwargs: self.status(papers, current))
+
     def status(self, papers, ticket):
         self.calls.append(('verify', tuple(papers)))
         ticket.check()

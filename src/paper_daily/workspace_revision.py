@@ -17,8 +17,13 @@ CREATE INDEX IF NOT EXISTS idx_list_papers_paper ON list_papers(paper_id);
 # These identifiers are fixed source constants, never caller-supplied SQL.
 for table, key in (
     ("lists", None),
+    ("list_reading_goals", None),
     ("list_papers", None),
     ("papers", "id"),
+    ("paper_claim_sets", "paper_id"),
+    ("paper_research_questions", "paper_id"),
+    ("paper_highlight_analysis", "paper_id"),
+    ("paper_reading_links", "paper_id"),
     ("dives", "paper_id"),
     ("close_readings", "paper_id"),
     ("cites", "paper_id"),

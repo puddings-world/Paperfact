@@ -18,7 +18,11 @@ Receiving a peer's analysis must not invoke an AI provider to reconstruct it.
 | `reading_links` | `paper_reading_links` | Highlight index, explanation section, explanation, analysis digest |
 | `research_questions` | `paper_research_questions` | Up to six questions, reasons, exact supporting quotes and pages |
 
-Each table has `paper_id`, `body_json`, `source_hash` and `written_at`. The outer
+Each table has `paper_id`, `body_json`, `source_hash`, nullable `document_hash`
+and `written_at`. The local `document_hash` survives ordinary bundle exports and
+must equal the outer sync record's source hash; unknown legacy provenance stays
+null. Keeping it only in private job receipts or sync metadata would lose source
+identity when an unbound workspace exports its business rows. The outer
 sync record's `source_document_hash` identifies the verified PDF bytes. The inner
 `source_hash` identifies the complete analysis input; these hashes are not
 interchangeable. Missing legacy PDF provenance remains explicitly unknown.
@@ -51,6 +55,16 @@ Linked explanation generation is a separate dependency phase with truthful parti
 status. A direct analysis-only helper retains its explicitly narrower API contract.
 Manual highlight add/remove must carry the displayed document version and parent
 epoch through save; it must not resolve today's global paper at completion.
+
+## Retained highlight review
+
+The typed grouped adapter is documented in [annotation review](../annotation-review.md).
+Generated requests and failed-publication sidecars use the existing sealed review
+API. Analysis plus verified located marks share one displayed-base transaction;
+text editing and remote single-row application are disabled for this group.
+Manual marks remain independent, hidden preferences are observed inputs, and
+restoring deleted content requires explicit target confirmation. Missing exact
+PDF bytes never permit an anchor-bearing group to apply to a replacement.
 
 ## Compatibility and migration
 

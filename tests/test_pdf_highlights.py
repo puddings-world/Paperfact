@@ -253,11 +253,25 @@ def test_missing_ai_is_visible_in_reader_and_retry_does_not_force_regeneration(r
 
     widget, app, _path = reader
     pane = widget.presentation_pane
-    pane.paper_id = widget.paper.id
+    # Analysis requires a real loaded research owner, not only a legacy PDF widget.
+    with store.connect() as conn:
+        store.upsert_papers(conn, [{
+            "id": widget.paper.id, "title": "Test paper", "venue": "Fixture",
+            "year": 2026, "source": "fixture",
+        }])
+    from paper_daily.desktop import ai_access, highlight_actions
+
+    highlight_actions.capture(widget, widget.paper, store.DB_PATH)
+    pane.load(widget.paper.id, "Test paper")
+    assert pane._annotation_owner is not None
+    requested = []
+    monkeypatch.setattr(ai_access, "login", lambda *a: requested.append(a[1]))
+    monkeypatch.setattr(llm, "capture_connections", lambda: {})
     monkeypatch.setattr(paper_highlights, "cached", lambda *a: None)
     monkeypatch.setattr(llm, "available", lambda **kw: False)
     widget.prepare_highlights.click()
     assert "AI 設定" in widget.highlight_status.text()
+    assert requested == ["paper_highlights"]
     calls = []
     monkeypatch.setattr(pane, "_analyze_highlights", lambda **kw: calls.append(kw))
     widget.prepare_highlights.click()

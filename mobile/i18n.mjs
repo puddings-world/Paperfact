@@ -1,8 +1,10 @@
 export const messages = {
   en: {
+    pinned: 'Pinned',
     brand: 'Paperfact',
     tagline: 'Your research, within reach.',
     library: 'Library',
+    readingGoal: 'Research purpose',
     allLists: 'All lists',
     papers: 'papers',
     empty: 'Your library is ready for a new collection.',
@@ -110,6 +112,8 @@ export const messages = {
     pairingGate: 'Account login and pairing are integration gates, not shipped features.'
   },
   'zh-TW': {
+    pinned: '\u5df2\u91d8\u9078',
+    readingGoal: '研究目的',
     brand: 'Paperfact',
     tagline: '研究隨行，思路不斷。',
     library: '研究清單',
@@ -234,6 +238,8 @@ Object.assign(
 messages.en,
 {
   research_chat: 'Research conversation',
+  research_highlight_analysis: 'Original highlights', research_reading_links: 'Explanation links',
+  research_research_questions: 'Suggested research questions', annotationQuote: 'Original quote', annotationPage: 'Page',
   research_resource: 'Research resource',
   research_followup: 'Related work',
   importedSnapshot: 'Imported snapshot passages',
@@ -246,6 +252,8 @@ Object.assign(
 messages['zh-TW'],
 {
   research_chat: '研究對話',
+  research_highlight_analysis: '原文重點', research_reading_links: '講解與原文連結',
+  research_research_questions: '本文建議問題', annotationQuote: '原文依據', annotationPage: '頁碼',
   research_resource: '研究資源',
   research_followup: '相關研究',
   importedSnapshot: '匯入快照的重點句',
@@ -285,4 +293,30 @@ Object.assign(messages['zh-TW'], {
   chatQuestion: '問題', chatAnswer: '回答',
   chatOrphan: '此裝置尚無對應的問題內容。',
   chatPending: '這個問題尚未收到回答。'
+});
+
+Object.assign(messages.en, {
+  research_claims:'Claims and quoted evidence',
+  claimSnapshotScope:'Quote locations were checked against the original snapshot. Current PDF availability is separate.',
+  claimNoSemanticValidation:'Semantic support has not been verified. The judgments below are caller proposals.',
+  claimJudgment_supported:'Proposed judgment: supported', claimJudgment_inferred:'Proposed judgment: inferred',
+  claimJudgment_unresolved:'Proposed judgment: unresolved', claimEmpty:'No claims are included in this saved set.',
+  claimNoPassages:'No quoted passage was proposed for this claim.',
+  claimLocation_located:'Quote located in the original snapshot', claimLocation_missing:'Quote not located',
+  claimLocation_ambiguous:'Multiple possible quote locations', claimLocation_invalid_page:'Proposed page is invalid',
+  claimLocation_invalid_anchor:'Proposed location is invalid',
+  claimCitationUnresolved:'Proposed citation identity has not been resolved through a trusted mapping.',
+  unsupported_claim_set:'The saved claim format or source binding could not be validated.'
+});
+Object.assign(messages['zh-TW'], {
+  research_claims:'研究主張與引文依據',
+  claimSnapshotScope:'引句位置只針對原始快照核對；目前 PDF 是否可用需另外確認。',
+  claimNoSemanticValidation:'尚未驗證語意支持程度；下列判斷為提出者的建議。',
+  claimJudgment_supported:'建議判斷：有支持', claimJudgment_inferred:'建議判斷：推論',
+  claimJudgment_unresolved:'建議判斷：未釐清', claimEmpty:'這份已儲存資料組未包含研究主張。',
+  claimNoPassages:'此主張尚未提出引文依據。', claimLocation_located:'已在原始快照定位引句',
+  claimLocation_missing:'未定位到引句', claimLocation_ambiguous:'引句有多個可能位置',
+  claimLocation_invalid_page:'建議頁碼無效', claimLocation_invalid_anchor:'建議位置無效',
+  claimCitationUnresolved:'建議的引用身分尚未透過可信對應核實。',
+  unsupported_claim_set:'已儲存的主張格式或來源綁定未通過驗證。'
 });

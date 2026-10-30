@@ -102,7 +102,9 @@ def _lineage_context(conn: sqlite3.Connection, paper_id: str) -> str:
 
     lines = []
     if ancestors:
-        lines.append("**Builds on (already in the corpus):**")
+        lines.append(
+            "**References in this corpus (citation links; relationship not established):**"
+        )
         for a in ancestors:
             mark = " [read]" if a["state"] == "read" else ""
             lines.append(f"- {a['title']} ({a['venue']} {a['year']}){mark}")
@@ -113,10 +115,14 @@ def _lineage_context(conn: sqlite3.Connection, paper_id: str) -> str:
                 lines.append(f"  - 當時的結論:{gist}")
     if descendants:
         lines.append("")
-        lines.append("**Later work in the corpus that cites it:**")
+        lines.append("**Works in this corpus citing this paper (citation links only):**")
         for d in descendants:
             lines.append(f"- {d['title']} ({d['venue']} {d['year']})")
-    return "\n".join(lines) or "_No in-corpus lineage recorded yet._"
+    if lines:
+        lines.append("")
+        lines.append("These are recorded citations, not endorsement, dependence, "
+                     "or historical influence.")
+    return "\n".join(lines) or "_No in-corpus citation links recorded yet._"
 
 
 def _recent_reading(conn: sqlite3.Connection, limit: int = 8) -> str:

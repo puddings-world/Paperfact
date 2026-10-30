@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const annotationFixtures = JSON.parse(readFileSync(new URL('../../tests/fixtures/reading-annotations.json', import.meta.url)));
+const claimFixture = JSON.parse(readFileSync(new URL('../../tests/fixtures/claim-sets.json', import.meta.url))).find(item => item.valid).body;
 import {
   CONTENT_FIELDS,
   validateContent,
@@ -7,7 +10,7 @@ import {
 } from '../content.mjs';
 import {
   asciiJSON,
-  contentId
+  contentId, uuid5Name
 } from '../ids.mjs';
 import {
   MemoryStore
@@ -30,13 +33,13 @@ import {
 const hash = 'a'.repeat(64), stamp = '2026-01-01T00:00:00+00:00';
 function payload(feature) {
   const scope = {
-    kind: feature === 'list_survey' ? 'list': 'paper',
-    id: feature === 'list_survey' ? 'demo-list': PAPER
+    kind: ['list_survey', 'reading_goal', 'list_pin'].includes(feature) ? 'list': 'paper',
+    id: ['list_survey', 'reading_goal', 'list_pin'].includes(feature) ? 'demo-list': PAPER
   };
-  const key =['manual_highlight', 'chat'].includes(feature) ? '00000000-0000-4000-8000-000000000002': feature === 'ai_highlight' ? hash + ':claim': feature === 'resource' ? 'https://example.org/code': feature === 'citation' ? '引用🚀': feature === 'followup' ? 'work-1': 'main';
+  const key = ['reference_edge','list_pin'].includes(feature) ? PAPER : ['manual_highlight', 'chat'].includes(feature) ? '00000000-0000-4000-8000-000000000002': feature === 'ai_highlight' ? hash + ':claim': feature === 'resource' ? 'https://example.org/code': feature === 'citation' ? '引用🚀': feature === 'followup' ? 'work-1': 'main';
   const data = {};
   for(const field of CONTENT_FIELDS[feature].split(' ')) {
-    data[field] =['created_at', 'written_at', 'fetched_at', 'checked_at'].includes(field) ? stamp: ['edited',
+    data[field] =['created_at', 'written_at', 'fetched_at', 'checked_at', 'pinned_at'].includes(field) ? stamp: ['edited',
     'hidden', 'influential', 'own'].includes(field) ? 0: field === 'anchor' ? {
       p0: 0,
       o0: 2,
@@ -47,12 +50,15 @@ function payload(feature) {
     : field === 'analysis_hash' ? hash: field === 'role' ? 'assistant': ['body', 'quote', 'kind', 'source',
     'reason'].includes(field) ? 'Fixture research': null;
   }
+  const annotation = annotationFixtures.find(item => item.valid && item.feature === feature);
+  if(annotation) { data.body_json = structuredClone(annotation.body); data.source_hash = hash; data.document_hash = hash; }
+  if(feature === 'claims') { data.body_json=structuredClone(claimFixture); data.source_hash=hash; data.document_hash=claimFixture.report.source.document_hash; }
   return {
     scope,
     feature,
     key,
     data,
-    source_document_hash: hash
+    source_document_hash: feature === 'claims' ? data.document_hash : ['reading_goal','reference_edge','list_pin'].includes(feature) ? null : hash
   };
 }
 test(
@@ -82,7 +88,7 @@ async() => {
   item,
   {
     operationId: 'content-created',
-    parents: [ref(item.scope.kind, item.scope.id)]
+    parents: feature === 'list_pin' ? [ref('list',item.scope.id),ref('paper',PAPER),ref('membership',uuid5Name('paperfact:membership:' + JSON.stringify([item.scope.id,PAPER])))] : [ref(item.scope.kind, item.scope.id)]
   }
   );
   validateOperation(op, 'demo-workspace');
@@ -101,7 +107,7 @@ async() => {
   const view = projection(await store.read()),
   scope =(item.scope.kind === 'paper' ? view.papers: view.lists).find(x => x.id === item.scope.id);
   assert.deepEqual(scope.research_content[0].data, item.data);
-  assert.equal(scope.research_content[0].source_document_hash, hash);
+  assert.equal(scope.research_content[0].source_document_hash, item.source_document_hash);
 }
 );
 test(
@@ -259,3 +265,57 @@ async() => {
   assert.equal(state.readProjection.highlights[0].quote, imported.highlights[0].quote);
 }
 );
+
+
+for(const feature of ['highlight_analysis','reading_links','research_questions']) {
+  test(`annotation ${feature} preserves known or unknown PDF provenance explicitly`,()=>{
+    const value=payload(feature);
+    validateContent(value,contentId(value.scope,feature,value.key),[value.scope]);
+    value.data.document_hash='b'.repeat(64);
+    assert.throws(()=>validateContent(value,contentId(value.scope,feature,value.key),[value.scope]));
+    value.data.document_hash=null;
+    assert.throws(()=>validateContent(value,contentId(value.scope,feature,value.key),[value.scope]));
+    value.source_document_hash=null;
+    validateContent(value,contentId(value.scope,feature,value.key),[value.scope]);
+  });
+}
+
+
+test('current highlight selection hides historical AI marks even with the same input digest', async()=>{
+  const {projectContent} = await import('../content.mjs');
+  const analysis=payload('highlight_analysis'), automatic=payload('ai_highlight'), manual=payload('manual_highlight');
+  const item=analysis.data.body_json.items[0];
+  automatic.data.quote=item.text;
+  automatic.data.anchor={p0:item.page-1,o0:0,p1:item.page-1,o1:4};
+  const row=value=>({operation:{entity_id:contentId(value.scope,value.feature,value.key),payload:value},revision:1});
+  const read=()=>projectContent([{id:PAPER}],[],[row(automatic),row(manual),row(analysis)]);
+  assert.deepEqual(read().map(mark=>mark.origin),['ai','manual']);
+  analysis.data.body_json.items=[];
+  assert.deepEqual(read().map(mark=>mark.origin),['manual']);
+  analysis.data.body_json.items=[item];
+  analysis.data.source_hash='b'.repeat(64);
+  assert.deepEqual(read().map(mark=>mark.origin),['manual']);
+  analysis.data.source_hash=hash;
+  analysis.data.document_hash='b'.repeat(64);
+  assert.deepEqual(read().map(mark=>mark.origin),['manual']);
+  analysis.data.document_hash=hash;
+  automatic.data.anchor.p0++;
+  automatic.data.anchor.p1++;
+  assert.deepEqual(read().map(mark=>mark.origin),['manual']);
+});
+
+test('canonical deletion hides historical and snapshot AI marks without hiding manual highlights',async()=>{
+  const {projectContent,suppressSnapshotContent}=await import('../content.mjs');
+  const analysis=payload('highlight_analysis'), automatic=payload('ai_highlight'), manual=payload('manual_highlight');
+  const id=contentId(analysis.scope,analysis.feature,analysis.key);
+  const old={sequence:1,outcome:'accepted',operation:{entity_type:'research_content',entity_id:id,action:'put',payload:analysis}};
+  const removed={revision:2,operation:{entity_type:'research_content',entity_id:id,action:'delete'}};
+  const papers=[{id:PAPER,research_content:[{feature:'highlight_analysis',data:analysis.data}]}];
+  const archived=[{paper_id:PAPER,origin:'ai',quote:'Prior AI mark'}, {paper_id:PAPER,origin:'manual',quote:'My mark'}];
+  const result=suppressSnapshotContent(papers,[],[removed],[old],archived);
+  assert.deepEqual(result.live.map(mark=>mark.origin),['manual']);
+  const row=value=>({operation:{entity_id:contentId(value.scope,value.feature,value.key),payload:value},revision:1});
+  assert.deepEqual(projectContent(papers,[],[row(automatic),row(manual)]).map(mark=>mark.origin),['manual']);
+  assert.equal(papers[0].research_content.some(item=>item.feature==='highlight_analysis'),false);
+  assert.deepEqual(projectContent([{id:PAPER}],[],[row(automatic)]).map(mark=>mark.origin),['ai']);
+});

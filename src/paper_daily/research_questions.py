@@ -87,6 +87,20 @@ def _ensure(paper_id, *, force=False):
         return None, old["reason"]
     if len(payload) > 240000:
         return None, "全文超過候選問題的單次分析上限；原文與深度講解仍可正常使用。"
+    result = dict(paper_id=paper_id, source_hash=key, **produce(source))
+    # Failed refreshes preserve the last useful result; automatic failures are cached.
+    if result["items"] or not old.get("items"):
+        _atomic_json(_path(paper_id), result)
+    else:
+        _atomic_json(_path(paper_id), dict(old, failed_source_hash=key, reason=result["reason"]))
+    return (result, "本文研究問題已保存") if result["items"] else (None, result["reason"])
+
+
+def produce(source):
+    """Generate and validate grounded questions without reading or writing storage."""
+    payload = json.dumps(source, ensure_ascii=False, sort_keys=True)
+    if len(payload) > 240000:
+        return {"items": [], "reason": "Question input exceeds the supported budget"}
     reply = llm.complete_result(
         payload,
         task="ask",
@@ -100,7 +114,7 @@ def _ensure(paper_id, *, force=False):
             '{"questions":[{"question":"...","why":"...","evidence":"..."}]}。'
         ),
     )
-    result = dict(paper_id=paper_id, source_hash=key, items=[])
+    result = dict(items=[])
     if reply.text:
         try:
             data = json.loads(
@@ -111,9 +125,4 @@ def _ensure(paper_id, *, force=False):
             result["reason"] = str(exc)
     else:
         result["reason"] = reply.reason
-    # Failed refreshes preserve the last useful result; automatic failures are cached.
-    if result["items"] or not old.get("items"):
-        _atomic_json(_path(paper_id), result)
-    else:
-        _atomic_json(_path(paper_id), dict(old, failed_source_hash=key, reason=result["reason"]))
-    return (result, "本文研究問題已保存") if result["items"] else (None, result["reason"])
+    return result

@@ -5,7 +5,7 @@ This is the current integration map. Historical checkpoint sections remain in
 `implementation-0.5.0.md`; their old pending descriptions are not a current audit.
 No v0.5 public release or production research enrollment has been approved.
 
-## Latest verified checkpoint
+## Prior verified checkpoint
 
 The offline-verification dialog/entry and read-only duplicate detector passed the
 complete gate on a frozen 615-file input set: **3,227 Python/desktop cases,
@@ -21,6 +21,90 @@ isolated candidates; their focused passes are not this full-gate result.
 No installed daily app, production research, public release or physical Mac/phone
 acceptance was exercised by this checkpoint.
 
+## Current combined candidate
+
+The pending candidate combines source-pinned annotations, selected downloads,
+per-list purposes, reference links, membership-bound pins, supported-subset
+first-enrollment preparation and bounded professional evidence validation.
+These changes have focused fixture evidence; the combined full gate is pending.
+
+- Analysis and located PDF marks publish together. Complete remote annotation
+  analysis can be reviewed only against its exact registered source; individual,
+  incomplete or unlocatable annotation conflicts remain keep/export-only.
+- Explicit offline downloads fetch selected current attachments through the
+  in-memory connection. Separate resumable verification hashes actual bytes;
+  progress counts verified objects/bytes, not estimated completion time.
+- Per-list purposes are user-owned observed edits, shared, synchronized and shown
+  separately from generated analysis on mobile. Rolled-back changes do not refresh
+  displays. Reference links preserve both paper incarnations; pins also depend on
+  the current list membership, preventing removal/re-add from reviving old flags.
+- Field-neutral deep dives distinguish study design, evidence, interpretation and
+  missing details. Recorded citation links do not establish influence or agreement.
+  Existing saved dives are retained.
+- Claim extraction captures one source and AI route, preserves old results on
+  failure, and publishes through observed edits. Saved-first desktop cards and PWA
+  content separate quote location from proposed semantic support. Restoration is
+  explicit; changing the current PDF never relabels original-version evidence.
+- Continuous desktop sync is explicitly enabled per app session after connection
+  verification. Shared bounded workers defer busy work, retry offline with backoff
+  and pause on identity/protocol/storage failures. Login alone never uploads data.
+  Secure remembered login and production enrollment remain open.
+- Maintenance fixes preserve partial citation work, keep legacy completion unknown,
+  move source-status checks off Qt, respect manual-only scheduling, serialize
+  preferences and initialize the first WebEngine view correctly.
+- Extended research packages declare capabilities and reject unsupported content
+  or lost deletion knowledge; legacy packages without extensions remain readable.
+- Enrollment preparation creates a supported isolated copy and inspected backup;
+  it reports runtime enrollment incomplete and refuses unsupported legacy data or
+  assets. Reference links and valid per-list pins are covered; queue/log/history,
+  orphan flags and unmigrated decks/assets still block this limited workflow.
+- Mac packaging explicitly forbids background-only app flags and includes a native
+  foreground gate. Windows fixture checks do not prove Mac foreground behavior.
+
+Focused selections include 166 combined claim/pin/goal cases, 88 polished desktop
+claim cases, 85 continuous-sync/UI cases, 23 controller/status cases, 155 maintenance
+cases, 96 resumable-verification cases, 52 remote-review cases and 20 packaging
+cases. These overlap; do not sum them. The merged PWA passed 184 cases and three
+actual Python HTTP scenarios before the separate original-source follow-on.
+
+Two earlier full attempts exposed regressions: 451 passed / one failed for
+unconditional annotation-trigger replacement, then 718 passed / one failed for a
+pin cleanup trigger installed without its optional base tables. Both underlying
+initializers were repaired; original rollback assertions remain unchanged. The
+optional-schema selection passed 43 cases. Another Windows file-proof boundary
+was reproduced: same-size mutation with restored mtime could reuse a cached
+proof. A timestamp-only repair exposed a same-clock-tick collision; the unchanged test
+now passes using a per-file revision as well. The focused revision selection
+passed 44 cases. A frozen combined full gate is required before committing; its
+final result belongs in the checkpoint commit and ignored run ledger. A later
+complete gate reached 1,653 passed before a legacy material fixture lacked a
+loaded source owner. Actual owner/load fixtures now retain every original
+stale-result and failure assertion, with a separate unbound refusal case. The
+affected seven-file selection passed 97 cases; no source guard was removed.
+
+Historical PDF transfer, private provenance archive, selected offline closure
+and distinct mobile source access are now integrated. Their merged selection
+passed 144 Python cases and 198 mobile cases, with four actual authenticated HTTP
+runners (six reported acceptance checkpoints). This is focused evidence, not a
+whole-project gate or complete enrollment claim. The portable original-version
+desktop viewer and read-only missing-store resolver are integrated: their merged
+selections passed 108 and 44 cases respectively. Private source archives now
+initialize lazily; the unchanged fresh-database/recovery/enrollment selection
+passed 112 cases. These selections overlap. Current source publishing does not
+activate a reader or replace the primary PDF.
+
+Already-enrolled package import is integrated through typed graph operations,
+exact source/deck byte validation and one caller-owned transaction. It rejects
+unsupported scopes and ambiguous updated-package identities; the desktop mapping
+preview remains required. A native Windows archive-version JSON round-trip
+regression was reproduced and repaired without weakening stale-file rejection.
+The merged import/source/bundle selection passed 86 cases (121.87s). Existing-job history migration
+and unbound original ownership remain isolated follow-ons.
+
+See `remote-annotation-review.md`, `workspace-offline-verification.md`,
+`list-reading-goals.md`, `list-pins.md`, `reference-edges.md` and
+`workspace-enrollment.md`. Physical devices and production hosting remain open.
+
 ## Requirement-to-evidence map
 
 | Requirement | Current authoritative implementation/evidence | Still required |
@@ -29,12 +113,12 @@ acceptance was exercised by this checkpoint.
 | Existing research starts sync | `SyncSession` deliberately rejects unbound databases; `test_unbound_nonempty_workspace_cannot_silently_enroll` | Explicit copy-and-enroll workflow, complete source inventory, maintenance locking and baseline/file closure |
 | New device joins safely | `sync_bootstrap.join`, guarded sessions and no-replace publication; workspace sync/bootstrap fixtures | Compatibility, authority generation/retention and secure production device issuance |
 | Offline desktop changes converge | Journal/client/service, guarded capture, typed research projections; two-workspace/actual HTTP fixtures | Complete writer enrollment and Windows/Mac acceptance with independently edited copies |
-| Safe conflicts and retained AI work | Generation/chat/compound observations, grouped review and durable edited drafts | Annotation analysis + located-mark grouped review; editable recovered copies with source closure |
-| Verified attachments | Managed PDFs and editable-deck manifests, blobs, resumable transfers and strict source checks | Remaining annotation/derived asset producers, selective download execution and retention/pinning lifecycle |
-| Desktop workspace UX | Status, backup, restore, manual connection/join, independent window opening | Initial enrollment UX, device management, complete offline preparation and resume UX |
+| Safe conflicts and retained AI work | Generation/chat/compound observations, grouped review and durable edited drafts | Complete source-aware review for every content type; editable recovered copies with source closure |
+| Verified attachments | Managed PDFs and editable-deck manifests, blobs, resumable transfers and strict source checks | Remaining derived asset producers and the retention/eviction lifecycle |
+| Desktop workspace UX | Status, backup, restore, manual connection/join and opt-in continuous synchronization | Initial enrollment UX, secure remembered connection, device management and resume UX |
 | Private mobile reader | Independent PWA, 91 domain cases and actual Python HTTP scenarios at f7155c0 | Physical iPhone/Android offline restart, storage pressure, IME, accessibility and hosted login acceptance |
 | Recovery preserves work | Detached backups, legacy source/deck recovery, read-only restored-reader adapters | Editable recovery adoption and every annotation/file closure; do not reactivate old device identities |
-| Professional paper reading | f7155c0 task drafting, 3155 Python + 18 frontend + 91 mobile cases and 2 HTTP scenarios | Per-list goals, validated claim-level sources, lineage and source audit; templates are not validation |
+| Professional paper reading | Task drafting, per-list goals and bounded source-aware claim cards in the pending candidate | Unbound original ownership, grounded lineage, full audit and device acceptance; source location is not semantic proof |
 | Duplicate identity review | Read-only detector from df3392c, complete frozen gate passed | Reviewed portable-ID alias operation and nonempty-device join; local merge 7a25a0d is not safe to expose |
 | Release and device evidence | Current 0.4 maintenance remains independent | Frozen 0.5 installers, preservation/upgrade checks, owner Windows/Mac and phone journey |
 
@@ -51,7 +135,7 @@ is not a completed integration. Typed grouped annotation review, real producer/U
 wiring, backup/source closure and merged acceptance remain open. Retain all work.
 
 The clean identity branch contains a separable read-only detection commit and a
-local-merge commit. Only detection is currently being integrated. Independent
+local-merge commit. Detection is included in verified checkpoint `63732ee`; merging remains blocked. Independent
 synthetic repros found that the merge commit:
 
 - Relocates decks/question/highlight caches without updating embedded paper ownership.

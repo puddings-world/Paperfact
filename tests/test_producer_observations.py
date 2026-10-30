@@ -34,7 +34,6 @@ def test_dive_actual_generation_publishes_before_count_and_retries_without_ai(
     workspace, monkeypatch
 ):
     path, client, document = workspace
-    monkeypatch.setattr(dive, "_prepare_highlights", lambda *_: None)
     calls = []
     monkeypatch.setattr(llm, "complete", lambda *a, **k: (calls.append(k) or BODY, "ok"))
     assert dive.dive_ahead(paper_id="paper") == 1
@@ -90,15 +89,22 @@ def test_dive_workspace_switch_keeps_original_destination(workspace, monkeypatch
     with closing(sqlite3.connect(replacement)) as conn:
         conn.executescript(store.SCHEMA)
 
+    calls = []
     def complete(*args, **kwargs):
+        calls.append(1)
         monkeypatch.setattr(store, "DB_PATH", replacement)
         return BODY, "ok"
 
     monkeypatch.setattr(llm, "complete", complete)
-    monkeypatch.setattr(dive, "_prepare_highlights", lambda *_: pytest.fail("wrong workspace"))
+    original_prepare = dive._prepare_highlights
+    def original_workspace(paper_id, log, **kwargs):
+        assert kwargs["database"] == path
+        return original_prepare(paper_id, log, **kwargs)
+    monkeypatch.setattr(dive, "_prepare_highlights", original_workspace)
     assert dive.dive_ahead(paper_id="paper") == 1
     assert rows(path, "SELECT body FROM dives") == [{"body": BODY}]
     assert rows(replacement, "SELECT * FROM dives") == []
+    assert calls == [1]
 
 
 def test_duplicate_dive_jobs_make_one_call_and_failed_job_can_retry(workspace, monkeypatch):

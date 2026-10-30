@@ -191,7 +191,7 @@ def test_unsupported_research_write_rolls_back(bound):
     count = len(bound.journal.pending())
     with pytest.raises(sqlite3.OperationalError), store.connect() as conn:
         conn.execute("UPDATE lists SET name='must roll back'")
-        conn.execute("INSERT INTO pins VALUES('list','local-paper',?)", (STAMP,))
+        conn.execute("INSERT INTO pins VALUES('queue','local-paper',?)", (STAMP,))
     assert rows("SELECT name FROM lists") == [("Reading",)]
     assert bound.journal.pending() and len(bound.journal.pending()) == count
 

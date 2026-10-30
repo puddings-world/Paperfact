@@ -24,10 +24,15 @@ MAX_BYTES = 8 * 1024 * 1024
 MAX_ROWS = 2000
 MAX_CONTEXT_BYTES = 3 * 1024 * 1024
 REGISTRY = {
+    "paper_claim_sets": ("paper", "paper_id", "claims", "claims"),
+    "paper_highlight_analysis": ("paper", "paper_id", "highlight_analysis", "highlights"),
+    "paper_reading_links": ("paper", "paper_id", "reading_links", "reading_links"),
+    "paper_research_questions": ("paper", "paper_id", "research_questions", "questions"),
     "dives": ("paper", "paper_id", "dive", "brief"),
     "paper_context": ("paper", "paper_id", "context", "overview"),
     "close_readings": ("paper", "paper_id", "close_reading", "brief"),
     "list_surveys": ("list", "list_id", "list_survey", "survey"),
+    "list_reading_goals": ("list", "list_id", "reading_goal", "target"),
 }
 REQUEST_FIELDS = {"request_id", "context_json", "row_json", "status", "candidate_id", "reason"}
 
@@ -81,8 +86,59 @@ def _target(conn, table, owner_id):
 
 
 def _inputs(conn, reader, owner_id):
+    if reader == "highlights":
+        from paper_daily.highlight_publication import inputs
+
+        return inputs(conn, owner_id)
     if reader == "target":
         return None
+    if reader == "reading_links":
+        inputs = {
+            name: _dict(
+                conn.execute(f"SELECT * FROM {name} WHERE paper_id=?", (owner_id,)).fetchone()
+            )
+            for name in ("dives", "close_readings", "paper_highlight_analysis")
+        }
+        inputs["links_known"] = bool(
+            conn.execute(
+                "SELECT 1 FROM paper_annotation_known WHERE feature='reading_links' AND paper_id=?",
+                (owner_id,),
+            ).fetchone()
+        )
+        return inputs
+    if reader == "claims":
+        values = {
+            name: _dict(
+                conn.execute(
+                    f"SELECT * FROM {name} WHERE paper_id=?",
+                    (owner_id,),
+                ).fetchone()
+            )
+            for name in ("dives", "close_readings")
+        }
+        values["claims_known"] = bool(
+            conn.execute(
+                "SELECT 1 FROM paper_annotation_known WHERE feature='claims' AND paper_id=?",
+                (owner_id,),
+            ).fetchone()
+        )
+        return values
+    if reader == "questions":
+        inputs = {
+            name: _dict(
+                conn.execute(f"SELECT * FROM {name} WHERE paper_id=?", (owner_id,)).fetchone()
+            )
+            for name in ("dives", "close_readings")
+        }
+        # Observe a canonical deletion even if the content row is absent again.
+        inputs["question_known"] = bool(
+            conn.execute(
+                "SELECT 1 FROM paper_annotation_known "
+                "WHERE feature='research_questions' AND paper_id=?",
+                (owner_id,),
+            ).fetchone()
+        )
+        return inputs
     if reader == "brief":
         from paper_daily.brief import input_snapshot
 
@@ -392,6 +448,10 @@ def _stale(conn, context):
         return "Research content changed"
     if _inputs(conn, data["input_reader"], data["owner_id"]) != data["inputs"]:
         return "Research inputs changed"
+    if data["table"] == "paper_highlight_analysis" and "highlight_plan" in data:
+        from paper_daily.highlight_publication import stale
+
+        return stale(conn, context)
     return None
 
 
@@ -408,7 +468,7 @@ def _validate_row(context, row):
     ):
         raise ValueError("Output row does not match the captured target")
     values = {key: row[key] for key in fields}
-    for key in ("reading_json",):
+    for key in ("reading_json", "body_json"):
         if key in values and values[key] is not None:
             values[key] = json.loads(values[key])
     validate_payload(
@@ -420,6 +480,37 @@ def _validate_row(context, row):
             "source_document_hash": data["document"]["sha256"] if data["document"] else None,
         }
     )
+
+    if data["table"] == "paper_highlight_analysis":
+        from paper_daily.highlight_publication import validate
+
+        validate(context, row)
+    if data["table"] == "paper_claim_sets":
+        from paper_daily import claim_content, claim_publication
+
+        claim_publication.validate(context)
+
+        body = json.loads(row["body_json"])
+        if (
+            not isinstance(context.inputs, dict)
+            or not context.inputs.get("dives")
+            or not context.inputs.get("close_readings")
+        ):
+            raise ValueError("Claim sets require original observed analysis inputs")
+        inputs = {
+            "dive": claim_content.input_digest(context.inputs["dives"]),
+            "close_reading": claim_content.input_digest(context.inputs["close_readings"]),
+        }
+        portable = ((data["observation"] or {}).get("parents") or [{}])[0].get("id")
+        if (
+            not data["document"]
+            or body["inputs"] != inputs
+            or body["report"]["source"]["paper_id"] != (portable or context.owner_id)
+            or row["document_hash"] != data["document"]["sha256"]
+            or body["report"]["source"]["document_hash"] != row["document_hash"]
+            or row["source_hash"] != claim_content.source_digest(inputs, row["document_hash"])
+        ):
+            raise ValueError("Claim set does not match its original observed inputs")
 
 
 def validate_request_record(record):
@@ -446,7 +537,16 @@ def validate_request_record(record):
         "inputs",
         "document",
     }
-    if not isinstance(data, dict) or set(data) not in (fields, fields | {"parent_lifecycle"}):
+    allowed = (fields, fields | {"parent_lifecycle"})
+    if isinstance(data, dict) and data.get("table") == "paper_highlight_analysis":
+        allowed = (fields | {"parent_lifecycle", "highlight_plan"},)
+    if (
+        isinstance(data, dict)
+        and data.get("table") == "paper_claim_sets"
+        and "claim_restore" in data
+    ):
+        allowed = (fields | {"parent_lifecycle", "claim_restore"},)
+    if not isinstance(data, dict) or set(data) not in allowed:
         raise ValueError("Invalid generation context fields")
     # Old recovery records remain readable, but cannot automatically publish.
     # They need explicit target selection in the review workflow.
@@ -571,6 +671,9 @@ def publish_generation(context, *, row):
     data = context.data
     row_json = _json(row)
     pdf_current = _document_current(context)
+    from paper_daily.sync_source_files import stage_claim_source
+
+    prepared_source = stage_claim_source(context, row)
     try:
         if _identity(context.db_path) != data["database_identity"]:
             return _retain_outside_database(context, row, "Research database was replaced")
@@ -619,19 +722,43 @@ def publish_generation(context, *, row):
                 if observation and data["input_reader"] != "target"
                 else {}
             )
-            with sync_capture.expecting(conn, [observation], source_hashes=sources):
-                columns = list(row)
-                owner_column = REGISTRY[data["table"]][1]
-                updates = ",".join(
-                    f'"{key}"=excluded."{key}"' for key in columns if key != owner_column
+            observations = [observation]
+            if data["table"] == "paper_highlight_analysis":
+                from paper_daily.highlight_publication import expectations
+
+                observations.extend(expectations(context))
+                sources.update(
+                    {item["entity_id"]: data["document"]["sha256"] for item in observations if item}
                 )
-                quoted = ",".join(f'"{key}"' for key in columns)
-                conn.execute(
-                    f'INSERT INTO "{data["table"]}"({quoted}) VALUES('
-                    + ",".join("?" for _ in columns)
-                    + f') ON CONFLICT("{owner_column}") DO UPDATE SET {updates}',
-                    tuple(row.values()),
-                )
+            with sync_capture.expecting(conn, observations, source_hashes=sources):
+                from paper_daily.sync_source_files import apply_claim_source_in
+
+                apply_claim_source_in(conn, context, row, prepared_source)
+                if (
+                    data["table"] == "paper_claim_sets"
+                    and data.get("claim_restore")
+                    and sync_capture.enabled(conn)
+                ):
+                    from paper_daily.claim_publication import apply_restore
+
+                    apply_restore(conn, context, row)
+                else:
+                    columns = list(row)
+                    owner_column = REGISTRY[data["table"]][1]
+                    updates = ",".join(
+                        f'"{key}"=excluded."{key}"' for key in columns if key != owner_column
+                    )
+                    quoted = ",".join(f'"{key}"' for key in columns)
+                    conn.execute(
+                        f'INSERT INTO "{data["table"]}"({quoted}) VALUES('
+                        + ",".join("?" for _ in columns)
+                        + f') ON CONFLICT("{owner_column}") DO UPDATE SET {updates}',
+                        tuple(row.values()),
+                    )
+                if data["table"] == "paper_highlight_analysis":
+                    from paper_daily.highlight_publication import apply
+
+                    apply(conn, context)
                 with sync_capture.suppress_capture(conn):
                     conn.execute(
                         "INSERT INTO research_generation_requests VALUES(?,?,?,?,?,?)",
@@ -650,17 +777,66 @@ def publish_generation(context, *, row):
         conn.close()
 
 
-
 def publish_generated(context, *, row):
-    """Preserve a completed model result even if its SQL transaction fails."""
+    """Retain valid completed output even after an unexpected delivery failure."""
+    _validate_row(context, row)
+    # Validate the sealed inputs before any fallback can use their private paths.
+    validate_request_record(
+        {
+            "request_id": context.request_id,
+            "context_json": context._json,
+            "row_json": _json(row),
+            "status": "accepted",
+            "candidate_id": None,
+            "reason": "ok",
+        }
+    )
     try:
         return publish_generation(context, row=row)
-    except (OSError, sqlite3.DatabaseError):
-        # Commit may have succeeded before the connection reported a failure.
-        try:
-            return retry_publication(context)
-        except (OSError, sqlite3.DatabaseError, ValueError):
-            return _retain_outside_database(context, row, "Research storage failed")
+    except Exception:
+        return retain_failed_generated(context, row)
+
+
+def retain_failed_generated(context, row):
+    """Probe exact committed success; otherwise preserve the original bounded result."""
+    _validate_row(context, row)
+    validate_request_record(
+        {
+            "request_id": context.request_id,
+            "context_json": context._json,
+            "row_json": _json(row),
+            "status": "accepted",
+            "candidate_id": None,
+            "reason": "ok",
+        }
+    )
+    prior = None
+    try:
+        if _identity(context.db_path) == context.data["database_identity"]:
+            with closing(_connect(context.db_path)) as conn:
+                if (
+                    _identity(context.db_path) == context.data["database_identity"]
+                    and _binding(conn) == context.data["binding"]
+                ):
+                    record = conn.execute(
+                        "SELECT * FROM research_generation_requests WHERE request_id=?",
+                        (context.request_id,),
+                    ).fetchone()
+                    if record is not None:
+                        prior = validate_request_record(dict(record))
+    except Exception:
+        # A broken probe cannot authorize a write into today's replacement DB.
+        # The record and its private location were validated before this probe.
+        prior = None
+    if prior is not None:
+        if prior["context_json"] != context._json or prior["row_json"] != _json(row):
+            raise ValueError("Generation delivery identity was reused for another result")
+        return Publication(
+            prior["status"], context.request_id, prior["candidate_id"], prior["reason"]
+        )
+    return _retain_outside_database(
+        context, row, "Completed research retained after delivery failed"
+    )
 
 
 def publish_edit(context, *, row):

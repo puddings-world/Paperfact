@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -82,6 +83,27 @@ def _base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+_CLI_ERROR = re.compile(r"(?:API Error\b|Error:|Execution error\b)", re.IGNORECASE)
+_CLI_CATEGORIES = (
+    (("usage policy", "violat", "safety", "content filter", "flagged", "refus"),
+     "{name} request refused by usage policy; adjust content and retry"),
+    (("rate limit", "rate_limit", "usage limit", "limit reached", "quota", "429",
+      "credit balance", "out of credits", "overloaded", "529"),
+     "{name} usage limit or rate limit reached; retry later or switch accounts"),
+    (("authenticat", "oauth", "login", "log in", "401", "invalid api key", "unauthorized"),
+     "{name} authentication failed; sign in again"),
+)
+
+
+def _cli_failure(name: str, stdout: str, stderr: str) -> str | None:
+    """Classify failed CLI output without displaying private output or error bodies."""
+    low = f"{stdout}\n{stderr}".lower()
+    for needles, message in _CLI_CATEGORIES:
+        if any(needle in low for needle in needles):
+            return message.format(name=name)
+    return None
+
+
 class ClaudeCLI:
     def complete(self, request: Request, cfg: Settings, post: Transport) -> Completion:
         exe = shutil.which("claude")
@@ -118,12 +140,13 @@ class ClaudeCLI:
         except OSError as exc:
             return Completion(None, f"could not run claude: {type(exc).__name__}")
         answer = (proc.stdout or "").strip()
-        if proc.returncode == 0 and answer:
+        if proc.returncode == 0 and answer and not _CLI_ERROR.match(answer):
             return Completion(answer, model=cfg.model)
-        # CLI stderr can contain prompts or credentials; keep failures categorical.
-        err = (proc.stderr or "").lower()
-        if "authenticate" in err or "oauth" in err or "login" in err:
-            return Completion(None, "claude authentication failed -- run 'claude' to sign in again")
+        reason = _cli_failure("claude", answer, proc.stderr or "")
+        if reason:
+            return Completion(None, reason)
+        if _CLI_ERROR.match(answer):
+            return Completion(None, "claude CLI failed; no answer was produced")
         return Completion(
             None, f"claude CLI failed (exit {proc.returncode})" if proc.returncode else "no output"
         )
@@ -167,9 +190,15 @@ class CodexCLI:
                 )
                 if proc.returncode:
                     return Completion(
-                        None, f"Codex CLI failed (exit {proc.returncode}); check login"
+                        None,
+                        _cli_failure("Codex", proc.stdout or "", proc.stderr or "")
+                        or f"Codex CLI failed (exit {proc.returncode}); check login"
                     )
                 answer = output.read_text(encoding="utf-8").strip() if output.exists() else ""
+                if _CLI_ERROR.match(answer):
+                    return Completion(
+                        None, _cli_failure("Codex", answer, "") or "Codex CLI failed; no answer"
+                    )
                 return Completion(answer or None, "ok" if answer else "Codex returned no answer")
         except subprocess.TimeoutExpired:
             return Completion(None, f"timed out after {request.timeout}s")

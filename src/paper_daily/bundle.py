@@ -30,7 +30,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from paper_daily import bundle_files
+from paper_daily import annotation_content, bundle_files
 from paper_daily.config import DATA_DIR, PDF_DIR
 from paper_daily.fetch import _safe_name, pdf_candidates
 from paper_daily.http import FetchError, fetch
@@ -39,8 +39,32 @@ from paper_daily.store import connect, get_kv, init_db, set_kv
 FORMAT = 1
 
 # Tables holding one paper's analyses, keyed by paper_id.
-PER_PAPER = ("dives", "close_readings", "cites", "followups", "paper_context", "resources")
+PER_PAPER = (
+    "dives", "close_readings", "cites", "followups", "paper_context", "resources",
+    *annotation_content.FEATURES.values(), "paper_annotation_known",
+)
 KV_KEYS = ("citegraph.{pid}", "followups.checked.{pid}", "resources:{pid}")
+
+
+def _required_capabilities(tables):
+    capabilities = []
+    if tables.get("paper_claim_sets") or any(
+            row.get("feature") == "claims" for row in tables.get("paper_annotation_known", [])):
+        capabilities.append("claim_evidence")
+    if tables.get("list_reading_goals"):
+        capabilities.append("reading_goal")
+    if any(tables.get(table) for table in annotation_content.FEATURES.values()):
+        capabilities.append("reading_annotations")
+    if tables.get("paper_annotation_known"):
+        capabilities.append("annotation_deletions")
+    return sorted(capabilities)
+
+
+def _claim_source_relative(paper_id, fingerprint):
+    from paper_daily.claim_content import hashed
+
+    owner = hashed(["claim-source-owner", paper_id])[:24]
+    return Path("pdf") / ".claim-evidence" / owner / (fingerprint + ".pdf")
 
 
 def _digest(paper_id: str) -> str:
@@ -160,6 +184,8 @@ def export(
     `with_pdfs` packs every locally available PDF without requiring the network.
     """
     with connect() as conn:
+        database_root = Path(next(row[2] for row in conn.execute("PRAGMA database_list")
+                                  if row[1] == "main")).parent
         listing = conn.execute("SELECT * FROM lists WHERE id=?", (list_id,)).fetchone()
         if listing is None:
             raise ValueError(f"no list {list_id}")
@@ -184,6 +210,9 @@ def export(
             ),
             "list_surveys": _rows(conn, "SELECT * FROM list_surveys WHERE list_id=?", (list_id,)),
         }
+        goals = _rows(conn, "SELECT * FROM list_reading_goals WHERE list_id=?", (list_id,))
+        if goals:
+            tables["list_reading_goals"] = goals
         far = sorted(
             {e for r in tables["refs"] for e in (r["paper_id"], r["ref_paper_id"])} - set(ids)
         )
@@ -191,6 +220,11 @@ def export(
             conn, f"SELECT * FROM papers WHERE id IN ({','.join('?' * len(far))})", far
         )
         for table in PER_PAPER:
+            if table in annotation_content.FEATURES.values() and not conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (table,)
+            ).fetchone():
+                tables[table] = []
+                continue
             tables[table] = _rows(
                 conn, f"SELECT * FROM {table} WHERE paper_id IN ({marks_sql})", ids
             )
@@ -259,8 +293,28 @@ def export(
         files.update(
             {Path("pdf") / f"{_safe_name(pid)}.pdf": paths[pid] for pid, rec in pdfs.items() if rec}
         )
+    claim_sources = {}
+    for claim in tables.get("paper_claim_sets", []):
+        annotation_content.validate_row("claims", claim)
+        pid, digest = claim["paper_id"], claim["document_hash"]
+        relative = _claim_source_relative(pid, digest)
+        included = None
+        if with_pdfs:
+            candidate = database_root / relative
+            current = paths.get(pid)
+            if candidate.exists() and _sha256(candidate.read_bytes()) == digest:
+                selected = candidate
+            elif (current is not None and current.exists()
+                  and _sha256(current.read_bytes()) == digest):
+                selected = current
+            else:
+                raise ValueError("The exact original claim-source PDF is unavailable for sharing")
+            files[relative] = selected
+            included = relative.as_posix()
+        claim_sources[pid] = {"sha256": digest, "path": included}
+    capabilities = _required_capabilities(tables)
     manifest = {
-        "format": FORMAT,
+        "format": 2 if capabilities else FORMAT,
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "list": dict(listing),
         "members": members,
@@ -270,6 +324,10 @@ def export(
         "file_hashes": {f.as_posix(): _sha256(source.read_bytes()) for f, source in files.items()},
         "counts": {t: len(rows) for t, rows in tables.items()} | {"files": len(files)},
     }
+    if "claim_evidence" in capabilities:
+        manifest["claim_sources"] = claim_sources
+    if capabilities:
+        manifest["capabilities"] = capabilities
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         dir=out.parent, prefix=".paperfact-export-", delete=False
@@ -407,16 +465,63 @@ def _validated(z):
     try:
         manifest = json.loads(z.read("manifest.json"))
         tables = json.loads(z.read("tables.json"))
-        if manifest.get("format") != FORMAT:
+        if type(manifest.get("format")) is not int or manifest["format"] not in (FORMAT, 2):
             raise ValueError("不支援的研究資料包格式")
         listing = manifest["list"]
         if not all(
             isinstance(listing.get(k), str) and listing[k] for k in ("id", "name", "created_at")
         ):
             raise ValueError("資料包缺少清單資訊")
+        required = _required_capabilities(tables)
+        capabilities = manifest.get("capabilities", [])
+        if manifest["format"] == 2:
+            if not required or capabilities != required:
+                raise ValueError("Package capabilities do not match its research content")
+        elif required or capabilities:
+            raise ValueError("Extended research requires the version-2 package format")
+        goals = tables.get("list_reading_goals", [])
+        if not isinstance(goals, list) or len(goals) > 1:
+            raise ValueError("Reading-goal package requires at most one goal row")
+        from paper_daily.sync_content import validate_payload
+
+        for goal in goals:
+            if (not isinstance(goal, dict) or set(goal) != {"list_id", "body", "written_at"}
+                    or goal["list_id"] != listing["id"]):
+                raise ValueError("Reading goal does not belong to this list")
+            validate_payload({
+                "scope": {"kind": "list", "id": listing["id"]},
+                "feature": "reading_goal", "key": "main", "source_document_hash": None,
+                "data": {key: goal[key] for key in ("body", "written_at")},
+            })
         ids = {p["id"] for p in tables["papers"]}
         from paper_daily.research_chat import validate_shared_turn
 
+        for feature, table in annotation_content.FEATURES.items():
+            for row in tables.get(table, []):
+                annotation_content.validate_row(feature, row)
+        for row in tables.get("paper_annotation_known", []):
+            if (set(row) != {"feature", "paper_id"}
+                    or row["feature"] not in annotation_content.FEATURES
+                    or not isinstance(row["paper_id"], str) or not row["paper_id"]):
+                raise ValueError("Invalid reading annotation authority marker")
+        claim_rows = {row["paper_id"]: row["document_hash"]
+                      for row in tables.get("paper_claim_sets", [])}
+        claim_sources = manifest.get("claim_sources", {})
+        if not isinstance(claim_sources, dict) or set(claim_sources) != set(claim_rows):
+            raise ValueError("Claim package source ownership differs from its research")
+        for pid, digest in claim_rows.items():
+            record = claim_sources[pid]
+            if not isinstance(record, dict) or set(record) != {"sha256", "path"}:
+                raise ValueError("Invalid claim-source package manifest")
+            expected = _claim_source_relative(pid, digest).as_posix()
+            if record["sha256"] != digest or record["path"] not in (None, expected):
+                raise ValueError("Claim-source package identity differs")
+            if record["path"] is None:
+                if manifest.get("pdfs_included"):
+                    raise ValueError("Complete claim packages require original source bytes")
+            elif (manifest.get("file_hashes", {}).get(expected) != digest
+                  or "files/" + expected not in names):
+                raise ValueError("Claim-source package bytes are missing or changed")
         linked_ids = set()
         for turn in tables.get("chat", []):
             if validate_shared_turn(turn):
@@ -470,15 +575,22 @@ def _validated(z):
         if expected and _sha256(blob) != expected:
             raise ValueError(f"資料包檔案核對失敗：{relative}")
         if rel.parts[0] == "pdf":
-            record = manifest.get("pdfs", {}).get(owner)
+            claim_source = len(rel.parts) == 4 and rel.parts[1] == ".claim-evidence"
+            record = manifest.get("claim_sources" if claim_source else "pdfs", {}).get(owner)
             if not record or _sha256(blob) != record.get("sha256"):
-                raise ValueError(f"PDF 版本核對失敗：{relative}")
+                raise ValueError("Package PDF source version differs")
+            if claim_source and record["path"] != relative:
+                raise ValueError("Undeclared claim-source package file")
         owners[relative] = owner
     return manifest, tables, owners
 
 
 def _owns_file(pid, rel):
     parts = rel.parts
+    if len(parts) == 4 and parts[:2] == ("pdf", ".claim-evidence"):
+        fingerprint = rel.stem
+        return (len(fingerprint) == 64 and all(char in "0123456789abcdef" for char in fingerprint)
+                and rel == _claim_source_relative(pid, fingerprint))
     if len(parts) == 2:
         folder, name = parts
         if folder in ("pdf", "text"):
@@ -513,6 +625,29 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
 
     With `pdfs`, each paper's PDF is then fetched from its verified URL and kept
     only if it is byte for byte the file the analyses were made from."""
+    from contextlib import closing
+
+    from paper_daily import store
+
+    captured = False
+    database = Path(store.DB_PATH).resolve()
+    if database.is_file():
+        import sqlite3
+
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
+            markers = {row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table','trigger')"
+            )}
+            captured = any(name.startswith(("research_capture_", "capture_")) for name in markers)
+    if captured:
+        # A damaged capture binding must fail here; it cannot opt back into the
+        # legacy writer. Reader-only historical adapters retain their old path.
+        from paper_daily.package_import import import_package
+
+        return import_package(
+            database, DATA_DIR, path, replace=replace,
+            current_path=lambda: store.DB_PATH,
+        )
     init_db()
     with zipfile.ZipFile(path) as z:
         manifest, tables, owners = _validated(z)
@@ -559,7 +694,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             owner = owners[relative.as_posix()]
             if owner in conflicts:
                 continue
-            if relative.parts[0] == "pdf" and owner in managed:
+            if relative.parts[0] == "pdf" and len(relative.parts) == 2 and owner in managed:
                 continue  # Existing managed bytes remain owned by the document binding.
             target = (DATA_DIR / relative).resolve()
             if not target.is_relative_to(DATA_DIR.resolve()):
@@ -605,7 +740,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             report["joined_list"] = joined
             pins = [{"scope": listing["id"], **pin} for pin in tables.get("pins", [])]
             report["pins"] = _insert(conn, "pins", pins, replace=False)
-            for table in ("refs", "list_surveys", *PER_PAPER):
+            for table in ("refs", "list_surveys", "list_reading_goals", *PER_PAPER):
                 report[table] = _insert(conn, table, tables.get(table, []), replace)
             report["kv"] = _insert(conn, "kv", tables.get("kv", []), replace)
             for table in ("pdf_ai_highlights", "pdf_highlights"):

@@ -41,9 +41,10 @@ def has_pdf(paper_id: str) -> bool:
     return (PDF_DIR / f"{_safe_name(paper_id)}.pdf").exists()
 
 
-def status(conn, paper_id: str) -> dict[str, bool]:
-    """Which parts exist. 啟後 counts once the field was asked, even if nobody cites
-    the paper yet: a preprint from last month has no later work to find."""
+def status(conn, paper_id: str, *, verify_sources: bool = False) -> dict[str, bool]:
+    """Which parts have completion evidence, rather than merely some stored rows."""
+    from paper_daily import cites, followups
+
     one = lambda sql: conn.execute(sql, (paper_id,)).fetchone() is not None  # noqa: E731
     return {
         "pdf": has_pdf(paper_id),
@@ -53,8 +54,8 @@ def status(conn, paper_id: str) -> dict[str, bool]:
             "WHERE d.paper_id=?"
         ),
         "highlights": paper_highlights.is_prepared(conn, paper_id),
-        "cites": one("SELECT 1 FROM cites WHERE paper_id=? LIMIT 1"),
-        "later": get_kv(conn, f"followups.checked.{paper_id}") is not None,
+        "cites": cites.complete(conn, paper_id, verify_source=verify_sources),
+        "later": followups.done(conn, paper_id),
     }
 
 
@@ -142,6 +143,8 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
 
         parameters = inspect.signature(producer).parameters
         variadic = any(p.kind == p.VAR_KEYWORD for p in parameters.values())
+        if "overview_too" not in parameters and not variadic:
+            kwargs.pop("overview_too", None)
         for name, value in (("database", database), ("connections", connections)):
             if name in parameters or variadic:
                 kwargs[name] = value
@@ -151,7 +154,7 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         if not current():
             return False
         with scoped_connection() as conn:
-            have = status(conn, paper_id)[step]
+            have = status(conn, paper_id, verify_sources=True)[step]
             gave_up = failed(conn, paper_id, step)
         return not have and (retry or not gave_up)
 
@@ -167,6 +170,15 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         path, _text = fetch.prepare(row)
         record("pdf", None if path else "no source had the PDF")
         log(f"  {'PDF  ' if path else 'no PDF'}  {name}")
+
+    # Pin the original source before any remote explanation/citation work. A
+    # later PDF replacement must not silently become this operation's authority.
+    from paper_daily.document_reader import from_workspace
+    from paper_daily.manual_highlight_ops import capture_owner
+
+    source_root = PDF_DIR
+    source_document = from_workspace(database, legacy_root=source_root).resolve(paper_id)
+    annotation_owner = capture_owner(database, paper_id) if current() else None
 
     # Cheap, and they read the text the PDF step just extracted.
     if current():
@@ -201,7 +213,14 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         work_progress.report("分析原文重點並連結素材", paper_id=paper_id)
         if todo("highlights"):
             try:
-                prepared, why = paper_highlights.prepare_reading(paper_id)
+                from paper_daily import reading_annotation_jobs
+
+                if not source_document.available or annotation_owner is None:
+                    raise ValueError("The original PDF was unavailable before analysis started")
+                prepared, why = reading_annotation_jobs.prepare(
+                    database, paper_id, legacy_root=source_root, connections=connections,
+                    owner=annotation_owner, expected_document_hash=source_document.sha256,
+                )
                 marks = prepared.get("marks") if prepared else None
                 ok = bool(marks and marks["mapped"])
                 if prepared and prepared.get("explanation_pending"):
@@ -218,12 +237,14 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
                 record("highlights", str(exc))
                 log(f"  原文重點未完成：{exc}  {name}")
         work_progress.report("整理候選研究問題", paper_id=paper_id)
-        from paper_daily import research_questions
+        from paper_daily import research_question_jobs
 
         if not current():
             return
         try:
-            _questions, why = research_questions.ensure(paper_id)
+            _questions, why = research_question_jobs.ensure(
+                database, paper_id, connections=connections
+            )
             log(f"  候選問題：{why}  {name}")
         except (ValueError, OSError, RuntimeError) as exc:
             log(f"  候選問題未完成：{type(exc).__name__}  {name}")
@@ -233,10 +254,20 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         work_progress.report("核對參考文獻與引用關係", paper_id=paper_id)
         if has_pdf(paper_id) and todo("cites"):
             n = invoke(cites.analyse, paper_id, log=log)
-            record("cites", None if n else "no references could be read")
+            with scoped_connection() as conn:
+                coverage = cites.coverage(conn, paper_id, verify_source=True)
+            record("cites", None if coverage["state"] == "complete" else (
+                coverage["reason"] if n else "no references could be read"
+            ))
         work_progress.report("查找後續研究與發展脈絡", paper_id=paper_id)
         if todo("later"):
-            invoke(followups.analyse, paper_id, log=log)
+            from paper_daily.http import FetchError
+
+            try:
+                invoke(followups.analyse, paper_id, log=log, overview_too=False)
+            except FetchError:
+                record("later", "The later-work service is unavailable; retry later")
+                log("Later-work retrieval failed; original research was preserved")
 
     # The explanation and the citations read the same text but not each other, and
     # each spends minutes waiting on a model: side by side, the paper is ready in
@@ -250,13 +281,45 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
     for chain in chains:
         chain.result()
 
+    # The story consumes both chains' accepted outputs, never their in-flight drafts.
+    if current():
+        with scoped_connection() as conn:
+            story_pending = (
+                get_kv(conn, f"followups.checked.{paper_id}") is not None
+                and not followups.done(conn, paper_id)
+            )
+        if story_pending:
+            import hashlib
+
+            from paper_daily.document_reader import document_current
+            from paper_daily.sync_documents import MAX_PDF_BYTES
+
+            unchanged = True
+            if source_document.available:
+                try:
+                    unchanged = document_current(source_document)
+                    unchanged = unchanged and source_document.path.stat().st_size <= MAX_PDF_BYTES
+                    if unchanged:
+                        with source_document.path.open("rb") as stream:
+                            unchanged = (
+                                hashlib.file_digest(stream, "sha256").hexdigest()
+                                == source_document.sha256
+                            )
+                except OSError:
+                    unchanged = False
+            if not unchanged:
+                record("later", "The original PDF changed; the overview was not regenerated")
+            else:
+                wrote, why = invoke(followups.overview, paper_id, log=log)
+                record("later", None if wrote or why == "edited by hand" else why)
+
     if not belongs():
         log("Analysis stopped: original research workspace changed")
         return {step: False for step in STEPS}
     if not current():
         log("Workspace changed; remaining analysis stages were not started")
     with scoped_connection() as conn:
-        state = status(conn, paper_id)
+        state = status(conn, paper_id, verify_sources=True)
         work_progress.report(
             "本篇分析結束",
             sum(state.values()),
@@ -267,14 +330,16 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         return state
 
 
-def left(conn, paper_id: str, retry: bool = False) -> list[str]:
+def left(
+    conn, paper_id: str, retry: bool = False, *, verify_sources: bool = True
+) -> list[str]:
     """The steps still worth attempting for one paper.
 
     A step that failed is left out unless `retry`, and so are the steps that read
     the text when the PDF itself could not be found: otherwise a paper no source
     has would come first every night and nothing would ever be made for it.
     """
-    have = status(conn, paper_id)
+    have = status(conn, paper_id, verify_sources=verify_sources)
     gave_up = {s for s in STEPS if failed(conn, paper_id, s)}
     if not have["pdf"] and "pdf" in gave_up:
         gave_up.update(NEEDS_PDF)
@@ -309,7 +374,9 @@ def upcoming(conn, count: int, list_id: str | None = None, scan: int = 300) -> l
         ).fetchall()
     out = []
     for r in rows:
-        if left(conn, r[0]):
+        # The desktop also asks for candidates on its UI thread. Actual worker
+        # admission rechecks pending() with exact-source verification before AI.
+        if left(conn, r[0], verify_sources=False):
             out.append(r[0])
             if len(out) == count:
                 break

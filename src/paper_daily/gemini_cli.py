@@ -123,6 +123,8 @@ def authenticate(cfg, action):
 
 class GeminiCLI:
     def complete(self, request, cfg, post):
+        from paper_daily.ai_providers import _CLI_ERROR, _cli_failure
+
         if not status(cfg)[0]:
             return Completion(None, "請先在 AI 設定登入 Gemini")
         body = f"{request.system}\n\n---\n\n{request.prompt}" if request.system else request.prompt
@@ -159,7 +161,10 @@ class GeminiCLI:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 if proc.returncode:
-                    return Completion(None, "Gemini 未完成回覆；請檢查登入、模型或額度")
+                    return Completion(
+                        None, _cli_failure("Gemini", proc.stdout or "", proc.stderr or "")
+                        or "Gemini CLI failed; check login and model selection",
+                    )
                 data = json.loads(proc.stdout)
                 answer = data.get("response") if isinstance(data, dict) else None
                 if (
@@ -169,6 +174,10 @@ class GeminiCLI:
                     or not answer.strip()
                 ):
                     return Completion(None, "Gemini 未回傳完整回答")
+                if _CLI_ERROR.match(answer.strip()):
+                    return Completion(
+                        None, _cli_failure("Gemini", answer, "") or "Gemini CLI failed; no answer"
+                    )
                 return Completion(answer.strip(), model=cfg.model)
         except subprocess.TimeoutExpired:
             return Completion(None, f"timed out after {request.timeout}s")

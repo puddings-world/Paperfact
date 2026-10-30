@@ -55,7 +55,6 @@ from paper_daily import (
     google_slides,
     llm,
     materials,
-    paper_highlights,
     presentation_export,
     presentation_odp,
     presentations,
@@ -708,6 +707,9 @@ class PresentationPane(QWidget):
     def load(self, paper_id: str, title: str, *, defer=False) -> None:
         self._pending_load = None
         self.paper_id = paper_id
+        from paper_daily.desktop.reading_annotation_ui import bind
+
+        bind(self)
         self._undo.clear()
         self._redo.clear()
         self.paper_label.setText(title)
@@ -978,60 +980,14 @@ class PresentationPane(QWidget):
         self.highlights_status.emit(self.paper_id, text)
 
     def _analyze_highlights(self, *, force=True) -> None:
-        if not self.paper_id or self.busy:
-            return
-        cached = paper_highlights.cached(self.paper_id) if not force else None
-        try:
-            cfg = llm.settings(task="paper_highlights") if cached is None else None
-        except (ValueError, OSError) as exc:
-            self._highlight_status(str(exc))
-            return
-        if cached is None and not llm.available(task="paper_highlights"):
-            from paper_daily.desktop.ai_access import login
+        from paper_daily.desktop.reading_annotation_ui import start
 
-            reason = "請先在 AI 設定登入帳號，再按分析／補上標註。"
-            self._highlight_status(reason)
-            login(self, "paper_highlights", reason)
-            return
-        paper_id = self.paper_id
-        self._highlights_busy = True
-        self._update_controls()
-        self._highlight_status("AI 正在讀取原文、比較研究重要性並核對引句；舊結果暫時保留。")
+        start(self, force=force)
 
-        def analyze(_prompt):
-            try:
-                result, reason = paper_highlights.prepare_reading(paper_id, force=force, cfg=cfg)
-                return (
-                    json.dumps(result, ensure_ascii=False) if result is not None else None
-                ), reason
-            except Exception as exc:  # noqa: BLE001 - always finish the worker lifecycle
-                return None, f"研究重點分析失敗：{type(exc).__name__}"
+    def _cancel_highlights(self):
+        from paper_daily.desktop.reading_annotation_ui import cancel
 
-        def done(_result):
-            self._highlights_busy = False
-            self._update_controls()
-            if self.paper_id == paper_id:
-                self._load_materials()
-                self.highlights_ready.emit(paper_id)
-                prepared = json.loads(_result)
-                marks = prepared.get("marks")
-                if marks and marks.get("unmatched"):
-                    self._highlight_status(
-                        f"已定位 {marks['mapped']}/{marks['total']} 段；"
-                        "其餘無法精確定位，仍保留在素材中供核對。"
-                    )
-                elif prepared.get("explanation_reason") and not prepared.get("explanation"):
-                    self._highlight_status(
-                        "原文標註與素材已同步；" + prepared["explanation_reason"]
-                    )
-
-        def failed(reason):
-            self._highlights_busy = False
-            self._update_controls()
-            if self.paper_id == paper_id:
-                self._highlight_status(f"分析未完成，舊結果保留：{reason}")
-
-        self.runner.start("", done, failed, call=analyze, task="paper_highlights")
+        cancel(self)
 
     def _material_dropped(self, text: str, x: float, y: float) -> None:
         try:

@@ -263,6 +263,23 @@ def generate(paper_id: str, *, force: bool = False, cfg=None) -> tuple[dict | No
         existing = cached(paper_id, pages)
         if existing is not None and not force:
             return existing, "cached"
+        produced, reason = produce(pages, cfg=cfg)
+        if produced is None:
+            return None, reason
+        result = dict(paper_id=paper_id, **produced)
+        if _hash(read_original(paper_id)) != result["source_hash"]:
+            return None, "分析期間原文已變更，請重新分析；舊結果未變動。"
+        _atomic_json(_path(paper_id), result)
+        return result, reason
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError) as exc:
+        return None, str(exc)
+
+
+def produce(pages: list[dict], *, cfg=None) -> tuple[dict | None, str]:
+    """Generate from captured pages without reading global paths or saving a cache."""
+    try:
+        if not any(p["text"] for p in pages):
+            return None, "沒有可讀取的原文文字，請先取得 PDF；掃描檔需先做 OCR。"
         cfg = cfg or llm.settings(task="paper_highlights")
         chunks, receipts, candidates, seen = _chunks(pages), [], [], set()
         for index, chunk in enumerate(chunks):
@@ -299,7 +316,6 @@ def generate(paper_id: str, *, force: bool = False, cfg=None) -> tuple[dict | No
             candidates = _rank(candidates, cfg, receipts)
         result = dict(
             version=VERSION,
-            paper_id=paper_id,
             source_hash=_hash(pages),
             created_at=datetime.now(UTC).isoformat(),
             items=candidates,
@@ -311,9 +327,6 @@ def generate(paper_id: str, *, force: bool = False, cfg=None) -> tuple[dict | No
             ),
             generation=receipts,
         )
-        if _hash(read_original(paper_id)) != result["source_hash"]:
-            return None, "分析期間原文已變更，請重新分析；舊結果未變動。"
-        _atomic_json(_path(paper_id), result)
         return result, "ok"
     except (ValueError, TypeError, KeyError, OSError, RuntimeError) as exc:
         return None, str(exc)

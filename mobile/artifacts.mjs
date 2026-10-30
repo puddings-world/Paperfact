@@ -5,6 +5,7 @@ const HASH = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 export const MAX_BODY = 8 * 1024 ** 2;
+export const MAX_ORIGINAL_PDF = 150 * 1024 ** 2;
 const KINDS = ['paper','list','membership','note','reading_state','paper_document',
   'research_content','research_file','list_order','workspace_list_order'];
 export function requireArtifact(value, code = 'invalid_artifact') {
@@ -31,6 +32,7 @@ function array(value,max,min = 0) {
   requireArtifact(Array.isArray(value) && value.length >= min && value.length <= max);
 }
 export const fileId = (paper,slot) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'deck',slot]));
+export const sourceFileId = (paper,sha) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'original_source',sha]));
 export function validateInputVersions(value) {
   closed(value,['schema_version','complete','entities','documents','inputs_sha256']);
   requireArtifact(value.schema_version === 1 && typeof value.complete === 'boolean');
@@ -57,6 +59,26 @@ export function validateInputVersions(value) {
 export function validateArtifact(payload, entityId, parents) {
   closed(payload,['paper_id','feature','slot','format_version','source_document_hash','input_versions','body','assets']);
   uuid(payload.paper_id);
+  if (payload.feature === 'original_source') {
+    requireArtifact(payload.format_version === 1);
+    hash(payload.slot); requireArtifact(payload.source_document_hash === payload.slot);
+    requireArtifact(entityId === sourceFileId(payload.paper_id,payload.slot));
+    if (parents) requireArtifact(parents.length === 1 && parents[0].kind === 'paper' && parents[0].id === payload.paper_id);
+    validateInputVersions(payload.input_versions);
+    const versions = payload.input_versions;
+    requireArtifact(versions.complete === false && versions.entities.length === 0 &&
+      versions.documents.length === 0 && versions.inputs_sha256 === null);
+    closed(payload.body,['sha256','size','media_type']);
+    hash(payload.body.sha256); integer(payload.body.size,1024,1);
+    requireArtifact(payload.body.media_type === 'application/json');
+    array(payload.assets,1,1);
+    const pdf = payload.assets[0];
+    closed(pdf,['id','role','sha256','size','media_type']);
+    requireArtifact(pdf.id === 'original' && pdf.role === 'original_pdf' &&
+      pdf.sha256 === payload.slot && pdf.media_type === 'application/pdf');
+    integer(pdf.size,MAX_ORIGINAL_PDF,1);
+    return payload;
+  }
   requireArtifact(payload.feature === 'deck' && ['notes','guide'].includes(payload.slot) && payload.format_version === 1);
   requireArtifact(entityId === fileId(payload.paper_id,payload.slot));
   if (parents) requireArtifact(parents.length === 1 && parents[0].kind === 'paper' && parents[0].id === payload.paper_id);
@@ -134,6 +156,23 @@ export function artifactJSON(bytes) {
     return Number(number[0]);
   };
   const value = parse(0); requireArtifact(at === source.length); return value;
+}
+
+/** Original-source proof is byte integrity/format scope, not a PDF readability verdict. */
+export function validateOriginalSource(bytes,payload) {
+  requireArtifact(payload.feature === 'original_source' && bytes instanceof Uint8Array && bytes.length <= 1024);
+  const body = artifactJSON(bytes);
+  closed(body,['version','paper_id','document_hash']);
+  requireArtifact(body.version === 1 && body.paper_id === payload.paper_id &&
+    body.document_hash === payload.slot && body.document_hash === payload.source_document_hash);
+  // This closed body has integers/ASCII only; preserve the reference's integer type boundary.
+  requireArtifact(new TextDecoder('utf-8',{fatal:true}).decode(bytes) === JSON.stringify(body));
+  return body;
+}
+export function validateOriginalPDF(bytes) {
+  requireArtifact(bytes instanceof Uint8Array && bytes.length > 0 && bytes.length <= MAX_ORIGINAL_PDF,'invalid_pdf');
+  requireArtifact(new TextDecoder().decode(bytes.subarray(0,5)) === '%PDF-' &&
+    new TextDecoder().decode(bytes.subarray(-1024)).includes('%%EOF'),'invalid_pdf');
 }
 
 function sourceRow(row, figure = false) {

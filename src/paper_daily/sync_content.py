@@ -8,10 +8,16 @@ from datetime import datetime
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from paper_daily import annotation_content
+
 HASH = re.compile(r"[0-9a-f]{64}")
 FIELDS = {"scope", "feature", "key", "data", "source_document_hash"}
 # feature: (table, natural key or integer identity, field names)
 FEATURES = {
+    **{
+        feature: (table, None, annotation_content.FIELDS)
+        for feature, table in annotation_content.FEATURES.items()
+    },
     "dive": ("dives", None, "body written_at spec"),
     "close_reading": ("close_readings", None, "body spec written_at"),
     "citation": (
@@ -36,6 +42,9 @@ FEATURES = {
     "ai_highlight": ("pdf_ai_highlights", "source_key", "analysis_hash anchor quote reason hidden"),
     "chat": ("chat", "id", "role body created_at page anchor"),
     "list_survey": ("list_surveys", None, "body papers spec written_at edited"),
+    "reading_goal": ("list_reading_goals", None, "body written_at"),
+    "reference_edge": ("refs", "ref_paper_id", "influential"),
+    "list_pin": ("pins", "paper_id", "pinned_at"),
 }
 TABLE_FEATURES = {value[0]: feature for feature, value in FEATURES.items()}
 TABLE_FEATURES["notes"] = "note"
@@ -50,6 +59,24 @@ FILE_ONLY_SCOPES = (
     "research-questions",
 )
 RICH_NOTE_FIELDS = {"paper_id", "body", "kind", "created_at", "page", "anchor"}
+
+PIN_CLEANUP_SQL = (
+    "CREATE TRIGGER IF NOT EXISTS paperfact_pin_membership_delete "
+    "AFTER DELETE ON list_papers BEGIN DELETE FROM pins "
+    "WHERE scope=OLD.list_id AND paper_id=OLD.paper_id; END"
+)
+
+
+def pin_cleanup_ready(conn):
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' "
+        "AND name='paperfact_pin_membership_delete'"
+    ).fetchone()
+
+    def canonical(sql):
+        return re.sub(r"\s+", "", sql).lower().replace("ifnotexists", "").rstrip(";")
+
+    return bool(row and row[0] and canonical(row[0]) == canonical(PIN_CLEANUP_SQL))
 
 
 def _text(value, limit=16384, *, nullable=True, nonempty=False):
@@ -125,6 +152,23 @@ def content_id(scope, feature, key):
     return str(uuid5(NAMESPACE_URL, "paperfact:research-content:" + encoded))
 
 
+def parent_identities(payload):
+    """Ordered portable closure; an edge depends on both distinct paper lifetimes."""
+    scope = payload["scope"]
+    result = [(scope["kind"], scope["id"])]
+    if payload["feature"] == "reference_edge":
+        target = ("paper", payload["key"])
+        if target not in result:
+            result.append(target)
+    if payload["feature"] == "list_pin":
+        from paper_daily.sync_schema_v2 import membership_id
+
+        result.extend(
+            [("paper", payload["key"]), ("membership", membership_id(scope["id"], payload["key"]))]
+        )
+    return result
+
+
 def validate_payload(payload, *, entity_id=None, parents=None):
     from paper_daily.sync_journal import ID
 
@@ -133,7 +177,7 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     scope, feature, key = payload["scope"], payload["feature"], payload["key"]
     if feature not in FEATURES or not isinstance(scope, dict) or set(scope) != {"kind", "id"}:
         raise ValueError("Unsupported research-content feature/scope")
-    expected = "list" if feature == "list_survey" else "paper"
+    expected = "list" if feature in {"list_survey", "reading_goal", "list_pin"} else "paper"
     if (
         scope["kind"] != expected
         or not isinstance(scope["id"], str)
@@ -148,14 +192,20 @@ def validate_payload(payload, *, entity_id=None, parents=None):
         raise ValueError("Singleton research uses the main key")
     if natural == "id":
         _uuid(key)
+    if feature == "list_pin" and scope["id"] == "queue":
+        raise ValueError("Legacy queue pins require explicit migration to a list")
+    if feature in {"reference_edge", "list_pin"}:
+        _uuid(key)
+        if payload["source_document_hash"] is not None:
+            raise ValueError("Reference edges are paper relationships, not PDF-version claims")
     if feature == "resource":
         url = urlsplit(key)
         if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
             raise ValueError("Resource URLs require HTTP(S) without credentials")
     if entity_id is not None and entity_id != content_id(scope, feature, key):
         raise ValueError("Research-content identity differs from its scope/feature/key")
-    if parents is not None and (
-        len(parents) != 1 or parents[0]["kind"] != expected or parents[0]["id"] != scope["id"]
+    if parents is not None and [(p["kind"], p["id"]) for p in parents] != parent_identities(
+        payload
     ):
         raise ValueError("Research-content parent differs from its scope")
     _hash(payload["source_document_hash"], nullable=True)
@@ -167,6 +217,12 @@ def validate_payload(payload, *, entity_id=None, parents=None):
         allowed.append(allowed[0] | {"exchange_id", "reply_to"})
     if not isinstance(data, dict) or set(data) not in allowed:
         raise ValueError("Unexpected research-content data fields")
+    if feature == "reading_goal":
+        _text(data["body"], 8000, nullable=False)
+        if len(data["body"]) > 2000:
+            raise ValueError("Reading goal exceeds 2000 characters")
+        if payload["source_document_hash"] is not None:
+            raise ValueError("A user-owned reading goal has no PDF provenance")
     if feature == "chat" and "exchange_id" in data:
         _uuid(data["exchange_id"])
         if data["reply_to"] is not None:
@@ -183,7 +239,7 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     for name, value in data.items():
         if name in ("exchange_id", "reply_to"):
             continue
-        if name in ("created_at", "written_at", "fetched_at", "checked_at"):
+        if name in ("created_at", "written_at", "fetched_at", "checked_at", "pinned_at"):
             _stamp(value)
         elif name in ("edited", "hidden", "influential", "own"):
             _integer(value, maximum=1)
@@ -195,7 +251,13 @@ def validate_payload(payload, *, entity_id=None, parents=None):
                 raise ValueError("Highlights require an anchor")
             if value and value.get("document_hash") not in (None, payload["source_document_hash"]):
                 raise ValueError("Contradictory source document hashes")
-        elif name == "analysis_hash":
+        elif name == "document_hash":
+            _hash(value, nullable=True)
+            if value != payload["source_document_hash"]:
+                raise ValueError("Contradictory annotation source document hashes")
+        elif name == "body_json":
+            annotation_content.validate(feature, value)
+        elif name in ("analysis_hash", "source_hash"):
             _hash(value)
         elif name == "contexts_json":
             if value is not None:
@@ -218,6 +280,10 @@ def validate_payload(payload, *, entity_id=None, parents=None):
                 200 * 1024 if name == "body" else 32 * 1024,
                 nullable=name not in ("body", "quote", "role", "kind", "source", "reason"),
             )
+    if feature == "claims" and (
+            data["document_hash"] is None
+            or data["body_json"]["report"]["source"]["document_hash"] != data["document_hash"]):
+        raise ValueError("Claim content belongs to a different original source")
     if feature == "chat" and data["role"] not in ("user", "assistant", "system"):
         raise ValueError("Unsupported conversation role")
     if feature == "ai_highlight" and not key.startswith(payload["source_document_hash"] + ":"):
@@ -229,6 +295,15 @@ def validate_payload(payload, *, entity_id=None, parents=None):
 def initialize_content(conn):
     if not conn.in_transaction:
         raise ValueError("Content initialization requires a caller transaction")
+    annotation_content.initialize(conn)
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if {"list_papers", "pins"} <= tables:
+        conn.execute(PIN_CLEANUP_SQL)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS research_chat_links(local_id INTEGER "
+        "PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,exchange_id TEXT "
+        "NOT NULL,reply_to TEXT,source_hash TEXT)"
+    )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS research_chat_links(local_id INTEGER "
         "PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,exchange_id TEXT "
@@ -309,13 +384,17 @@ def content_payload(conn, table, row):
     feature = TABLE_FEATURES[table]
     _, natural, fields = FEATURES[feature]
     scope = (
-        {"kind": "list", "id": row["list_id"]}
-        if feature == "list_survey"
+        {"kind": "list", "id": row["scope"] if feature == "list_pin" else row["list_id"]}
+        if feature in {"list_survey", "reading_goal", "list_pin"}
         else {"kind": "paper", "id": _portable_paper(conn, row["paper_id"])}
     )
     key = _row_key(conn, table, row) if natural == "id" else (row[natural] if natural else "main")
     if feature == "ai_highlight":
         key = row["document_hash"] + ":" + key
+    if feature in {"reference_edge", "list_pin"}:
+        if feature == "list_pin" and row["scope"] == "queue":
+            raise ValueError("Legacy queue pins require explicit migration to a list")
+        key = _portable_paper(conn, key)
     data = {field: row[field] for field in fields.split()}
     if feature == "chat":
         link = conn.execute(
@@ -324,7 +403,7 @@ def content_payload(conn, table, row):
         ).fetchone()
         if link is not None:
             data.update(exchange_id=link[0], reply_to=link[1])
-    for field in ("anchor", "contexts_json", "reading_json"):
+    for field in ("anchor", "contexts_json", "reading_json", "body_json"):
         if field in data and data[field] is not None:
             data[field] = json.loads(data[field])
     source_hash = row.get("document_hash")
@@ -332,7 +411,11 @@ def content_payload(conn, table, row):
         source_hash = link[2]
     if source_hash is None and isinstance(data.get("anchor"), dict):
         source_hash = data["anchor"].get("document_hash")
-    if source_hash is None and feature not in ("manual_highlight", "ai_highlight"):
+    if (
+        source_hash is None
+        and feature not in ("manual_highlight", "ai_highlight", "reference_edge", "list_pin")
+        and feature not in annotation_content.FEATURES
+    ):
         previous = conn.execute(
             "SELECT source_hash FROM research_content_projection WHERE entity_id=?",
             (content_id(scope, feature, key),),
@@ -451,6 +534,71 @@ def write_content(conn, operation):
         raise ValueError("Content projection cannot move to another parent")
     local = _local_scope(conn, scope, required=not deleting)
     table, natural, _fields = FEATURES[feature]
+    if feature == "list_pin":
+        if not pin_cleanup_ready(conn):
+            raise ValueError("List pin schema migration required before projection")
+        expected = parent_identities({"scope": scope, "feature": feature, "key": key})
+        if [(p["kind"], p["id"]) for p in operation["parents"]] != expected:
+            raise ValueError("Pin projection differs from its exact membership closure")
+        refs = {p["kind"]: p for p in operation["parents"]}
+        membership = conn.execute(
+            "SELECT incarnation,list_incarnation,paper_incarnation "
+            "FROM research_membership_projection WHERE sync_id=?",
+            (refs["membership"]["id"],),
+        ).fetchone()
+        wanted = (
+            refs["membership"]["incarnation"],
+            refs["list"]["incarnation"],
+            refs["paper"]["incarnation"],
+        )
+        if membership is None or tuple(membership) != wanted:
+            if deleting:
+                return
+            raise ValueError("List pin requires its exact projected membership")
+        paper = _local_scope(conn, {"kind": "paper", "id": key}, required=not deleting)
+        if deleting:
+            conn.execute("DELETE FROM pins WHERE scope=? AND paper_id=?", (local, paper))
+            return
+        if (
+            conn.execute(
+                "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (local, paper)
+            ).fetchone()
+            is None
+        ):
+            raise ValueError("List pin requires an existing membership row")
+        conn.execute(
+            "INSERT INTO pins VALUES(?,?,?) ON CONFLICT(scope,paper_id) "
+            "DO UPDATE SET pinned_at=excluded.pinned_at",
+            (local, paper, data["pinned_at"]),
+        )
+        _record_projection(conn, operation, feature, scope, key, source_hash)
+        return
+    if feature == "reference_edge":
+        expected = [("paper", scope["id"])]
+        if key != scope["id"]:
+            expected.append(("paper", key))
+        if [(p["kind"], p["id"]) for p in operation["parents"]] != expected:
+            raise ValueError("Reference projection differs from its complete ordered paper closure")
+        target = _local_scope(conn, {"kind": "paper", "id": key}, required=not deleting)
+        if deleting:
+            conn.execute("DELETE FROM refs WHERE paper_id=? AND ref_paper_id=?", (local, target))
+            return
+        for endpoint in operation["parents"]:
+            actual = conn.execute(
+                "SELECT incarnation FROM research_paper_projection WHERE sync_id=?",
+                (endpoint["id"],),
+            ).fetchone()
+            if actual is None or actual[0] != endpoint["incarnation"]:
+                raise ValueError(
+                    "Reference endpoint is not the exact materialized paper incarnation"
+                )
+        conn.execute(
+            "INSERT INTO refs VALUES(?,?,?) ON CONFLICT(paper_id,ref_paper_id) "
+            "DO UPDATE SET influential=excluded.influential",
+            (local, target, data["influential"]),
+        )
+        _record_projection(conn, operation, feature, scope, key, source_hash)
+        return
     scope_column = "list_id" if scope["kind"] == "list" else "paper_id"
     where, parameters = f"{scope_column}=?", [local]
     mapping = None
@@ -482,7 +630,7 @@ def write_content(conn, operation):
         return
     if mapping is not None and mapping[2] != data["created_at"]:
         raise ValueError("Research item creation identity cannot change")
-    for field in ("anchor", "contexts_json", "reading_json"):
+    for field in ("anchor", "contexts_json", "reading_json", "body_json"):
         if field in data and data[field] is not None:
             data[field] = json.dumps(data[field], ensure_ascii=False, sort_keys=True)
     linkage = None
@@ -528,6 +676,11 @@ def write_content(conn, operation):
             ),
             (local_row[0], key, *linkage, source_hash),
         )
+    _record_projection(conn, operation, feature, scope, key, source_hash)
+
+
+def _record_projection(conn, operation, feature, scope, key, source_hash):
+    identity, parent = operation["entity_id"], operation["parents"][0]
     conn.execute(
         "INSERT INTO research_content_projection VALUES(?,?,?,?,?,?,?,?) "
         "ON CONFLICT(entity_id) DO UPDATE SET incarnation=excluded.incarnation,"

@@ -20,6 +20,7 @@ from contextlib import closing
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from paper_daily import annotation_content
 from paper_daily.store import SCHEMA, _migrate
 from paper_daily.sync_blobs import BlobManifest, BlobStore, _no_link
 from paper_daily.sync_client import validate_event
@@ -59,7 +60,12 @@ RESEARCH_TABLES = frozenset(
         "chat",
     }
 )
+OPTIONAL_RESEARCH_TABLES = {"list_reading_goals"}
+
 PROTOCOL = {
+    "research_source_archive": "record_id body_json",
+    "research_source_snapshot_recovery": "request_id owner_json sha256 size media_type",
+    "paper_annotation_known": "feature paper_id",
     "paperfact_sync_identity": "id workspace device",
     "paperfact_sync_operations": (
         "sequence operation_id fingerprint entity_type entity_id envelope server_revision"
@@ -190,7 +196,10 @@ def _research_schema():
         _migrate(conn)
         return {
             name: [row[1] for row in conn.execute(f'PRAGMA table_info("{name}")')]
-            for name in RESEARCH_TABLES
+            for name in (
+                RESEARCH_TABLES | OPTIONAL_RESEARCH_TABLES
+                | frozenset(annotation_content.FEATURES.values())
+            )
         }
 
 
@@ -254,8 +263,10 @@ class _Records:
         self.hidden_pdf, self.hidden_files = set(), set()
         self.pending_ids = set()
         self.research_sources = set()
+        self.annotation_owners = set()
         self.slide_revisions = {}
         self.legacy_sources = {}
+        self.archived_sources = {}
         self.legacy_decks = {}
         self.parent_lifecycles = {}
 
@@ -276,6 +287,19 @@ class _Records:
                     self.hidden_pdf.add(row["paper_id"])
                 else:
                     self.hidden_files.add(row["entity_id"])
+        if name in annotation_content.FEATURES.values():
+            self.annotation_owners.add(row["paper_id"])
+            feature = next(k for k, v in annotation_content.FEATURES.items() if v == name)
+            annotation_content.validate_row(feature, row)
+            if row["document_hash"] is not None:
+                self.research_sources.add(row["document_hash"])
+        if name == "paper_annotation_known" and (
+            row["feature"] not in annotation_content.FEATURES
+            or not isinstance(row["paper_id"], str) or not row["paper_id"]
+        ):
+            raise RecoveryError("Invalid annotation cache authority marker")
+        if name == "paper_annotation_known":
+            self.annotation_owners.add(row["paper_id"])
         if name == "papers":
             self.paper_ids.add(row["id"])
         elif name == "research_paper_identity":
@@ -484,6 +508,22 @@ class _Records:
             binding = context["binding"]
             if binding is not None and binding["workspace_id"] != self.workspace:
                 raise RecoveryError("Compound receipt belongs to another workspace")
+        elif name == "research_source_archive":
+            from paper_daily.source_provenance import validate
+
+            receipt = validate(row)
+            _add_blob(self.refs, receipt)
+            self.research_sources.add(receipt["sha256"])
+            self.archived_sources[receipt["sha256"]] = {
+                key: receipt[key] for key in ("sha256", "size", "media_type")}
+        elif name == "research_source_snapshot_recovery":
+            from paper_daily.source_snapshots import validate
+
+            validate(row)
+            owner = json.loads(row["owner_json"])
+            if owner["binding"] is not None and owner["binding"]["workspace_id"] != self.workspace:
+                raise RecoveryError("Source snapshot belongs to another workspace")
+            self.research_sources.add(row["sha256"])
         elif name in {"research_generation_requests", "research_generation_recovery"}:
             from paper_daily.research_generation import validate_request_record
 
@@ -551,6 +591,8 @@ class _Records:
         return result
 
     def finish(self):
+        if self.annotation_owners - self.paper_ids:
+            raise RecoveryError("Reading annotation has no archived paper")
         for row in self.legacy_decks.values():
             parent = self.parent_lifecycles.get(("paper", row["paper_id"]))
             if (
@@ -770,7 +812,10 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         )
                 return list(legacy_sources.manifests.values())
 
+            from paper_daily.source_snapshots import list_owned
+
             for name, loader in (
+                ("research_source_snapshot_recovery", list_owned),
                 ("research_generation_recovery", research_generation.list_recovery_requests),
                 ("research_chat_recovery", research_chat.list_recovery_requests),
                 ("research_compound_recovery", research_compound.list_recovery_requests),
@@ -1040,7 +1085,7 @@ def inspect(package):
             )
         from paper_daily.sync_legacy_sources import validate_pdf
 
-        for row in records.legacy_sources.values():
+        for row in [*records.legacy_sources.values(), *records.archived_sources.values()]:
             validate_pdf(archive.read("objects/" + row["sha256"]))
         return manifest
 
@@ -1068,6 +1113,14 @@ def _detached_files(stage, records):
         body = validate_closure(
             payload, lambda row: (stage / "objects" / row["sha256"]).read_bytes()
         )
+        if payload["feature"] == "original_source":
+            from paper_daily.claim_content import hashed
+
+            folder = stage / "pdf" / ".claim-evidence" / hashed(["claim-source-owner", local])[:24]
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / (body["document_hash"] + ".pdf")
+            shutil.copyfile(stage / "objects" / body["document_hash"], target)
+            continue
         raw = body["deck"]
         raw["paper_id"] = local
         folder = stage / "presentations" / hashlib.sha256(local.encode()).hexdigest()[:24]
@@ -1124,6 +1177,11 @@ def restore_detached(package, destination):
             conn.executescript(SCHEMA)
             _migrate(conn)
             records = _Records(manifest["workspace_id"], manifest["cursor"])
+            if any(item["name"] == "research_source_archive" for item in manifest["tables"]):
+                from paper_daily.source_provenance import SCHEMA as archive_schema
+
+                # Compatibility shape only: actual provenance stays in recovery_records.
+                conn.execute(archive_schema)
             conn.execute(
                 "CREATE TABLE recovery_records(table_name TEXT NOT NULL,"
                 "row_number INTEGER NOT NULL,"
@@ -1151,11 +1209,15 @@ def restore_detached(package, destination):
             for table in manifest["tables"]:
                 for index, row in enumerate(_table_rows(archive, table)):
                     records.row(table["name"], row)
-                    if table["section"] == "research" or table["name"] == "research_chat_links":
+                    if table["section"] == "research" or table["name"] in {
+                        "research_chat_links", "paper_annotation_known"
+                    }:
                         columns = ",".join('"' + name + '"' for name in table["columns"])
                         placeholders = ",".join("?" for _ in table["columns"])
+                        verb = ("INSERT OR IGNORE" if table["name"] == "paper_annotation_known"
+                                else "INSERT")
                         conn.execute(
-                            f'INSERT INTO "{table["name"]}" ({columns}) VALUES({placeholders})',
+                            f'{verb} INTO "{table["name"]}" ({columns}) VALUES({placeholders})',
                             [row[name] for name in table["columns"]],
                         )
                     else:
@@ -1175,7 +1237,7 @@ def restore_detached(package, destination):
                 read_retained(row, lambda item: (objects / item["sha256"]).read_bytes())
             from paper_daily.sync_legacy_sources import validate_pdf
 
-            for row in records.legacy_sources.values():
+            for row in [*records.legacy_sources.values(), *records.archived_sources.values()]:
                 validate_pdf(objects / row["sha256"])
             conn.commit()
             if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":

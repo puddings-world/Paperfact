@@ -10,12 +10,14 @@ been filled, so the reader can redraw them without being reopened.
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
-from paper_daily import analyze
-from paper_daily.desktop import ai_style
-from paper_daily.store import connect
+from paper_daily import analyze, store
+from paper_daily.desktop import ai_style, analysis_status
 
 # The parts the tabs show, named after the tabs; the PDF and the marked passages
 # are listed in the tooltip, where the detail belongs.
@@ -69,6 +71,9 @@ class AnalysisBar(QWidget):
         self.paper_id: str | None = None
         self._state: dict[str, bool] = {}
         self._was_running = False
+        self._epoch = 0
+        self._status_worker = analysis_status.LatestStatus(self)
+        self._status_worker.failed.connect(self.label_error)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 2, 8, 2)
         row.setSpacing(8)
@@ -82,12 +87,26 @@ class AnalysisBar(QWidget):
         self._poll = QTimer(self)
         self._poll.setInterval(2000)
         self._poll.timeout.connect(self.refresh)
+        self._render(describe({}, False, {}))
 
     def show_paper(self, paper_id: str) -> None:
+        self._epoch += 1
+        self._status_worker.cancel()
         self.paper_id = paper_id
         self._state = {}
         self._was_running = False
+        self._render(describe({}, bool(self.win.analysis_running(paper_id)), {}))
         self.refresh()
+
+    def hideEvent(self, event):
+        self._status_worker.cancel()
+        self._poll.stop()
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.paper_id:
+            self.refresh()
 
     def _pressed(self) -> None:
         if not self.paper_id:
@@ -101,9 +120,33 @@ class AnalysisBar(QWidget):
     def refresh(self) -> None:
         if not self.paper_id:
             return
-        with connect() as conn:
-            state = analyze.status(conn, self.paper_id)
-            failures = {s: analyze.failed(conn, self.paper_id, s) or "" for s in state}
+        try:
+            scope = analysis_status.capture(store.DB_PATH, self.paper_id)
+        except (OSError, ValueError, RuntimeError, sqlite3.Error):
+            self.label_error("Saved analysis could not be checked; please retry")
+            return
+        epoch = self._epoch
+        visible = self.isVisible()
+        self.label.setToolTip("Checking saved analysis...")
+
+        def apply(result):
+            if result is None or self._epoch != epoch or self.paper_id != scope[1]:
+                return
+            if Path(store.DB_PATH).resolve() != Path(scope[0]) or visible and not self.isVisible():
+                return
+            try:
+                if analysis_status.capture(store.DB_PATH, self.paper_id) != scope:
+                    return
+            except (OSError, ValueError, RuntimeError, sqlite3.Error):
+                return
+            self._apply_status(*result)
+
+        self._status_worker.run((scope, epoch), lambda: analysis_status.read(scope), apply)
+
+    def label_error(self, message):
+        self.label.setToolTip(message)
+
+    def _apply_status(self, state, failures):
         mine = self.win.analysis_running(self.paper_id)
         activity = getattr(self.win, "_analysis_activity", None)
         if mine and activity is not None:

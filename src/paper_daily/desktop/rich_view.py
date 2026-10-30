@@ -54,6 +54,9 @@ def _web_view(owner: RichView, palette: dict[str, str]):
     # Everything the page needs is on disk; nothing it shows should reach out.
     settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
     view.page().setBackgroundColor(QColor(palette["ground"]))
+    # Initialize the native WebEngine surface before showing the main window.
+    # First-paper content must not recreate/move an already visible window.
+    view.setHtml("")
     return view
 
 

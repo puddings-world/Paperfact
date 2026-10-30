@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
     QFormLayout,
@@ -206,6 +207,7 @@ class SyncConnectionDialog(QDialog):
         language="zh-TW",
         writers_busy=lambda: False,
         open_workspace=None,
+        automatic=None,
     ):
         super().__init__(parent)
         from paper_daily.workspace_open import open_workspace as launch_workspace
@@ -214,6 +216,7 @@ class SyncConnectionDialog(QDialog):
         self.created_destination = None
         self._opened = False
         self.session, self.writers_busy = session, writers_busy
+        self.automatic = automatic
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
         self._worker = None
@@ -269,6 +272,22 @@ class SyncConnectionDialog(QDialog):
         self.sync_button = QPushButton(self.t["sync"])
         self.sync_button.clicked.connect(self.sync_now)
         layout.addWidget(self.sync_button)
+        self.automatic_box = QCheckBox(
+            "自動同步此工作區（本次開啟期間）" if self.zh
+            else "Sync this workspace automatically during this app session"
+        )
+        self.automatic_box.setToolTip(
+            "開啟後會背景傳送及接收研究資料；關閉不會刪除本機內容。" if self.zh
+            else "Enabling sends and receives this workspace's research in the background."
+        )
+        self.automatic_box.setVisible(self.automatic is not None)
+        self.automatic_box.toggled.connect(self._toggle_automatic)
+        layout.addWidget(self.automatic_box)
+        self.automatic_status = QLabel()
+        self.automatic_status.setWordWrap(True)
+        layout.addWidget(self.automatic_status)
+        if self.automatic is not None:
+            self.automatic.changed.connect(self._automatic_changed)
         self.join_button = QPushButton(self.t["join"])
         self.join_button.clicked.connect(self.choose_join)
         layout.addWidget(self.join_button)
@@ -317,19 +336,50 @@ class SyncConnectionDialog(QDialog):
         self._buttons()
         QTimer.singleShot(0, self.probe)
 
+    def _toggle_automatic(self, checked):
+        if self.automatic is None:
+            return
+        if checked:
+            if (not self.eligible or self.binding != self.session.summary()["identity"]
+                    or not self.automatic.enable()):
+                self.automatic_box.blockSignals(True)
+                self.automatic_box.setChecked(False)
+                self.automatic_box.blockSignals(False)
+        else:
+            self.automatic.stop()
+
+    def _automatic_changed(self, value):
+        if self.disposed:
+            return
+        from paper_daily.desktop.continuous_sync import COPY as SYNC_COPY
+
+        self.automatic_status.setText(SYNC_COPY["zh-TW" if self.zh else "en"][value["state"]])
+        self._buttons()
+
     @property
     def busy(self):
         return self._worker is not None
 
     def _edited(self):
         if not self._setting:
+            if self.automatic is not None:
+                self.automatic.stop()
             self.session.disconnect()
             self._buttons()
 
     def _buttons(self):
         summary = self.session.summary()
         live = summary.get("authenticated", False)
-        available = not self.busy and not self.disposed and not self._invalid
+        auto_busy = self.automatic is not None and self.automatic.busy
+        available = not self.busy and not auto_busy and not self.disposed and not self._invalid
+        checked = self.automatic is not None and self.automatic.enabled
+        self.automatic_box.blockSignals(True)
+        self.automatic_box.setChecked(checked)
+        self.automatic_box.blockSignals(False)
+        self.automatic_box.setEnabled(
+            not self.disposed and (checked or (available and live and self.eligible
+                                              and self.binding == summary["identity"]))
+        )
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
         self.connect_button.setEnabled(available)
@@ -341,8 +391,8 @@ class SyncConnectionDialog(QDialog):
         self.open_created_button.setEnabled(
             available and self.created_destination is not None and not self._opened
         )
-        self.stop_button.setEnabled(self.busy)
-        self.progress_bar.setVisible(self.busy)
+        self.stop_button.setEnabled(self.busy or auto_busy)
+        self.progress_bar.setVisible(self.busy or auto_busy)
         mismatch = self.eligible and live and self.binding != summary["identity"]
         self.enrollment_label.setVisible(not self.eligible or mismatch)
         self.enrollment_label.setText(
@@ -372,7 +422,9 @@ class SyncConnectionDialog(QDialog):
         self.identity_label.setText(
             (("連線狀態：" if self.zh else "Connection state: ") + state)
             + (
-                ("\n上次手動同步：" if self.zh else "\nLast manual sync: ")
+                (("\n上次成功同步：" if self.zh else "\nLast successful sync: ")
+                 if self.automatic is not None else
+                 ("\n上次手動同步：" if self.zh else "\nLast manual sync: "))
                 + summary["last_success"]
                 if summary["last_success"]
                 else ""
@@ -380,7 +432,8 @@ class SyncConnectionDialog(QDialog):
         )
 
     def _start(self, kind, task):
-        if self.busy or self.disposed or self._invalid:
+        if (self.busy or self.disposed or self._invalid
+                or (kind != "probe" and self.automatic is not None and self.automatic.busy)):
             return False
         worker = SyncWorker(task, self)
         self._worker = worker
@@ -613,12 +666,16 @@ class SyncConnectionDialog(QDialog):
         return True
 
     def cancel(self):
+        if self.automatic is not None:
+            self.automatic.stop()
         if self._worker:
             self._worker.ticket.cancel()
             self.session.cancel()
             self.status.setText(self.t["working"])
 
     def disconnect(self):
+        if self.automatic is not None:
+            self.automatic.stop()
         self.session.disconnect()
         if self._worker:
             self._worker.ticket.cancel()
@@ -656,3 +713,51 @@ class SyncConnectionDialog(QDialog):
         self.credential.clear()
         self.done(QDialog.DialogCode.Rejected)
         event.accept()
+
+
+def open_offline_connection(owner, parent, database, *, current_path=None, language='zh-TW',
+                            dialog_factory=SyncConnectionDialog):
+    """Use the same process-memory session owned by WorkspaceDialog, only on a user action."""
+    from paper_daily.workspace_sync import SyncSession
+
+    path = Path(database).resolve(strict=True)
+    current_path = current_path or (lambda: path)
+    if Path(current_path()).resolve() != path:
+        raise ValueError('The selected workspace changed')
+    info = path.stat()
+    identity = (info.st_dev, info.st_ino)
+    session = getattr(owner, '_workspace_sync_session', None)
+    if (session is None or session.workspace.path != path
+            or session.workspace.identity != identity):
+        if session is not None:
+            session.disconnect()
+        session = SyncSession(path, current_path=current_path)
+        owner._workspace_sync_session = session
+    workspace = getattr(owner, '_workspace_dialog', None)
+    existing = getattr(workspace, '_sync_dialog', None)
+    if existing is None or existing.disposed or existing.session is not session:
+        existing = getattr(parent, '_connection_dialog', None)
+    if (existing is not None and not existing.disposed and existing.session is session):
+        existing.show()
+        existing.raise_()
+        existing.activateWindow()
+        return existing
+    kwargs = {"language": language}
+    if dialog_factory is SyncConnectionDialog:
+        from paper_daily.desktop.continuous_sync import controller_for
+
+        kwargs["automatic"] = controller_for(
+            owner, session, blocked=lambda: _background_busy(owner))
+    dialog = dialog_factory(session, parent, **kwargs)
+    dialog.open()
+    return dialog
+
+
+def _background_busy(owner):
+    """Pause between passes for workspace/file/research operations."""
+    from PySide6.QtCore import QThread
+
+    if any(thread.isRunning() for thread in owner.findChildren(QThread)):
+        return True
+    return any(getattr(getattr(owner, name, None), "busy", False) for name in (
+        "_workspace_dialog", "_offline_dialog"))
