@@ -878,3 +878,60 @@ The preview was rendered and inspected with a synthetic reader. No real provider
 login, paid inference, production research, native Mac or physical phone was used.
 This completes the task-drafting slice, not the full v0.5 release. Prior pending
 entries above describe the pre-verification state; the full gate is now passed.
+
+## Current integration map — 2026-10-30
+
+See [delivery status](delivery-status-0.5.md) for the current requirement-to-evidence
+map and independent worktree reconciliation. Manifest comparisons established
+that most producer/review worktree changes are historical integrated layers;
+the isolated annotation layer is still incomplete. A real read-only Claude session
+reviewed first enrollment, and independent synthetic checks identified blocking
+local paper-merge source/version and crash-recovery bugs. Only its separable
+read-only duplicate detector is being integrated; no merge action is exposed.
+
+Offline intent/verified availability and the desktop selected-paper dialog are
+in development with separate file ownership. The original workspace, existing
+research, current release and independent worktrees remain intact. The final
+combined source check remains required before committing this next slice.
+
+
+### Offline and identity candidate ? focused integration passed
+
+The integrated selection passed privacy, Ruff and 131 Python/UI cases in 120.1
+seconds (`build/offline-integration-focused.log`). It covers the new local offline
+service, desktop dialog, selected/current-paper entry, duplicate discovery, and
+existing sync-file/workspace/CLI/question behavior. The dialog was rendered with
+bundled fonts/Fusion and inspected (`build/offline-dialog-preview.png`).
+
+Offline verification uses actual managed PDF/deck bytes, current source targets,
+sealed file proofs and bounded work. Readiness is a dated selected-manifest
+snapshot, not whole-workspace readiness. Pins persist local intent only: selected
+download execution, eviction protection and resumable verification beyond the
+64 MiB pass bound still require implementation. No implicit network/model calls.
+
+Next full-check candidate is frozen now. Source inputs are recorded under
+`build/offline-integration-inputs.json`; full log target is
+`build/offline-integration-full.log`. Do not claim a full pass or commit this
+candidate until its matching run finishes successfully.
+
+Next core work remains: complete typed annotation-group review/producer/backup
+closure; safe explicit first enrollment with complete writer/file coverage;
+selective download/retention; compatibility/device management and editable
+recovery adoption; grounded reading goals/claim sources/lineage; maintenance
+integration preserving observed publication; frozen desktop/mobile acceptance.
+See delivery-status-0.5.md for external hosting and owner-device gates.
+
+### Verified selected offline checks and read-only identity detection
+
+The frozen candidate passed the full gate: **3,227 Python/desktop, 18 frontend,
+91 mobile cases and two actual Python HTTP scenarios**, with privacy/Ruff checks.
+The 615 captured source/test/document inputs remained byte-identical throughout.
+Runtime was 2,260.2 seconds; stage percentages count test cases, not delivery
+completeness. Logs and hashes: `build/offline-integration-full.log` and
+`build/offline-integration-inputs.json`.
+
+This checkpoint includes scoped local byte verification, dated readiness,
+device-local retention intent, guarded desktop selection/close behavior and the
+read-only duplicate detector. It does not include the separate selective-download,
+annotation or per-list-purpose candidates, production enrollment, cache eviction,
+or physical-device acceptance. No owner research or credentials were used.

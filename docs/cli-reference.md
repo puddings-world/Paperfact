@@ -104,6 +104,7 @@ available; `paper-daily` remains a compatibility alias.
 | Command | What it does |
 |---|---|
 | `venues [<paper_id>...] [--list S\|all]` | Check published venue metadata for preprints, using OpenAlex and Crossref. |
+| `duplicates [--list S\|all] [--json]` | Propose library records that are the same paper: a shared DOI, arXiv or Semantic Scholar id (`same`; `check` when the titles disagree), or an identical or same-author near-identical title for papers in a list (`likely`). Each group names the copy holding the most notes and analysis. Read-only; see [paper-identity.md](paper-identity.md). |
 | `resources [<paper_id>...] [--list S\|all] [--force]` | Find and verify code, datasets, model and project links. Named papers and `--force` are rechecked. |
 | `cites [<paper_id>] [--list S] [--limit N]` | Work out what each reference is doing in a paper, and whether to read it; `--list` does every paper in a list that has no analysis yet |
 | `followups <id>... [--list S] [--ahead N] [--with-cites]` | What cites a paper across the whole field (OpenAlex and Semantic Scholar, merged), what each citing work does with it and whether to read it, and the research overview of both directions; `--with-cites` analyses the references first when missing |

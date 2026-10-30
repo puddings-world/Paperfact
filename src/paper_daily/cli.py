@@ -677,6 +677,37 @@ def cmd_venues(args) -> int:
     return 0
 
 
+def cmd_duplicates(args) -> int:
+    """Propose library records that are the same paper. Changes nothing."""
+    from paper_daily import paper_identity
+
+    within = _list_ids(args.list) if args.list else None
+    with connect() as conn:
+        groups = paper_identity.find(conn, within=within)
+        titles = {
+            pid: (title, year)
+            for g in groups
+            for pid, title, year in conn.execute(
+                f"SELECT id, title, year FROM papers WHERE id IN ({','.join('?' * len(g.papers))})",
+                g.papers,
+            )
+        }
+    if args.json:
+        print(json.dumps([g.__dict__ for g in groups], ensure_ascii=False, indent=1))
+        return 0
+    labels = {"same": "same paper", "check": "check: identifiers match, titles differ",
+              "likely": "likely the same paper"}
+    for g in groups:
+        print(f"{labels[g.kind]}  ({', '.join(g.reasons)})")
+        for pid in g.papers:
+            title, year = titles[pid]
+            mark = "keep" if pid == g.keep else "    "
+            print(f"  {mark} {pid:32s} {year or '':4} {g.research[pid]:3d} items  {title}")
+    counts = {k: sum(g.kind == k for g in groups) for k in labels}
+    print(f"{counts['same']} same, {counts['check']} to check, {counts['likely']} likely")
+    return 0
+
+
 def cmd_analyze(args) -> int:
     from paper_daily import analyze
 
@@ -1365,6 +1396,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--list", default=None,
                     help="every paper in a reading list, or 'all' for every list")
     sp.set_defaults(func=cmd_venues)
+
+    sp = sub.add_parser("duplicates",
+                        help="propose library records that are the same paper (changes nothing)")
+    sp.add_argument("--list", default=None,
+                    help="only groups touching a reading list's papers, or 'all' for every list")
+    sp.add_argument("--json", action="store_true", help="machine-readable output")
+    sp.set_defaults(func=cmd_duplicates)
 
     sp = sub.add_parser(
         "analyze", help="make everything a paper is missing: PDF, dive, 承先, 啟後"

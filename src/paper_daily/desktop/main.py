@@ -2403,6 +2403,7 @@ class MainWindow(QWidget):
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
         data_menu.addSeparator()
         self.workspace_action = data_menu.addAction("工作區與備份…", self._workspace_settings)
+        self.offline_action = data_menu.addAction("離線準備所選論文…", self._offline_selected)
         self.review_action = data_menu.addAction("審閱保留內容…", self._review_retained)
         self.review_action.setToolTip("核對未套用的 AI 結果與同步衝突；不會重新呼叫 AI")
         data_menu.addAction("本地整合 · 連接 agent…", self._local_integration)
@@ -2673,6 +2674,41 @@ class MainWindow(QWidget):
         # editor or switch its service to the new workspace in that case.
         return dialog.close()
 
+    def _offline_selected(self):
+        from paper_daily import store
+        from paper_daily.desktop.offline_dialog import OfflineDialog
+        from paper_daily.desktop.queue_view import PAPER_ROLE
+
+        existing = getattr(self, "_offline_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            return
+        if self.stack.currentWidget() is self.reader_page and self.reader_page.paper:
+            selected = [self.reader_page.paper.id]
+        elif self.stack.currentWidget() is self.queue_page:
+            selected = [index.data(PAPER_ROLE).id
+                        for index in self.queue_page.view.selectionModel().selectedIndexes()
+                        if index.data(PAPER_ROLE) is not None]
+        else:
+            selected = []
+        selected = list(dict.fromkeys(selected))
+        if not selected or len(selected) > 100:
+            QMessageBox.information(self, "離線準備",
+                                    "請先在清單選擇 1–100 篇論文，或開啟一篇論文。")
+            return
+        try:
+            dialog = OfflineDialog(store.DB_PATH, selected, self,
+                                   current_path=lambda: store.DB_PATH, language="zh-TW")
+        except (OSError, ValueError, sqlite3.Error):
+            QMessageBox.warning(self, "離線準備",
+                                "無法讀取工作區，請重試。")
+            return
+        self._offline_dialog = dialog
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.open()
+
     def _local_integration(self):
         from paper_daily.desktop.integration_dialog import IntegrationDialog
 
@@ -2877,7 +2913,7 @@ class MainWindow(QWidget):
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
             return False
-        for name in ("_workspace_dialog", "_review_dialog"):
+        for name in ("_workspace_dialog", "_review_dialog", "_offline_dialog"):
             dialog = getattr(self, name, None)
             if dialog is not None and not dialog.disposed:
                 return False
@@ -2971,6 +3007,10 @@ class MainWindow(QWidget):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
     def closeEvent(self, event) -> None:
+        offline = getattr(self, "_offline_dialog", None)
+        if offline is not None and not offline.disposed and not offline.close():
+            event.ignore()
+            return
         workspace = getattr(self, "_workspace_dialog", None)
         if workspace is not None and not workspace.disposed and not workspace.close():
             event.ignore()

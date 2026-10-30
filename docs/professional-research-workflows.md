@@ -1,4 +1,4 @@
-﻿# Professional research workflows for v0.5
+# Professional research workflows for v0.5
 
 Status: implementation direction, 2026-10-30. This document distinguishes the
 working task-drafting entry point from proposed agent execution and release gates.
@@ -91,11 +91,12 @@ truth. A critique must point to inspectable evidence or a specific missing check
 
 ## Delivery order and acceptance
 
-1. **Implemented, focused checks passed:** professional task drafting and responsive
+1. **Verified checkpoint f7155c0:** professional task drafting and responsive
    question controls. Source: `research_tasks.py`, `desktop/research_tasks.py`.
    Tests include cancellation, repeated activation, existing drafts, context changes
    during preview/confirmation, closing, and existing question/browser layout.
-   Full gate remains required before claiming this slice complete.
+   Full gate passed: 3,155 Python, 18 frontend, 91 mobile and two HTTP scenarios.
+   This verifies task drafting, not the proposed research-agent execution layer.
 2. **Required existing v0.5 scope:** per-list goals with explicit sync/export domain;
    claim-level verified sources; grounded lineage; source audit and grouped review.
    Enroll writers and assets before claiming these survive sync, restore or sharing.
