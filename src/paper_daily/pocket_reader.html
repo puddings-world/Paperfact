@@ -1209,7 +1209,7 @@ async function openPdf(p, token) {
     pdf.doc = null;
     pdf.id = p.id;
     try {
-      pdf.doc = await pdfjsLib.getDocument({ url: p.pdf }).promise;
+      pdf.doc = await pdfjsLib.getDocument({ url: p.pdf, isEvalSupported: false }).promise;
     } catch (err) {
       if (token !== pdf.token) return;
       host.innerHTML = `<div class="hint" style="margin:16px">PDF 開不起來:`
@@ -1934,7 +1934,7 @@ async function paperText(p) {
   if (fullText[p.id]) return fullText[p.id];
   if (!p.pdf || typeof pdfjsLib === "undefined") return "";
   pdfjsLib.GlobalWorkerOptions.workerSrc = "lib/pdf.worker.min.js";
-  const doc = (pdf.id === p.id && pdf.doc) ? pdf.doc : await pdfjsLib.getDocument({ url: p.pdf }).promise;
+  const doc = (pdf.id === p.id && pdf.doc) ? pdf.doc : await pdfjsLib.getDocument({ url: p.pdf, isEvalSupported: false }).promise;
   const parts = [];
   for (let i = 1; i <= doc.numPages; i += 1) {
     const c = await (await doc.getPage(i)).getTextContent();
