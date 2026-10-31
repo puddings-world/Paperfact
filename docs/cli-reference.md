@@ -75,7 +75,7 @@ available; `paper-daily` remains a compatibility alias.
 | `app [--next] [--paper ID] [--restart]` | Open the desktop reader (`--next` jumps straight to the next unread; `--paper` opens one paper, in the running window if there is one, switching to the queue or a list that holds it; `--restart` saves drafts and restarts the running reader) |
 | `import-list <name> --file F [--slug S]` | Import a bibliography as a switchable reading list |
 | `lists` | Show the reading lists and how far through each one is |
-| `list-add <list> "<citation>" [--file F] [--doi DOI]` | Resolve a title, citation, arXiv ID/URL or DOI and add the paper to the named list. |
+| `list-add <list> "<citation>" [--file F] [--doi DOI] [--pdf PDF]` | Resolve a title, citation, arXiv ID/URL or DOI and add the paper to the named list. `--pdf` reads the paper from that file; without a citation it takes the arXiv id, DOI and title printed on the file's first page. |
 | `analyze [<paper_id>...] [--list S\|all] [--ahead N] [--jobs N] [--retry]` | Generate missing PDF preparation, explanations, highlights, references and later-work analysis. Use `--list ID` for a list; `--retry` retries previously failed steps. See details below. |
 | `list-remove <list> <paper_id>` | Drop a paper from a list (the paper stays in the corpus) |
 | `repdf <paper_id> [--url URL] [--file PATH]` | Read a paper from another PDF (default: its arXiv copy; `--file` for one downloaded by hand, e.g. through a library proxy); figures and text are re-extracted and every note and question is re-anchored by the passage it quotes. The old file is kept in `data/pdf/replaced/` |

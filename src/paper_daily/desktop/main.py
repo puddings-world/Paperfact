@@ -2310,6 +2310,7 @@ class MainWindow(QWidget):
         self._job_paper: str | None = None
         self.active_list: str | None = None
         self._switching = False
+        self.setAcceptDrops(True)
         self._marked: list[str] = pocket.marked_ids()
 
         self.setWindowTitle("Paperfact")
@@ -4049,6 +4050,39 @@ class MainWindow(QWidget):
 
     def _add_paper(self) -> None:
         if run_add(self):
+            self.reload()
+            self.top_up_dives()
+
+    @staticmethod
+    def dropped_pdfs(mime) -> list[Path]:
+        return [
+            Path(url.toLocalFile())
+            for url in mime.urls()
+            if url.isLocalFile() and url.toLocalFile().lower().endswith(".pdf")
+        ]
+
+    def dragEnterEvent(self, event) -> None:
+        if MainWindow.dropped_pdfs(event.mimeData()):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:
+        pdfs = MainWindow.dropped_pdfs(event.mimeData())
+        if not pdfs:
+            super().dropEvent(event)
+            return
+        event.acceptProposedAction()
+        if not self.active_list:
+            self.queue_page.analysis.setText(
+                "拖進來的 PDF 會加進閱讀清單；請先在上方切到一個清單，再拖一次。"
+            )
+            return
+        # One dialog per file: each title is a guess the person confirms on its own.
+        changed = False
+        for pdf in pdfs:
+            changed = run_add(self, pdf=pdf) or changed
+        if changed:
             self.reload()
             self.top_up_dives()
 

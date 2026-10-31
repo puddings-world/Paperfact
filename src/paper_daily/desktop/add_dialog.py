@@ -141,11 +141,19 @@ class AddToListDialog(QDialog):
     """Resolve a citation and append it to a reading list."""
 
     def __init__(
-        self, palette: dict[str, str], list_id: str, list_name: str, repo_root: Path, parent=None
+        self,
+        palette: dict[str, str],
+        list_id: str,
+        list_name: str,
+        repo_root: Path,
+        parent=None,
+        pdf: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self.pal = palette
         self.list_id = list_id
+        self.pdf = pdf
+        self.doi: str | None = None
         self.repo_root = repo_root
         self.process: QProcess | None = None
         self._temp: Path | None = None
@@ -182,6 +190,8 @@ class AddToListDialog(QDialog):
         self.status.setWordWrap(True)
         self.status.setStyleSheet(f"color:{palette['faint']};font-size:12px;")
         layout.addWidget(self.status)
+        if pdf is not None:
+            self._from_pdf(heading, blurb)
 
         buttons = QHBoxLayout()
         self.go = QPushButton("加入")
@@ -196,6 +206,26 @@ class AddToListDialog(QDialog):
         buttons.addWidget(self.close_btn)
         buttons.addStretch(1)
         layout.addLayout(buttons)
+
+    def _from_pdf(self, heading: QLabel, blurb: QLabel) -> None:
+        from paper_daily import pdf_identity
+
+        assert self.pdf is not None
+        heading.setText(heading.text() + "（附上這份 PDF）")
+        try:
+            found = pdf_identity.guess(self.pdf)
+        except (RuntimeError, ValueError, OSError):
+            found = {"doi": None, "arxiv": None, "title": ""}
+        self.doi = found["doi"]
+        self.body.setPlainText(found["arxiv"] or found["title"])
+        blurb.setText(
+            f"檔案：{self.pdf.name}。下面是從第一頁認出的標題，不對就改掉再按加入；"
+            "加入後就用這份 PDF 閱讀，不再另外下載。"
+        )
+        if self.doi:
+            self.status.setText(f"第一頁印有 DOI {self.doi}，會用它比對。")
+        elif not self.body.toPlainText():
+            self.status.setText("認不出標題，請貼上標題或參考文獻。")
 
     def _start(self) -> None:
         from paper_daily.desktop.ai_access import requires_ai
@@ -234,8 +264,10 @@ class AddToListDialog(QDialog):
         self.process.readyReadStandardOutput.connect(self._progress)
         self.process.finished.connect(self._finished)
         self.process.errorOccurred.connect(self._error)
+        extra = ["--pdf", str(self.pdf)] if self.pdf is not None else []
+        extra += ["--doi", self.doi] if self.doi else []
         program, *rest = runtime.cli_command(
-            "list-add", self.list_id, "--file", str(self._temp)
+            "list-add", self.list_id, "--file", str(self._temp), *extra
         )
         self.process.start(program, rest)
 
@@ -289,13 +321,18 @@ class AddToListDialog(QDialog):
         super().closeEvent(event)
 
 
-def run_add(window) -> bool:
-    """Show the right dialog for whatever the window is showing. True if anything changed."""
+def run_add(window, pdf: Path | None = None) -> bool:
+    """Show the right dialog for whatever the window is showing. True if anything changed.
+
+    A PDF always goes to a list: the main queue holds the three conferences' crawled
+    papers only, and a file on disk cannot be one of them by being dropped."""
     pal = window.pal
     repo_root = runtime.bundle_root()
+    if pdf is not None and not window.active_list:
+        return False
     if window.active_list:
         name = window.list_picker.currentText().rsplit(" (", 1)[0]
-        dialog = AddToListDialog(pal, window.active_list, name, repo_root, window)
+        dialog = AddToListDialog(pal, window.active_list, name, repo_root, window, pdf=pdf)
         dialog.setWindowModality(Qt.WindowModality.WindowModal)
         dialog.exec()
         return dialog.added

@@ -574,13 +574,22 @@ def cmd_list_add(args) -> int:
     from paper_daily import lists
 
     citation = Path(args.file).read_text(encoding="utf-8") if args.file else args.citation
+    doi = args.doi
+    if args.pdf:
+        from paper_daily import pdf_identity
+
+        found = pdf_identity.guess(args.pdf)
+        doi = doi or found["doi"]
+        citation = citation or found["arxiv"] or found["title"]
     if not citation:
-        print("give a citation, a title, or --file")
+        print("give a citation, a title, --file, or a --pdf whose first page names it")
         return 1
     result = lists.add_paper(
-        args.list_id, citation, log=_log, create_name=args.create, doi=args.doi
+        args.list_id, citation, log=_log, create_name=args.create, doi=doi
     )
     print(f"{result['added']} added to '{args.list_id}' ({result['reason']})")
+    if args.pdf and not _attach_pdf(result, args.pdf):
+        return 1
     if result["added"]:
         from paper_daily import resources
 
@@ -589,6 +598,21 @@ def cmd_list_add(args) -> int:
         with connect() as conn:
             resources.refresh(conn, result["paper_ids"], log=_log)
     return 0 if result["added"] else 1
+
+
+def _attach_pdf(result: dict, file: str) -> bool:
+    """Read the paper from the dropped file. A paper already in the list keeps the
+    PDF it has: replacing it would move its notes for no reason the person gave."""
+    from paper_daily import fetch, repdf
+
+    ids = result.get("paper_ids") or result.get("already") or []
+    if not ids:
+        return False
+    paper_id = ids[0]
+    if not result["added"] and (repdf.PDF_DIR / f"{fetch._safe_name(paper_id)}.pdf").exists():
+        print(f"{paper_id} already has a PDF; kept it")
+        return True
+    return repdf.replace(paper_id, None, log=_log, file=file)
 
 
 def cmd_list_remove(args) -> int:
@@ -1376,6 +1400,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("citation", nargs="?", help="a citation, a title, or an arXiv id")
     sp.add_argument("--file", help="read the reference(s) from a file instead")
     sp.add_argument("--doi", help="resolve by DOI instead of searching for the title")
+    sp.add_argument("--pdf", metavar="FILE",
+                    help="read the paper from this PDF; without a citation, name it from the file")
     sp.add_argument("--create", metavar="NAME",
                     help="create the list under this display name if it does not exist")
     sp.set_defaults(func=cmd_list_add)
