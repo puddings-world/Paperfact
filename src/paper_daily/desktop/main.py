@@ -22,7 +22,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QEvent, QObject, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QDesktopServices,
     QFont,
@@ -344,6 +344,12 @@ class Data:
 
         save(paper_id, body, expected=expected)
 
+    def backlinks(self, paper_id: str) -> list[dict]:
+        from paper_daily import notes_search
+
+        with connect() as conn:
+            return notes_search.backlinks(conn, paper_id)
+
     def notes(self, paper_id: str) -> list[sqlite3.Row]:
         with connect() as conn:
             return conn.execute(
@@ -658,6 +664,31 @@ def tag(text: str, pal: dict[str, str], kind: str = "plain") -> str:
     )
 
 
+def _backlinks_html(found: list[dict], pal) -> str:
+    """Notes in other papers that link here with [[title]]."""
+    if not found:
+        return ""
+    items = "".join(
+        f'<div style="margin-top:4px;"><a href="paper:{html.escape(hit["paper_id"])}" '
+        f'style="color:{pal["accent"]};">{html.escape(hit["title"])}</a>'
+        f'<span style="color:{pal["muted"]};"> — {html.escape(hit["snippet"])}</span></div>'
+        for hit in found
+    )
+    return (
+        f'<div style="font-size:11px;margin-bottom:10px;color:{pal["faint"]};">'
+        f"連到這篇的筆記（{len(found)}）{items}</div>"
+    )
+
+
+def _linked(content: str) -> str:
+    from paper_daily import notes_search
+
+    if "[[" not in content:
+        return content
+    with connect() as conn:
+        return notes_search.linked(conn, content)
+
+
 class ReaderPage(ManagedDocumentReader, QWidget):
     def __init__(self, window: MainWindow) -> None:
         super().__init__()
@@ -755,6 +786,31 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             lambda on: self.highlight_button.setText("螢光筆：開" if on else "螢光筆：關")
         )
         bar.addWidget(self.highlight_button)
+        self.layers_button = QPushButton("顯示標記：全部")
+        self.layers_button.setToolTip(
+            "分別顯示或隱藏 AI 重點（綠）與你的螢光筆（黃）；每篇論文各自記住，不會刪除任何標記。"
+        )
+        layers_menu = QMenu(self.layers_button)
+        self.layer_actions = {}
+        for layer, label in (("ai", "AI 重點（綠色）"), ("mine", "我的螢光筆（黃色）")):
+            action = layers_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(True)
+            action.toggled.connect(self._layers_changed)
+            self.layer_actions[layer] = action
+        self.layers_button.setMenu(layers_menu)
+        bar.addWidget(self.layers_button)
+        self.focus_button = QPushButton("專注")
+        self.focus_button.setToolTip(
+            f"只留下論文頁面，全螢幕閱讀（{fonts.key(QKeySequence.StandardKey.FullScreen)}）；"
+            "Esc 離開。"
+        )
+        self.focus_button.clicked.connect(lambda: self.win.focus_mode.enter())
+        bar.addWidget(self.focus_button)
+        # A pen that draws invisible ink reads as broken.
+        self.highlight_button.toggled.connect(
+            lambda on: on and self.layer_actions["mine"].setChecked(True)
+        )
         self.auto_highlights = QCheckBox("自動重點")
         self.auto_highlights.setToolTip(
             "首次開啟 PDF 會分析原文重點、同步素材並連結深度講解；已有結果沿用快取。"
@@ -1346,6 +1402,51 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.presentation_pane.status.setText("已要求開啟新工作區；原始簡報與此視窗保留。")
         return True
 
+    def hidden_layers(self) -> set[str]:
+        return {layer for layer, action in self.layer_actions.items() if not action.isChecked()}
+
+    def _show_layers(self, hidden: set[str]) -> None:
+        for layer, action in self.layer_actions.items():
+            action.blockSignals(True)
+            action.setChecked(layer not in hidden)
+            action.blockSignals(False)
+        self.layers_button.setText(
+            "顯示標記：" + ("全部" if not hidden else "只有 AI" if hidden == {"mine"}
+                         else "只有我的" if hidden == {"ai"} else "隱藏")
+        )
+
+    def _layers_changed(self, _checked=None) -> None:
+        hidden = self.hidden_layers()
+        self._show_layers(hidden)
+        selection = getattr(self.pdf, "selection", None)
+        if selection:
+            selection.set_hidden_layers(hidden)
+            if getattr(self, "_pdf_fingerprint", None):
+                self._mark_status(selection._records, hidden)
+        if self.paper:
+            self.win.remember(f"layers.{self.paper.id}", ",".join(sorted(hidden)))
+
+    def _restore_layers(self) -> set[str]:
+        hidden = set()
+        if self.paper:
+            with connect() as conn:
+                saved = ui_state.read(conn, f"ui.layers.{self.paper.id}") or ""
+            hidden = {layer for layer in saved.split(",") if layer in self.layer_actions}
+        self._show_layers(hidden)
+        return hidden
+
+    def _mark_status(self, marks: list[dict], hidden: set[str]) -> None:
+        ai = sum(mark.get("origin") == "ai" for mark in marks)
+        manual = len(marks) - ai
+        note = "".join(
+            f" · {name}已隱藏" for layer, name in (("ai", "AI "), ("mine", "手動"))
+            if layer in hidden
+        )
+        self.highlight_status.setText(
+            f"原文重點：AI {ai} 段（綠色） · 手動 {manual} 段（黃色）{note}"
+            if marks else "尚未標註原文重點；可按「分析／補上標註」。"
+        )
+
     def _highlights_ready(self, paper_id: str) -> None:
         if self.paper and self.paper.id == paper_id:
             self._load_highlights(self.paper.pdf_path)
@@ -1353,7 +1454,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 self._load_dive()
             selection = getattr(self.pdf, "selection", None)
             if selection:
-                count = sum(mark.get("origin") == "ai" for mark, _words in selection._marks)
+                count = sum(mark.get("origin") == "ai" for mark in selection._records)
                 self.pdf_note.setText(f"已同步 {count} 段 AI 重點（綠色）與素材。")
 
     def _load_highlights(self, path: Path, *, fingerprint=None) -> None:
@@ -1376,6 +1477,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             active = getattr(self, "_active_document", None)
             known = active.sha256 if active is not None and active.path == path else None
             self._pdf_fingerprint = fingerprint or known or pdf_highlights.document_hash(path)
+            selection.hidden_layers = self._restore_layers()
             if hasattr(self, "_highlight_owner"):
                 from paper_daily.desktop import highlight_actions
 
@@ -1384,12 +1486,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
             selection.set_highlights(marks)
             QTimer.singleShot(0, self.reading_positions.bind)
-            ai = sum(mark.get("origin") == "ai" for mark in marks)
-            manual = len(marks) - ai
-            self.highlight_status.setText(
-                f"原文重點：AI {ai} 段（綠色） · 手動 {manual} 段（黃色）"
-                if marks else "尚未標註原文重點；可按「分析／補上標註」。"
-            )
+            self._mark_status(marks, selection.hidden_layers)
         except (OSError, sqlite3.Error, ValueError) as exc:
             self.highlight_status.setText(f"螢光標記無法載入：{exc}")
 
@@ -1570,15 +1667,17 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         pal = self.win.pal
         rows = self.win.data.notes(self.paper.id)
         self._visible_notes = {int(row["id"]): dict(row) for row in rows}
+        links = _backlinks_html(self.win.data.backlinks(self.paper.id), pal)
         if not rows:
             self.note_log.setHtml(
-                f'<div style="color:{pal["faint"]};font-size:12px;">'
+                links + f'<div style="color:{pal["faint"]};font-size:12px;">'
                 "還沒有筆記。在左邊選一段原文,按「寫筆記」或「問這段」,"
-                "寫下來的東西會變成一張便條,點便條上的引文就跳回原處。</div>"
+                "寫下來的東西會變成一張便條,點便條上的引文就跳回原處。"
+                "寫 [[論文標題]] 可以連到另一篇。</div>"
             )
             return
         # A note opened or closed redraws the list; the reader stays where they were.
-        self.note_log.setHtml("".join(self._card(r) for r in rows), keep_scroll=True)
+        self.note_log.setHtml(links + "".join(self._card(r) for r in rows), keep_scroll=True)
 
     def _card(self, row) -> str:
         """One note as a card: its headline always, the rendered note when opened.
@@ -1625,7 +1724,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             inside = (
                 f'<hr style="border:0;border-top:1px solid {pal["border"]};">'
                 f'<div style="color:{pal["ink"]};font-size:13px;">'
-                f"{self.note_log.markdown(content)}</div>"
+                f"{self.note_log.markdown(_linked(content))}</div>"
                 f'<div align="right" style="font-size:11px;">'
                 f'<a href="edit:{note_id}" style="color:{pal["accent"]};">編輯</a>&nbsp;&nbsp; '
                 f'<a href="del:{note_id}" style="color:{pal["faint"]};">刪除</a>&nbsp;&nbsp; '
@@ -1692,6 +1791,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
     def _note_action(self, url) -> None:
         """Every link in the notes and the conversation goes through here."""
         what, _, raw = url.toString().partition(":")
+        if what == "paper":
+            if not self.win.open_anywhere(raw):
+                self.note_status.setText("那篇不在佇列或任何清單裡，無法開啟。")
+            return
         if what == "resumeqa":
             self._resume_qa(raw)
             return
@@ -1757,6 +1860,22 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             QTimer.singleShot(2500, self.note_status, lambda: self.note_status.setText(""))
         else:
             self.note_status.setText("找不到那一段了 — 原文換過了嗎?")
+
+    def reveal(self, anchor: str | None, page: int | None, tries: int = 20) -> None:
+        """Land on a passage once the PDF has loaded, selected so the eye finds it."""
+        selection = getattr(self.pdf, "selection", None)
+        try:
+            spot = json.loads(anchor) if anchor else None
+        except ValueError:
+            spot = None
+        if (selection is not None and spot and anchor_allowed(self, spot)
+                and selection.focus(spot)):
+            self.pdf_note.setText(f"已跳到第 {page} 頁的那一段" if page else "已跳到那一段")
+            return
+        if spot and tries:
+            QTimer.singleShot(150, self, lambda: self.reveal(anchor, page, tries - 1))
+        elif page and selection is not None:
+            selection.scroll_to_page(page - 1)
 
     def _keep_answer(self, chat_id: int) -> None:
         """Keep one answer as a note, with the question and where it was asked.
@@ -2414,6 +2533,15 @@ class MainWindow(QWidget):
             "匯出目前清單資料包…", self._export_bundle)
         self.export_bundle_action.setToolTip(
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
+        self.search_notes_action = data_menu.addAction("搜尋全部筆記…", self._search_notes)
+        self.search_notes_action.setShortcut(QKeySequence("Ctrl+Shift+F"))
+        self.search_notes_action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+        self.addAction(self.search_notes_action)
+        self.export_notes_action = data_menu.addAction(
+            "匯出筆記為 Markdown…", self._export_notes)
+        self.export_notes_action.setToolTip(
+            "每篇一個 .md：你的螢光筆、AI 重點與筆記；"
+            "再次匯出只更新標記區塊，你在檔案裡寫的字會保留")
         self.reading_goal_action = data_menu.addAction("清單研究目的…", self._edit_reading_goal)
         data_menu.addSeparator()
         from paper_daily.desktop.research_updates import COPY as activity_copy
@@ -2600,6 +2728,9 @@ class MainWindow(QWidget):
         window_events.watch(self)
         self._last_paper: str | None = None
         QShortcut(QKeySequence.StandardKey.Find, self, self._find)
+        from paper_daily.desktop.focus_mode import FocusMode
+
+        self.focus_mode = FocusMode(self)
 
         self._restore_layout()
         with connect() as conn:
@@ -3752,8 +3883,37 @@ class MainWindow(QWidget):
         # first thing you see is an empty 深度講解 tab.
         self.top_up_dives()
 
+    def _search_notes(self):
+        from paper_daily.desktop.notes_search_dialog import NotesSearchDialog
+
+        dialog = NotesSearchDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.open()
+        return dialog
+
+    def _export_notes(self) -> None:
+        from paper_daily import notes_export
+
+        if not self.active_list:
+            return
+        folder = QFileDialog.getExistingDirectory(self, "匯出筆記到資料夾")
+        if not folder:
+            return
+        with connect() as conn:
+            ids = [r[0] for r in conn.execute(
+                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+                (self.active_list,),
+            )]
+            results = notes_export.export(conn, ids, Path(folder))
+        kept = sum(item["status"] == "kept" for item in results)
+        message = f"已匯出 {len(results)} 篇的筆記到 {folder}。"
+        if kept:
+            message += f"其中 {kept} 個檔案的標記被刪掉了，原檔沒動，新內容另存為 .new.md。"
+        self.queue_page.analysis.setText(message)
+
     def reload(self) -> None:
         self.export_bundle_action.setEnabled(bool(self.active_list))
+        self.export_notes_action.setEnabled(bool(self.active_list))
         self.add_paper_action.setEnabled(bool(self.active_list))
         self.papers = self.data.queue(list_id=self.active_list) if self.active_list else []
         pinned = self.data.pins(self.active_list or "queue")
@@ -4073,9 +4233,13 @@ class MainWindow(QWidget):
             super().dropEvent(event)
             return
         event.acceptProposedAction()
+        self.open_pdfs(pdfs)
+
+    def open_pdfs(self, pdfs: list[Path]) -> None:
+        """PDFs dropped on the window or opened with Paperfact join the open list."""
         if not self.active_list:
             self.queue_page.analysis.setText(
-                "拖進來的 PDF 會加進閱讀清單；請先在上方切到一個清單，再拖一次。"
+                "拖進來或用 Paperfact 開啟的 PDF 會加進閱讀清單；請先在上方切到一個清單，再試一次。"
             )
             return
         # One dialog per file: each title is a guess the person confirms on its own.
@@ -4130,7 +4294,8 @@ def _force_visible(window: QWidget) -> None:
 
 
 def _hand_off_to_running_instance(
-    open_next: bool, restart: bool = False, paper: str | None = None, destination=None
+    open_next: bool, restart: bool = False, paper: str | None = None, destination=None,
+    pdf: str | None = None,
 ) -> bool:
     """If a window is already open, tell it to come forward and return True.
 
@@ -4146,6 +4311,8 @@ def _hand_off_to_running_instance(
         command = b"workspace-open:" + json.dumps(destination.payload()).encode() + b"\n"
     elif paper:
         command = b"open:" + paper.encode()
+    elif pdf:
+        command = b"pdf:" + str(Path(pdf).resolve()).encode()
     else:
         command = b"restart" if restart else b"next" if open_next else b"show"
     socket.write(command)
@@ -4162,6 +4329,18 @@ def _hand_off_to_running_instance(
         print("Restart not completed: the running app is busy or needs a one-time manual restart.")
     socket.disconnectFromServer()
     return True
+
+
+class _FileOpens(QObject):
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+
+    def eventFilter(self, _watched, event) -> bool:
+        if event.type() == QEvent.Type.FileOpen and event.file().lower().endswith(".pdf"):
+            self.window.open_pdfs([Path(event.file())])
+            return True
+        return False
 
 
 def _install_error_log() -> None:
@@ -4194,7 +4373,10 @@ def _finish_smoke(app) -> None:
     app.quit()
 
 
-def run(open_next: bool = False, restart: bool = False, paper: str | None = None) -> int:
+def run(
+    open_next: bool = False, restart: bool = False, paper: str | None = None,
+    pdf: str | None = None,
+) -> int:
     from paper_daily import store
     from paper_daily.workspace_open import consume_startup, focus_workspace
 
@@ -4210,7 +4392,7 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
     # Without it the Dock (macOS) and the taskbar show the Python interpreter's icon.
     app.setWindowIcon(QIcon(str(ROOT / "assets" / "paper-daily.ico")))
 
-    if _hand_off_to_running_instance(open_next, restart, paper, destination):
+    if _hand_off_to_running_instance(open_next, restart, paper, destination, pdf):
         return 0
 
     smoke = os.environ.get("PAPERFACT_SMOKE_SECONDS")
@@ -4237,6 +4419,11 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
         focus_workspace(window, destination)
     elif paper:
         window.open_anywhere(paper)
+    if pdf:
+        QTimer.singleShot(0, lambda: window.open_pdfs([Path(pdf)]))
+    # macOS hands "open with" files to a running app as an event, not as arguments.
+    window.file_opens = _FileOpens(window)
+    app.installEventFilter(window.file_opens)
     window.update_banner.check_in_background()
 
     # A crashed previous run can leave the socket name taken on Windows; removing it
@@ -4286,6 +4473,8 @@ def run(open_next: bool = False, restart: bool = False, paper: str | None = None
                 window.open_next_unread()
             elif command.startswith(b"open:"):
                 window.open_anywhere(command[5:].decode(errors="replace"))
+            elif command.startswith(b"pdf:"):
+                window.open_pdfs([Path(command[4:].decode(errors="replace"))])
             conn.disconnectFromServer()
 
         conn.readyRead.connect(handle)

@@ -74,6 +74,25 @@ quotes appear as green highlights and in the presentation materials panel. Cache
 analysis is reused on reopening. This checkbox starts off in a fresh workspace;
 enable it to opt into automatic preparation. The main **深入分析** action also
 generates highlights as part of the analysis.
+**顯示標記** shows or hides the two layers separately: AI highlights (green) and
+your own (yellow). Each paper remembers its choice. Hiding only changes what is
+drawn. Nothing is deleted, and a hidden mark can't be clicked or removed. The
+status line still counts both layers and says which one is hidden. Turning the pen
+on brings your own layer back, so new marks never go on an invisible layer.
+**專注** (or the system full-screen key: F11 on Windows, Ctrl+Cmd+F on macOS) leaves
+only the page on screen. It hides the toolbar, the paper header, the PDF bar and the
+side panels, and fills the screen. **Esc**, the same key again, or going back to a
+list leaves focus mode. Everything that was showing comes back exactly as it was.
+In focus mode, **R** turns the reading ruler on or off. It dims the page except for
+about three lines around the pointer, and the choice is remembered.
+**研究資料 → 搜尋全部筆記…** (Ctrl+Shift+F) searches every paper's notes and your
+highlights. Words separated by spaces must all appear. Opening a result lands on the
+passage itself, selected. Write `[[Paper title]]` in a note to link to another paper
+in the workspace. The link works when the whole title matches exactly one paper
+(case and spacing don't matter). That paper's notes tab then lists **連到這篇的筆記**.
+**研究資料 → 匯出筆記為 Markdown…** writes the open list's highlights and notes as one
+`.md` file per paper (see `notes-export` in the CLI reference). Text you add outside
+the marked block survives the next export.
 
 ## Paper presentations
 

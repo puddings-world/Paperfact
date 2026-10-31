@@ -23,7 +23,9 @@ def _page():
         }
     ]
     page = SimpleNamespace(
-        win=SimpleNamespace(pal=pal, data=SimpleNamespace(notes=lambda _pid: rows)),
+        win=SimpleNamespace(
+            pal=pal, data=SimpleNamespace(notes=lambda _pid: rows, backlinks=lambda _pid: [])
+        ),
         paper=SimpleNamespace(id="p1"),
         _open_notes=set(),
         note_log=rich_view.RichView(pal),

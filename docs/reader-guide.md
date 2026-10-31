@@ -174,7 +174,11 @@ with the title read from the file's first page (its arXiv id when it prints one,
 its DOI for the lookup); correct it if it is wrong, then **加入**. The paper is then
 read from that file rather than downloaded again. Several files open one dialog each.
 A paper already in the list keeps the PDF it has, so its notes do not move. With the
-main queue showing, the window asks you to switch to a list first.
+main queue showing, the window asks you to switch to a list first. `paperfact app
+paper.pdf` does the same from a terminal, or from an "open with" association. If a
+reader is already open, the file goes to that window. On macOS the app also accepts
+PDFs that Finder hands to the running app. The installers don't register Paperfact
+as a PDF handler yet.
 
 Removing never deletes: a queue paper is marked skipped so the row keeps whether and
 when you read it, and a list paper leaves the corpus row, its notes and its deep dive

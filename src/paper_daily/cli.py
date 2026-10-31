@@ -521,7 +521,9 @@ def cmd_app(args) -> int:
     except ImportError as e:
         print(f"the desktop reader needs PySide6: run scripts/setup.ps1  ({e})")
         return 1
-    return run(open_next=args.next, restart=args.restart, paper=args.paper)
+    return run(
+        open_next=args.next, restart=args.restart, paper=args.paper, pdf=getattr(args, "pdf", None)
+    )
 
 
 def cmd_backfill(args) -> int:
@@ -954,6 +956,36 @@ def cmd_web_assets(args) -> int:
     return 0
 
 
+def cmd_notes_export(args) -> int:
+    """Write papers' notes and highlights as Markdown files people can keep elsewhere."""
+    from paper_daily import notes_export
+    from paper_daily.config import DATA_DIR
+
+    with connect() as conn:
+        ids = list(args.paper or [])
+        if args.list_id:
+            ids += [r[0] for r in conn.execute(
+                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+                (args.list_id,),
+            )]
+        if not ids:
+            print("nothing to export: give --paper or a --list that has papers")
+            return 1
+        out = Path(args.out) if args.out else DATA_DIR / "notes" / (args.list_id or "papers")
+        try:
+            results = notes_export.export(conn, ids, out)
+        except ValueError as exc:
+            print(exc)
+            return 1
+    for item in results:
+        print(f"{item['status']:9} {item['path']}")
+    kept = sum(item["status"] == "kept" for item in results)
+    if kept:
+        print(f"{kept} file(s) had their paperfact markers removed, so they were left as "
+              "they are and the new export was written beside them as .new.md")
+    return 0
+
+
 def cmd_list_export(args) -> int:
     """Pack a reading list and all its analyses into one file to hand on."""
     from paper_daily import research_service
@@ -1253,6 +1285,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="save drafts and safely restart the running reader")
     sp.add_argument("--paper", metavar="ID",
                     help="open this paper, in the running reader if there is one")
+    sp.add_argument("pdf", nargs="?", metavar="PDF",
+                    help="add this PDF to the open reading list (what \"open with\" passes)")
     sp.set_defaults(func=cmd_app)
 
     sp = sub.add_parser("followups", help="what cites a paper across the field, judged")
@@ -1306,6 +1340,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--without-pdfs", action="store_false", dest="with_pdfs",
                     help="export a smaller package using verified download URLs instead")
     sp.set_defaults(func=cmd_list_export)
+
+    sp = sub.add_parser("notes-export",
+                        help="write notes and highlights as Markdown, one file per paper")
+    sp.add_argument("--paper", action="append", metavar="ID", help="a paper id (repeatable)")
+    sp.add_argument("--list", dest="list_id", metavar="LIST", help="every paper in this list")
+    sp.add_argument("-o", "--out", default=None,
+                    help="folder to write into (default: <data>/notes/<list>)")
+    sp.set_defaults(func=cmd_notes_export)
 
     sp = sub.add_parser("list-import", help="bring in a list exported with list-export")
     sp.add_argument("path")

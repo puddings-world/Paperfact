@@ -177,6 +177,11 @@ class SelectionOverlay(QWidget):
         self._words: dict[int, list[Word]] = {}
         self._selected: list[Word] = []
         self._marks: list[tuple[dict, list[Word]]] = []
+        self._records: list[dict] = []
+        self.hidden_layers: set[str] = set()
+        # Focus mode's reading ruler: the lines around the pointer stay lit.
+        self.ruler = False
+        self._ruler_y: float | None = None
         self._anchor: tuple[int, float, float] | None = None
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.IBeamCursor)
@@ -217,6 +222,7 @@ class SelectionOverlay(QWidget):
                 return False
         self.clear()
         self._marks.clear()
+        self._records = []
         self._words.clear()
         self._close()
         self._doc = candidate
@@ -308,9 +314,22 @@ class SelectionOverlay(QWidget):
         # survive into a note or a prompt as invisible junk.
         return " ".join(text.split())
 
+    @staticmethod
+    def layer(record: dict) -> str:
+        return "ai" if record.get("origin") == "ai" else "mine"
+
+    def set_hidden_layers(self, layers) -> None:
+        """Hide whole layers of marks without touching what is stored. A hidden mark
+        cannot be clicked or erased, so hiding never costs anyone a highlight."""
+        self.hidden_layers = set(layers)
+        self.set_highlights(self._records)
+
     def set_highlights(self, records: list[dict]) -> None:
+        self._records = list(records)
         self._marks = []
-        for record in records:
+        for record in self._records:
+            if self.layer(record) in self.hidden_layers:
+                continue
             anchor = record["anchor"]
             words = [w for page in range(anchor["p0"], anchor["p1"] + 1)
                      for w in self.words_on(page)
@@ -453,7 +472,23 @@ class SelectionOverlay(QWidget):
         self._selected = []
         self.update()
 
+    def set_ruler(self, on: bool) -> None:
+        self.ruler = on
+        self._ruler_y = None
+        self.update()
+
+    def ruler_band(self) -> tuple[int, int] | None:
+        """(top, bottom) of the lit band, or None when there is nothing to dim."""
+        if not self.ruler or self._ruler_y is None:
+            return None
+        half = RULER_HEIGHT // 2
+        top = max(0, int(self._ruler_y) - half)
+        return top, min(self.height(), top + RULER_HEIGHT)
+
     def mouseMoveEvent(self, event) -> None:
+        if self.ruler:
+            self._ruler_y = event.position().y()
+            self.update()
         if self._anchor is None or not (event.buttons() & Qt.MouseButton.LeftButton):
             return
         here = self.map.at(event.position().toPoint())
@@ -499,7 +534,8 @@ class SelectionOverlay(QWidget):
         self.picked.emit(word.text)
 
     def paintEvent(self, _event) -> None:
-        if not self._selected and not self._marks:
+        band = self.ruler_band()
+        if not self._selected and not self._marks and band is None:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -527,6 +563,14 @@ class SelectionOverlay(QWidget):
             rect = self.map.rect_for(word, pages)
             if not rect.isNull():
                 painter.drawRect(rect.adjusted(-1, -1, 1, 1))
+        if band is not None:
+            painter.setBrush(QColor(0, 0, 0, 96))
+            painter.drawRect(0, 0, self.width(), band[0])
+            painter.drawRect(0, band[1], self.width(), self.height() - band[1])
+
+
+# About three lines of body text at the default zoom.
+RULER_HEIGHT = 72
 
 
 class _ActionBar(QFrame):

@@ -188,3 +188,41 @@ def test_a_small_caps_title_keeps_its_capitals(tmp_path):
     doc.save(tmp_path / "caps.pdf")
     doc.close()
     assert pdf_identity.guess(tmp_path / "caps.pdf")["title"] == "CATEGORICAL REPARAMETERIZATION"
+
+
+def test_open_with_passes_the_pdf_to_the_running_window(workspace, monkeypatch, tmp_path):
+    from PySide6.QtGui import QFileOpenEvent
+
+    import paper_daily.desktop.main as main
+
+    assert cli.build_parser().parse_args(["app", "paper.pdf"]).pdf == "paper.pdf"
+
+    class Socket:
+        def connectToServer(self, name):
+            pass
+
+        def waitForConnected(self, _ms):
+            return True
+
+        def write(self, data):
+            sent.append(data)
+
+        def __getattr__(self, _name):
+            return lambda *a: None
+
+    sent = []
+    monkeypatch.setattr(main, "QLocalSocket", Socket)
+    pdf = _pdf(tmp_path / "paper.pdf")
+    assert main._hand_off_to_running_instance(False, pdf=str(pdf))
+    assert sent == [b"pdf:" + str(pdf.resolve()).encode()]
+    win = MainWindow()
+    try:
+        seen = []
+        monkeypatch.setattr(win, "open_pdfs", lambda pdfs: seen.extend(pdfs))
+        opens = main._FileOpens(win)
+        assert opens.eventFilter(None, QFileOpenEvent(str(pdf)))
+        assert not opens.eventFilter(None, QFileOpenEvent(str(tmp_path / "notes.txt")))
+        assert seen == [pdf]
+    finally:
+        win.close()
+        win.deleteLater()
