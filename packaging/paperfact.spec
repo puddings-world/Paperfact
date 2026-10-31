@@ -8,7 +8,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).parent
 ICONS = ROOT / "build" / "icons"
@@ -28,6 +28,15 @@ datas = [
 datas += collect_data_files("paper_daily")
 # Features import their modules when first used, out of PyInstaller's sight.
 hiddenimports = collect_submodules("paper_daily")
+# keyring discovers built-in backends via package entry-point metadata. Bundle
+# only its native platform backend plus safe null/failure selection; never add
+# plaintext third-party fallbacks. No credential store is opened during build.
+datas += copy_metadata("keyring")
+hiddenimports += ["keyring.backends.null", "keyring.backends.fail", "keyring.backends.chainer"]
+hiddenimports += [{
+    "win32": "keyring.backends.Windows",
+    "darwin": "keyring.backends.macOS",
+}.get(sys.platform, "keyring.backends.SecretService")]
 
 a = Analysis(
     [str(ROOT / "packaging" / "gui_entry.py"), str(ROOT / "packaging" / "cli_entry.py")],

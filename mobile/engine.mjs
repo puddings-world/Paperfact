@@ -1,4 +1,6 @@
 import { downloadArtifact, readArtifact } from './artifact-engine.mjs';
+import {preparePositionPush,reconcilePositionIntents} from './primary-source-retention.mjs';
+import {exportPositionRecovery} from './position-recovery.mjs';
 import {
   copy,
   own,
@@ -205,10 +207,13 @@ export class Engine {
   async syncRun(generation) {
     await this.authenticated(generation);
     this.onChange('syncing');
+    if((await this.store.read()).positionIntents || (await this.store.read()).positionRetentions)
+      await this.store.update(state=>{this.check(generation);reconcilePositionIntents(state);});
     const queued =(await this.store.read()).outbox.slice(0, 100);
     for(const item of queued) {
       this.check(generation);
       if(item.acknowledged) continue;
+      if(!await preparePositionPush(this,item.operation,this.#token,generation))continue;
       const event = await this.transport.push(this.#token, copy(item.operation), this.controller.signal);
       this.check(generation);
       validateEvent(event, item.operation.workspace_id);
@@ -233,6 +238,7 @@ export class Engine {
       await this.store.update(next => {
         this.check(generation);
         receive(next, events);
+        reconcilePositionIntents(next);
       });
     }
     this.check(generation);
@@ -332,19 +338,11 @@ export class Engine {
   }
   async deck(id) { return readArtifact(this,id,'deck'); }
   async originalSource(id) { return readArtifact(this,id,'original_source'); }
-  async exportLocal() {
+  async legacyBrief(id) { return readArtifact(this,id,'legacy_brief'); }
+  async exportLocal({drafts={}}={}) {
     const state = await this.store.read();
-    return {
-      format: 'paperfact-mobile-recovery',
-      version: 1,
-      workspace: state.workspace,
-      device: state.device,
-      cursor: state.cursor,
-      outbox: state.outbox,
-      conflicts: state.conflicts,
-      drafts: state.drafts,
-      draftBases: state.draftBases ?? {}
-    };
+    state.drafts={...state.drafts,...drafts};
+    return exportPositionRecovery(state);
   }
 }
 function join(chunks, size) {

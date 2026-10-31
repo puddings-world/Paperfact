@@ -141,7 +141,7 @@ class ClaudeCLI:
             return Completion(None, f"could not run claude: {type(exc).__name__}")
         answer = (proc.stdout or "").strip()
         if proc.returncode == 0 and answer and not _CLI_ERROR.match(answer):
-            return Completion(answer, model=cfg.model)
+            return Completion(answer, model=cfg.model, model_reported=False)
         reason = _cli_failure("claude", answer, proc.stderr or "")
         if reason:
             return Completion(None, reason)
@@ -260,6 +260,7 @@ class Anthropic:
             "ok" if text else "empty reply",
             usage=usage,
             model=data.get("model") or cfg.effective_model,
+            model_reported=bool(data.get("model")),
             provider_request_id=data.get("id"),
             finish_reason=data.get("stop_reason"),
         )
@@ -321,6 +322,7 @@ class OpenAICompatible:
                 _count(details.get("cached_tokens")),
             ),
             model=data.get("model") or cfg.effective_model,
+            model_reported=bool(data.get("model")),
             provider_request_id=data.get("id"),
             finish_reason=first.get("finish_reason"),
         )

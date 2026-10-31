@@ -2,6 +2,15 @@
 fonts/
 # Downloaded by `web-assets` (see src/paper_daily/web_assets.py)
 vendor/
+# The mobile offline parser is a pinned, licensed runtime dependency.
+!/mobile/vendor/
+/mobile/vendor/*
+!/mobile/vendor/pdfjs-6.4.299/
+/mobile/vendor/pdfjs-6.4.299/*
+!/mobile/vendor/pdfjs-6.4.299/LICENSE
+!/mobile/vendor/pdfjs-6.4.299/pdf.mjs
+!/mobile/vendor/pdfjs-6.4.299/pdf.worker.mjs
+!/mobile/vendor/pdfjs-6.4.299/provenance.json
 
 # Python
 __pycache__/

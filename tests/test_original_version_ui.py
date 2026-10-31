@@ -389,9 +389,7 @@ def test_account_switch_during_prepare_never_reads_ai_routing(historical, monkey
     assert h.d._original_viewer is not None and len(h.claims[2]) == 1
 
 
-def test_private_unbound_pin_stays_unavailable_without_identity_creation_or_ai(
-    tmp_path, monkeypatch
-):
+def test_private_unbound_owned_pin_opens_without_identity_creation_or_ai(tmp_path, monkeypatch):
     from PySide6.QtWidgets import QApplication, QWidget
 
     from paper_daily.claim_jobs import ClaimJob
@@ -424,8 +422,12 @@ def test_private_unbound_pin_stays_unavailable_without_identity_creation_or_ai(
     try:
         assert dialog.open_original()
         wait(app, lambda: not dialog.busy)
-        assert dialog._original_viewer is None
-        assert dialog.status.text() == TEXT["en"]["original_unavailable"]
+        assert dialog._original_viewer is not None
+        snapshot = dialog._original_viewer.snapshot
+        assert snapshot.local_proof is not None and snapshot.portable_id is None
+        assert snapshot.document_hash == dialog.saved["document_hash"]
+        assert hashlib.sha256(snapshot.data).hexdigest() == snapshot.document_hash
+        assert dialog.status.text() == TEXT["en"]["original_opened"]
         assert (
             rows(ready[0], "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             == before
@@ -433,6 +435,7 @@ def test_private_unbound_pin_stays_unavailable_without_identity_creation_or_ai(
         assert len(claims[2]) == 1 and dialog.saved["report"]
     finally:
         dialog.close()
+        wait(app, lambda: dialog.disposed)
         dialog.deleteLater()
         parent.close()
         parent.deleteLater()

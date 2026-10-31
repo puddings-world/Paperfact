@@ -1,5 +1,6 @@
 /** Closed portable deck manifests and byte validation. No paths, HTML or network. */
 import {uuid5Name, asciiJSON} from './ids.mjs';
+import {validateLegacyManifest} from './legacy-workflow.mjs';
 const enc = new TextEncoder();
 const HASH = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -59,6 +60,10 @@ export function validateInputVersions(value) {
 export function validateArtifact(payload, entityId, parents) {
   closed(payload,['paper_id','feature','slot','format_version','source_document_hash','input_versions','body','assets']);
   uuid(payload.paper_id);
+  if(payload.feature==='legacy_brief') {
+    validateInputVersions(payload.input_versions);
+    return validateLegacyManifest(payload,entityId,parents);
+  }
   if (payload.feature === 'original_source') {
     requireArtifact(payload.format_version === 1);
     hash(payload.slot); requireArtifact(payload.source_document_hash === payload.slot);

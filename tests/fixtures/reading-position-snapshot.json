@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "workspace_id": "source-workspace",
+  "cursor": 6,
+  "capabilities": {
+    "database_read_projection": true,
+    "sync_bootstrap": false,
+    "assets": true,
+    "decks": false,
+    "note_contract_version": 2,
+    "reading_state_contract_version": 2,
+    "ordering_contract_version": 2,
+    "document_contract_version": 2,
+    "document_manifests": true,
+    "reader_activation": false
+  },
+  "local_state": {
+    "pending_operations": 0,
+    "awaiting_receipts": 0,
+    "deferred_entities": 0
+  },
+  "lists": [],
+  "papers": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "title": "Synthetic historical source A with current document B",
+      "authors": [],
+      "year": 2026,
+      "doi": null,
+      "url": null,
+      "pdf_asset_id": "sha256:2adde01e9667962ca0c151e448b7ea5d86be85edc9d81645a13370144d2fa375",
+      "analysis_sections": [],
+      "citations": [],
+      "queue_pin": {
+        "pinned_at": "2026-10-31T00:00:00Z"
+      },
+      "revision": 1,
+      "sync_state": "synced",
+      "graph": {
+        "incarnation": "a1ef2286-59bf-4ad2-9e25-83455aada20b",
+        "parents": [],
+        "structure_revision": 6
+      },
+      "document": {
+        "desired": {
+          "paper_id": "11111111-1111-4111-8111-111111111111",
+          "sha256": "2adde01e9667962ca0c151e448b7ea5d86be85edc9d81645a13370144d2fa375",
+          "size": 1271,
+          "media_type": "application/pdf"
+        },
+        "applied_sha256": null,
+        "availability": "unchecked",
+        "revision": 3,
+        "sync_state": "synced"
+      }
+    }
+  ],
+  "notes": [],
+  "highlights": [],
+  "decks": [],
+  "assets": [
+    {
+      "id": "sha256:2adde01e9667962ca0c151e448b7ea5d86be85edc9d81645a13370144d2fa375",
+      "sha256": "2adde01e9667962ca0c151e448b7ea5d86be85edc9d81645a13370144d2fa375",
+      "size": 1271,
+      "media_type": "application/pdf",
+      "availability": "unchecked"
+    },
+    {
+      "id": "sha256:9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34",
+      "sha256": "9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34",
+      "size": 263438,
+      "media_type": "application/pdf",
+      "availability": "unchecked"
+    }
+  ],
+  "required_capabilities": [
+    "inbox",
+    "queue_pin",
+    "reading_position"
+  ],
+  "list_order": {
+    "revision": null,
+    "sync_state": "local",
+    "graph": null,
+    "editable": false,
+    "read_only_reason": "graph_unavailable"
+  },
+  "reading_positions": [
+    {
+      "paper_id": "11111111-1111-4111-8111-111111111111",
+      "document_hash": "9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34",
+      "page": 2,
+      "recorded_at": "2026-10-30T17:39:55+00:00",
+      "method": "entered",
+      "source": {
+        "id": "33944504-fd35-52a5-88eb-57aaeb2b08ec",
+        "parents": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "a1ef2286-59bf-4ad2-9e25-83455aada20b",
+            "kind": "paper"
+          }
+        ],
+        "manifest": {
+          "assets": [
+            {
+              "id": "original",
+              "media_type": "application/pdf",
+              "role": "original_pdf",
+              "sha256": "9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34",
+              "size": 263438
+            }
+          ],
+          "body": {
+            "media_type": "application/json",
+            "sha256": "c7ef9f2898acdc6fbb328626b0dd253aa26443c4703dd47256206a4f174a1bde",
+            "size": 146
+          },
+          "feature": "original_source",
+          "format_version": 1,
+          "input_versions": {
+            "complete": false,
+            "documents": [],
+            "entities": [],
+            "inputs_sha256": null,
+            "schema_version": 1
+          },
+          "paper_id": "11111111-1111-4111-8111-111111111111",
+          "slot": "9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34",
+          "source_document_hash": "9797b26da63eeb56d6ed69fa0c2485e36d2bd6637dd829cc85fc080db3ce2c34"
+        }
+      }
+    }
+  ],
+  "inbox": {
+    "items": [
+      {
+        "id": "43890788-e0f3-47bf-8186-afc4ccdc2299",
+        "payload": {
+          "created_at": "2026-10-31T00:00:00Z",
+          "kind": "idea",
+          "state": "new",
+          "text": "Synthetic continuity fixture",
+          "updated_at": "2026-10-31T00:00:00Z"
+        },
+        "active": true,
+        "version": "8c1cf8be-d57e-53a3-9fec-37bb680559b3",
+        "incarnation": "8c1cf8be-d57e-53a3-9fec-37bb680559b3",
+        "sync_state": "synced"
+      }
+    ],
+    "retained": 0
+  }
+}

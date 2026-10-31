@@ -58,3 +58,10 @@ class Completion:
     request_id: str | None = None
     backend: str | None = None
     profile: str | None = None
+    # Providers must clear this when `model` is only a requested/default fallback.
+    model_reported: bool = True
+
+    @property
+    def reported_model(self) -> str | None:
+        """Actual provider identity when supplied; never the compatibility fallback."""
+        return self.model if self.model_reported else None

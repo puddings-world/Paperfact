@@ -1,4 +1,10 @@
 import { pinBadge } from './list-pins.mjs';
+import {parsePositionJSON} from './position-json.mjs';
+import {readingPositionDialog} from './position-dialog.mjs';
+import {positionLabel} from './position-view.mjs';
+import {inboxLabel,researchInboxDialog} from './inbox-view.mjs';
+import {activityLabel,activityReport,researchActivityDialog,activateActivity,canOpenSavedNote} from './research-activity.mjs';
+import { renderLegacyWorkflow } from './legacy-view.mjs';
 import { renderReadingGoal } from './reading-goal.mjs';
 import {
   IndexedStore,
@@ -159,6 +165,9 @@ function retainFocus() {
 }
 function render() {
   if(! state) return;
+  activityDialog?.check();
+  inboxDialog?.check();
+  positionDialog?.check();
   clearDeckURLs();
   const focus = retainFocus(),
   data = projection(state),
@@ -197,6 +206,8 @@ function render() {
     disabled: busy || ! connected ? '': null
   }
   ),
+  button(activityLabel(language), showResearchActivity, {class:'quiet',disabled:busy?'':null}),
+  button(inboxLabel(language), showResearchInbox, {class:'quiet',disabled:busy?'':null}),
   button(t('settings'), showConnection, {
     class: 'quiet'
   })
@@ -323,7 +334,7 @@ function render() {
       role: 'tabpanel',
       'aria-labelledby': 'tab-' + view.tab
     });
-    if(view.tab === 'overview') renderOverview(panel, paper);
+    if(view.tab === 'overview') renderOverview(panel, paper, data);
     if(view.tab === 'notes') renderNotes(panel, paper, data);
     if(view.tab === 'pdf') renderPdf(panel, paper);
     if(view.tab === 'evidence') renderEvidence(panel, paper, data);
@@ -403,9 +414,17 @@ function select(list, paper = null) {
     behavior: 'instant'
   });
 }
-function renderOverview(panel, paper) {
+function renderOverview(panel, paper, data) {
   renderChatCards(panel, paper, el, t);
   renderAnnotations(panel, paper, el, t);
+  const serial=renderSerial,owner=engine;
+  renderLegacyWorkflow(panel,paper,el,t,{
+    briefs:data.legacy_briefs,
+    read:id=>owner.legacyBrief(id),
+    download:id=>owner.downloadArtifact(id),
+    canDownload:connected && !busy,
+    current:()=>serial===renderSerial && owner===engine && view.paper===paper.id && view.tab==='overview'
+  });
   for(const item of paper.research_content ??[]) {
     if(!['resource', 'followup'].includes(item.feature)) continue;
     const data = item.data;
@@ -555,7 +574,8 @@ function renderNotes(panel, paper, data) {
       draftTimer = setTimeout(
       () => {
         void owner.draft(id, value, observation).then(() => {
-          if(owner === engine && view.note === id) document.querySelector('#save-state').textContent = t('draftStored');
+          const saved = document.querySelector('#save-state');
+          if(owner === engine && view.note === id && view.tab === 'notes' && saved) saved.textContent = t('draftStored');
         }).catch(() => {
           notice = 'storage_write_failed';
           isError = true;
@@ -751,6 +771,7 @@ function renderPdf(panel, paper) {
     disabled: ! file?.verified ? '': null
   }
   ),
+  button(positionLabel(language),()=>showReadingPosition(paper.id),{id:'reading-position-button',disabled:busy?'':null}),
   busy ? button(t('downloadCancel'), () => {
     engine.disconnect();
     connected = false;
@@ -773,6 +794,18 @@ function renderPdf(panel, paper) {
     rel: 'noopener'
   }, t('openPdf'))
   ));
+}
+let positionDialog=null;
+function showReadingPosition(paper) {
+  if(positionDialog||busy)return;
+  const owner=engine,ownedStore=store,generation=owner.generation;
+  const current=()=>engine===owner&&store===ownedStore&&owner.generation===generation&&view.paper===paper&&!switchingWorkspace;
+  positionDialog=readingPositionDialog(el,{engine:owner,paper,language,current,
+    connected:()=>connected,blocked:()=>busy||view.dirty.size>0,
+    onExport:value=>downloadJSON(value,'Paperfact-unsent-work.json'),
+    onSaved:result=>{if(current()){notice=result.status==='retained'?'conflict':'saved_locally';isError=false;}},
+    onClose:()=>{positionDialog=null;void refresh();}});
+  document.body.append(positionDialog.dialog);positionDialog.dialog.showModal();void positionDialog.refresh();
 }
 function renderEvidence(panel, paper, data) {
   const imported =(data.imported_highlights ??[]).filter(item => item.paper_id === paper.id && ! item.hidden);
@@ -825,6 +858,43 @@ function renderEvidence(panel, paper, data) {
     class: 'prose'
   }, c.gist ?? c.why ?? '')))
   ));
+}
+let inboxDialog = null;
+function showResearchInbox() {
+  if(inboxDialog || busy)return;
+  const owner=engine,generation=engine.generation;
+  const current=()=>owner===engine && owner.generation===generation;
+  inboxDialog=researchInboxDialog(el,{engine:owner,language,current,blocked:()=>busy,
+    onSaved:result=>{
+      if(!current() || result.status==='resolved')return;
+      notice=result.status==='conflict'?'conflict':'saved_locally';isError=false;
+      const live=document.querySelector('#notice-text');if(live)live.textContent=t(notice);
+    },
+    onClose:()=>{inboxDialog=null;}});
+  document.body.append(inboxDialog.dialog);
+  inboxDialog.dialog.showModal();
+  void inboxDialog.refresh();
+}
+let activityDialog = null;
+function showResearchActivity() {
+  if(activityDialog || busy)return;
+  const owner=engine,generation=engine.generation,scope=[view.list,view.paper,view.tab,view.note];
+  const current=()=>owner===engine&&owner.generation===generation&&
+    scope.every((value,index)=>value===[view.list,view.paper,view.tab,view.note][index]);
+  const loaded=()=>({paper_id:view.paper,hash:pdfURL?pdfHash:null});
+  const blocked=()=>busy||view.dirty.size>0;
+  activityDialog=researchActivityDialog(el,{
+    language,current,blocked,
+    read:async()=>activityReport(await owner.store.read()),
+    canNote:row=>canOpenSavedNote(state,row,loaded()),
+    activate:(row,locate)=>activateActivity({store:owner.store,row,locate,current,blocked,loaded,
+      open:id=>{view.tab='overview';select(view.list,id);},
+      openNote:(id,note)=>{view.paper=id;view.note=note;view.tab='notes';render();}}),
+    onClose:()=>{activityDialog=null;}
+  });
+  document.body.append(activityDialog.dialog);
+  activityDialog.dialog.showModal();
+  void activityDialog.refresh();
 }
 function showConnection() {
   const workspace = el('input', {
@@ -932,11 +1002,7 @@ function showConnection() {
   button(
   t('export'),
   () => attempt(async() => {
-    const recovery = await engine.exportLocal();
-    recovery.drafts = {
-      ...recovery.drafts,
-      ...view.drafts
-    };
+    const recovery = await engine.exportLocal({drafts:view.drafts});
     downloadJSON(recovery, 'Paperfact-unsent-work.json');
   })
   ),
@@ -955,7 +1021,7 @@ function showConnection() {
       if(! file) return;
       void attempt(async() => {
         if(file.size > 8 * 1024 * 1024) throw new Error('projection_too_large');
-        await engine.importProjection(JSON.parse(await file.text()));
+        await engine.importProjection(parsePositionJSON(await file.text()));
         dialog.close();
       });
     }

@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS pins (
 
 -- A list pin belongs to this membership, never a later re-addition of the pair.
 CREATE TRIGGER IF NOT EXISTS paperfact_pin_membership_delete
-AFTER DELETE ON list_papers BEGIN
+AFTER DELETE ON list_papers WHEN OLD.list_id != 'queue' BEGIN
     DELETE FROM pins WHERE scope=OLD.list_id AND paper_id=OLD.paper_id;
 END;
 
@@ -464,6 +464,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if not conn.in_transaction:
         conn.execute("BEGIN")
     initialize(conn)
+    from paper_daily.inbox_content import initialize as initialize_inbox
+
+    initialize_inbox(conn)
+
+    from paper_daily.reading_positions import initialize as initialize_positions
+
+    # Older note-only migrations run before the core paper table is present.
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+    ).fetchone():
+        initialize_positions(conn)
 
 
 PAPER_FIELDS = (

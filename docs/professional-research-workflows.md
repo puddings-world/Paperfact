@@ -17,7 +17,7 @@ theoretical, qualitative, clinical and other research without imposing ML defaul
 These are representative documented workflows, not evidence of universal adoption
 or independent endorsement of vendor accuracy claims.
 
-- [Ai2 Asta](https://allenai.org/blog/asta): question framing, finding papers,
+- [Ai2 Asta agents](https://allenai.org/asta/agents): question framing, finding papers,
   evidence-backed synthesis and scientific-task evaluation. Reuse modular discovery
   and synthesis boundaries; keep researchers able to inspect and correct sources.
 - [PaperQA2 engineering report](https://www.futurehouse.org/research/engineering-blog-journey-to-superhuman-performance-on-scientific-tasks):
@@ -29,7 +29,8 @@ or independent endorsement of vendor accuracy claims.
   Adopt explicit criteria and traceable extraction cells. An exploratory reading
   list is not automatically a systematic review or PRISMA-compliant search.
 
-Additional primary references checked on 2026-10-30:
+Primary references below were checked on 2026-10-30; the Asta agents page,
+Asta interaction study and Elicit workflow were rechecked on 2026-10-31:
 
 - [OpenScholar](https://arxiv.org/abs/2411.14199) documents retrieval, cited synthesis
   and a self-feedback loop. Reuse explicit evidence retrieval/validation boundaries;
@@ -65,6 +66,57 @@ extensions. These are provider-independent drafting templates, not an autonomous
 agent runtime. Prompt requests for quotations are not verified anchors and must
 not receive a "verified" badge until the source validator accepts them.
 
+## Study-design reading defaults
+
+The default deep and close reading recipes are `2026-10-study-design`. They ask
+for checks that fit the actual empirical, theoretical, qualitative or review
+design. Dataset splits, baselines, backbones and training settings apply only
+when the paper actually uses them. Reported datasets and evaluation metrics also
+apply outside ML. Close reading keeps the paper's own section
+order, exact quoted words and reported numbers; unavailable figures, proofs or
+materials must not be invented. These instructions do not certify scientific
+quality, formal verification or successful replication.
+
+Contribution and reading questions can use observations, proofs, materials,
+experiments or stated arguments. Question and highlight prompts ask for only
+grounded useful items, without filling a quota. Candidate validation remains
+strict: only an exact empty question array is handled as this run identifying no
+supported questions, with a clear reason. Saved questions and the existing cached
+failure/refresh behavior are preserved; no extra call or automatic retry is added.
+Malformed, missing, scalar or null question data remains an error. A located
+passage remains distinct from semantic support.
+
+New deep/close writes carry the new recipe marker. Older saved text stays
+readable, and ordinary reads and normal queued selection do not regenerate it.
+Only the existing explicit rewrite/generate action can replace it. Highlight
+format version 2 and question input-only cache identities are unchanged, so this
+wording update alone does not invalidate saved cache content or trigger calls.
+Fixture tests inspect actual producer requests, saved rows and cache reuse with
+simulated responses; they test the prompt contract and application behavior,
+not whether a real model produces valid science.
+
+## Compare saved statements with the original
+
+In the local v0.5 candidate, open **Research tasks > Check saved evidence >
+Compare statements**. Opening reads local saved work; it does not call a model.
+Choose one to eight saved outputs, inspect the Audit account/model and the
+4,000-token output budget setting, then generate explicitly. Actual limits depend
+on the service; current CLI adapters do not enforce this setting. One captured request
+proposes source facts; local checks locate quotations and compare only explicitly
+matching scopes. Both differing statements and their locations remain visible.
+Rounding, derived values, unknown scope and absent reporting remain distinct.
+
+The modeless view preserves question/note drafts while work drains. Its report is
+temporary and copyable, not a saved research artifact or scientific certification.
+Opening or changing the next model does not rewrite a completed report. Stop
+keeps it while the view stays open; accepted close releases its source snapshot.
+While comparison is pending, a bounded read-only recapture can accept unchanged
+research inputs after a reading-state write, without another model call. Changes
+to notes, source bindings or the actual original still reject delivery. Later
+writes after acceptance can invalidate source navigation; idle continuity remains
+separate work. See [the bounded review UI](source-fact-review-ui.md) and
+[the fact extraction contract](source-fact-extraction.md).
+
 ## Professional analysis contract
 
 | Component | Required content | Integrity rule |
@@ -99,8 +151,10 @@ original again; a current PDF is not substituted for a prior version.
 The claim set and its declared original source survive supported list packages
 and complete backups. Typed historical-source transfer and portable original-version
 inspection have integrated fixture coverage. The viewer opens the exact old source
-separately while preserving the current PDF and drafts. Unbound ownership and
-complete first-enrollment migration remain required follow-ons. Mobile displays
+separately while preserving the current PDF and drafts. Generated/imported unbound
+ownership and the copy-based enrollment UI also have fixture coverage. Remaining
+chat/compound/review/file histories and editable recovery adoption are explicit
+migration gates. Mobile displays
 saved proposals and distinct verified original artifacts without AI execution;
 physical-device offline acceptance remains open.
 
@@ -152,3 +206,29 @@ truth. A critique must point to inspectable evidence or a specific missing check
 Cloud identity/hosting, service operation and physical Windows/Mac/phone acceptance
 remain explicit release gates. No real research upload, paid calls or public
 release is authorized merely by this design document.
+
+## Local evidence-check entry
+
+The current development candidate adds **Check saved evidence** under Research
+tasks. It reads saved text and the owned original in a cancellable local worker,
+shows actual processed-item counts and source-version uncertainty, and never asks
+a model from a read. The same bounded operation is available through JSON CLI/MCP.
+This is the initial deterministic audit slice, not the completed semantic or
+cross-output audit. See [coverage and required next layers](analysis-audit.md).
+The default task menu stays small; specialized systematic-review/experiment agents
+remain optional workflows with their own criteria, evidence and execution budgets.
+
+## Study-design-aware drafts
+
+The existing Methods task now distinguishes empirical, theoretical and qualitative
+appraisal, with mixed/review designs using applicable checks. It asks the model to
+state uncertainty about the design, separate reported facts from interpretation,
+and avoid universal quality scores or journal prestige as a substitute for review.
+The existing Replication task distinguishes same-material checking, independent
+data, proof review and qualitative-material/process review; a generated plan does
+not imply execution or formal verification. Evidence drafting requests at most
+five consequential claims without inventing extra claims to fill a quota.
+
+These remain editable questions under the same six menu entries. Previewing or
+cancelling calls no model and writes no research. This tests the software draft
+contract; specialist evaluation of actual answers remains an external gate.

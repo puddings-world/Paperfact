@@ -39,6 +39,24 @@ def user_data_dir(platform: str = sys.platform, env=os.environ, home: Path | Non
     return (Path(base) if base else home / ".local" / "share") / APP_NAME
 
 
+def user_cache_dir(platform: str = sys.platform, env=os.environ, home: Path | None = None) -> Path:
+    """Local derived results; independent of install files and shared research folders."""
+    home = home or Path.home()
+    if platform == "win32":
+        configured = Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None
+        base = (
+            configured
+            if configured is not None and configured.is_absolute()
+            else home / "AppData" / "Local"
+        )
+        return base / APP_NAME / "Cache"
+    if platform == "darwin":
+        return home / "Library" / "Caches" / APP_NAME
+    configured = Path(env["XDG_CACHE_HOME"]) if env.get("XDG_CACHE_HOME") else None
+    base = configured if configured is not None and configured.is_absolute() else home / ".cache"
+    return base / APP_NAME
+
+
 def data_dir(env=os.environ, frozen: bool = FROZEN) -> Path:
     """Where papers.db, PDFs and notes go, unless PAPERFACT_DATA says otherwise.
 
@@ -63,7 +81,7 @@ def read_env_file(path: Path) -> dict[str, str]:
             continue
         key, value = (part.strip() for part in line.split("=", 1))
         if key.startswith("export "):
-            key = key[len("export "):].strip()
+            key = key[len("export ") :].strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
         if key:

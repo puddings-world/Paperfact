@@ -12,12 +12,9 @@ from paper_daily.store import connect, now, upsert_papers
 
 def _json(text):
     try:
-        value = json.loads(text.strip().removeprefix("```json").removesuffix("```").strip())
-    except json.JSONDecodeError as exc:
+        return llm.reply_json(text, dict)
+    except ValueError as exc:
         raise ValueError("AI 回傳的格式無法讀取；請重試。") from exc
-    if not isinstance(value, dict):
-        raise ValueError("AI 回傳的格式無法讀取；請重試。")
-    return value
 
 
 def topic_papers(topic, log=lambda _m: None):

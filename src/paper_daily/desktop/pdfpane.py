@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtCore import QPoint, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QVBoxLayout, QWidget
 
@@ -40,6 +40,47 @@ BASE_DPI = 130
 # Pages kept as pixmaps at once. A letter page at 130 dpi is ~5 MB of RGB, so a
 # 47-page paper rendered eagerly would hold ~230 MB -- hence a window, not the lot.
 RESIDENT_PAGES = 8
+_NO_POSITION_PROOF = object()
+
+
+class _LoadWitness:
+    """Bounded native-load metadata only; PDF hashing/parsing stays on workers."""
+
+    def __init__(self, path):
+        self.path = path
+        self.before = self._version()
+        self.version = None
+        self._ready_seen = self._invalidated = False
+
+    def _version(self):
+        from paper_daily.file_change import version
+
+        try:
+            return version(self.path)
+        except (OSError, ValueError):
+            return None
+
+    def complete(self, ready):
+        if not ready:
+            self._invalidated |= self._ready_seen
+            self.version = None
+            return
+        self._ready_seen = True
+        after = self._version() if ready else None
+        self.version = (
+            after if not self._invalidated and after is not None and after == self.before else None
+        )
+
+
+def _position_matches(pane, expected):
+    witness = pane._position_witness
+    if witness is None or expected is None or witness.version != expected:
+        return False
+    if witness._version() != expected:
+        witness.version = None
+        pane.source_changed.emit()
+        return False
+    return True
 
 
 class _QtPdfPane(QWidget):
@@ -48,6 +89,9 @@ class _QtPdfPane(QWidget):
     def __init__(self, parent: QWidget | None = None, palette: dict | None = None) -> None:
         super().__init__(parent)
         self._doc = QPdfDocument(self)
+        self._position_epoch = 0
+        self._position_path = None
+        self._position_witness = None
         self._view = QPdfView(self)
         self._view.setDocument(self._doc)
         self._view.setPageMode(QPdfView.PageMode.MultiPage)
@@ -113,6 +157,10 @@ class _QtPdfPane(QWidget):
         return f"{_round_pct(new)}%"
 
     def unload(self) -> None:
+        self._position_epoch += 1
+        self._position_path = None
+        self._position_witness = None
+        self.source_changed.emit()
         if self.selection is not None:
             self.selection.set_document(None)
         old = self._doc
@@ -124,6 +172,17 @@ class _QtPdfPane(QWidget):
 
     def load(self, path: Path) -> bool:
         candidate = QPdfDocument(self)
+        witness = _LoadWitness(path)
+
+        def completed(status):
+            witness.complete(
+                status == QPdfDocument.Status.Ready
+                and candidate.status() == QPdfDocument.Status.Ready
+            )
+            if self._doc is candidate:
+                self.source_changed.emit()
+
+        candidate.statusChanged.connect(completed)
         candidate.load(str(path))
         ready = candidate.status() == QPdfDocument.Status.Ready
         if ready and self.selection is not None:
@@ -137,7 +196,22 @@ class _QtPdfPane(QWidget):
         self._view.setDocument(candidate)
         old.close()
         old.deleteLater()
+        self._position_epoch += 1
+        self._position_path = path.absolute()
+        # Ready (not load() returning) is the native completion boundary. A later
+        # status transition invalidates the cached proof before another position.
+        witness.complete(candidate.status() == QPdfDocument.Status.Ready)
+        self._position_witness = witness
+        self.source_changed.emit()
         return True
+
+    source_changed = Signal()
+
+    def position_identity(self):
+        return self._position_epoch, self._position_path, self._doc
+
+    def position_source_version(self):
+        return self._position_witness.version if self._position_witness else None
 
     def page_count(self) -> int:
         return max(self._doc.pageCount(), 0)
@@ -152,6 +226,14 @@ class _QtPdfPane(QWidget):
 
     def current_page(self) -> int:
         return self._view.pageNavigator().currentPage()
+
+    def go_to_position(self, page: int, *, source_version=_NO_POSITION_PROOF) -> bool:
+        if type(page) is not int or not 1 <= page <= self.page_count():
+            return False
+        if source_version is not _NO_POSITION_PROOF and not _position_matches(self, source_version):
+            return False
+        self._view.pageNavigator().jump(page - 1, QPointF(), 0)
+        return True
 
     def page_text(self, page: int) -> str:
         """Text of one page. QPdfView exposes no mouse selection, so asking about
@@ -180,6 +262,8 @@ class _PixmapPdfPane(QScrollArea):
         self.setWidget(self._inner)
 
         self._path: Path | None = None
+        self._position_epoch = 0
+        self._position_witness = None
         self._doc = None
         self._labels: list[QLabel] = []
         self._resident: list[int] = []
@@ -190,6 +274,7 @@ class _PixmapPdfPane(QScrollArea):
     def load(self, path: Path) -> bool:
         if not path.exists():
             return False
+        witness = _LoadWitness(path)
         try:
             import pymupdf
 
@@ -204,13 +289,19 @@ class _PixmapPdfPane(QScrollArea):
         self._path = path
         self._build_placeholders()
         self._render_visible()
+        witness.complete(True)
+        self._position_witness = witness
+        self.source_changed.emit()
         return self.page_count() > 0
 
     def unload(self) -> None:
         self._close()
 
     def _close(self) -> None:
+        self._position_epoch += 1
         self._path = None
+        self._position_witness = None
+        self.source_changed.emit()
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item.widget():
@@ -285,6 +376,14 @@ class _PixmapPdfPane(QScrollArea):
     def page_count(self) -> int:
         return len(self._labels)
 
+    source_changed = Signal()
+
+    def position_identity(self):
+        return self._position_epoch, self._path.absolute() if self._path else None, self._doc
+
+    def position_source_version(self):
+        return self._position_witness.version if self._position_witness else None
+
     def zoom(self, direction: int) -> str:
         new_index = max(0, min(len(ZOOM_STEPS) - 1, self._zoom_index + direction))
         if new_index == self._zoom_index or self._path is None:
@@ -303,6 +402,14 @@ class _PixmapPdfPane(QScrollArea):
             if label.y() <= middle <= label.y() + label.height():
                 return index
         return 0
+
+    def go_to_position(self, page: int, *, source_version=_NO_POSITION_PROOF) -> bool:
+        if type(page) is not int or not 1 <= page <= self.page_count():
+            return False
+        if source_version is not _NO_POSITION_PROOF and not _position_matches(self, source_version):
+            return False
+        self.verticalScrollBar().setValue(self._labels[page - 1].y())
+        return True
 
     def page_text(self, page: int) -> str:
         if self._doc is None or not 0 <= page < self.page_count():

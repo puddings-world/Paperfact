@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 
@@ -257,13 +258,25 @@ def test_cli_workspace_isolation_unicode_json_and_retries(tmp_path):
     assert bad.returncode == 2 and not json.loads(bad.stdout)["ok"]
 
 
-def test_official_sdk_stdio_discovery_commit_errors_and_disconnect(tmp_path):
+@pytest.mark.parametrize("outer_source", ["current", "foreign"])
+def test_official_sdk_stdio_discovery_commit_errors_and_disconnect(
+    tmp_path, monkeypatch, outer_source
+):
     from mcp import Client, StdioServerParameters
+
+    source = Path(__file__).resolve().parents[1] / "src"
+    assert Path(ops.__file__).resolve() == source / "paper_daily" / "local_operations.py"
+    monkeypatch.setenv(
+        "PYTHONPATH", str(source if outer_source == "current" else tmp_path / "foreign-source")
+    )
 
     async def exercise():
         params = StdioServerParameters(
             command=sys.executable,
             args=["-m", "paper_daily", "mcp", "--workspace", str(tmp_path / "mcp")],
+            # The official SDK intentionally filters inherited PYTHONPATH. Pin this
+            # repository's source, even when its interpreter is shared by worktrees.
+            env={"PYTHONPATH": str(source)},
         )
         async with Client(params) as client:
             tools = await client.list_tools()
@@ -308,7 +321,7 @@ def test_packaged_acceptance_contract_also_runs_against_source(tmp_path, monkeyp
     report = verify(
         [sys.executable, "-m", "paper_daily"], tmp_path / "acceptance", dict(os.environ)
     )
-    assert report == {"mcp_tools": 6, "retry_preserved": True, "restart_recovery": True}
+    assert report == {"mcp_tools": 7, "retry_preserved": True, "restart_recovery": True}
 
 
 def test_distinct_concurrent_operations_share_strong_paper_identity(workspace):

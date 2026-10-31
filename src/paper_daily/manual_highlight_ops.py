@@ -65,6 +65,27 @@ class HighlightOwner:
             raise ValueError("Loaded paper or workspace changed; reopen the paper before editing")
 
 
+def capture_owner_in(conn, paper_id, *, expected_identity=None):
+    """Capture actual owner metadata in the caller's transaction; never commit."""
+    if not conn.in_transaction:
+        raise ValueError("Highlight owner capture requires a caller transaction")
+    database = Path(generation._path(conn)).resolve(strict=True)
+    identity = generation._identity(database)
+    if expected_identity is not None and identity != expected_identity:
+        raise ValueError("Highlight owner changed during capture")
+    if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
+        raise ValueError("Highlight paper is no longer present")
+    ensure_lifecycle(conn)
+    data = dict(
+        database_identity=identity, binding=generation._binding(conn),
+        parent=parent_lifecycle(conn, "paper", paper_id),
+        graph=_parent_graph(conn, paper_id),
+    )
+    if not data["parent"] or generation._identity(database) != identity:
+        raise ValueError("Highlight owner changed during capture")
+    return HighlightOwner(database, paper_id, _json(data))
+
+
 def capture_owner(database, paper_id):
     """Capture at actual ReaderPage.load, before PDF loading or selection is possible."""
     database = Path(database).resolve(strict=True)
@@ -72,21 +93,14 @@ def capture_owner(database, paper_id):
     with closing(generation._connect(database)) as conn:
         conn.execute("BEGIN IMMEDIATE")
         try:
-            if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
-                raise ValueError("Highlight paper is no longer present")
-            ensure_lifecycle(conn)
-            data = dict(
-                database_identity=identity, binding=generation._binding(conn),
-                parent=parent_lifecycle(conn, "paper", paper_id),
-                graph=_parent_graph(conn, paper_id),
-            )
-            if not data["parent"] or generation._identity(database) != identity:
+            owner = capture_owner_in(conn, paper_id, expected_identity=identity)
+            if generation._identity(database) != identity:
                 raise ValueError("Highlight owner changed during capture")
             conn.commit()
         except BaseException:
             conn.rollback()
             raise
-    return HighlightOwner(database, paper_id, _json(data))
+    return owner
 
 
 def _file_identity(path):

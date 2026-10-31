@@ -12,6 +12,7 @@ import os
 import re
 import threading
 from contextlib import closing
+from itertools import islice
 from pathlib import Path
 
 from paper_daily import claim_content
@@ -25,6 +26,8 @@ FIELDS = set(COLUMNS.split())
 MAX_RECEIPT = 16 * 1024
 MAX_RECEIPTS = 10000
 _PUBLICATION_LOCK = threading.RLock()
+_DEFAULT_POLICY = object()
+POSITION_FORMATS = {"paperfact.position-source-owner.v1", "paperfact.position-source-owner.v2"}
 
 
 def _owner(context, snapshot):
@@ -62,7 +65,9 @@ def _decode(encoded):
     return json.loads(encoded, object_pairs_hook=pairs)
 
 
-def validate(row):
+def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
+    from paper_daily.sync_documents import MAX_PDF_BYTES as primary_limit
+
     claim_content.closed(row, FIELDS)
     claim_content.text(row["request_id"], 128)
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", row["request_id"]):
@@ -73,6 +78,9 @@ def validate(row):
         owner = _decode(row["owner_json"])
     except (ValueError, TypeError):
         raise ValueError("Invalid source snapshot owner") from None
+    position = (
+        isinstance(owner, dict) and owner.get("format") in POSITION_FORMATS
+    )
     claim_content.closed(
         owner,
         {
@@ -82,9 +90,9 @@ def validate(row):
             "paper_id",
             "parent_lifecycle",
             "source_owner_id",
-        },
+        } | ({"position_key"} if position else set()),
     )
-    if owner["format"] != "paperfact.source-owner.v1":
+    if owner["format"] not in {"paperfact.source-owner.v1", *POSITION_FORMATS}:
         raise ValueError("Unsupported source snapshot owner")
     identity = owner["database_identity"]
     if (
@@ -105,7 +113,15 @@ def validate(row):
     ):
         raise ValueError("Invalid source snapshot parent epoch")
     claim_content.digest(row["sha256"])
-    claim_content.number(row["size"], evidence.MAX_PDF_BYTES, 1)
+    if position and (
+        owner["position_key"] != row["sha256"] or owner["source_owner_id"] != owner["paper_id"]
+    ):
+        raise ValueError("Position original belongs to another exact position owner")
+    if max_pdf_bytes is _DEFAULT_POLICY:
+        max_pdf_bytes = primary_limit if position else evidence.MAX_PDF_BYTES
+    if type(max_pdf_bytes) is not int or not 0 < max_pdf_bytes <= primary_limit:
+        raise ValueError("Invalid trusted source receipt size policy")
+    claim_content.number(row["size"], max_pdf_bytes, 1)
     if row["media_type"] != "application/pdf":
         raise ValueError("Unsupported source snapshot media")
     return row
@@ -117,16 +133,22 @@ def _namespace(owner):
 
 def receipt_path(database, row):
     owner = json.loads(validate(row)["owner_json"])
-    return owned_path(
-        Path(database).parent
-        / ".paperfact-source-snapshots"
-        / _namespace(owner)
-        / (claim_content.hashed(row["request_id"]) + ".json")
-    )
+    root = Path(database).parent / ".paperfact-source-snapshots" / _namespace(owner)
+    key = claim_content.hashed(row["request_id"])
+    if owner["format"] == "paperfact.position-source-owner.v2":
+        return owned_path(root / key / "receipt.json")
+    return owned_path(root / (key + ".json"))
 
 
-def source_path(database, row):
-    owner = json.loads(validate(row)["owner_json"])
+def source_path(database, row, *, max_pdf_bytes=_DEFAULT_POLICY):
+    owner = json.loads(validate(row, max_pdf_bytes=max_pdf_bytes)["owner_json"])
+    if owner["format"] == "paperfact.position-source-owner.v2":
+        return owned_path(receipt_path(database, row).parent / "original.pdf")
+    if owner["format"] == "paperfact.position-source-owner.v1":
+        alias = claim_content.hashed(["reading-position-owner", owner["paper_id"]])[:24]
+        return owned_path(
+            Path(database).parent / "pdf" / ".reading-positions" / alias / (row["sha256"] + ".pdf")
+        )
     alias = claim_content.hashed(["claim-source-owner", owner["paper_id"]])[:24]
     return owned_path(
         Path(database).parent / "pdf" / ".claim-evidence" / alias / (row["sha256"] + ".pdf")
@@ -196,9 +218,30 @@ def list_owned(database):
     root = owned_path(database.parent / ".paperfact-source-snapshots" / _namespace(owner))
     if not root.exists():
         return []
+    from paper_daily import position_source_snapshots as position_sources
+
     rows = []
-    for item in sorted(root.iterdir()):
+    entries = list(islice(root.iterdir(), MAX_RECEIPTS * 2 + 1))
+    if len(entries) > MAX_RECEIPTS * 2:
+        raise ValueError("Source snapshot history exceeds its entry bound")
+    for item in sorted(entries):
         owned_path(item)
+        if item.is_dir():
+            if position_sources.is_stage(item):
+                continue
+            if not re.fullmatch(r"[0-9a-f]{64}", item.name):
+                raise ValueError("Unsupported private source snapshot directory")
+            receipt = owned_path(item / "receipt.json")
+            if not receipt.is_file() or receipt.stat().st_size > MAX_RECEIPT:
+                raise ValueError("Private position source receipt is missing or oversized")
+            row = validate(_decode(receipt.read_bytes()))
+            if receipt_path(database, row) != receipt:
+                raise ValueError("Position receipt differs from its canonical location")
+            position_sources.verify(database, row)
+            rows.append(row)
+            if len(rows) > MAX_RECEIPTS:
+                raise ValueError("Source snapshot history exceeds its receipt bound")
+            continue
         if item.suffix != ".json" or not item.is_file() or item.stat().st_size > MAX_RECEIPT:
             raise ValueError("Unsupported private source snapshot receipt")
         if len(rows) >= MAX_RECEIPTS:

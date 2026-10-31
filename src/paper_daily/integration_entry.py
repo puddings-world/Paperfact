@@ -34,6 +34,7 @@ def main(argv=None):
                 "config",
                 "lists.list",
                 "lists.read",
+                "analysis.audit",
                 "imports.propose",
                 "imports.commit",
                 "imports.discard",
@@ -77,7 +78,8 @@ def main(argv=None):
         if len(raw) > MAX_BYTES:
             raise ValueError("JSON input exceeds 2 MB")
         arguments = json.loads(raw.decode("utf-8-sig") or "{}")
-        init_db()
+        if args.operation != "analysis.audit":
+            init_db()
         result = dispatch(args.operation, arguments)
     except (OSError, ValueError) as exc:
         result = {"ok": False, "error": {"code": "invalid_input", "message": str(exc)}}

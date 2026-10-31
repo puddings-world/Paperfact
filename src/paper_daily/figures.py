@@ -12,9 +12,14 @@ which is how the two conventionally sit.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
+import secrets
 import tempfile
+import threading
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -47,6 +52,250 @@ class Figure:
     path: Path
     kind: str = "figure"
     meta: dict = field(default_factory=dict)
+
+
+_LOADED_KEY = secrets.token_bytes(32)
+
+
+@dataclass(frozen=True)
+class _LoadedSource:
+    view: object
+    document: object
+    version: tuple
+    data: bytes = field(repr=False)
+    _seal: str = field(repr=False)
+
+
+def _loaded_stamp(view, document, version, data):
+    # Immutable byte-object identity is process-only; no serialized cache is authority.
+    value = [
+        id(view),
+        id(document),
+        version,
+        id(data),
+        len(data),
+        view.owner._json,
+        view.fingerprint,
+        str(view.path),
+    ]
+    return hmac.new(_LOADED_KEY, json.dumps(value, sort_keys=True).encode(), "sha256").hexdigest()
+
+
+def _check_loaded(view, document, version):
+    from paper_daily import audit_inputs, file_change, manual_highlight_ops
+
+    if threading.current_thread() is threading.main_thread():
+        raise ValueError("Loaded figure proof verification requires a worker")
+    if (
+        not isinstance(view.owner._json, str)
+        or len(view.owner._json) > manual_highlight_ops.MAX_SNAPSHOT_BYTES
+        or len(view.owner._json.encode()) > manual_highlight_ops.MAX_SNAPSHOT_BYTES
+    ):
+        raise ValueError("Loaded figure owner exceeds its existing snapshot bound")
+    state = json.loads(view.owner._json)
+    parent = state.get("parent")
+    identity = state.get("database_identity")
+    if (
+        not isinstance(parent, str)
+        or not re.fullmatch(r"[0-9a-f]{32}", parent)
+        or not isinstance(identity, list)
+        or len(identity) != 2
+        or any(type(n) is not int for n in identity)
+        or identity[0] < 0
+        or identity[1] <= 0
+    ):
+        raise ValueError("Loaded figure owner has no original native identity/lifecycle")
+    with closing(audit_inputs._connect(view.owner.database)) as conn:
+        conn.execute("BEGIN")
+        try:
+            view.owner.check(conn)
+        except ValueError:
+            raise SourceRevoked("Original figure owner changed") from None
+    if file_change.version(view.path) != version:
+        raise SourceRevoked("Loaded figure source changed")
+    if document is not None and not document._owner.intact(document):
+        raise SourceRevoked("Loaded figure document context changed")
+
+
+def loaded_current(source):
+    """Worker-only source ownership check; never writer or activation authority."""
+    if type(source) is not _LoadedSource or not hmac.compare_digest(
+        source._seal,
+        _loaded_stamp(source.view, source.document, source.version, source.data),
+    ):
+        raise ValueError("Figures need an actual loaded source proof")
+    _check_loaded(source.view, source.document, source.version)
+    return True
+
+
+def capture_loaded(view, document, native_version, *, cancelled=lambda: False):
+    """Read exact original bytes off-GUI, without creating research ownership."""
+    from paper_daily import file_change, manual_highlight_ops
+    from paper_daily.document_reader import DocumentReader, ResolvedDocument
+    from paper_daily.sync_documents import MAX_PDF_BYTES
+
+    if (
+        type(view) is not manual_highlight_ops.HighlightView
+        or type(view.owner) is not manual_highlight_ops.HighlightOwner
+        or native_version is None
+    ):
+        raise ValueError("Figures need an actual loaded reader view")
+    if document is not view.document or (
+        document is not None
+        and (
+            type(document) is not ResolvedDocument
+            or not isinstance(document._owner, DocumentReader)
+            or document.local_id != view.owner.paper_id
+            or document._owner.db_path.resolve() != view.owner.database
+            or document.path != view.path
+            or document.sha256 != view.fingerprint
+        )
+    ):
+        raise ValueError("Figure source differs from the loaded reader")
+    if cancelled():
+        raise ValueError("Figure preparation cancelled")
+    _check_loaded(view, document, native_version)
+    if not 0 < native_version[2] <= MAX_PDF_BYTES:
+        raise ValueError("Figure original exceeds the ordinary PDF budget")
+    data = bytearray()
+    digest = hashlib.sha256()
+    with view.path.open("rb") as stream:
+        while chunk := stream.read(min(1024 * 1024, MAX_PDF_BYTES + 1 - len(data))):
+            if cancelled() or len(data) + len(chunk) > MAX_PDF_BYTES:
+                raise ValueError("Figure preparation cancelled or exceeds its PDF budget")
+            data.extend(chunk)
+            digest.update(chunk)
+    if len(data) != native_version[2] or digest.hexdigest() != view.fingerprint:
+        raise ValueError("Figure original differs from the loaded PDF")
+    data = bytes(data)
+    result = _LoadedSource(
+        view, document, native_version, data, _loaded_stamp(view, document, native_version, data)
+    )
+    loaded_current(result)
+    if cancelled() or file_change.version(view.path) != native_version:
+        raise ValueError("Figure preparation cancelled or changed")
+    return result
+
+
+class SourceRevoked(ValueError):
+    """Original ownership/source was disproved; never renew or rehome it."""
+
+
+class LeaseInterference(ValueError):
+    """One bounded read could not establish a stable physical delivery lease."""
+
+
+@dataclass(frozen=True)
+class _SourceLease:
+    view: object
+    document: object
+    version: tuple
+    _seal: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class _FencedLease:
+    source: _SourceLease
+    fence: tuple
+    _seal: str = field(repr=False)
+
+
+def _lease_stamp(view, document, version):
+    value = [
+        "figure-source-lease-v1",
+        id(view),
+        id(document),
+        version,
+        str(view.owner.database),
+        view.owner.paper_id,
+        view.owner._json,
+        str(view.path),
+        view.fingerprint,
+    ]
+    return hmac.new(_LOADED_KEY, json.dumps(value, sort_keys=True).encode(), "sha256").hexdigest()
+
+
+def _fence_stamp(source, fence):
+    value = ["figure-delivery-v1", source._seal, fence]
+    return hmac.new(_LOADED_KEY, json.dumps(value, sort_keys=True).encode(), "sha256").hexdigest()
+
+
+def loaded_fence(database):
+    """Bounded native metadata only; physical drift is interference, not owner loss."""
+    from paper_daily import file_change
+
+    before = file_change.version(database)
+    wal = Path(str(database) + "-wal")
+    observed = file_change.version(wal) if wal.exists() else None
+    if observed is not None and observed[2] == 0:
+        observed = None
+    if file_change.version(database) != before:
+        raise LeaseInterference("Figure database changed during observation")
+    return before, observed
+
+
+def retain_loaded_lease(source):
+    """Reduce an actual verified byte proof to a process-only original-source lease."""
+    loaded_current(source)
+    return _SourceLease(
+        source.view,
+        source.document,
+        source.version,
+        _lease_stamp(source.view, source.document, source.version),
+    )
+
+
+def _checked_lease(source):
+    if type(source) is not _SourceLease or not hmac.compare_digest(
+        source._seal, _lease_stamp(source.view, source.document, source.version)
+    ):
+        raise SourceRevoked("Figure source lease is not an actual original proof")
+    return source
+
+
+def recheck_loaded_lease(source, *, cancelled=lambda: False):
+    """One stable RO original-owner/source check; no PDF read, parse or new authority."""
+    source = _checked_lease(source)
+    if cancelled():
+        raise LeaseInterference("Figure source check cancelled")
+    before = loaded_fence(source.view.owner.database)
+    _check_loaded(source.view, source.document, source.version)
+    after = loaded_fence(source.view.owner.database)
+    if before != after or cancelled():
+        raise LeaseInterference("Figure source check remained unstable")
+    return _FencedLease(source, after, _fence_stamp(source, after))
+
+
+def lease_metadata_current(proof):
+    """GUI-safe point-in-time delivery guard: no SQL, source hash or PDF parsing."""
+    from paper_daily import file_change
+
+    try:
+        if type(proof) is not _FencedLease:
+            return False
+        source = _checked_lease(proof.source)
+        return (
+            hmac.compare_digest(proof._seal, _fence_stamp(source, proof.fence))
+            and file_change.version(source.view.path) == source.version
+            and loaded_fence(source.view.owner.database) == proof.fence
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _loaded_key(source):
+    options = dict(
+        min_height=MIN_HEIGHT,
+        max_height=MAX_HEIGHT,
+        render_scale=RENDER_SCALE,
+        min_png_bytes=MIN_PNG_BYTES,
+    )
+    encoded = json.dumps(options, sort_keys=True, separators=(",", ":"))
+    return (
+        Path("documents")
+        / source.view.fingerprint
+        / ("figures-v1-" + hashlib.sha256(encoded.encode()).hexdigest()[:24])
+    )
 
 
 def source_id(sid: str, document_hash: str | None = None) -> str:
@@ -212,26 +461,72 @@ def image_path(paper_id, item, *, root=None, legacy_root=None, historical=False)
 
 
 def extract(
-    paper_id: str, pdf_path: Path, force: bool = False, *, cached_only=False, document=None
+    paper_id: str,
+    pdf_path: Path,
+    force: bool = False,
+    *,
+    cached_only=False,
+    document=None,
+    root=None,
+    legacy_root=None,
+    loaded_source=None,
+    cancelled=lambda: False,
 ) -> list[Figure]:
     """Render every figure and table in the paper, newest render cached on disk."""
-    document = capture_document(paper_id, document=document, cached_only=cached_only)
-    if document is not None and (
-        not document_current(document) or Path(pdf_path).resolve() != document.path.resolve()
-    ):
+
+    def current():
+        return not cancelled() and (
+            loaded_current(loaded_source)
+            if loaded_source is not None
+            else document_current(document)
+        )
+
+    root = Path(root) if root is not None else FIG_DIR
+    if loaded_source is not None:
+        loaded_current(loaded_source)
+        if hashlib.sha256(loaded_source.data).hexdigest() != loaded_source.view.fingerprint:
+            raise ValueError("Loaded figure bytes differ from their exact original")
+        if (
+            loaded_source.view.owner.paper_id != paper_id
+            or Path(pdf_path).resolve() != loaded_source.view.path
+        ):
+            raise ValueError("Figure extraction differs from its actual loaded source")
+        # Unbound ready callbacks still read this legacy alias. It never becomes
+        # managed cache authority; owned loads regenerate exact original bytes.
+        if loaded_source.document is not None and loaded_source.document.managed:
+            out_dir = root / _loaded_key(loaded_source)
+            source = dict(
+                document_hash=loaded_source.view.fingerprint,
+                cache_key=out_dir.relative_to(root).as_posix(),
+            )
+        else:
+            out_dir = root / _safe(paper_id)
+            source = dict(document_hash=loaded_source.view.fingerprint)
+    else:
+        document = capture_document(
+            paper_id, document=document, legacy_root=legacy_root, cached_only=cached_only
+        )
+        if document is not None and (
+            not document_current(document) or Path(pdf_path).resolve() != document.path.resolve()
+        ):
+            return []
+        if root == FIG_DIR:
+            ensure_dirs()
+        out_dir = cache_directory(
+            paper_id, document=document, root=root, legacy_root=legacy_root, cached_only=cached_only
+        )
+        if out_dir is None:
+            return []
+        source = (
+            {"document_hash": document.sha256, "cache_key": out_dir.relative_to(root).as_posix()}
+            if document is not None and document.managed
+            else {}
+        )
+    if not current():
         return []
-    ensure_dirs()
-    out_dir = cache_directory(paper_id, document=document, cached_only=cached_only)
-    if out_dir is None:
-        return []
-    source = (
-        {"document_hash": document.sha256, "cache_key": out_dir.relative_to(FIG_DIR).as_posix()}
-        if document is not None and document.managed
-        else {}
-    )
     index = out_dir / "index.json"
 
-    if index.exists() and not force:
+    if index.exists() and not force and loaded_source is None:
         stored = json.loads(index.read_text(encoding="utf-8"))
         found = [
             Figure(
@@ -248,7 +543,7 @@ def extract(
             and (out_dir / f["file"]).exists()
             and (not source or f.get("document_hash") == source["document_hash"])
         ]
-        return found if document_current(document) else []
+        return found if current() else []
 
     if cached_only or not pdf_path.exists():
         return []
@@ -262,8 +557,14 @@ def extract(
     manifest = []
 
     try:
-        with pymupdf.open(pdf_path) as doc:
+        with (
+            pymupdf.open(stream=loaded_source.data, filetype="pdf")
+            if loaded_source is not None
+            else pymupdf.open(pdf_path)
+        ) as doc:
             for pno, page in enumerate(doc):
+                if not current():
+                    return []
                 blocks = [b for b in page.get_text("blocks") if b[4].strip()]
                 for block in blocks:
                     caption = " ".join(block[4].split())
@@ -285,11 +586,19 @@ def extract(
 
                     label = f"{match.group(1).title()} {match.group(2)}"
                     name = f"p{pno + 1:02d}-{_safe(label)}.png"
+                    if not current():
+                        return []
                     try:
                         pix = page.get_pixmap(
                             matrix=pymupdf.Matrix(RENDER_SCALE, RENDER_SCALE),
                             clip=pymupdf.Rect(*rect),
                         )
+                        asset = {}
+                        encoded = pix.tobytes("png") if loaded_source is not None else None
+                        if encoded is not None:
+                            if len(encoded) < MIN_PNG_BYTES:
+                                continue
+                            asset = dict(asset_sha256=hashlib.sha256(encoded).hexdigest())
                         if source:
                             temporary = None
                             try:
@@ -297,7 +606,12 @@ def extract(
                                     dir=out_dir, suffix=".png", delete=False
                                 ) as handle:
                                     temporary = Path(handle.name)
-                                pix.save(temporary)
+                                if encoded is not None:
+                                    temporary.write_bytes(encoded)
+                                else:
+                                    pix.save(temporary)
+                                if not current():
+                                    return []
                                 temporary.replace(out_dir / name)
                             finally:
                                 if temporary is not None:
@@ -309,7 +623,7 @@ def extract(
 
                     # A region that resolved to blank paper compresses to almost
                     # nothing. Showing it would be worse than omitting it.
-                    if (out_dir / name).stat().st_size < MIN_PNG_BYTES:
+                    if loaded_source is None and (out_dir / name).stat().st_size < MIN_PNG_BYTES:
                         (out_dir / name).unlink(missing_ok=True)
                         continue
 
@@ -321,7 +635,7 @@ def extract(
                             pno + 1,
                             out_dir / name,
                             kind,
-                            {"rect": list(rect), **source},
+                            {"rect": list(rect), **source, **asset},
                         )
                     )
                     manifest.append(
@@ -333,12 +647,13 @@ def extract(
                             "kind": kind,
                             "rect": list(rect),
                             **source,
+                            **asset,
                         }
                     )
     except Exception:
-        return figures if document_current(document) else []
+        return figures if current() else []
 
-    if not document_current(document):
+    if not current():
         return []
     if source:
         from paper_daily.presentations import _atomic_json
@@ -346,4 +661,4 @@ def extract(
         _atomic_json(index, manifest)
     else:
         index.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
-    return figures if document_current(document) else []
+    return figures if current() else []

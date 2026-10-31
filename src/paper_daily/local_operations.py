@@ -382,9 +382,31 @@ def commit(
         return result
 
 
+def audit_paper(paper_id: str) -> dict:
+    """Read-only deterministic checks of saved analysis, using the owned local PDF."""
+    if not isinstance(paper_id, str) or not paper_id.strip() or len(paper_id) > 512:
+        raise OperationError("invalid_input", "paper_id must identify a saved paper")
+    from pathlib import Path
+
+    from paper_daily import audit_inputs
+    from paper_daily.config import PDF_DIR
+    from paper_daily.document_reader import from_workspace
+
+    try:
+        database = Path(store.DB_PATH).resolve(strict=True)
+        document = from_workspace(database, legacy_root=PDF_DIR).resolve(paper_id)
+        return audit_inputs.AuditCapture.capture(database, paper_id, document=document).run()
+    except (OSError, ValueError) as error:
+        raise OperationError(
+            getattr(error, "code", "audit_unavailable"),
+            "Evidence check unavailable; retain research and reopen the owned original or retry",
+        ) from None
+
+
 OPERATIONS = {
     "lists.list": list_collections,
     "lists.read": read_collection,
+    "analysis.audit": audit_paper,
     "imports.propose": propose,
     "imports.commit": commit,
     "imports.discard": discard,

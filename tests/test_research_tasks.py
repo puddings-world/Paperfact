@@ -155,3 +155,32 @@ def test_preview_wraps_long_questions_and_cancellation_returns_no_action(reader)
     assert not accepted and result == text
     assert observed == [
         (text, QPlainTextEdit.LineWrapMode.WidgetWidth, 0, '\u5e36\u5165\u8349\u7a3f')]
+
+
+@pytest.mark.parametrize('task,required', [
+    ('methods', ('\u5be6\u8b49\u7814\u7a76', '\u7406\u8ad6\u7814\u7a76',
+                 '\u8cea\u6027\u7814\u7a76', '\u901a\u7528\u5206\u6578')),
+    ('replication', ('\u5c1a\u672a\u57f7\u884c', '\u540c\u4e00\u8cc7\u6599',
+                     '\u7368\u7acb\u8cc7\u6599', '\u8b49\u660e', '\u8cea\u6027')),
+    ('evidence', ('\u4e0d\u8db3', '\u4f5c\u8005', '\u63a8\u8ad6')),
+])
+def test_professional_task_draft_is_design_aware_and_stays_free(
+    reader, monkeypatch, task, required,
+):
+    from paper_daily import llm
+
+    monkeypatch.setattr(llm, 'complete', lambda *a, **k: pytest.fail('Draft called AI'))
+    monkeypatch.setattr(llm, 'complete_result', lambda *a, **k: pytest.fail('Draft called AI'))
+    previews = []
+
+    def accept(_reader, _title, text):
+        previews.append(text)
+        return text, True
+
+    monkeypatch.setattr(ui, 'preview', accept)
+    ui.draft(reader, task)
+    text = reader.ask_box.text()
+    assert all(part in text for part in required)
+    assert reader.drafted == previews == [text]
+    assert research_tasks.EVIDENCE_RULES in text
+    assert not store.DB_PATH.exists()

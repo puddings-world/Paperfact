@@ -5,6 +5,8 @@ import {
   requireThat,
   validateEvent
 } from './domain.mjs';
+import {parsePositionJSON} from './position-json.mjs';
+import {sourceFileId,validateArtifact,validateOriginalSource} from './artifacts.mjs';
 export const CHUNK = 256 * 1024;
 export class TransportError extends Error {
   constructor(code) {
@@ -37,7 +39,8 @@ export class HttpTransport {
     requireThat(new TextEncoder().encode(data).length <= 512 * 1024, 'request_too_large');
     let response;
     try {
-      response = await this.fetch(
+      const request = this.fetch;
+      response = await request(
       this.origin + route,
       {
         method: 'POST',
@@ -93,7 +96,7 @@ export class HttpTransport {
       offset += part.length;
     }
     try {
-      return JSON.parse(new TextDecoder('utf-8', {
+      return parsePositionJSON(new TextDecoder('utf-8', {
         fatal: true
       }).decode(bytes));
     } catch {
@@ -144,5 +147,30 @@ export class HttpTransport {
     }
     requireThat(btoa(raw) === value.data && raw.length === Math.min(limit, size - offset), 'invalid_response');
     return Uint8Array.from(raw, c => c.charCodeAt(0));
+  }
+  async uploadOriginalBody(token,payload,bytes,signal) {
+    validateArtifact(payload,sourceFileId(payload.paper_id,payload.slot));
+    validateOriginalSource(bytes,payload);
+    requireThat(bytes.length===payload.body.size,'invalid_original_body');
+    const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))]
+      .map(value=>value.toString(16).padStart(2,'0')).join('');
+    requireThat(hash===payload.body.sha256,'invalid_original_body');
+    const manifest={sha256:hash,size:bytes.length};
+    const started=await this.post('/v1/blobs/begin',manifest,token,signal);
+    closed(started,['upload_id','sha256','size','offset','complete']);integer(started.offset);
+    requireThat(started.sha256===hash && started.size===bytes.length && typeof started.complete==='boolean' &&
+      started.offset<=bytes.length,'invalid_response');
+    if(started.complete) {
+      requireThat(started.upload_id===null && started.offset===bytes.length,'invalid_response');return;
+    }
+    requireThat(typeof started.upload_id==='string' && /^[A-Za-z0-9_-]{32,64}$/.test(started.upload_id),'invalid_response');
+    if(started.offset<bytes.length) {
+      const result=await this.post('/v1/blobs/append',{upload_id:started.upload_id,offset:started.offset,
+        data:btoa(String.fromCharCode(...bytes.subarray(started.offset)))},token,signal);
+      closed(result,['offset']);requireThat(result.offset===bytes.length,'invalid_response');
+    }
+    const committed=await this.post('/v1/blobs/commit',{upload_id:started.upload_id},token,signal);
+    closed(committed,['sha256','size','complete']);
+    requireThat(committed.complete===true && committed.sha256===hash && committed.size===bytes.length,'invalid_response');
   }
 }

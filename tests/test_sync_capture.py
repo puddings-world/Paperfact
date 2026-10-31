@@ -186,14 +186,31 @@ def test_stale_note_keeps_candidate_and_newer_projection(bound):
     assert len(bound.journal.pending()) == count
 
 
-def test_unsupported_research_write_rolls_back(bound):
+def test_supported_queue_pin_commits_atomically_with_other_research(bound):
+    seed()
+    count = len(bound.journal.pending())
+    with store.connect() as conn:
+        conn.execute("UPDATE lists SET name='Updated with pin'")
+        conn.execute("INSERT INTO pins VALUES('queue','local-paper',?)", (STAMP,))
+    assert rows("SELECT name FROM lists") == [("Updated with pin",)]
+    assert rows("SELECT scope,paper_id,pinned_at FROM pins") == [("queue", "local-paper", STAMP)]
+    assert len(bound.journal.pending()) == count + 2
+    pin = next(op for op in bound.journal.pending()[count:]
+               if op["payload"].get("feature") == "queue_pin")
+    assert pin["payload"]["data"] == {"pinned_at": STAMP}
+    assert pin["payload"]["key"] == "main" and len(pin["parents"]) == 1
+    assert pin["parents"][0]["kind"] == "paper"
+
+
+def test_malformed_queue_pin_rolls_back_other_research_and_outbox(bound):
     seed()
     count = len(bound.journal.pending())
     with pytest.raises(sqlite3.OperationalError), store.connect() as conn:
         conn.execute("UPDATE lists SET name='must roll back'")
-        conn.execute("INSERT INTO pins VALUES('queue','local-paper',?)", (STAMP,))
+        conn.execute("INSERT INTO pins VALUES('queue','local-paper',?)", ("2026-10-30T00:00:00",))
     assert rows("SELECT name FROM lists") == [("Reading",)]
-    assert bound.journal.pending() and len(bound.journal.pending()) == count
+    assert rows("SELECT * FROM pins") == []
+    assert len(bound.journal.pending()) == count
 
 
 def test_unbound_legacy_is_unchanged(tmp_path, monkeypatch):

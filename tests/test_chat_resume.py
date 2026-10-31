@@ -16,7 +16,38 @@ from paper_daily import research_generation as generation
 from paper_daily.desktop import main
 from paper_daily.research_chat_review import ChatReview
 
-reader = reader_fixture
+base_reader = reader_fixture
+
+
+@pytest.fixture
+def reader(base_reader, monkeypatch):
+    from PySide6.QtTest import QTest
+
+    from paper_daily.manual_highlight_ops import capture_owner
+
+    app, window, view = base_reader
+    view._highlight_owner = capture_owner(view._qa_view_database, "local-paper")
+    original = main.ReaderPage._load_chat
+
+    def await_render(target):
+        original(target)
+        if target is view:
+            for _ in range(1000):
+                app.processEvents()
+                if not view.preparation.busy:
+                    break
+                QTest.qWait(5)
+            else:
+                pytest.fail("Queued saved conversation did not drain")
+
+    monkeypatch.setattr(main.ReaderPage, "_load_chat", await_render)
+    yield app, window, view
+    view.preparation.dispose()
+    for _ in range(1000):
+        app.processEvents()
+        if not view.preparation.busy:
+            break
+        QTest.qWait(5)
 legacy = legacy_fixture
 bound = bound_fixture
 

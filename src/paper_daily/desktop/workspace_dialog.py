@@ -225,6 +225,12 @@ class WorkspaceDialog(QDialog):
         actions.addStretch()
         layout.addLayout(actions)
         layout.addWidget(self.sync_connection_button)
+        self.enrollment_button = QPushButton(
+            "\u6e96\u5099\u5de5\u4f5c\u5340\u526f\u672c..."
+            if self.zh else "Prepare workspace copy..."
+        )
+        self.enrollment_button.clicked.connect(self._enrollment_settings)
+        layout.addWidget(self.enrollment_button)
         self.summary = QLabel(self.t["loading"])
         self.summary.setWordWrap(True)
         self.summary.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -250,6 +256,15 @@ class WorkspaceDialog(QDialog):
         self.restore_button = QPushButton(self.t["restore"])
         self.restore_button.clicked.connect(self.choose_restore)
         group.addWidget(self.restore_button)
+        self.recovery_copy_button = QPushButton(
+            "建立可編輯副本…" if self.zh else "Create editable copy…"
+        )
+        self.recovery_copy_button.setToolTip(
+            "選擇已還原的資料庫，檢查後建立獨立副本與備份。"
+            if self.zh else "Inspect restored research, then create a separate copy and backup."
+        )
+        self.recovery_copy_button.clicked.connect(self._recovery_adoption_settings)
+        group.addWidget(self.recovery_copy_button)
         self.open_created_button = QPushButton(
             "開啟新工作區視窗" if self.zh else "Open created workspace"
         )
@@ -286,16 +301,19 @@ class WorkspaceDialog(QDialog):
 
     @property
     def busy(self):
-        return self._worker is not None
+        child = getattr(self, "_recovery_adoption_dialog", None)
+        return self._worker is not None or bool(child and not child.disposed and child.busy)
 
     def _buttons(self):
         active = not self.busy and not self._invalid and not self.disposed
         self.refresh_button.setEnabled(active)
         self.folder_button.setEnabled(active)
         self.sync_connection_button.setEnabled(active and self._ready)
+        self.enrollment_button.setEnabled(active and self._ready)
         self.backup_button.setEnabled(active and self._ready)
         self.inspect_button.setEnabled(active and self._ready)
         self.restore_button.setEnabled(active and self._ready and self.preview is not None)
+        self.recovery_copy_button.setEnabled(active and self._ready)
         self.open_created_button.setEnabled(
             active and self.created_destination is not None and not self._opened
         )
@@ -397,6 +415,62 @@ class WorkspaceDialog(QDialog):
             else "Opening the created workspace; this window and its drafts stay open."
         )
         return True
+
+    def _adoption_context_current(self):
+        if self.disposed or self._invalid or self._closing:
+            return False
+        try:
+            info = self.service.path.stat()
+            return (
+                Path(self.service.current_path()).resolve() == self.service.path
+                and (info.st_dev, info.st_ino) == self.service.identity
+            )
+        except (OSError, ValueError, TypeError):
+            return False
+
+    def _recovery_adoption_settings(self):
+        from paper_daily.desktop.recovery_adoption_dialog import RecoveryAdoptionDialog
+
+        existing = getattr(self, "_recovery_adoption_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            return existing
+        if self.busy or not self._ready or not self._adoption_context_current():
+            return None
+        source = self.created_destination.database_path if self.created_destination else None
+        dialog = RecoveryAdoptionDialog(
+            source, self, language="zh-TW" if self.zh else "en",
+            context_current=self._adoption_context_current,
+            open_workspace=self._open_workspace,
+        )
+        self._recovery_adoption_dialog = dialog
+        dialog.finished.connect(self._sync_closed)
+        dialog.open()
+        return dialog
+
+    def _enrollment_settings(self):
+        from paper_daily.desktop.enrollment_dialog import EnrollmentDialog
+
+        if self.busy or self.disposed or self._invalid:
+            return
+        existing = getattr(self, "_enrollment_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            return
+        try:
+            dialog = EnrollmentDialog(
+                self.service.path, self, language="zh-TW" if self.zh else "en",
+                current_path=self.service.current_path, writers_busy=self.writers_busy,
+                open_workspace=self._open_workspace,
+            )
+        except (OSError, ValueError):
+            self.status.setText(self.t["changed"])
+            return
+        self._enrollment_dialog = dialog
+        dialog.finished.connect(self._sync_closed)
+        dialog.open()
 
     def _sync_settings(self):
         from paper_daily.desktop.sync_connection_dialog import SyncConnectionDialog
@@ -618,10 +692,22 @@ class WorkspaceDialog(QDialog):
         self.close()
 
     def closeEvent(self, event):
+        recovery = getattr(self, "_recovery_adoption_dialog", None)
+        if recovery is not None and not recovery.disposed:
+            self._closing = True
+            if not recovery.close():
+                event.ignore()
+                return
         connection = getattr(self, "_sync_dialog", None)
         if connection is not None and not connection.disposed:
             self._closing = True
             if not connection.close():
+                event.ignore()
+                return
+        enrollment = getattr(self, "_enrollment_dialog", None)
+        if enrollment is not None and not enrollment.disposed:
+            self._closing = True
+            if not enrollment.close():
                 event.ignore()
                 return
         if self.busy:

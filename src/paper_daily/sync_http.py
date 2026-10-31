@@ -18,8 +18,10 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from paper_daily import sync_device_protocol as devices
 from paper_daily.sync_blob_service import BlobDisabledError, BlobUnavailableError
 from paper_daily.sync_blobs import BlobManifest, BlobQuotaError
+from paper_daily.sync_device_management import UnknownDeviceError, _device_id, device_label
 from paper_daily.sync_journal import ID, canonical_operation
 
 BLOB_CHUNK_BYTES = 256 * 1024
@@ -228,7 +230,9 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
             self._reply(code, _encode({"error": _ERRORS[code]}))
 
         def _request(self):
-            if self.path not in {"/v1/push", "/v1/pull", "/v1/session/info"} | _BLOB_ROUTES:
+            if self.path not in (
+                {"/v1/push", "/v1/pull", "/v1/session/info"} | _BLOB_ROUTES | devices.ROUTES
+            ):
                 raise _RequestError(404)
             authorization = self.headers.get_all("Authorization", [])
             if len(authorization) != 1 or not authorization[0].startswith("Bearer "):
@@ -279,6 +283,10 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
                     except ValueError:
                         raise RuntimeError("Invalid session identity response") from None
                     response = _encode(identity)
+                elif self.path in devices.ROUTES:
+                    response = _encode(devices.request(service, self.path, token, value))
+                    if len(response) > MAX_RESPONSE_BYTES:
+                        raise _RequestError(500)
                 elif self.path in _BLOB_ROUTES:
                     response = _encode(_blob_request(service, self.path, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
@@ -314,7 +322,9 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
             except BlobQuotaError:
                 self._error(413)
             except PermissionError:
-                self._error(403)
+                self._error(401 if self.path in devices.ROUTES else 403)
+            except UnknownDeviceError:
+                self._error(404)
             except (ValueError, TypeError, RecursionError, UnicodeError):
                 self._error(400)
             except TimeoutError:
@@ -448,6 +458,20 @@ class HttpTransport:
     def session_info(self, token):
         """Resolve authenticated identity before binding a workspace transfer session."""
         return _session_identity(self._post("/v1/session/info", token, {}))
+
+    def device_catalog(self, token, *, after=None, limit=50):
+        bounds = devices.catalog_bounds(after, limit)
+        return devices.catalog(self._post("/v1/devices/list", token, bounds), **bounds)
+
+    def rename_device(self, token, device_id, label):
+        target, label = _device_id(device_id), device_label(label)
+        result = self._post("/v1/devices/rename", token, {"device_id": target, "label": label})
+        return devices.renamed(result, target, label)
+
+    def revoke_peer(self, token, device_id):
+        target = _device_id(device_id)
+        result = self._post("/v1/devices/revoke", token, {"device_id": target})
+        return devices.revoked(result, target)
 
     def blob_begin(self, token, manifest):
         manifest = dict(_manifest(manifest))

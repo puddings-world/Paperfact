@@ -347,6 +347,7 @@ def complete_result(
         backend=cfg.backend,
         profile=cfg.profile,
         model=result.model or cfg.effective_model,
+        model_reported=result.model_reported and bool(result.model),
     )
     if result.finish_reason in ("length", "max_tokens", "model_context_window_exceeded"):
         result = replace(
@@ -408,3 +409,32 @@ def available(task: str = "default") -> bool:
     except (ValueError, OSError):
         return False
     return cfg.backend in _PROVIDERS
+
+
+_FENCE = re.compile(r"^\s*```[\w-]*\s*|\s*```\s*$")
+
+
+def reply_json(text: str, expect: type = dict, items: type | None = None):
+    """The first JSON value of type `expect` in a model's reply.
+
+    Models wrap JSON in fences or put a sentence before it, and that sentence often
+    holds brackets of its own ("A 區 [12]"): taking the first "[" to the last "]"
+    turned those replies into parse errors. Every candidate opening is tried in turn;
+    with `items`, a list only counts when its entries have that type, so "[12]"
+    is not mistaken for the answer.
+    """
+    text = _FENCE.sub("", text or "")
+    opener = "[" if expect is list else "{"
+    decoder = json.JSONDecoder()
+    start = text.find(opener)
+    while start >= 0:
+        try:
+            value, _end = decoder.raw_decode(text, start)
+        except ValueError:
+            value = None
+        if isinstance(value, expect) and (
+            items is None or all(isinstance(v, items) for v in value)
+        ):
+            return value
+        start = text.find(opener, start + 1)
+    raise ValueError("AI 回覆中沒有可讀的 JSON")

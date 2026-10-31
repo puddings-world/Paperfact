@@ -81,23 +81,14 @@ def parse_bibliography(raw: str, log: Log = lambda _m: None, *, strict=False) ->
         log(f"  {reason}; falling back to blank-line splitting")
         return _fallback_parse(text)
 
-    # The model is told not to fence the output, but a stray ```json is cheap to undo
-    # and expensive to debug.
-    body = re.sub(r"^```(?:json)?\s*|\s*```$", "", body).strip()
-    start, end = body.find("["), body.rfind("]")
-    if start == -1 or end == -1:
+    try:
+        entries = llm.reply_json(body, list, items=dict)
+    except ValueError as e:
         if strict:
-            raise ValueError("AI 未回傳有效參考文獻清單，請重試。")
+            raise ValueError("AI 未回傳有效參考文獻清單，請重試。") from e
         log(f"  parse produced no JSON array: {body[:120]}")
         return _fallback_parse(text)
-    try:
-        entries = json.loads(body[start : end + 1])
-    except json.JSONDecodeError as e:
-        if strict:
-            raise ValueError("AI 回傳格式無法解析，請重試。") from e
-        log(f"  parse produced invalid JSON ({e}); falling back")
-        return _fallback_parse(text)
-    return [e for e in entries if isinstance(e, dict) and e.get("title")]
+    return [e for e in entries if e.get("title")]
 
 
 def _paper_from_match(entry: dict, match: dict | None) -> dict:

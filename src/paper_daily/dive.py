@@ -21,7 +21,7 @@ Log = Callable[[str], None]
 
 # Bumped when the specification below changes, so `dive-ahead --rewrite` can tell
 # which dives are already on the current one.
-DIVE_SPEC = "2026-10-research-evidence"
+DIVE_SPEC = "2026-10-study-design"
 
 # The canonical specification of what a deep dive is. `.claude/commands/paper-today.md`
 # describes the same thing for the interactive path; keep them in step.
@@ -84,12 +84,12 @@ DIVE_INSTRUCTIONS = """\
 
 ### 缺口、主張與貢獻
 作者宣稱要解決的確切問題或研究問題;列出論文自己條列的貢獻(照原文的順序與
-措辭轉述);每項貢獻後註明後文用哪個實驗或圖表支撐(例如「見 Table 2」),
-或註明「後文沒有直接驗證」。
+措辭轉述);每項貢獻後指出後文適用的證據或論證,例如定理與證明、觀察、材料、
+實驗或已列出的圖表;缺少直接依據時明說,不要為理論或質性研究補造實驗。
 
 ### 讀前導章節時該帶著的問題
-三到五個讀者應該帶進方法與實驗章節的疑問:哪些前提只是被宣稱、哪裡的框架
-可能誇大了缺口、哪個對比的選擇值得懷疑。
+列出讀者應該帶進後續方法、論證或證據章節的具體疑問(最多五個,不必湊數):
+依研究設計檢視哪些前提只是被宣稱、哪裡可能誇大缺口、哪些推導、材料或比較值得核對。
 
 pack 說全文無法取得時,這一段只依摘要寫,並在開頭明說;不要編造前導章節的內容。
 

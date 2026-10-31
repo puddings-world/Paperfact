@@ -1,10 +1,12 @@
 # v0.5.0 implementation and session handoff
 
-Status: local implementation in development, 2026-10-27. Planning checkpoint: `c6ba6d9`.
-Journal, research adapter, reference service, client and attachment foundations
-exist. Opt-in SQL capture now exercises existing app actions in isolated fixtures;
-user-facing enrollment and complete producer/file capture are still gated.
-No cloud deployment, credential changes, production migration or version bump.
+Status: local implementation in development, updated 2026-10-30. Build identity
+is `0.5.0.dev`; this is not the daily-use maintenance release. See
+[the current delivery map](delivery-status-0.5.md) for implemented coverage,
+latest exact evidence and remaining gates. The work ledger below records
+historical iterations; old pending descriptions are not current status.
+No production deployment, research migration, credential change or release
+publication has been performed by these local candidates.
 
 ## Read first
 
@@ -1111,3 +1113,89 @@ and AI-settings wording was restored in production rather than weakening the
 existing message assertions. The combined seven-file reader/material/highlight
 selection passed 97 cases (95.08s); privacy scanning and Ruff passed. The following
 frozen complete gate remains the commit boundary.
+
+
+### Existing research copy flow, local originals and native connection memory
+
+Seven frozen slices were contextually combined in a source-only workspace: local
+source ownership, existing ClaimJob history/deletions, imported-source enrollment,
+nullable list notes, unbound original viewing, native connection memory and the
+enrollment desktop flow. Four archive/catalogue merge blocks preserved both
+registries and lazy setup; the enrollment/content/source/capture/schema modules
+match the corresponding tested dependency semantics. Recovery differs only in
+distinct protocol-branch order and its compatibility comment.
+
+The merged selection passed 337 Python cases (521.22s), 208 mobile cases and six
+actual HTTP runners. English/Traditional Chinese and compact enrollment screens
+were inspected with bundled fonts. A read-only review then found a queued saved
+credential race: binding changed after the worker returned but before GUI
+delivery. The new regression failed against the old dialog (1.43s); final local
+metadata guards before delivery/explicit reconnect passed three cases, followed
+by 99 merged connection/sync/packaging cases (108.29s). No native vault, account,
+paid model, user app or research database was accessed. These are overlapping
+focused selections, not a complete gate. Complete-gate evidence belongs to the
+matching checkpoint commit and ignored run ledger.
+
+The source workspace is never replaced by preparation; the user explicitly opens
+an inspected copy after an independent backup. Original machine/job observations
+remain archive-only. Known deleted annotations stay deleted, and nullable list
+notes are not coerced. Unsupported histories remain visible blockers; production
+device issuance, native store acceptance, editable recovery and physical devices
+are separate gates. Grounded lineage and the full analysis audit remain required
+reading-feature work rather than being satisfied by task drafting.
+
+
+### Canonical foundation integration after checkpoint 06183e1
+
+Fifty-seven exact paths were copied from the frozen source-only integration after
+verifying all beforeimages against 06183e1. This includes AST-identical whitespace
+cleanup deferred from that checkpoint. The native-vault dependency is installed
+without querying its store. Canonical privacy/Ruff plus the 340-case affected
+selection and 208 mobile cases/six HTTP runners passed (428.1s total). No real
+accounts, research data or service was used. The following whole-project gate is
+required before a new commit; its matching input hashes and final result belong
+to the ignored run ledger and checkpoint message.
+
+### Recovery, device-management and local evidence-audit checkpoint candidate
+
+Typed Q&A enrollment and exact historical sources are integrated, including a
+real source-A/current-B recovery/adoption regression preserving message, exchange,
+reply and source links. Editable adoption creates fresh authority plus a verified
+independent backup without replaying old requests. Device-management server core,
+strict HTTP/client controls and bounded native UI are integrated with queued-result
+binding guards. The deterministic audit is local/derived, source-aware and shared
+by desktop, JSON CLI and official MCP; semantic and cross-output audit remain open.
+
+Canonical privacy/Ruff and the 324-case explicit combined selection passed
+(231.13 seconds Python, 233.5 total). Existing integration catalog acceptance now
+pins seven tools for the added audit operation, retaining all previous tool
+assertions. Synthetic source fixtures explicitly close owned SQLite handles.
+Line-ending cleanup has exact normalized-byte and AST receipts. Whole-project
+input hashes, diagnostics environment and final result must match before commit.
+No daily app/data, native vault, real account, paid model or hosted service was used.
+
+See the current delivery ledger for the remaining typed legacy workflow, recovery
+UX, grounded-lineage reader/integration, audit layers, maintenance reconciliation
+and cross-device journey. An isolated checkpoint is not v0.5 release acceptance.
+
+
+### Legacy reading preservation and explicit model appraisal
+
+The integrated legacy core/mobile batch passed 173 Python/desktop cases,
+273 mobile cases and seven actual HTTP programs (nine checkpoints). Old queue/log
+identity, ranks, context, exact Markdown, recovery and fresh-copy authority remain
+intact. Missing experimental capability metadata fails closed. Queue pins are
+still a named required gap; a reproduced inspection-report error now names that
+blocker before staging (24 affected cases passed). Desktop editable-copy controls
+are being implemented separately over the sealed service.
+
+The optional explicit Audit route accepts selected source-pinned claims and one
+captured model call, retrieves bounded local original passages, locates model
+quotes and retains valid results in private local derived history. No model runs
+on open/load or save-only retry. Requested and actually reported model identities
+are separate, including compatibility fallbacks; notes/claims are never rewritten.
+The coherent slice passed 309 affected cases; canonical integration passed 348
+including CLI/MCP. These overlap. Full audit adapters/fact sheets/consistency,
+scientific evaluation, remaining history gaps, maintenance ancestry reconciliation
+and real-device acceptance remain required. Do not add these partial counts to
+infer whole-project completion or a progress percentage.

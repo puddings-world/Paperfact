@@ -27,13 +27,16 @@ also added a dozen at a time, and the faces not on screen are built while idle.
 
 from __future__ import annotations
 
+import copy
 import html
 import os
 import sqlite3
 import subprocess
 import threading
+import weakref
+from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -49,8 +52,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
-from paper_daily import citegraph, followups, lineage_team, runtime
+from paper_daily import citegraph, followups, lineage_team, runtime, store
 from paper_daily.desktop import ai_style, ui_state
 from paper_daily.desktop.ai_access import requires_ai
 from paper_daily.desktop.cite_graph import VERDICT_STYLE, CiteMap
@@ -177,6 +181,22 @@ class _Text(QLabel):
         return height
 
 
+def _database_identity():
+    path = store.DB_PATH.resolve()
+    try:
+        stat = path.stat()
+        return (str(path), stat.st_dev, stat.st_ino) if stat.st_ino else None
+    except OSError:
+        return None
+
+
+@dataclass(frozen=True)
+class _ProjectionScope:
+    paper_id: str
+    generation: int
+    active_list: str | None
+
+
 class CitesPane(QScrollArea):
     # (generation, result) from the author/institution lookup thread.
     team_ready = Signal(int, object)
@@ -187,6 +207,11 @@ class CitesPane(QScrollArea):
         self.win = window
         self.pal = palette
         self.paper_id: str | None = None
+        self._database = _database_identity()
+        self._outer_workspace = getattr(window, "_workspace_owner", None)
+        self._closed = False
+        self._projection = self._graph_scope = self._links_scope = None
+        self._graph_submitted = set()
         # 全域 shows the whole lineage; 作者團隊 only work sharing an author or an
         # institution with this paper, as OpenAlex lists them.
         self._team = "all"
@@ -218,8 +243,10 @@ class CitesPane(QScrollArea):
         self._orders: dict[str, QWidget] = {}
         self._pending: dict[str, object] = {}
         self._generation = 0
-        with connect() as conn:
-            self._view = ui_state.read(conn, "ui.cites_view", "list")  # or "graph"
+        self._view = "list"
+        if self._admitted():
+            with connect(path=self._database[0]) as conn:
+                self._view = ui_state.read(conn, "ui.cites_view", "list")  # or "graph"
         # The links lookup takes a few seconds; the map redraws itself when it is
         # done instead of waiting for the tab to be reopened.
         self._watch = QTimer(self)
@@ -241,11 +268,74 @@ class CitesPane(QScrollArea):
         self._layout.addWidget(self._view_bar, 0, Qt.AlignmentFlag.AlignLeft)
         self._layout.addStretch(1)
 
+    def _admitted(self):
+        current = (isValid(self) and not self._closed and self._database is not None
+                   and _database_identity() == self._database
+                   and getattr(self.win, "_workspace_owner", None) is self._outer_workspace
+                   and (self._outer_workspace is None or self._outer_workspace.current()))
+        if not current and isValid(self):
+            watch = getattr(self, "_watch", None)
+            if watch is not None:
+                watch.stop()
+        return current
+
+    def _projection_current(self, scope):
+        return bool(
+            self._admitted() and scope is not None and self._projection is scope
+            and self.paper_id == scope.paper_id and self._generation == scope.generation
+            and getattr(self.win, "active_list", None) == scope.active_list
+        )
+
+    def _map_current(self, scope, graph):
+        return bool(
+            self._projection_current(scope) and graph is not None and isValid(graph)
+            and self._map is graph and self._graph_scope is scope
+        )
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Close and obj is self._map:
+            self._graph_scope = None
+        return super().eventFilter(obj, event)
+
+    def _scoped(self, action, *, once=False, forward=False):
+        # Widget callbacks may remain queued after their card or paper is replaced.
+        paper, generation = self.paper_id, self._generation
+        active_list = getattr(self.win, "active_list", None)
+        running = consumed = False
+
+        def invoke(*_args):
+            nonlocal running, consumed
+            if (running or consumed or not self._admitted()
+                    or (paper is not None and (
+                        self.paper_id != paper or self._generation != generation
+                        or getattr(self.win, "active_list", None) != active_list))):
+                return
+            running = True
+            try:
+                result = action(*_args) if forward else action()
+            finally:
+                running = False
+            consumed = once
+            return result
+
+        return invoke
+
+    def closeEvent(self, event):
+        self._closed = True
+        self._generation += 1
+        self._pending = {}
+        self._watch.stop()
+        super().closeEvent(event)
+
     # ---- loading ---------------------------------------------------------
     def load(self, paper_id: str) -> None:
+        if not self._admitted():
+            return
         self.paper_id = paper_id
         self._clear()
-        with connect() as conn:
+        scope = _ProjectionScope(paper_id, self._generation, getattr(self.win, "active_list", None))
+        self._projection = scope
+        with connect(path=self._database[0]) as conn:
             refs = followups.references(conn, paper_id)
             later = followups.for_paper(conn, paper_id)
             story = followups.overview_for(conn, paper_id)
@@ -258,6 +348,8 @@ class CitesPane(QScrollArea):
                 "SELECT reference_count, citation_count, title, doi FROM papers WHERE id=?",
                 (paper_id,),
             ).fetchone()
+        if not self._projection_current(scope):
+            return
         self._paper_info = {"title": counts["title"], "doi": counts["doi"]} if counts else {}
         self._team_data, self._team_loading = None, False
         self._coverage = coverage(
@@ -276,6 +368,8 @@ class CitesPane(QScrollArea):
         QTimer.singleShot(300, lambda: self._prepare_rest(generation))
 
     def _prepare_rest(self, generation: int) -> None:
+        if not self._projection_current(self._projection):
+            return
         if generation != self._generation or self._data is None:
             return
         if self._list_face is None:
@@ -306,6 +400,8 @@ class CitesPane(QScrollArea):
     def _clear(self) -> None:
         """Drop both faces; the switch above them stays."""
         self._generation += 1
+        self._projection = self._graph_scope = None
+        self._graph_submitted = set()
         self._pending = {}
         self._boxes = {}
         self._side_widgets = {}
@@ -325,7 +421,8 @@ class CitesPane(QScrollArea):
 
     def _show_face(self) -> None:
         """Show the face the switch is on, making it first if it was never made."""
-        if self._data is None:
+        scope = self._projection
+        if self._data is None or not self._projection_current(scope):
             return
         if self._view == "graph":
             if self._graph_face is None:
@@ -335,6 +432,8 @@ class CitesPane(QScrollArea):
             if self._list_face is None:
                 self._build_list_face()
             face, other = self._list_face, self._graph_face
+        if face is None or not isValid(face) or not self._projection_current(scope):
+            return
         if other is not None:
             other.hide()
         face.show()
@@ -422,6 +521,7 @@ class CitesPane(QScrollArea):
 
     # ---- 研究脈絡 ---------------------------------------------------------
     def _story(self, story: dict | None, refs: list, later: list, asked: str | None) -> QWidget:
+        story = copy.deepcopy(story)
         box, layout = self._frame()
         head = QHBoxLayout()
         title = QLabel("研究脈絡")
@@ -430,7 +530,7 @@ class CitesPane(QScrollArea):
         head.addStretch(1)
         if story:
             edit = self._button("編輯")
-            edit.clicked.connect(lambda: self._edit_story(story))
+            edit.clicked.connect(self._scoped(lambda: self._edit_story(story)))
             head.addWidget(edit)
         layout.addLayout(head)
 
@@ -471,11 +571,11 @@ class CitesPane(QScrollArea):
                 + "再寫成脈絡，同時補上這篇還沒有的深度講解。"
             ))
             go = self._ai_button("深入分析", primary=True)
-            go.clicked.connect(self._run_all)
+            go.clicked.connect(self._scoped(self._run_all))
             layout.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
         else:
             again = self._ai_button("重新查後續研究並更新脈絡")
-            again.clicked.connect(self._refresh_context)
+            again.clicked.connect(self._scoped(self._refresh_context))
             layout.addWidget(again, 0, Qt.AlignmentFlag.AlignLeft)
         return box
 
@@ -510,18 +610,22 @@ class CitesPane(QScrollArea):
                 f"border-color:{pal['accent']};}}"
             )
             group.addButton(b)
-            b.clicked.connect(lambda _=False, k=key: pick(k))
+            b.clicked.connect(self._scoped(lambda k=key: pick(k)))
             row.addWidget(b)
             buttons[key] = b
         return bar, buttons
 
     def _set_view(self, view: str) -> None:
-        if view == self._view:
+        if view == self._view or not self._admitted():
             return
         self._view = view
         self._view_buttons[view].setChecked(True)
         ui_state.save("ui.cites_view", view)
-        self._show_face()
+        if self._projection_current(self._projection):
+            self._show_face()
+        elif self.paper_id and self._data is not None:
+            # An explicit mode switch may renew a same-workspace list context.
+            self.load(self.paper_id)
 
     # ---- the two lists ---------------------------------------------------
     def _build_list_face(self) -> None:
@@ -636,10 +740,14 @@ class CitesPane(QScrollArea):
         self._say_team()
 
     def _team_step(self, generation: int, done: int, total: int) -> None:
+        if not self._admitted():
+            return
         if generation == self._generation and self._team_note is not None:
             self._team_note.setText(f"正在向 OpenAlex 查作者與機構…{done}/{total}")
 
     def _team_done(self, generation: int, result: dict) -> None:
+        if not self._admitted():
+            return
         if generation != self._generation:
             return
         self._team_data, self._team_loading = result, False
@@ -713,7 +821,8 @@ class CitesPane(QScrollArea):
         generation = self._generation
 
         def step() -> None:
-            if generation != self._generation or self._pending.get(side) is not cards:
+            if (not self._admitted() or generation != self._generation
+                    or self._pending.get(side) is not cards):
                 return
             for _ in range(CHUNK):
                 if not self._add_card(side, box, cards):
@@ -771,7 +880,7 @@ class CitesPane(QScrollArea):
                     13,
                 ))
                 go = self._ai_button("分析這篇的參考文獻", primary=True)
-                go.clicked.connect(self._run_cites)
+                go.clicked.connect(self._scoped(self._run_cites))
                 box.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
         else:
             # Say how many verdicts rest on a citing sentence and how many on a title
@@ -802,7 +911,7 @@ class CitesPane(QScrollArea):
             box.addWidget(self._label(text, 13))
             if not asked and not self._busy():
                 go = self._ai_button("查後續研究", primary=True)
-                go.clicked.connect(self._run_followups)
+                go.clicked.connect(self._scoped(self._run_followups))
                 box.addWidget(go, 0, Qt.AlignmentFlag.AlignLeft)
             return []
         if self._later_order == "cited":
@@ -818,6 +927,8 @@ class CitesPane(QScrollArea):
 
     # ---- the map -----------------------------------------------------------
     def _build_graph_face(self) -> None:
+        if not self._projection_current(self._projection):
+            return
         data = self._data
         face, layout = self._face()
         self._graph_face = face
@@ -828,7 +939,8 @@ class CitesPane(QScrollArea):
 
     def _rebuild_graph(self) -> None:
         """Only the map: the lists do not change when it is redrawn."""
-        if self._graph_face is None:
+        if (not self._projection_current(self._projection) or self._graph_face is None
+                or not isValid(self._graph_face)):
             return
         layout = self._graph_face.layout()
         story = layout.takeAt(layout.count() - 1).widget()
@@ -844,8 +956,16 @@ class CitesPane(QScrollArea):
             self._fit()
 
     def _fill_graph(self, layout: QVBoxLayout) -> None:
-        with connect() as conn:
-            whole = citegraph.build(conn, self.paper_id)
+        scope = self._projection
+        if (not self._projection_current(scope) or self._graph_face is None
+                or not isValid(self._graph_face) or not isValid(layout)
+                or self._graph_face.layout() is not layout):
+            return
+        with connect(path=self._database[0]) as conn:
+            whole = citegraph.build(conn, scope.paper_id)
+        if (not self._projection_current(scope) or self._graph_face is None
+                or not isValid(self._graph_face) or self._graph_face.layout() is not layout):
+            return
         if not whole.nodes:
             return
         graph = citegraph.pick(whole, None if self._graph_all else GRAPH_LIMIT)
@@ -874,7 +994,7 @@ class CitesPane(QScrollArea):
         # lists' own refresh (整理研究脈絡) asks again, so there is no second button.
         if refs + later and not whole.checked and not self._running(self._links_job):
             links = self._button("查彼此引用")
-            links.clicked.connect(self._run_links)
+            links.clicked.connect(self._scoped(self._run_links))
             row.addWidget(links)
         holder = QWidget()
         holder.setLayout(row)
@@ -889,8 +1009,27 @@ class CitesPane(QScrollArea):
                 "還沒有承先啟後的資料。按「深入分析」，參考文獻與後續研究整理好後就會畫在這裡。",
                 13,
             ))
-        view = CiteMap(self.pal, self.win.open_paper, self._add_node)
+        owner = weakref.ref(self)
+        submitted = self._graph_submitted
+
+        def open_paper(paper_id):
+            widget, graph = owner(), graph_ref()
+            if widget is not None and widget._map_current(scope, graph):
+                widget.win.open_paper(paper_id)
+
+        def add_node(node):
+            widget, graph = owner(), graph_ref()
+            if widget is not None and widget._map_current(scope, graph):
+                widget._add_node(
+                    node, graph=graph, scope=scope, note=note_ref(), submitted=submitted
+                )
+
+        view = CiteMap(self.pal, open_paper, add_node)
+        graph_ref = weakref.ref(view)
+        note_ref = weakref.ref(self._graph_note)
         self._map = view
+        self._graph_scope = scope
+        view.installEventFilter(self)
         view.show_graph(graph)
         # As tall as the map needs at this width, up to the window's height, so a
         # small map does not sit in a field of white.
@@ -1012,23 +1151,42 @@ class CitesPane(QScrollArea):
         self._rebuild_graph()
 
     def _run_links(self) -> None:
-        if not self.paper_id or self._running(self._links_job):
+        scope = self._projection
+        if not self._projection_current(scope) or self._running(self._links_job):
             return
-        self._links_job = _spawn("cite-links", self.paper_id)
-        self._watch.start()
-        self._rebuild_graph()
+        self._links_scope = scope
+        self._links_job = _spawn("cite-links", scope.paper_id)
+        if self._projection_current(scope):
+            self._watch.start()
+            self._rebuild_graph()
 
     def _links_done(self) -> None:
+        if not self._projection_current(self._links_scope):
+            self._watch.stop()
+            return
         if self._running(self._links_job):
             return
         self._watch.stop()
         self._links_job = None
+        self._links_scope = None
         self._rebuild_graph()
 
-    def _add_node(self, node: citegraph.Node) -> None:
-        where = self._send_to_list({"title": node.title, "doi": node.doi})
-        if self._graph_note is not None:
-            self._graph_note.setText(f"「{node.label}」已送到「{where}」,幾秒後會出現在清單裡。")
+    def _add_node(self, node: citegraph.Node, *, graph=None, scope=None,
+                  note=None, submitted=None) -> None:
+        graph = self._map if graph is None else graph
+        scope = self._graph_scope if scope is None else scope
+        note = self._graph_note if note is None else note
+        submitted = self._graph_submitted if submitted is None else submitted
+        if not self._map_current(scope, graph) or node.key in submitted:
+            return
+        submitted.add(node.key)
+        try:
+            where = self._send_to_list({"title": node.title, "doi": node.doi})
+        except Exception:
+            submitted.discard(node.key)
+            raise
+        if self._map_current(scope, graph) and note is not None and isValid(note):
+            note.setText(f"「{node.label}」已送到「{where}」,幾秒後會出現在清單裡。")
 
     # ---- cards -----------------------------------------------------------
     def _meta(self, r: dict) -> str:
@@ -1096,6 +1254,7 @@ class CitesPane(QScrollArea):
         return q
 
     def _actions(self, r: dict, editable: bool, kind: str) -> QHBoxLayout:
+        r = copy.deepcopy(r)
         row = QHBoxLayout()
         row.setSpacing(6)
         here = r.get("here")
@@ -1106,22 +1265,23 @@ class CitesPane(QScrollArea):
         looks_like_title = len([w for w in title.split() if w.isascii()]) >= 3 and len(title) > 15
         if here:
             go = self._button("已讀 · 開啟" if here["read"] else "開啟")
-            go.clicked.connect(lambda _=False, pid=here["id"]: self.win.open_paper(pid))
+            go.clicked.connect(self._scoped(lambda pid=here["id"]: self.win.open_paper(pid)))
             row.addWidget(go)
             # Following the context only works if you can act on it: a paper this one
             # rests on is useless 3000 rows down the queue.
             if not here["read"] and self.win.in_queue(here["id"]):
                 lift = self._button("插到最前面")
-                lift.clicked.connect(lambda _=False, pid=here["id"], b=lift: self._promote(pid, b))
+                lift.clicked.connect(self._scoped(
+                    lambda pid=here["id"], b=lift: self._promote(pid, b), once=True))
                 row.addWidget(lift)
         elif r.get("doi") or r.get("s2_id") or looks_like_title:
             add = self._button("加入清單")
             target = {"title": title, "doi": r.get("doi")}
-            add.clicked.connect(lambda _=False, x=target, b=add: self._add(x, b))
+            add.clicked.connect(self._scoped(lambda x=target, b=add: self._add(x, b), once=True))
             row.addWidget(add)
         if editable:
             edit = self._button("編輯")
-            edit.clicked.connect(lambda _=False, x=r, k=kind: self._edit_item(k, x))
+            edit.clicked.connect(self._scoped(lambda x=r, k=kind: self._edit_item(k, x)))
             row.addWidget(edit)
         row.addStretch(1)
         return row

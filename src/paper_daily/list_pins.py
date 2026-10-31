@@ -27,6 +27,10 @@ def set_pinned(conn, scope, local_paper_id, on, *, expected=None, pinned_at=None
         ).fetchone()
     ):
         raise ValueError("An enrolled pin action requires its CaptureConnection")
+    if scope == "queue" and not pin_cleanup_ready(conn):
+        raise ValueError(
+            "Queue pin cleanup requires explicit installation or a fresh editable copy"
+        )
     if not conn.in_transaction:
         conn.execute("BEGIN IMMEDIATE")
     existing = conn.execute(
@@ -52,7 +56,9 @@ def set_pinned(conn, scope, local_paper_id, on, *, expected=None, pinned_at=None
             )
         return {"changed": bool(cursor.rowcount), "pinned": on, "operation_id": None}
     if scope == "queue":
-        raise ValueError("Legacy queue pins require explicit migration to a list")
+        from paper_daily.queue_pins import set_enrolled
+
+        return set_enrolled(conn, local_paper_id, on, expected=expected, pinned_at=pinned_at)
     if member is None:
         raise ValueError("Pin requires a current list membership")
     portable = conn.execute(

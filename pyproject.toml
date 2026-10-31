@@ -25,6 +25,8 @@ app = [
     # Markdown with math and fenced blocks for the web-rendered reading views.
     "markdown-it-py>=3",
     "mdit-py-plugins>=0.4",
+    # Optional remembered sync connections use the OS vault, never plaintext settings.
+    "keyring>=25.6,<26",
 ]
 
 [project.scripts]

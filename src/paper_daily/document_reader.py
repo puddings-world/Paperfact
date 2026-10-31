@@ -394,7 +394,7 @@ class DocumentReader:
         for suffix in ("", "-journal", "-wal", "-shm"):
             _no_link(Path(str(index) + suffix))
         final, staged = root / (manifest.sha256 + ".pdf"), root / (manifest.sha256 + ".part")
-        with sqlite3.connect(index, timeout=5) as conn:
+        with closing(sqlite3.connect(index, timeout=5)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
             for path in (final, staged):
                 _no_link(path)

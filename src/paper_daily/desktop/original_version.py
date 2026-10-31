@@ -57,15 +57,16 @@ _SNAPSHOT_SEAL = object()
 @dataclass(frozen=True, init=False)
 class OriginalSnapshot:
     owner: object = field(repr=False)
-    portable_id: str
+    portable_id: str | None
     document_hash: str
     data: bytes = field(repr=False)
     pages: int
     source: Path = field(repr=False)
     file_version: tuple = field(repr=False)
-    operation: bytes = field(repr=False)
-    claim: tuple = field(repr=False)
-    registry: tuple = field(repr=False)
+    operation: bytes | None = field(repr=False)
+    claim: tuple | None = field(repr=False)
+    registry: tuple | None = field(repr=False)
+    local_proof: object | None = field(repr=False)
     _seal: object = field(repr=False)
 
 
@@ -106,6 +107,17 @@ def metadata_current(snapshot):
     ):
         return False
     try:
+        if snapshot.local_proof is not None:
+            from paper_daily import local_source_owners
+
+            proof = snapshot.local_proof
+            return bool(
+                snapshot.data is proof.data
+                and snapshot.source == proof.source
+                and snapshot.file_version == proof.file_version
+                and snapshot.document_hash == proof.document_hash
+                and local_source_owners.metadata_current(proof)
+            )
         with closing(_connection(snapshot.owner)) as conn:
             conn.execute("BEGIN")
             snapshot.owner.check(conn)
@@ -124,6 +136,59 @@ def metadata_current(snapshot):
 
 
 def prepare(owner, expected, *, cancelled=lambda: False):
+    """Inspect the existing owner's local or portable source without enrollment."""
+    if cancelled():
+        return None
+    with closing(_connection(owner)) as conn:
+        conn.execute("BEGIN")
+        owner.check(conn)
+        enrolled = sync_capture.enabled(conn)
+    if enrolled:
+        # Damage/retirement in a declared portable source never falls through to another cache.
+        return _portable_prepare(owner, expected, cancelled=cancelled)
+    return _local_prepare(owner, expected, cancelled=cancelled)
+
+
+def _local_prepare(owner, expected, *, cancelled):
+    from paper_daily import local_source_owners
+
+    try:
+        proof = local_source_owners.prepare(owner, expected, cancelled=cancelled)
+        if proof is None or cancelled():
+            return None
+        if not isinstance(proof.data, bytes) or not 0 < len(proof.data) <= MAX_PDF_BYTES:
+            raise OriginalUnavailable("Owned local original exceeds the PDF byte boundary")
+        # The service has already verified SHA/native identity; only PDF parsing remains here.
+        with pymupdf.open(stream=proof.data, filetype="pdf") as document:
+            if document.is_encrypted or document.page_count < 1:
+                raise OriginalUnavailable("Owned local original is not readable")
+            pages = document.page_count
+        if cancelled():
+            return None
+        snapshot = object.__new__(OriginalSnapshot)
+        for name, value in dict(
+            owner=owner,
+            portable_id=None,
+            document_hash=proof.document_hash,
+            data=proof.data,
+            pages=pages,
+            source=proof.source,
+            file_version=proof.file_version,
+            operation=None,
+            claim=None,
+            registry=None,
+            local_proof=proof,
+            _seal=_SNAPSHOT_SEAL,
+        ).items():
+            object.__setattr__(snapshot, name, value)
+        if not metadata_current(snapshot):
+            raise OriginalUnavailable("Local original ownership changed before opening")
+        return snapshot
+    except (OSError, ValueError, sqlite3.Error) as error:
+        raise OriginalUnavailable("No current owned local original is available") from error
+
+
+def _portable_prepare(owner, expected, *, cancelled=lambda: False):
     """Resolve exactly one current owned source; no account, network, enrollment or write."""
     if cancelled():
         return None
@@ -192,6 +257,7 @@ def prepare(owner, expected, *, cancelled=lambda: False):
         operation=operation,
         claim=raw,
         registry=registry,
+        local_proof=None,
         _seal=_SNAPSHOT_SEAL,
     ).items():
         object.__setattr__(snapshot, name, value)

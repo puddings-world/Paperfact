@@ -1,0 +1,30 @@
+{
+  "name": "PDF.js",
+  "version": "6.4.299",
+  "build": "compatibility",
+  "license": "Apache-2.0",
+  "release_url": "https://github.com/mozilla/pdf.js/releases/download/v6.4.299/pdfjs-6.4.299-legacy-dist.zip",
+  "archive_sha256": "c894bce53b2f4c3e13141e088c89cc051a1f7118ba4a2c02ec058798ae1303d1",
+  "upstream_notice_present": false,
+  "files": [
+    {
+      "path": "pdf.mjs",
+      "sha256": "630de0bd0092cf2e9d46a23c68596b736699035e08cce4e9c85537c8eba0fc8e",
+      "bytes": 1069549,
+      "upstream_path": "build/pdf.mjs"
+    },
+    {
+      "path": "pdf.worker.mjs",
+      "sha256": "bb422f60804477de4a0b09091d8347a916a387755ed1cbad24ccaec1d09c78bf",
+      "bytes": 2418244,
+      "upstream_path": "build/pdf.worker.mjs"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "bytes": 10174,
+      "upstream_path": "LICENSE"
+    }
+  ],
+  "scope": "Parser and worker only; no viewer, scripting, rendering or auxiliary assets."
+}

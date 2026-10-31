@@ -99,6 +99,7 @@ sequenceDiagram
 | `imports.commit` | Save selected candidate IDs in their supplied order, atomically |
 | `imports.discard` | Cancel a preview, leaving saved research untouched |
 | `operations.inspect` | Recover a completed commit by operation ID |
+| `analysis.audit` | v0.5 development: check saved evidence offline against the owned PDF; no AI or edits |
 
 All six operations are **offline and use no AI**. Metadata supplied by an agent
 is not publication verification. Sources are stored as data; URLs are not fetched
@@ -201,3 +202,10 @@ the frozen-app acceptance check repeats discovery, commit and retry. Host-specif
 settings screens and real Claude/Codex/Gemini sessions are separate manual checks.
 For future paid execution and external source integrations, see
 [MCP and execution modes](mcp-and-modes.md).
+
+
+The v0.5 `analysis.audit` tool returns saved text and quoted passages, which may be
+private and can enter the calling host's model context. It reports explicit source
+uncertainty and coverage gaps; it does not certify scientific conclusions. See
+[the audit contract](analysis-audit.md). Existing stable releases do not expose this
+new operation until an updated build is installed.

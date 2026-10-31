@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from paper_daily import annotation_reader, claim_jobs, llm, work_progress
+from paper_daily import ai_choices, annotation_reader, claim_jobs, llm, work_progress
 from paper_daily import research_generation as generation
 from paper_daily.desktop import activity, ai_style, fonts
 from paper_daily.desktop.flow_layout import FlowLayout
@@ -67,7 +67,14 @@ TEXT = {
         "stopped": "Stopped. Completed original-source work is retained for review.",
         "retained": "Completed work was retained for review; it did not replace the current set.",
         "login": "Sign in to the AI selected for claim extraction, then press Generate again.",
-        "route": "AI route for this task: ",
+        "route": "Next Claims generation: ",
+        "settings": "Account and model…",
+        "settings_unavailable": "AI settings unavailable; saved research is unchanged.",
+        "saved_run": "Saved generation: ",
+        "requested_model": "Requested model: ",
+        "reported_model": "Reported model: ",
+        "default_model": "Provider default",
+        "unreported_model": "Not reported",
         "default_route": "Generation uses the Claims AI task setting.",
         "source_old": "Original snapshot; the loaded PDF differs or is unavailable.",
         "source_same": "Original-snapshot location record. View source checks the loaded PDF.",
@@ -123,7 +130,14 @@ TEXT = {
         "stopped": "已停止；完成的原始版本內容保留供後續審閱。",
         "retained": "完成內容已保留待審閱，未覆蓋目前資料組。",
         "login": "請先登入「核對論證」所選的 AI，再按一次產生；不會自動送出。",
-        "route": "本次任務 AI：",
+        "route": "下次論點產生使用：",
+        "settings": "帳號與模型…",
+        "settings_unavailable": "目前無法讀取 AI 設定；已存研究保持不變。",
+        "saved_run": "已存產生紀錄：",
+        "requested_model": "指定模型：",
+        "reported_model": "回報模型：",
+        "default_model": "服務預設",
+        "unreported_model": "未回報",
         "default_route": "產生時使用「核對論證」的 AI 功能設定。",
         "source_old": "原始版本快照；目前載入的 PDF 版本不同或尚未就緒。",
         "source_same": "原始快照的定位記錄；按「核對原文」後才會驗證目前原文並跳轉。",
@@ -152,7 +166,7 @@ def _label(text):
     label = QLabel(text)
     label.setTextFormat(Qt.TextFormat.PlainText)
     label.setWordWrap(True)
-    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum)
+    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     label.setTextInteractionFlags(
         Qt.TextInteractionFlag.TextSelectableByMouse
         | Qt.TextInteractionFlag.TextSelectableByKeyboard
@@ -280,6 +294,7 @@ class ClaimEvidenceDialog(QDialog):
         self._expanded = {}
         self._compact = False
         self._original_viewer = None
+        self._settings_open = False
         self.language = language
         self.setWindowTitle(self.t["title"])
         self.setWindowModality(Qt.WindowModality.WindowModal)
@@ -300,8 +315,21 @@ class ClaimEvidenceDialog(QDialog):
         self.intro.setProperty("role", "muted")
         layout.addWidget(self.intro)
         self.route = _label(self.t["default_route"])
+        self.route.setObjectName("claimsNextRoute")
         self.route.setProperty("role", "meta")
-        layout.addWidget(self.route)
+        route_row = QHBoxLayout()
+        route_row.addWidget(self.route, 1)
+        self.settings_button = QPushButton(self.t["settings"])
+        self.settings_button.setObjectName("claimsModelSettings")
+        self.settings_button.setAutoDefault(False)
+        self.settings_button.clicked.connect(self.settings)
+        route_row.addWidget(self.settings_button)
+        layout.addLayout(route_row)
+        self.saved_run = _label("")
+        self.saved_run.setObjectName("claimsSavedRun")
+        self.saved_run.setProperty("role", "meta")
+        self.saved_run.hide()
+        layout.addWidget(self.saved_run)
         self.version = _label("")
         self.version.setProperty("role", "meta")
         layout.addWidget(self.version)
@@ -357,6 +385,7 @@ class ClaimEvidenceDialog(QDialog):
         self.freshness.start()
         if changes is not None:
             changes.changed.connect(self.request_refresh)
+        self._refresh_intent()
         self._controls()
         QTimer.singleShot(0, self.refresh)
 
@@ -441,6 +470,7 @@ class ClaimEvidenceDialog(QDialog):
         deleted = self.saved is not None and "report" not in self.saved
         active = active and not self._refresh_pending
         self.generate_button.setEnabled(active and self.owner is not None)
+        self.settings_button.setEnabled(active and not self.busy and not self._settings_open)
         self.refresh_button.setEnabled(active)
         self.original_button.setEnabled(active and self.owner is not None)
         self.generate_button.setText(
@@ -456,6 +486,39 @@ class ClaimEvidenceDialog(QDialog):
         self.stop_button.setEnabled(self.busy and not watching and not self._closing)
         self.progress.setVisible(self.busy and self._worker.kind != "watch")
         self.more_button.setEnabled(active)
+
+    def _refresh_intent(self):
+        if self.disposed or self._closing or not self._check():
+            return
+        try:
+            text = ai_choices.connection_label(llm.settings(task="claims"))
+        except (OSError, ValueError):
+            text = self.t["settings_unavailable"]
+        self.route.setText(self.t["route"] + text)
+
+    def settings(self):
+        if self.busy or self._settings_open or self._closing or not self._check():
+            return
+        from paper_daily.desktop.ai_picker import AIPickerDialog
+
+        self._settings_open = True
+        self._controls()
+        dialog, failed = None, False
+        try:
+            dialog = AIPickerDialog(self, task="claims")
+            dialog.exec()
+        except (OSError, ValueError, RuntimeError):
+            failed = True
+        finally:
+            if dialog is not None and isValid(dialog):
+                dialog.deleteLater()
+            self._settings_open = False
+            if isValid(self) and not self.disposed and not self._closing and self._check():
+                if failed:
+                    self.route.setText(self.t["route"] + self.t["settings_unavailable"])
+                else:
+                    self._refresh_intent()
+                self._controls()
 
     def _start(self, kind, call):
         if self.busy or not self._check() or self._closing:
@@ -483,6 +546,7 @@ class ClaimEvidenceDialog(QDialog):
     def refresh(self, *, quiet=False):
         if self.busy or self.disposed or self._closing:
             return False
+        self._refresh_intent()
         self._refresh_pending = False
         if not quiet:
             self.status.setText(self.t["loading"])
@@ -535,7 +599,7 @@ class ClaimEvidenceDialog(QDialog):
                     login(self, "claims", self.t["login"])
                     return False
                 selected = llm.settings(task="claims")
-                self.route.setText(self.t["route"] + llm.describe(selected))
+                self.route.setText(self.t["route"] + ai_choices.connection_label(selected))
         except (OSError, ValueError):
             self.status.setText(self.t["login"])
             return False
@@ -672,6 +736,15 @@ class ClaimEvidenceDialog(QDialog):
         self.source_buttons = []
         self.sections = []
         report = (self.saved or {}).get("report")
+        metadata = (self.saved or {}).get("generation") if report is not None else None
+        self.saved_run.setVisible(metadata is not None)
+        self.saved_run.setText(
+            self.t["saved_run"] + metadata["backend"] + " / "
+            + self.t["requested_model"] + (metadata["requested_model"] or self.t["default_model"])
+            + " / " + self.t["reported_model"]
+            + (metadata["returned_model"] or self.t["unreported_model"])
+            if metadata is not None else ""
+        )
         if report is None:
             card = QFrame()
             card.setProperty("role", "card")
@@ -890,7 +963,13 @@ def open_report(reader):
     host = getattr(reader, "win", reader.window())
     existing = getattr(host, "_claim_dialog", None)
     if existing is not None and not existing.disposed:
-        if existing.path == Path(store.DB_PATH).resolve() and existing.paper_id == paper.id:
+        if (
+            existing.path == Path(store.DB_PATH).resolve()
+            and existing.paper_id == paper.id
+            and existing.document is getattr(reader, "_active_document", None)
+            and existing._check()
+            and not existing._closing
+        ):
             existing.show()
             existing.raise_()
             return existing
@@ -908,15 +987,14 @@ def open_report(reader):
         )
 
     def focus(source):
-        if (
-            getattr(reader, "_active_document", None) is not dialog.document
-            or getattr(reader, "_pdf_fingerprint", None) != source["document_hash"]
-            or not reader.pdf.isVisible()
-            or getattr(reader.pdf, "selection", None) is None
-        ):
-            return False
-        reader._jump_to_source(source)
-        return True
+        from paper_daily.desktop.research_source_navigation import focus as focus_source
+
+        return focus_source(
+            reader,
+            source,
+            document=dialog.document,
+            current=lambda: current() == dialog.view,
+        )
 
     try:
         dialog = ClaimEvidenceDialog(

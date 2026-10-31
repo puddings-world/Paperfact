@@ -8,14 +8,11 @@ from contextlib import suppress
 from copy import deepcopy
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QRectF, QSignalBlocker, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QDesktopServices,
-    QIcon,
     QImage,
     QKeySequence,
-    QPainter,
-    QPixmap,
     QShortcut,
     QTextDocument,
 )
@@ -147,6 +144,16 @@ class PresentationPane(QWidget):
         self.history_button.setToolTip("還原重新產生前的整份簡報；逐次手動修改請用「復原」。")
         self.history_button.clicked.connect(self._restore_history)
         self.toolbar.addWidget(self.history_button)
+        from paper_daily.desktop.deck_audit import COPY as deck_audit_copy
+        from paper_daily.desktop.deck_audit import open_selected as audit_selected_deck
+
+        audit_text = deck_audit_copy.get(
+            getattr(self.window(), "language", "zh-TW"), deck_audit_copy["en"]
+        )
+        self.deck_audit_action = self.toolbar.addAction(
+            audit_text["entry"], lambda: audit_selected_deck(self)
+        )
+        self.deck_audit_action.setToolTip(audit_text["hint"])
         self.export_button = QPushButton("匯出簡報…")
         self.export_button.setToolTip(
             "匯出目前這份簡報，預設為 PDF；可選 HTML、講稿或可編輯格式。"
@@ -269,6 +276,9 @@ class PresentationPane(QWidget):
         self.outline.setWordWrap(True)
         self._thumbnail_canvas = SlideCanvas(self)
         self._thumbnail_canvas.hide()
+        from paper_daily.desktop.slide_thumbnails import SlideThumbnails
+
+        self._thumbnails = SlideThumbnails(self)
         left_layout.addWidget(self.outline)
         order = QToolBar()
         order.setMovable(False)
@@ -695,6 +705,11 @@ class PresentationPane(QWidget):
 
     @property
     def busy(self) -> bool:
+        # Restart/update callers use this seam before closeEvent can drain a child.
+        return self._producer_busy or bool(getattr(self, "_deck_audit_running", 0))
+
+    @property
+    def _producer_busy(self) -> bool:
         return (
             self._generating
             or self._revising
@@ -822,6 +837,7 @@ class PresentationPane(QWidget):
 
     def _show_deck(self, deck: presentations.Deck | None, *, reset_options: bool = True) -> None:
         self._loading = True
+        self._thumbnails.reset()
         self._autosave.stop()
         self._canvas_dirty = self._layout_reset = False
         self.canvas.load(None, 0)
@@ -920,6 +936,11 @@ class PresentationPane(QWidget):
             bool(self._undo or self._dirty) and not blocked and not readonly
         )
         self.history_button.setEnabled(bool(self.paper_id) and not blocked and not readonly)
+        self.deck_audit_action.setEnabled(
+            bool(getattr(self.deck, "_file_operation", None)) and not blocked
+            and not self._dirty and not self._canvas_dirty and not self._layout_reset
+            and not readonly
+        )
         self.materials_button.setEnabled(bool(self.paper_id))
         self.materials_panel.analyze.setEnabled(bool(self.paper_id) and not blocked)
 
@@ -1264,17 +1285,7 @@ class PresentationPane(QWidget):
         self._material_feedback("已加入並選取新物件；可拖曳調整位置，稍後自動儲存。", True)
 
     def _thumbnail(self, index: int) -> None:
-        if not self.deck:
-            return
-        self._thumbnail_canvas.load(self.deck, index)
-        image = QPixmap(288, 162)
-        image.fill(Qt.GlobalColor.white)
-        painter = QPainter(image)
-        self._thumbnail_canvas.scene.render(
-            painter, QRectF(0, 0, 288, 162), QRectF(0, 0, 1200, 675)
-        )
-        painter.end()
-        self.outline.item(index).setIcon(QIcon(image))
+        self._thumbnails.request(index)
 
     def _canvas_changed(self) -> None:
         if not self._loading and self.deck and self._index >= 0:
@@ -1498,6 +1509,7 @@ class PresentationPane(QWidget):
         self.canvas.load(self.deck, self._index)
         self._canvas_dirty = self._layout_reset = False
         self._render_preview()
+        self._thumbnails.request(index, priority=True)
 
     def _open_source(self, url: QUrl) -> None:
         if not self.deck or url.scheme() != "paperfact-source":

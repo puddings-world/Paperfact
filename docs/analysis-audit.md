@@ -1,161 +1,243 @@
-# Analysis audit: checking AI output against the paper (proposed, v0.5)
+# Analysis audit for specialist reading
 
-Status: proposed design, 2026-10-27. Nothing here is implemented yet. It extends the
-planned **claim-level sources** and **lineage explanations** in
-[roadmap-0.5.0.md](roadmap-0.5.0.md).
+Status: v0.5 development candidate, not a release claim. The first deterministic
+checks have a local engine, saved-output adapter, native desktop view and shared
+JSON CLI/MCP operation. A separate explicit, one-call claim-appraisal candidate
+has local private history and a native view. Complete appraisal coverage and
+cross-output consistency remain required; opening either panel calls no model.
 
-Every AI feature in the reader writes text a researcher may repeat: the deep dive,
-close readings, answers (and the notes kept from them), slides, paper highlights,
-the reference and follow-up analysis, the 研究脈絡 story and list surveys. The audit
-checks that this text agrees with the paper and with itself, and shows the reader
-where it does not. It never rewrites output on its own and never replaces the
-reader's judgement.
+## Read the result correctly
 
-## Principles
+Open a paper, then **Research tasks > Check saved evidence**. The panel reads saved
+research and the owned PDF in a background worker. It initially shows items that
+need review; clear the filter to see every checked item. Expand a card and use
+**View original passage** for a located quotation in the exact loaded version.
+The reader's question and note drafts stay intact. Refresh is explicit.
 
-1. **The reader stays accountable.** Following RAISE (Cochrane, Campbell, JBI and
-   CEE, 2025), the audit flags and explains; it does not silently correct, hide or
-   score research. Every finding links to the passage it is about.
-2. **Deterministic checks first.** Whatever can be checked without a model (a quote
-   is in the PDF, a page exists, a resolved reference is the cited paper) is checked
-   that way, on every run, at no cost.
-3. **Ask checkable questions, never for a quality score.** Where a model is needed,
-   it answers "does this passage support this sentence: supported / not found /
-   contradicted", not "how good is this". Judges scoring overall quality agree poorly
-   with people and favour their own family's output.
-4. **A different judge from the writer.** The audit task routes, where the user has a
-   second provider, to a different model family than the one that wrote the output.
-   When only one is available the report says so.
-5. **Missing evidence is shown, not invented.** "No source found" is a valid,
-   visible result; the audit never supplies a citation.
-6. **Findings are derived and local.** They are recomputed from the output and the
-   paper, are not research data, and are not synced or exported in bundles.
+- **Quote located** means the quoted text and optional anchor were found in that
+  exact PDF snapshot. It does not mean the passage supports the associated claim.
+- **Number/unit observed** means the same lexical pair appears in extracted text.
+  It does not verify the comparator, denominator, uncertainty or interpretation.
+  A missing pair may be a derivation or image-only content, not an error.
+- **Source unknown** means the saved output has no document-version binding. The
+  adapter does not assign today's PDF to older deep dives, answers or notes.
+- **Different original** does not search today's PDF for a substitute location.
+- **Title similar** is a heuristic. A differing known DOI or title mismatch needs
+  inspection; a citation occurrence proves neither agreement nor influence.
+- **Title only / citing context missing** identifies the evidence basis available
+  for a reference relation. The system does not invent a citing sentence.
 
-## What is checked
+There is no quality score, confidence percentage or claim that a paper passed.
+An empty report has zero covered items. Limits and unsupported outputs stay visible.
 
-### Layer 1 — deterministic (always, no AI)
+## Implemented deterministic boundary
 
-| Check | Applies to | Passes when |
+`research_audit.run(snapshot, items)` accepts a sealed, owner-verified PDF snapshot
+and a closed explicit output corpus. It locates declared quotes/anchors, compares
+source hashes, checks bounded number/unit occurrences and reports reference-identity
+and evidence-basis findings. Normalization reuses the existing NFKC/whitespace/
+soft-hyphen/wrapped-word rule. Ambiguous matches retain alternatives; none becomes
+an active anchor. No OCR or semantic truth is inferred.
+
+`audit_inputs.AuditCapture` reads one bounded SQL snapshot without schema creation.
+The current adapter includes deep explanations, close readings, saved notes,
+assistant answers, canonical claims, selected highlights, manual marks, references
+and later-work rows. Typed saved reading links and research questions, plus saved
+paper-context summaries and recommendations, are included by the SQL slice below.
+Unsubmitted chat/user questions are not included. Notes use only an explicitly
+recorded anchor document hash; their prose is never automatically treated as an
+original quotation. Answers use the validated typed Q&A source link, when present.
+All preserve old source versions and leave missing bindings unknown. Versionless
+legacy text stays versionless. Selected editable decks have a separate bounded
+audit entry described below. List surveys, grounded-lineage sets and cross-output
+consistency remain explicit adapter gaps, not successful checks.
+
+Bounds: 256 items, 1 MiB input JSON, 512 declared passages and 512 distinct lexical
+quantity checks across outputs; individual text is at most 120,000 characters.
+The existing source verifier bounds PDFs to 32 MiB / 500 pages / 200,000 words.
+An exceeded bound fails the whole report; no silent truncation is called complete.
+The short desktop excerpt is presentation only; the operation retains full bounded
+item text. UI progress counts actual processed items, not estimated time.
+
+Results are derived in memory and identified by output hash, document hash and
+rule version. They do not modify research, create an audit SQL table, enter sync
+or bundles, or persist an AI judgment. Refresh can recompute deterministic results.
+Native DB/WAL versions guard capture and GUI delivery. Source navigation separately
+checks the actual loaded owner and PDF bytes. Cancellation, closing and context
+changes discard late presentation and preserve the prior report and drafts.
+
+## Bounded saved SQL output slice
+
+`paper_reading_links` and `paper_research_questions` reuse the closed annotation
+row/body validators. Their `source_hash` is an input digest, distinct from the
+nullable PDF `document_hash`. Source-less rows remain unknown even if an input
+digest happens to equal the loaded PDF digest. The optional, closed `provenance`
+object is valid only for these new categories and `paper_context`: `record_hash`
+retains exact validated row identity, `input_hash` records the annotation input,
+`related_record_hash` records the related highlight row, and `link_state` describes
+whether its declared link can be reconstructed. None grants PDF ownership.
+Rule identity is `source-checks.v2`; legacy item shapes remain valid.
+
+A reading link stores a quote index, explanation section and linked analysis
+input digest. It contributes its saved explanation as prose. A quote is available
+only from the same paper's validated highlight row with the exact `analysis_hash`
+and `document_hash`. Missing/changed highlights, another original or an unavailable
+index produce an explicit unresolved-link finding and no borrowed quotation.
+A matched, located quote still does not verify the explanation's semantic support.
+An empty saved link set remains a visible item without invented quote coverage.
+
+A saved research question contributes its complete question and rationale as
+prose. Only its explicit `evidence` field declares a quotation; question wording
+or a rationale is not a quote. Both quotation and lexical number checks use the
+saved nullable PDF digest, preserving A when B is loaded. `paper_context` has no
+PDF-version field: summary and complete reading recommendations remain unknown,
+without inferred quotes, paper-identity resolution or a current-PDF assignment.
+The context row reuses the existing closed field/stamp/text/collection bounds.
+Transient translation/refinement displays have no persisted saved-output schema
+in this snapshot and are outside this saved-output audit. No refinements table is
+created and no cache/file is imported on read.
+
+All added SQL/JSON/source work stays inside the existing worker capture. Missing
+columns, unknown table shape, malformed nonempty payloads and over-budget saved
+content fail the capture without truncation, migration or writes. Exact row
+identity participates in capture equality and report input identity, including
+metadata-only output changes. GUI construction, polling, cards and source delivery
+perform no SQL or hashing; the existing source worker still rechecks exact owner
+and bytes before a GUI-only navigation callback. Reader drafts remain intact.
+
+The native appraisal UI offers canonical claims only. The core has older tested
+eligibility for other source-bound inputs, including manual highlights; this
+slice preserves that contract. The three new A1 categories are explicitly
+refused before capturing an Audit route, so this adapter adds no paid selection.
+No existing appraisal success assertions are loosened.
+
+## Shared agent and script operation
+
+The desktop and `analysis.audit` use the same `AuditCapture` boundary. The official
+local MCP tool is read-only and offline. A host may receive saved text and source
+quotations in its context; the user's authorization for that host still applies.
+The operation accepts a paper ID, never a file path, SQL, provider or shell command.
+
+```sh
+printf '%s' '{"paper_id":"PAPER_ID"}' | paperfact integration analysis.audit --workspace /absolute/workspace
+```
+
+PowerShell equivalent:
+
+```powershell
+'{"paper_id":"PAPER_ID"}' | paperfact integration analysis.audit --workspace C:\Research\Paperfact
+```
+
+A missing store is not created by the audit CLI. A missing/changed owned original,
+invalid saved data or over-budget corpus returns a bounded error. No network,
+login, PDF download, paid call or research rewrite is attempted as a fallback.
+
+## Remaining required audit layers
+
+### A1: complete deterministic coverage
+
+The [bounded selected saved-deck adapter](deck-audit.md) adds an explicit native
+check for a typed retained editable deck and its unambiguously recorded owned
+originals. It does not broaden the focal SQL operation or complete deck/corpus
+coverage: legacy/detached selection, ambiguous/missing source scope and source
+navigation remain explicit limits. The remaining file/corpus boundaries are:
+
+| Output inventory | Required next adapter boundary | Current limit |
 |---|---|---|
-| D1 Quote exists | every quoted source sentence (highlights, dive quotes, slide sources, citing sentences) | the text occurs in the extracted PDF text of the exact document version, after whitespace and hyphenation normalisation |
-| D2 Anchor resolves | page, figure, table and anchor references | the page, figure or table number exists in that PDF; an anchor's document hash matches the open version |
-| D3 Numbers appear | numbers in generated text (metrics, dataset sizes, counts, years) | each number, with its unit, appears in the paper text or in a cited span; derived numbers are marked as derived |
-| D4 Reference identity | 承先 rows resolved to a paper or DOI | the resolved title passes `openalex.same_paper` against the citation text; a mismatch is the most damaging error (the reader is shown another paper's analysis) |
-| D5 Evidence basis | 承先 rows with `basis='title'` | the row makes no claim about how the paper uses the reference (purpose and verdict are marked "title only") |
-| D6 Story coverage | 研究脈絡 and 接下來必讀 | every title in 接下來必讀 is a 承先 or 啟後 row; every paper named in the story is one |
+| Editable deck JSON and source/figure catalog (`sync_deck_files`, `sync_deck_publication`) | Read the actual selected retained deck version through typed deck/file ownership, validate bounded source IDs and figure assets, bind each source to its exact owned PDF | Deck `source_hash` is an input digest; a slide/source/figure may reference a different or unknown PDF. Do not use global presentation/cache paths, fabricate file ownership, or assign the focal original to every slide. |
+| `list_surveys` and retained list generation inputs | Explicitly select and capture the actual list, membership/incarnations and bounded per-paper source corpus before reading its summary | A list-wide prose summary and captured analysis rows are not per-assertion PDF citations. A single-focal `AuditCapture` cannot certify the list's corpus or assign one loaded PDF to it. |
+| Grounded lineage reports/sets and legacy `lineage_team` output | Use the typed corpus/report reader after integration, retain exact source IDs, distinct paper owners and per-parent original versions; validate prior/later citing passages against their own sources | The frozen lineage candidate and its pending recovery/export hooks are separate. This slice neither imports that code nor invents corpus/file authority, global path lookup, citation influence, or source ownership from a title/hash. |
 
-### Layer 2 — claim grounding (model, checkable)
+A future file/corpus slice must explicitly select and retain the proper source
+scope, keep malformed/unavailable sources visible and preserve the same no-model
+read boundary. No adapter is activated by this gap inventory.
 
-1. Split an output into atomic claims (one assertion each), keeping its position.
-2. For each claim, collect candidate spans: its own anchor if it has one, else the
-   best-matching passages of the paper (local retrieval, no model).
-3. Ask the judge per claim and span: `supported`, `not_found` or `contradicted`, with
-   the span it relied on. A claim is grounded only when a quoted span supports it.
-4. Report the grounded share per output, and list every `contradicted` and
-   `not_found` claim with its span.
+Pin every quote, figure/table locator and related-paper title to the correct source
+rather than attaching them all to the focal PDF. Complete story-to-row coverage,
+citing-context and known-author-ID checks. Unknown references stay unresolved.
+After-analysis scheduling must not block publication or run a model from a read.
 
-Results are cached by (output hash, document hash, rule version), so an unchanged
-output is never judged twice.
+### A2: bounded claim appraisal
 
-### Layer 3 — consistency across outputs
+[The implemented first slice](model-appraisal.md) accepts selected source-pinned
+claims, retrieves bounded local spans and captures one explicit Audit route.
+It preserves valid completed results in private local derived history; its source
+navigation uses read-only owner checks so verification cannot checkpoint the
+sealed audit WAL. This does not yet implement atomic extraction of arbitrary
+outputs or the complete procedure below.
 
-Each paper gets a **fact sheet**: datasets (name, size, centres, licence), tasks,
-metrics with values, method names, baselines and stated limitations, each with its
-source span. Facts are extracted from the paper once, then every output is compared
-with it and with each other. A conflict (the deep dive says 3,000 videos, the slides
-say 1,000) is a finding on both outputs. As in PaperQA2's contradiction detection,
-conflicts are graded so that rounding and wording differences are not reported.
+The researcher explicitly chooses an Audit route and budget. Split selected saved
+output into atomic assertions; retain their output positions. Retrieve candidate
+passages locally and ask checkable questions: supported, not found or contradicted,
+with exact cited spans. These are model judgments for review, not certified truth.
+When available, offer a different model family from the writer and show requested
+and returned identities. Do not silently substitute accounts or add paid calls.
+Cache only against complete input/document/rule/model identities; preserve failed
+or stale results separately from accepted research. Add fixture responses and
+independent human evaluation before advertising precision or grounded shares.
 
-## Lineage rules (承先 / 啟後 / 研究脈絡)
+### A3: cross-output consistency
 
-Lineage is where errors spread furthest: a wrong relation is repeated in the story,
-in 接下來必讀, in slides and in shared bundles. These rules apply in addition to the
-layers above.
+The local [bounded fact-sheet and consistency core](source-fact-consistency.md)
+now preserves source identity, exact saved-output locations and both comparison
+locations. It distinguishes explicit scope, rounding, derived values and missing
+reporting, with researcher-review labels. Its isolated focused gate passed 196
+cases. Explicit one-call extraction and a modeless desktop comparison view are
+now present in the local candidate; opening makes no model call. The complete
+CLI/corpus adapters, continuity after result acceptance and scientific evaluation
+remain separate gates. Pending comparisons now allow one bounded read-only
+recapture after reading-state writes only when the actual owner, source and all
+captured research inputs match; changed notes or originals still reject delivery.
+This does not add a second model call or relax the default physical capture fence. This bounded slice does not
+complete all A3 coverage or establish scientific accuracy.
 
-| Rule | Requirement |
-|---|---|
-| L1 Purpose from the citing sentence | 與原文的關係 (how this paper uses a reference) must be supported by a sentence of this paper that cites it (`contexts_json`). Without one, the row is title-only (D5). |
-| L2 What the reference is | 這篇在做什麼 may only use the reference's own abstract or text, never this paper's description of it presented as fact. |
-| L3 Relation from the later paper | A 啟後 relation must be supported by the later paper's sentence that cites this one. |
-| L4 Citation function | Each citing sentence is classified as one of: `uses-method`, `uses-data`, `extends`, `compares`, `supports`, `contrasts`, `background`. Adapted from scite's supporting / contrasting / mentioning classes, made finer for lineage. `supports` and `contrasts` are flagged for the reader to confirm, since classifiers are least accurate on them. |
-| L5 Story sentences map to rows | Each sentence of 研究脈絡 cites the 承先 or 啟後 rows it summarises; a sentence with none is flagged as unsupported. |
-| L6 Inference is labelled | A relationship not stated in any citing sentence (for example "this likely inspired") is shown as inferred, never as fact. |
-| L7 Team claims use ids | 作者團隊 matches (shared author or institution) come from OpenAlex ids; names alone never establish them. |
+Extract a source-bound fact sheet of design, applicable assumptions, sample/data,
+method, outcome/metric, comparator, units, uncertainty and stated limitations.
+Compare saved outputs against these facts and each other. Separate rounding,
+derived values, author limitations and reviewer inference. Show both conflicting
+locations; never auto-rewrite either output or collapse disagreement into a score.
+Use a small rights-appropriate, manually checked corpus to measure each rule's
+precision/recall. Synthetic fixtures alone do not establish scientific accuracy.
 
-## How it is used
+## Lineage and specialist integrity rules
 
-- **In the reader:** a **檢查** panel per paper lists findings by severity
-  (`contradicted` > `identity mismatch` > `not found` > `title only` > `inferred`).
-  Each finding opens the output at the claim and the PDF at the span. Rows and cards
-  with findings carry a small mark. The panel shows the grounded share and which
-  judge was used.
-- **On demand and after analysis:** Layer 1 runs after every analysis step. Layers
-  2 and 3 run when the reader asks, or as part of 深入分析 when the list's reading
-  goal enables it; they count as AI use and show their cost like other tasks.
-- **From the command line and agents:** `paperfact audit <paper> [--layer 1|2|3]
-  [--json]` and a read-only MCP tool return the same findings, so Claude Code or
-  Codex can audit without the desktop app.
+- A prior-work use needs the focal paper's actual citing passage.
+- A description of prior work needs its own abstract/text; distinguish a second-hand account.
+- A later-work relation needs the later paper's passage citing the focal paper.
+- Citation function can be uses-method, uses-data, extends, compares, supports,
+  contrasts or background; support/contrast judgments require review.
+- Story sentences map to recorded source rows; inferred influence is labelled.
+- Shared author/institution claims use resolved IDs, never names alone.
+- Theory, qualitative and empirical studies need applicable appraisal criteria;
+  absent reporting differs from zero or failure. A replication plan is not execution.
 
-## Skills
+Portable audit skills and a human gold set remain planned until these procedures
+and their evidence are implemented. No private papers are copied into skills.
 
-The rules above are written once as portable skills in `skills/` (see
-[development-skills.md](development-skills.md)), used by both the app's audit
-prompts and by coding agents reviewing changes to analysis prompts:
+## Evidence and limits
 
-- `analysis-grounding-audit`: Layer 1 and 2 procedure, claim splitting, the three
-  verdicts and how to cite a span.
-- `lineage-citation-audit`: rules L1–L7 and the citation-function classes, with
-  worked examples from real citing sentences.
-- `cross-output-consistency`: the fact-sheet fields and conflict grading.
+Engine/input/native UI fixtures cover exact, missing, ambiguous and wrong-version
+sources, quantities/units, reference metadata, bounds, cancellation, duplicate
+activation, changed workspace/source/saved rows, close-active and retry behavior.
+Actual CLI and official SDK stdio calls use synthetic workspaces. Existing MCP
+catalog acceptance now requires seven tools, including the added audit operation;
+all prior tool behavior assertions remain. The shared synthetic PDF fixture now
+explicitly closes its SQLite connection; no behavior assertion was weakened.
 
-A change to an analysis prompt must keep the audit's gold set passing (below).
+English/Traditional Chinese and compact native screenshots were inspected with
+bundled fonts. These are local fixtures, not installed Mac/phone acceptance or a
+claim that all AI outputs have been audited. Exact combined/full-gate counts belong
+to the current delivery ledger and checkpoint, not accumulated overlapping counts.
 
-## Evaluation
+## Primary references informing the design
 
-- **Gold set:** about 10 papers from a real reading list (the Cataract list is the
-  first candidate), with each output's claims, lineage rows and fact sheet checked
-  by hand. It measures the audit's own precision and recall per rule.
-- **Fixtures:** deterministic checks get unit tests from these papers' extracted
-  text; model checks get recorded judge responses, so the suite runs offline.
-- **Reported, not hidden:** the audit's measured precision per rule is shown in its
-  documentation, and rules below an agreed precision stay advisory.
-
-This gold set doubles as the first slice of a lineage benchmark: the "why this paper
-exists" answers it checks are taken from real citing sentences, not from a model.
-
-## Data and boundaries
-
-- Findings live in a local table keyed by (paper, output, item, rule, output hash,
-  document hash). They are derived, so they are neither synced nor bundled; a
-  recipient re-runs the audit on their own copy.
-- No new external service: lookups reuse the OpenAlex client already used by the
-  reader; model calls go through `llm.complete` with a new `audit` task.
-- The audit reads outputs and the paper; it never edits analysis. Fixing a finding
-  is the reader's action (edit, re-run that step, or accept).
-
-## Phases
-
-| Phase | Scope | Depends on |
-|---|---|---|
-| A1 | Layer 1 (D1–D6) and lineage rules L1, L5, L7; the 檢查 panel; CLI | nothing new |
-| A2 | Layer 2 claim grounding; citation function (L4); judge routing | claim-level sources |
-| A3 | Layer 3 fact sheet and consistency; skills published; gold-set report | A2, reading goals |
-
-## Open questions
-
-- Claim splitting granularity for slides (one bullet, or each clause).
-- Whether a list's reading goal may require Layer 2 before a paper counts as analysed.
-- Where the gold set's hand-checked records live so they can be shared without
-  sharing copyrighted full text.
-
-## References
-
-- RAISE: Recommendations and guidance on responsible AI in evidence synthesis
-  (Cochrane, Campbell Collaboration, JBI, Collaboration for Environmental Evidence,
-  2025). https://www.cochrane.org/zh-hant/events/recommendations-and-guidance-responsible-ai-evidence-synthesis
-- Skarlinski et al., "Language agents achieve superhuman synthesis of scientific
-  knowledge" (PaperQA2, including contradiction detection), arXiv:2409.13740.
-- scite Smart Citations: supporting / contrasting / mentioning citation statements.
-  https://help.scite.ai/zh/article/what-is-scite-1gfjuck
-- Cao et al., "Automation of systematic reviews with large language models"
-  (otto-SR), medRxiv 2025.06.13.25329541 (preprint; tool not released).
+- [OpenScholar](https://arxiv.org/abs/2411.14199): retrieval, cited synthesis and self-feedback.
+- [PaperQA2](https://www.futurehouse.org/research/engineering-blog-journey-to-superhuman-performance-on-scientific-tasks):
+  bounded evidence gathering, query expansion and citation traversal.
+- [Asta interaction study](https://arxiv.org/abs/2602.23335): users revisit saved
+  outputs and evidence nonlinearly; saved-first, inspectable cards are our design inference.
+- [Elicit systematic reviews](https://support.elicit.com/en/articles/14759154-systematic-reviews-in-elicit):
+  explicit criteria, screening and structured extraction. An exploratory list is
+  not a completed systematic review.
+- [PRISMA 2020](https://www.prisma-statement.org/prisma-2020): retain search,
+  eligibility and exclusion decisions for any future systematic-review module.

@@ -38,7 +38,7 @@ qualitative or review. Separate author claims, observations/proofs, inference an
 missing evidence. Unreported is not zero; a located quote is not semantic proof.
 Do not infer causation, replication or influence without the necessary sources.
 The canonical executable specification is `dive.DIVE_INSTRUCTIONS`; its current
-recipe is `2026-10-research-evidence`. Existing saved explanations remain available.
+recipe is `2026-10-study-design`. Existing saved explanations remain available.
 
 Structure:
 
@@ -53,8 +53,10 @@ Structure:
    from state of the art to gap to approach; short English quotes allowed),
    相關研究的地圖 (lines of prior work, what each lacks per the authors, and how this
    paper relates to each), 缺口、主張與貢獻 (the stated contributions, each with the
-   experiment that supports it or "not directly tested"), and 讀前導章節時該帶著的
-   問題 (three to five doubts to carry into the method and experiments). Without
+   evidence or argument appropriate to its design (proof, observations, materials,
+   experiments or listed exhibits), or explicitly missing support), and 讀前導章節時該帶著的
+   問題 (up to five grounded doubts to carry into subsequent methods, arguments or
+   evidence; do not fill a quota). Without
    full text, say so and work from the abstract only.
 3. **核心洞見** — the single idea the paper turns on. If you cannot name it in two
    sentences, you have not found it yet.

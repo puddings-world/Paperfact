@@ -1,5 +1,8 @@
 import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
 import { validateArtifact } from './artifacts.mjs';
+import { inboxUUID, validateInbox, validateInboxProjection } from './inbox-schema.mjs';
+import {validatePositionProjection,positionReceived} from './reading-position-schema.mjs';
+import { queueClosure, queueParents, requireLegacy } from './legacy-workflow.mjs';
 import {
   copy,
   own,
@@ -7,6 +10,7 @@ import {
 } from './store.mjs';
 import {
   validateContent,
+  validateContentTimestamp,
   validateRichNote,
   projectContent,
   suppressSnapshotContent
@@ -15,7 +19,7 @@ const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const HASH = /^[0-9a-f]{64}$/;
 export const states =['pending', 'delivered', 'read', 'skipped', 'deferred'];
 const kinds =['list', 'paper', 'membership', 'note', 'reading_state', 'list_order', 'workspace_list_order',
-'paper_document', 'research_content', 'research_file'];
+'paper_document', 'research_content', 'research_file', 'inbox_item'];
 export function requireThat(test, code = 'invalid_data') {
   if(! test) throw new Error(code);
 }
@@ -43,6 +47,7 @@ function boundedText(value, limit, nullable = false) {
   requireThat((nullable && value === null) ||(typeof value === 'string' &&[...value].length <= limit));
 }
 function parentShape(op) {
+  if(queueClosure(op)) { queueParents(op); return; }
   const pin = op.entity_type === 'research_content' &&
     ((op.action === 'put' && op.payload?.feature === 'list_pin') ||
     (op.action === 'delete' && op.parents.length === 3));
@@ -85,6 +90,7 @@ function parentShape(op) {
     list: [],
     paper: [],
     workspace_list_order: [],
+    inbox_item: [],
     membership: ['list', 'paper'],
     note: ['paper'],
     paper_document: ['paper'],
@@ -134,13 +140,16 @@ export function validateOperation(op, workspace) {
     integer(op.structure_revision);
     requireThat(Array.isArray(op.parents));
     parentShape(op);
-  }
+    if(op.entity_type==='inbox_item') inboxUUID(op.entity_id);
+  } else requireThat(op.entity_type!=='inbox_item','unsupported_version');
   if(op.action === 'delete') {
     closed(op.payload, []);
     requireThat(op.entity_type !== 'paper');
     return op;
   }
-  if(op.entity_type === 'note') {
+  if(op.entity_type === 'inbox_item') {
+    requireThat(op.version===2); inboxUUID(op.entity_id); validateInbox(op.payload);
+  } else if(op.entity_type === 'note') {
     if(Object.keys(op.payload).length === 2) {
       closed(op.payload, ['paper_id', 'body']);
       identifier(op.payload.paper_id);
@@ -157,7 +166,7 @@ export function validateOperation(op, workspace) {
     closed(op.payload, ['name', 'note']);
     boundedText(op.payload.name, 200);
     requireThat(op.payload.name.trim());
-    boundedText(op.payload.note, 128 * 1024);
+    boundedText(op.payload.note, 128 * 1024, op.version === 2);
   } else if(op.entity_type === 'reading_state') {
     closed(op.payload, ['list_id', 'paper_id', 'state', 'delivered_at', 'read_at']);
     requireThat(states.includes(op.payload.state));
@@ -238,8 +247,93 @@ function applyGraph(state, op, sequence) {
     if(parent?.active && parent.incarnation === p.incarnation) parent.structure_revision = sequence;
   }
 }
+function queueContextTransition(state,op,previous) {
+  if(op.entity_type!=='research_content' || op.action!=='put' || op.payload.feature!=='queue_entry' ||
+      previous.action!=='put' || previous.payload.feature!=='queue_entry' ||
+      !active(state,op.entity_type,op.entity_id) || op.incarnation!==op.operation_id ||
+      op.incarnation===previous.incarnation || stable(op.parents[0])!==stable(previous.parents[0]))return false;
+  const roots=parents=>parents.map(({kind,id})=>({kind,id}));
+  if(stable(roots(op.parents))===stable(roots(previous.parents)))return false;
+  const origin=own(state.receipts,previous.incarnation),source=origin?.operation;
+  if(origin?.outcome!=='accepted' || source?.version!==2 || source.action!=='put' ||
+      source.entity_type!==op.entity_type || source.entity_id!==op.entity_id ||
+      source.incarnation!==previous.incarnation || source.operation_id!==previous.incarnation ||
+      source.payload.feature!=='queue_entry' || source.payload.key!=='main' ||
+      source.payload.scope.kind!=='paper' || source.payload.scope.id!==op.payload.scope.id)return false;
+  for(const parent of previous.parents)if(!active(state,parent.kind,parent.id) ||
+      state.graph[keyOf(parent.kind,parent.id)].incarnation!==parent.incarnation)return false;
+  const head=own(state.entities,keyOf(op.entity_type,op.entity_id)),graph=own(state.graph,keyOf(op.entity_type,op.entity_id));
+  const dependency=op.depends_on===null?null:own(state.receipts,op.depends_on);
+  if(dependency) {
+    const before=dependency.operation;
+    if(dependency.outcome!=='accepted' || dependency.sequence!==head.revision ||
+        before.workspace_id!==op.workspace_id || before.device_id!==op.device_id ||
+        before.entity_type!==op.entity_type || before.entity_id!==op.entity_id)return false;
+  } else if(op.depends_on!==null || op.base_revision!==head.revision)return false;
+  if(!op.structure_depends_on)return op.structure_revision===graph.structure_revision;
+  const receipt=own(state.receipts,op.structure_depends_on),before=receipt?.operation;
+  if(receipt?.outcome!=='accepted' || receipt.sequence!==graph.structure_revision ||
+      before.version!==2 || before.workspace_id!==op.workspace_id || before.device_id!==op.device_id)return false;
+  return before.entity_type===op.entity_type && before.entity_id===op.entity_id ?
+    before.incarnation===previous.incarnation && (before.action==='delete' || before.incarnation===before.operation_id) :
+    before.parents.some(parent=>parent.kind===op.entity_type && parent.id===op.entity_id && parent.incarnation===previous.incarnation);
+}
+function legacyReceived(state,op) {
+  const key=keyOf(op.entity_type,op.entity_id), previous=own(state.entities,key)?.operation;
+  const priorPut=op.action==='delete' && previous?.action==='delete' ?
+    Object.values(state.receipts).filter(event=>event.outcome==='accepted' &&
+      event.operation.entity_type===op.entity_type && event.operation.entity_id===op.entity_id &&
+      event.operation.action==='put').sort((a,b)=>b.sequence-a.sequence)[0]?.operation : previous;
+  const feature=op.action==='put' ? op.payload?.feature : priorPut?.payload?.feature;
+  const content=op.entity_type==='research_content' && ['queue_entry','reading_event'].includes(feature);
+  const file=op.entity_type==='research_file' && feature==='legacy_brief';
+  if(!content && !file && !queueClosure(op)) return;
+  if(op.action==='put') {
+    for(const parent of op.parents) requireLegacy(active(state,parent.kind,parent.id) &&
+      state.graph[keyOf(parent.kind,parent.id)].incarnation===parent.incarnation,'legacy_parent_unavailable');
+  }
+  if(!previous) {
+    if(op.action==='put') requireLegacy(op.incarnation===op.operation_id,'invalid_legacy_lifecycle');
+    return;
+  }
+  if(queueContextTransition(state,op,previous))return;
+  if(op.action==='delete' || op.incarnation===previous.incarnation) {
+    requireLegacy(op.incarnation===previous.incarnation && stable(op.parents)===stable(previous.parents),
+      'invalid_legacy_lifecycle');
+    if(feature==='reading_event' && op.action==='put' && previous.action==='put')
+      requireLegacy(op.payload.data.delivered_at===previous.payload.data.delivered_at,'changed_event_identity');
+  }
+  if(op.action==='put') {
+    const live=active(state,op.entity_type,op.entity_id);
+    requireLegacy(stable(op.parents.map(({kind,id})=>({kind,id})))===
+      stable(previous.parents.map(({kind,id})=>({kind,id}))),'invalid_legacy_lifecycle');
+    requireLegacy(live ? op.incarnation===previous.incarnation :
+      op.incarnation===op.operation_id && op.incarnation!==previous.incarnation,'invalid_legacy_lifecycle');
+  }
+}
+function inboxReceived(state,op) {
+  if(op.entity_type!=='inbox_item')return;
+  const key=keyOf('inbox_item',op.entity_id), previous=state.graph[key];
+  const prior=state.entities[key]?.operation;
+  if(!previous) requireThat(op.incarnation===op.operation_id,'invalid_inbox_lifecycle');
+  else if(op.action==='put' && !previous.active) requireThat(
+    op.incarnation===op.operation_id && op.incarnation!==previous.incarnation,'invalid_inbox_restore');
+  else requireThat(op.incarnation===previous.incarnation,'invalid_inbox_lifecycle');
+  if(op.action==='put' && previous?.active) requireThat(
+    prior?.action==='put' && op.payload.created_at===prior.payload.created_at,'changed_inbox_identity');
+  if(op.action==='delete') {
+    if(op.structure_depends_on) {
+      const predecessor=state.receipts[op.structure_depends_on];
+      requireThat(predecessor?.outcome==='accepted' && predecessor.sequence===(previous?.structure_revision??0) &&
+        predecessor.operation.device_id===op.device_id && predecessor.operation.entity_type==='inbox_item' &&
+        predecessor.operation.entity_id===op.entity_id && predecessor.operation.incarnation===op.incarnation &&
+        (predecessor.operation.action==='delete' || predecessor.operation.operation_id===op.incarnation),'invalid_inbox_structure');
+    } else requireThat(op.structure_revision===(previous?.structure_revision??0),'invalid_inbox_structure');
+  }
+}
 export function receive(state, events) {
   requireThat(Array.isArray(events) && events.length <= 1000);
+  events.forEach(event=>validateEvent(event,state.workspace));
   for(const event of events) {
     validateEvent(event, state.workspace);
     const prior = own(state.receipts, event.operation.operation_id);
@@ -252,6 +346,10 @@ export function receive(state, events) {
     const op = event.operation,
     local = state.outbox.find(item => item.operation.operation_id === op.operation_id);
     if(local) requireThat(stable(local.operation) === stable(op), 'changed_retry');
+    if(event.outcome==='accepted') {
+      positionReceived(state,op,active,stable);
+      legacyReceived(state,op); inboxReceived(state,op);
+    }
     put(state.receipts, op.operation_id, copy(event));
     state.outbox = state.outbox.filter(item => item.operation.operation_id !== op.operation_id);
     if(event.outcome === 'accepted') {
@@ -315,7 +413,8 @@ export function buildOperation(state, kind, id, payload, {
   resolutionOf = null,
   restore = false
 } = {}) {
-  requireThat(['note', 'reading_state'].includes(kind), 'unsupported_write');
+  requireThat(['note', 'reading_state', 'inbox_item'].includes(kind), 'unsupported_write');
+  if(kind==='inbox_item') inboxUUID(id);
   identifier(id);
   identifier(operationId);
   const view = optimistic(state),
@@ -334,6 +433,9 @@ export function buildOperation(state, kind, id, payload, {
   if(action === 'delete') {
     requireThat(graph || conflict, 'missing_entity');
     parents = copy(graph?.parents ?? conflict.event.operation.parents);
+  } else if(kind==='inbox_item') {
+    parents=[];
+    if(prior?.operation.action==='put') requireThat(prior.operation.payload.created_at===payload.created_at,'changed_inbox_identity');
   } else if(kind === 'note') {
     requireThat(active(view, 'paper', payload.paper_id), 'parent_unavailable');
     parents =[{
@@ -361,6 +463,7 @@ export function buildOperation(state, kind, id, payload, {
   );
   const live = active(view, kind, id),
   retiring = action === 'delete' && conflict;
+  if(kind==='inbox_item' && restore) requireThat(prior && !live && action==='put','invalid_inbox_restore');
   if(prior && ! live && action === 'put') requireThat(restore, 'explicit_restore_required');
   if(action === 'delete' && ! retiring) requireThat(live, 'parent_unavailable');
   const pending =[...state.outbox].reverse().find(item => keyOf(item.operation.entity_type, item.operation.entity_id) === key);
@@ -419,8 +522,17 @@ export function validateProjection(value, workspace) {
   value,
   ['schema_version', 'workspace_id', 'cursor', 'capabilities', 'local_state', 'lists', 'papers', 'notes',
   'highlights', 'decks', 'assets'],
-  ['list_order']
+  ['list_order','inbox','reading_positions','required_capabilities']
   );
+  const required=value.required_capabilities??[];
+  requireThat(!Object.hasOwn(value,'required_capabilities') || required.length>0,'unused_capability');
+  requireThat(Array.isArray(required) && stable(required)===stable([...new Set(required)].sort()) &&
+    required.every(cap=>['inbox','queue_pin','reading_position'].includes(cap)),'unsupported_capability');
+  requireThat(required.includes('inbox')===Object.hasOwn(value,'inbox'),'inbox_capability_required');
+  const hasQueuePin=value.papers.some(row=>Object.hasOwn(row,'queue_pin'));
+  requireThat(required.includes('queue_pin')===hasQueuePin,'queue_pin_capability_required');
+  requireThat(required.includes('reading_position')===Object.hasOwn(value,'reading_positions'),'position_capability_required');
+  if(Object.hasOwn(value,'reading_positions'))requireThat(value.schema_version===2,'position_portable_owner_required');
   // Copy only read-contract fields. Imported credentials/config/path fields never persist.
   const pick =(row, fields) => Object.fromEntries(fields.filter(field => Object.hasOwn(row, field)).map(field =>[field,
   copy(row[field])]));
@@ -440,6 +552,13 @@ export function validateProjection(value, workspace) {
     decks: [],
     assets: []
   };
+  if(Object.hasOwn(value,'inbox'))result.inbox=validateInboxProjection(value.inbox);
+  if(required.length)result.required_capabilities=[...required];
+  if(Object.hasOwn(value,'reading_positions')) {
+    result.reading_positions=validatePositionProjection(
+      value.reading_positions,value.papers,value.assets,validateContentTimestamp);
+    result.assets=copy(value.assets);
+  }
   result.lists = value.lists.map(row =>({
     ...pick(row, ['id', 'name', 'note']),
     members: (row.members ??[]).map(member => {
@@ -455,8 +574,12 @@ export function validateProjection(value, workspace) {
     }),
     analysis_sections: sections(row.analysis_sections)
   }));
+  for(const paper of value.papers) if(Object.hasOwn(paper,'queue_pin')) {
+    closed(paper.queue_pin,['pinned_at']);
+    validateContentTimestamp(paper.queue_pin.pinned_at);
+  }
   result.papers = value.papers.map(row =>({
-    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id']),
+    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id','queue_pin']),
     analysis_sections: sections(row.analysis_sections),
     citations: (row.citations ??[]).map(c => pick(c, ['ref_key', 'title', 'doi', 'purpose', 'gist', 'verdict',
     'why', 'basis', 'year']))
@@ -536,6 +659,10 @@ export function projection(state) {
   );
   const contentHighlights = projectContent(papers, lists, rows('research_content'));
   return {
+    ...((hasKind('inbox_item') || supplementary?.inbox) ? {inbox:{
+      items:[...rows('inbox_item').map(({operation:op})=>({id:op.entity_id,payload:op.payload,active:true,version:op.operation_id,incarnation:op.incarnation,sync_state:statusFor(state,'inbox_item',op.entity_id),editable:true})),
+        ...(supplementary?.inbox?.items??[]).filter(row=>!view.entities[keyOf('inbox_item',row.id)]).map(row=>({...copy(row),editable:false}))],
+      retained:supplementary?.inbox?.retained??0}} : {}),
     lists: hasKind('list') ? reorder(lists, 'workspace_list_order', 'workspace-lists'): (supplementary?.lists ??[]),
     papers: hasKind('paper') ? papers: (supplementary?.papers ??[]),
     notes: [...notes, ...(supplementary?.notes ??[]).filter(n => ! view.entities[keyOf('note', n.id)]).map(n =>({
@@ -548,6 +675,9 @@ export function projection(state) {
     original_sources: rows('research_file').filter(({operation: op}) => op.payload.feature === 'original_source')
       .map(({operation: op}) => ({id:op.entity_id,paper_id:op.payload.paper_id,
         document_hash:op.payload.slot,operation_id:op.operation_id,editable:false})),
+    legacy_briefs: rows('research_file').filter(({operation: op}) => op.payload.feature === 'legacy_brief')
+      .map(({operation:op})=>({id:op.entity_id,paper_id:op.payload.paper_id,event_id:op.payload.slot,
+        operation_id:op.operation_id,editable:false})),
     decks: rows('research_file').filter(({operation: op}) => op.payload.feature === 'deck').map(({operation: op}) => ({id: op.entity_id, paper_id: op.payload.paper_id,
       slot: op.payload.slot, operation_id: op.operation_id, editable: false}))
   };

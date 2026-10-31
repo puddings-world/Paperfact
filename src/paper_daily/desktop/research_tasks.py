@@ -102,5 +102,10 @@ def button(reader):
     from paper_daily.desktop.claim_evidence import open_report
 
     claims.triggered.connect(lambda: open_report(reader))
+    audit = menu.addAction("\u6aa2\u67e5\u5df2\u5b58\u8b49\u64da\u2026")
+    audit.setData("analysis_audit")
+    from paper_daily.desktop.research_audit import open_report as open_audit
+
+    audit.triggered.connect(lambda: open_audit(reader))
     widget.setMenu(menu)
     return widget

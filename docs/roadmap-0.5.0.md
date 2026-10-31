@@ -63,11 +63,22 @@ claim against its exact PDF version, showing missing evidence honestly, and
 preserving the goal/source/lineage provenance across supported sharing and sync.
 Per-list purpose editing, sharing, capture and mobile display are in the current
 local candidate. Source-pinned claim extraction, deterministic quote-location
-checks, saved-first cards and portable original-version inspection also have
-fixture coverage. Quote location does not certify semantic support. Unbound
-original ownership, grounded lineage, the complete analysis audit, full producer
-enrollment and physical-device acceptance remain open; task templates do not
-satisfy those gates.
+checks, saved-first cards and portable/unbound original-version inspection also
+have fixture coverage. Quote location does not certify semantic support. Grounded
+lineage, the complete analysis audit, remaining typed producer/history enrollment,
+complete editable-recovery migration/UX and physical-device acceptance remain open;
+task templates do not satisfy those gates. A bounded local A1 audit and the
+editable-recovery service have focused coverage in the current candidate; neither
+satisfies the complete audit or recovery release requirement.
+
+A bounded source-fact/consistency slice is also present in the local candidate:
+one explicit Audit request over selected saved outputs, inspected quotations and
+paired value differences in a modeless view. It remains a researcher-review
+proposal with temporary copyable results. Pending comparisons now have a bounded
+read-only recapture for unchanged research inputs after reading-state writes;
+source/owner changes still reject delivery, without an automatic model retry.
+Complete corpus/CLI coverage, continuity after result acceptance and expert
+evaluation remain separate work. See [reading continuity](audit-reading-continuity.md).
 
 The next list-recency improvement is initially local-only reading state. Dragging
 still commits the explicit shared custom order. See the concrete

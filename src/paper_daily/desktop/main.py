@@ -61,7 +61,6 @@ from paper_daily import (
     resources,
     runtime,
     store,
-    translate,
     venues,
 )
 from paper_daily import queue as qmod
@@ -101,6 +100,7 @@ from paper_daily.desktop.note_editor import NoteEditor
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
+from paper_daily.desktop.window_workspace import WindowWorkspace, current_for
 from paper_daily.store import connect, get_kv, init_db, now
 
 LIGHT = {
@@ -1048,8 +1048,19 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         )
         outer.addWidget(split, 1)
 
+        from paper_daily.desktop.reading_position_controller import ReadingPositionController
+
+        self.reading_positions = ReadingPositionController(self, bar)
+        from paper_daily.desktop.reader_preparation import ReaderPreparation
+
+        self.preparation = ReaderPreparation(self)
+        self.pdf.source_changed.connect(self.preparation.source_changed)
+
     # ---- loading ---------------------------------------------------------
     def load(self, paper: Paper) -> None:
+        self.preparation.invalidate(clear=True)
+        self.figure_pane.invalidate()
+        self.reading_positions.invalidate()
         from paper_daily import store
         if self.paper is not None:
             self._qa_drafts[(self._qa_view_database, self.paper.id)] = self.ask_box.text()
@@ -1372,6 +1383,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             else:
                 marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
             selection.set_highlights(marks)
+            QTimer.singleShot(0, self.reading_positions.bind)
             ai = sum(mark.get("origin") == "ai" for mark in marks)
             manual = len(marks) - ai
             self.highlight_status.setText(
@@ -1436,7 +1448,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         if ok:
             self.paper._has_pdf = True
             self._load_pdf()
-            self.figure_pane.load(self.paper.id, self.paper.pdf_path, True)
+            self._load_figures()
             self._check_resources()
         else:
             self.pdf_note.setText("下載失敗")
@@ -1782,22 +1794,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     def _load_chat(self) -> None:
         assert self.paper
-        pal = self.win.pal
-        self._chat_snapshot = self.win.data.chat_snapshot(self.paper.id)
-        rows = [item["row"] for item in self._chat_snapshot["rows"]]
-        from paper_daily import research_chat
-
-        with connect() as conn:
-            pending = research_chat.pending_requests(conn, self.paper.id)
-        self._qa_pending = {item["user_key"]: item for item in pending}
-        if not rows:
-            self.chat_view.setHtml(
-                f'<div style="color:{pal["faint"]};font-size:12px;">'
-                "問答紀錄 · 尚無對話。可在底部自行輸入，或先選擇提問建議。</div>"
-            )
-            return
-        chunks = [self._exchange(q, a) for q, a in _exchanges(rows)]
-        self.chat_view.setHtml("<h3>問答紀錄</h3>" + "".join(chunks), at_end=True)
+        self.preparation.request()
 
     def _exchange(self, question, answer) -> str:
         """One question and its answer as a card: the question as its header."""
@@ -1871,15 +1868,28 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 break
         self._load_chat()
 
+    def _load_figures(self):
+        from paper_daily.desktop.figure_loading import capture
+
+        if not self.paper:
+            return
+        try:
+            context = capture(self)
+        except (OSError, ValueError, RuntimeError):
+            context = None
+        path = context.view.path if context is not None else self.paper.pdf_path
+        self.figure_pane.load(self.paper.id, path, context is not None, context=context)
+
     def _figures_ready(self, paper_id):
         if self.paper and self.paper.id == paper_id:
             self._load_dive()
 
     def _show_cites_if_visible(self) -> None:
         if (self.paper and self.tabs.currentWidget() is self.figure_pane
-                and getattr(self, "_figures_stale", False)):
+                and (getattr(self, "_figures_stale", False)
+                     or (not self.figure_pane.busy and self.figure_pane._frame is None))):
             self._figures_stale = False
-            self.figure_pane.load(self.paper.id, self.paper.pdf_path, self.paper.has_pdf)
+            self._load_figures()
         if self.paper and self._cites_stale and self.tabs.currentWidget() is self.cites_pane:
             self._cites_stale = False
             self.cites_pane.load(self.paper.id)
@@ -1998,40 +2008,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     # ---- acting on a passage of the paper --------------------------------
     def _translate_selection(self, text: str) -> None:
-        """Translate the selected passage in place, quickly, with the model one click away.
+        from paper_daily.desktop.translation_scope import controller
 
-        Google answers in a second, which is what a glance at a sentence wants. The
-        model keeps technical terms in English, which is what a sentence you half
-        understand needs, so it is offered on the same panel and taken over
-        automatically when Google does not answer.
-        """
-        if not text.strip() or self.translate_runner.busy:
-            return
-        overlay = self.pdf.selection
-        overlay.show_result("翻譯中…", text[:160] + ("…" if len(text) > 160 else ""))
-        self.translate_runner.start(
-            text,
-            lambda answer: overlay.show_result("Google 翻譯", answer, refinable=True),
-            lambda _reason: self._translate_with_model(text),
-            call=translate.machine, task="translate",
-        )
+        controller(self).start(text)
 
     def _translate_with_model(self, text: str) -> None:
-        if not text.strip() or self.refine_runner.busy:
-            return
-        overlay = self.pdf.selection
-        overlay.show_result("AI 精譯中…",
-                            text[:160] + ("…" if len(text) > 160 else ""))
-        prompt = (
-            "把下面這段論文原文翻成繁體中文。技術名詞、模型名稱、資料集名稱保留英文,"
-            "數學用 Unicode 純文字,絕不使用 LaTeX。只輸出譯文,不要前言。\n\n" + text
-        )
-        self.refine_runner.start(
-            prompt,
-            lambda answer: overlay.show_result("AI 精譯", answer.strip()),
-            lambda reason: overlay.show_result("翻不出來", reason),
-            task="translate",
-        )
+        from paper_daily.desktop.translation_scope import controller
+
+        controller(self).start(text, model=True)
 
     def _where(self) -> tuple[int | None, str | None]:
         """The current selection as (page for a human, anchor for the machine).
@@ -2317,6 +2301,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 class MainWindow(QWidget):
     def __init__(self, open_next: bool = False) -> None:
         super().__init__()
+        self._workspace_owner = WindowWorkspace.capture()
+        self.destroyed.connect(self._workspace_owner.close)
         self.pal = palette()
         self.data = Data()
         self.papers: list[Paper] = []
@@ -2386,14 +2372,14 @@ class MainWindow(QWidget):
         outer.setSpacing(0)
 
         # Where you are on the left (back, which list, what to add to it); what to do
-        # with the paper on the right. Settings stay quiet between the two.
-        bar = QHBoxLayout()
+        # with the paper next. Preserve the list/research and AI/reading order,
+        # wrapping whole controls rather than growing beyond a laptop screen.
+        bar = FlowLayout()
         bar.setContentsMargins(16, 8, 12, 8)
         bar.setSpacing(6)
         brand = QLabel("Paperfact")
         brand.setFont(fonts.font(fonts.SERIF, 13, QFont.Weight.DemiBold))
         bar.addWidget(brand)
-        bar.addSpacing(10)
         self.back_btn = ghost(QPushButton("← 清單"))
         self.back_btn.setToolTip(
             f"回到清單({fonts.key(QKeySequence.StandardKey.Back)},或滑鼠側鍵)"
@@ -2429,6 +2415,17 @@ class MainWindow(QWidget):
             "將目前清單已儲存的 PDF、分析、筆記與可編輯簡報打包成 ZIP")
         self.reading_goal_action = data_menu.addAction("清單研究目的…", self._edit_reading_goal)
         data_menu.addSeparator()
+        from paper_daily.desktop.research_updates import COPY as activity_copy
+
+        activity_text = activity_copy.get(getattr(self, "language", "zh-TW"), activity_copy["en"])
+        self.research_activity_action = data_menu.addAction(
+            activity_text["title"], self._research_activity)
+        self.research_activity_action.setToolTip(activity_text["coverage"])
+        from paper_daily.desktop.inbox_dialog import COPY as inbox_copy
+
+        inbox_text = inbox_copy.get(getattr(self, "language", "zh-TW"), inbox_copy["en"])
+        self.research_inbox_action = data_menu.addAction(inbox_text["title"], self._research_inbox)
+        self.research_inbox_action.setToolTip(inbox_text["hint"])
         self.workspace_action = data_menu.addAction("工作區與備份…", self._workspace_settings)
         self.offline_action = data_menu.addAction("離線準備所選論文…", self._offline_selected)
         self.review_action = data_menu.addAction("審閱保留內容…", self._review_retained)
@@ -2439,9 +2436,7 @@ class MainWindow(QWidget):
 
         self.progress = QLabel("")
         self.progress.setStyleSheet(f"color:{self.pal['muted']};font-size:12px;")
-        bar.addSpacing(6)
         bar.addWidget(self.progress)
-        bar.addStretch(1)
         from paper_daily.desktop.ai_dialog import AIStatusButton
 
         self.ai_picker = AIStatusButton(self)
@@ -2454,9 +2449,7 @@ class MainWindow(QWidget):
         divider = QFrame()
         divider.setFixedSize(1, 22)
         divider.setStyleSheet(f"background:{self.pal['border']};")
-        bar.addSpacing(4)
         bar.addWidget(divider)
-        bar.addSpacing(4)
         self.read_btn = QPushButton("標記已讀")
         self.read_btn.clicked.connect(self._toggle_read)
         self.read_btn.hide()
@@ -2520,13 +2513,14 @@ class MainWindow(QWidget):
         self.account_status = AccountStatus(self, self._refresh_ai_summary)
         from paper_daily.desktop.analysis_settings import ReadyBanner
 
-        self.ready_banner = ReadyBanner(self.pal)
+        self.ready_banner = ReadyBanner(self.pal, owner=self._workspace_owner)
         self.ready_banner.open_paper.connect(self.open_anywhere)
         outer.addWidget(self.ready_banner)
         from paper_daily.desktop.update_banner import UpdateBanner
 
         self.update_banner = UpdateBanner(
-            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update
+            self.pal, prepare_install=self._prepare_update, cancel_install=self._cancel_update,
+            owner=self._workspace_owner
         )
         self.update_banner.quit_for_update.connect(self.close)
         outer.addWidget(self.update_banner)
@@ -2642,6 +2636,69 @@ class MainWindow(QWidget):
         self.compact_header.setVisible(collapsed)
         self.remember("top_collapsed", "1" if collapsed else "0")
         self._refresh_ai_summary()
+
+    def _research_inbox(self):
+        from paper_daily import store
+        from paper_daily.desktop.inbox_dialog import COPY, InboxDialog
+        from paper_daily.research_inbox import Inbox
+
+        existing = getattr(self, "_research_inbox_dialog", None)
+        if existing is not None and not existing.disposed:
+            if (existing.service.path != Path(store.DB_PATH).resolve()
+                    or existing.service.needs_reopen):
+                if not existing.close():
+                    existing.raise_()
+                    return
+            else:
+                existing.show()
+                existing.raise_()
+                return
+        language = getattr(self, "language", "zh-TW")
+        try:
+            service = Inbox(store.DB_PATH, current_path=lambda:store.DB_PATH)
+            dialog = InboxDialog(service, self, language=language)
+        except (OSError, ValueError, sqlite3.Error):
+            text = COPY.get(language, COPY["en"])
+            QMessageBox.warning(self, text["title"], text["failed"])
+            return
+        self._research_inbox_dialog = dialog
+        dialog.open()
+
+    def _research_activity(self):
+        from paper_daily import store
+        from paper_daily.desktop import recorded_navigation
+        from paper_daily.desktop.research_updates import COPY, ResearchUpdatesDialog
+        from paper_daily.workspace_activity import ActivityReader
+
+        existing = getattr(self, "_research_activity_dialog", None)
+        if existing is not None and not existing.disposed:
+            if existing.service.path != Path(store.DB_PATH).resolve() or existing._invalid:
+                if not existing.close():
+                    existing.raise_()
+                    return
+            else:
+                existing.show()
+                existing.raise_()
+                return
+        language = getattr(self, "language", "zh-TW")
+        try:
+            service = ActivityReader(store.DB_PATH, current_path=lambda: store.DB_PATH)
+            dialog = ResearchUpdatesDialog(
+                service, self, language=language,
+                prepare=lambda row, locate: recorded_navigation.capture(
+                    self, service, row, locate=locate),
+                activate=lambda prepared, locate: recorded_navigation.activate(
+                    self, service, prepared, locate=locate),
+                can_locate=lambda row: recorded_navigation.can_locate(
+                    self, row, database=service.path),
+                blocked=lambda: recorded_navigation.blocked(self),
+            )
+        except (OSError, ValueError, sqlite3.Error):
+            text = COPY.get(language, COPY["en"])
+            QMessageBox.warning(self, text["title"], text["failed"])
+            return
+        self._research_activity_dialog = dialog
+        dialog.open()
 
     def _workspace_settings(self):
         from paper_daily import store
@@ -2778,6 +2835,8 @@ class MainWindow(QWidget):
         IntegrationDialog(self).exec()
 
     def _external_lists_changed(self):
+        if not current_for(self):
+            return
         # Keep the open paper, editor contents, selection and keyboard focus intact.
         self._external_refresh_pending = True
         if (QApplication.activeModalWidget() is not None
@@ -2793,6 +2852,8 @@ class MainWindow(QWidget):
         self._external_refresh_pending = False
 
     def _refresh_external_list_views(self):
+        if not current_for(self):
+            return
         reader = getattr(self, "reader_page", None)
         notify_document = getattr(reader, "_check_document_update", None)
         if notify_document is not None:
@@ -2813,7 +2874,12 @@ class MainWindow(QWidget):
             self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
     def _poll_external_lists(self, *, background=False):
+        # Retire the pinned editor before refusing new-workspace reads.
+        if getattr(getattr(self, "_workspace_owner", None), "closed", False):
+            return
         if not self._close_stale_review():
+            return
+        if not current_for(self):
             return
         # On the timer the read runs off the GUI thread, where opening the database
         # froze the window for half a second; a change it finds arrives as `changed`.
@@ -2854,7 +2920,10 @@ class MainWindow(QWidget):
         """Say which papers the scheduled analysis finished, once per batch."""
         from paper_daily import analysis_schedule
 
-        with connect() as conn:
+        if not current_for(self):
+            return
+
+        with connect(path=self._workspace_owner.database) as conn:
             ids = analysis_schedule.unseen(conn)
             titles = {
                 r["id"]: r["title"]
@@ -2863,6 +2932,8 @@ class MainWindow(QWidget):
                     ids,
                 )
             } if ids else {}
+        if not current_for(self):
+            return
         if not ids:
             self.ready_banner.hide()
             return
@@ -2931,7 +3002,12 @@ class MainWindow(QWidget):
 
     # ---- layout memory ---------------------------------------------------
     def remember(self, key: str, value: str) -> None:
-        ui_state.save(f"ui.{key}", value)
+        if (getattr(self, "_preparation_persisting", False)
+                and not MainWindow._preparation_ready(self)):
+            self._preparation_persist_blocked = True
+            return
+        if current_for(self):
+            ui_state.save(f"ui.{key}", value)
 
     def _restore_layout(self) -> None:
         """Put the window back where it was. Kept in the same database as everything
@@ -2970,19 +3046,52 @@ class MainWindow(QWidget):
         dialog.finished.connect(finished)
         dialog.show()
 
+    def _preparation_ready(self) -> bool:
+        reader = getattr(self, "reader_page", None)
+        figures = getattr(reader, "figure_pane", None)
+        figure_ready = figures is None or figures.request_close()
+        preparation = getattr(reader, "preparation", None)
+        prepared = preparation is None or preparation.request_close()
+        if not figure_ready or not prepared:
+            self.reader_page.ask_status.setText(
+                "Figures are still preparing; wait for them to stop, then retry."
+                if not figure_ready else
+                "Saved conversation is still preparing; wait for it to stop, then retry."
+            )
+            return False
+        return True
+
+    def _remember_prepared(self, key: str, value: str) -> bool:
+        if not MainWindow._preparation_ready(self):
+            return False
+        nested = getattr(self, "_preparation_persisting", False)
+        if not nested:
+            self._preparation_persist_blocked = False
+        self._preparation_persisting = True
+        try:
+            self.remember(key, value)
+        finally:
+            self._preparation_persisting = nested
+        return (not getattr(self, "_preparation_persist_blocked", False)
+                and MainWindow._preparation_ready(self))
+
     def _prepare_update(self):
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
         # Match closeEvent's dialog/operation guards before starting an installer.
         from paper_daily.desktop.integration_dialog import OperationWorker
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
             return False
         for name in ("_workspace_dialog", "_review_dialog", "_offline_dialog", "_goal_dialog",
-                     "_claim_dialog"):
+                     "_claim_dialog", "_research_activity_dialog", "_research_inbox_dialog"):
             dialog = getattr(self, name, None)
             if dialog is not None and not dialog.disposed:
                 return False
         try:
-            return self._prepare_restart()
+            prepared = self._prepare_restart()
+            return prepared and MainWindow._preparation_ready(self)
         except (OSError, ValueError, sqlite3.Error):
             return False
 
@@ -2991,6 +3100,27 @@ class MainWindow(QWidget):
         self._closing_with_recovery = False
 
     def _prepare_restart(self) -> bool:
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not MainWindow._preparation_ready(self):
+            return False
+        inbox = getattr(self, "_research_inbox_dialog", None)
+        if inbox is not None and not inbox.disposed and not inbox.close():
+            if not current_for(self):
+                self._workspace_changed_notice()
+            return False
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        activity = getattr(self, "_research_activity_dialog", None)
+        if activity is not None and not activity.disposed and not activity.close():
+            if not current_for(self):
+                self._workspace_changed_notice()
+            return False
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
         automatic = getattr(self, "_continuous_sync", None)
         if automatic is not None:
             automatic.stop()
@@ -3016,27 +3146,50 @@ class MainWindow(QWidget):
         if (pane.busy or any(worker.busy for worker in (
                 reader.runner, reader.translate_runner, reader.refine_runner, reader.fetcher,
                 getattr(reader, "document_runner", None),
+                getattr(reader, "reading_positions", None),
         ) if worker is not None) or QApplication.activeModalWidget() is not None):
             pane.status.setText("仍有工作或對話視窗，暫不重啟；完成後可再試一次。")
             return False
         recovered = False
-        if not pane.save_changes():
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not MainWindow._preparation_ready(self):
+            return False
+        saved = pane.save_changes()
+        if not MainWindow._preparation_ready(self):
+            return False
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not saved:
             try:
                 pane.save_recovery()
             except (ValueError, OSError) as exc:
                 pane.status.setText(f"草稿保存失敗，暫不重啟：{exc}")
                 return False
             recovered = True
-        self.remember("restart", json.dumps({
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not MainWindow._remember_prepared(self, "restart", json.dumps({
             "paper": reader.paper.id if reader.paper else None,
             "reader": self.stack.currentWidget() is reader,
             "tab": reader.tabs.currentIndex(), "mode": pane._mode,
             "slide": pane._index, "view": pane.views.currentIndex(),
             "note": reader.note_edit.toPlainText(), "question": reader.ask_box.text(),
             "pdf_page": reader.pdf.current_page() if reader.pdf.isVisible() else 0,
-        }))
+        })):
+            return False
         # A failed flush must keep the current process and its drafts alive.
+        if not current_for(self):
+            self._workspace_changed_notice()
+            return False
+        if not MainWindow._preparation_ready(self):
+            return False
         if not ui_state.flush():
+            return False
+        if not MainWindow._preparation_ready(self):
             return False
         self._closing_with_recovery = recovered
         return True
@@ -3059,7 +3212,8 @@ class MainWindow(QWidget):
                 selection = getattr(reader.pdf, "selection", None)
                 page = state.get("pdf_page", 0)
                 if selection and type(page) is int and 0 <= page < reader.pdf.page_count():
-                    QTimer.singleShot(0, selection, lambda: selection.scroll_to_page(page))
+                    QTimer.singleShot(0, selection, lambda: selection.scroll_to_page(page)
+                                      if current_for(self) else None)
                 if not pane._dirty and 0 <= state.get("slide", -1) < pane.outline.count():
                     pane.outline.setCurrentRow(state["slide"])
                 pane.views.setCurrentIndex(state.get("view", 0))
@@ -3076,10 +3230,113 @@ class MainWindow(QWidget):
         except (ValueError, TypeError, KeyError):
             self.reader_page.presentation_pane.status.setText("無法恢復重啟前的視角；草稿仍保留。")
 
+    def _workspace_drafts(self) -> bool:
+        reader = self.reader_page
+        for name, getter in (("note_edit", "toPlainText"), ("ask_box", "text")):
+            editor = getattr(reader, name, None)
+            if editor is not None and getattr(editor, getter)():
+                return True
+        if any(getattr(reader, "_qa_drafts", {}).values()):
+            return True
+        pane = reader.presentation_pane
+        if any(getattr(pane, key, False) for key in ("_dirty", "_canvas_dirty", "_layout_reset")):
+            return True
+        instruction = getattr(getattr(pane, "canvas", None), "revise_instruction", None)
+        return bool((instruction is not None and instruction.toPlainText())
+                    or QApplication.activeModalWidget() is not None)
+
+    def _workspace_changed_notice(self) -> None:
+        message = (
+            "Workspace changed. Copy unsaved text, or return to the original workspace "
+            "to save and close."
+        )
+        banner = getattr(self, "ready_banner", None)
+        if banner is not None:
+            banner.ids = []
+            banner.label.setText(message)
+            banner.read.setEnabled(False)
+            banner.show()
+        reader = getattr(self, "reader_page", None)
+        for name in ("note_status", "ask_status"):
+            label = getattr(reader, name, None)
+            if label is not None:
+                label.setText(message)
+
+    def _stop_window_observers(self) -> None:
+        owner = getattr(self, "_workspace_owner", None)
+        if owner is not None:
+            owner.close()
+        timer = getattr(self, "_ready_poll", None)
+        if timer is not None:
+            timer.stop()
+        observer = getattr(self, "workspace_changes", None)
+        timer = getattr(observer, "timer", None)
+        if timer is not None:
+            timer.stop()
+
+        figures = getattr(getattr(self, "reader_page", None), "figure_pane", None)
+        if figures is not None:
+            figures.dispose()
+
+    def _close_changed_workspace(self, event) -> bool:
+        if current_for(self):
+            return False
+        if not MainWindow._preparation_ready(self):
+            event.ignore()
+            return True
+        if self._workspace_drafts():
+            self._workspace_changed_notice()
+            event.ignore()
+        else:
+            self._stop_window_observers()
+            self.update_banner.shutdown()
+            position = getattr(self.reader_page, "reading_positions", None)
+            if position is not None:
+                position.close()
+            preparation = getattr(self.reader_page, "preparation", None)
+            if preparation is not None:
+                preparation.dispose()
+            self.workspace_changes.close()
+            super().closeEvent(event)
+        return True
+
+    def _preserve_changed_drafts(self, event) -> bool:
+        if not current_for(self) and self._workspace_drafts():
+            self._workspace_changed_notice()
+            event.ignore()
+            return True
+        return False
+
     def closeEvent(self, event) -> None:
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
+        inbox = getattr(self, "_research_inbox_dialog", None)
+        if inbox is not None and not inbox.disposed and not inbox.close():
+            MainWindow._preserve_changed_drafts(self, event)
+            event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
+        activity = getattr(self, "_research_activity_dialog", None)
+        if activity is not None and not activity.disposed and not activity.close():
+            MainWindow._preserve_changed_drafts(self, event)
+            event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
+        audit = getattr(self, "_audit_dialog", None)
+        if audit is not None and not audit.disposed and not audit.close():
+            MainWindow._preserve_changed_drafts(self, event)
+            event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
         claims = getattr(self, "_claim_dialog", None)
         if claims is not None and not claims.disposed and not claims.close():
+            MainWindow._preserve_changed_drafts(self, event)
             event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
             return
         goal = getattr(self, "_goal_dialog", None)
         if goal is not None and not goal.disposed and goal.isVisible():
@@ -3088,11 +3345,17 @@ class MainWindow(QWidget):
             return
         offline = getattr(self, "_offline_dialog", None)
         if offline is not None and not offline.disposed and not offline.close():
+            MainWindow._preserve_changed_drafts(self, event)
             event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
             return
         workspace = getattr(self, "_workspace_dialog", None)
         if workspace is not None and not workspace.disposed and not workspace.close():
+            MainWindow._preserve_changed_drafts(self, event)
             event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
             return
 
         review = getattr(self, "_review_dialog", None)
@@ -3108,6 +3371,15 @@ class MainWindow(QWidget):
             event.ignore()
             return
         reader = self.reader_page
+        preparation_ready = MainWindow._preparation_ready(self)
+        position_controller = getattr(reader, "reading_positions", None)
+        position_ready = position_controller is None or position_controller.request_close()
+        if not preparation_ready or not position_ready:
+            MainWindow._preserve_changed_drafts(self, event)
+            event.ignore()
+            return
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
         hub = getattr(self, "activity_hub", None)
         workers = (getattr(reader, name, None) for name in
                    ("runner", "translate_runner", "refine_runner", "fetcher", "document_runner"))
@@ -3121,6 +3393,8 @@ class MainWindow(QWidget):
         qa_review = getattr(reader, "_qa_review_dialog", None)
         if qa_review is not None:
             qa_review.close()
+        if MainWindow._preserve_changed_drafts(self, event):
+            return
         downloads = getattr(self, "pdf_downloads", None)
         if downloads is not None and downloads.busy:
             downloads.cancel()
@@ -3153,7 +3427,18 @@ class MainWindow(QWidget):
             self.reader_page.tabs.setCurrentWidget(pane)
             event.ignore()
             return
-        if not getattr(self, "_closing_with_recovery", False) and not pane.save_changes():
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        if not MainWindow._preparation_ready(self):
+            event.ignore()
+            return
+        saved = getattr(self, "_closing_with_recovery", False) or pane.save_changes()
+        if not MainWindow._preparation_ready(self):
+            event.ignore()
+            return
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        if not saved:
             event.ignore()
             if getattr(self, "_close_dialog", None):
                 self._close_dialog.raise_()
@@ -3187,10 +3472,36 @@ class MainWindow(QWidget):
             # A modal exec inside closeEvent can re-enter native window teardown.
             box.open()
             return
-        self.remember("presentation", json.dumps(pane.workspace_state()))
-        self.remember("geometry", self.saveGeometry().toHex().data().decode())
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        presentation_state = json.dumps(pane.workspace_state())
+        if not MainWindow._remember_prepared(self, "presentation", presentation_state):
+            event.ignore()
+            return
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        geometry = self.saveGeometry().toHex().data().decode()
+        if not MainWindow._remember_prepared(self, "geometry", geometry):
+            event.ignore()
+            return
+        if MainWindow._close_changed_workspace(self, event):
+            return
+        if not MainWindow._preparation_ready(self):
+            event.ignore()
+            return
         ui_state.flush()
+        if not MainWindow._preparation_ready(self):
+            event.ignore()
+            return
+        MainWindow._stop_window_observers(self)
         self.update_banner.shutdown()
+        position_controller = getattr(self.reader_page, "reading_positions", None)
+        if position_controller is not None:
+            position_controller.close()
+        preparation = getattr(self.reader_page, "preparation", None)
+        if preparation is not None:
+            preparation.dispose()
+        self.workspace_changes.close()
         super().closeEvent(event)
 
     # Papers kept analysed ahead of the reading while the window is open.
@@ -3203,6 +3514,8 @@ class MainWindow(QWidget):
         return alive and (paper_id is None or self._job_paper == paper_id)
 
     def _spawn_job(self, args: list[str], paper_id: str | None) -> None:
+        if not current_for(self):
+            return
         workspace = getattr(self, "_workspace_dialog", None)
         if workspace is not None and not workspace.disposed:
             return
@@ -3215,6 +3528,8 @@ class MainWindow(QWidget):
         self._job_paper = paper_id
 
         def show_result():
+            if not current_for(self):
+                return
             if Path(store.DB_PATH).resolve() != original_database:
                 return
             if paper_id:
@@ -3291,6 +3606,10 @@ class MainWindow(QWidget):
         paper opened only to glance at should not spend a model call.
         """
         # Desktop background spending is opt-in; opening/importing a list only reads it.
+        if getattr(self, "_recorded_navigation", False):
+            return
+        if not current_for(self):
+            return
         with connect() as conn:
             if ui_state.read(conn, "ui.background_analysis") != "1":
                 return
@@ -3518,16 +3837,22 @@ class MainWindow(QWidget):
         paper = next((p for p in self.papers if p.id == paper_id), None)
         if not paper:
             return
-        if paper.state == "pending":
-            self.data.set_state(paper.id, "delivered", list_id=self.active_list)
-            paper.state = "delivered"
-        paper.opened_at = now()
-        ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
+        recorded = getattr(self, "_recorded_navigation", False)
+        if recorded and not managed(paper):
+            return
+        if not recorded:
+            if paper.state == "pending":
+                self.data.set_state(paper.id, "delivered", list_id=self.active_list)
+                paper.state = "delivered"
+            paper.opened_at = now()
+            ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
         self.reader_page.load(paper)
         self._last_paper = paper.id
-        self.top_up_dives()
+        if not recorded:
+            self.top_up_dives()
         self.stack.setCurrentWidget(self.reader_page)
-        self._refresh_ai_summary()
+        if not recorded:
+            self._refresh_ai_summary()
         self.back_btn.setText("← 清單")
         self.back_btn.show()
         self.read_btn.show()

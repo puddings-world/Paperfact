@@ -23,7 +23,9 @@ def validate(row):
     if not isinstance(value, str) or len(value.encode("utf-8")) > source_snapshots.MAX_RECEIPT:
         raise ValueError("Archived source provenance exceeds its bound")
     body = read_json(value.encode("utf-8"))
-    source_snapshots.validate(body)
+    from paper_daily.sync_documents import MAX_PDF_BYTES
+
+    source_snapshots.validate(body, max_pdf_bytes=MAX_PDF_BYTES)
     if hashlib.sha256(value.encode("utf-8")).hexdigest() != row["record_id"]:
         raise ValueError("Archived source provenance identity differs from its content")
     return body
@@ -31,8 +33,9 @@ def validate(row):
 
 def wrap(receipt):
     from paper_daily import source_snapshots
+    from paper_daily.sync_documents import MAX_PDF_BYTES
 
-    source_snapshots.validate(receipt)
+    source_snapshots.validate(receipt, max_pdf_bytes=MAX_PDF_BYTES)
     body = canonical_json(receipt)
     return {"record_id": hashlib.sha256(body).hexdigest(), "body_json": body.decode("utf-8")}
 

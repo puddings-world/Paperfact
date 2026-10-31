@@ -264,6 +264,10 @@ def write_file(conn, operation):
         return
     if not paper_current(conn, operation):
         raise ValueError("Artifact requires its projected paper incarnation")
+    if operation["payload"]["feature"] == "legacy_brief":
+        from paper_daily.legacy_workflow import require_ready
+
+        require_ready(conn)
     encoded = canonical_operation(operation)
     row = conn.execute(
         "SELECT operation FROM research_file_versions WHERE operation_id=?", (oid,)
@@ -325,8 +329,14 @@ def materialize(store, root, operation):
     directory = version_directory(root, operation)
     directory.mkdir(parents=True, exist_ok=True)
     if operation["payload"]["feature"] == "original_source":
-        files = {"source.json": canonical_json(body),
-                 "source.pdf": blobs[body["document_hash"]]}
+        files = {"source.json": canonical_json(body), "source.pdf": blobs[body["document_hash"]]}
+    elif operation["payload"]["feature"] == "legacy_brief":
+        from paper_daily.legacy_briefs import filename
+
+        files = {
+            "brief.json": canonical_json(body),
+            filename(body): blobs[operation["payload"]["assets"][0]["sha256"]],
+        }
     else:
         raw = body["deck"]
         descriptors = {row["id"]: row for row in operation["payload"]["assets"]}
@@ -371,6 +381,8 @@ def materialize(store, root, operation):
         "seal": _SEAL,
     }.items():
         object.__setattr__(snapshot, key, value)
+    if operation["payload"]["feature"] == "legacy_brief":
+        object.__setattr__(snapshot, "_legacy_brief_body", canonical_json(body))
     return snapshot
 
 
@@ -387,6 +399,11 @@ def activate(conn, operation, directory):
         return False
     if not isinstance(directory, MaterializedVersion) or not directory.matches(operation):
         raise ValueError("Installed artifact changed before activation")
+    if operation["payload"]["feature"] == "legacy_brief":
+        from paper_daily.legacy_briefs import bind_in
+
+        if not bind_in(conn, operation, directory):
+            return False
     conn.execute(
         (
             "INSERT INTO research_file_applied VALUES(?,?) ON "

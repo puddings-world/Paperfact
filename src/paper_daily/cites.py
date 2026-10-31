@@ -279,14 +279,9 @@ def _analyse(context, text, limit, log):
         log(f"  failed: {reason}")
         return 0
 
-    body = re.sub(r"^```(?:json)?\s*|\s*```$", "", body.strip())
-    start, end = body.find("["), body.rfind("]")
-    if start == -1 or end == -1:
-        log("  no JSON array in the reply")
-        return 0
     try:
-        entries = json.loads(body[start : end + 1])
-    except json.JSONDecodeError as e:
+        entries = llm.reply_json(body, expect=list, items=dict)
+    except ValueError as e:
         log(f"  invalid JSON ({e})")
         return 0
 

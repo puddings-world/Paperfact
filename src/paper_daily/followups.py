@@ -288,10 +288,8 @@ def _fetch(context, log):
 
 # ---- judging --------------------------------------------------------------------
 def _json(text: str, opener: str, closer: str):
-    start, end = text.find(opener), text.rfind(closer)
-    if start < 0 or end < start:
-        raise ValueError("no JSON in the answer")
-    return json.loads(text[start : end + 1])
+    return llm.reply_json(text, list if opener == "[" else dict,
+                          dict if opener == "[" else None)
 
 
 def judge(

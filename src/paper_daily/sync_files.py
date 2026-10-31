@@ -103,6 +103,8 @@ def file_id(paper_id, feature, slot):
     uuid(paper_id)
     if feature == "original_source":
         digest(slot)
+    elif feature == "legacy_brief":
+        uuid(slot)
     elif feature != "deck" or slot not in ("notes", "guide"):
         raise ValueError("Unsupported research-file feature/slot")
     identity = json.dumps([paper_id, feature, slot], separators=(",", ":"))
@@ -182,6 +184,11 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     digest(payload["source_document_hash"], nullable=True)
     validate_input_versions(payload["input_versions"])
     closed(payload["body"], {"sha256", "size", "media_type"})
+    if payload["feature"] == "legacy_brief":
+        from paper_daily.legacy_briefs import validate_manifest
+
+        validate_manifest(payload)
+        return
     if payload["feature"] == "original_source":
         from paper_daily.sync_source_files import validate_manifest
 
@@ -259,6 +266,10 @@ def validate_closure(payload, read_blob):
             ):
                 raise ValueError("Artifact closure bytes do not match their manifest")
             blobs[key] = data
+    if payload["feature"] == "legacy_brief":
+        from paper_daily.legacy_briefs import validate_closure as validate_brief
+
+        return validate_brief(payload, blobs)
     if payload["feature"] == "original_source":
         from paper_daily.sync_source_files import validate_source_closure
 

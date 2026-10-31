@@ -3,6 +3,7 @@
 import copy
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import replace
 
 import pymupdf
@@ -29,7 +30,7 @@ def pdf(path, pages):
 @pytest.fixture
 def source(tmp_path):
     database = tmp_path / "research.sqlite"
-    with sqlite3.connect(database) as conn:
+    with closing(sqlite3.connect(database)) as conn, conn:
         conn.executescript(store.SCHEMA)
         conn.execute(
             "INSERT INTO papers(id,title,title_key,year,venue,source) "

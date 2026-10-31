@@ -25,13 +25,33 @@ from paper_daily import drive_share, google_slides, research_service
 from paper_daily.desktop.ask import AskRunner
 
 
+def queue_pin_notice(result, language="zh-TW"):
+    records = result.get("queue_pin_preserved")
+    if not isinstance(records, list) or not records:
+        return ""
+    from paper_daily.enrollment_history import MAX_RECORDS
+    from paper_daily.queue_pins import validate_import_record
+
+    if len(records) > MAX_RECORDS:
+        return ""
+    try:
+        for record in records:
+            validate_import_record(record)
+    except (TypeError, ValueError):
+        return ""
+    if str(language).startswith("zh"):
+        return "已保留你的釘選；對方的釘選時間已存入匯入紀錄。"
+    return "Your pins were kept; incoming pin times were saved in import history."
+
+
 class BundleDialog(QDialog):
     progress = Signal(str)
     uploaded = Signal(int, int)
 
     def __init__(self, parent=None, *, source=None, list_id=None, list_name="",
-                 download_missing=True):
+                 download_missing=True, language="zh-TW"):
         super().__init__(parent)
+        self.language = language
         self.source = Path(source) if source else None
         self.download_missing = download_missing
         self.list_id = list_id
@@ -204,6 +224,9 @@ class BundleDialog(QDialog):
                 f"已匯出 {result['papers']} 篇論文、{result['pdf_packed']} 份原文。\n"
                 f"{len(result['pdf_missing'])} 篇尚無本機 PDF。\n{result['out']}"
             )
+        notice = queue_pin_notice(result, self.language) if self.source else ""
+        if notice:
+            message += " " + notice
         self.status.setText(message)
         self.share_button.setVisible(not self.source)
         self.go.setText("完成")

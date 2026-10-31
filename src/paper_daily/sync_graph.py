@@ -74,6 +74,61 @@ def _reading_closure(get_entity, get_receipt, operation, retirement):
     return actual == supplied
 
 
+def queue_context_transition(get_entity, get_receipt, operation, current):
+    """Only an explicit active queue context change may use new optional roots.
+
+    Base-revision/depends_on CAS remains the caller's mandatory separate gate.
+    This predicate adds old-root liveness, creation provenance and structure CAS.
+    """
+    if (
+        operation["version"] != 2
+        or operation["entity_type"] != "research_content"
+        or operation["action"] != "put"
+        or current is None
+        or not current["active"]
+        or operation["payload"].get("feature") != "queue_entry"
+        or operation["payload"].get("key") != "main"
+        or operation["incarnation"] != operation["operation_id"]
+        or operation["incarnation"] == current["incarnation"]
+        or not current["parents"]
+        or not operation["parents"]
+        or operation["parents"][0] != current["parents"][0]
+        or set(_parent_map(operation["parents"])) == set(_parent_map(current["parents"]))
+        or not _parents_active(get_entity, current["parents"])
+    ):
+        return None
+    origin = get_receipt(current["incarnation"])
+    if origin is None or origin["outcome"] != "accepted":
+        return None
+    source = origin["operation"]
+    if (
+        source["version"] != 2
+        or source["action"] != "put"
+        or source["entity_type"] != "research_content"
+        or source["entity_id"] != operation["entity_id"]
+        or source["incarnation"] != current["incarnation"]
+        or source["payload"].get("feature") != "queue_entry"
+        or source["payload"].get("key") != "main"
+        or source["payload"].get("scope") != operation["payload"].get("scope")
+    ):
+        return None
+    dependency = operation.get("structure_depends_on")
+    if dependency is None:
+        return operation["structure_revision"] == current["structure_revision"]
+    receipt = get_receipt(dependency)
+    if receipt is None:
+        raise ValueError("Missing queue context structural predecessor")
+    previous = receipt["operation"]
+    if (previous["workspace_id"], previous["device_id"]) != (
+        operation["workspace_id"],
+        operation["device_id"],
+    ) or not _touches_structure(
+        previous, "research_content", operation["entity_id"], current["incarnation"]
+    ):
+        raise ValueError("Unrelated queue context structural predecessor")
+    return receipt["outcome"] == "accepted" and receipt["sequence"] == current["structure_revision"]
+
+
 def check_preconditions(get_entity, get_receipt, operation) -> bool:
     """Return False for preserved graph conflict; raise for missing/invalid dependencies.
 
@@ -112,6 +167,18 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
             raise ValueError("Invalid membership creation receipt")
         if source["payload"]["added_at"] != operation["payload"]["added_at"]:
             raise ValueError("Membership added_at is immutable within its incarnation")
+    if (kind == "inbox_item" and operation["action"] == "put" and current is not None
+            and current["active"] and current["incarnation"] == operation["incarnation"]):
+        origin = get_receipt(current["incarnation"])
+        if origin is None:
+            raise ValueError("Inbox editing requires its creation receipt")
+        source = origin["operation"]
+        if (origin["outcome"] != "accepted" or source["version"] != 2
+                or source["entity_type"] != "inbox_item" or source["entity_id"] != identity
+                or source["action"] != "put" or source["incarnation"] != current["incarnation"]):
+            raise ValueError("Invalid Inbox creation receipt")
+        if source["payload"]["created_at"] != operation["payload"]["created_at"]:
+            raise ValueError("Inbox captured-at metadata is immutable within its incarnation")
     retirement = _retirement(get_receipt, operation, current)
     parents_match = True
     for parent in operation["parents"]:
@@ -134,6 +201,9 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
         if incarnation != operation["operation_id"] and not retirement:
             return False
     else:
+        queue_context = queue_context_transition(get_entity, get_receipt, operation, current)
+        if queue_context is not None:
+            return queue_context
         if set(_parent_map(current["parents"])) != set(_parent_map(operation["parents"])):
             raise ValueError("A research entity cannot move to different parents")
         effective_active = current["active"] and _parents_active(get_entity, current["parents"])

@@ -253,22 +253,31 @@ def add_companions(conn: sqlite3.Connection, paper_id: str, limit: int = 2) -> l
 
     out = []
     for i, r in enumerate(rows):
-        conn.execute(
-            "INSERT INTO queue(paper_id, rank, state, role, parent_id, reason, queued_at) "
-            "VALUES (?,?,?,?,?,?,?) "
-            "ON CONFLICT(paper_id) DO UPDATE SET rank=excluded.rank, role='companion', "
-            "parent_id=excluded.parent_id, reason=excluded.reason "
-            "WHERE queue.state='pending'",
-            (
-                r["rid"],
-                base + 0.1 * (i + 1),
-                "pending",
-                "companion",
-                paper_id,
-                "referenced by the paper you just read",
-                now(),
-            ),
-        )
+        from paper_daily.legacy_workflow import companion_context
+
+        with companion_context(
+            conn,
+            paper_id=r["rid"],
+            rank=base + 0.1 * (i + 1),
+            parent_id=paper_id,
+            reason="referenced by the paper you just read",
+        ):
+            conn.execute(
+                "INSERT INTO queue(paper_id, rank, state, role, parent_id, reason, queued_at) "
+                "VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT(paper_id) DO UPDATE SET rank=excluded.rank, role='companion', "
+                "parent_id=excluded.parent_id, reason=excluded.reason "
+                "WHERE queue.state='pending'",
+                (
+                    r["rid"],
+                    base + 0.1 * (i + 1),
+                    "pending",
+                    "companion",
+                    paper_id,
+                    "referenced by the paper you just read",
+                    now(),
+                ),
+            )
         out.append(r["rid"])
     return out
 

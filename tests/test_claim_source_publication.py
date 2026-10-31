@@ -111,13 +111,17 @@ def test_late_source_or_parent_change_leaves_no_shared_original_candidate(
     assert source_snapshots.list_owned(claims[0][0])
 
 
-def test_real_generation_history_remains_an_explicit_enrollment_blocker(claims):
+def test_real_generation_history_is_archived_for_first_enrollment(claims):
     from paper_daily.workspace_enrollment import EnrollmentService
 
     assert job(claims).run().status == "accepted"
     report = EnrollmentService(claims[0][0]).plan(pdfs={"paper": claims[0][2].path})
-    assert not report["supported"] and not report["runtime_enrollment_complete"]
+    assert not report["runtime_enrollment_complete"]
     assert report["archived_source_receipts"] == 1
     assert report["original_source_count"] == 1
-    assert any("research_generation_requests" in item for item in report["blockers"])
-    assert any("research_parent_lifecycle" in item for item in report["blockers"])
+    if claims[0][1]:
+        assert not report["supported"]  # Existing sync authority is not a first enrollment.
+    else:
+        assert report["supported"], report["blockers"]
+        assert report["archived_history_by_protocol"]["research_generation_requests"] == 1
+        assert report["archived_history_by_protocol"]["research_parent_lifecycle"] >= 1

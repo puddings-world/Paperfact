@@ -55,6 +55,10 @@ buttons serialize through a server just to share behavior.
   workspace/device binding. A valid token and a local cancellation generation do not
   prove they refer to the same workspace. Recheck binding after credential changes;
   preserve per-request authorization and do not persist tokens in transfer state.
+- Recheck a delayed result at its actual GUI delivery boundary. A worker can
+  finish against the correct workspace and queue its signal before that workspace
+  is rebound. Use bounded local identity/binding guards before filling credentials
+  or enabling connection actions; validation inside the worker alone is insufficient.
 - Treat file publication and database ownership as separate durability boundaries.
   Publish verified bytes before granting ownership, fail closed on unowned or
   damaged objects, and make retry repair the interrupted boundary. A local verified
@@ -80,6 +84,11 @@ buttons serialize through a server just to share behavior.
   hashes and independent transfer-byte checks. If change tracking is unavailable,
   require fresh verification or report unavailable. Test restored mtime and
   same-clock-tick writes; do not hide the failure by sleeping in the test.
+- Keep verification reads genuinely read-only when derived views are guarded by
+  database/WAL file versions. A write-capable SQLite connection can checkpoint on
+  close and invalidate an unchanged view. Retain real owner/binding checks and
+  independent source-byte verification; do not mask it with retries or refreshed
+  timestamps. Test successful navigation as well as changed-content rejection.
 - Close database/file handles explicitly before workspace replacement. In Python,
   a SQLite connection context manages its transaction, not its lifetime; a read-only
   helper can still retain a Windows file lock. Verify replacement with actual handles,
@@ -87,6 +96,29 @@ buttons serialize through a server just to share behavior.
 - Keep retry identity separate from entity identity. Use stable identifiers for
   automatic reuse, surface uncertain title/name matches, and preserve curated
   content. Concurrent submissions must recheck matches inside the write transaction.
+- A periodic database observer binds its path and native identity when created,
+  before the first scheduled read. Switching a global workspace is not authority
+  to follow it. Stop new reads on close, drain admitted work and suppress delivery
+  into a closed/replaced view. Test a held read of A while switching to B, including
+  actual native replacement of B; do not infer the cause of another file-lock bug.
+- Bind the caller's window and its notification/update callbacks as well as the
+  observer. A scoped watcher does not protect a pending refresh that later opens
+  the global database. Check the original window lifetime before admission and
+  delivery, use its explicit database path, and stop its timers only after close
+  barriers accept. If a stale window still holds drafts, retain them visibly and
+  refuse cross-workspace persistence; metadata admission is not source ownership.
+- Before launching an updater or restarting a process, check the actual owned
+  background jobs at the launch boundary. A later window-close veto cannot undo
+  an installer already started. Keep active work discoverable until it drains,
+  even after its dialog is hidden or destroyed; avoid counting the job itself
+  as an unrelated reason to reject its result. Test the configured launch action
+  with a held real worker and a fake installer, not only the close handler.
+- Pin child-process provenance in worktree integration tests. A protocol SDK may
+  filter inherited environment variables, and a shared editable interpreter may
+  otherwise import another checkout. Pass the intended test source explicitly,
+  assert the parent identity and retain exact public tool/persistence assertions.
+  Packaged acceptance must still exercise the packaged binary without a source
+  override. This is test isolation, not permission to change user environments.
 - For a local stdio adapter, let the host own the helper lifetime. Keep protocol
   stdout clean and avoid loading desktop/model modules. Verify the installed SDK
   rather than copying protocol messages or outdated SDK examples.

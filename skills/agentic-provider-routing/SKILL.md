@@ -9,7 +9,9 @@ description: Design or refactor agentic-app features that select different provi
    Keep document/list records independent of authentication and provider choice.
 2. Resolve task override or inherited global default once per job. Capture the
    resolved provider, account identity, requested model and relevant options.
-   Show the effective selection to users; "default" alone is not enough.
+   Show the effective selection to users; "default" alone is not enough. Capture
+   budgets and selected inputs immutably through dispatch; copy nested mutable
+   options instead of only freezing their outer container.
 3. Send generation through one facade. Provider adapters own transport, credentials,
    timeouts and response normalization. Expose capability availability explicitly.
    Unsupported features should explain what is missing.

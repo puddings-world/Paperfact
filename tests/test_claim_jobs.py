@@ -440,3 +440,12 @@ def test_textless_pdf_never_uses_saved_analysis_as_a_substitute_original(claims)
         job(claims).run()
     assert claims[2] == []
     assert not (claims[0][0].parent / "pdf/.claim-evidence").exists()
+
+
+def test_claim_receipt_does_not_turn_requested_fallback_into_reported_model(claims, monkeypatch):
+    monkeypatch.setattr(llm, "complete_result", lambda *a, **kw: Completion(
+        json.dumps(claims[1]), model="requested", model_reported=False))
+    assert job(claims).run().status == "accepted"
+    body = saved(claims)
+    assert body["generation"]["requested_model"] == "requested"
+    assert body["generation"]["returned_model"] is None

@@ -174,13 +174,9 @@ def _repair(
     )
     if not result.text:
         return {}
-    text = result.text.strip()
-    fence = chr(96) * 3
-    if text.startswith(fence):
-        text = re.sub("^" + fence + r"(?:json)?\s*|\s*" + fence + "$", "", text).strip()
     try:
-        raw = json.loads(text)
-    except json.JSONDecodeError:
+        raw = llm.reply_json(result.text, expect=dict)
+    except ValueError:
         return {}
     out = {}
     for item in raw.get("slides", []) if isinstance(raw, dict) else []:
@@ -740,11 +736,7 @@ def generate(
     if not result.text:
         return None, result.reason
     try:
-        text = result.text.strip()
-        fence = chr(96) * 3
-        if text.startswith(fence):
-            text = re.sub("^" + fence + r"(?:json)?\s*|\s*" + fence + "$", "", text).strip()
-        raw = json.loads(text)
+        raw = llm.reply_json(result.text, expect=dict)
         if not isinstance(raw, dict) or set(raw) != {"title", "slides"}:
             raise ValueError("Expected a presentation title and slides")
         if not isinstance(raw["slides"], list) or len(raw["slides"]) != slide_count:

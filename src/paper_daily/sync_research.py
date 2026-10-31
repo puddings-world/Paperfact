@@ -89,6 +89,9 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
         from paper_daily.sync_content import initialize_content
 
         initialize_content(conn)
+        from paper_daily.inbox_content import initialize as initialize_inbox
+
+        initialize_inbox(conn)
         paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
         paper_rows = conn.execute(
             "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
@@ -465,6 +468,11 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
     if binding is None or binding[0] != operation["workspace_id"]:
         raise ValueError("Research operation belongs to another workspace")
     if operation["version"] == 2:
+        if operation["entity_type"] == "inbox_item":
+            from paper_daily.inbox_content import write as write_inbox
+
+            write_inbox(conn, operation)
+            return
         if operation["entity_type"] == "research_content":
             from paper_daily.sync_content import write_content
 

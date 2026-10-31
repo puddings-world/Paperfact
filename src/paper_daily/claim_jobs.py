@@ -201,7 +201,7 @@ class ClaimJob:
                         "task": TASK,
                         "backend": cfg.backend,
                         "requested_model": cfg.model,
-                        "returned_model": response.model,
+                        "returned_model": response.reported_model,
                     },
                     "report": report,
                 },

@@ -34,6 +34,7 @@ RESEARCH = CORE | {
     "pins",
     "queue",
     "reading_log",
+    "reading_positions",
 }
 PAPER_COLUMNS = {
     "id",
@@ -298,6 +299,13 @@ class CaptureConnection(sqlite3.Connection):
         self._capture_client = SyncClient.attach_existing(
             journal, research_writer, order_writer=research_order_writer
         )
+        from paper_daily.legacy_workflow import require_ready
+
+        try:
+            require_ready(self)
+            self._legacy_schema_issue = None
+        except ValueError as error:
+            self._legacy_schema_issue = str(error)
         self.create_function("paperfact_capture", 3, self._mark)
         # SQLite REPLACE otherwise suppresses its deletion triggers.
         self.execute("PRAGMA recursive_triggers=ON")
@@ -306,6 +314,12 @@ class CaptureConnection(sqlite3.Connection):
     def _authorize(self, action, first, second, database, trigger):
         if self._capture_trusted:
             return sqlite3.SQLITE_OK
+        if (
+            action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE)
+            and first in {"queue", "reading_log"}
+            and getattr(self, "_legacy_schema_issue", None)
+        ):
+            return sqlite3.SQLITE_DENY
         if action == sqlite3.SQLITE_TRANSACTION:
             if first in ("COMMIT", "END"):
                 return sqlite3.SQLITE_DENY
@@ -315,7 +329,8 @@ class CaptureConnection(sqlite3.Connection):
             # RELEASE of a top-level SAVEPOINT commits without Connection.commit().
             return sqlite3.SQLITE_DENY
         if first == "research_parent_lifecycle" and action in (
-            sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE
+            sqlite3.SQLITE_INSERT,
+            sqlite3.SQLITE_UPDATE,
         ):
             from paper_daily.research_lifecycle import TRIGGERS
 
@@ -365,8 +380,27 @@ class CaptureConnection(sqlite3.Connection):
             raise CaptureError("Autocommit research mutations bypass capture")
         old, new = json.loads(before) if before else None, json.loads(after) if after else None
         row = new or old
+        if table == "reading_positions":
+            from paper_daily.reading_position_ops import admitted
+
+            if new is not None and not admitted(self, new):
+                raise CaptureError("Reading positions require verified explicit reader admission")
         if old and new and any(old[k] != new[k] for k in _primary(self, table)):
             raise CaptureError("Research identities cannot be changed by an UPDATE")
+        if table == "reading_log" and old and new and old["delivered_at"] != new["delivered_at"]:
+            raise CaptureError("Delivery timestamp is an immutable event identity")
+        if (
+            table == "reading_log"
+            and old
+            and new
+            and old["brief_path"] is not None
+            and new["brief_path"] is None
+        ):
+            from paper_daily.sync_content import _row_key
+
+            clears = getattr(self, "_legacy_brief_clears", set())
+            clears.add(_row_key(self, table, new))
+            self._legacy_brief_clears = clears
         if old and new and "paper_id" in row and old["paper_id"] != new["paper_id"]:
             raise CaptureError("Research content cannot be reparented by an UPDATE")
         if table == "kv" and row["key"] != "lists.order":
@@ -429,10 +463,18 @@ class CaptureConnection(sqlite3.Connection):
         finally:
             self._capture_trusted = False
             self._capture_graph_cache = None
+            self._legacy_prepared_briefs = {}
+            self._legacy_brief_buffers = {}
+            self._legacy_brief_clears = set()
+            self._legacy_queue_contexts = {}
             self.set_authorizer(self._authorize)
 
     def rollback(self):
         self._capture_graph_cache = None
+        self._legacy_prepared_briefs = {}
+        self._legacy_brief_buffers = {}
+        self._legacy_brief_clears = set()
+        self._legacy_queue_contexts = {}
         return super().rollback()
 
     def executescript(self, script):
@@ -475,6 +517,10 @@ def install(conn, *, workspace_id, device_id):
             if content:
                 content.initialize_content(conn)
             _install_triggers(conn)
+            from paper_daily.legacy_workflow import require_ready
+
+            require_ready(conn)
+            conn._legacy_schema_issue = None
         return
     identity = conn.execute(
         "SELECT workspace,device FROM paperfact_sync_identity WHERE id=1"
@@ -562,7 +608,7 @@ def _payload(conn, table, row):
             **{key: row[key] for key in PAPER_COLUMNS - {"id", "title", "authors_json"}},
         }
     if table == "lists":
-        return {"name": row["name"], "note": row["note"] or ""}
+        return {"name": row["name"], "note": row["note"]}
     if table == "list_papers":
         return {
             "list_id": row["list_id"],
@@ -748,8 +794,16 @@ def _flush(conn):
             payload.get("feature") == "reference_edge"
             or (current and current["payload"].get("feature") == "reference_edge")
         )
+        workflow = kind == "research_content" and (
+            payload.get("feature") or (current or {}).get("payload", {}).get("feature")
+        ) in {"queue_entry", "reading_event"}
+        # Workflow scalar writers observe current state in the same SQL transaction.
+        # Explicit expected tokens still pass the stale check before this phase.
         requires_base = (
-            kind in ("note", "research_content") and current is not None and not reference_edge
+            kind in ("note", "research_content")
+            and current is not None
+            and not reference_edge
+            and not workflow
         ) or (
             kind == "research_content"
             and payload.get("feature")
@@ -767,10 +821,25 @@ def _flush(conn):
         if requires_base and not cascading_goal and (base is None or base["expected"] is None):
             _retain_candidate(conn, rows, [dict(base)] if base else [])
         # A SQL INSERT cannot silently restore an old graph incarnation.
-        op = client.new_graph_operation_in(conn, kind, identity, payload, action=action)
+        queue_context = False
+        if (
+            kind == "research_content"
+            and action == "put"
+            and payload.get("feature") == "queue_entry"
+        ):
+            from paper_daily.legacy_workflow import consume_queue_context
+
+            queue_context = consume_queue_context(conn, identity, current, payload)
+        op = client.new_graph_operation_in(
+            conn, kind, identity, payload, action=action, restore=queue_context
+        )
         result = client.journal.apply_in(conn, op, client.writer)
         if result["applied"] and conn._capture_graph_cache is not None:
             client._overlay_optimistic(conn._capture_graph_cache, op)
+        if result["applied"] and workflow:
+            from paper_daily.legacy_briefs import publish_for_event
+
+            publish_for_event(conn, client, op, current)
     from paper_daily.sync_schema_v2 import membership_id
 
     for kind, identity in sorted(orders):

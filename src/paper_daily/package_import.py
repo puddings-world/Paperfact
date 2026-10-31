@@ -219,6 +219,7 @@ class PackageImporter:
                 "list_surveys",
                 "list_reading_goals",
                 "pins",
+                "queue_pins",
                 *bundle.PER_PAPER,
                 "pdf_ai_highlights",
                 "pdf_highlights",
@@ -345,6 +346,8 @@ class PackageImporter:
                 if prior[0] != action_fingerprint:
                     raise ValueError("Import request identity was reused for another package")
                 return self._replay(prior[1], request, action_fingerprint)
+            if tables.get("queue_pins") and not sync_content.pin_cleanup_ready(conn):
+                raise UnsupportedPackage("Queue pin cleanup requires explicit installation")
             conn._capture_graph_cache = copy.deepcopy(self.client._optimistic_graph(conn))
             graph = conn._capture_graph_cache[0]
             list_id = target_list_id or _uid(fingerprint, "list", manifest["list"]["id"])
@@ -594,6 +597,7 @@ class PackageImporter:
                     "request": request,
                     "fingerprint": action_fingerprint,
                     "namespace_roster": namespace_roster,
+                    "queue_pin_intent": bool(tables.get("queue_pins")),
                 }
                 return PreparedImport(
                     _SEAL,
@@ -662,19 +666,25 @@ class PackageImporter:
         from paper_daily.sync_source_files import encode
 
         records = [
-            (old, {"sha256": row["sha256"], "path": "pdf/" + bundle._safe_name(old) + ".pdf"})
+            (item["paper_id"], item, True) for item in manifest.get("position_sources", [])
+        ]
+        records += [
+            (old, {"sha256": row["sha256"],
+                   "path": "pdf/" + bundle._safe_name(old) + ".pdf"}, False)
             for old, row in manifest.get("pdfs", {}).items()
             if row
         ]
-        records += list(manifest.get("claim_sources", {}).items())
+        records += [
+            (old, record, False) for old, record in manifest.get("claim_sources", {}).items()
+        ]
         seen = set()
-        for old, record in records:
+        for old, record, position in records:
             if (old, record["sha256"]) in seen:
                 continue
-            seen.add((old, record["sha256"]))
             ticket.check()
-            if old in report["pdf_conflicts"]:
+            if old in report["pdf_conflicts"] and not position:
                 continue
+            seen.add((old, record["sha256"]))
             relative = record["path"]
             if relative is None or relative not in files:
                 raise UnsupportedPackage(
@@ -700,7 +710,7 @@ class PackageImporter:
             _table, natural, field_names = sync_content.FEATURES[feature]
             for index, row in enumerate(rows):
                 old = row.get("paper_id")
-                if old in report["pdf_conflicts"]:
+                if old in report["pdf_conflicts"] and feature != "reading_position":
                     continue
                 if feature in {"list_survey", "reading_goal", "list_pin"}:
                     scope = {"kind": "list", "id": list_id}
@@ -737,9 +747,29 @@ class PackageImporter:
                     "source_document_hash": source_hash,
                 }
                 sync_content.validate_payload(payload)
-                add(
+                installed = add(
                     "research_content", sync_content.content_id(scope, feature, key), payload, table
                 )
+                if feature == "reading_position" and installed and installed["payload"] != payload:
+                    report.setdefault("position_import_candidates", []).append({
+                        "package_sha256": fingerprint, "source_owner": old,
+                        "receiver_owner": identities[old], "document_hash": key,
+                        "incoming_json": canonical_json(data).decode(),
+                        "receiver_json": canonical_json(installed["payload"]["data"]).decode(),
+                    })
+        for row in tables.get("queue_pins", []):
+            scope = {"kind": "paper", "id": identities[row["paper_id"]]}
+            payload = {"scope": scope, "feature": "queue_pin", "key": "main",
+                       "data": {"pinned_at": row["pinned_at"]}, "source_document_hash": None}
+            sync_content.validate_payload(payload)
+            operation = add("research_content", sync_content.content_id(scope, "queue_pin", "main"),
+                            payload, "queue_pins", overwrite=False)
+            if operation and operation["payload"] != payload:
+                report.setdefault("queue_pin_preserved", []).append({
+                    "package_sha256": fingerprint, "source_owner": row["paper_id"],
+                    "receiver_owner": scope["id"], "incoming_pinned_at": row["pinned_at"],
+                    "receiver_pinned_at": operation["payload"]["data"]["pinned_at"],
+                })
         for index, row in enumerate(tables.get("notes", [])):
             if row["paper_id"] in report["pdf_conflicts"]:
                 continue
@@ -889,6 +919,8 @@ class PackageImporter:
                     "availability_rechecked": False,
                 }
             else:
+                if data.get("queue_pin_intent") and not sync_content.pin_cleanup_ready(conn):
+                    raise UnsupportedPackage("Queue pin cleanup requires explicit installation")
                 if data.get("namespace_roster") is not None:
                     roster = sorted(
                         [identity, value["incarnation"]]
@@ -954,6 +986,12 @@ class PackageImporter:
                     if not activate(conn, operation, directory):
                         raise ValueError("Imported artifact target changed before activation")
                 report = json.loads(prepared.report)
+                from paper_daily.reading_position_packages import retain_imports_in
+
+                retain_imports_in(conn, report.get("position_import_candidates", []))
+                from paper_daily.queue_pins import retain_imports_in
+
+                retain_imports_in(conn, report.get("queue_pin_preserved", []))
                 conn.execute(
                     f"CREATE TABLE IF NOT EXISTS {_RECEIPTS}(request_id TEXT PRIMARY KEY, "
                     "fingerprint TEXT NOT NULL, result_json TEXT NOT NULL)"
@@ -996,6 +1034,7 @@ def known_categories():
         "notes",
         "chat",
         "pins",
+        "queue_pins",
         "refs",
         "list_surveys",
         "list_reading_goals",

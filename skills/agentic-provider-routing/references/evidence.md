@@ -67,3 +67,32 @@
 - Synthetic UI renders checked readable model versions, bounded selectors and the
   filtered task layout. No live logout, credential deletion or paid inference was
   performed. Account authentication/plan entitlement remains provider-dependent.
+
+## Captured budgets and historical model disclosure (2026-10-31)
+
+- Pattern ID / revision: provider-routing-captured-options-v1.
+- Status: validated-local in the unreleased Paperfact 0.5 candidate. This extends
+  the existing capture/identity rule; it is not a global installation.
+- Trigger: an explicit fact-extraction job captured its Audit connection but left
+  public scalar budgets mutable. An actual simulated completion received 8,001
+  output tokens after the prepared 4,000-token field was reassigned. The recorded
+  control failed before the repair. A read-only UI review separately found that
+  Claims hid its next route and omitted retained historical model provenance.
+- Decision: copy selections into immutable values, freeze public captured options,
+  and keep private attempted/result/lock state separate. Pass the captured output
+  cap explicitly. Display next-call intent independently of saved requested and
+  reported model identity; an absent reported model stays unreported.
+- Evidence: audit_fact_extraction.py, desktop/claim_evidence.py;
+  test_audit_fact_extraction.py and test_claim_model_disclosure.py. The producer's
+  fixed selection passed 252 cases; the canonical combined selection passed 203
+  cases, with all 18 integrated afterimage hashes unchanged. Counts overlap and
+  must not be added. Privacy/Ruff passed; the matching complete feature gate is
+  still required before a commit or release.
+- Limits: disposable actual source captures and simulated providers, including
+  held cancellation/context changes. No live accounts, paid calls, owner data or
+  deployment. The facade request cap does not guarantee a single HTTP transport
+  attempt or vendor billing total. Configuration/environment witnesses do not
+  certify external CLI reauthentication inside an unchanged credential home.
+- Privacy/promotion: synthetic budgets and repository-relative code paths only;
+  no prompts, research content, credentials or account identifiers. No new
+  provider auth flow, global skill installation or universal scientific claim.

@@ -1,6 +1,8 @@
 /** Download exact manifest closures; activation never outruns verified bytes. */
 import {copy,own,put} from './store.mjs';
 import {active,keyOf,stable,validateOperation} from './domain.mjs';
+import {contentId} from './ids.mjs';
+import {validateLegacyBody,markdownText,requireLegacy} from './legacy-workflow.mjs';
 import {CHUNK} from './transport.mjs';
 import {artifactJSON,validateArtifact,validateDeck,validateEvidence,validatePNG,validateOriginalSource,validateOriginalPDF,requireArtifact} from './artifacts.mjs';
 export const ARTIFACT_CACHE_BYTES = 128 * 1024 ** 2;
@@ -22,6 +24,18 @@ function joined(file) {
 function current(state,target) {
   requireArtifact(stable(artifactTarget(state,target.entity_id))===stable(target),'stale_artifact');
 }
+function legacyOwner(state,target,body) {
+  const payload=target.payload, id=contentId({kind:'paper',id:payload.paper_id},'reading_event',payload.slot),
+    event=own(state.entities,keyOf('research_content',id))?.operation;
+  requireLegacy(event?.action==='put' && active(state,'research_content',id),'legacy_event_unavailable');
+  validateOperation(event,state.workspace);
+  const declaration=event.payload.data.brief, asset=payload.assets[0];
+  requireLegacy(event.payload.feature==='reading_event' && event.payload.scope.id===payload.paper_id &&
+    event.payload.key===body.event_id && event.incarnation===body.event_incarnation &&
+    stable(event.parents)===stable(target.parents) && declaration!==null &&
+    declaration.sha256===asset.sha256 && declaration.size===asset.size &&
+    declaration.media_type===asset.media_type,'legacy_event_unavailable');
+}
 async function closure(state,target) {
   validateArtifact(target.payload,target.entity_id,target.parents);
   const descriptors=new Map([target.payload.body,...target.payload.assets].map(row=>[row.sha256,row]));
@@ -41,6 +55,13 @@ async function closure(state,target) {
     validateOriginalPDF(blobs.get(body.document_hash));
     return {body,blobs,verification_scope:'exact_bytes'};
   }
+  if(target.payload.feature==='legacy_brief') {
+    const raw=blobs.get(target.payload.body.sha256), body=validateLegacyBody(artifactJSON(raw),target.payload);
+    requireLegacy(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)===stable(body));
+    const text=markdownText(blobs.get(target.payload.assets[0].sha256));
+    legacyOwner(state,target,body);
+    return {body,blobs,text,verification_scope:'exact_bytes'};
+  }
   const body=validateDeck(artifactJSON(blobs.get(target.payload.body.sha256)),target.payload);
   for (const asset of target.payload.assets) {
     if (asset.role==='figure') await validatePNG(blobs.get(asset.sha256));
@@ -48,6 +69,11 @@ async function closure(state,target) {
     else throw new Error('invalid_artifact');
   }
   return {body,blobs};
+}
+/** Verification only, for a separately validated typed primary-retention intent. */
+export async function verifyOriginalCache(state,target) {
+  requireArtifact(target?.payload?.feature==='original_source');
+  return closure(state,target);
 }
 export async function downloadArtifact(engine,id,token,generation) {
   await engine.authenticated(generation);
@@ -97,15 +123,16 @@ export async function downloadArtifact(engine,id,token,generation) {
     });
     done+=description.size;
   }
-  await closure(await engine.store.read(),target); engine.check(generation);
+  const complete=await closure(await engine.store.read(),target); engine.check(generation);
   await engine.store.update(next=>{
     engine.check(generation); current(next,target); next.appliedArtifacts ??= {};
+    if(target.payload.feature==='legacy_brief') legacyOwner(next,target,complete.body);
     put(next.appliedArtifacts,id,{operation:copy(target)});
   });
   engine.onChange('file_ready'); return id;
 }
 export async function readArtifact(engine,id,feature = 'deck') {
-  requireArtifact(['deck','original_source'].includes(feature));
+  requireArtifact(['deck','original_source','legacy_brief'].includes(feature));
   const generation=engine.generation, state=await engine.store.read();
   const target=artifactTarget(state,id), applied=own(state.appliedArtifacts ?? {},id)?.operation;
   requireArtifact(target && target.payload.feature===feature && applied && applied.payload.feature===feature && target.incarnation===applied.incarnation && stable(target.parents)===stable(applied.parents),'artifact_unavailable');
@@ -116,5 +143,6 @@ export async function readArtifact(engine,id,feature = 'deck') {
   const now=await engine.store.read(), latest=artifactTarget(now,id);
   requireArtifact(latest && latest.incarnation===applied.incarnation && stable(latest.parents)===stable(applied.parents) &&
     stable(own(now.appliedArtifacts ?? {},id)?.operation)===stable(applied),'stale_artifact');
+  if(feature==='legacy_brief') legacyOwner(now,applied,result.body);
   return {...result,operation:applied,awaiting:latest.operation_id!==applied.operation_id};
 }

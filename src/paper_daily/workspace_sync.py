@@ -108,6 +108,9 @@ class GuardedTransport:
     def __getattr__(self, name):
         if name not in {
             "session_info",
+            "device_catalog",
+            "rename_device",
+            "revoke_peer",
             "push",
             "pull",
             "blob_begin",

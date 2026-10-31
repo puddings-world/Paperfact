@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+from collections.abc import Callable
 
 from PySide6.QtCore import QCoreApplication, Qt, QUrl, Signal
 from PySide6.QtGui import QColor
@@ -85,7 +86,10 @@ class RichView(QWidget):
     def markdown(self, text: str) -> str:
         return rich_html.markdown(text) if self.rich else md.to_html(text, self.palette_)
 
-    def setHtml(self, body: str, *, at_end: bool = False, keep_scroll: bool = False) -> None:
+    def setHtml(self, body: str, *, at_end: bool = False, keep_scroll: bool = False,
+                current: Callable[[], bool] | None = None) -> None:
+        if current is not None and not current():
+            return
         self._body = body
         if not self.rich:
             bar = self.view.verticalScrollBar()
@@ -98,12 +102,16 @@ class RichView(QWidget):
             return
         if keep_scroll:
             self.view.page().runJavaScript(
-                "window.scrollY", 0, lambda y: self._load(body, at_end, int(y or 0))
+                "window.scrollY", 0,
+                lambda y: self._load(body, at_end, int(y or 0), current=current),
             )
         else:
-            self._load(body, at_end, 0)
+            self._load(body, at_end, 0, current=current)
 
-    def _load(self, body: str, at_end: bool, at: int) -> None:
+    def _load(self, body: str, at_end: bool, at: int, *,
+              current: Callable[[], bool] | None = None) -> None:
+        if current is not None and not current():
+            return
         page = rich_html.page(body, self.palette_, at_end=at_end, at=at)
         self.view.setHtml(page, QUrl.fromLocalFile(str(WEB_DIR) + "/"))
 

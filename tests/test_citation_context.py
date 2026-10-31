@@ -13,11 +13,11 @@ def test_prompt_context_names_citation_direction_without_claiming_influence():
         store.upsert_papers(
             conn,
             [
-                {"id": "current", "title": "Current study", "year": 2026, 
+                {"id": "current", "title": "Current study", "year": 2026,
                  "source": "fixture", "venue": "Journal"},
-                {"id": "earlier", "title": "Earlier study", "year": 2020, 
+                {"id": "earlier", "title": "Earlier study", "year": 2020,
                  "source": "fixture", "venue": "Journal"},
-                {"id": "later", "title": "Later study", "year": 2027, 
+                {"id": "later", "title": "Later study", "year": 2027,
                  "source": "fixture", "venue": "Journal"},
             ],
         )

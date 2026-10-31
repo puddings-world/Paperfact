@@ -8,7 +8,6 @@ import json
 import os
 import platform
 import re
-import shutil
 import sys
 import tempfile
 import threading
@@ -16,7 +15,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from paper_daily import __version__, build_identity, runtime
+from paper_daily import __version__, build_identity, executables, runtime
 
 LIMIT = 256 * 1024
 MAX_EVENTS = 40
@@ -271,7 +270,7 @@ def collect(directory=None):
         },
         "packages": packages,
         "agent_commands_found": {
-            name: shutil.which(name) is not None for name in ("claude", "codex", "gemini")
+            name: executables.which(name) is not None for name in ("claude", "codex", "gemini")
         },
         "logs": sources,
         "errors": events[-MAX_EVENTS:],

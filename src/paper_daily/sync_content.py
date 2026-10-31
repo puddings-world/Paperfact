@@ -45,9 +45,18 @@ FEATURES = {
     "reading_goal": ("list_reading_goals", None, "body written_at"),
     "reference_edge": ("refs", "ref_paper_id", "influential"),
     "list_pin": ("pins", "paper_id", "pinned_at"),
+    "queue_pin": ("pins", None, "pinned_at"),
+    "queue_entry": (
+        "queue",
+        None,
+        "rank state role parent_id reason queued_at delivered_at read_at",
+    ),
+    "reading_event": ("reading_log", "id", "delivered_at role note brief"),
+    "reading_position": ("reading_positions", "document_hash", "page recorded_at method"),
 }
 TABLE_FEATURES = {value[0]: feature for feature, value in FEATURES.items()}
 TABLE_FEATURES["notes"] = "note"
+TABLE_FEATURES["pins"] = "list_pin"
 CONTENT_TABLES = frozenset(TABLE_FEATURES)
 FILE_ONLY_SCOPES = (
     "presentations",
@@ -60,23 +69,59 @@ FILE_ONLY_SCOPES = (
 )
 RICH_NOTE_FIELDS = {"paper_id", "body", "kind", "created_at", "page", "anchor"}
 
-PIN_CLEANUP_SQL = (
+_PREVIOUS_PIN_CLEANUP_SQL = (
     "CREATE TRIGGER IF NOT EXISTS paperfact_pin_membership_delete "
     "AFTER DELETE ON list_papers BEGIN DELETE FROM pins "
     "WHERE scope=OLD.list_id AND paper_id=OLD.paper_id; END"
 )
+PIN_CLEANUP_SQL = (
+    "CREATE TRIGGER IF NOT EXISTS paperfact_pin_membership_delete "
+    "AFTER DELETE ON list_papers WHEN OLD.list_id != 'queue' BEGIN DELETE FROM pins "
+    "WHERE scope=OLD.list_id AND paper_id=OLD.paper_id; END"
+)
 
 
-def pin_cleanup_ready(conn):
+def _pin_cleanup_tokens(sql):
+    # Preserve literal case and token boundaries: quoted 'QUEUE' and table+alias
+    # spellings must never compare equal to the maintained queue guard.
+    tokens = re.findall(
+        r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|[A-Za-z_][A-Za-z_0-9]*|!=|<>|[^\s]",
+        sql or "",
+    )
+    tokens = [token if token.startswith(("'", '\"')) else token.lower() for token in tokens]
+    if tokens[:5] == ["create", "trigger", "if", "not", "exists"]:
+        tokens[2:5] = []
+    if tokens and tokens[-1] == ";":
+        tokens.pop()
+    return tuple(tokens)
+
+
+def _pin_cleanup_definition(conn):
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='trigger' "
         "AND name='paperfact_pin_membership_delete'"
     ).fetchone()
+    return _pin_cleanup_tokens(row[0]) if row and row[0] else ()
 
-    def canonical(sql):
-        return re.sub(r"\s+", "", sql).lower().replace("ifnotexists", "").rstrip(";")
 
-    return bool(row and row[0] and canonical(row[0]) == canonical(PIN_CLEANUP_SQL))
+def pin_cleanup_ready(conn):
+    return _pin_cleanup_definition(conn) == _pin_cleanup_tokens(PIN_CLEANUP_SQL)
+
+
+def pin_cleanup_recognized(conn):
+    """Read-only source-copy compatibility; old SQL is never runtime readiness."""
+    return _pin_cleanup_definition(conn) in {
+        _pin_cleanup_tokens(PIN_CLEANUP_SQL), _pin_cleanup_tokens(_PREVIOUS_PIN_CLEANUP_SQL)
+    }
+
+
+def _install_pin_cleanup(conn):
+    if not conn.in_transaction:
+        raise ValueError("Pin cleanup installation requires a caller transaction")
+    if _pin_cleanup_definition(conn) == _pin_cleanup_tokens(_PREVIOUS_PIN_CLEANUP_SQL):
+        conn.execute("DROP TRIGGER paperfact_pin_membership_delete")
+    # IF NOT EXISTS deliberately preserves any unknown trigger for explicit review.
+    conn.execute(PIN_CLEANUP_SQL)
 
 
 def _text(value, limit=16384, *, nullable=True, nonempty=False):
@@ -160,6 +205,12 @@ def parent_identities(payload):
         target = ("paper", payload["key"])
         if target not in result:
             result.append(target)
+    if payload["feature"] == "queue_entry" and not isinstance(payload["data"], dict):
+        raise ValueError("Legacy workflow data must be a closed object")
+    if payload["feature"] == "queue_entry" and payload["data"].get("parent_id") is not None:
+        target = ("paper", payload["data"]["parent_id"])
+        if target not in result:
+            result.append(target)
     if payload["feature"] == "list_pin":
         from paper_daily.sync_schema_v2 import membership_id
 
@@ -198,6 +249,8 @@ def validate_payload(payload, *, entity_id=None, parents=None):
         _uuid(key)
         if payload["source_document_hash"] is not None:
             raise ValueError("Reference edges are paper relationships, not PDF-version claims")
+    if feature == "queue_pin" and payload["source_document_hash"] is not None:
+        raise ValueError("Queue pins have no PDF provenance")
     if feature == "resource":
         url = urlsplit(key)
         if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
@@ -212,6 +265,16 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     if feature in ("manual_highlight", "ai_highlight"):
         _hash(payload["source_document_hash"])
     data = payload["data"]
+    if feature == "reading_position":
+        from paper_daily.reading_positions import validate_wire
+
+        validate_wire(payload)
+        return
+    if feature in {"queue_entry", "reading_event"}:
+        from paper_daily.legacy_workflow import validate_wire
+
+        validate_wire(payload)
+        return
     allowed = [set(fields.split())]
     if feature == "chat":
         allowed.append(allowed[0] | {"exchange_id", "reply_to"})
@@ -296,9 +359,18 @@ def initialize_content(conn):
     if not conn.in_transaction:
         raise ValueError("Content initialization requires a caller transaction")
     annotation_content.initialize(conn)
+    from paper_daily.legacy_briefs import TARGET_SCHEMA
+
+    conn.execute(TARGET_SCHEMA)
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    # Optional metadata may be initialized before the caller creates paper storage.
+    # A cleanup trigger can be installed only once its real parent table exists.
+    if "papers" in tables:
+        from paper_daily.reading_positions import initialize as initialize_positions
+
+        initialize_positions(conn)
     if {"list_papers", "pins"} <= tables:
-        conn.execute(PIN_CLEANUP_SQL)
+        _install_pin_cleanup(conn)
     conn.execute(
         "CREATE TABLE IF NOT EXISTS research_chat_links(local_id INTEGER "
         "PRIMARY KEY,message_id TEXT NOT NULL UNIQUE,exchange_id TEXT "
@@ -359,7 +431,8 @@ def _row_key(conn, table, row):
             "WHERE feature=? AND local_id=?",
             (feature, row["id"]),
         ).fetchone()
-    if mapped is not None and tuple(mapped[1:]) == (row["paper_id"], row["created_at"]):
+    created_at = row["delivered_at"] if table == "reading_log" else row["created_at"]
+    if mapped is not None and tuple(mapped[1:]) == (row["paper_id"], created_at):
         return mapped[0]
     binding = conn.execute(
         "SELECT workspace,origin FROM research_sync_binding WHERE id=1"
@@ -368,20 +441,26 @@ def _row_key(conn, table, row):
         raise ValueError("Research identity binding is missing")
     label = "notes" if table == "notes" else table
     namespace = uuid5(NAMESPACE_URL, f"paperfact:{binding[0]}:{binding[1]}:{label}")
-    return str(uuid5(namespace, f"{row['id']}:{row['paper_id']}:{row['created_at']}"))
+    return str(uuid5(namespace, f"{row['id']}:{row['paper_id']}:{created_at}"))
 
 
 def content_payload(conn, table, row):
     if table not in CONTENT_TABLES:
         raise ValueError("Unsupported research content table")
     row = dict(row)
+    if table == "pins" and row["scope"] == "queue" and not pin_cleanup_ready(conn):
+        raise ValueError("Queue pin cleanup requires explicit installation")
+    if table in {"queue", "reading_log"}:
+        from paper_daily.legacy_workflow import payload
+
+        return payload(conn, table, row)
     if table == "notes":
         payload = {key: row[key] for key in RICH_NOTE_FIELDS}
         payload["paper_id"] = _portable_paper(conn, row["paper_id"])
         payload["anchor"] = json.loads(row["anchor"]) if row["anchor"] is not None else None
         validate_rich_note(payload)
         return payload
-    feature = TABLE_FEATURES[table]
+    feature = "queue_pin" if table == "pins" and row["scope"] == "queue" else TABLE_FEATURES[table]
     _, natural, fields = FEATURES[feature]
     scope = (
         {"kind": "list", "id": row["scope"] if feature == "list_pin" else row["list_id"]}
@@ -413,7 +492,9 @@ def content_payload(conn, table, row):
         source_hash = data["anchor"].get("document_hash")
     if (
         source_hash is None
-        and feature not in ("manual_highlight", "ai_highlight", "reference_edge", "list_pin")
+        and feature not in (
+            "manual_highlight", "ai_highlight", "reference_edge", "list_pin", "queue_pin"
+        )
         and feature not in annotation_content.FEATURES
     ):
         previous = conn.execute(
@@ -440,13 +521,14 @@ def enroll_content_identities(conn):
     if not conn.in_transaction:
         raise ValueError("Identity enrollment requires a caller transaction")
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    for table in ("notes", "chat", "pdf_highlights"):
+    for table in ("notes", "chat", "pdf_highlights", "reading_log"):
         if table not in tables:
             continue
         cursor = conn.execute(f"SELECT * FROM {table}")
         names = [column[0] for column in cursor.description]
         for values in cursor.fetchall():
             row = dict(zip(names, values, strict=True))
+            created_at = row["delivered_at"] if table == "reading_log" else row["created_at"]
             key = _row_key(conn, table, row)
             if table == "notes":
                 conn.execute(
@@ -456,7 +538,7 @@ def enroll_content_identities(conn):
                 )
                 conn.execute(
                     "INSERT OR IGNORE INTO research_note_identity VALUES(?,?,?,?)",
-                    (key, row["id"], row["paper_id"], row["created_at"]),
+                    (key, row["id"], row["paper_id"], created_at),
                 )
             else:
                 feature = TABLE_FEATURES[table]
@@ -467,7 +549,7 @@ def enroll_content_identities(conn):
                 )
                 conn.execute(
                     "INSERT OR IGNORE INTO research_content_identity VALUES(?,?,?,?,?)",
-                    (feature, key, row["id"], row["paper_id"], row["created_at"]),
+                    (feature, key, row["id"], row["paper_id"], created_at),
                 )
 
 
@@ -513,7 +595,12 @@ def write_content(conn, operation):
     ).fetchone()
     deleting = operation["action"] == "delete"
     if deleting:
-        if marker is None or tuple(marker[4:6]) != (
+        if marker is None:
+            from paper_daily.enrollment_tombstones import project_absent
+
+            project_absent(conn, operation)
+            return
+        if tuple(marker[4:6]) != (
             operation["incarnation"],
             parent["incarnation"],
         ):
@@ -534,6 +621,42 @@ def write_content(conn, operation):
         raise ValueError("Content projection cannot move to another parent")
     local = _local_scope(conn, scope, required=not deleting)
     table, natural, _fields = FEATURES[feature]
+    if feature in {"queue_entry", "reading_event"}:
+        from paper_daily.legacy_workflow import write_in
+
+        return write_in(
+            conn,
+            operation,
+            feature=feature,
+            local=local,
+            scope=scope,
+            key=key,
+            data=data,
+            deleting=deleting,
+        )
+    if feature == "queue_pin":
+        if not pin_cleanup_ready(conn):
+            raise ValueError("Queue pin cleanup requires explicit installation")
+        expected = [("paper", scope["id"])]
+        if [(p["kind"], p["id"]) for p in operation["parents"]] != expected:
+            raise ValueError("Queue pin requires its exact paper parent")
+        actual = conn.execute(
+            "SELECT incarnation FROM research_paper_projection WHERE sync_id=?", (scope["id"],)
+        ).fetchone()
+        if actual is None or actual[0] != parent["incarnation"]:
+            if deleting:
+                return
+            raise ValueError("Queue pin requires its exact materialized paper incarnation")
+        if deleting:
+            conn.execute("DELETE FROM pins WHERE scope='queue' AND paper_id=?", (local,))
+            return
+        conn.execute(
+            "INSERT INTO pins VALUES('queue',?,?) ON CONFLICT(scope,paper_id) "
+            "DO UPDATE SET pinned_at=excluded.pinned_at",
+            (local, data["pinned_at"]),
+        )
+        _record_projection(conn, operation, feature, scope, key, source_hash)
+        return
     if feature == "list_pin":
         if not pin_cleanup_ready(conn):
             raise ValueError("List pin schema migration required before projection")

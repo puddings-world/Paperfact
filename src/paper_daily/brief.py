@@ -386,6 +386,14 @@ def build_pack(conn: sqlite3.Connection, row: sqlite3.Row) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
 
     text, _ = pack_text(conn, row)
+    from paper_daily.sync_capture import enabled
+
+    if enabled(conn):
+        from paper_daily.legacy_briefs import record_pack
+
+        return record_pack(
+            conn, row["id"], now(), row["role"], text.encode("utf-8"), legacy_day=day
+        )
     path = outdir / f"{_safe(row['id'])}-pack.md"
     path.write_text(text, encoding="utf-8")
 

@@ -178,7 +178,7 @@ class GeminiCLI:
                     return Completion(
                         None, _cli_failure("Gemini", answer, "") or "Gemini CLI failed; no answer"
                     )
-                return Completion(answer.strip(), model=cfg.model)
+                return Completion(answer.strip(), model=cfg.model, model_reported=False)
         except subprocess.TimeoutExpired:
             return Completion(None, f"timed out after {request.timeout}s")
         except (ValueError, OSError):

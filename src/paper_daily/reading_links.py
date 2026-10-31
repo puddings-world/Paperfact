@@ -107,8 +107,7 @@ def produce(parts, analysis, cfg=None):
     if not answer.text:
         return None, answer.reason
     try:
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", answer.text.strip())
-        raw = json.loads(text)
+        raw = llm.reply_json(answer.text, expect=dict)
         ids = {p["id"] for p in parts}
         links, used = [], set()
         for item in raw["links"]:

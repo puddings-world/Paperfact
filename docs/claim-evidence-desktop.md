@@ -65,7 +65,8 @@ Disclosing saved text performs no account access, AI call or research write. The
 is immediate, with no decorative animation or additional motion dependency.
 
 
-For registered original A/current B research, **View original version** opens a separate
+For generated, imported or synchronized original A/current B research, **View original version**
+opens a separate
 read-only byte-verified PDF window; the existing current-reader source jump remains guarded.
 See [Original-version inspection](original-version-viewer.md) for exact ownership, lifecycle,
 o-applied-receipt/offline behavior and the required unbound-source follow-on boundary.

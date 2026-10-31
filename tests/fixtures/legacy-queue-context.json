@@ -1,0 +1,3490 @@
+{
+  "format": "paperfact-legacy-queue-context-v1",
+  "cases": [
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "direct",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": true,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": true
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": "queue-origin",
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11,
+        "structure_depends_on": "queue-origin"
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "dependencies",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": true,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": true
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 10,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "stale-head",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": true,
+        "graph_error": false,
+        "data_cas": false,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 10
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "stale-structure",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": false,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-origin",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "same-incarnation",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": null,
+        "graph_error": true,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "66666666-6666-4666-8666-666666666666",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "wrong-identity",
+      "expected": {
+        "wire_valid": false,
+        "graph_result": null,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          },
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "reversed-closure",
+      "expected": {
+        "wire_valid": false,
+        "graph_result": null,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "wrong-owner",
+      "expected": {
+        "wire_valid": false,
+        "graph_result": null,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [],
+      "name": "missing-origin",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": null,
+        "graph_error": true,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": false,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "old-parent-retired",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": null,
+        "graph_error": true,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": false,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "new-parent-retired",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": false,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": false
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "44444444-4444-4444-8444-444444444444",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "new-epoch"
+          }
+        ],
+        "structure_revision": 11
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "new-epoch",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "same-secondary-new-epoch",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": true,
+        "graph_error": false,
+        "data_cas": true,
+        "accepted": true
+      }
+    },
+    {
+      "operation": {
+        "version": 2,
+        "operation_id": "queue-context",
+        "workspace_id": "fixture-workspace",
+        "device_id": "a",
+        "entity_type": "research_content",
+        "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+        "action": "put",
+        "base_revision": 11,
+        "depends_on": null,
+        "payload": {
+          "data": {
+            "delivered_at": null,
+            "parent_id": "55555555-5555-4555-8555-555555555555",
+            "queued_at": "2026-10-30T12:34:56.123456+08:00",
+            "rank": 0.1,
+            "read_at": "2026-10-30T12:34:56.123456+08:00",
+            "reason": "Exact original reason",
+            "role": "companion",
+            "state": "pending"
+          },
+          "feature": "queue_entry",
+          "key": "main",
+          "scope": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "kind": "paper"
+          },
+          "source_document_hash": null
+        },
+        "incarnation": "queue-context",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "55555555-5555-4555-8555-555555555555",
+            "incarnation": "paper-new-context"
+          }
+        ],
+        "structure_revision": 11,
+        "structure_depends_on": "unrelated"
+      },
+      "current": {
+        "incarnation": "queue-origin",
+        "structure_revision": 11,
+        "active": true,
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "11111111-1111-4111-8111-111111111111",
+            "incarnation": "paper-owner"
+          },
+          {
+            "kind": "paper",
+            "id": "44444444-4444-4444-8444-444444444444",
+            "incarnation": "paper-old-context"
+          }
+        ]
+      },
+      "head": {
+        "revision": 11,
+        "operation": {
+          "version": 2,
+          "operation_id": "queue-origin",
+          "workspace_id": "fixture-workspace",
+          "device_id": "a",
+          "entity_type": "research_content",
+          "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "action": "put",
+          "base_revision": 0,
+          "depends_on": null,
+          "payload": {
+            "data": {
+              "delivered_at": null,
+              "parent_id": "44444444-4444-4444-8444-444444444444",
+              "queued_at": "2026-10-30T12:34:56.123456+08:00",
+              "rank": 9,
+              "read_at": "2026-10-30T12:34:56.123456+08:00",
+              "reason": "Exact original reason",
+              "role": "main",
+              "state": "pending"
+            },
+            "feature": "queue_entry",
+            "key": "main",
+            "scope": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "kind": "paper"
+            },
+            "source_document_hash": null
+          },
+          "incarnation": "queue-origin",
+          "parents": [
+            {
+              "kind": "paper",
+              "id": "11111111-1111-4111-8111-111111111111",
+              "incarnation": "paper-owner"
+            },
+            {
+              "kind": "paper",
+              "id": "44444444-4444-4444-8444-444444444444",
+              "incarnation": "paper-old-context"
+            }
+          ],
+          "structure_revision": 0
+        }
+      },
+      "state": [
+        {
+          "kind": "paper",
+          "id": "11111111-1111-4111-8111-111111111111",
+          "metadata": {
+            "incarnation": "paper-owner",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "44444444-4444-4444-8444-444444444444",
+          "metadata": {
+            "incarnation": "paper-old-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "paper",
+          "id": "55555555-5555-4555-8555-555555555555",
+          "metadata": {
+            "incarnation": "paper-new-context",
+            "structure_revision": 1,
+            "active": true,
+            "parents": []
+          }
+        },
+        {
+          "kind": "research_content",
+          "id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+          "metadata": {
+            "incarnation": "queue-origin",
+            "structure_revision": 11,
+            "active": true,
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ]
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "queue-origin",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "queue-origin",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "cbefc605-536c-5118-99d6-a301b61acdd0",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        },
+        {
+          "sequence": 11,
+          "outcome": "accepted",
+          "operation": {
+            "version": 2,
+            "operation_id": "unrelated",
+            "workspace_id": "fixture-workspace",
+            "device_id": "a",
+            "entity_type": "research_content",
+            "entity_id": "66666666-6666-4666-8666-666666666666",
+            "action": "put",
+            "base_revision": 0,
+            "depends_on": null,
+            "payload": {
+              "data": {
+                "delivered_at": null,
+                "parent_id": "44444444-4444-4444-8444-444444444444",
+                "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                "rank": 9,
+                "read_at": "2026-10-30T12:34:56.123456+08:00",
+                "reason": "Exact original reason",
+                "role": "main",
+                "state": "pending"
+              },
+              "feature": "queue_entry",
+              "key": "main",
+              "scope": {
+                "id": "11111111-1111-4111-8111-111111111111",
+                "kind": "paper"
+              },
+              "source_document_hash": null
+            },
+            "incarnation": "queue-origin",
+            "parents": [
+              {
+                "kind": "paper",
+                "id": "11111111-1111-4111-8111-111111111111",
+                "incarnation": "paper-owner"
+              },
+              {
+                "kind": "paper",
+                "id": "44444444-4444-4444-8444-444444444444",
+                "incarnation": "paper-old-context"
+              }
+            ],
+            "structure_revision": 0
+          },
+          "head": {
+            "revision": 11,
+            "operation": {
+              "version": 2,
+              "operation_id": "unrelated",
+              "workspace_id": "fixture-workspace",
+              "device_id": "a",
+              "entity_type": "research_content",
+              "entity_id": "66666666-6666-4666-8666-666666666666",
+              "action": "put",
+              "base_revision": 0,
+              "depends_on": null,
+              "payload": {
+                "data": {
+                  "delivered_at": null,
+                  "parent_id": "44444444-4444-4444-8444-444444444444",
+                  "queued_at": "2026-10-30T12:34:56.123456+08:00",
+                  "rank": 9,
+                  "read_at": "2026-10-30T12:34:56.123456+08:00",
+                  "reason": "Exact original reason",
+                  "role": "main",
+                  "state": "pending"
+                },
+                "feature": "queue_entry",
+                "key": "main",
+                "scope": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "kind": "paper"
+                },
+                "source_document_hash": null
+              },
+              "incarnation": "queue-origin",
+              "parents": [
+                {
+                  "kind": "paper",
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "incarnation": "paper-owner"
+                },
+                {
+                  "kind": "paper",
+                  "id": "44444444-4444-4444-8444-444444444444",
+                  "incarnation": "paper-old-context"
+                }
+              ],
+              "structure_revision": 0
+            }
+          }
+        }
+      ],
+      "name": "unrelated-structure",
+      "expected": {
+        "wire_valid": true,
+        "graph_result": null,
+        "graph_error": true,
+        "data_cas": true,
+        "accepted": false
+      }
+    }
+  ]
+}

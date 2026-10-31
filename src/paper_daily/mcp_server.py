@@ -46,6 +46,17 @@ def create_server():
         """Read ordered paper metadata from one list, at most 100 papers per page."""
         return invoke("lists.read", dict(list_id=list_id, limit=limit, offset=offset))
 
+    @server.tool(name="analysis.audit", annotations=read, structured_output=True)
+    def analysis_audit(paper_id: str) -> dict[str, Any]:
+        """Check saved quotations, versions, quantities and reference metadata offline.
+
+        Requires a locally available owned PDF. Does not call AI, edit research,
+        resolve references online or certify semantic support. Returned saved text
+        and source quotations may be private and can enter this host's context.
+        The report explicitly lists unimplemented checks and unsupported outputs.
+        """
+        return invoke("analysis.audit", dict(paper_id=paper_id))
+
     @server.tool(
         name="imports.propose",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),

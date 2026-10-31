@@ -21,8 +21,34 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import sync_bootstrap
+from paper_daily.connection_vault import Connection, ConnectionVault, VaultUnavailable
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped, local_binding
+
+VAULT_COPY = {
+    "en": {
+        "remember": "Remember the verified connection on this device",
+        "load": "Use saved connection",
+        "forget": "Forget saved connection",
+        "stored": "Connection remembered in the system credential store.",
+        "loaded": "Saved details loaded. Verify and connect before syncing.",
+        "missing": "No saved connection for this local workspace.",
+        "forgotten": "Saved connection removed. The current session stays connected.",
+        "unavailable": "System credential storage is unavailable. Manual connection still works.",
+        "memory": "Connected for this session; the connection could not be remembered.",
+    },
+    "zh-TW": {
+        "remember": "在此裝置記住驗證過的連線",
+        "load": "使用已儲存連線",
+        "forget": "移除已儲存連線",
+        "stored": "已將連線存入系統憑證庫。",
+        "loaded": "已帶入連線資訊，請先驗證並連線再同步。",
+        "missing": "此本機工作區沒有已儲存連線。",
+        "forgotten": "已移除儲存的連線，本次連線仍可使用。",
+        "unavailable": "系統憑證庫無法使用，仍可手動連線。",
+        "memory": "本次已連線，但無法記住連線。",
+    },
+}
 
 COPY = {
     "zh-TW": {
@@ -32,8 +58,13 @@ COPY = {
             "置 ID 與裝置憑證；這不是 AI 或 Google 帳號登入。"
         ),
         "privacy": (
-            "憑證只保留於這次 App 程序的記憶體；不寫入研究資料、備份或設定檔。"
-            "重開 App 後需重新連接。"
+
+
+            "憑證預設只保留於本次 App 使用；可選擇將驗證過的連線存入此裝"
+            "置的系統憑證庫。憑證不會進入研究資料、資料包、備份或 App 設"
+            "定。載入已儲存連線後仍需驗證。"
+
+
         ),
         "server": "服務網址",
         "workspace": "工作區 ID",
@@ -54,9 +85,9 @@ COPY = {
             "可以另外加入到新的資料夾。"
         ),
         "gates": (
-            "仍待完成：現有資料的首次完整啟用、受保護的記住登入、裝置核發／撤"
-            "銷介面。新工作區可另外開啟；未支援的記錄會停止接收，不會跳過"
-            "。"
+
+            "仍需完成既有研究的完整啟用流程、正式裝置發證與撤銷介面。不支援的資料會停止接收，不會略過。"
+
         ),
         "checking": "正在確認服務回覆的工作區與裝置身分…",
         "connected": "已確認裝置身分；尚未傳送研究內容。",
@@ -83,10 +114,12 @@ COPY = {
             "r Google login."
         ),
         "privacy": (
-            "Credentials stay in this app pro"
-            "cess's memory, outside research,"
-            " backups and settings. Reconnect"
-            " after restarting the app."
+
+            "Credentials stay in this app session unless you choose to remember t"
+            "he verified connection in this device's system credential store. The"
+            "y never enter research, packages, backups or app settings. Loading s"
+            "aved details still requires verification."
+
         ),
         "server": "Service URL",
         "workspace": "Workspace ID",
@@ -115,12 +148,11 @@ COPY = {
             "directory."
         ),
         "gates": (
-            "Still required: complete first e"
-            "nrollment of existing research, "
-            "secure remembered login, device "
-            "issuance/revocation UI. Unsup"
-            "ported records stop receive; the"
-            "y are never skipped."
+
+            "Still required: complete first enrollment of existing research and p"
+            "roduction device issuance/revocation UI. Unsupported records stop re"
+            "ceive; they are never skipped."
+
         ),
         "checking": ("Checking the service's authenticated workspace/device identity…"),
         "connected": ("Device identity verified; no research has been sent."),
@@ -167,6 +199,12 @@ COPY = {
 }
 
 
+
+
+
+
+
+
 class SyncWorker(QThread):
     progress = Signal(object)
 
@@ -180,7 +218,9 @@ class SyncWorker(QThread):
             self.result = self.task(self.ticket, self.progress.emit)
         except Exception as error:
             self.error = (
-                "cancelled"
+                "vault"
+                if isinstance(error, VaultUnavailable)
+                else "cancelled"
                 if isinstance(error, (Cancelled, SyncStopped))
                 else "enrollment"
                 if isinstance(error, EnrollmentRequired)
@@ -208,6 +248,7 @@ class SyncConnectionDialog(QDialog):
         writers_busy=lambda: False,
         open_workspace=None,
         automatic=None,
+        vault=None,
     ):
         super().__init__(parent)
         from paper_daily.workspace_open import open_workspace as launch_workspace
@@ -217,9 +258,12 @@ class SyncConnectionDialog(QDialog):
         self._opened = False
         self.session, self.writers_busy = session, writers_busy
         self.automatic = automatic
+        self._vault = vault
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
+        self.v = VAULT_COPY.get(language, VAULT_COPY["en"])
         self._worker = None
+        self._devices_dialog = None
         self._closing = self.disposed = self._invalid = self._setting = False
         self.binding, self.eligible = None, False
         self.join_destination = None
@@ -262,7 +306,21 @@ class SyncConnectionDialog(QDialog):
         self.disconnect_button.clicked.connect(self.disconnect)
         row.addWidget(self.connect_button)
         row.addWidget(self.disconnect_button)
+        self.devices_button = QPushButton("裝置…" if self.zh else "Devices…")
+        self.devices_button.clicked.connect(self.open_devices)
+        row.addWidget(self.devices_button)
         layout.addLayout(row)
+        self.remember_box = QCheckBox(self.v["remember"])
+        self.remember_box.setChecked(False)
+        layout.addWidget(self.remember_box)
+        saved_row = QHBoxLayout()
+        self.load_saved_button = QPushButton(self.v["load"])
+        self.forget_saved_button = QPushButton(self.v["forget"])
+        self.load_saved_button.clicked.connect(self.load_saved)
+        self.forget_saved_button.clicked.connect(self.forget_saved)
+        saved_row.addWidget(self.load_saved_button)
+        saved_row.addWidget(self.forget_saved_button)
+        layout.addLayout(saved_row)
         self.identity_label = QLabel()
         self.identity_label.setWordWrap(True)
         layout.addWidget(self.identity_label)
@@ -358,7 +416,36 @@ class SyncConnectionDialog(QDialog):
 
     @property
     def busy(self):
-        return self._worker is not None
+        child = self._devices_dialog
+        return self._worker is not None or (child is not None and not child.disposed and child.busy)
+
+    def open_devices(self):
+        summary = self.session.summary()
+        if (self.busy or self.disposed or self._invalid
+                or (self.automatic is not None and self.automatic.busy)
+                or not summary["authenticated"] or not self.eligible
+                or self.binding != summary["identity"]):
+            return False
+        from paper_daily.desktop.devices_dialog import DevicesDialog
+
+        child = self._devices_dialog
+        if child is not None and not child.disposed:
+            if child.client.current():
+                child.show()
+                child.raise_()
+                return child
+            child.close()
+        child = DevicesDialog(self.session, self, language="zh-TW" if self.zh else "en")
+        self._devices_dialog = child
+        child.finished.connect(self._devices_finished)
+        child.open()
+        self._buttons()
+        return child
+
+    def _devices_finished(self, _result):
+        self._buttons()
+        if self._closing:
+            self.close()
 
     def _edited(self):
         if not self._setting:
@@ -383,8 +470,14 @@ class SyncConnectionDialog(QDialog):
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
         self.connect_button.setEnabled(available)
+        self.remember_box.setEnabled(available)
+        self.load_saved_button.setEnabled(available)
+        self.forget_saved_button.setEnabled(available)
         self.disconnect_button.setEnabled(live and not self.disposed)
         self.sync_button.setEnabled(
+            available and live and self.eligible and self.binding == summary["identity"]
+        )
+        self.devices_button.setEnabled(
             available and live and self.eligible and self.binding == summary["identity"]
         )
         self.join_button.setEnabled(available and live and self.binding != summary["identity"])
@@ -456,8 +549,16 @@ class SyncConnectionDialog(QDialog):
 
         return self._start("probe", run)
 
+    def _connection_scope_current(self):
+        if self._vault is None or self._vault.current():
+            return True
+        self._invalid = True
+        self.disconnect()
+        self.status.setText(self.t["changed"])
+        return False
+
     def connect_session(self):
-        if self.busy:
+        if self.busy or not self._connection_scope_current():
             return False
         values = tuple(
             field.text().strip()
@@ -466,8 +567,48 @@ class SyncConnectionDialog(QDialog):
         if not all(values):
             self.status.setText(self.t["empty"])
             return False
+        remember = self.remember_box.isChecked()
+
+        def run(ticket, _progress):
+            result = self.session.connect(*values, ticket)
+            if remember:
+                try:
+                    self._connection_vault().remember(self.session, Connection(*values), ticket)
+                except VaultUnavailable:
+                    result["remembered"] = False
+                except ValueError as error:
+                    from paper_daily.workspace_service import WorkspaceChanged
+
+                    if isinstance(error, WorkspaceChanged):
+                        raise
+                    result["remembered"] = False
+                else:
+                    result["remembered"] = True
+            return result
+
+        return self._start("connect", run)
+
+    def _connection_vault(self):
+        if self._vault is None:
+            self._vault = ConnectionVault(self.session.workspace)
+        return self._vault
+
+    def load_saved(self):
+        def run(ticket, _progress):
+            try:
+                return self._connection_vault().load(ticket)
+            except ValueError as error:
+                from paper_daily.workspace_service import WorkspaceChanged
+
+                if isinstance(error, WorkspaceChanged):
+                    raise
+                raise VaultUnavailable("Stored connection needs review") from None
+
+        return self._start("load_saved", run)
+
+    def forget_saved(self):
         return self._start(
-            "connect", lambda ticket, _progress: self.session.connect(*values, ticket)
+            "forget_saved", lambda ticket, _progress: self._connection_vault().forget(ticket)
         )
 
     def sync_now(self):
@@ -557,9 +698,14 @@ class SyncConnectionDialog(QDialog):
             return
         self._worker = None
         self._check_workspace()
+        if (not self._invalid and not self._closing
+                and kind in {"load_saved", "forget_saved", "connect"}):
+            self._connection_scope_current()
         if not self._invalid and not self._closing:
             if worker.error:
-                self.status.setText(self.t[worker.error])
+                self.status.setText(
+                    self.v["unavailable"] if worker.error == "vault" else self.t[worker.error]
+                )
             elif worker.ticket.cancelled:
                 self.status.setText(self.t["cancelled"])
             elif kind == "probe":
@@ -574,7 +720,32 @@ class SyncConnectionDialog(QDialog):
                 self._setting = True
                 self.credential.clear()
                 self._setting = False
-                self.status.setText(self.t["connected"])
+                remembered = worker.result.get("remembered")
+                self.status.setText(
+                    self.v["memory"] if remembered is False else self.t["connected"]
+                    + ("\n" + self.v["stored"] if remembered else "")
+                )
+            elif kind == "load_saved":
+                record, worker.result = worker.result, None
+                if record is None:
+                    self.status.setText(self.v["missing"])
+                else:
+                    if self.automatic is not None:
+                        self.automatic.stop()
+                    self.session.disconnect()
+                    self._setting = True
+                    try:
+                        for field, value in zip(
+                            (self.endpoint, self.workspace_id, self.device_id, self.credential),
+                            (record.endpoint, record.workspace_id, record.device_id, record.token),
+                            strict=True,
+                        ):
+                            field.setText(value)
+                    finally:
+                        self._setting = False
+                    self.status.setText(self.v["loaded"])
+            elif kind == "forget_saved":
+                self.status.setText(self.v["forgotten"])
             elif kind == "sync":
                 result = worker.result
                 self._progress({**result, "stage": "metadata"})
@@ -672,6 +843,8 @@ class SyncConnectionDialog(QDialog):
             self._worker.ticket.cancel()
             self.session.cancel()
             self.status.setText(self.t["working"])
+        if self._devices_dialog is not None and self._devices_dialog.busy:
+            self._devices_dialog.cancel()
 
     def disconnect(self):
         if self.automatic is not None:
@@ -702,6 +875,11 @@ class SyncConnectionDialog(QDialog):
         self.close()
 
     def closeEvent(self, event):
+        child = self._devices_dialog
+        if child is not None and not child.disposed and not child.close():
+            self._closing = True
+            event.ignore()
+            return
         if self.busy:
             self._closing = True
             self.cancel()

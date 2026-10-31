@@ -329,6 +329,10 @@ class SelectionOverlay(QWidget):
     # A note is worth more if it can lead back to the passage it was written about.
     # Word order within a page is the cheapest anchor that survives a restart: the
     # file on disk does not change, so index 412 on page 3 is the same word tomorrow.
+    def selection_epoch(self) -> int:
+        """An intent revision: selecting identical words again is a new selection."""
+        return getattr(self, "_selection_epoch", 0)
+
     def anchor(self) -> dict | None:
         """Where the current selection is, as something storable."""
         if not self._selected:
@@ -355,6 +359,7 @@ class SelectionOverlay(QWidget):
         if not picked:
             return False
 
+        self._selection_epoch = self.selection_epoch() + 1
         self._selected = picked
         self.result.hide()
         self.bar.hide()
@@ -426,6 +431,7 @@ class SelectionOverlay(QWidget):
         self.result.place(self.bar.geometry(), self.width(), self.height())
 
     def clear(self) -> None:
+        self._selection_epoch = self.selection_epoch() + 1
         self._selected = []
         self._anchor = None
         self.bar.hide()
@@ -440,6 +446,7 @@ class SelectionOverlay(QWidget):
         return False
 
     def mousePressEvent(self, event) -> None:
+        self._selection_epoch = self.selection_epoch() + 1
         self.bar.hide()
         self.result.hide()
         self._anchor = self.map.at(event.position().toPoint())
@@ -485,6 +492,7 @@ class SelectionOverlay(QWidget):
         word = self._nearest(*at)
         if word is None:
             return
+        self._selection_epoch = self.selection_epoch() + 1
         self._selected = [word]
         self.update()
         self.bar.place(event.position().toPoint(), self.width(), self.height())

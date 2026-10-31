@@ -1,2 +1,4 @@
 # Shell scripts run on macOS and Linux, where a CR after "bash" breaks the shebang.
 *.sh text eol=lf
+# Preserve the reviewed upstream bytes and license across Git checkout settings.
+/mobile/vendor/pdfjs-6.4.299/* -text

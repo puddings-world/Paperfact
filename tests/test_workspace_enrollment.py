@@ -72,16 +72,17 @@ def rows(database, sql):
         return conn.execute(sql).fetchall()
 
 
-def test_plan_has_no_side_effects_and_names_unsupported_scopes(source, tmp_path):
+def test_plan_has_no_side_effects_and_supports_paper_scoped_queue_pins(source, tmp_path):
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("INSERT INTO refs VALUES('paper','paper',0)")
         conn.execute("INSERT INTO pins VALUES('queue','paper',?)", (STAMP,))
     before = source.read_bytes()
     plan = EnrollmentService(source).plan()
-    assert not plan["supported"]
+    assert plan["supported"]
     assert "unsupported writer scope: refs" not in plan["blockers"]
     assert plan["research_counts"]["refs"] == 1
-    assert "legacy queue pins require migration" in plan["blockers"]
+    assert plan["research_counts"]["pins"] == 1
+    assert plan["blockers"] == []
     assert plan["excluded_private_kv"] == 2
     assert not plan["runtime_enrollment_complete"]
     assert source.read_bytes() == before
@@ -166,6 +167,22 @@ def test_incomplete_coverage_blocks_without_outputs(source, tmp_path, kind):
                 conn.execute(
                     "INSERT INTO reading_log(paper_id,delivered_at) VALUES('paper',?)", (STAMP,)
                 )
+    if kind in {"queue", "reading-log"}:
+        # Typed legacy workflow is now supported; all other incomplete scopes
+        # retain their original fail-closed assertions below.
+        table = "queue" if kind == "queue" else "reading_log"
+        expected = rows(source, "SELECT * FROM " + table)
+        original = source.read_bytes()
+        result = prepare(source, tmp_path)
+        assert result["supported"]
+        assert rows(result["database"], "SELECT * FROM " + table) == expected
+        feature = "queue_entry" if kind == "queue" else "reading_event"
+        assert rows(
+            result["database"],
+            "SELECT COUNT(*) FROM research_content_projection WHERE feature='" + feature + "'",
+        ) == [(1,)]
+        assert source.read_bytes() == original
+        return
     with pytest.raises(EnrollmentBlocked) as error:
         prepare(source, tmp_path)
     assert not error.value.plan["supported"]

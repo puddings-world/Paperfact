@@ -36,7 +36,7 @@ function payload(feature) {
     kind: ['list_survey', 'reading_goal', 'list_pin'].includes(feature) ? 'list': 'paper',
     id: ['list_survey', 'reading_goal', 'list_pin'].includes(feature) ? 'demo-list': PAPER
   };
-  const key = ['reference_edge','list_pin'].includes(feature) ? PAPER : ['manual_highlight', 'chat'].includes(feature) ? '00000000-0000-4000-8000-000000000002': feature === 'ai_highlight' ? hash + ':claim': feature === 'resource' ? 'https://example.org/code': feature === 'citation' ? '引用🚀': feature === 'followup' ? 'work-1': 'main';
+  const key = ['reference_edge','list_pin'].includes(feature) ? PAPER : ['manual_highlight', 'chat', 'reading_event'].includes(feature) ? '00000000-0000-4000-8000-000000000002': feature === 'ai_highlight' ? hash + ':claim': feature === 'resource' ? 'https://example.org/code': feature === 'citation' ? '引用🚀': feature === 'followup' ? 'work-1': 'main';
   const data = {};
   for(const field of CONTENT_FIELDS[feature].split(' ')) {
     data[field] =['created_at', 'written_at', 'fetched_at', 'checked_at', 'pinned_at'].includes(field) ? stamp: ['edited',
@@ -50,6 +50,9 @@ function payload(feature) {
     : field === 'analysis_hash' ? hash: field === 'role' ? 'assistant': ['body', 'quote', 'kind', 'source',
     'reason'].includes(field) ? 'Fixture research': null;
   }
+  if(feature === 'queue_entry') Object.assign(data,{rank:-2.75,state:'pending',role:'manual',parent_id:null,
+    reason:'Fixture reason',queued_at:stamp,delivered_at:null,read_at:null});
+  if(feature === 'reading_event') Object.assign(data,{delivered_at:stamp,role:null,note:'Original note',brief:null});
   const annotation = annotationFixtures.find(item => item.valid && item.feature === feature);
   if(annotation) { data.body_json = structuredClone(annotation.body); data.source_hash = hash; data.document_hash = hash; }
   if(feature === 'claims') { data.body_json=structuredClone(claimFixture); data.source_hash=hash; data.document_hash=claimFixture.report.source.document_hash; }
@@ -58,7 +61,7 @@ function payload(feature) {
     feature,
     key,
     data,
-    source_document_hash: feature === 'claims' ? data.document_hash : ['reading_goal','reference_edge','list_pin'].includes(feature) ? null : hash
+    source_document_hash: feature === 'claims' ? data.document_hash : ['reading_goal','reference_edge','list_pin','queue_entry','queue_pin','reading_event'].includes(feature) ? null : hash
   };
 }
 test(

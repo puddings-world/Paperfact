@@ -124,6 +124,7 @@ def canonical_operation(value: dict) -> str:
         "paper_document",
         "research_content",
         "research_file",
+        "inbox_item",
     ) or action not in (
         "put",
         "delete",
@@ -140,9 +141,24 @@ def canonical_operation(value: dict) -> str:
         3 if kind == "reading_state" or pin_closure else 2
     ):
         raise ValueError("Invalid parent references")
+    queue_closure = (
+        kind == "research_content" and action == "put" and payload.get("feature") == "queue_entry"
+    )
+    if (
+        kind == "research_content"
+        and action == "delete"
+        and len(parents) == 2
+        and isinstance(parents[0], dict)
+        and "id" in parents[0]
+    ):
+        from paper_daily.sync_content import content_id
+
+        queue_closure = value["entity_id"] == content_id(
+            {"kind": "paper", "id": parents[0]["id"]}, "queue_entry", "main"
+        )
     edge_closure = kind == "research_content" and (
         (action == "put" and payload.get("feature") == "reference_edge")
-        or (action == "delete" and len(parents) == 2)
+        or (action == "delete" and len(parents) == 2 and not queue_closure)
     )
     refs = {}
     seen = set()
@@ -151,7 +167,7 @@ def canonical_operation(value: dict) -> str:
             raise ValueError("Invalid parent reference")
         if (
             parent["kind"] not in ("list", "paper", "membership")
-            or (parent["kind"] in refs and not edge_closure)
+            or (parent["kind"] in refs and not (edge_closure or queue_closure))
             or (parent["kind"], parent["id"]) in seen
         ):
             raise ValueError("Duplicate or unsupported parent kind")
@@ -161,6 +177,8 @@ def canonical_operation(value: dict) -> str:
             _uuid(parent["id"])
         seen.add((parent["kind"], parent["id"]))
         refs[parent["kind"]] = parent
+    if queue_closure and (not parents or any(p["kind"] != "paper" for p in parents)):
+        raise ValueError("Legacy queue requires only its distinct ordered paper references")
     if edge_closure:
         if not parents or any(p["kind"] != "paper" for p in parents):
             raise ValueError("Reference edge requires only its distinct paper endpoints")
@@ -193,6 +211,7 @@ def canonical_operation(value: dict) -> str:
         "reading_state": {"membership", "list", "paper"},
         "list_order": {"list"},
         "workspace_list_order": set(),
+        "inbox_item": set(),
         "paper_document": {"paper"},
         "research_file": {"paper"},
         "research_content": (
@@ -205,7 +224,7 @@ def canonical_operation(value: dict) -> str:
     }[kind]
     if set(refs) != expected:
         raise ValueError("Research entity has incorrect parents")
-    if kind in ("research_content", "research_file"):
+    if kind in ("research_content", "research_file", "inbox_item"):
         _uuid(value["entity_id"])
     if kind == "paper":
         _uuid(value["entity_id"])
@@ -226,6 +245,10 @@ def canonical_operation(value: dict) -> str:
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
+    elif kind == "inbox_item":
+        from paper_daily.inbox_content import validate as validate_inbox
+
+        validate_inbox(payload)
     elif kind == "research_file":
         from paper_daily.sync_files import validate_payload as validate_file
 
@@ -244,7 +267,7 @@ def canonical_operation(value: dict) -> str:
         if set(payload) != {"name", "note"}:
             raise ValueError("List payload requires name and note only")
         _text(payload["name"], 200, nonempty=True)
-        _text(payload["note"], 128 * 1024)
+        _text(payload["note"], 128 * 1024, nullable=True)
     elif kind == "note":
         if payload.get("paper_id") != refs["paper"]["id"]:
             raise ValueError("Text note payload must match its paper parent")

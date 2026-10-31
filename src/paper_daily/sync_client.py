@@ -318,6 +318,7 @@ class SyncClient:
             "research_file",
             "list_order",
             "workspace_list_order",
+            "inbox_item",
         ):
             raise ValueError("Unsupported graph entity")
         if not isinstance(payload, dict):
@@ -329,7 +330,7 @@ class SyncClient:
         state, touches, own = self._optimistic_graph(conn)
         key = (kind, entity_id)
         current = state.get(key)
-        if kind in ("paper", "list", "reading_state", "workspace_list_order"):
+        if kind in ("paper", "list", "reading_state", "workspace_list_order", "inbox_item"):
             if kind == "reading_state" and action == "delete" and current is None:
                 raise ValueError("A child deletion needs its known parent identities")
             requested = []

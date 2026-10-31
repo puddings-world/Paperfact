@@ -186,15 +186,23 @@ def test_stale_toggle_observation_cannot_pin_recreated_membership(pins):
     assert query(a, "SELECT * FROM pins") == [] and a.journal.pending() == before
 
 
-@pytest.mark.parametrize("kind", ["missing", "queue", "not-member"])
+@pytest.mark.parametrize("kind", ["missing", "missing-queue-paper", "not-member"])
 def test_invalid_pin_target_has_no_saved_data_or_operation(pins, kind):
     a, *_ = pins
     before = a.journal.pending()
     with pytest.raises(ValueError):
         toggle(
             a,
-            scope="queue" if kind == "queue" else "missing" if kind == "missing" else LIST,
-            paper="a-other" if kind == "not-member" else "a-source",
+            scope="queue"
+            if kind == "missing-queue-paper"
+            else "missing"
+            if kind == "missing"
+            else LIST,
+            paper="absent-paper"
+            if kind == "missing-queue-paper"
+            else "a-other"
+            if kind == "not-member"
+            else "a-source",
             pinned_at=STAMP,
         )
     assert query(a, "SELECT * FROM pins") == [] and a.journal.pending() == before
@@ -357,12 +365,14 @@ def test_lossless_enrollment_and_recovery_keep_current_membership_pin(tmp_path):
         assert conn.execute("SELECT * FROM pins").fetchall() == [(LIST, "paper", STAMP)]
 
 
-@pytest.mark.parametrize("kind", ["queue", "orphan"])
-def test_queue_or_orphan_pin_is_an_explicit_preflight_migration_blocker(tmp_path, kind):
+@pytest.mark.parametrize("kind", ["unknown-scope", "orphan"])
+def test_unknown_scope_or_orphan_list_pin_is_an_explicit_preflight_blocker(tmp_path, kind):
     from paper_daily.workspace_enrollment import EnrollmentBlocked, EnrollmentService
 
     database = legacy(
-        tmp_path / "legacy", scope="queue" if kind == "queue" else LIST, member=kind != "orphan"
+        tmp_path / "legacy",
+        scope="unknown-list" if kind == "unknown-scope" else LIST,
+        member=kind != "orphan",
     )
     service = EnrollmentService(database)
     plan = service.plan()

@@ -316,3 +316,161 @@ Limits: native observations were tested on the development Windows filesystem,
 not every Windows/removable/network filesystem or native Mac/phone. Metadata
 and USN observations do not defend against a hostile filesystem/kernel that can
 forge all version data. No credentials, private papers or real provider calls.
+
+## Delayed credential delivery (2026-10-30)
+
+Status: validated-local focused fixtures; complete candidate gate remains required.
+
+A background native-vault load verified its original workspace, but SQL binding
+changed after worker completion and before its queued GUI callback. The old dialog
+filled the former token. The regression failed against that dialog; three boundary
+cases then passed with bounded local binding checks, followed by 99 merged
+connection/session/packaging cases. These are overlapping selections.
+
+Evidence: `connection_vault.ConnectionVault.current`, the connection dialog's
+scope guards, and `tests/test_connection_vault_ui.py`. The later device-management
+vertical also exercises queued old results and confirmation-time connection changes.
+No native credential API, real account, paid model, hosted service or daily database
+was accessed. A cheap metadata guard at delivery does not replace worker-side
+source validation or per-request authorization, and must not hash PDFs on Qt.
+
+
+## Read-only verification and sealed audit views (2026-10-30)
+
+Status: validated-local focused fixtures; the complete integrated gate is pending.
+
+An actual appraisal passage had an unchanged owned original and successful byte
+verification, but its source jump was refused. The existing verifier opened a
+write-capable SQLite connection; its close checkpointed WAL, invalidating the
+view's native database observation. The regression recorded current/verified/
+current as true/true/false. A dedicated read-only CaptureConnection retains the
+real owner/binding and source-byte checks without causing that checkpoint.
+
+Evidence: `audit_inputs.verify_loaded_source` and source-navigation cases in
+`tests/test_appraisal_dialog.py`, with unbound and enrolled fixture workspaces,
+real PDF bytes, duplicate activation, late paper changes and preserved drafts.
+The affected audit/appraisal/cache/runtime selection passed 85 cases; a later
+provider/model selection passed 69 overlapping cases. These are partial checks,
+not independent totals or whole-project acceptance.
+
+Limits: native fixture workspaces and fake model replies. No daily data, real
+account, native vault, remote service or physical Mac/phone was used. Read-only
+connections still require explicit lifetime management; the separate full-suite
+Windows replacement failure is not explained or fixed by this finding. A located
+quotation still does not establish semantic support.
+
+## Scoped observer lifetime and SDK test provenance (2026-10-30)
+
+Status: validated-local; maintenance commit `987c365` passed its complete gate.
+The feature-branch contextual backport and its independent full gate are pending.
+
+A warm run observed an older window's background poll reading a newly selected
+fixture database through a mutable global path. The maintained observer now
+captures the original path/native identity, stops admission on explicit close or
+QObject destruction, drains admitted work and rejects stale GUI delivery. Native
+fixtures hold A's read while switching to B and replace B without waiting for A.
+Missing initial files do not grant authority to later replacements. This does
+not establish the cause of the separate v0.5 Windows replacement failure.
+
+The first isolated maintenance gate also discovered a seventh tool from a
+foreign editable checkout instead of the maintenance catalog. The installed MCP
+SDK deliberately filters inherited PYTHONPATH. Explicit stdio-child test env
+pins the intended source; current and foreign outer-source variants both retain
+exact catalog, idempotent persistence, error and helper-restart assertions.
+Packaged acceptance retains its independent executable path.
+
+Evidence: `desktop/workspace_changes.py`,
+`tests/test_workspace_changes_lifecycle.py`,
+`tests/test_workspace_changes_window_close.py`, and
+`tests/test_local_integration.py`. The unchanged complete maintenance gate passed
+1,471 Python/desktop cases with one existing conditional skip and 18 frontend
+cases. Source and pinned public font hashes were verified before and after.
+
+Limits: fixture SQLite/native Qt and real local SDK processes on Windows. No
+real account, paid model, user database, cloud deployment, native vault or
+physical Mac/phone was used. These are project-local patterns, not global
+installation or provider authorization. The v0.5 integration remains unreleased.
+
+
+## 2026-10-31 ? Worker admission before installer launch
+
+Status: validated-local for the observed UI boundaries; complete feature gate
+and installed-device acceptance remain separate.
+
+A source-bound reading-position worker exposed a restart/update path that could
+launch its installer before closeEvent refused to close. Three real Qt fixtures
+failed before the launch boundary consulted the position controller. The existing
+worker tuple now includes that optional controller; thin legacy readers remain
+supported. The affected selection passed 99 Python cases.
+
+A selected-deck audit exercised the same boundary through its owning presentation
+pane. The pane retains weakly tracked audit workers until drain even if the review
+dialog is hidden or destroyed. Its producer-only state stays separate from this
+external lifecycle check, so a result does not invalidate itself. The canonical
+deck/audit selection passed 101 Python cases, including actual configured update
+actions with a fake installer. The integrated positions/Inbox selection also
+passed 248 Python cases; counts overlap and must not be added.
+
+Evidence: desktop/main.py, desktop/reading_position_controller.py,
+desktop/presentation_pane.py, desktop/deck_audit.py;
+tests/test_position_update_guard.py and tests/test_deck_audit_ui.py.
+No real installer, account, model call or owner workspace was used. This
+project-local lesson does not authorize deployment or prove every worker has
+been audited. It is not a global skill installation.
+
+## Window callers beyond a scoped observer (2026-10-31)
+
+- Pattern ID / revision: local-integration-window-ownership-v1
+- Status: validated-local on maintenance; contextual 0.5 focused integration passed.
+- Trigger: a full feature gate still observed the next global workspace after the
+  watcher had been bound correctly. Controlled queued Qt callbacks reproduced
+  seven MainWindow/update failures and two notification seen-write failures;
+  two current-workspace controls remained valid. The earlier file-lock failure's
+  cause is not established by these observations.
+- Decision: capture the original database path/native identity before deferred
+  reads, guard the caller and owned banners, and use explicit-path connections.
+  Accepted close stops observers; a stale window with unsaved drafts remains open
+  with a local notice rather than saving into another workspace. Busy/close-veto
+  paths retain their original ownership and continue to drain.
+- Preconditions and limits: this is an outer window admission lease, not a
+  document hash, research row revision, sync binding or authorization capability.
+  Retain stronger source and writer checks. Tests cover switches at admission,
+  queued delivery and modal/preparation hooks; arbitrary foreign-thread rebinding
+  halfway through a synchronous legacy helper is not certified.
+- Evidence: maintenance commit e926be9; desktop/window_workspace.py, main.py,
+  update_banner.py, analysis_settings.py; test_main_window_workspace_scope.py
+  and the unchanged workspace_changes lifecycle, update and close tests.
+- Validation: complete scripts/check.py passed 1,527 Python tests, one existing
+  conditional skip and 24 frontend tests; Privacy/Ruff passed. All 470 source
+  inputs and two runtime fonts stayed unchanged. The focused 145-case selection
+  overlaps this gate and is not an additional total.
+- Live limits: actual isolated SQLite, native replacement and offscreen Qt
+  callbacks; remote update fetch and installer launch simulated. No physical Mac,
+  real account/model/vault, owner database, cloud deployment or release action.
+- Privacy/promotion: repository-relative paths and synthetic observations only;
+  no raw research, identifiers or credentials. No global installation; feature
+  integration and its complete gate remain separate.
+
+## Projection ownership independent of rendering (2026-10-31)
+
+Status: validated-local on maintenance commit 8bc4a3b; feature adaptation has a
+separate gate. This adds evidence for the existing delayed-delivery/window rules,
+not a new global installation.
+
+A native citation map retained callbacks after paper/list/workspace changes.
+Its projection lease now includes its actual map, paper, list and outer window;
+HTML nonce rotation alone does not retire the map. Per-projection submission
+identity survives rebuilding the widget, while failed admission permits retry.
+A rejected old callback must not stop a newer projection's timer, and an old
+layout must not trigger fresh SQL into the current workspace.
+
+Evidence: desktop/cites_pane.py and tests/test_cites_map_scope.py. Original
+controls recorded 13 failures/two valid cases; a rebuild duplicate and two stale
+timer/layout failures were recorded separately. The final full gate passed 1,549
+Python and 24 frontend tests with no skips; 471 source files and 87 existing public
+runtime dependencies stayed unchanged. Counts from focused selections overlap.
+
+Limits: native Qt and isolated SQLite on Windows; external process/network
+boundaries simulated. No user research, real account/model, service deployment,
+release, or installed Mac/phone acceptance. These are project-local observations;
+source ownership, research revisions and authentication remain separate checks.

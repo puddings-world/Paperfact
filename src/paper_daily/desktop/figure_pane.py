@@ -18,10 +18,11 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
 
+from paper_daily.desktop import figure_loading
 from paper_daily.figures import Figure, extract
 
 MAX_WIDTH = 720
@@ -35,23 +36,6 @@ def toc_html(figures: list[Figure], pal: dict[str, str]) -> str:
         for i, fig in enumerate(figures)
     )
     return f"跳到&nbsp;&nbsp;{links}"
-
-
-class _ExtractWorker(QObject):
-    finished = Signal(str, int, list)
-
-    def __init__(self, paper_id: str, pdf_path: Path, generation=0) -> None:
-        super().__init__()
-        self._paper_id = paper_id
-        self._pdf_path = pdf_path
-        self._generation = generation
-
-    def run(self) -> None:
-        try:
-            figures = extract(self._paper_id, self._pdf_path)
-        except Exception:
-            figures = []
-        self.finished.emit(self._paper_id, self._generation, figures)
 
 
 class _ClickableImage(QLabel):
@@ -78,7 +62,25 @@ class FigurePane(QScrollArea):
         self.setWidget(self._inner)
         self.setStyleSheet(f"QScrollArea{{background:{palette['ground']};border:0;}}")
         self._thread: QThread | None = None
-        self._worker: _ExtractWorker | None = None
+        self._running = None
+        self._worker = None
+        self._disposed = False
+        self._context = None
+        self._frame = None
+        self._pending_scroll = None
+        self._lease_pending = self._lease_failed = False
+        self._lease_label = None
+        self._watch = QTimer(self)
+        self._watch.setInterval(50)
+        self._watch.timeout.connect(self._check_context)
+        self._lifetime = {"worker": None}
+
+        def destroyed(_object=None, state=self._lifetime):
+            worker, state["worker"] = state["worker"], None
+            if worker is not None:
+                worker.cancel()
+
+        self.destroyed.connect(destroyed)
         self._paper_id: str | None = None
         self._requested = None
         self._generation = 0
@@ -98,40 +100,338 @@ class FigurePane(QScrollArea):
         self._toc.hide()
 
     # ---- loading ---------------------------------------------------------
-    def load(self, paper_id: str, pdf_path: Path, has_pdf: bool) -> None:
+    @property
+    def busy(self):
+        return self._running is not None or self._requested is not None
+
+    def load(self, paper_id: str, pdf_path: Path, has_pdf: bool, *, context=None) -> None:
+        if self._disposed:
+            return
+        key = (paper_id, Path(pdf_path), has_pdf, context)
+        if self.busy and key == getattr(self, "_active_key", None):
+            return
         self._generation += 1
-        generation = self._generation
-        self._paper_id = paper_id
-        self._requested = None
+        self._paper_id, self._context = paper_id, context
+        self._frame = self._requested = None
         self._clear()
-        if not has_pdf or not pdf_path.exists():
-            self._message(
-                "需要本機的 PDF 才能抽圖。開啟這篇時會自動下載,抓到之後回到這個分頁就會出現。"
-            )
+        self._message("Preparing figures..." if has_pdf else "A local PDF is required for figures.")
+        if self._running is not None:
+            self._running.cancel()
+            if has_pdf:
+                self._requested = key
             return
-        self._message("正在從 PDF 抽出圖表…")
-        if self._thread is not None and self._thread.isRunning():
-            self._requested = (paper_id, pdf_path, has_pdf)
+        if has_pdf:
+            self._start(key)
+
+    def _start(self, request):
+        paper_id, path, has_pdf, context = request
+        if self._disposed or (context is not None and not context.current()):
             return
+        self._active_key = request
+        worker = figure_loading.Worker(paper_id, path, self._generation, context, extract)
+        self._launch(worker)
+
+    def _launch(self, worker):
         if self._thread is not None:
-            # finished can be delivered before native thread-local cleanup ends.
-            self._thread.wait()
-        self._thread = QThread()
-        self._worker = _ExtractWorker(paper_id, pdf_path, generation)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._show_result)
-        self._worker.finished.connect(self._thread.quit)
-        self._thread.finished.connect(self._next_request)
-        self._thread.start()
+            self._thread.deleteLater()
+        self._thread = self._running = self._worker = worker
+        self._lifetime["worker"] = worker
+        import weakref
+
+        worker.owner_ref = weakref.ref(self)
+        worker.begun.connect(self._begin_owned)
+        worker.entry.connect(self._queue_entry)
+        worker.finished.connect(self._next_request)
+        self._watch.start()
+        worker.start()
+
+    def _valid(self, worker):
+        try:
+            return (
+                not self._disposed
+                and self._running is worker
+                and not worker.stopped.is_set()
+                and worker.generation == self._generation
+                and worker.paper_id == self._paper_id
+                and (worker.context is None or worker.context.current())
+            )
+        except (OSError, RuntimeError, ValueError):
+            return False
+
+    def _begin_owned(self, worker):
+        if not self._valid(worker):
+            worker.cancel()
+            return
+        self._clear()
+        found = worker.figures
+        if worker.source is not None:
+            digest = worker.source.view.fingerprint
+            if any(f.meta.get("document_hash") != digest for f in found):
+                worker.cancel()
+                self._message("Figure source differs from the open PDF.")
+                return
+        if not found:
+            self._message("No numbered figures or tables were found in this PDF.")
+            return
+        if worker.source is not None:
+            self.loaded_document_hash = worker.source.view.fingerprint
+        count = QLabel(
+            f"{sum(f.kind == 'figure' for f in found)} figures / "
+            f"{sum(f.kind == 'table' for f in found)} tables"
+        )
+        count.setStyleSheet(f"color:{self.pal['faint']};font-size:11px;")
+        self._layout.addWidget(count)
+        self._layout.addStretch(1)
+        self._entries = [None] * len(found)
+        self._toc.setText(toc_html(found, self.pal))
+        self._toc.show()
+        self._place_toc()
+
+    def _queue_entry(self, row):
+        QTimer.singleShot(0, self, lambda: self._insert_entry(row))
+
+    def _insert_entry(self, row):
+        worker = row.worker
+        try:
+            if not self._valid(worker):
+                worker.cancel()
+                return
+            if worker.context is not None and not figure_loading.figures.lease_metadata_current(
+                row.proof
+            ):
+                row.recheck = True
+                self._lease_pending = True
+                self._notice("Checking the original source...")
+                return
+            self._lease_pending = False
+            self._notice("")
+            try:
+                asset_current = figure_loading.version(row.figure.path) == row.version
+            except (OSError, ValueError):
+                asset_current = False
+            if not asset_current:
+                worker.failed = True
+                worker.cancel()
+                return
+            if row.index >= len(self._entries) or self._entries[row.index] is not None:
+                return
+            entry = self._entry(row.figure, row.image)
+            if not self._valid(worker):
+                entry.deleteLater()
+                worker.cancel()
+                return
+            self._entries[row.index] = entry
+            self._layout.insertWidget(
+                1
+                + int(self._lease_label is not None)
+                + sum(e is not None for e in self._entries[: row.index]),
+                entry,
+            )
+            entry.show()
+            if self._pending_scroll == row.index:
+                self._pending_scroll = None
+                self.scroll_to(row.index)
+        finally:
+            row.ack.set()
+
+    def _publish_initial(self, frame):
+        if (
+            not frame.ready_emitted
+            and frame.figures
+            and frame.success
+            and frame.generation == self._generation
+            and (
+                frame.context is None
+                or (
+                    frame.context.current()
+                    and figure_loading.figures.lease_metadata_current(frame.proof)
+                )
+            )
+        ):
+            frame.ready_emitted = True
+            self.ready.emit(frame.paper_id)
+
+    def _notice(self, text, *, retry=False):
+        if self._lease_label is None and text:
+            self._lease_label = QLabel(self._inner)
+            self._lease_label.setWordWrap(True)
+            self._lease_label.setStyleSheet(f"color:{self.pal['muted']};font-size:12px;")
+            token = self._generation
+            self._lease_label.linkActivated.connect(
+                lambda _link: self.recheck_source() if token == self._generation else None
+            )
+            self._layout.insertWidget(0, self._lease_label)
+        if self._lease_label is not None:
+            self._lease_label.setText(
+                text + (" <a href='retry'>Retry source check</a>" if retry else "")
+            )
+            self._lease_label.setVisible(bool(text))
+
+    def recheck_source(self):
+        """Explicit retry or one automatic drift check, on the existing worker lane."""
+        frame = self._frame
+        if (
+            self._disposed
+            or self.busy
+            or frame is None
+            or frame.lease is None
+            or frame.generation != self._generation
+            or not frame.context.current()
+        ):
+            return False
+        self._lease_failed = False
+        self._lease_pending = True
+        self._notice("Checking the original source...")
+        worker = figure_loading.Worker(
+            frame.paper_id, frame.path, self._generation, frame.context, extract, lease=frame.lease
+        )
+        worker.target_frame = frame
+        self._launch(worker)
+        return True
 
     def _next_request(self):
-        if self._requested:
-            self.load(*self._requested)
+        worker = self._running
+        if worker is None:
+            return
+        if not worker.wait(0):
+            QTimer.singleShot(10, self, self._next_request)
+            return
+        worker._release()
+        valid = self._valid(worker)
+        self._running = self._worker = None
+        self._lifetime["worker"] = None
+        need_check = False
+        if valid and worker.mode == "check":
+            frame = self._frame
+            if frame is worker.target_frame and worker.success:
+                if figure_loading.figures.lease_metadata_current(worker.proof):
+                    frame.proof = worker.proof
+                    self._lease_pending = self._lease_failed = False
+                    self._notice("")
+                    # Only a still-unpublished ORIGINAL extraction can become ready.
+                    self._publish_initial(frame)
+                else:
+                    self._lease_failed = self._lease_pending = True
+                    self._notice(
+                        "Source verification remained unstable; figures are read-only.", retry=True
+                    )
+            elif worker.revoked:
+                self._frame = None
+                self._clear()
+                self._message("The original owner or source changed. Open the PDF again.")
+            else:
+                self._lease_failed = self._lease_pending = True
+                self._notice(
+                    "Unable to verify the original source; figures are read-only.", retry=True
+                )
+        elif valid and worker.mode == "extract" and worker.success:
+            self._frame = worker
+            if worker.context is None or figure_loading.figures.lease_metadata_current(
+                worker.proof
+            ):
+                self._lease_pending = self._lease_failed = False
+                self._notice("")
+                self._publish_initial(worker)
+            else:
+                self._lease_pending = True
+                need_check = True
+        elif not self._disposed and worker.generation == self._generation:
+            if worker.revoked or not valid:
+                self._frame = None
+                self._clear()
+                if worker.failed and not worker.revoked:
+                    try:
+                        current = worker.context is None or worker.context.current()
+                    except (OSError, RuntimeError, ValueError):
+                        current = False
+                    if current:
+                        self._message("Unable to prepare figures. Reopen this tab to retry.")
+            elif worker.lease is not None and any(e is not None for e in self._entries):
+                self._frame = worker
+                self._lease_failed = self._lease_pending = True
+                self._notice("Preparation stopped; retained figures are read-only.", retry=True)
+            else:
+                self._clear()
+                if worker.failed:
+                    self._message("Unable to prepare figures. Reopen this tab to retry.")
+        worker.source = None
+        if self._requested is not None and not self._disposed:
+            request, self._requested = self._requested, None
+            self._start(request)
+        elif need_check and self._frame is worker and not self._disposed:
+            self.recheck_source()
+        elif self._frame is None and self._running is None:
+            self._watch.stop()
+
+    def invalidate(self):
+        self._generation += 1
+        self._requested = self._frame = None
+        if self._running is not None:
+            self._running.cancel()
+        self._clear()
+
+    def _check_context(self):
+        worker = self._running or self._frame
+        if worker is None:
+            return
+        if self._requested is not None:
+            context = self._requested[3]
+        elif worker.generation != self._generation and worker.stopped.is_set():
+            self._watch.stop()
+            return
+        else:
+            context = worker.context
+        try:
+            valid = not self._disposed and (context is None or context.current())
+        except (OSError, RuntimeError, ValueError):
+            valid = False
+        if not valid:
+            self.invalidate()
+            self._watch.stop()
+            return
+        if context is None or self._requested is not None:
+            return
+        proof = worker.proof
+        if figure_loading.figures.lease_metadata_current(proof):
+            if not self._lease_failed:
+                self._lease_pending = False
+            return
+        self._lease_pending = True
+        if not self._lease_failed:
+            self._notice("Checking the original source...")
+            if self._running is None and self._frame is not None:
+                self.recheck_source()
+
+    def request_close(self):
+        if self.busy:
+            self.invalidate()
+            return False
+        return True
+
+    def dispose(self, *args):
+        if self._disposed:
+            return
+        self._disposed = True
+        self._watch.stop()
+        self._requested = self._frame = None
+        if self._running is not None:
+            self._running.cancel()
+        elif self._thread is not None:
+            self._thread.deleteLater()
+
+    def closeEvent(self, event):
+        if not self.request_close():
+            event.ignore()
+            return
+        self.dispose()
+        super().closeEvent(event)
 
     def _clear(self) -> None:
         self.loaded_document_hash = None
         self._entries = []
+        self._pending_scroll = None
+        self._lease_pending = self._lease_failed = False
+        self._lease_label = None
         self._toc.hide()
         self.setViewportMargins(0, 0, 0, 0)
         while self._layout.count():
@@ -194,6 +494,14 @@ class FigurePane(QScrollArea):
 
     def scroll_to(self, index: int) -> None:
         """Bring entry `index` to the top of the list, under the contents line."""
+        if not 0 <= index < len(self._entries):
+            return
+        if self._entries[index] is None:
+            self._pending_scroll = index
+            if self._running is not None:
+                self._running.priority = index
+            return
+        self._layout.activate()
         self.verticalScrollBar().setValue(self._entries[index].y())
 
     def _place_toc(self) -> None:
@@ -208,12 +516,35 @@ class FigurePane(QScrollArea):
         self._place_toc()
 
     def _jump(self, figure):
+        if self._context is not None:
+            try:
+                if self._disposed or not self._context.current():
+                    return
+                worker = self._frame or self._running
+                if (
+                    self._lease_pending
+                    or self._lease_failed
+                    or not figure_loading.figures.lease_metadata_current(
+                        getattr(worker, "proof", None)
+                    )
+                ):
+                    return
+                if (
+                    worker is None
+                    or worker.generation != self._generation
+                    or worker.context is not self._context
+                    or worker.stopped.is_set()
+                    or not any(item is figure for item in worker.figures)
+                ):
+                    return
+            except (OSError, RuntimeError, ValueError):
+                return
         # Navigation targets the PDF actually rendered by the parent reader. A
         # newly desired version must not invalidate the user's still-open version.
         self.loaded_document_hash = figure.meta.get("document_hash")
         self.jump.emit(figure.page, figure.caption)
 
-    def _entry(self, fig: Figure) -> QWidget:
+    def _entry(self, fig: Figure, decoded=None) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 8, 0, 8)
@@ -233,11 +564,16 @@ class FigurePane(QScrollArea):
         image.setCursor(Qt.CursorShape.PointingHandCursor)
         image.setToolTip("點圖跳到原文中的位置")
         image.clicked.connect(lambda f=fig: self._jump(f))
-        pixmap = QPixmap(str(fig.path))
-        if not pixmap.isNull():
-            if pixmap.width() > MAX_WIDTH:
+        if decoded is None:
+            pixmap = QPixmap(str(fig.path))
+            if not pixmap.isNull() and pixmap.width() > MAX_WIDTH:
                 pixmap = pixmap.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
+        else:
+            pixmap = QPixmap.fromImage(decoded)
+        if not pixmap.isNull():
             image.setPixmap(pixmap)
+        elif decoded is not None:
+            image.setText("Image unavailable; the original caption is preserved.")
         image.setStyleSheet("background:#ffffff;")
         image.setAlignment(Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(image)

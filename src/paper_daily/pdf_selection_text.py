@@ -17,4 +17,3 @@ def level_words(page) -> list[tuple[int, tuple]]:
     }
     words = page.get_text("words", textpage=tp)
     return [(i, w) for i, w in enumerate(words) if (w[5], w[6]) not in slanted]
-

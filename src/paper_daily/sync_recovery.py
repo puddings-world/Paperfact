@@ -21,6 +21,9 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from paper_daily import annotation_content
+from paper_daily.inbox_recovery import DETACHED_ORIGINALS as INBOX_DETACHED_ORIGINALS
+from paper_daily.inbox_recovery import PROTOCOL as INBOX_PROTOCOL
+from paper_daily.inbox_recovery import RESEARCH as INBOX_RESEARCH
 from paper_daily.store import SCHEMA, _migrate
 from paper_daily.sync_blobs import BlobManifest, BlobStore, _no_link
 from paper_daily.sync_client import validate_event
@@ -60,9 +63,16 @@ RESEARCH_TABLES = frozenset(
         "chat",
     }
 )
-OPTIONAL_RESEARCH_TABLES = {"list_reading_goals"}
+OPTIONAL_RESEARCH_TABLES = {"list_reading_goals", "reading_positions"} | INBOX_RESEARCH
 
 PROTOCOL = {
+    "research_reading_position_receipts": "request_id request_json result_json",
+    **INBOX_PROTOCOL,
+    "research_legacy_brief_recovery": "local_id paper_id sha256 size media_type legacy_day",
+    "research_legacy_brief_targets": "event_key paper_id descriptor_json",
+    "research_recovery_provenance": "record_id body_json",
+    "research_local_source_owners": "request_id owner_json sha256 size media_type",
+    "research_history_archive": "record_id protocol body_json",
     "research_source_archive": "record_id body_json",
     "research_source_snapshot_recovery": "request_id owner_json sha256 size media_type",
     "paper_annotation_known": "feature paper_id",
@@ -264,11 +274,18 @@ class _Records:
         self.pending_ids = set()
         self.research_sources = set()
         self.annotation_owners = set()
+        self.queue_pin_owners = set()
         self.slide_revisions = {}
         self.legacy_sources = {}
         self.archived_sources = {}
         self.legacy_decks = {}
         self.parent_lifecycles = {}
+        self.recovered_provenance = []
+        self.legacy_briefs, self.legacy_events = {}, {}
+        self.reading_positions = {}
+        from paper_daily.inbox_recovery import Records as InboxRecords
+
+        self.inbox = InboxRecords()
 
     def _artifact(self, payload):
         self.artifacts[_json(payload)] = payload
@@ -279,6 +296,62 @@ class _Records:
         )
 
     def row(self, name, row):
+        if name == "pins" and row["scope"] == "queue":
+            from paper_daily.sync_content import _stamp, _text
+
+            _stamp(row["pinned_at"])
+            _text(row["paper_id"], 4096, nullable=False, nonempty=True)
+            self.queue_pin_owners.add(row["paper_id"])
+        if name == "reading_positions":
+            from paper_daily.reading_positions import validate_row
+
+            validate_row(row)
+            identity = row["paper_id"], row["document_hash"]
+            if identity in self.reading_positions:
+                raise RecoveryError("Duplicate source-bound reading position")
+            self.reading_positions[identity] = row
+            self.annotation_owners.add(row["paper_id"])
+            self.research_sources.add(row["document_hash"])
+        if name == "research_reading_position_receipts":
+            from paper_daily.reading_position_ops import validate_receipt
+
+            self.research_sources.update(validate_receipt(row))
+            owner = _load(row["request_json"])["owner"]
+            if owner["binding"] is not None and owner["binding"]["workspace_id"] != self.workspace:
+                raise RecoveryError("Position receipt belongs to another workspace")
+        if name in INBOX_RESEARCH | set(INBOX_PROTOCOL):
+            self.inbox.add(name, row)
+            return
+        if name == "queue":
+            from paper_daily.legacy_workflow import validate_queue
+
+            validate_queue(row)
+        if name == "reading_log":
+            from paper_daily.legacy_workflow import validate_event as validate_legacy_event
+
+            validate_legacy_event(row)
+            if row["id"] in self.legacy_events:
+                raise RecoveryError("Duplicate reading event identity")
+            self.legacy_events[row["id"]] = row
+        if name == "research_legacy_brief_targets":
+            from paper_daily.legacy_briefs import validate_target
+
+            validate_target(row)
+            _add_blob(self.refs, _load(row["descriptor_json"]))
+        if name == "research_legacy_brief_recovery":
+            from paper_daily.legacy_brief_recovery import validate
+
+            validate(row)
+            if row["local_id"] in self.legacy_briefs:
+                raise RecoveryError("Duplicate reading brief identity")
+            self.legacy_briefs[row["local_id"]] = row
+            _add_blob(self.refs, row)
+        if name == "research_recovery_provenance":
+            from paper_daily.recovery_provenance import decode
+
+            decode(row)
+            self.recovered_provenance.append(row)
+            return
         if name in {"research_document_desired", "research_file_desired"}:
             if row["active"] not in (0, 1):
                 raise RecoveryError("Invalid desired-file activity")
@@ -295,7 +368,8 @@ class _Records:
                 self.research_sources.add(row["document_hash"])
         if name == "paper_annotation_known" and (
             row["feature"] not in annotation_content.FEATURES
-            or not isinstance(row["paper_id"], str) or not row["paper_id"]
+            or not isinstance(row["paper_id"], str)
+            or not row["paper_id"]
         ):
             raise RecoveryError("Invalid annotation cache authority marker")
         if name == "paper_annotation_known":
@@ -508,6 +582,11 @@ class _Records:
             binding = context["binding"]
             if binding is not None and binding["workspace_id"] != self.workspace:
                 raise RecoveryError("Compound receipt belongs to another workspace")
+        elif name == "research_history_archive":
+            from paper_daily.enrollment_history import validate
+
+            _original, sources = validate(row)
+            self.research_sources.update(sources)
         elif name == "research_source_archive":
             from paper_daily.source_provenance import validate
 
@@ -515,7 +594,20 @@ class _Records:
             _add_blob(self.refs, receipt)
             self.research_sources.add(receipt["sha256"])
             self.archived_sources[receipt["sha256"]] = {
-                key: receipt[key] for key in ("sha256", "size", "media_type")}
+                key: receipt[key] for key in ("sha256", "size", "media_type")
+            }
+        elif name == "research_local_source_owners":
+            from paper_daily.local_source_owners import validate
+
+            validate(row)
+            owner = json.loads(row["owner_json"])
+            if owner["binding"] is not None and owner["binding"]["workspace_id"] != self.workspace:
+                raise RecoveryError("Imported original belongs to another workspace")
+            _add_blob(self.refs, row)
+            self.research_sources.add(row["sha256"])
+            self.archived_sources[row["sha256"]] = {
+                key: row[key] for key in ("sha256", "size", "media_type")
+            }
         elif name == "research_source_snapshot_recovery":
             from paper_daily.source_snapshots import validate
 
@@ -591,6 +683,21 @@ class _Records:
         return result
 
     def finish(self):
+        self.inbox.finish()
+        from paper_daily.legacy_brief_recovery import validate_records
+
+        validate_records(self)
+        if self.recovered_provenance:
+            from paper_daily.recovery_provenance import validate_groups
+
+            self._recovered_groups = validate_groups(
+                self.recovered_provenance, depth=getattr(self, "_provenance_depth", 0)
+            )
+            for archived in self._recovered_groups:
+                for sha256, size in archived.refs.items():
+                    _add_blob(self.refs, {"sha256": sha256, "size": size})
+        if self.queue_pin_owners - self.paper_ids:
+            raise RecoveryError("Queue pin has no archived paper")
         if self.annotation_owners - self.paper_ids:
             raise RecoveryError("Reading annotation has no archived paper")
         for row in self.legacy_decks.values():
@@ -622,7 +729,35 @@ class _Records:
                     raise RecoveryError("Acknowledgment does not match retained history")
 
 
-def _legacy_check(root, aliases, represented=None):
+def _verified_source_cache(database, receipt):
+    """Bounded exact bytes and native identity, never authority from a cache name."""
+    from paper_daily import file_change
+    from paper_daily.source_snapshots import source_path
+
+    location = source_path(database, receipt)
+    expected = receipt["size"]
+    digest, size = hashlib.sha256(), 0
+    try:
+        with location.open("rb") as stream:
+            before = file_change.version(location, stream=stream)
+            if before[2] != expected:
+                raise RecoveryError("Owned source cache changed during backup")
+            while block := stream.read(min(1024**2, expected + 1 - size)):
+                size += len(block)
+                if size > expected:
+                    raise RecoveryError("Owned source cache changed during backup")
+                digest.update(block)
+            if file_change.version(location, stream=stream) != before:
+                raise RecoveryError("Owned source cache changed during backup")
+        if (size != expected or digest.hexdigest() != receipt["sha256"]
+                or file_change.version(location) != before):
+            raise RecoveryError("Owned source cache changed during backup")
+    except (OSError, ValueError) as error:
+        raise RecoveryError("Owned source cache changed during backup") from error
+    return location, before
+
+
+def _legacy_check(root, aliases, represented=None, *, verified_sources=None):
     """Do not label a partial SQL-only archive as a complete existing workspace."""
     if root is None:
         return
@@ -638,6 +773,12 @@ def _legacy_check(root, aliases, represented=None):
                 continue
             if not path.is_file():
                 raise RecoveryError("Unexpected legacy research entry")
+            if verified_sources and path in verified_sources:
+                from paper_daily import file_change
+
+                if file_change.version(path) != verified_sources[path]:
+                    raise RecoveryError("Owned source cache changed during backup")
+                continue
             if represented and path in represented and _fingerprint(path) == represented[path]:
                 continue
             if (
@@ -715,6 +856,11 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 if "paperfact_sync_cursor" in present
                 else 0
             )
+            from paper_daily.legacy_brief_recovery import collect as collect_briefs
+
+            brief_rows, brief_objects, brief_aliases = collect_briefs(
+                conn, source, temporary, legacy_root=legacy_root, blob_store=blob_store
+            )
             records = _Records(workspace, cursor)
             papers = {r[0] for r in conn.execute("SELECT id FROM papers")}
             table_files, metadata_bytes, count = [], 0, 0
@@ -740,10 +886,6 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         row = dict(raw)
                         if name == "kv" and not _kv_allowed(row["key"], papers):
                             continue
-                        if name == "reading_log" and row["brief_path"]:
-                            raise RecoveryError(
-                                "Legacy reading brief requires migration before backup"
-                            )
                         _check_row(row, columns)
                         records.row(name, row)
                         encoded = (_json(row) + "\n").encode()
@@ -796,6 +938,15 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
 
             def adopted_sources():
                 for digest in sorted(records.research_sources):
+                    if digest in source_caches:
+                        # This exact location was resolved from a closed owned
+                        # receipt and independently hashed/version-checked. Feed
+                        # it through maintained immutable PDF staging, without
+                        # broadening trusted roots or following context paths.
+                        legacy_sources._scan()
+                        legacy_sources._index.setdefault(digest, []).insert(
+                            0, source_caches[digest]
+                        )
                     if digest in records.refs and blob_store is not None:
                         try:
                             owned = blob_store.verified_path(
@@ -814,6 +965,7 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
 
             from paper_daily.source_snapshots import list_owned
 
+            source_aliases, source_caches, source_cache_bytes = {}, {}, 0
             for name, loader in (
                 ("research_source_snapshot_recovery", list_owned),
                 ("research_generation_recovery", research_generation.list_recovery_requests),
@@ -821,9 +973,24 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 ("research_compound_recovery", research_compound.list_recovery_requests),
                 ("research_slide_revision_recovery", lambda _source: slide_rows),
                 ("research_legacy_deck_recovery", lambda _source: legacy_decks),
+                ("research_legacy_brief_recovery", lambda _source: brief_rows),
                 ("research_legacy_source_recovery", lambda _source: adopted_sources()),
             ):
                 sidecars = loader(source)
+                if name == "research_source_snapshot_recovery":
+                    for receipt in sidecars:
+                        location, proof = _verified_source_cache(source, receipt)
+                        source_aliases[location] = proof
+                        previous = source_caches.get(receipt["sha256"])
+                        if previous is None:
+                            source_cache_bytes += receipt["size"]
+                        elif previous[1] != receipt["size"]:
+                            raise RecoveryError("One original source hash has inconsistent sizes")
+                        source_caches[receipt["sha256"]] = (location, receipt["size"])
+                        if source_cache_bytes > MAX_TOTAL:
+                            raise RecoveryError(
+                                "Owned original sources exceed the backup byte budget"
+                            )
                 if sidecars:
                     if name in present:
                         raise RecoveryError("Reserved recovery archive table already exists")
@@ -855,13 +1022,19 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         )
                     )
             records.finish()
-            represented = {**slide_aliases, **legacy_sources.aliases}
-            _legacy_check(source.parent, records.pdf_aliases(), represented)
+            represented = {**slide_aliases, **legacy_sources.aliases, **brief_aliases}
+            _legacy_check(
+                source.parent, records.pdf_aliases(), represented, verified_sources=source_aliases
+            )
             if legacy_root is not None and _path(legacy_root) != source.parent:
-                _legacy_check(legacy_root, records.pdf_aliases(), represented)
+                _legacy_check(
+                    legacy_root, records.pdf_aliases(), represented, verified_sources=source_aliases
+                )
             objects = []
             for digest, size in sorted(records.refs.items()):
-                if digest in slide_objects:
+                if digest in brief_objects:
+                    path = brief_objects[digest]
+                elif digest in slide_objects:
                     path = slide_objects[digest]
                 elif digest in legacy_sources.objects:
                     path = legacy_sources.objects[digest]
@@ -876,6 +1049,13 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 objects.append((dict(sha256=digest, size=size), path))
             if metadata_bytes + sum(item[0]["size"] for item in objects) > MAX_TOTAL:
                 raise RecoveryError("Recovery package exceeds its total byte bound")
+            position_paths = {item[0]["sha256"]: item[1] for item in objects}
+
+            def read_position_source(descriptor):
+                with position_paths[descriptor["sha256"]].open("rb") as stream:
+                    return stream.read(descriptor["size"] + 1)
+
+            _validate_positions(records, read_position_source)
             manifest = dict(
                 format=FORMAT,
                 version=VERSION,
@@ -901,6 +1081,14 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 for item, path in objects:
                     archive.write(path, "objects/" + item["sha256"])
             inspect(stage)
+            from paper_daily import file_change
+
+            for location, proof in source_aliases.items():
+                try:
+                    if file_change.version(location) != proof:
+                        raise RecoveryError("Owned source cache changed during backup")
+                except (OSError, ValueError) as error:
+                    raise RecoveryError("Owned source cache changed during backup") from error
             # Hard-link publication is exclusive, unlike replace() after an exists check.
             os.link(stage, output)
         finally:
@@ -1069,25 +1257,42 @@ def inspect(package):
             raise RecoveryError("Archive does not contain its exact retained blob closure")
         for item in manifest["blobs"]:
             _stream(archive, "objects/" + item["sha256"], item)
-        from paper_daily.sync_files import validate_closure
-
-        for payload in records.artifacts.values():
-            validate_closure(payload, lambda row: archive.read("objects/" + row["sha256"]))
-        from paper_daily.sync_slide_recovery import read_retained
-
-        for row in records.slide_revisions.values():
-            read_retained(row, lambda item: archive.read("objects/" + item["sha256"]))
-        from paper_daily.recovery_decks import legacy_snapshot
-
-        for row in records.legacy_decks.values():
-            legacy_snapshot(
-                row, records.slide_revisions, lambda item: archive.read("objects/" + item["sha256"])
-            )
-        from paper_daily.sync_legacy_sources import validate_pdf
-
-        for row in [*records.legacy_sources.values(), *records.archived_sources.values()]:
-            validate_pdf(archive.read("objects/" + row["sha256"]))
+        _validate_closures(records, lambda row: archive.read("objects/" + row["sha256"]))
         return manifest
+
+
+def _validate_positions(records, read):
+    from paper_daily.reading_positions import verify_page
+
+    for row in records.reading_positions.values():
+        descriptor = {"sha256": row["document_hash"], "size": records.refs[row["document_hash"]]}
+        data = read(descriptor)
+        if len(data) != descriptor["size"]:
+            raise RecoveryError("Reading position original changed during verification")
+        verify_page(row, data)
+
+
+def _validate_closures(records, read):
+    """Validate independent original archive groups without merging their identities."""
+    from paper_daily.legacy_briefs import validate_markdown
+    from paper_daily.recovery_decks import legacy_snapshot
+    from paper_daily.sync_files import validate_closure
+    from paper_daily.sync_legacy_sources import validate_pdf
+    from paper_daily.sync_slide_recovery import read_retained
+
+    _validate_positions(records, read)
+    for row in records.legacy_briefs.values():
+        validate_markdown(read(row))
+    for payload in records.artifacts.values():
+        validate_closure(payload, read)
+    for row in records.slide_revisions.values():
+        read_retained(row, read)
+    for row in records.legacy_decks.values():
+        legacy_snapshot(row, records.slide_revisions, read)
+    for row in [*records.legacy_sources.values(), *records.archived_sources.values()]:
+        validate_pdf(read(row))
+    for group in getattr(records, "_recovered_groups", ()):
+        _validate_closures(group, read)
 
 
 def _detached_files(stage, records):
@@ -1103,6 +1308,9 @@ def _detached_files(stage, records):
     from paper_daily.recovery_decks import restore_legacy
 
     restore_legacy(stage, records.legacy_decks, records.slide_revisions)
+    from paper_daily.legacy_brief_recovery import restore as restore_briefs
+
+    restore_briefs(stage, records)
     for operation in records.applied_files.values():
         if operation["entity_id"] in records.hidden_files:
             continue
@@ -1121,6 +1329,8 @@ def _detached_files(stage, records):
             target = folder / (body["document_hash"] + ".pdf")
             shutil.copyfile(stage / "objects" / body["document_hash"], target)
             continue
+        if payload["feature"] == "legacy_brief":
+            continue  # Current log-owned text is separately projected from its typed closure.
         raw = body["deck"]
         raw["paper_id"] = local
         folder = stage / "presentations" / hashlib.sha256(local.encode()).hexdigest()[:24]
@@ -1192,13 +1402,14 @@ def restore_detached(package, destination):
                 "backup_id TEXT NOT NULL,"
                 "origin_workspace TEXT,origin_device TEXT,recovery_device TEXT NOT NULL)"
             )
+            recovery_device = str(uuid4())
             conn.execute(
                 "INSERT INTO recovery_identity VALUES(1,?,?,?,?)",
                 (
                     manifest["backup_id"],
                     manifest["workspace_id"],
                     manifest["origin_device_id"],
-                    str(uuid4()),
+                    recovery_device,
                 ),
             )
             conn.execute(
@@ -1225,7 +1436,16 @@ def restore_detached(package, destination):
                             "INSERT INTO recovery_records VALUES(?,?,?)",
                             (table["name"], index, _json(row)),
                         )
+                    if table["name"] in INBOX_DETACHED_ORIGINALS:
+                        # Preserve source rows before fresh receiver versions are minted.
+                        conn.execute(
+                            "INSERT INTO recovery_records VALUES(?,?,?)",
+                            (table["name"], index, _json(row)),
+                        )
             records.finish()
+            from paper_daily.inbox_recovery import fresh_receiver_in
+
+            fresh_receiver_in(conn, recovery_device=recovery_device)
             objects = stage / "objects"
             objects.mkdir()
             for item in manifest["blobs"]:

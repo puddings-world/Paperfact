@@ -1,0 +1,746 @@
+{
+  "format": "paperfact-reading-position-wire-v1",
+  "cases": [
+    {
+      "name": "entered",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": true,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "observed",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "observed"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": true,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"observed\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "last-bound",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 1000001,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": true,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 1000001, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "bool",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": true,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": true, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "float",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 1.0,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 1.0, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "zero",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 0,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 0, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "negative",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": -1,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": -1, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "overflow",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 1000002,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 1000002, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "naive",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "unknown-method",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "inferred"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"inferred\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "extra",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered",
+            "page_count": 5
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\", \"page_count\": 5}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "wrong-source",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "missing-source",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": null,
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": null, \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "wrong-key",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "uppercase",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "source_document_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"source_document_hash\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "wrong-scope",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "list",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"list\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "extra-parent",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          },
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}, {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    },
+    {
+      "name": "missing-parent",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "reading_position",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"reading_position\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [], \"structure_revision\": 0}"
+    },
+    {
+      "name": "unknown-feature",
+      "operation": {
+        "version": 2,
+        "operation_id": "position-wire",
+        "workspace_id": "demo-workspace",
+        "device_id": "demo-desktop",
+        "entity_type": "research_content",
+        "entity_id": "7693bf49-290b-5cd7-97dc-a5bb8403a47b",
+        "action": "put",
+        "base_revision": 0,
+        "depends_on": null,
+        "payload": {
+          "scope": {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001"
+          },
+          "feature": "position_other",
+          "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_document_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "data": {
+            "page": 2,
+            "recorded_at": "2026-10-31T00:00:00Z",
+            "method": "entered"
+          }
+        },
+        "incarnation": "position-wire",
+        "parents": [
+          {
+            "kind": "paper",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "incarnation": "00000000-0000-4000-8000-000000000001-created"
+          }
+        ],
+        "structure_revision": 0
+      },
+      "valid": false,
+      "wire": "{\"version\": 2, \"operation_id\": \"position-wire\", \"workspace_id\": \"demo-workspace\", \"device_id\": \"demo-desktop\", \"entity_type\": \"research_content\", \"entity_id\": \"7693bf49-290b-5cd7-97dc-a5bb8403a47b\", \"action\": \"put\", \"base_revision\": 0, \"depends_on\": null, \"payload\": {\"scope\": {\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\"}, \"feature\": \"position_other\", \"key\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"source_document_hash\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"data\": {\"page\": 2, \"recorded_at\": \"2026-10-31T00:00:00Z\", \"method\": \"entered\"}}, \"incarnation\": \"position-wire\", \"parents\": [{\"kind\": \"paper\", \"id\": \"00000000-0000-4000-8000-000000000001\", \"incarnation\": \"00000000-0000-4000-8000-000000000001-created\"}], \"structure_revision\": 0}"
+    }
+  ]
+}

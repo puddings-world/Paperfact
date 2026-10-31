@@ -14,12 +14,13 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from paper_daily.sync_blob_service import BlobServiceMixin
+from paper_daily.sync_device_management import DeviceManagementMixin
 from paper_daily.sync_graph import apply_accepted, check_preconditions
 from paper_daily.sync_journal import ID, canonical_operation
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
-class ReferenceService(BlobServiceMixin):
+class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
     """Serialize workspace changes and retain conflicting operations durably."""
 
     def __init__(
@@ -41,6 +42,7 @@ class ReferenceService(BlobServiceMixin):
                 "token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, device TEXT NOT NULL, "
                 "revoked INTEGER NOT NULL DEFAULT 0, UNIQUE(workspace,device))"
             )
+            self._device_schema(conn)
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS sync_events ("
                 "workspace TEXT NOT NULL, sequence INTEGER NOT NULL, operation_id TEXT NOT NULL, "

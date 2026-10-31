@@ -224,6 +224,18 @@ export const messages = {
     pairingGate: '帳號登入與裝置配對仍待整合，尚未提供。'
   }
 };
+Object.assign(messages.en, {
+  queuePin:'Pinned for reading',legacyHistory:'Reading history',legacyReadOnly:'Saved history · read only',legacyQueue:'Reading queue',
+  legacyState_pending:'Pending',legacyState_delivered:'Delivered',legacyState_read:'Read',
+  legacyState_skipped:'Skipped',legacyState_deferred:'Deferred',legacyDownload:'Save brief offline',
+  legacyBriefUnavailable:'This brief is not available offline.'
+});
+Object.assign(messages['zh-TW'], {
+  queuePin:'已釘選閱讀',legacyHistory:'閱讀紀錄',legacyReadOnly:'已儲存的紀錄 · 唯讀',legacyQueue:'閱讀佇列',
+  legacyState_pending:'待閱讀',legacyState_delivered:'已送達',legacyState_read:'已閱讀',
+  legacyState_skipped:'已略過',legacyState_deferred:'已延後',legacyDownload:'離線儲存摘要',
+  legacyBriefUnavailable:'這份摘要尚無可用的離線內容。'
+});
 messages.en.unsupported_operation = 'This history includes a newer research format. Update the reader; the sync cursor has not advanced.';
 messages['zh-TW'].unsupported_operation = '同步歷史包含較新的研究格式，請更新閱讀器；同步游標尚未前進。';
 messages.en.stale_draft = 'The synchronized note changed while you were editing. Your draft is retained; compare it before saving a new version.';

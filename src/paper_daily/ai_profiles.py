@@ -46,6 +46,7 @@ TASKS = (
     "slides",
     "paper_highlights",
     "claims",
+    "audit",
 )
 
 

@@ -18,6 +18,7 @@ from uuid import UUID, uuid5
 
 from paper_daily import store, sync_recovery
 from paper_daily.document_reader import register_document_paths
+from paper_daily.inbox_recovery import RESEARCH as INBOX_RESEARCH
 from paper_daily.sync_blobs import BlobStore
 from paper_daily.sync_capture import CORE, CaptureConnection, capture_existing, install
 from paper_daily.sync_client import SyncClient
@@ -36,8 +37,15 @@ MAX_METADATA = 64 * 1024**2
 MAX_FILES = 256
 MAX_BYTES = 512 * 1024**2
 PRIVATE_FILES = {".env", "credentials.json", "tokens.json", "settings.json", "config.json"}
-SUPPORTED = CORE | set(CONTENT_TABLES)
-LOCAL_DERIVED = {"authors", "paper_authors", "workspace_revision", "research_source_archive"}
+PRIVATE_KV_PREFIXES = ("ui.", "ai.", "provider.", "account.", "usage.", "auth.")
+SUPPORTED = CORE | set(CONTENT_TABLES) | INBOX_RESEARCH
+LOCAL_DERIVED = {
+    "authors",
+    "paper_authors",
+    "workspace_revision",
+    "research_source_archive",
+    "research_local_source_owners",
+}
 
 
 class EnrollmentBlocked(ValueError):
@@ -62,9 +70,14 @@ def _schema():
     with closing(sqlite3.connect(":memory:")) as conn:
         conn.executescript(store.SCHEMA)
         store._migrate(conn)
-        from paper_daily.source_provenance import SCHEMA as archive_schema
+        from paper_daily.enrollment_history import SCHEMA as history_archive_schema
+        from paper_daily.local_source_owners import SCHEMA as local_owner_schema
+        from paper_daily.source_provenance import SCHEMA as source_archive_schema
 
-        conn.execute(archive_schema)  # Trusted optional catalogue, not runtime initialization.
+        # Trusted optional catalogues, never eager runtime initialization.
+        conn.execute(source_archive_schema)
+        conn.execute(history_archive_schema)
+        conn.execute(local_owner_schema)
         objects = {
             row[0]
             for row in conn.execute(
@@ -86,9 +99,17 @@ def _research_tables():
     }
 
 
-def _database(conn, ticket):
+def _database(conn, ticket, *, history=None):
     """Closed schema, bounded rows; secrets contribute to invalidation, never output."""
     trusted, trusted_objects = _schema()
+    from paper_daily.enrollment_history import COLUMNS, FORMATS, lifecycle_triggers
+    from paper_daily.enrollment_history import TABLE as HISTORY_TABLE
+
+    history_tables = set(FORMATS) | {HISTORY_TABLE}
+    trusted.update({table: columns.split() for table, columns in FORMATS.items()})
+    trusted[HISTORY_TABLE] = COLUMNS.split()
+    if history and history["counts"].get("research_parent_lifecycle") is not None:
+        trusted_objects.update(lifecycle_triggers())
     research_tables = _research_tables()
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     blockers, rows, counts, digest, size, count, excluded = [], {}, {}, hashlib.sha256(), 0, 0, 0
@@ -103,13 +124,15 @@ def _database(conn, ticket):
         kind == "trigger" and name == "paperfact_pin_membership_delete"
         for kind, name, _table, _sql in objects
     ):
-        from paper_daily.sync_content import pin_cleanup_ready
+        from paper_daily.sync_content import pin_cleanup_recognized
 
-        if not pin_cleanup_ready(conn):
+        if not pin_cleanup_recognized(conn):
             blockers.append("pin cleanup trigger requires review")
     optional = set(getattr(sync_recovery, "OPTIONAL_RESEARCH_TABLES", set()))
-    optional.add("research_source_archive")
-    if not (set(trusted) - set(optional)) <= names:
+    optional.update({
+        "research_source_archive", "research_history_archive", "research_local_source_owners"
+    })
+    if not (set(trusted) - set(optional) - history_tables) <= names:
         blockers.append("schema: initialized current research schema required")
     for table in sorted(names - {"sqlite_sequence"}):
         ticket.check()
@@ -138,9 +161,7 @@ def _database(conn, ticket):
                     blockers.append("unsupported research KV: " + value["key"])
                 elif value["key"].startswith(("citegraph.", "followups.checked.", "resources:")):
                     blockers.append("unsupported research KV scope")
-                elif value["key"].startswith(
-                    ("ui.", "ai.", "provider.", "account.", "usage.", "auth.")
-                ):
+                elif value["key"].startswith(PRIVATE_KV_PREFIXES):
                     excluded += 1
                 else:
                     blockers.append("unsupported KV scope")
@@ -155,7 +176,10 @@ def _database(conn, ticket):
                 except (ValueError, TypeError):
                     blockers.append("list pin timestamp requires migration")
                 if pin["scope"] == "queue":
-                    blockers.append("legacy queue pins require migration")
+                    if not conn.execute(
+                        "SELECT 1 FROM papers WHERE id=?", (pin["paper_id"],)
+                    ).fetchone():
+                        blockers.append("queue pin requires an existing paper")
                 elif (
                     conn.execute(
                         "SELECT 1 FROM list_papers lp JOIN lists l ON l.id=lp.list_id "
@@ -165,18 +189,10 @@ def _database(conn, ticket):
                     is None
                 ):
                     blockers.append("list pin requires an existing list membership")
-        if table == "paper_annotation_known":
-            from paper_daily.annotation_content import FEATURES
-
-            for marker in selected:
-                target = FEATURES.get(marker["feature"])
-                if target is None or not conn.execute(
-                    f'SELECT 1 FROM "{target}" WHERE paper_id=?', (marker["paper_id"],)
-                ).fetchone():
-                    blockers.append(
-                        "known annotation deletion requires explicit enrollment migration")
         counts[table] = len(selected)
-        if selected and table not in SUPPORTED | LOCAL_DERIVED | {"paper_annotation_known"}:
+        if selected and table not in SUPPORTED | LOCAL_DERIVED | history_tables | {
+            "paper_annotation_known", "research_history_archive"
+        }:
             blockers.append("unsupported writer scope: " + table)
         if selected and table in SUPPORTED and table not in research_tables:
             blockers.append("missing recovery coverage: " + table)
@@ -185,10 +201,23 @@ def _database(conn, ticket):
     return rows, counts, digest.hexdigest(), excluded, blockers
 
 
-def _files(root, database, pdfs, papers, ticket, *, claim_sources=(), owned_sources=(),
-           receipt_paths=(), source_inventory=None):
+def _files(
+    root,
+    database,
+    pdfs,
+    papers,
+    ticket,
+    *,
+    claim_sources=(),
+    owned_sources=(),
+    receipt_paths=(),
+    source_inventory=None,
+    briefs=(),
+):
     if not isinstance(pdfs, dict) or len(pdfs) > MAX_FILES:
         raise ValueError("Use a bounded mapping of local paper IDs to explicit PDF files")
+    from paper_daily.position_source_snapshots import is_stage_file
+
     blockers, manifests, selected, metadata, total = [], {}, set(), [], 0
     for local_id, raw in sorted(pdfs.items()):
         ticket.check()
@@ -216,6 +245,7 @@ def _files(root, database, pdfs, papers, ticket, *, claim_sources=(), owned_sour
         manifests[local_id] = {"path": str(path), "sha256": digest.hexdigest(), "size": measured}
         selected.add(path)
         metadata.append(before)
+    brief_paths = {item.source: item for item in briefs}
     aliases = {}
     source_inventory = source_inventory if source_inventory is not None else {}
     from paper_daily import annotation_content
@@ -247,7 +277,10 @@ def _files(root, database, pdfs, papers, ticket, *, claim_sources=(), owned_sour
             continue
         aliases[candidate] = digest
         source_inventory[(local_id, digest)] = {
-            "path": str(candidate), "sha256": digest, "size": candidate.stat().st_size}
+            "path": str(candidate),
+            "sha256": digest,
+            "size": candidate.stat().st_size,
+        }
     checked_aliases = set()
     private_receipts = {_safe_path(item) for item in receipt_paths}
     entries = 0
@@ -262,15 +295,33 @@ def _files(root, database, pdfs, papers, ticket, *, claim_sources=(), owned_sour
         if not entry.is_file():
             raise ValueError("Source inventory contains an unsupported filesystem entry")
         relative = entry.relative_to(root)
-        metadata.append(_identity(entry))
-        if entry in private_receipts:
-            continue  # Validated private receipt is archived, never shared authority.
-        if entry in selected or entry in {
-            database,
+        if entry == database:
+            identity = _identity(entry)
+            # SQLite checkpoint size/mtime are not a committed research version.
+            # Schema/row digests cover SQL; device/inode still reject replacement.
+            metadata.append((identity[0], identity[1], identity[2], None, None, None))
+            continue
+        if entry in {
             Path(str(database) + "-wal"),
             Path(str(database) + "-shm"),
             Path(str(database) + "-journal"),
         }:
+            continue
+        if is_stage_file(database, entry):
+            continue  # Disposable preparation cache is not a research snapshot input.
+        metadata.append(_identity(entry))
+        if entry in brief_paths:
+            from paper_daily.legacy_workflow import brief_current
+
+            if not brief_current(brief_paths[entry]):
+                raise SnapshotChanged("Declared legacy brief changed during inventory")
+            total += brief_paths[entry].size
+            if total > MAX_BYTES:
+                raise ValueError("Legacy brief inventory exceeds its bounded bytes")
+            continue
+        if entry in private_receipts:
+            continue  # Validated private receipt is archived, never shared authority.
+        if entry in selected:
             continue
         if len(relative.parts) == 1 and (relative.name in PRIVATE_FILES or entry.suffix == ".log"):
             continue
@@ -311,44 +362,117 @@ class EnrollmentService:
         self._running = threading.Lock()
 
     def _inventory(self, conn, pdfs, ticket):
-        rows, counts, digest, excluded, blockers = _database(conn, ticket)
-        from paper_daily import source_provenance, source_snapshots
+        from paper_daily import enrollment_chat_history, enrollment_history
 
+        history = enrollment_history.collect(conn, self.database, ticket)
+        live_chat = enrollment_chat_history.live_inventory(conn, ticket)
+        history["idle_job_locks"] = enrollment_history.idle_lock_files(self.database)
+        rows, counts, digest, excluded, blockers = _database(conn, ticket, history=history)
+        from paper_daily import legacy_workflow
+
+        try:
+            workflow = legacy_workflow.inventory(conn, source_root=self.source_root, ticket=ticket)
+        except (ValueError, OSError) as error:
+            blockers.append("legacy workflow: " + str(error))
+            workflow = {"briefs": {}}
+        from paper_daily import local_source_owners, source_provenance, source_snapshots
+        from paper_daily.sync_documents import MAX_PDF_BYTES
+
+        imported = local_source_owners.list_owned(self.database)
         receipts = source_snapshots.list_owned(self.database)
         provenance = {row["record_id"]: row for row in source_provenance.archived(conn)}
-        for receipt in receipts:
+        for receipt in receipts + imported:
             archived = source_provenance.wrap(receipt)
             provenance[archived["record_id"]] = archived
         owned_sources = [
-            {"path": str(source_snapshots.source_path(self.database, row)),
-             "sha256": row["sha256"], "size": row["size"]}
+            {
+                "path": str(source_snapshots.source_path(self.database, row)),
+                "sha256": row["sha256"],
+                "size": row["size"],
+            }
             for row in receipts
         ]
+        owned_sources.extend(
+            {
+                "path": str(
+                    source_snapshots.source_path(self.database, row, max_pdf_bytes=MAX_PDF_BYTES)
+                ),
+                "sha256": row["sha256"],
+                "size": row["size"],
+            }
+            for row in imported
+        )
         seen_owned = {(item["path"], item["sha256"]) for item in owned_sources}
         for archived in provenance.values():
             receipt = source_provenance.validate(archived)
-            cached = source_snapshots.source_path(self.database, receipt)
+            cached = source_snapshots.source_path(
+                self.database, receipt, max_pdf_bytes=MAX_PDF_BYTES
+            )
             if (str(cached), receipt["sha256"]) in seen_owned:
                 continue
             if not cached.is_file() or cached.stat().st_size != receipt["size"]:
                 blockers.append("archived original source bytes require explicit migration")
                 continue
-            owned_sources.append({"path": str(cached), "sha256": receipt["sha256"],
-                                  "size": receipt["size"]})
+            owned_sources.append(
+                {"path": str(cached), "sha256": receipt["sha256"], "size": receipt["size"]}
+            )
             seen_owned.add((str(cached), receipt["sha256"]))
+        history_sources = []
+        required_sources = set(history["sources"]) | {
+            item["sha256"] for item in live_chat["sources"]
+        }
+        if required_sources:
+            from paper_daily.sync_legacy_sources import LegacySources
+
+            # Resolve only declared digests in explicit trusted roots. Context
+            # document/db paths remain archived text and are never followed.
+            with tempfile.TemporaryDirectory(prefix="paperfact-history-sources-") as temporary:
+                finder = LegacySources([self.source_root / "pdf"], temporary)
+                for digest in sorted(required_sources):
+                    ticket.check()
+                    if any(item["sha256"] == digest for item in owned_sources):
+                        continue
+                    finder.require(digest)
+                for location, (digest, size) in finder.aliases.items():
+                    item = {"path": str(location), "sha256": digest, "size": size}
+                    if (str(location), digest) not in seen_owned:
+                        owned_sources.append(item)
+                        seen_owned.add((str(location), digest))
+                    history_sources.append(item)
         sources = {}
         papers = {row["id"] for row in rows.get("papers", [])}
         manifests, files, file_blockers = _files(
-            self.source_root, self.database, pdfs, papers, ticket,
-            claim_sources=rows.get("paper_claim_sets", []), owned_sources=owned_sources,
-            receipt_paths=[source_snapshots.receipt_path(self.database, row) for row in receipts],
+            self.source_root,
+            self.database,
+            pdfs,
+            papers,
+            ticket,
+            claim_sources=rows.get("paper_claim_sets", []),
+            owned_sources=owned_sources,
+            receipt_paths=[source_snapshots.receipt_path(self.database, row) for row in receipts]
+            + history["sidecars"]
+            + history["idle_job_locks"],
             source_inventory=sources,
+            briefs=workflow["briefs"].values(),
+        )
+        enrollment_chat_history.add_live_sources(
+            sources, live_chat, manifests, owned_sources, papers
+        )
+        from paper_daily.reading_position_ops import add_enrollment_sources
+
+        add_enrollment_sources(
+            conn, rows.get("reading_positions", []), imported, sources, ticket=ticket
         )
         return {
             "rows": rows,
+            "legacy_workflow": workflow,
+            "live_chat": live_chat,
+            "history": history,
+            "history_sources": history_sources,
             "original_sources": sources,
             "owned_sources": owned_sources,
             "source_provenance": sorted(provenance.values(), key=lambda row: row["record_id"]),
+            "imported_source_receipts": len(imported),
             "counts": counts,
             "digest": digest,
             "files": files,
@@ -356,7 +480,8 @@ class EnrollmentService:
             "excluded_private_kv": excluded,
             "blockers": sorted(set(blockers + file_blockers)),
             "claim_source_duplicates": sum(
-                1 for row in rows.get("paper_claim_sets", [])
+                1
+                for row in rows.get("paper_claim_sets", [])
                 if row["paper_id"] in manifests
                 and manifests[row["paper_id"]]["sha256"] == row["document_hash"]
             ),
@@ -374,6 +499,15 @@ class EnrollmentService:
             "pdf_count": len(inventory["pdfs"]),
             "original_source_count": len(inventory["original_sources"]),
             "archived_source_receipts": len(inventory["source_provenance"]),
+            "imported_source_receipts": inventory["imported_source_receipts"],
+            "archived_history_records": len(inventory["history"]["records"]),
+            "archived_history_by_protocol": inventory["history"]["archive_counts"],
+            "history_original_sources": len(inventory["history"]["sources"]),
+            "known_annotation_deletions": len(inventory["history"]["known_deletions"]),
+            "live_chat_links": len(inventory["live_chat"]["links"]),
+            "unresolved_chat_replies": inventory["live_chat"]["unresolved_replies"],
+            "legacy_unpaired_chat_turns": inventory["live_chat"]["legacy_unpaired"],
+            "archived_orphan_chat_links": inventory["live_chat"]["archived_orphan_links"],
             "claim_sources_covered_by_primary": inventory["claim_source_duplicates"],
             "pdf_bytes": sum(value["size"] for value in inventory["pdfs"].values()),
             "excluded_private_kv": inventory["excluded_private_kv"],
@@ -399,6 +533,7 @@ class EnrollmentService:
         pdfs=None,
         ticket=None,
         progress=lambda _message: None,
+        _recovered=None,
     ):
         """Publish a candidate and independent verified archive; no adoption or network.
 
@@ -406,6 +541,12 @@ class EnrollmentService:
         Unpublished operation IDs are not a durable resumable enrollment protocol.
         """
         ticket = ticket or Ticket()
+        if _recovered is not None:
+            from paper_daily.recovery_adoption import _Baseline
+
+            if type(_recovered) is not _Baseline:
+                raise ValueError("A native sealed recovered baseline is required")
+            _recovered.check(self.database)
         request = UUID(request_id)
         if str(request) != request_id:
             raise ValueError("Enrollment requires a canonical UUID request ID")
@@ -436,6 +577,8 @@ class EnrollmentService:
                 with tempfile.TemporaryDirectory(
                     prefix=".paperfact-enrollment-", dir=output.parent
                 ) as temporary:
+                    from paper_daily import enrollment_history, source_provenance
+
                     stage = Path(temporary) / "workspace"
                     stage.mkdir()
                     database = stage / "papers.db"
@@ -454,6 +597,14 @@ class EnrollmentService:
                         from paper_daily.source_provenance import retain_in
 
                         retain_in(copied, before["source_provenance"])
+                        enrollment_history.retain_in(copied, before["history"]["records"])
+                        if before["history"]["counts"].get("research_parent_lifecycle"):
+                            from paper_daily.research_lifecycle import ensure_lifecycle
+
+                            ensure_lifecycle(copied)  # Fresh local epochs, not archived tokens.
+                        from paper_daily.inbox_recovery import fresh_receiver_in
+
+                        inbox_seeds = fresh_receiver_in(copied)
                         copied.commit()
                     workspace = str(uuid5(request, "workspace"))
                     device = str(uuid5(request, "device"))
@@ -463,19 +614,80 @@ class EnrollmentService:
                         research_writer,
                         order_writer=research_order_writer,
                     )
-                    with closing(sqlite3.connect(database, factory=CaptureConnection)) as conn:
-                        conn.execute("BEGIN IMMEDIATE")
-                        install(conn, workspace_id=workspace, device_id=device)
-                        capture_existing(conn)
-                        conn.commit()
-                    ticket.check()
                     blobs = BlobStore(stage / "blobs", quota_bytes=MAX_BYTES)
+                    from paper_daily.sync_artifacts import register_paths
+
+                    with client.journal.transaction() as conn:
+                        register_paths(conn, workspace, blobs, stage / "research-versions")
+                    with closing(sqlite3.connect(database, factory=CaptureConnection)) as conn:
+                        conn._legacy_brief_inputs = before["legacy_workflow"]["briefs"]
+                        conn._legacy_brief_input_paths = {
+                            row["id"]: row["brief_path"]
+                            for row in before["rows"].get("reading_log", [])
+                        }
+                        conn.execute("BEGIN IMMEDIATE")
+                        from paper_daily.enrollment_chat_history import install_live_in
+
+                        install_live_in(conn, before["live_chat"]["links"])
+                        install(conn, workspace_id=workspace, device_id=device)
+                        from paper_daily.reading_position_ops import admit_enrollment
+
+                        with admit_enrollment(conn, before["rows"].get("reading_positions", [])):
+                            capture_existing(conn)
+                        conn.commit()
+                    with client.journal.transaction() as conn:
+                        from paper_daily.enrollment_tombstones import establish_in
+
+                        for deletion in before["history"]["known_deletions"]:
+                            establish_in(
+                                conn,
+                                client,
+                                feature=deletion["feature"],
+                                paper_id=deletion["paper_id"],
+                                request_id=str(
+                                    uuid5(
+                                        request,
+                                        "annotation-delete:"
+                                        + deletion["feature"]
+                                        + ":"
+                                        + deletion["paper_id"],
+                                    )
+                                ),
+                            )
+                    ticket.check()
+                    from paper_daily.legacy_briefs import materialize_pending
+
+                    materialize_pending(client, blobs, stage / "research-versions", ticket=ticket)
+                    from paper_daily.inbox_recovery import enroll_in as enroll_inbox
+
+                    with client.journal.transaction() as conn:
+                        inbox_enrolled = enroll_inbox(conn, client, str(request))
                     actions = ResearchOperations(client)
                     for selected in before["owned_sources"]:
                         ticket.check()
                         retained = stage_file(blobs, Path(selected["path"]))
+                        already_declared = (
+                            {item["sha256"] for item in before["pdfs"].values()}
+                            | {item["sha256"] for item in before["original_sources"].values()}
+                            | {
+                                source_provenance.validate(item)["sha256"]
+                                for item in before["source_provenance"]
+                            }
+                        )
+                        if (
+                            selected["sha256"] in before["history"]["sources"]
+                            and selected["sha256"] not in already_declared
+                        ):
+                            archival = stage / "pdf" / ".history" / (selected["sha256"] + ".pdf")
+                            archival.parent.mkdir(parents=True, exist_ok=True)
+                            if not archival.exists():
+                                import shutil
+
+                                shutil.copyfile(blobs.verified_path(retained), archival)
                         if (retained.sha256, retained.size) != (
-                            selected["sha256"], selected["size"]):
+                            selected["sha256"],
+                            selected["size"],
+                        ):
                             raise SnapshotChanged("Owned original source changed while staging")
                     for local_id, selected in before["pdfs"].items():
                         ticket.check()
@@ -508,25 +720,56 @@ class EnrollmentService:
                             portable, parent = conn.execute(
                                 "SELECT m.sync_id,g.incarnation FROM research_paper_identity m "
                                 "JOIN research_paper_projection g ON g.sync_id=m.sync_id "
-                                "WHERE m.local_id=?", (local_id,),
+                                "WHERE m.local_id=?",
+                                (local_id,),
                             ).fetchone()
-                        publish(client, portable, selected["path"], document_hash=digest,
-                                parent_incarnation=parent, store=blobs,
-                                version_root=stage / "research-versions",
-                                request_id="enroll-source:" + portable + ":" + digest[:32])
+                        publish(
+                            client,
+                            portable,
+                            selected["path"],
+                            document_hash=digest,
+                            parent_incarnation=parent,
+                            store=blobs,
+                            version_root=stage / "research-versions",
+                            request_id="enroll-source:" + portable + ":" + digest[:32],
+                        )
+                    if _recovered is not None:
+                        _recovered.publish(client, blobs, stage / "research-versions")
                     with client.journal.transaction() as conn:
+                        from paper_daily.enrollment_chat_history import verify_live_in
+
+                        verify_live_in(conn, before["live_chat"]["links"], ticket)
                         for table, expected in before["rows"].items():
                             current = [
                                 dict(zip(row.keys(), row, strict=True))
                                 for row in conn.execute(f'SELECT * FROM "{table}"')
                             ]
+                            if table in INBOX_RESEARCH:
+                                from paper_daily.inbox_content import ITEMS as inbox_items
+                                from paper_daily.inbox_recovery import (
+                                    compare_baseline as compare_inbox,
+                                )
+
+                                compare_inbox(table, expected, current,
+                                              before["rows"].get(inbox_items, []),
+                                              inbox_seeds, inbox_enrolled)
+                                continue
+                            if table == "reading_log":
+                                from paper_daily.legacy_briefs import compare_baseline
+
+                                compare_baseline(
+                                    conn, expected, current, before["legacy_workflow"]["briefs"]
+                                )
+                                continue
                             if table == "kv":
                                 current = [
                                     row
                                     for row in current
                                     if row["key"] in {item["key"] for item in expected}
                                 ]
-                            if sorted(map(_json, current)) != sorted(map(_json, expected)):
+                            if enrollment_history.canonical_research_rows(current) != (
+                                enrollment_history.canonical_research_rows(expected)
+                            ):
                                 raise EnrollmentBlocked(
                                     {
                                         **report,
@@ -544,6 +787,11 @@ class EnrollmentService:
                         raise ValueError("Recovery backup verification failed")
                     # Persist only final local roots, never temporary paths or credentials.
                     with client.journal.transaction() as conn:
+                        from paper_daily.legacy_briefs import relocate_in
+
+                        relocate_in(
+                            conn, blobs, stage / "research-versions", output / "research-versions"
+                        )
                         conn.execute(
                             "UPDATE research_file_paths SET blob_root=?,version_root=? WHERE id=1",
                             (str(output / "blobs"), str(output / "research-versions")),
@@ -578,6 +826,9 @@ class EnrollmentService:
                         latest = self._inventory(current, ({} if pdfs is None else pdfs), ticket)
                     if before != latest:
                         raise SnapshotChanged("Source changed before publication")
+
+                    if _recovered is not None:
+                        _recovered.check(self.database)
 
                     def publish():
                         os.link(archive, backup)

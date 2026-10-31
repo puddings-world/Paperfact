@@ -23,6 +23,7 @@ _SOURCE_FIELDS = {
     "lists": ("id", "name", "note"),
     "list_papers": ("list_id", "paper_id", "position", "state"),
     "pins": ("scope", "paper_id", "pinned_at"),
+    "reading_positions": ("paper_id", "document_hash", "page", "recorded_at", "method"),
     "papers": ("id", "title", "authors_json", "year", "doi", "page_url"),
     "notes": ("id", "paper_id", "body", "created_at", "kind", "page", "anchor"),
     "dives": ("paper_id", "body", "written_at"),
@@ -152,7 +153,10 @@ def _anchor(raw):
 
 def _preflight(conn, max_records, max_bytes):
     records, size = 0, 0
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table, fields in _SOURCE_FIELDS.items():
+        if table == "reading_positions" and table not in tables:
+            continue
         lengths = "+".join(f"COALESCE(length(CAST({field} AS BLOB)),0)" for field in fields)
         row = conn.execute(f"SELECT COUNT(*),COALESCE(SUM({lengths}),0) FROM {table}").fetchone()
         records += row[0]
@@ -203,11 +207,17 @@ def _require_link(collection, identity):
     return collection[identity]
 
 
-def _project(conn, workspace_id, max_records, max_bytes):
+def _project(conn, workspace_id, max_records, max_bytes, *, position_rows=None):
     binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
     if binding is None or binding[0] != workspace_id:
         raise ValueError("Research projection workspace does not match")
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if (
+        position_rows is None
+        and "reading_positions" in tables
+        and conn.execute("SELECT 1 FROM reading_positions LIMIT 1").fetchone()
+    ):
+        raise ValueError("Source-bound reading positions are not supported by this snapshot")
     _preflight(conn, max_records, max_bytes)
     cursor = 0
     if "paperfact_sync_cursor" in tables:
@@ -241,6 +251,9 @@ def _project(conn, workspace_id, max_records, max_bytes):
             "analysis_sections": [],
             "citations": [],
         }
+    for pin in conn.execute("SELECT paper_id,pinned_at FROM pins WHERE scope='queue'"):
+        paper = _require_link(papers, pin["paper_id"])
+        paper["queue_pin"] = {"pinned_at": _reading_timestamp(_text(pin["pinned_at"]))}
     pin_rows = {
         (row["scope"], row["paper_id"]): _reading_timestamp(_text(row["pinned_at"]))
         for row in conn.execute(
@@ -368,7 +381,7 @@ def _project(conn, workspace_id, max_records, max_bytes):
         if "paperfact_sync_heads" in tables
         else 0
     )
-    return {
+    result = {
         "schema_version": 1,
         "workspace_id": workspace_id,
         "cursor": cursor,
@@ -390,6 +403,9 @@ def _project(conn, workspace_id, max_records, max_bytes):
         "decks": [],
         "assets": [],
     }
+    if any("queue_pin" in paper for paper in papers.values()):
+        result["required_capabilities"] = ["queue_pin"]
+    return result
 
 
 def _portable_uuid(value):
@@ -812,10 +828,46 @@ def read_manifest(
         conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
         conn.row_factory = sqlite3.Row
         conn.execute("BEGIN")
-        result = _project(conn, workspace_id, max_records, max_bytes)
+        # Positions require the portable owner plus its exact original declaration.
+        # Version 1 and incomplete source closures retain the existing refusal.
+        position_rows = None
+        if schema_version == 2:
+            from paper_daily.reading_position_projection import declarations
+
+            binding = conn.execute(
+                "SELECT workspace FROM research_sync_binding WHERE id=1"
+            ).fetchone()
+            if binding is None or binding[0] != workspace_id:
+                raise ValueError("Research projection workspace does not match")
+            position_rows = declarations(conn)
+        result = _project(conn, workspace_id, max_records, max_bytes, position_rows=position_rows)
         if schema_version == 2:
             result = _portable_projection(conn, result)
             _document_projection(conn, result, verified_documents, max_records, max_bytes)
+            from paper_daily.reading_position_projection import attach
+
+            attach(result, position_rows)
+        from paper_daily.inbox_projection import attach as attach_inbox
+
+        attach_inbox(conn, result, max_records=max_records)
+        if (
+            position_rows
+            and sum(
+                len(result.get(key, []))
+                for key in (
+                    "lists",
+                    "papers",
+                    "notes",
+                    "highlights",
+                    "decks",
+                    "assets",
+                    "reading_positions",
+                )
+            )
+            + len(result.get("inbox", {}).get("items", []))
+            > max_records
+        ):
+            raise ValueError("Research projection exceeds the record limit")
         if len(_encode(result)) > max_bytes:
             raise ValueError("Research projection exceeds the byte limit")
         return result
