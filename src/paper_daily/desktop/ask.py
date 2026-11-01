@@ -13,6 +13,7 @@ import threading
 from contextvars import copy_context
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
+from shiboken6 import isValid
 
 from paper_daily import llm
 
@@ -195,8 +196,11 @@ class AskRunner(QObject):
         from paper_daily.desktop.activity import begin
 
         if not self.read_only:
-            self.activity = begin(self, getattr(self, "activity_label", None), task=task,
-                                  result=getattr(self, "result_target", None))
+            self.activity = begin(
+                self, getattr(self, "activity_label", None), task=task,
+                result=getattr(self, "result_target", None),
+                retry=lambda: isValid(self) and self.start(prompt, on_done, on_fail, call, task),
+            )
             if not self.activity.accepted:
                 on_fail("相同工作已在執行，請查看上方進度。")
                 return
@@ -242,7 +246,7 @@ class AskRunner(QObject):
     @Slot(str)
     def _fail(self, reason: str) -> None:
         try:
-            self.activity.finish(False)
+            self.activity.finish(False, reason=reason)
             if self._on_fail:
                 self._on_fail(reason)
         finally:

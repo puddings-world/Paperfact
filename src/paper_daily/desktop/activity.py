@@ -8,17 +8,27 @@ from collections import deque
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-from PySide6.QtCore import QEvent, QObject, QProcessEnvironment, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QObject,
+    QPoint,
+    QProcessEnvironment,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QProgressBar,
     QPushButton,
     QStackedLayout,
+    QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
@@ -54,13 +64,17 @@ def hub_for(owner):
     return None
 
 
-def begin(owner, label=None, *, task="ask", key=None, result=None, paper_id=None):
+def begin(owner, label=None, *, task="ask", key=None, result=None, paper_id=None,
+          cancel=None, retry=None):
+    """Register slow work. `cancel` offers 停止 and must end the work, then finish it with
+    cancelled=True; `retry` offers 重試 after a failure and starts the work as a new job."""
     hub = hub_for(owner)
     if hub is None:
         return Handle()
     widget = widget_for(owner)
     label = label or OWNER_LABELS.get(type(widget).__name__, TASKS.get(task, "背景工作"))
-    return hub.begin(widget, label, key or f"{id(owner)}:{task}", result, paper_id)
+    return hub.begin(widget, label, key or f"{id(owner)}:{task}", result, paper_id,
+                     cancel=cancel, retry=retry)
 
 
 @dataclass
@@ -81,6 +95,20 @@ class Job:
     total: int | None = None
     warning: bool = False
     history: deque = field(default_factory=lambda: deque(maxlen=12))
+    # Set by the feature that owns the work; no callback means no button for it.
+    cancel: object = None
+    retry: object = None
+    stopping: bool = False
+    kind: str | None = None
+
+
+# What a failed AI call means for the person, and the one thing they can do about it.
+FAILURES = dict(
+    auth=("AI 登入過期或被拒絕", "重新登入"),
+    limit=("AI 額度或次數用完了，可以稍後重試或換一個 AI 帳號", "AI 帳號"),
+    policy=("AI 依內容政策拒絕了這次請求", None),
+    timeout=("AI 太久沒有回應", "重試"),
+)
 
 
 class Handle:
@@ -94,9 +122,9 @@ class Handle:
     def stage(self, text):
         self.update(dict(stage=text))
 
-    def finish(self, ok=True, message=None, *, cancelled=False):
+    def finish(self, ok=True, message=None, *, cancelled=False, reason=None):
         if self.hub is not None and isValid(self.hub):
-            self.hub.finish(self.token, ok, message, cancelled=cancelled)
+            self.hub.finish(self.token, ok, message, cancelled=cancelled, reason=reason)
 
 
 class ActivityHub(QObject):
@@ -138,7 +166,7 @@ class ActivityHub(QObject):
     def busy(self):
         return any(j.state == "running" for j in self.jobs.values())
 
-    def begin(self, owner, label, key, result=None, paper_id=None):
+    def begin(self, owner, label, key, result=None, paper_id=None, *, cancel=None, retry=None):
         old = next((j for j in self.jobs.values() if j.key == key and j.state == "running"), None)
         if old:
             self.selected = old.token
@@ -146,7 +174,7 @@ class ActivityHub(QObject):
             return Handle(self, old.token, accepted=False)
         token = uuid4().hex
         job = Job(token, key, label, weakref.ref(owner) if owner is not None else lambda: None,
-                  self.context(), self.epoch, result, paper_id)
+                  self.context(), self.epoch, result, paper_id, cancel=cancel, retry=retry)
         self.jobs[token] = job
         # Bounded session history; never stored or uploaded.
         for previous in list(self.jobs.values()):
@@ -156,6 +184,7 @@ class ActivityHub(QObject):
                 self.jobs.pop(previous.token)
         self.selected = token
         self.selected_explicit = False
+        self._poll.start()
         surface = owner.window() if owner is not None else None
         if (isinstance(surface, QDialog) and hasattr(surface.layout(), "insertWidget")
                 and not hasattr(surface, "_activity_board")):
@@ -188,6 +217,8 @@ class ActivityHub(QObject):
 
     def tick(self):
         if not self.busy and self.events.empty() and not self._processes:
+            # Nothing to watch: sleep until the next job instead of waking 4 times a second.
+            self._poll.stop()
             return
         while not self.events.empty():
             token, event = self.events.get_nowait()
@@ -200,7 +231,7 @@ class ActivityHub(QObject):
                 self.finish(token, code == 0, cancelled=code < 0)
         self.changed.emit()
 
-    def finish(self, token, ok=True, message=None, *, cancelled=False):
+    def finish(self, token, ok=True, message=None, *, cancelled=False, reason=None):
         # Deliver queued stage events before terminal status (including partial failure).
         while not self.events.empty():
             queued_token, event = self.events.get_nowait()
@@ -211,6 +242,12 @@ class ActivityHub(QObject):
         job.state = "cancelled" if cancelled else "error" if not ok else (
             "partial" if job.warning else "done")
         job.ended = time.monotonic()
+        if job.state == "error" and reason and not message:
+            from paper_daily.llm import failure_kind
+
+            job.kind = failure_kind(reason)
+            known = FAILURES.get(job.kind)
+            message = f"未完成：{known[0] if known else ' '.join(reason.split())[:120]}"
         job.stage = message or {"done": "內容已更新", "partial": "部分完成，請查看尚缺項目",
                                 "error": "未完成，請查看原操作區的原因後重試",
                                 "cancelled": "工作已停止"}[job.state]
@@ -234,7 +271,29 @@ class ActivityHub(QObject):
               and owner.isVisible()):
             owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
+    def cancel(self, token):
+        job = self.jobs.get(token)
+        if job is None or job.state != "running" or job.cancel is None or job.stopping:
+            return
+        job.stopping = True
+        job.stage = "正在停止…"
+        self.changed.emit()
+        job.cancel()
+
+    def next_step(self, job):
+        """The one action a finished job offers besides 查看結果, as (label, callback)."""
+        if job.state != "error":
+            return None
+        label = FAILURES.get(job.kind, (None, "重試"))[1]
+        if label in ("重新登入", "AI 帳號"):
+            settings = getattr(self.window, "_ai_settings", None)
+            return (label, settings) if settings else None
+        if label == "重試" and job.retry is not None:
+            return (label, job.retry)
+        return None
+
     def watch_popen(self, handle, process):
+        self._poll.start()
         self._processes[handle.token] = process
         if getattr(process, "stdout", None) is None:
             process._paperfact_output_done = True
@@ -277,9 +336,16 @@ class ActivityBoard(QWidget):
         self.bar = QProgressBar()
         self.bar.setFixedSize(QSize(110, 15))
         row.addWidget(self.bar)
+        self.stop = QPushButton("停止")
+        self.stop.clicked.connect(self._stop)
+        row.addWidget(self.stop)
+        self.step = QPushButton()
+        self.step.clicked.connect(self._step)
+        row.addWidget(self.step)
         self.result = QPushButton("查看結果")
         self.result.clicked.connect(self._goto)
         row.addWidget(self.result)
+        self.panel = None
         self.more = QPushButton("工作")
         self.more.clicked.connect(self._menu)
         row.addWidget(self.more)
@@ -317,7 +383,13 @@ class ActivityBoard(QWidget):
         self.text.setToolTip(label + "\n" + "\n".join(job.history))
         self.setAccessibleName(label)
         self.more.setText(f"工作 ({sum(j.state == 'running' for j in self.hub.jobs.values())})")
-        self.result.setVisible(not active)
+        self.stop.setVisible(active and job.cancel is not None)
+        self.stop.setEnabled(not job.stopping)
+        step = self.hub.next_step(job)
+        self.step.setVisible(step is not None)
+        if step:
+            self.step.setText(step[0])
+        self.result.setVisible(not active and job.state != "error")
         self.dismiss.setVisible(not active)
         if active and job.total is None:
             self.bar.setRange(0, 0)
@@ -336,21 +408,106 @@ class ActivityBoard(QWidget):
         if job := self.job():
             self.hub.goto(job.token)
 
+    def _stop(self):
+        if job := self.job():
+            self.hub.cancel(job.token)
+
+    def _step(self):
+        job = self.job()
+        step = job and self.hub.next_step(job)
+        if step:
+            step[1]()
+
     def _dismiss(self):
         self.hub.selected = None
         self.hub.changed.emit()
 
     def _menu(self):
-        menu = QMenu(self)
-        for job in reversed(list(self.hub.jobs.values())):
-            action = menu.addAction(f"{job.label} · {job.stage}")
-            action.triggered.connect(lambda _checked=False, token=job.token: self._select(token))
-        menu.exec(self.more.mapToGlobal(self.more.rect().bottomLeft()))
+        if self.panel is None or not isValid(self.panel):
+            self.panel = JobPanel(self.hub, self.pal, self)
+        self.panel.refresh()
+        self.panel.adjustSize()
+        self.panel.move(self.more.mapToGlobal(self.more.rect().bottomRight())
+                        - QPoint(self.panel.width(), 0))
+        self.panel.show()
 
     def _select(self, token):
         self.hub.selected = token
         self.hub.selected_explicit = True
         self.hub.changed.emit()
+
+
+STATES = dict(running="進行中", done="完成", partial="部分完成", error="未完成", cancelled="已停止")
+
+
+def describe(job, now=None):
+    seconds = max(0, int((job.ended or now or time.monotonic()) - job.started))
+    count = f" · {job.completed}/{job.total}" if job.total else ""
+    return (f"{STATES[job.state]} · {job.label}{count} · {job.stage} · "
+            f"{seconds // 60}:{seconds % 60:02d}")
+
+
+class JobPanel(QFrame):
+    """Every job of this session, newest first, each with the actions it really has."""
+
+    def __init__(self, hub, palette, board):
+        super().__init__(board, Qt.WindowType.Popup)
+        self.hub, self.pal, self.board = hub, palette, board
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setMinimumWidth(420)
+        self.rows = QVBoxLayout(self)
+        self.rows.setContentsMargins(10, 8, 10, 8)
+        self.rows.setSpacing(4)
+        hub.changed.connect(self._changed)
+
+    def _changed(self):
+        if self.isVisible():
+            self.refresh()
+
+    def refresh(self):
+        while self.rows.count():
+            item = self.rows.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        jobs = list(reversed(list(self.hub.jobs.values())))
+        if not jobs:
+            empty = QLabel("這次開啟後還沒有背景工作。")
+            empty.setStyleSheet(f"color:{self.pal['muted']};")
+            self.rows.addWidget(empty)
+        for job in jobs:
+            self.rows.addWidget(self._row(job))
+
+    def _row(self, job):
+        row = QWidget()
+        line = QHBoxLayout(row)
+        line.setContentsMargins(0, 0, 0, 0)
+        text = QLabel(describe(job))
+        text.setTextFormat(Qt.TextFormat.PlainText)
+        text.setWordWrap(True)
+        color = (self.pal["accent"] if job.state == "running" else self.pal["done"]
+                 if job.state == "done" else self.pal["warn"] if job.state in ("error", "partial")
+                 else self.pal["muted"])
+        text.setStyleSheet(f"color:{color};font-size:12px;")
+        line.addWidget(text, 1)
+        buttons = []
+        if job.state == "running" and job.cancel is not None:
+            buttons.append(("停止", lambda: self.hub.cancel(job.token), not job.stopping))
+        if step := self.hub.next_step(job):
+            buttons.append((step[0], step[1], True))
+        if job.state in ("done", "partial", "cancelled"):
+            buttons.append(("查看結果", lambda: self._open(job.token), True))
+        for label, act, enabled in buttons:
+            button = QPushButton(label)
+            button.setEnabled(enabled)
+            button.clicked.connect(act)
+            line.addWidget(button)
+        row.setAccessibleName(describe(job))
+        return row
+
+    def _open(self, token):
+        self.hide()
+        self.board._select(token)
+        self.hub.goto(token)
 
 
 def process_environment(process):

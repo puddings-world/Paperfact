@@ -3676,6 +3676,8 @@ class MainWindow(QWidget):
             key=f"analysis:{paper_id}",
             result=show_result,
             paper_id=paper_id,
+            cancel=self.stop_analysis,
+            retry=lambda: self._spawn_job(args, paper_id),
         )
         if not self._analysis_activity.accepted:
             return

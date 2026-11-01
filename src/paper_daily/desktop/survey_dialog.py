@@ -179,10 +179,12 @@ class SurveyDialog(QDialog):
         from paper_daily.desktop.activity import begin, process_environment
 
         self._activity = begin(self, "撰寫清單綜覽", key=f"survey:{self.list_id}",
-                               result=self._show_result)
+                               result=self._show_result, cancel=self._stop,
+                               retry=self._run_ready)
         if not self._activity.accepted:
             self.status.setText("這份清單的綜覽正在撰寫，請查看進度布告。")
             return
+        self._stopping = False
         self._activity_pending = self._output_tail = ""
         # Owned by the window behind the dialog, so closing the dialog does not kill
         # a survey that is minutes into being written; reopening shows it.
@@ -199,6 +201,11 @@ class SurveyDialog(QDialog):
         self._load()
         program, *rest = runtime.cli_command(*args)
         self.job.start(program, rest)
+
+    def _stop(self):
+        if self.job is not None:
+            self._stopping = True
+            self.job.kill()
 
     def _show_result(self):
         self._load()
@@ -220,7 +227,13 @@ class SurveyDialog(QDialog):
         output = self._output_tail.strip()
         self.job.deleteLater()
         self.job = None
-        self._activity.finish(code == 0)
+        self._activity.finish(code == 0, cancelled=self._stopping)
+        if self._stopping:
+            self._stopping = False
+            if self.isVisible():
+                self._load()
+                self.status.setText("已停止撰寫；原本的綜覽沒有改動。")
+            return
         if not self.isVisible():
             return
         self._load()

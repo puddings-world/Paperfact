@@ -1057,8 +1057,7 @@ class QueuePage(QWidget):
 
     def _toggle_analyze(self) -> None:
         if self._job is not None:
-            self._then = None
-            self._job.kill()
+            self._stop_job()
             return
         self._analyze_list()
 
@@ -1093,9 +1092,12 @@ class QueuePage(QWidget):
             self.view.setFocus()
 
         self._activity = begin(self, "清單分析" if args[0] == "analyze" else "整理論文",
-                               key=f"queue:{list_id}", result=show_result)
+                               key=f"queue:{list_id}", result=show_result,
+                               cancel=self._stop_job,
+                               retry=lambda: self._start_ready(args, then))
         if not self._activity.accepted:
             return
+        self._stopping = False
         self._activity_pending = ""
         env = QProcessEnvironment.systemEnvironment()
         env.insert("PAPERFACT_PROGRESS", "1")
@@ -1128,10 +1130,17 @@ class QueuePage(QWidget):
         if not self._reload_soon.isActive():
             self._reload_soon.start()
 
+    def _stop_job(self) -> None:
+        if self._job is not None:
+            self._then = None
+            self._stopping = True
+            self._job.kill()
+
     def _job_done(self, code: int, _status) -> None:
         if self._job is not None:
             self._job_output()
-        self._activity.finish(code == 0)
+        self._activity.finish(code == 0, cancelled=getattr(self, "_stopping", False))
+        self._stopping = False
         self._job = None
         then, self._then = self._then, None
         self.win.reload()

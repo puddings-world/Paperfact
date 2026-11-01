@@ -112,6 +112,11 @@ The owner picked the top three of the second survey:
 2. **Job tray for background AI**: every analysis, slides and deep-dive job in one
    status-bar tray with per-item state, cancel, retry failed only, and a failure
    reason with one next step. It is where the resource budget above is enforced.
+   Step 1 done (`activity.JobPanel`, see [work-progress](work-progress.md)): the
+   panel, 停止 for deep analysis, list jobs and surveys, failure cause plus one next
+   step, and a notice poll that sleeps while idle. Still to do: one AI job at a time
+   with a visible queue, retry of only the failed papers in a batch, and an
+   "unfinished last time" notice after a restart.
 3. **Coloured status tags on keys 1–9**: up to nine tags (e.g. 精讀 / 略讀 / 待讀 /
    引用) toggled on a multi-selection in any list and shown as a colour chip.
 
