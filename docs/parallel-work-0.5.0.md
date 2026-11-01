@@ -223,3 +223,21 @@ Read `sync-content.md`, `research-generation.md`, `sync-recovery.md` and the lat
 artifact contract before extending research payloads. Candidate review is planned
 in `adr/0011-retained-work-review.md`; storage retention does not imply a finished
 review/reapply UI.
+
+## Keeping 0.5 current with master
+
+Fixes for the released line land on `master` first and are verified there (full
+check, and a release when one is cut). They then flow one way:
+
+```
+master  ->  feature/0.5-sync-foundation (integration)  ->  feature/0.5-* branches
+```
+
+- The integration owner merges `master` after each verified batch of 0.4.x fixes,
+  resolving conflicts once, and runs the full check before committing the merge.
+- Feature branches take those fixes from the integration branch, never by merging
+  `master` themselves, so the same conflict is not solved differently per branch.
+- A fix needed by both lines is written for `master`, not cherry-picked out of a
+  0.5 branch; 0.5-only work never goes to `master`.
+- As of 2026-11-01 the integration branch lacks 24 `master` commits (0.4.2–0.4.6
+  fixes, including `97c0676`, which disables PDF.js eval in exported pocket readers).
