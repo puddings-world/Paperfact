@@ -811,7 +811,7 @@ class QueuePage(QWidget):
         elif action in ("read", "unread"):
             self.win.set_read_many(ids, action == "read")
         elif action == "analyze":
-            self._start(["analyze", *ids, "--retry"])
+            self._start(["analyze", *ids, "--retry", "--jobs", self._parallel()])
         elif action == "remove" and self.win.remove_papers(ids):
             self._untick_all()
 
@@ -977,8 +977,8 @@ class QueuePage(QWidget):
         self.analyze_btn.setVisible(bool(self.win.active_list))
         self.survey_btn.setVisible(bool(self.win.active_list))
         left = len(papers) - full
-        if self._job is not None:
-            self.analyze_btn.setText("停止分析")
+        if self._job is not None or self._waiting():
+            self.analyze_btn.setText("取消排隊" if self._job is None else "停止分析")
             self.analyze_btn.setEnabled(True)
         else:
             self.analyze_btn.setText(f"分析未完成的 {left} 篇" if left else "全部分析完成")
@@ -1062,7 +1062,13 @@ class QueuePage(QWidget):
         self._analyze_list()
 
     def _analyze_list(self):
-        self._start(["analyze", "--list", self.win.active_list, "--jobs", "3"])
+        self._start(["analyze", "--list", self.win.active_list, "--jobs", self._parallel()])
+
+    def _parallel(self) -> str:
+        from paper_daily.desktop.analysis_settings import parallel
+
+        with connect() as conn:
+            return str(parallel(conn))
 
     def _start(self, args: list[str], then=None) -> None:
         from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
@@ -1074,13 +1080,10 @@ class QueuePage(QWidget):
 
     def _start_ready(self, args: list[str], then=None) -> None:
         """Run a paper-daily command beside the window, its last line on the bar."""
-        if self._job is not None:
-            self.analysis.setText("上一個工作還在跑,等它結束或先停止。")
+        if self._job is not None or self._waiting():
+            self.analysis.setText("上一個工作還在跑或排隊,等它結束或先停止。")
             return
-        if args and args[0] == "analyze" and self.win.analysis_running():
-            self.analysis.setText("已有深入分析工作，請先等候或停止該工作。")
-            return
-        from paper_daily.desktop.activity import begin
+        from paper_daily.desktop.activity import begin, when_ready
 
         list_id = self.win.active_list
 
@@ -1091,12 +1094,40 @@ class QueuePage(QWidget):
                 self.win.show_queue()
             self.view.setFocus()
 
+        # A step that failed is skipped on later runs unless asked again; papers already
+        # complete have nothing left, so this redoes only what failed.
+        again = args + ["--retry"] if args[0] == "analyze" and "--retry" not in args else args
         self._activity = begin(self, "清單分析" if args[0] == "analyze" else "整理論文",
                                key=f"queue:{list_id}", result=show_result,
                                cancel=self._stop_job,
-                               retry=lambda: self._start_ready(args, then))
+                               retry=lambda: self._start_ready(again, then),
+                               retry_failed=(lambda: self._start_ready(again, then))
+                               if args[0] == "analyze" else None,
+                               queued=args[0] == "analyze")
         if not self._activity.accepted:
             return
+        handle = self._activity
+        when_ready(handle, lambda: self._launch(handle, args, then))
+        if getattr(handle, "waiting", False):
+            if not getattr(self, "_watching_queue", False):
+                self._watching_queue = True
+                self.win.activity_hub.changed.connect(self._queue_changed)
+            self._say_analysis()
+
+    def _queue_changed(self) -> None:
+        # Leaving the line (here or from the job panel) must not leave 取消排隊 behind.
+        if self._job is None and not self._waiting() and self.analyze_btn.text() == "取消排隊":
+            self._say_analysis()
+
+    def _waiting(self) -> bool:
+        activity = getattr(self, "_activity", None)
+        return bool(getattr(activity, "waiting", False))
+
+    def _launch(self, handle, args: list[str], then=None) -> None:
+        if self._job is not None:
+            handle.finish(False, "上一個工作還在跑，請稍後重試。")
+            return
+        self._activity = handle
         self._stopping = False
         self._activity_pending = ""
         env = QProcessEnvironment.systemEnvironment()
@@ -1131,6 +1162,9 @@ class QueuePage(QWidget):
             self._reload_soon.start()
 
     def _stop_job(self) -> None:
+        if self._waiting():
+            self.win.activity_hub.cancel(self._activity.token)
+            return
         if self._job is not None:
             self._then = None
             self._stopping = True

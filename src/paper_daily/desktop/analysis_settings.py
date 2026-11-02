@@ -30,6 +30,18 @@ from paper_daily.store import connect, get_kv, set_kv
 
 # The window's own top-up while it is open (MainWindow.top_up_dives), opt-in.
 IDLE_KEY = "ui.background_analysis"
+# Papers a list or selection analysis works on at once. One by default: each paper runs
+# its own AI program, so more at once means more memory, CPU and quota in a burst.
+PARALLEL_KEY = "ui.analysis_parallel"
+MAX_PARALLEL = 3
+
+
+def parallel(conn) -> int:
+    try:
+        value = int(get_kv(conn, PARALLEL_KEY, 1))
+    except (TypeError, ValueError):
+        return 1
+    return min(max(value, 1), MAX_PARALLEL)
 
 
 class AnalysisSettings(QDialog):
@@ -63,6 +75,14 @@ class AnalysisSettings(QDialog):
         self.idle = QCheckBox("App 開著時，先分析目前清單接下來 3 篇")
         self.idle.setToolTip("打開或讀完一篇時補上；會用掉 AI 額度，所以預設關閉。")
         form.addRow("", self.idle)
+        self.parallel = QSpinBox()
+        self.parallel.setRange(1, MAX_PARALLEL)
+        self.parallel.setSuffix(" 篇")
+        self.parallel.setToolTip(
+            "按「分析未完成的論文」或對選取的論文按「分析」時，同時處理幾篇。"
+            "超過 1 篇會更快，但電腦負擔和 AI 額度用量也會同時加倍。"
+        )
+        form.addRow("清單分析一次處理", self.parallel)
         layout.addLayout(form)
 
         self.preview = QLabel()
@@ -89,10 +109,12 @@ class AnalysisSettings(QDialog):
             settings = analysis_schedule.load(conn)
             self._last_run = get_kv(conn, analysis_schedule.LAST_RUN)
             idle = get_kv(conn, IDLE_KEY) == "1"
+            at_once = parallel(conn)
         self.every.setCurrentIndex(self.every.findData(settings["every"]))
         self.lists.setValue(settings["lists"])
         self.notify.setChecked(settings["notify"])
         self.idle.setChecked(idle)
+        self.parallel.setValue(at_once)
         self.every.currentIndexChanged.connect(self._update)
         self.lists.valueChanged.connect(self._update)
         self._update()
@@ -116,6 +138,7 @@ class AnalysisSettings(QDialog):
         with connect() as conn:
             analysis_schedule.save(conn, self.settings())
             set_kv(conn, IDLE_KEY, "1" if self.idle.isChecked() else "0")
+            set_kv(conn, PARALLEL_KEY, self.parallel.value())
         super().accept()
 
 

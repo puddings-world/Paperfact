@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QVBoxLayout,
 )
+from shiboken6 import isValid
 
 from paper_daily import runtime, store, survey
 from paper_daily.desktop import ai_style, md
@@ -118,10 +119,12 @@ class SurveyDialog(QDialog):
                 (self.list_id,),
             ).fetchone()[0]
         self._stored = stored
-        running = self.job is not None
+        waiting = self._waiting()
+        running = self.job is not None or waiting
         self.run_btn.setEnabled(not running)
         self.run_btn.setText(
-            "撰寫中…" if running else ("重新撰寫綜覽" if stored else "撰寫清單綜覽")
+            "排隊中…" if waiting else "撰寫中…" if running
+            else ("重新撰寫綜覽" if stored else "撰寫清單綜覽")
         )
         self.edit_btn.setVisible(bool(stored) and not running)
         # A survey is only as good as the dives under it; say when it rests on
@@ -164,7 +167,7 @@ class SurveyDialog(QDialog):
         if not self._workspace_matches():
             self.status.setText(self._edit_text["workspace"])
             return
-        if self.job is not None:
+        if self.job is not None or self._waiting():
             return
         with connect() as conn:
             stored = survey.get(conn, self.list_id)
@@ -176,14 +179,40 @@ class SurveyDialog(QDialog):
             if answer != QMessageBox.StandardButton.Yes:
                 return
             args.append("--force")
-        from paper_daily.desktop.activity import begin, process_environment
+        from paper_daily.desktop.activity import begin, when_ready
 
         self._activity = begin(self, "撰寫清單綜覽", key=f"survey:{self.list_id}",
                                result=self._show_result, cancel=self._stop,
-                               retry=self._run_ready)
+                               retry=self._run_ready, queued=True)
         if not self._activity.accepted:
             self.status.setText("這份清單的綜覽正在撰寫，請查看進度布告。")
             return
+        handle = self._activity
+        when_ready(handle, lambda: isValid(self) and self._launch(handle, args))
+        if getattr(handle, "waiting", False):
+            self._load()
+            self.status.setText("已排入工作佇列；前面的分析結束後就會開始撰寫。")
+            if handle.hub is not None and not getattr(self, "_watching_queue", False):
+                self._watching_queue = True
+                handle.hub.changed.connect(self._queue_changed)
+
+    def _queue_changed(self) -> None:
+        # Leaving the line from the job panel must not leave 排隊中 on the button.
+        if (isValid(self) and self.job is None and not self._waiting()
+                and self.run_btn.text() == "排隊中…"):
+            self._load()
+
+    def _waiting(self) -> bool:
+        activity = getattr(self, "_activity", None)
+        return bool(getattr(activity, "waiting", False))
+
+    def _launch(self, handle, args) -> None:
+        if self.job is not None or not self._workspace_matches():
+            handle.finish(cancelled=True)
+            return
+        from paper_daily.desktop.activity import process_environment
+
+        self._activity = handle
         self._stopping = False
         self._activity_pending = self._output_tail = ""
         # Owned by the window behind the dialog, so closing the dialog does not kill
@@ -203,6 +232,10 @@ class SurveyDialog(QDialog):
         self.job.start(program, rest)
 
     def _stop(self):
+        if self._waiting():
+            self._activity.finish(cancelled=True)
+            self._load()
+            return
         if self.job is not None:
             self._stopping = True
             self.job.kill()

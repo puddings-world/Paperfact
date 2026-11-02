@@ -3652,12 +3652,10 @@ class MainWindow(QWidget):
         if workspace is not None and not workspace.disposed:
             return
 
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         from paper_daily import store
-        from paper_daily.desktop.activity import begin
+        from paper_daily.desktop.activity import begin, when_ready
 
         original_database = Path(store.DB_PATH).resolve()
-        self._job_paper = paper_id
 
         def show_result():
             if not current_for(self):
@@ -3670,7 +3668,8 @@ class MainWindow(QWidget):
                 self.reader_page.tabs.setCurrentWidget(self.reader_page.dive_view)
                 self.reader_page.dive_view.setFocus()
 
-        self._analysis_activity = begin(
+        # `_analysis_activity` stays the running job; a waiting one lives only in the hub.
+        handle = begin(
             self.reader_page,
             "深入分析" if paper_id else "背景分析",
             key=f"analysis:{paper_id}",
@@ -3678,9 +3677,17 @@ class MainWindow(QWidget):
             paper_id=paper_id,
             cancel=self.stop_analysis,
             retry=lambda: self._spawn_job(args, paper_id),
+            queued=True,
         )
-        if not self._analysis_activity.accepted:
+        when_ready(handle, lambda: self._launch_job(handle, args, paper_id, original_database))
+
+    def _launch_job(self, handle, args, paper_id, original_database) -> None:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if not current_for(self):
+            handle.finish(cancelled=True)
             return
+        self._analysis_activity = handle
+        self._job_paper = paper_id
         try:
             self._dive_job = subprocess.Popen(
                 runtime.cli_command(*args),
@@ -3710,18 +3717,27 @@ class MainWindow(QWidget):
 
         One analysis job at a time, so the same paper is never analysed twice at
         once; idle work on the papers ahead gives way, and since every step skips
-        what already exists, it loses nothing it had finished.
+        what already exists, it loses nothing it had finished. Behind a list
+        analysis it waits in the job queue.
         """
-        if self.queue_page._job is not None:
-            self.activity_board.setFocus()
-            return
         if self.analysis_running(paper_id):
             self.activity_board.setFocus()
             return
-        if self.analysis_running():
+        if self.analysis_running() and self._job_paper is None:
+            # Idle work on the papers ahead gives way; asked-for work keeps its turn.
             self._dive_job.terminate()
             self._analysis_activity.finish(cancelled=True)
         self._spawn_job(["analyze", paper_id, "--retry"], paper_id)
+
+    def analysis_waiting(self, paper_id: str) -> bool:
+        """Is this paper's 深入分析 waiting in the job queue?"""
+        return any(job.key == f"analysis:{paper_id}" and job.state == "queued"
+                   for job in self.activity_hub.jobs.values())
+
+    def cancel_waiting_analysis(self, paper_id: str) -> None:
+        for job in list(self.activity_hub.jobs.values()):
+            if job.key == f"analysis:{paper_id}" and job.state == "queued":
+                self.activity_hub.cancel(job.token)
 
     def stop_analysis(self) -> None:
         if self.analysis_running():
@@ -3747,7 +3763,8 @@ class MainWindow(QWidget):
         with connect() as conn:
             if ui_state.read(conn, "ui.background_analysis") != "1":
                 return
-        if self.analysis_running():
+        if self.analysis_running() or self.activity_hub.queue_busy():
+            # Unprompted work never joins the line behind work someone asked for.
             return
         from paper_daily import analyze
 

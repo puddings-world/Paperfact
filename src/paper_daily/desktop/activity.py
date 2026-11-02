@@ -65,16 +65,30 @@ def hub_for(owner):
 
 
 def begin(owner, label=None, *, task="ask", key=None, result=None, paper_id=None,
-          cancel=None, retry=None):
+          cancel=None, retry=None, retry_failed=None, queued=False):
     """Register slow work. `cancel` offers 停止 and must end the work, then finish it with
-    cancelled=True; `retry` offers 重試 after a failure and starts the work as a new job."""
+    cancelled=True; `retry` offers 重試 after a failure and starts the work as a new job;
+    `retry_failed` offers 重試未完成的 after a partial result and redoes only what failed.
+
+    `queued` marks long AI work (analysis, surveys) that runs one at a time: the caller
+    starts it through `handle.when_ready(launch)`, which runs `launch` now or when the
+    jobs ahead of it have ended. A launch that cannot start must finish the handle."""
     hub = hub_for(owner)
     if hub is None:
         return Handle()
     widget = widget_for(owner)
     label = label or OWNER_LABELS.get(type(widget).__name__, TASKS.get(task, "背景工作"))
     return hub.begin(widget, label, key or f"{id(owner)}:{task}", result, paper_id,
-                     cancel=cancel, retry=retry)
+                     cancel=cancel, retry=retry, retry_failed=retry_failed, queued=queued)
+
+
+def when_ready(handle, launch):
+    """`handle.when_ready(launch)` for any handle; one without a queue starts at once."""
+    ready = getattr(handle, "when_ready", None)
+    if ready is not None:
+        ready(launch)
+    elif getattr(handle, "accepted", True):
+        launch()
 
 
 @dataclass
@@ -98,8 +112,15 @@ class Job:
     # Set by the feature that owns the work; no callback means no button for it.
     cancel: object = None
     retry: object = None
+    retry_failed: object = None
     stopping: bool = False
     kind: str | None = None
+    # Long AI work that waits its turn; `launch` starts it when the turn comes.
+    queued: bool = False
+    launch: object = None
+
+
+ACTIVE = ("running", "queued")
 
 
 # What a failed AI call means for the person, and the one thing they can do about it.
@@ -125,6 +146,21 @@ class Handle:
     def finish(self, ok=True, message=None, *, cancelled=False, reason=None):
         if self.hub is not None and isValid(self.hub):
             self.hub.finish(self.token, ok, message, cancelled=cancelled, reason=reason)
+
+    def when_ready(self, launch):
+        """Start queued work now if its turn has come, otherwise when it does."""
+        if not self.accepted:
+            return
+        if self.hub is None or not isValid(self.hub):
+            launch()
+            return
+        self.hub.ready(self.token, launch)
+
+    @property
+    def waiting(self):
+        hub = self.hub if self.hub is not None and isValid(self.hub) else None
+        job = hub.jobs.get(self.token) if hub is not None else None
+        return job is not None and job.state == "queued"
 
 
 class ActivityHub(QObject):
@@ -164,23 +200,32 @@ class ActivityHub(QObject):
 
     @property
     def busy(self):
-        return any(j.state == "running" for j in self.jobs.values())
+        return any(j.state in ACTIVE for j in self.jobs.values())
 
-    def begin(self, owner, label, key, result=None, paper_id=None, *, cancel=None, retry=None):
-        old = next((j for j in self.jobs.values() if j.key == key and j.state == "running"), None)
+    def queue_busy(self):
+        """Is long AI work running or waiting? Unprompted work should not join the line."""
+        return any(j.queued and j.state in ACTIVE for j in self.jobs.values())
+
+    def begin(self, owner, label, key, result=None, paper_id=None, *, cancel=None, retry=None,
+              retry_failed=None, queued=False):
+        old = next((j for j in self.jobs.values() if j.key == key and j.state in ACTIVE), None)
         if old:
             self.selected = old.token
             self.changed.emit()
             return Handle(self, old.token, accepted=False)
         token = uuid4().hex
         job = Job(token, key, label, weakref.ref(owner) if owner is not None else lambda: None,
-                  self.context(), self.epoch, result, paper_id, cancel=cancel, retry=retry)
+                  self.context(), self.epoch, result, paper_id, cancel=cancel, retry=retry,
+                  retry_failed=retry_failed, queued=queued)
+        if queued and any(j.queued and j.state == "running" for j in self.jobs.values()):
+            job.state = "queued"
         self.jobs[token] = job
+        self._restage()
         # Bounded session history; never stored or uploaded.
         for previous in list(self.jobs.values()):
             if len(self.jobs) <= 30:
                 break
-            if previous.state != "running":
+            if previous.state not in ACTIVE:
                 self.jobs.pop(previous.token)
         self.selected = token
         self.selected_explicit = False
@@ -237,8 +282,9 @@ class ActivityHub(QObject):
             queued_token, event = self.events.get_nowait()
             self.update(queued_token, event)
         job = self.jobs.get(token)
-        if job is None or job.state != "running":
+        if job is None or job.state not in ACTIVE:
             return
+        waited = job.state == "queued"
         job.state = "cancelled" if cancelled else "error" if not ok else (
             "partial" if job.warning else "done")
         job.ended = time.monotonic()
@@ -250,7 +296,11 @@ class ActivityHub(QObject):
             message = f"未完成：{known[0] if known else ' '.join(reason.split())[:120]}"
         job.stage = message or {"done": "內容已更新", "partial": "部分完成，請查看尚缺項目",
                                 "error": "未完成，請查看原操作區的原因後重試",
-                                "cancelled": "工作已停止"}[job.state]
+                                "cancelled": "已取消排隊" if waited else "工作已停止"}[job.state]
+        if job.queued:
+            self._restage()
+            # After the caller's own cleanup, so the next job never meets a half-ended one.
+            QTimer.singleShot(0, self, self._advance)
         self.changed.emit()
         if (ok and not cancelled and self.selected == token and job.epoch == self.epoch
                 and job.context == self.context()):
@@ -271,8 +321,43 @@ class ActivityHub(QObject):
               and owner.isVisible()):
             owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
+    def ready(self, token, launch):
+        job = self.jobs.get(token)
+        if job is None:
+            return
+        if job.state == "running":
+            launch()
+        elif job.state == "queued":
+            job.launch = launch
+
+    def _advance(self):
+        if any(j.queued and j.state == "running" for j in self.jobs.values()):
+            return
+        job = next((j for j in self.jobs.values() if j.state == "queued"), None)
+        if job is None:
+            return
+        job.state = "running"
+        job.started = time.monotonic()
+        job.stage = "開始…"
+        self._restage()
+        self._poll.start()
+        self.changed.emit()
+        if job.launch is not None:
+            launch, job.launch = job.launch, None
+            launch()
+
+    def _restage(self):
+        waiting = [j for j in self.jobs.values() if j.state == "queued"]
+        for place, job in enumerate(waiting, 1):
+            job.stage = (f"排隊中（前面還有 {place} 個）" if place > 1
+                         else "排隊中，等目前的分析結束")
+
     def cancel(self, token):
         job = self.jobs.get(token)
+        if job is not None and job.state == "queued":
+            # Nothing has started, so there is nothing to stop: leave the line.
+            self.finish(token, cancelled=True)
+            return
         if job is None or job.state != "running" or job.cancel is None or job.stopping:
             return
         job.stopping = True
@@ -282,6 +367,8 @@ class ActivityHub(QObject):
 
     def next_step(self, job):
         """The one action a finished job offers besides 查看結果, as (label, callback)."""
+        if job.state == "partial" and job.retry_failed is not None:
+            return ("重試未完成的", job.retry_failed)
         if job.state != "error":
             return None
         label = FAILURES.get(job.kind, (None, "重試"))[1]
@@ -359,9 +446,9 @@ class ActivityBoard(QWidget):
 
     def job(self):
         selected = self.hub.jobs.get(self.hub.selected)
-        active = [j for j in self.hub.jobs.values() if j.state == "running"]
+        active = [j for j in self.hub.jobs.values() if j.state in ACTIVE]
         return selected if selected and (
-            selected.state == "running" or self.hub.selected_explicit) else (
+            selected.state in ACTIVE or self.hub.selected_explicit) else (
             active[-1] if active else selected)
 
     def refresh(self):
@@ -375,15 +462,17 @@ class ActivityBoard(QWidget):
         self.show()
         self.stack.setCurrentWidget(self.running)
         seconds = max(0, int((job.ended or time.monotonic()) - job.started))
-        active = job.state == "running"
-        pulse = "◐◓◑◒"[int(time.monotonic() * 2) % 4] if active else (
+        active = job.state in ACTIVE
+        waiting = job.state == "queued"
+        pulse = "…" if waiting else "◐◓◑◒"[int(time.monotonic() * 2) % 4] if active else (
             "✓" if job.state == "done" else "!")
         label = f"{pulse} {job.label} · {job.stage} · {seconds // 60}:{seconds % 60:02d}"
         self.text.setText(label)
         self.text.setToolTip(label + "\n" + "\n".join(job.history))
         self.setAccessibleName(label)
-        self.more.setText(f"工作 ({sum(j.state == 'running' for j in self.hub.jobs.values())})")
-        self.stop.setVisible(active and job.cancel is not None)
+        self.more.setText(f"工作 ({sum(j.state in ACTIVE for j in self.hub.jobs.values())})")
+        self.stop.setText("取消排隊" if waiting else "停止")
+        self.stop.setVisible(waiting or active and job.cancel is not None)
         self.stop.setEnabled(not job.stopping)
         step = self.hub.next_step(job)
         self.step.setVisible(step is not None)
@@ -397,7 +486,8 @@ class ActivityBoard(QWidget):
             self.bar.setRange(0, 100)
             percent = int(job.completed * 100 / job.total) if job.total else 0
             self.bar.setValue(100 if job.state == "done" else min(99, percent))
-        self.bar.setVisible(active or job.total is not None or job.state == "done")
+        self.bar.setVisible(not waiting and (
+            active or job.total is not None or job.state == "done"))
         self.bar.setToolTip("依實際完成項目計算；不是剩餘時間估計" if job.total else "等待工作回覆")
         color = self.pal["accent"] if active else self.pal["done"] if job.state == "done" else (
             self.pal["warn"])
@@ -437,7 +527,8 @@ class ActivityBoard(QWidget):
         self.hub.changed.emit()
 
 
-STATES = dict(running="進行中", done="完成", partial="部分完成", error="未完成", cancelled="已停止")
+STATES = dict(running="進行中", queued="排隊中", done="完成", partial="部分完成", error="未完成",
+              cancelled="已停止")
 
 
 def describe(job, now=None):
@@ -490,6 +581,8 @@ class JobPanel(QFrame):
         text.setStyleSheet(f"color:{color};font-size:12px;")
         line.addWidget(text, 1)
         buttons = []
+        if job.state == "queued":
+            buttons.append(("取消排隊", lambda: self.hub.cancel(job.token), True))
         if job.state == "running" and job.cancel is not None:
             buttons.append(("停止", lambda: self.hub.cancel(job.token), not job.stopping))
         if step := self.hub.next_step(job):

@@ -114,9 +114,16 @@ The owner picked the top three of the second survey:
    reason with one next step. It is where the resource budget above is enforced.
    Step 1 done (`activity.JobPanel`, see [work-progress](work-progress.md)): the
    panel, 停止 for deep analysis, list jobs and surveys, failure cause plus one next
-   step, and a notice poll that sleeps while idle. Still to do: one AI job at a time
-   with a visible queue, retry of only the failed papers in a batch, and an
-   "unfinished last time" notice after a restart.
+   step, and a notice poll that sleeps while idle. Step 3 done: a partial list
+   analysis offers 重試未完成的, which reruns with `--retry` so only failed steps
+   are tried (finished papers have nothing left). List and selection analysis now
+   work on one paper at a time; 分析排程 can raise it to 3 (`ui.analysis_parallel`).
+   Step 2 done: long AI work (deep and background analysis, list analysis, surveys)
+   runs one at a time; the rest waits as 排隊中 with its place, starts when the
+   previous one ends and can leave the line without starting anything. A question or
+   translation asked while reading does not wait (one per window), so at most one
+   long job plus one question run at once. Idle analysis skips rather than queues.
+   Still to do: an "unfinished last time" notice after a restart.
 3. **Coloured status tags on keys 1–9**: up to nine tags (e.g. 精讀 / 略讀 / 待讀 /
    引用) toggled on a multi-selection in any list and shown as a colour chip.
 

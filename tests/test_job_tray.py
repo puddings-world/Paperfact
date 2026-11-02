@@ -175,3 +175,208 @@ def test_stopping_a_survey_keeps_the_previous_one(workspace, monkeypatch):
         dialog.close()
         window.close()
         window.deleteLater()
+
+
+def test_a_partial_result_offers_to_redo_only_what_failed(surface):
+    window, hub, board, _ = surface
+    redone = []
+    handle = begin(window, "Analyse list", key="list", retry_failed=lambda: redone.append(1))
+    handle.update(dict(stage="one paper failed", completed=1, total=2, outcome="partial"))
+    hub.tick()
+    handle.finish()
+    assert hub.jobs[handle.token].state == "partial"
+    assert board.step.text() == "重試未完成的" and board.result.isVisible()
+    board.step.click()
+    assert redone == [1]
+
+    whole = begin(window, "Ask", key="whole")
+    whole.update(dict(stage="half", outcome="partial"))
+    hub.tick()
+    whole.finish()
+    # Work that cannot redo only its failed part offers nothing extra.
+    assert not board.step.isVisible()
+
+
+def test_retrying_a_list_analysis_asks_again_for_the_failed_steps(workspace, monkeypatch):
+    import json
+
+    from paper_daily import runtime, store, work_progress
+    from paper_daily.desktop.main import MainWindow
+
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('first','first','now')")
+        conn.commit()
+    event = work_progress.PREFIX + json.dumps(dict(stage="x", completed=1, total=2,
+                                                    outcome="partial"))
+    runs = []
+
+    def command(*args):
+        runs.append(list(args))
+        return [sys.executable, "-c", f"print({event!r}, flush=True)"]
+
+    monkeypatch.setattr(runtime, "cli_command", command)
+    window = MainWindow()
+    window.show()
+    try:
+        window._open_list("first")
+        page = window.queue_page
+        page._start_ready(["analyze", "--list", "first", "--jobs", "1"])
+        token = page._activity.token
+        wait_for(lambda: page._job is None)
+        hub = window.activity_hub
+        hub.tick()
+        assert hub.jobs[token].state == "partial"
+        assert window.activity_board.step.text() == "重試未完成的"
+        window.activity_board.step.click()
+        assert runs[-1] == ["analyze", "--list", "first", "--jobs", "1", "--retry"]
+        wait_for(lambda: page._job is None)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_list_analysis_works_on_one_paper_at_a_time_unless_the_person_raises_it(
+    workspace, monkeypatch
+):
+    from paper_daily import store
+    from paper_daily.desktop.analysis_settings import PARALLEL_KEY, AnalysisSettings
+    from paper_daily.desktop.main import MainWindow
+
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('first','first','now')")
+        conn.commit()
+    window = MainWindow()
+    started = []
+    monkeypatch.setattr(type(window.queue_page), "_start",
+                        lambda _self, args, then=None: started.append(args))
+    try:
+        window._open_list("first")
+        window.queue_page._analyze_list()
+        assert started[-1][-2:] == ["--jobs", "1"]
+
+        dialog = AnalysisSettings(window, window.pal)
+        assert dialog.parallel.value() == 1 and dialog.parallel.maximum() == 3
+        dialog.parallel.setValue(3)
+        dialog.accept()
+        window.queue_page._analyze_list()
+        assert started[-1][-2:] == ["--jobs", "3"]
+
+        # A hand-edited or stale value can never ask for more than the cap.
+        with store.connect() as conn:
+            store.set_kv(conn, PARALLEL_KEY, 12)
+            conn.commit()
+        window.queue_page._analyze_list()
+        assert started[-1][-2:] == ["--jobs", "3"]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_long_ai_work_waits_its_turn_and_short_work_does_not(surface):
+    window, hub, board, _ = surface
+    started = []
+    first = begin(window, "List analysis", key="first", queued=True)
+    first.when_ready(lambda: started.append("first"))
+    second = begin(window, "Deep analysis", key="second", queued=True)
+    second.when_ready(lambda: started.append("second"))
+    third = begin(window, "Survey", key="third", queued=True)
+    third.when_ready(lambda: started.append("third"))
+    quick = begin(window, "Ask", key="quick")
+    assert started == ["first"]
+    assert second.waiting and third.waiting and hub.jobs[quick.token].state == "running"
+    assert "排隊中" in hub.jobs[second.token].stage
+    assert "前面還有 2 個" in hub.jobs[third.token].stage
+
+    # Leaving the line starts nothing; the one behind moves up.
+    hub.selected = second.token
+    hub.changed.emit()
+    assert board.stop.isVisible() and board.stop.text() == "取消排隊"
+    board.stop.click()
+    assert hub.jobs[second.token].state == "cancelled"
+    assert hub.jobs[second.token].stage == "已取消排隊"
+    assert "等目前的分析結束" in hub.jobs[third.token].stage
+
+    first.finish()
+    wait_for(lambda: started == ["first", "third"])
+    assert hub.jobs[third.token].state == "running" and not third.waiting
+    third.finish()
+    QTest.qWait(20)
+    assert started == ["first", "third"]
+
+
+def test_the_same_waiting_work_is_not_queued_twice(surface):
+    window, hub, _board, _ = surface
+    begin(window, "List analysis", key="busy", queued=True).when_ready(lambda: None)
+    waiting = begin(window, "Deep analysis", key="paper", queued=True)
+    again = begin(window, "Deep analysis", key="paper", queued=True)
+    assert waiting.waiting and not again.accepted and again.token == waiting.token
+
+
+def test_a_deep_analysis_asked_for_during_a_list_analysis_runs_after_it(workspace, monkeypatch):
+    from paper_daily import runtime, store
+    from paper_daily.desktop.main import MainWindow
+
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('first','first','now')")
+        conn.commit()
+    runs = []
+
+    def command(*args):
+        runs.append(args[0] if args[0] != "analyze" or "--list" in args else args[1])
+        code = "import time; time.sleep(30)" if "--list" in args else "print('done')"
+        return [sys.executable, "-c", code]
+
+    monkeypatch.setattr(runtime, "cli_command", command)
+    window = MainWindow()
+    window.show()
+    try:
+        window._open_list("first")
+        page = window.queue_page
+        page._start_ready(["analyze", "--list", "first", "--jobs", "1"])
+        listed = page._activity.token
+        window._spawn_job(["analyze", "paper-1", "--retry"], "paper-1")
+        hub = window.activity_hub
+        assert runs == ["analyze"] and window.analysis_waiting("paper-1")
+        assert not window.analysis_running()
+
+        hub.cancel(listed)
+        wait_for(lambda: page._job is None)
+        wait_for(lambda: runs == ["analyze", "paper-1"])
+        deep = next(j for j in hub.jobs.values() if j.key == "analysis:paper-1")
+        wait_for(lambda: deep.state != "running" and (hub.tick() or True))
+        assert hub.jobs[listed].state == "cancelled" and deep.state == "done"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_a_survey_behind_a_list_analysis_says_it_is_waiting(workspace, monkeypatch):
+    from paper_daily import runtime, store
+    from paper_daily.desktop.main import MainWindow
+    from paper_daily.desktop.survey_dialog import SurveyDialog
+
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('x','Research','now')")
+        conn.commit()
+    monkeypatch.setattr(
+        runtime, "cli_command", lambda *_: [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    window = MainWindow()
+    window.show()
+    dialog = SurveyDialog("x", "Research", window.pal, window)
+    try:
+        window._open_list("x")
+        window.queue_page._start_ready(["analyze", "--list", "x", "--jobs", "1"])
+        dialog.show()
+        dialog._run_ready()
+        assert dialog.job is None and dialog.run_btn.text() == "排隊中…"
+        assert "排入工作佇列" in dialog.status.text()
+        assert window.queue_page.analyze_btn.text() == "停止分析"
+        window.activity_hub.cancel(dialog._activity.token)
+        assert dialog.run_btn.text() != "排隊中…" and dialog.job is None
+    finally:
+        window.activity_hub.cancel(window.queue_page._activity.token)
+        wait_for(lambda: window.queue_page._job is None)
+        dialog.close()
+        window.close()
+        window.deleteLater()

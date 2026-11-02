@@ -113,6 +113,8 @@ class AnalysisBar(QWidget):
             return
         if self.win.analysis_running(self.paper_id):
             self.win.stop_analysis()
+        elif self.win.analysis_waiting(self.paper_id):
+            self.win.cancel_waiting_analysis(self.paper_id)
         else:
             self.win.analyse_now(self.paper_id)
         self.refresh()

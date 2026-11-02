@@ -79,8 +79,12 @@ PDF is missing; then its authors.
 | 缺 PDF | not downloaded yet; **缺 PDF(找不到,右鍵補)** once every source was tried |
 
 Above the list, **分析:完整 · 部分 · 未分析 · 缺 PDF** counts them, and **分析未完成的 N
-篇** runs `analyze --list` for the list on screen, three papers at a time, with its
-progress on the same line; press it again to stop. Rows update as papers finish, and
+篇** runs `analyze --list` for the list on screen, one paper at a time unless
+分析排程 says otherwise (清單分析一次處理, 1–3), with its
+progress on the same line; press it again to stop. Long AI work runs one job at a
+time: pressed while a 深入分析 or survey is running, it waits as 排隊中 (the button
+reads 取消排隊) and starts by itself when that ends. If some papers could not be
+finished, **重試未完成的** in the activity notice tries only their failed steps again. Rows update as papers finish, and
 whatever was finished stays. Right-click a row for **分析這篇**, or for **補 PDF** by
 pasting a URL or choosing a file you downloaded through the library; the paper is
 analysed as soon as the PDF is in.
@@ -259,7 +263,9 @@ one you jumped to. 簡報 is separate and made only on request.
 or only when you press the button; how many papers from the main queue and from the
 reading lists (0–20 each, 4 and 3 by default); whether the window tells you when
 they are done; and whether the open app also analyses the next three in the
-background (off by default, since it spends model calls while you read). The dialog
+background (off by default, since it spends model calls while you read); and how
+many papers a list or selection analysis works on at once (1 by default, up to 3:
+each runs its own AI program, so more is faster but heavier). The dialog
 says in one line what will happen next ("今晚 00:00 會分析主佇列接下來 4 篇、清單裡
 3 篇"). When a run finishes, a violet strip above the page names the papers
 ("已深入分析 3 篇，可以讀了：《…》"), once per run, with **開始讀** to open the
