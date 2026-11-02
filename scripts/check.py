@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -23,6 +24,17 @@ SECRET_PATTERNS = {
     "Slack token": r"\bxox[abprs]-[A-Za-z0-9-]{10,}",
     "AWS access key": r"\bAKIA[0-9A-Z]{16}\b",
 }
+
+
+def remove_tree(path: Path) -> None:
+    """Delete a test temp folder, including read-only files such as git objects."""
+
+    def writable_then_retry(function, name, _error):
+        os.chmod(name, stat.S_IWRITE)
+        function(name)
+
+    if path.exists():
+        shutil.rmtree(path, onerror=writable_then_retry)
 
 
 def committable_files(root):
@@ -186,6 +198,10 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
                 }).returncode
             stage.update(seconds=round(clock() - stage_started, 3), exit_code=code,
                          status="failed" if code else "passed")
+            if command is not None and "--basetemp" in command and not code:
+                # A passing run's test files are never read again; a full run leaves
+                # gigabytes. A failing run keeps them for diagnosis.
+                remove_tree(Path(command[command.index("--basetemp") + 1]))
             print(f"{name}: {stage['status']} in {stage['seconds']:.1f}s", flush=True)
             if code:
                 break

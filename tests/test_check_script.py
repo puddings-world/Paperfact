@@ -45,6 +45,29 @@ def test_a_fresh_clone_gets_a_folder_for_the_test_temp_files(tmp_path, monkeypat
     assert basetemps and basetemps[0].parent.is_dir()
 
 
+@pytest.mark.parametrize("passed", [True, False])
+def test_test_temp_files_are_removed_after_a_pass_and_kept_after_a_failure(
+    tmp_path, monkeypatch, passed
+):
+    monkeypatch.setattr(CHECK["shutil"], "which", lambda name: "node")
+    basetemps = []
+
+    def execute(command, **kwargs):
+        if "--basetemp" in command:
+            base = Path(command[command.index("--basetemp") + 1])
+            (base / "test_x0").mkdir(parents=True)
+            (base / "test_x0" / "paper.pdf").write_bytes(b"%PDF")
+            # Git writes its objects read-only; a checkout made by a test must still go.
+            (base / "test_x0" / "object").write_bytes(b"blob")
+            (base / "test_x0" / "object").chmod(0o444)
+            basetemps.append(base)
+            return SimpleNamespace(returncode=0 if passed else 1)
+        return SimpleNamespace(returncode=0)
+
+    assert CHECK["run_checks"](tmp_path, execute, files=[]) == (0 if passed else 1)
+    assert basetemps and basetemps[0].exists() != passed
+
+
 # Built from pieces so that this file does not trip the scan it tests.
 FAKE_SECRETS = {
     "Anthropic key": "sk-" + "ant-api03-" + "x" * 40,
