@@ -121,6 +121,9 @@ class Job:
 
 
 ACTIVE = ("running", "queued")
+# Long AI work still running or waiting, kept so that a crash, a forced quit or a power
+# cut can be reported on the next start. Closing normally waits for the work to end.
+UNFINISHED_KEY = "ui.unfinished_jobs"
 
 
 # What a failed AI call means for the person, and the one thing they can do about it.
@@ -179,6 +182,7 @@ class ActivityHub(QObject):
         self._poll.setInterval(250)
         self._poll.timeout.connect(self.tick)
         self._poll.start()
+        self._remembered = []
         from paper_daily.desktop import window_events
 
         window_events.watch(self)
@@ -221,6 +225,7 @@ class ActivityHub(QObject):
             job.state = "queued"
         self.jobs[token] = job
         self._restage()
+        self._remember()
         # Bounded session history; never stored or uploaded.
         for previous in list(self.jobs.values()):
             if len(self.jobs) <= 30:
@@ -299,6 +304,7 @@ class ActivityHub(QObject):
                                 "cancelled": "已取消排隊" if waited else "工作已停止"}[job.state]
         if job.queued:
             self._restage()
+            self._remember()
             # After the caller's own cleanup, so the next job never meets a half-ended one.
             QTimer.singleShot(0, self, self._advance)
         self.changed.emit()
@@ -320,6 +326,47 @@ class ActivityHub(QObject):
         elif (owner is not None and isValid(owner) and job.context == self.context()
               and owner.isVisible()):
             owner.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _remember(self):
+        from paper_daily.desktop import ui_state
+
+        unfinished = [dict(label=j.label, key=j.key, paper_id=j.paper_id)
+                      for j in self.jobs.values() if j.queued and j.state in ACTIVE]
+        if unfinished != self._remembered:
+            self._remembered = unfinished
+            # Queued for the background writer: the window never waits on the database.
+            ui_state.save(UNFINISHED_KEY, unfinished)
+
+    def report_unfinished(self, conn):
+        """Say once which long AI work the last session left unfinished. Nothing restarts
+        by itself: finished steps are kept, so asking again carries on from there."""
+        from paper_daily.desktop import ui_state
+
+        left = ui_state.read(conn, UNFINISHED_KEY) or []
+        if not isinstance(left, list) or not left:
+            return None
+        names = []
+        for item in left:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("label") or "AI 工作")
+            where = _unfinished_place(conn, item)
+            names.append(f"{name}「{where}」" if where else name)
+        self._remembered = []
+        ui_state.save(UNFINISHED_KEY, [])
+        if not names:
+            return None
+        token = uuid4().hex
+        job = Job(token, UNFINISHED_KEY, "上次未完成", lambda: None, self.context(), self.epoch,
+                  state="interrupted")
+        job.ended = job.started
+        job.stage = ("、".join(names[:3]) + (f" 等 {len(names)} 項" if len(names) > 3 else "")
+                     + " 在上次關閉時沒做完。已完成的部分都保留，需要時再按一次就會接著做。")
+        self.jobs[token] = job
+        self.selected = token
+        self.selected_explicit = False
+        self.changed.emit()
+        return job
 
     def ready(self, token, launch):
         job = self.jobs.get(token)
@@ -478,7 +525,7 @@ class ActivityBoard(QWidget):
         self.step.setVisible(step is not None)
         if step:
             self.step.setText(step[0])
-        self.result.setVisible(not active and job.state != "error")
+        self.result.setVisible(not active and job.state not in ("error", "interrupted"))
         self.dismiss.setVisible(not active)
         if active and job.total is None:
             self.bar.setRange(0, 0)
@@ -528,7 +575,19 @@ class ActivityBoard(QWidget):
 
 
 STATES = dict(running="進行中", queued="排隊中", done="完成", partial="部分完成", error="未完成",
-              cancelled="已停止")
+              cancelled="已停止", interrupted="上次中斷")
+
+
+def _unfinished_place(conn, item):
+    paper_id, key = item.get("paper_id"), str(item.get("key") or "")
+    if paper_id:
+        row = conn.execute("SELECT title FROM papers WHERE id = ?", (str(paper_id),)).fetchone()
+        return row[0][:60] if row and row[0] else None
+    list_id = key.partition(":")[2] if key.startswith(("queue:", "survey:")) else None
+    if list_id:
+        row = conn.execute("SELECT name FROM lists WHERE id = ?", (list_id,)).fetchone()
+        return row[0][:60] if row and row[0] else None
+    return None
 
 
 def describe(job, now=None):

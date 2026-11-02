@@ -380,3 +380,54 @@ def test_a_survey_behind_a_list_analysis_says_it_is_waiting(workspace, monkeypat
         dialog.close()
         window.close()
         window.deleteLater()
+
+
+def _restart(hub_window):
+    from PySide6.QtWidgets import QWidget
+
+    from paper_daily import store
+    from paper_daily.desktop import ui_state
+    from paper_daily.desktop.activity import ActivityHub
+
+    assert ui_state.flush()
+    window = QWidget()
+    window.pal = hub_window.pal
+    hub = ActivityHub(window)
+    with store.connect() as conn:
+        return window, hub, hub.report_unfinished(conn)
+
+
+def test_work_cut_off_by_a_crash_is_reported_once_on_the_next_start(surface):
+    from paper_daily import store
+
+    window, hub, _board, _ = surface
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('x','Research','now')")
+        conn.execute("INSERT INTO papers(id,venue,year,title,title_key,source) "
+                     "VALUES ('p1','ICLR',2024,'Sparse Attention','sparse attention','test')")
+        conn.commit()
+    started = []
+    begin(window, "清單分析", key="queue:x", queued=True).when_ready(lambda: started.append(1))
+    begin(window, "深入分析", key="analysis:p1", paper_id="p1",
+          queued=True).when_ready(lambda: started.append(2))
+    begin(window, "Ask", key="ask")  # Short work is not worth reporting.
+
+    # The process dies here: nothing finishes, the next start reads what was left.
+    _later, after, notice = _restart(window)
+    assert notice is not None and notice.state == "interrupted"
+    assert "清單分析「Research」" in notice.stage and "深入分析「Sparse Attention」" in notice.stage
+    assert "Ask" not in notice.stage
+    assert after.selected == notice.token and not after.busy  # Nothing restarts by itself.
+
+    # Seen once: a second start has nothing to say.
+    _again, _hub, second = _restart(window)
+    assert second is None
+
+
+def test_work_that_ends_normally_leaves_nothing_to_report(surface):
+    window, _hub, _board, _ = surface
+    handle = begin(window, "清單分析", key="queue:x", queued=True)
+    handle.when_ready(lambda: None)
+    handle.finish(cancelled=True)
+    _later, _after, notice = _restart(window)
+    assert notice is None

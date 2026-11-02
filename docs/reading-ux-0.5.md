@@ -123,7 +123,10 @@ The owner picked the top three of the second survey:
    previous one ends and can leave the line without starting anything. A question or
    translation asked while reading does not wait (one per window), so at most one
    long job plus one question run at once. Idle analysis skips rather than queues.
-   Still to do: an "unfinished last time" notice after a restart.
+   Step 4 done: long AI work still running or waiting is kept in
+   `ui.unfinished_jobs`; if a crash or power cut ends it (a normal close waits for
+   it), the next start shows 上次未完成 once, naming the paper or list. Nothing
+   restarts by itself.
 3. **Coloured status tags on keys 1–9**: up to nine tags (e.g. 精讀 / 略讀 / 待讀 /
    引用) toggled on a multi-selection in any list and shown as a colour chip.
 

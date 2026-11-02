@@ -2639,6 +2639,8 @@ class MainWindow(QWidget):
         self.activity_board = ActivityBoard(
             self.activity_hub, self.ai_summary, self.pal, height=AI_ROW_HEIGHT)
         outer.addWidget(self.activity_board)
+        with connect() as conn:
+            self.activity_hub.report_unfinished(conn)
         self.account_status = AccountStatus(self, self._refresh_ai_summary)
         from paper_daily.desktop.analysis_settings import ReadyBanner
 

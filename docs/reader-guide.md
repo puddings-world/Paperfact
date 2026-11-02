@@ -83,7 +83,10 @@ Above the list, **分析:完整 · 部分 · 未分析 · 缺 PDF** counts them,
 分析排程 says otherwise (清單分析一次處理, 1–3), with its
 progress on the same line; press it again to stop. Long AI work runs one job at a
 time: pressed while a 深入分析 or survey is running, it waits as 排隊中 (the button
-reads 取消排隊) and starts by itself when that ends. If some papers could not be
+reads 取消排隊) and starts by itself when that ends. The window does not close
+while such work runs; if a crash or power cut ends it anyway, the next start says
+which work was left unfinished (上次未完成). Nothing restarts by itself: press it
+again and it carries on from the steps already finished. If some papers could not be
 finished, **重試未完成的** in the activity notice tries only their failed steps again. Rows update as papers finish, and
 whatever was finished stays. Right-click a row for **分析這篇**, or for **補 PDF** by
 pasting a URL or choosing a file you downloaded through the library; the paper is
