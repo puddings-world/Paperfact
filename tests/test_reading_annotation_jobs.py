@@ -187,3 +187,17 @@ def test_new_selection_between_phases_is_not_linked_as_the_old_result(explained,
             conn.execute("SELECT body_json FROM paper_highlight_analysis").fetchone()[0]
         )
     assert body["items"][0]["text"] != result["analysis"]["items"][0]["text"]
+
+
+def test_the_materials_panel_shows_the_saved_analysis_for_the_pdf_in_use(ready, monkeypatch):
+    from paper_daily import materials
+    from paper_daily.document_reader import from_workspace
+
+    assert run(ready)[1] == "ok"
+    document = from_workspace(ready[0], legacy_root=ready[2].path.parent).resolve("paper")
+    saved = materials._saved_analysis("paper", document)
+    assert saved is not None and saved["items"]
+    assert all(item["document_hash"] == document.sha256 for item in saved["items"])
+    # Made from another version of the PDF: not shown as if it were this one's.
+    monkeypatch.setattr(materials, "document_current", lambda _document: False)
+    assert materials._saved_analysis("paper", document) is None

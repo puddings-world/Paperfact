@@ -269,6 +269,33 @@ def headings_from_close_reading(body: str | None) -> list[dict]:
     ]
 
 
+def _saved_analysis(paper_id: str, document) -> dict | None:
+    """The saved highlight analysis, only when it was made from the PDF in use."""
+    from paper_daily import annotation_content
+
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM paper_highlight_analysis WHERE paper_id=?", (paper_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    row = dict(row)
+    if document is not None:
+        current = document.sha256 if document_current(document) else None
+    else:
+        path = PDF_DIR / (_safe_name(paper_id) + ".pdf")
+        current = pdf_highlights.document_hash(path) if path.exists() else None
+    if current is None or row["document_hash"] != current:
+        return None
+    try:
+        annotation_content.validate_row("highlight_analysis", row)
+        body = annotation_content.decode("highlight_analysis", row["body_json"])
+    except ValueError:
+        return None
+    items = [dict(item, document_hash=row["document_hash"]) for item in body.get("items", [])]
+    return {**body, "items": items, "paper_id": paper_id, "source_hash": row["source_hash"]}
+
+
 def collect(paper_id: str, *, document=None) -> Materials:
     document = capture_document(paper_id, document=document, legacy_root=PDF_DIR)
     with connect() as conn:
@@ -287,7 +314,10 @@ def collect(paper_id: str, *, document=None) -> Materials:
     if len(headings) < 2:
         headings = headings_from_close_reading(close)
     _locate_materials(paper_id, exhibits + headings, document=document)
-    highlights = (
+    # 分析／補上標註 saves its analysis in the research database; the file cache below
+    # only holds what the older 挑選原文重點 wrote. Without this the panel said 尚未分析
+    # right after an analysis had finished.
+    highlights = _saved_analysis(paper_id, document) or (
         paper_highlights.cached(
             paper_id,
             pages=[
