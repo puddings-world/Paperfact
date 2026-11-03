@@ -613,6 +613,10 @@ def note_headline(body: str, kind: str) -> tuple[str, str, str]:
     if kind == "ask":
         question, _, passage = quote.partition(PASSAGE_MARK)
         headline = " ".join(question.split())
+    elif kind == "key":
+        # The claim is what a key note is about; the question it came from stays quoted.
+        _question, _, passage = quote.partition(PASSAGE_MARK)
+        headline = ""
     else:
         passage, headline = quote, ""
     if not headline:
@@ -709,6 +713,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         # A separate runner: translating a line should not have to wait behind a
         # question that is still being answered.
         self.translate_runner = AskRunner(self)
+        # Condensing an exchange into a key note waits for nobody's question either.
+        self.key_runner = AskRunner(self)
+        self.key_runner.activity_label = "整理關鍵筆記"
         # Its own runner: Google failing hands over to it before that thread has quit.
         self.refine_runner = AskRunner(self)
         self.fetcher = FetchRunner(self)
@@ -1721,8 +1728,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         note_id = int(row["id"])
         kind = row["kind"] or "note"
         asked = kind == "ask"
-        accent = pal["accent"] if asked else pal["award"]
-        tint = pal["accentSoft"] if asked else pal["awardSoft"]
+        key = kind == "key"
+        accent = pal["done"] if key else pal["accent"] if asked else pal["award"]
+        tint = pal["doneSoft"] if key else pal["accentSoft"] if asked else pal["awardSoft"]
         headline, passage, content = note_headline(row["body"] or "", kind)
         opened = note_id in self._open_notes
 
@@ -1730,7 +1738,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         where = f" · 第 {row['page']} 頁" if row["page"] else ""
         chip = (
             f'<span style="background:{tint};color:{accent};font-size:10px;">'
-            f'&nbsp;{"問 AI" if asked else "手寫"}&nbsp;</span>'
+            f'&nbsp;{"★ 關鍵" if key else "問 AI" if asked else "手寫"}&nbsp;</span>'
         )
         meta = (
             f'<div style="color:{pal["faint"]};font-size:10px;margin-top:3px;">'
@@ -1869,6 +1877,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self._forget_exchange(ident)
         elif what == "keep":
             self._keep_answer(ident)
+        elif what == "key":
+            self._key_note(ident)
 
     def _jump_to(self, note_id: int) -> None:
         """Put the reader back on the passage this note was written against."""
@@ -1907,6 +1917,56 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             QTimer.singleShot(150, self, lambda: self.reveal(anchor, page, tries - 1))
         elif page and selection is not None:
             selection.scroll_to_page(page - 1)
+
+    def _key_note(self, chat_id: int) -> None:
+        """Condense one exchange into a card -- a claim, its support with pages, the
+        reader's own line -- and open it in the editor; nothing is saved until 儲存."""
+        from paper_daily import key_notes
+
+        assert self.paper
+        if self.key_runner.busy:
+            self.ask_status.setText("正在整理另一則關鍵筆記，請稍候。")
+            return
+        rows = self.win.data.chat(self.paper.id)
+        answer = next((r for r in rows if int(r["id"]) == chat_id), None)
+        question = next((q for q, reply in _exchanges(rows)
+                         if reply is not None and int(reply["id"]) == chat_id), None)
+        if answer is None or question is None:
+            return
+        paper_id, title = self.paper.id, self.paper.title
+        connections = llm.capture_connections()
+        with llm.connection_scope(connections):
+            cfg = llm.settings(task="ask")
+        self.ask_status.setText("正在把這組問答整理成關鍵筆記…")
+
+        def drafted(card):
+            if self.paper is None or self.paper.id != paper_id:
+                self.ask_status.setText("已換到別篇論文；關鍵筆記沒有存，回到原論文再按一次。")
+                return
+            self.ask_status.setText("")
+
+            def save(body):
+                if self.paper is None or self.paper.id != paper_id:
+                    raise ValueError("The active paper changed")
+                self.win.data.add_note(paper_id, body, key_notes.KIND,
+                                       question["page"], question["anchor"])
+
+            dialog = NoteEditor(
+                key_notes.note_body(question["body"], card), self.win.pal,
+                "AI 整理的關鍵筆記草稿：改成你認同的說法，寫下「我的理解」，按儲存才會存。"
+                "開頭「> 」那行是原本的問題，保留它，這則筆記就能連回問的地方。",
+                self, save=save,
+            )
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._load_notes()
+                self.ask_status.setText("關鍵筆記已存 — 在「筆記」分頁，標著 ★。")
+
+        self.key_runner.start(
+            "", drafted, lambda why: self.ask_status.setText(f"關鍵筆記沒有整理完成：{why}"),
+            call=lambda _prompt: key_notes.condense(title, question["body"], answer["body"],
+                                                    connections=connections, cfg=cfg),
+            task="ask",
+        )
 
     def _keep_answer(self, chat_id: int) -> None:
         """Keep one answer as a note, with the question and where it was asked.
@@ -1982,6 +2042,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             links = (
                 f'<a href="keep:{int(answer["id"])}" style="color:{pal["accent"]};">'
                 "＋ 存成筆記</a>&nbsp;&nbsp; "
+                f'<a href="key:{int(answer["id"])}" style="color:{pal["accent"]};">'
+                "★ 關鍵筆記</a>&nbsp;&nbsp; "
             )
         if question is not None:
             links += (

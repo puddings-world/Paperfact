@@ -384,6 +384,14 @@ window — navigation, ticking, pinning — stays blue or grey.
   也可以問. **接續上一題** brings the last exchange back for one follow-up and turns
   itself off after sending. With 精要 off, answers are full and see the last six turns,
   as before.
+
+  **★ 關鍵筆記** under an answer asks the same AI to condense that exchange into a card:
+  a one-line claim, up to three supporting points with their pages, and a blank
+  **我的理解** line. The card opens in the note editor; nothing is saved until 儲存.
+  The question stays as the quote line, so the note leads back to where it was asked.
+  In 筆記 a key note is marked ★ 關鍵 and headed by its claim. Slides take key notes
+  first as the deck's main points, label hand-written notes 讀者筆記 and answers kept
+  with ＋ 存成筆記 as 問答摘錄 (AI text, not the reader's observation).
 - **脈絡** reads as summary first, then detail, and places the paper in its field
   rather than in this corpus. The corpus is three ML conferences plus the lists
   imported by hand, so a lineage drawn inside it showed Cataract-1K one ancestor out of

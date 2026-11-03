@@ -138,10 +138,12 @@ ledger: a QA receipt (`research_chat` context) is version 2 with
 old default is chosen; the default (detailed, six turns) still writes version 1, and
 `validate_request_record` accepts both. History capture and the staleness check use
 the style's turns.
-Next: 存成關鍵筆記 (an explicit AI condensation of an exchange into an editable card:
-claim, 1–3 points, pages, the reader's own line), note provenance (mine / AI) so
-slides stop labelling saved answers as reader observations, and a slide pane that
-takes chosen key notes as the deck's spine instead of the last 30 raw chat turns.
+Step 2 done: ★ 關鍵筆記 (`key_notes.py`) condenses one exchange through the 問答
+profile into an editable card saved as note kind `key` (notes allow any kind of up to
+40 characters, so sync is unchanged). Slides label notes by kind (讀者筆記 / 關鍵筆記 /
+問答摘錄) and put key notes first.
+Next: a slide pane that lets the reader choose and order key notes as the deck's
+spine instead of the last 30 raw chat turns, and links each slide back to its cards.
 3. **Coloured status tags on keys 1–9**: up to nine tags (e.g. 精讀 / 略讀 / 待讀 /
    引用) toggled on a multi-selection in any list and shown as a colour chip.
 

@@ -434,3 +434,21 @@ def test_a_slide_that_cannot_be_fixed_is_named(research, monkeypatch):
     monkeypatch.setattr(llm, "complete_result", model)
     deck, reason = _generate()
     assert deck is None and "第 3 頁" in reason
+
+
+def test_key_notes_lead_and_each_kind_of_note_is_named_for_what_it_is(research):
+    conn = sqlite3.connect(store.DB_PATH)
+    conn.executemany(
+        "INSERT INTO notes(paper_id,body,kind,created_at,page) VALUES (?,?,?,?,?)",
+        [("ref:deck", "> Q\n\nKept answer from the AI.", "ask", "today", 1),
+         ("ref:deck", "> Q\n\n## The claim the deck should make", "key", "today", 3)],
+    )
+    conn.commit()
+    conn.close()
+    notes = [s for s in slides.collect_evidence("ref:deck", {"original", "notes"})["sources"]
+             if s["kind"] == "notes"]
+    labels = [s["label"].split(" #")[0] for s in notes]
+    # Key notes lead; the rest keep their page order (the AI answer is on page 1).
+    assert labels == ["關鍵筆記", "問答摘錄", "讀者筆記"]
+    assert "關鍵筆記是讀者確認過的重點" in slides.INSTRUCTIONS
+    assert "問答摘錄是 AI 的解讀，不是讀者觀察" in slides.INSTRUCTIONS

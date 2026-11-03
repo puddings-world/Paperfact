@@ -280,3 +280,50 @@ def test_concise_is_on_by_default_and_a_follow_up_applies_to_one_question(reader
     view._ask("In full")
     deferred.run()
     assert "回答格式(精要)" not in prompts[-1] and "Unrelated" in prompts[-1]
+
+
+def test_an_answer_becomes_a_key_note_only_after_the_reader_saves_it(reader, monkeypatch):
+    from PySide6.QtCore import QUrl
+    from PySide6.QtWidgets import QDialog
+
+    from paper_daily import key_notes
+    from paper_daily.desktop import note_editor
+
+    _, window, view = reader
+    view.paper.title = "HoughSAM"
+    deferred, drafting = Deferred(), Deferred()
+    monkeypatch.setattr(view, "runner", deferred)
+    monkeypatch.setattr(view, "key_runner", drafting)
+    llm.save_settings(profile="a", backend="openai", model="m", isolated=True)
+    monkeypatch.setattr(llm, "complete", lambda prompt, *a, **k: (
+        ("## 主張\n- 依據（p.2）\n", "ok") if "關鍵筆記" in prompt else ("Answer (p.2)", "ok")))
+    view._ask("What is new?")
+    deferred.run()
+    answer = next(r for r in window.data.chat("local-paper") if r["role"] == "assistant")
+
+    shown = []
+
+    def notes():
+        return [dict(n) for n in window.data.notes("local-paper")]
+
+    before = notes()
+
+    def exec_(dialog, keep):
+        shown.append(dialog.editor.toPlainText())
+        if keep:
+            dialog._save_callback(dialog.editor.toPlainText())
+            return QDialog.DialogCode.Accepted
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(note_editor.NoteEditor, "exec", lambda d: exec_(d, False))
+    view._note_action(QUrl(f"key:{answer['id']}"))
+    drafting.run()
+    assert shown and shown[0].startswith("> What is new?") and "## 主張" in shown[0]
+    assert notes() == before  # Closed without saving: nothing kept.
+
+    monkeypatch.setattr(note_editor.NoteEditor, "exec", lambda d: exec_(d, True))
+    view._note_action(QUrl(f"key:{answer['id']}"))
+    drafting.run()
+    (note,) = [n for n in notes() if n not in before]
+    assert note["kind"] == key_notes.KIND and "## 主張" in note["body"]
+    assert main.note_headline(note["body"], note["kind"])[0] == "主張"

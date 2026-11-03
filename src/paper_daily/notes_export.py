@@ -80,7 +80,7 @@ def paper_block(conn, paper_id: str) -> tuple[str, str]:
     if notes:
         out += ["## 筆記", ""]
         for row in notes:
-            label = "問 AI" if row["kind"] == "ask" else "手寫"
+            label = {"ask": "問 AI", "key": "關鍵筆記"}.get(row["kind"], "手寫")
             where = f" · 第 {row['page']} 頁" if row["page"] else ""
             out += [
                 f"### {label}{where} · {(row['created_at'] or '')[:10]}",

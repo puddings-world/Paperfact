@@ -89,6 +89,8 @@ def _exchange(question, answer, pending, pal, rich):
         links = (
             f'<a href="keep:{int(answer["id"])}" style="color:{pal["accent"]};">'
             "＋ 存成筆記</a>&nbsp;&nbsp; "
+            f'<a href="key:{int(answer["id"])}" style="color:{pal["accent"]};">'
+            "★ 關鍵筆記</a>&nbsp;&nbsp; "
         )
     if question is not None:
         links += (
