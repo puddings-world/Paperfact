@@ -487,7 +487,8 @@ class Data:
                 conn, expected["paper_id"], expected["rows"], expected=expected
             )
 
-    def begin_chat(self, paper_id, question, *, request_id, page=None, anchor=None, document=None):
+    def begin_chat(self, paper_id, question, *, request_id, page=None, anchor=None, document=None,
+                   style=None):
         from paper_daily import research_chat
 
         with connect() as conn:
@@ -500,6 +501,7 @@ class Data:
                 anchor=anchor,
                 document=document,
                 legacy_root=PDF_DIR,
+                style=style,
             )
 
     def add_chat(
@@ -985,6 +987,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.questions.chosen.connect(self._draft_question)
         self.questions.return_to_draft.connect(self._resume_question_draft)
         self.questions.source_requested.connect(self._jump_to_source)
+        # 查看結果 on the tray goes back to the suggestions and their status line.
+        self.questions.runner.result_target = self._show_questions
         # Keep auxiliary recovery actions beside suggestions, never below the composer.
         question_tools = QHBoxLayout()
         question_tools.addWidget(self.questions, 1)
@@ -1029,6 +1033,33 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.ask_btn.clicked.connect(lambda: self._ask_from_box(self.ask_box.text()))
         ask_bar.addWidget(self.ask_btn)
         al.addLayout(ask_bar)
+        # 精要 answers one question at a time: a conclusion and page-cited support, without
+        # earlier turns. 接續上一題 brings the last exchange back for one follow-up.
+        style_bar = QHBoxLayout()
+        style_bar.setSpacing(6)
+        self.concise_btn = QPushButton("精要")
+        self.concise_btn.setCheckable(True)
+        self.concise_btn.setToolTip(
+            "開：一句結論加 3–5 點附頁碼的依據，約 250 字，每題獨立回答。\n"
+            "關：詳細回答，並參考最近的對話。")
+        self.follow_btn = QPushButton("接續上一題")
+        self.follow_btn.setCheckable(True)
+        self.follow_btn.setToolTip("下一題帶入上一個問答，方便追問；送出後自動關閉。")
+        for button in (self.concise_btn, self.follow_btn):
+            button.setStyleSheet(
+                f"QPushButton{{font-size:11px;padding:2px 10px;border-radius:9px;"
+                f"border:1px solid {pal['firm']};color:{pal['muted']};background:transparent;}}"
+                f"QPushButton:checked{{border-color:{pal['accent']};color:{pal['accent']};"
+                f"background:{pal['accentSoft']};}}")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            style_bar.addWidget(button)
+        style_bar.addStretch(1)
+        al.addLayout(style_bar)
+        with connect() as conn:
+            self.concise_btn.setChecked(ui_state.read(conn, "ui.ask.concise", True) is not False)
+        self.concise_btn.toggled.connect(lambda on: ui_state.save("ui.ask.concise", on))
+        self.concise_btn.toggled.connect(lambda on: self.follow_btn.setVisible(on))
+        self.follow_btn.setVisible(self.concise_btn.isChecked())
         self.ask_status = QLabel("")
         self.ask_status.setStyleSheet(f"color:{pal['faint']};font-size:11px;")
         al.addWidget(self.ask_status)
@@ -1168,14 +1199,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     def _render_facts(self) -> None:
         paper, pal = self.paper, self.win.pal
-        links = []
-        if paper.page_url:
-            links.append(f'<a href="{paper.page_url}" style="color:{pal["accent"]};">會議頁面</a>')
-        if paper.arxiv_id:
-            links.append(
-                f'<a href="https://arxiv.org/abs/{paper.arxiv_id}" '
-                f'style="color:{pal["accent"]};">arXiv {paper.arxiv_id}</a>'
-            )
+        from paper_daily.desktop import paper_links
+
+        # Every page found for the paper on the web, named for what it is, so the
+        # source the PDF came from is one click away too.
+        links = [
+            f'<a href="{html.escape(url)}" style="color:{pal["accent"]};">{html.escape(label)}</a>'
+            for label, url in paper_links.links(paper)
+        ]
         with connect() as conn:
             found = resources.of(conn, paper.id)
         self._others = [r for r in found if not r["own"]]
@@ -2212,6 +2243,15 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         # A modal's own focus restoration happens after rejected/accepted.
         QTimer.singleShot(0, self.ask_box, focus)
 
+    def _show_questions(self) -> None:
+        window = self.window()
+        if hasattr(window, "stack"):
+            window.stack.setCurrentWidget(self)
+        for index in range(self.tabs.count()):
+            if self.tabs.widget(index).isAncestorOf(self.questions):
+                self.tabs.setCurrentIndex(index)
+        self.questions.status.setFocus()
+
     def _draft_question(self, question):
         self._clear_passage()
         self.ask_box.setText(question)
@@ -2285,7 +2325,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                     page=page,
                     anchor=anchor,
                     document=getattr(self, "_active_document", None),
+                    style=self._answer_style(),
                 )
+                self.follow_btn.setChecked(False)
                 job = ChatJob(request, connections, cfg)
             self._qa_job = job
             self.runner.start("", self._ask_done, self._ask_failed, call=job, task="ask")
@@ -2294,6 +2336,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self.ask_btn.setEnabled(True)
         finally:
             self._qa_starting = False
+
+    def _answer_style(self):
+        if not self.concise_btn.isChecked():
+            return None
+        return {"answer": "concise", "turns": 2 if self.follow_btn.isChecked() else 0}
 
     def _resume_qa(self, request_id):
         from paper_daily import ai_choices, research_chat, store
@@ -4435,6 +4482,22 @@ def run(
     from paper_daily.config import DATA_DIR
 
     window.stall_watch = ui_stalls.install(DATA_DIR, window)
+    from paper_daily.desktop.dormancy import Dormancy
+
+    # Checks nobody is looking at stop while the window is in the background.
+    window.dormancy = dormancy = Dormancy(window)
+    dormancy.pause_with(window.workspace_changes.timer, window.workspace_changes.poll_in_background)
+    dormancy.pause_with(window._ready_poll, window.announce_ready)
+    dormancy.pause_with(window.update_banner._poll)
+    positions = window.reader_page.reading_positions
+    dormancy.pause_with(positions.poll, positions.check)
+    figures = window.reader_page.figure_pane
+    dormancy.pause_with(figures._watch, figures._check_context)
+    dormancy.slept.connect(window.stall_watch.pause)
+    dormancy.woke.connect(window.stall_watch.resume)
+    from paper_daily.desktop.dormancy import keys_home
+
+    dormancy.activated.connect(lambda: QTimer.singleShot(0, window, lambda: keys_home(window)))
     window._restore_restart()
     if destination is not None:
         focus_workspace(window, destination)
@@ -4515,4 +4578,8 @@ def run(
     _force_visible(window)
     # The build's smoke test: the whole app, web views included, starts and quits
     # cleanly on a machine with no screen and no papers.
+    from paper_daily.desktop import main_thread_probe
+
+    if main_thread_probe.enabled():
+        main_thread_probe.start(sys._getframe().f_code, DATA_DIR / "diagnostics")
     return app.exec()

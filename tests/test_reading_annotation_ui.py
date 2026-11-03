@@ -279,3 +279,25 @@ def test_empty_target_and_failure_retry_keep_previous_group(pane, ready, monkeyp
     assert ui.start(pane, force=True)
     pane.runner.finish()
     assert len(marks(ready[0])) == 1 and pane.material_reads == 2 and not pane.busy
+
+
+def test_a_stopped_preparation_says_why_and_records_where(tmp_path, monkeypatch):
+    from paper_daily import diagnostics
+    from paper_daily.desktop import reading_annotation_ui
+
+    recorded = []
+    monkeypatch.setattr(diagnostics, "record_exception",
+                        lambda kind, tb, **k: recorded.append((kind, k.get("phase"))))
+
+    def raised(error):
+        try:
+            raise error
+        except ValueError as caught:
+            return reading_annotation_ui.preparation_failure(caught)
+
+    known = raised(ValueError("The displayed PDF changed before highlight analysis"))
+    assert "重新開啟" in known and "ValueError" not in known
+    other = raised(ValueError("Highlight target has no saved paper"))
+    assert "Highlight target has no saved paper" in other and "ValueError" in other
+    assert "原因不明" in raised(ValueError())
+    assert recorded == [(ValueError, "annotation")] * 3

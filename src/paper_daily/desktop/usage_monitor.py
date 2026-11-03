@@ -1,8 +1,16 @@
-"""Start with the app; refresh only changed accounts and expired snapshots."""
+"""Start with the app; refresh only changed accounts and expired snapshots.
 
-from PySide6.QtCore import QObject, QTimer
+Each look reads the AI settings and every account, on the window's thread. It runs
+when the window is brought forward and every 15 s while it stays in front; a window
+in the background does none of it. The 2-second poll it replaced kept doing that
+work all day, and it was one of the things that made a long-open window slow.
+"""
+
+from PySide6.QtCore import QEvent, QObject, QTimer
 
 from paper_daily import ai_choices, llm, usage_cache
+
+ACTIVE_SECONDS = 15
 
 
 class UsageMonitor(QObject):
@@ -10,10 +18,21 @@ class UsageMonitor(QObject):
         super().__init__(parent)
         self._model_label = None
         self.timer = QTimer(self)
-        self.timer.setInterval(2000)
+        self.timer.setInterval(ACTIVE_SECONDS * 1000)
         self.timer.timeout.connect(self.tick)
-        self.timer.start()
+        if parent is not None:
+            parent.installEventFilter(self)
+            if parent.isActiveWindow():
+                self.timer.start()
         QTimer.singleShot(0, self.tick)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.WindowActivate:
+            self.tick()
+            self.timer.start()
+        elif event.type() == QEvent.Type.WindowDeactivate:
+            self.timer.stop()
+        return False
 
     def tick(self):
         try:

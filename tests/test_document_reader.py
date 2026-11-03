@@ -363,3 +363,33 @@ def test_registration_is_explicit_transactional_and_not_a_workspace_transfer(tmp
         assert conn.total_changes == before
     with pytest.raises(ValueError, match="another workspace"), journal.transaction() as conn:
         register_document_paths(conn, **dict(kwargs, workspace_id="another"))
+
+
+def test_file_name_collisions_are_counted_without_a_table_scan_per_paper():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
+    ids = ["a_b", "a:b", "a/b", "A_B", "a.b", "x:y", "plain"]
+    ids += [f"arxiv-{n}" for n in range(2000)]
+    conn.executemany("INSERT INTO papers VALUES (?)", [(i,) for i in ids])
+    names = {reader_module._safe_name(i) for i in ids}
+
+    statements = []
+    conn.set_trace_callback(statements.append)
+    counts = reader_module._alias_counts(conn, names)
+    conn.set_trace_callback(None)
+
+    brute = {name: sum(reader_module._safe_name(i) == name for i in ids) for name in names}
+    assert counts == brute
+    # "a_b" is claimed by three ids; case differs, so "A_B" stands alone.
+    assert counts["a_b"] == 3 and counts["A_B"] == 1 and counts["x_y"] == 1
+    # Batched lookups plus one pass, however many papers the list holds.
+    assert len(statements) <= len(names) // 500 + 2
+
+
+def test_a_few_names_are_counted_the_same_way_one_by_one():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
+    conn.executemany("INSERT INTO papers VALUES (?)",
+                     [(i,) for i in ("a_b", "a:b", "A_B", "x:y", "plain")])
+    assert reader_module._alias_counts(conn, {"a_b", "x_y", "missing"}) == {
+        "a_b": 2, "x_y": 1, "missing": 0}

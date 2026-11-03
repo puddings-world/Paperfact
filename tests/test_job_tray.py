@@ -431,3 +431,45 @@ def test_work_that_ends_normally_leaves_nothing_to_report(surface):
     handle.finish(cancelled=True)
     _later, _after, notice = _restart(window)
     assert notice is None
+
+
+def test_each_job_names_its_paper_or_list_and_goes_there(surface):
+    from paper_daily import store
+
+    window, hub, board, _ = surface
+    with store.connect() as conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('x','Research','now')")
+        conn.execute("INSERT INTO papers(id,venue,year,title,title_key,source) "
+                     "VALUES ('p1','ICLR',2024,'Sparse Attention','sparse attention','test')")
+        conn.commit()
+    went = []
+    window._open_list = lambda list_id: went.append(("list", list_id))
+    window.open_anywhere = lambda paper_id: went.append(("paper", paper_id))
+
+    begin(window, "清單分析", key="queue:x", queued=True).when_ready(lambda: None)
+    deep = begin(window, "深入分析", key="analysis:p1", paper_id="p1", queued=True)
+    deep.when_ready(lambda: None)
+    assert "深入分析「Sparse Attention」" in board.text.text()
+    assert board.go.isVisible()
+    board.go.click()
+    assert went == [("paper", "p1")]
+
+    panel = JobPanel(hub, window.pal, board)
+    panel.refresh()
+    rows = [panel.rows.itemAt(i).widget() for i in range(panel.rows.count())]
+    texts = [row.accessibleName() for row in rows]
+    assert any("清單分析「Research」" in t for t in texts)
+    list_row = next(r for r, t in zip(rows, texts, strict=True) if "Research" in t)
+    next(b for b in list_row.findChildren(type(board.go)) if b.text() == "前往").click()
+    assert went[-1] == ("list", "x")
+
+
+def test_a_failure_offers_a_way_back_to_where_it_was_asked(surface):
+    window, _hub, board, _ = surface
+    shown = []
+    handle = begin(window, "整理研究問題", key="questions", result=lambda: shown.append(1))
+    handle.finish(False, reason="這篇論文還沒有 PDF")
+    assert "這篇論文還沒有 PDF" in board.text.text()
+    assert not board.result.isVisible() and board.go.isVisible()
+    board.go.click()
+    assert shown == [1]

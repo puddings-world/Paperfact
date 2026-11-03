@@ -47,6 +47,10 @@ class _ClickableImage(QLabel):
         super().mousePressEvent(event)
 
 
+LOADING_CHECK_MS = 50
+SHOWN_CHECK_MS = 1000
+
+
 class FigurePane(QScrollArea):
     jump = Signal(int, str)  # 1-based page, caption
     ready = Signal(str)
@@ -71,7 +75,7 @@ class FigurePane(QScrollArea):
         self._lease_pending = self._lease_failed = False
         self._lease_label = None
         self._watch = QTimer(self)
-        self._watch.setInterval(50)
+        self._watch.setInterval(LOADING_CHECK_MS)
         self._watch.timeout.connect(self._check_context)
         self._lifetime = {"worker": None}
 
@@ -142,6 +146,7 @@ class FigurePane(QScrollArea):
         worker.begun.connect(self._begin_owned)
         worker.entry.connect(self._queue_entry)
         worker.finished.connect(self._next_request)
+        self._watch.setInterval(LOADING_CHECK_MS)
         self._watch.start()
         worker.start()
 
@@ -374,6 +379,10 @@ class FigurePane(QScrollArea):
         worker = self._running or self._frame
         if worker is None:
             return
+        # Quick while figures load, so stale work stops at once; once they are shown,
+        # a file change is noticed within a second without waking 20 times a second.
+        self._watch.setInterval(LOADING_CHECK_MS if self._running is not None
+                                else SHOWN_CHECK_MS)
         if self._requested is not None:
             context = self._requested[3]
         elif worker.generation != self._generation and worker.stopped.is_set():

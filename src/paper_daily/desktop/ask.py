@@ -86,11 +86,23 @@ class AskWorker(QObject):
         return True
 
 
+CONCISE_RULES = (
+    "回答格式(精要):\n"
+    "結論:一到兩句直接回答問題。\n"
+    "依據:3 到 5 點,每點一句,句末標出處,例如(p.3)或(Fig.2, p.4);"
+    "全文中的 [Selected page N] 與頁面順序可用來判斷頁碼。原文沒有的寫「原文未提及」。\n"
+    "不確定:只有原文不足或有歧義時才加這一行。\n"
+    "全文約 250 字以內,不要開場白,也不要重述問題或結尾總結。"
+    "若問題其實包含好幾個問題,只回答第一個,最後一行寫「也可以問:」並列出其餘的問題。\n"
+)
+
+
 def build_prompt(title: str, venue: str, year: int, abstract: str | None,
                  full_text: str | None, history: list[tuple[str, str]],
-                 question: str, text_budget: int = 45000) -> str:
+                 question: str, text_budget: int = 45000, *, concise: bool = False) -> str:
     """Assemble the prompt: rules, paper, prior turns, then the question."""
-    parts = [SYSTEM_RULES, f"\n論文:{title}\n會議:{venue} {year}"]
+    parts = [SYSTEM_RULES + (CONCISE_RULES if concise else ""),
+             f"\n論文:{title}\n會議:{venue} {year}"]
     if abstract:
         parts.append(f"\n摘要:\n{abstract}")
     if full_text:

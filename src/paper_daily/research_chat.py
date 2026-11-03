@@ -99,9 +99,27 @@ def history(conn, paper_id):
     ]
 
 
-def _inputs(conn, paper_id, exclude=None):
+# How a question is answered. 精要 asks for a conclusion with page-cited support and
+# leaves earlier turns out, so each question gets its own focused answer; 接續 keeps the
+# last exchange. Version 1 receipts have no style and were answered in full, with six.
+STYLES = {"concise": "精要", "detailed": "詳細"}
+LEGACY_STYLE = {"answer": "detailed", "turns": 6}
+
+
+def style_of(data):
+    return data.get("style") or LEGACY_STYLE
+
+
+def make_style(answer="concise", turns=0):
+    if answer not in STYLES or type(turns) is not int or turns not in (0, 2, 6):
+        raise ValueError("Unknown answer style")
+    return {"answer": answer, "turns": turns}
+
+
+def _inputs(conn, paper_id, exclude=None, turns=6):
     rows = history(conn, paper_id)
-    return [row for row in rows if exclude is None or row["message_id"] != exclude][-6:]
+    rows = [row for row in rows if exclude is None or row["message_id"] != exclude]
+    return rows[-turns:] if turns else []
 
 
 @dataclass(frozen=True)
@@ -123,10 +141,12 @@ class ChatRequest:
 
 
 def begin_chat(
-    conn, *, paper_id, question, request_id, page=None, anchor=None, document=None, legacy_root=None
+    conn, *, paper_id, question, request_id, page=None, anchor=None, document=None,
+    legacy_root=None, style=None,
 ):
     """Short submit-time transaction. PDF parsing/history preparation runs later."""
     _uuid(request_id)
+    style = make_style(**style) if style is not None else dict(LEGACY_STYLE)
     if not isinstance(question, str) or not question.strip() or len(question.encode()) > 200 * 1024:
         raise ValueError("Enter a bounded question")
     from paper_daily.sync_content import validate_anchor
@@ -142,7 +162,8 @@ def begin_chat(
     user_key = str(uuid5(NAMESPACE_URL, "paperfact:qa:" + request_id + ":user"))
     answer_key = str(uuid5(NAMESPACE_URL, "paperfact:qa:" + request_id + ":assistant"))
     data = {
-        "version": 1,
+        "version": 2,
+        "style": style,
         "request_id": request_id,
         "db_path": generation._path(conn),
         "database_identity": generation._identity(generation._path(conn)),
@@ -164,6 +185,11 @@ def begin_chat(
         "desired": None,
         "legacy_root": str(Path(legacy_root).resolve()) if legacy_root is not None else None,
     }
+    if style == LEGACY_STYLE:
+        # The full answer with six turns is what version 1 means; keep that receipt
+        # shape, so readers of version 1 see nothing new.
+        del data["style"]
+        data["version"] = 1
     conn.commit()
     return ChatRequest(_json(data), document)
 
@@ -198,7 +224,8 @@ def _stale(conn, request, *, question_row=None):
         return "Original paper changed"
     if (
         data["history"] is not None
-        and _inputs(conn, data["paper_id"], data["user_key"]) != data["history"]
+        and _inputs(conn, data["paper_id"], data["user_key"], style_of(data)["turns"])
+        != data["history"]
     ):
         return "Conversation inputs changed"
     if question_row is not None:
@@ -308,7 +335,7 @@ def prepare_chat(request):
             if reason := _stale(conn, request, question_row=json.loads(prior["question_json"])):
                 raise ValueError(reason)
         else:
-            data["history"] = _inputs(conn, data["paper_id"])
+            data["history"] = _inputs(conn, data["paper_id"], turns=style_of(data)["turns"])
     from paper_daily.document_reader import from_workspace
 
     reader = (
@@ -403,6 +430,7 @@ def prepare_chat(request):
         text,
         [(r["role"], r["body"]) for r in data["history"]],
         data["question"],
+        concise=style_of(data)["answer"] == "concise",
     )
     return request, prompt
 
@@ -446,14 +474,20 @@ def validate_request_record(record):
         "desired",
         "legacy_root",
     }
+    version = data.get("version") if isinstance(data, dict) else None
     if (
         not isinstance(data, dict)
-        or set(data) != expected
-        or type(data["version"]) is not int
-        or data["version"] != 1
+        or type(version) is not int
+        or set(data) != (expected | {"style"} if version == 2 else expected)
+        or version not in (1, 2)
         or data["request_id"] != record["request_id"]
     ):
         raise ValueError("Invalid QA context")
+    if version == 2:
+        style = data["style"]
+        if not isinstance(style, dict) or set(style) != {"answer", "turns"}:
+            raise ValueError("Invalid QA answer style")
+        make_style(**style)
     for key in ("db_path", "legacy_root"):
         value = data[key]
         if key == "legacy_root" and value is None:

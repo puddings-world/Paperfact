@@ -86,7 +86,12 @@ time: pressed while a 深入分析 or survey is running, it waits as 排隊中 (
 reads 取消排隊) and starts by itself when that ends. The window does not close
 while such work runs; if a crash or power cut ends it anyway, the next start says
 which work was left unfinished (上次未完成). Nothing restarts by itself: press it
-again and it carries on from the steps already finished. If some papers could not be
+again and it carries on from the steps already finished. Each job in the tray names
+its paper or list; **前往** goes there while it runs or waits, so you can read
+another paper meanwhile, and after a failure it returns to where the work was asked
+for. A window left in the background for five minutes stops its routine checks
+(workspace changes, the nightly result, updates, reading position, figures) and
+catches up once when it is brought forward; running work is never paused. If some papers could not be
 finished, **重試未完成的** in the activity notice tries only their failed steps again. Rows update as papers finish, and
 whatever was finished stays. Right-click a row for **分析這篇**, or for **補 PDF** by
 pasting a URL or choosing a file you downloaded through the library; the paper is
@@ -156,6 +161,11 @@ right-click menu. Opening one is not reading it, so 只看未讀, 讀過的 and 
 最近標記已讀 sort all ignore it; in a list an opened paper is tagged 開過, and in the
 queue one the nightly job handed you is tagged 已送出.
 
+**Its pages on the web.** A venue tag ending in ↗ opens the paper's own page in the
+browser (the publisher via DOI, OpenReview, the conference site, arXiv, or where the
+PDF came from); right-click → 開啟網頁 lists every known page plus a Google Scholar
+search by title. The reader shows the same links under the title.
+
 **Ticking rows.** The box at the left of every row ticks it, and the bar above the
 list acts on everything ticked on screen: 全選, 清除勾選, 置頂 / 取消置頂, 標記已讀 /
 未讀, 分析 (analyse just those), 從清單移除 (one confirmation for all of them), and
@@ -163,9 +173,20 @@ list acts on everything ticked on screen: 全選, 清除勾選, 置頂 / 取消�
 are remembered between launches. Clicks on the tick box or the 置頂 box never open the
 paper, however fast they come; click anywhere else on the row to open it.
 
+With the list holding the keys, a plain key acts on the highlighted row and Shift
+acts on every ticked row: **A** ticks, **Ctrl+A** ticks everything shown,
+**Ctrl+Shift+A** clears the ticks, **T** / **Shift+T** pin or unpin, **M** / **Shift+M**
+mark read or unread (all on, or all off when every ticked row already is), and
+**Delete** removes the ticked papers from the list after one confirmation. The bar's
+buttons show their key on hover. Coming back to the window gives the keys back to
+the list when they were left on a button or a notice.
+
 **置頂** holds papers above the rest whatever the sort, each queue and list keeping its
 own. The 置頂 box at the right end of every row turns it on and off, or tick several
 and press 置頂. Pins live in their own table, so the nightly re-rank leaves them be.
+Pinned papers can be dragged into any order among themselves, in any sort and
+without 自訂順序; that order is kept per list on this computer and never rewrites the
+list or its pins.
 
 In a reading list the filters are 只看未讀, 讀過的, 未分析完, 缺 PDF and 已有原文;
 oral / spotlight, 原理型 and 地基 come from the conference crawl and only appear in the
@@ -354,6 +375,15 @@ window — navigation, ticking, pinning — stays blue or grey.
   **刪除這組問答** removes one exchange, and a note kept from it stays. Which answers
   are worth keeping is a judgement, so it is a button rather than something that
   happens to every answer.
+
+  **精要** (on by default, remembered) answers one question at a time: a one- or
+  two-sentence conclusion, three to five supporting points each ending in its page or
+  figure, and an 不確定 line only when the paper leaves it open, in about 250
+  characters. Earlier turns are left out so the answer cannot drift toward them; a
+  question that is really several gets the first answered and the rest listed under
+  也可以問. **接續上一題** brings the last exchange back for one follow-up and turns
+  itself off after sending. With 精要 off, answers are full and see the last six turns,
+  as before.
 - **脈絡** reads as summary first, then detail, and places the paper in its field
   rather than in this corpus. The corpus is three ML conferences plus the lists
   imported by hand, so a lineage drawn inside it showed Cataract-1K one ancestor out of

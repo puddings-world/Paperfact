@@ -225,3 +225,47 @@ def test_malformed_qa_receipts_are_rejected(legacy, change):
     change(row)
     with pytest.raises(ValueError):
         chat.validate_request_record(row)
+
+
+def _answered(question, **kwargs):
+    request, prompt = chat.prepare_chat(start(question, **kwargs))
+    assert chat.publish_answer(request, f"Answer to {question}").status == "accepted"
+    return request, prompt
+
+
+def test_a_concise_question_is_answered_on_its_own_with_cited_support(legacy):
+    _answered("First")
+    _answered("Second")
+    request, prompt = chat.prepare_chat(start("Third", style={"answer": "concise", "turns": 0}))
+    assert "回答格式(精要)" in prompt and "(p.3)" in prompt
+    # Earlier turns stay out, so the answer cannot drift toward them.
+    assert "First" not in prompt and "Second" not in prompt
+    assert request.data["version"] == 2 and request.data["history"] == []
+    # A retry reads the stored version 2 receipt back and asks the same way.
+    again, retried = chat.prepare_chat(request)
+    assert retried == prompt and again.data["style"] == {"answer": "concise", "turns": 0}
+    assert chat.publish_answer(again, "Short answer").status == "accepted"
+
+
+def test_following_up_keeps_only_the_last_exchange(legacy):
+    _answered("First")
+    _answered("Second")
+    request, prompt = chat.prepare_chat(start("Third", style={"answer": "concise", "turns": 2}))
+    assert "Second" in prompt and "Answer to Second" in prompt and "First" not in prompt
+    assert [r["body"] for r in request.data["history"]] == ["Second", "Answer to Second"]
+
+
+def test_a_full_answer_keeps_the_version_1_receipt_and_six_turns(legacy):
+    for n in range(4):
+        _answered(f"Q{n}")
+    request, prompt = chat.prepare_chat(start("Last"))
+    assert request.data["version"] == 1 and "style" not in request.data
+    assert "回答格式(精要)" not in prompt and len(request.data["history"]) == 6
+
+
+@pytest.mark.parametrize("style", [{"answer": "short", "turns": 0},
+                                   {"answer": "concise", "turns": 3},
+                                   {"answer": "concise", "turns": 0, "tone": "x"}])
+def test_an_unknown_answer_style_is_refused(legacy, style):
+    with pytest.raises((ValueError, TypeError)):
+        start(style=style)

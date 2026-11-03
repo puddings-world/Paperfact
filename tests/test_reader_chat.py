@@ -250,3 +250,33 @@ def test_delete_click_uses_rendered_turn_not_a_fresh_replacement(reader):
     view._forget_exchange(row["id"])
     assert messages()[0]["body"] == "Remote replacement"
     assert view.ask_status.text()
+
+
+def test_concise_is_on_by_default_and_a_follow_up_applies_to_one_question(reader, monkeypatch):
+    _, _, view = reader
+    deferred = Deferred()
+    monkeypatch.setattr(view, "runner", deferred)
+    llm.save_settings(profile="a", backend="openai", model="m", isolated=True)
+    prompts = []
+    monkeypatch.setattr(llm, "complete",
+                        lambda prompt, cfg, **k: (prompts.append(prompt) or "Answer", "ok"))
+    assert view.concise_btn.isChecked() and not view.follow_btn.isHidden()
+
+    view._ask("First question")
+    deferred.run()
+    assert "回答格式(精要)" in prompts[-1]
+
+    view.follow_btn.setChecked(True)
+    view._ask("Follow up")
+    assert not view.follow_btn.isChecked()  # One follow-up, then back to one at a time.
+    deferred.run()
+    assert "First question" in prompts[-1]
+
+    view._ask("Unrelated")
+    deferred.run()
+    assert "First question" not in prompts[-1] and "Follow up" not in prompts[-1]
+
+    view.concise_btn.setChecked(False)
+    view._ask("In full")
+    deferred.run()
+    assert "回答格式(精要)" not in prompts[-1] and "Unrelated" in prompts[-1]

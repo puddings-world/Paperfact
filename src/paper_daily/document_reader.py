@@ -48,6 +48,9 @@ def _matching(conn, sql, values, *, whole=False):
             yield tuple(row) if whole else row[0]
 
 
+FEW_NAMES = 25
+
+
 def _aliases(conn, name):
     """Papers whose PDF file name is `name`. In LIKE, "_" matches any one character,
     so the file name itself finds every id that could map to it (a superset, as LIKE
@@ -57,6 +60,28 @@ def _aliases(conn, name):
         for (identity,) in conn.execute("SELECT id FROM papers WHERE id LIKE ?", (name,))
         if _safe_name(identity) == name
     )
+
+
+def _alias_counts(conn, names):
+    """How many papers map to each PDF file name.
+
+    A name is the paper's own id when the id is already a safe file name; only ids
+    with other characters map elsewhere. So an indexed lookup of the names plus one
+    pass over those few ids answers every name. A LIKE per name scanned the whole
+    table each time, and a list of a few thousand papers froze the window for
+    seconds on every return to the list. That one pass costs about as much as thirty
+    single lookups, so a few names (one paper opened in the reader) still go one by one.
+    """
+    if len(names) <= FEW_NAMES:
+        return {name: _aliases(conn, name) for name in names}
+    counts = dict.fromkeys(names, 0)
+    for identity in _matching(conn, "SELECT id FROM papers WHERE id IN ({})", counts):
+        counts[identity] += 1
+    for (identity,) in conn.execute("SELECT id FROM papers WHERE id GLOB '*[^A-Za-z0-9._-]*'"):
+        name = _safe_name(identity)
+        if name in counts:
+            counts[name] += 1
+    return counts
 
 
 def _tables(conn):
@@ -237,7 +262,7 @@ class DocumentReader:
             # each click, and reading whole tables made a jump to the source take
             # most of a second in a workspace of ~80,000 papers.
             papers = set(_matching(conn, "SELECT id FROM papers WHERE id IN ({})", identities))
-            aliases = {name: _aliases(conn, name) for name in {_safe_name(i) for i in papers}}
+            aliases = _alias_counts(conn, {_safe_name(i) for i in papers})
             mappings = (
                 dict(
                     _matching(

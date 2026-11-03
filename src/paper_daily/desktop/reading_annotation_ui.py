@@ -130,7 +130,7 @@ def start(pane, *, force=True):
             )
             return json.dumps(result, ensure_ascii=False) if result is not None else None, reason
         except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
-            return None, f'Annotation preparation did not complete: {type(error).__name__}'
+            return None, preparation_failure(error)
 
     from paper_daily.config import PDF_DIR
 
@@ -170,6 +170,29 @@ def start(pane, *, force=True):
 
     pane.runner.start('', done, failed, call=work, task='paper_highlights')
     return bool(pane.runner.busy)
+
+
+# What a reader can do about the refusals that have a known cause.
+KNOWN_FAILURES = {
+    'The displayed PDF changed before highlight analysis':
+        '畫面上的 PDF 和記錄的原文版本不一致；請重新開啟這篇論文的 PDF 後再試。',
+    'The loaded annotation owner belongs to another research target':
+        '這份標註屬於另一篇論文或另一個工作區；請重新開啟這篇論文後再試。',
+}
+
+
+def preparation_failure(error):
+    """Say why preparation stopped. Only the type name used to reach the screen, which
+    told the reader nothing; the code location goes to the local diagnostics log."""
+    from paper_daily import diagnostics
+
+    diagnostics.record_exception(type(error), error.__traceback__, phase='annotation')
+    detail = ' '.join(str(error).split())[:200]
+    known = KNOWN_FAILURES.get(detail)
+    if known:
+        return known
+    kind = type(error).__name__
+    return f'原因：{detail}（{kind}）' if detail else f'原因不明（{kind}）'
 
 
 def cancel(pane):

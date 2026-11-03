@@ -28,11 +28,21 @@ from PySide6.QtCore import (
     QProcess,
     QProcessEnvironment,
     QRect,
+    QRectF,
     QSize,
     Qt,
     QTimer,
+    QUrl,
 )
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QKeySequence, QPainter, QShortcut
+from PySide6.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFont,
+    QFontMetrics,
+    QKeySequence,
+    QPainter,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -52,7 +62,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import runtime, venues
-from paper_daily.desktop import ai_style, button_style, fonts, ui_state
+from paper_daily.desktop import ai_style, button_style, fonts, paper_links, ui_state
 from paper_daily.desktop.focus_scope import scopes
 from paper_daily.store import connect
 
@@ -165,6 +175,10 @@ SORTS = [
 SORT_IDS = [sort[0] for sort in SORTS]
 TIEBREAK = ("recent", "venue", "newest", "citations", "dependents", "read", "type", "todo")
 DRAGGABLE = ("custom",)
+# The list keys for the tick bar's buttons, shown in their tooltips.
+TICK_KEYS = {"全選": "Ctrl+A", "清除勾選": "Ctrl+Shift+A", "置頂": "Shift+T",
+             "取消置頂": "Shift+T", "標記已讀": "Shift+M", "標記未讀": "Shift+M",
+             "從清單移除": "Delete"}
 
 
 def ordered(rows: list, sort_id: str) -> list:
@@ -204,6 +218,9 @@ class PaperListModel(QAbstractListModel):
         self._rows: list[tuple[int, object]] = []
         self.reorder = None
         self.can_reorder = False
+        # Pinned papers keep their own order, set by dragging within the pinned block.
+        self.pin_reorder = None
+        self.can_reorder_pins = False
         self._epoch = uuid4().hex
         self.downloads = {}
 
@@ -213,11 +230,19 @@ class PaperListModel(QAbstractListModel):
         self._epoch = uuid4().hex
         self.endResetModel()
 
+    def _pinned_count(self):
+        return sum(1 for _position, paper in self._rows if paper.pinned)
+
+    def _draggable(self, row):
+        return self.can_reorder or (self.can_reorder_pins and row < self._pinned_count())
+
     def flags(self, index):
         flags = super().flags(index)
-        if self.can_reorder:
-            flags |= (Qt.ItemFlag.ItemIsDragEnabled if index.isValid()
-                      else Qt.ItemFlag.ItemIsDropEnabled)
+        if not index.isValid():
+            if self.can_reorder or self.can_reorder_pins:
+                flags |= Qt.ItemFlag.ItemIsDropEnabled
+        elif self._draggable(index.row()):
+            flags |= Qt.ItemFlag.ItemIsDragEnabled
         return flags
 
     def supportedDropActions(self):
@@ -229,12 +254,13 @@ class PaperListModel(QAbstractListModel):
     def mimeData(self, indexes):
         data = QMimeData()
         rows = sorted({index.row() for index in indexes if index.isValid()})
-        if self.can_reorder and len(rows) == 1:
+        if len(rows) == 1 and self._draggable(rows[0]):
             data.setData(self.mimeTypes()[0], json.dumps([self._epoch, rows[0]]).encode())
         return data
 
     def dropMimeData(self, data, action, row, column, parent):
-        if not self.can_reorder or action != Qt.DropAction.MoveAction or parent.isValid():
+        if (not (self.can_reorder or self.can_reorder_pins)
+                or action != Qt.DropAction.MoveAction or parent.isValid()):
             return False
         try:
             epoch, source = json.loads(bytes(data.data(self.mimeTypes()[0])))
@@ -246,16 +272,25 @@ class PaperListModel(QAbstractListModel):
                              len(self._rows) if row < 0 else row)
 
     def moveRows(self, source_parent, source, count, destination_parent, destination):
-        if (not self.can_reorder or self.reorder is None or source_parent.isValid()
-                or destination_parent.isValid() or count != 1
+        if (source_parent.isValid() or destination_parent.isValid() or count != 1
                 or not 0 <= source < len(self._rows)
                 or not 0 <= destination <= len(self._rows)
                 or destination in (source, source + 1)):
             return False
+        pinned = self._pinned_count()
+        # A pinned paper moves among the pinned; it is never dropped into the rest.
+        pins_only = not self.can_reorder and source < pinned
+        if pins_only:
+            if not self.can_reorder_pins or self.pin_reorder is None or destination > pinned:
+                return False
+        elif not self.can_reorder or self.reorder is None:
+            return False
         rows = list(self._rows)
         moved = rows.pop(source)
         rows.insert(destination - (destination > source), moved)
-        if not self.reorder([paper.id for _position, paper in rows]):
+        saved = (self.pin_reorder([paper.id for _p, paper in rows[:pinned]]) if pins_only
+                 else self.reorder([paper.id for _position, paper in rows]))
+        if not saved:
             return False
         self.beginMoveRows(source_parent, source, source, destination_parent, destination)
         self._rows = [(i, paper) for i, (_old, paper) in enumerate(rows, 1)]
@@ -301,6 +336,16 @@ class PaperDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index) -> QSize:
         return QSize(0, ROW_HEIGHT)
 
+    def link_rect(self, rect, paper) -> QRect:
+        """Where the row's venue tag sits; with a page to open, a click there opens it."""
+        if paper is None or not paper_links.main_link(paper):
+            return QRect()
+        text_left = (rect.left() + MARK_W + 2
+                     + QFontMetrics(self.pos_font).horizontalAdvance("9999.") + 6 + 8)
+        text = self._kinded_tags(paper)[0][1]
+        width = QFontMetrics(self.tag_font).horizontalAdvance(text) + 10
+        return QRect(text_left, rect.top() + 29, width, 17)
+
     def _tags(self, paper) -> list[tuple[str, str, str]]:
         """(text, foreground, background) for each tag on this row."""
         return [tag[1:] for tag in self._kinded_tags(paper)]
@@ -312,7 +357,10 @@ class PaperDelegate(QStyledItemDelegate):
         # A preprint is greyed: whether something passed review is part of what it is.
         ink = p["faint"] if venues.is_preprint(paper.venue) else p["ink"]
         sort = SORT_IDS[self.page.sort.currentIndex()] if self.page else None
-        out = [("venue", venues.label(paper.venue, paper.year), ink, p["sunk"])]
+        venue = venues.label(paper.venue, paper.year)
+        if paper_links.main_link(paper):
+            venue += " ↗"
+        out = [("venue", venue, ink, p["sunk"])]
         if paper.award:
             out.append(("award", paper.award, p["award"], p["awardSoft"]))
         if paper.is_canon:
@@ -443,13 +491,18 @@ class PaperDelegate(QStyledItemDelegate):
             )
 
         pin = QRect(r.right() - PIN_W + 6, r.top() + (ROW_HEIGHT - 22) // 2, PIN_W - 14, 22)
+        # Drawn as a button, not a tag: an accent outline that fills under the pointer.
+        # The faint grey box it replaced read as a disabled label.
+        hovered = getattr(self.page, "_pin_hover_row", None) == index.row()
+        accent = QColor(pal["accent"])
+        painter.setPen(accent)
         if paper.pinned:
-            painter.fillRect(pin, QColor(pal["accent"]))
-            painter.setPen(QColor("#ffffff"))
+            painter.setBrush(accent.darker(115) if hovered else accent)
         else:
-            painter.setPen(QColor(pal["firm"]))
-            painter.drawRect(pin.adjusted(0, 0, -1, -1))
-            painter.setPen(QColor(pal["faint"]))
+            painter.setBrush(QColor(pal["accentSoft"]) if hovered else Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QRectF(pin).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QColor("#ffffff") if paper.pinned else accent)
         painter.drawText(pin, Qt.AlignmentFlag.AlignCenter, "置頂")
         if not slot.isEmpty():
             painter.setFont(self.tag_font)
@@ -566,6 +619,8 @@ class QueuePage(QWidget):
             button.setStyleSheet(button_css)
             button.clicked.connect(action)
             button.setProperty("needs_ticks", needs_ticks)
+            if key := TICK_KEYS.get(text):
+                button.setToolTip(f"快捷鍵：{key}（在論文列表上）")
             if text == "分析":
                 ai_style.mark(button, pal)
             ticks.addWidget(button)
@@ -637,6 +692,7 @@ class QueuePage(QWidget):
 
         self.model = PaperListModel()
         self.model.reorder = self._save_paper_order
+        self.model.pin_reorder = self._save_pin_order
         self.view = QListView()
         self.view.setDragDropMode(QListView.DragDropMode.InternalMove)
         self.view.setDefaultDropAction(Qt.DropAction.MoveAction)
@@ -661,9 +717,16 @@ class QueuePage(QWidget):
         # keys: in the search box the same letters are typing.
         # Enter opens on every platform: a macOS list view takes Return as "edit" and
         # never emits activated for it.
+        # A plain key acts on the highlighted row; with Shift, on every ticked row.
         for key, act in (
             ("A", self._tick_current),
+            ("Ctrl+A", self._tick_all),
+            ("Ctrl+Shift+A", self._untick_all),
             ("T", self._pin_current),
+            ("Shift+T", lambda: self._toggle_ticked("pin")),
+            ("M", self._read_current),
+            ("Shift+M", lambda: self._toggle_ticked("read")),
+            ("Delete", lambda: self._batch("remove")),
             ("Return", self._open_current),
             ("Enter", self._open_current),
         ):
@@ -674,7 +737,8 @@ class QueuePage(QWidget):
         scopes(pal["accent"]).add(
             self.view,
             "論文列表",
-            "↑↓ 選擇 · Enter 開啟 · A 勾選 · T 置頂",
+            "↑↓ 選擇 · Enter 開啟 · A 勾選 · Ctrl+A 全選 · T 置頂 · M 已讀 · "
+            "Shift+T／M 套用到勾選的",
         )
 
         self.count = QLabel("")
@@ -726,6 +790,20 @@ class QueuePage(QWidget):
         if paper is not None:
             self.win.set_pinned([paper.id], not paper.pinned)
 
+    def _read_current(self) -> None:
+        paper = self._current_paper()
+        if paper is not None:
+            self.win.set_read_many([paper.id], not paper.read)
+
+    def _toggle_ticked(self, what: str) -> None:
+        """Shift with T or M: all ticked rows on, or off when every one already is."""
+        ids = set(self.ticked())
+        papers = [p for _i, p in self.model._rows if p.id in ids]
+        if not papers:
+            return
+        done = all(p.pinned if what == "pin" else p.read for p in papers)
+        self._batch({"pin": ("unpin", "pin"), "read": ("unread", "read")}[what][not done])
+
     def eventFilter(self, obj, event) -> bool:
         """A press in the tick strip marks the row; everywhere else opens it.
 
@@ -745,8 +823,16 @@ class QueuePage(QWidget):
             )
             and event.button() == Qt.MouseButton.LeftButton
         )
+        if obj is self.view.viewport() and event.type() in (
+                QEvent.Type.MouseMove, QEvent.Type.Leave):
+            self._hover_pin(event)
         in_strip = mouse and event.position().x() < MARK_W
         in_pin = mouse and event.position().x() > self.view.viewport().width() - PIN_W
+        link = self._link_at(event.position().toPoint()) if mouse else None
+        if link is not None:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                QDesktopServices.openUrl(QUrl(link[1]))
+            return True
         if (in_strip or in_pin) and event.type() != QEvent.Type.MouseButtonPress:
             return True
         if (
@@ -770,6 +856,41 @@ class QueuePage(QWidget):
                     self.win.toggle_marked(paper.id)
                 return True
         return super().eventFilter(obj, event)
+
+    def _link_at(self, point):
+        index = self.view.indexAt(point)
+        paper = index.data(PAPER_ROLE) if index.isValid() else None
+        delegate = self.view.itemDelegate()
+        if paper is None or not delegate.link_rect(self.view.visualRect(index),
+                                                   paper).contains(point):
+            return None
+        return paper_links.main_link(paper)
+
+    def _hover_pin(self, event) -> None:
+        """The pin button and the venue link answer the pointer like buttons do."""
+        hover, tip = None, ""
+        if event.type() == QEvent.Type.MouseMove:
+            point = event.position().toPoint()
+            index = self.view.indexAt(point)
+            link = self._link_at(point)
+            if link is not None:
+                hover, tip = ("link", index.row()), f"開啟{link[0]}：{link[1]}"
+            elif index.isValid() and point.x() > self.view.viewport().width() - PIN_W:
+                paper = index.data(PAPER_ROLE)
+                hover = ("pin", index.row())
+                tip = ("取消置頂（T）" if paper is not None and paper.pinned
+                       else "置頂到最上面（T）")
+        if hover == getattr(self, "_hover", None):
+            return
+        self._hover = hover
+        self._pin_hover_row = hover[1] if hover and hover[0] == "pin" else None
+        viewport = self.view.viewport()
+        if hover is None:
+            viewport.unsetCursor()
+        else:
+            viewport.setCursor(Qt.CursorShape.PointingHandCursor)
+        viewport.setToolTip(tip)
+        viewport.update()
 
     def ticked(self) -> list[str]:
         """The ticked papers among those on screen, in the order shown."""
@@ -899,7 +1020,7 @@ class QueuePage(QWidget):
             # the list: sorting by citations is a way to look at the same reading
             # order, not a way to renumber it.
             rows = ordered(rows, sort_id)
-            rows = self._pinned_first(rows)
+            rows = self._pinned_first(rows, self._pin_order(rows))
             self._show_rows(rows)
             return
 
@@ -912,8 +1033,20 @@ class QueuePage(QWidget):
             # Reading order here is what the field depends on, not what is newest.
             rows.sort(key=lambda pair: -pair[1].dependents)
 
-        rows = self._pinned_first(rows)
+        rows = self._pinned_first(rows, self._pin_order(rows))
         self._show_rows(rows)
+
+    def _pin_order(self, rows):
+        # Only a list with something pinned has an order worth a database read.
+        if not any(paper.pinned for _i, paper in rows):
+            return []
+        try:
+            with connect() as conn:
+                order = ui_state.read(conn, self._pin_order_key()) or []
+        except sqlite3.Error:
+            # View state, like the opened marks: unreadable means the chosen order.
+            return []
+        return [pid for pid in order if isinstance(pid, str)]
 
     def _show_rows(self, rows: list) -> None:
         # A reset drops the highlighted row; pinning moves it to the top, and the
@@ -926,12 +1059,34 @@ class QueuePage(QWidget):
                 self.f_award, self.f_principle, self.f_pdf, self.f_roots,
             )) and not any(p.pinned for _i, p in rows)
         )
+        self.model.can_reorder_pins = (
+            not self.model.can_reorder and not self.search.text().strip()
+            and sum(1 for _i, p in rows if p.pinned) >= 2
+        )
         if self.win.active_list and not self.model.can_reorder:
-            self.blurb.setText(self.blurb.text() +
-                " 要拖曳排序，請選「自訂順序」、清除搜尋與篩選，並取消置頂。")
+            self.blurb.setText(self.blurb.text() + (
+                " 置頂的論文可以拖曳排列；其餘要拖曳排序，請選「自訂順序」、清除搜尋與篩選，"
+                "並取消置頂。" if self.model.can_reorder_pins else
+                " 要拖曳排序，請選「自訂順序」、清除搜尋與篩選，並取消置頂。"))
         self.model.set_rows(rows)
         self._select(current.id if current is not None else getattr(self.win, "_last_paper", None))
         self._say_count(rows)
+
+    def _pin_order_key(self):
+        return f"ui.pin_order.{self.win.active_list or 'queue'}"
+
+    def _save_pin_order(self, paper_ids):
+        """Kept as this device's view state: the order of a few pinned papers is how
+        one person reads them, and it never rewrites the list or its pins."""
+        try:
+            with connect() as conn:
+                before = ui_state.read(conn, self._pin_order_key()) or []
+        except sqlite3.Error:
+            before = []
+        rest = [pid for pid in before if isinstance(pid, str) and pid not in paper_ids]
+        ui_state.save(self._pin_order_key(), list(paper_ids) + rest)
+        self.blurb.setText("置頂順序已儲存。")
+        return True
 
     def _save_paper_order(self, paper_ids):
         from paper_daily import lists
@@ -1207,9 +1362,14 @@ class QueuePage(QWidget):
         self._start(args, then=lambda: self._start(["analyze", paper.id, "--retry"]))
 
     @staticmethod
-    def _pinned_first(rows: list) -> list:
-        """Pinned papers above the rest, each group still in the order chosen."""
-        return [r for r in rows if r[1].pinned] + [r for r in rows if not r[1].pinned]
+    def _pinned_first(rows: list, pin_order=()) -> list:
+        """Pinned papers above the rest: in the order they were dragged into, then any
+        not yet placed in the order chosen; the rest in the order chosen."""
+        place = {pid: i for i, pid in enumerate(pin_order)}
+        pinned = [r for r in rows if r[1].pinned]
+        if place:
+            pinned.sort(key=lambda r: place.get(r[1].id, len(place)))
+        return pinned + [r for r in rows if not r[1].pinned]
 
     def _say_count(self, rows: list) -> None:
         total = len(self.win.papers)
@@ -1274,6 +1434,10 @@ class QueuePage(QWidget):
             f"QMenu::item:selected{{background:{self.win.pal['accentSoft']};}}"
         )
         menu.addAction("開啟").triggered.connect(lambda: self.win.open_paper(paper.id))
+        web = menu.addMenu("開啟網頁")
+        for label, url in paper_links.links(paper):
+            web.addAction(label).triggered.connect(
+                lambda _checked=False, url=url: QDesktopServices.openUrl(QUrl(url)))
         menu.addAction("取消置頂" if paper.pinned else "置頂").triggered.connect(
             lambda: self.win.set_pinned([paper.id], not paper.pinned)
         )

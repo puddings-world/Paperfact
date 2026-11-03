@@ -50,6 +50,19 @@ views fall back to Qt's plain rich text, showing formulas as their source.
 `tests/conftest.py`) so no Chromium starts per test; `node --test tests/*.mjs` runs
 the JavaScript tests.
 
+## Diagnosing a slow window
+
+The app always records freezes over 0.25 s, with the code location only, to
+`ui-stalls.log` in the data folder. For slowness made of many short busy moments,
+start the app with `PAPERFACT_PROBE=1`: once a minute it appends to
+`<data>/diagnostics/main-thread-<date>.log` how busy the window's thread was, its CPU
+use and the busiest code locations. It is off unless set, never uploads and records
+no paper content.
+
+```powershell
+$env:PAPERFACT_PROBE = "1"; .\scripts\dev.ps1 app
+```
+
 ## External services
 
 The paper sources require no account; one benefits from a free key. The language

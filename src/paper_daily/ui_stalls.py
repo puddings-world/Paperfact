@@ -53,6 +53,10 @@ class Watchdog:
         self.samples: Counter[tuple[str, ...]] = Counter()
         self.stall_started = None
         self.stopped = threading.Event()
+        # Cleared while the window sleeps: no beats are expected, and the watcher
+        # waits instead of waking 50 times a second for nothing.
+        self.awake = threading.Event()
+        self.awake.set()
         self._thread = threading.Thread(target=self._run, name="ui-stall-watch", daemon=True)
 
     def start(self) -> None:
@@ -60,6 +64,22 @@ class Watchdog:
 
     def stop(self) -> None:
         self.stopped.set()
+        self.awake.set()
+
+    def pause(self) -> None:
+        self.awake.clear()
+        timer = getattr(self, "timer", None)
+        if timer is not None:
+            timer.stop()
+
+    def resume(self) -> None:
+        self.samples.clear()
+        self.stall_started = None
+        self.beat = self.clock()
+        timer = getattr(self, "timer", None)
+        if timer is not None:
+            timer.start()
+        self.awake.set()
 
     def heartbeat(self) -> None:
         self.beat = self.clock()
@@ -79,6 +99,9 @@ class Watchdog:
 
     def _run(self) -> None:
         while not self.stopped.wait(SAMPLE_EVERY):
+            if not self.awake.is_set():
+                self.awake.wait()
+                continue
             self.check()
 
     def _write(self, seconds: float) -> None:

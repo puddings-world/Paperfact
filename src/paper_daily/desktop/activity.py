@@ -118,6 +118,13 @@ class Job:
     # Long AI work that waits its turn; `launch` starts it when the turn comes.
     queued: bool = False
     launch: object = None
+    # The paper or list the work is for, so a line in the tray says which and can go there.
+    place: str | None = None
+    list_id: str | None = None
+
+    @property
+    def title(self):
+        return f"{self.label}「{self.place}」" if self.place else self.label
 
 
 ACTIVE = ("running", "queued")
@@ -223,6 +230,12 @@ class ActivityHub(QObject):
                   retry_failed=retry_failed, queued=queued)
         if queued and any(j.queued and j.state == "running" for j in self.jobs.values()):
             job.state = "queued"
+        job.list_id = _list_of(key)
+        if paper_id or job.list_id:
+            from paper_daily import store
+
+            with store.connect() as conn:
+                job.place = _place_name(conn, dict(key=key, paper_id=paper_id))
         self.jobs[token] = job
         self._restage()
         self._remember()
@@ -327,6 +340,16 @@ class ActivityHub(QObject):
               and owner.isVisible()):
             owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
+    def visit(self, token):
+        """Show the paper or list a job is for, wherever the reader is now."""
+        job = self.jobs.get(token)
+        if job is None:
+            return
+        if job.paper_id and hasattr(self.window, "open_anywhere"):
+            self.window.open_anywhere(job.paper_id)
+        elif job.list_id and hasattr(self.window, "_open_list"):
+            self.window._open_list(job.list_id)
+
     def _remember(self):
         from paper_daily.desktop import ui_state
 
@@ -350,7 +373,7 @@ class ActivityHub(QObject):
             if not isinstance(item, dict):
                 continue
             name = str(item.get("label") or "AI 工作")
-            where = _unfinished_place(conn, item)
+            where = _place_name(conn, item)
             names.append(f"{name}「{where}」" if where else name)
         self._remembered = []
         ui_state.save(UNFINISHED_KEY, [])
@@ -447,6 +470,10 @@ class ActivityHub(QObject):
 
 
 class ActivityBoard(QWidget):
+    # It takes the keys to draw attention to new work; returning to the window should
+    # give them back to the page (dormancy.keys_home).
+    _keys_elsewhere = True
+
     def __init__(self, hub, baseline, palette, height=34):
         super().__init__()
         self.hub, self.baseline, self.pal = hub, baseline, palette
@@ -479,6 +506,10 @@ class ActivityBoard(QWidget):
         self.result = QPushButton("查看結果")
         self.result.clicked.connect(self._goto)
         row.addWidget(self.result)
+        self.go = QPushButton("前往")
+        self.go.setToolTip("切到這份工作的論文或清單")
+        self.go.clicked.connect(self._visit)
+        row.addWidget(self.go)
         self.panel = None
         self.more = QPushButton("工作")
         self.more.clicked.connect(self._menu)
@@ -513,7 +544,7 @@ class ActivityBoard(QWidget):
         waiting = job.state == "queued"
         pulse = "…" if waiting else "◐◓◑◒"[int(time.monotonic() * 2) % 4] if active else (
             "✓" if job.state == "done" else "!")
-        label = f"{pulse} {job.label} · {job.stage} · {seconds // 60}:{seconds % 60:02d}"
+        label = f"{pulse} {job.title} · {job.stage} · {seconds // 60}:{seconds % 60:02d}"
         self.text.setText(label)
         self.text.setToolTip(label + "\n" + "\n".join(job.history))
         self.setAccessibleName(label)
@@ -527,6 +558,11 @@ class ActivityBoard(QWidget):
             self.step.setText(step[0])
         self.result.setVisible(not active and job.state not in ("error", "interrupted"))
         self.dismiss.setVisible(not active)
+        # While it runs: go to its paper or list. After a failure: go back to where it
+        # was asked for, whose own line says more than this notice can.
+        self.go.setVisible(
+            active and bool(job.paper_id or job.list_id) and not self._here(job)
+            or job.state == "error" and callable(job.result))
         if active and job.total is None:
             self.bar.setRange(0, 0)
         else:
@@ -544,6 +580,17 @@ class ActivityBoard(QWidget):
     def _goto(self):
         if job := self.job():
             self.hub.goto(job.token)
+
+    def _here(self, job):
+        paper, active_list, _tab, _page = self.hub.context()
+        return paper == job.paper_id if job.paper_id else active_list == job.list_id
+
+    def _visit(self):
+        if job := self.job():
+            if job.state in ACTIVE:
+                self.hub.visit(job.token)
+            else:
+                self.hub.goto(job.token)
 
     def _stop(self):
         if job := self.job():
@@ -578,12 +625,17 @@ STATES = dict(running="進行中", queued="排隊中", done="完成", partial="�
               cancelled="已停止", interrupted="上次中斷")
 
 
-def _unfinished_place(conn, item):
-    paper_id, key = item.get("paper_id"), str(item.get("key") or "")
+def _list_of(key):
+    key = str(key or "")
+    return key.partition(":")[2] or None if key.startswith(("queue:", "survey:")) else None
+
+
+def _place_name(conn, item):
+    paper_id = item.get("paper_id")
     if paper_id:
         row = conn.execute("SELECT title FROM papers WHERE id = ?", (str(paper_id),)).fetchone()
         return row[0][:60] if row and row[0] else None
-    list_id = key.partition(":")[2] if key.startswith(("queue:", "survey:")) else None
+    list_id = _list_of(item.get("key"))
     if list_id:
         row = conn.execute("SELECT name FROM lists WHERE id = ?", (list_id,)).fetchone()
         return row[0][:60] if row and row[0] else None
@@ -593,7 +645,7 @@ def _unfinished_place(conn, item):
 def describe(job, now=None):
     seconds = max(0, int((job.ended or now or time.monotonic()) - job.started))
     count = f" · {job.completed}/{job.total}" if job.total else ""
-    return (f"{STATES[job.state]} · {job.label}{count} · {job.stage} · "
+    return (f"{STATES[job.state]} · {job.title}{count} · {job.stage} · "
             f"{seconds // 60}:{seconds % 60:02d}")
 
 
@@ -640,6 +692,8 @@ class JobPanel(QFrame):
         text.setStyleSheet(f"color:{color};font-size:12px;")
         line.addWidget(text, 1)
         buttons = []
+        if job.state in ACTIVE and (job.paper_id or job.list_id):
+            buttons.append(("前往", lambda: self._visit(job.token), True))
         if job.state == "queued":
             buttons.append(("取消排隊", lambda: self.hub.cancel(job.token), True))
         if job.state == "running" and job.cancel is not None:
@@ -655,6 +709,10 @@ class JobPanel(QFrame):
             line.addWidget(button)
         row.setAccessibleName(describe(job))
         return row
+
+    def _visit(self, token):
+        self.hide()
+        self.hub.visit(token)
 
     def _open(self, token):
         self.hide()

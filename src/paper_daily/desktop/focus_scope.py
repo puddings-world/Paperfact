@@ -58,7 +58,18 @@ class _Frame(QWidget):
             self._timer = QTimer(self)
             self._timer.setInterval(FRAME_TICK_MS)
             self._timer.timeout.connect(self._advance)
+            # The band only moves while the app is in front; in the background the
+            # timer is stopped rather than woken 20 times a second to do nothing.
+            QApplication.instance().applicationStateChanged.connect(self._app_state)
+            self._app_state(QApplication.applicationState())
+
+    def _app_state(self, state) -> None:
+        if not isValid(self):
+            return
+        if state == Qt.ApplicationState.ApplicationActive:
             self._timer.start()
+        else:
+            self._timer.stop()
 
     def resizeEvent(self, _event) -> None:
         # Only the ring is this widget's: each animation step then repaints a

@@ -126,7 +126,22 @@ The owner picked the top three of the second survey:
    Step 4 done: long AI work still running or waiting is kept in
    `ui.unfinished_jobs`; if a crash or power cut ends it (a normal close waits for
    it), the next start shows 上次未完成 once, naming the paper or list. Nothing
-   restarts by itself.
+   restarts by itself. Jobs name their paper or list and offer 前往. A window in the
+   background for five minutes pauses its routine polls (`desktop/dormancy.py`) and
+   catches up once on return; AI usage refreshes only while the window is in front.
+
+## Focused Q&A, key notes, notes as slide material
+
+Step 1 done: 精要 / 接續上一題 beside 問 AI. Contract change for the core owner's
+ledger: a QA receipt (`research_chat` context) is version 2 with
+`style: {answer: "concise"|"detailed", turns: 0|2|6}` only when a style other than the
+old default is chosen; the default (detailed, six turns) still writes version 1, and
+`validate_request_record` accepts both. History capture and the staleness check use
+the style's turns.
+Next: 存成關鍵筆記 (an explicit AI condensation of an exchange into an editable card:
+claim, 1–3 points, pages, the reader's own line), note provenance (mine / AI) so
+slides stop labelling saved answers as reader observations, and a slide pane that
+takes chosen key notes as the deck's spine instead of the last 30 raw chat turns.
 3. **Coloured status tags on keys 1–9**: up to nine tags (e.g. 精讀 / 略讀 / 待讀 /
    引用) toggled on a multi-selection in any list and shown as a colour chip.
 
