@@ -50,7 +50,10 @@ def _decode_usn(data):
     if layout is None or minor != 0 or not layout[0] <= length <= len(data):
         raise OSError("Unsupported file revision record")
     revision = struct.unpack_from("<q", data, layout[1])[0]
-    if revision <= 0:
+    # Zero is a real state: NTFS reports it for a file not written since the volume's
+    # change journal began, and the first write gives it a positive number. Refusing
+    # it made every older PDF unverifiable. Only a negative value is malformed.
+    if revision < 0:
         raise OSError("Filesystem does not expose a usable file revision")
     return revision
 

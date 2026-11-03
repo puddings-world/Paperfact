@@ -62,7 +62,8 @@ def test_known_native_revision_formats_preserve_the_exact_sequence(major, minimu
     assert file_change._decode_usn(bytes(data)) == 987654321
 
 
-@pytest.mark.parametrize("case", ["empty", "oversized", "unknown", "truncated", "minor", "zero"])
+@pytest.mark.parametrize("case", ["empty", "oversized", "unknown", "truncated", "minor",
+                                  "negative"])
 def test_unknown_native_revision_records_fail_closed(case):
     import struct
     data = bytearray(60)
@@ -79,9 +80,18 @@ def test_unknown_native_revision_records_fail_closed(case):
     elif case == "minor":
         struct.pack_into("<H", data, 6, 99)
     else:
-        struct.pack_into("<q", data, 24, 0)
+        struct.pack_into("<q", data, 24, -1)
     with pytest.raises(OSError):
         file_change._decode_usn(bytes(data))
+
+
+def test_a_file_unchanged_since_the_journal_began_has_revision_zero():
+    """NTFS reports 0 for a file not written since its change journal started; such a
+    PDF (most of an older library) must still have a version, or nothing can verify it."""
+    import struct
+    data = bytearray(60)
+    struct.pack_into("<IHH", data, 0, 60, 2, 0)
+    assert file_change._decode_usn(bytes(data)) == 0
 
 
 def test_rapid_same_size_writes_with_restored_mtime_have_distinct_versions(tmp_path):
