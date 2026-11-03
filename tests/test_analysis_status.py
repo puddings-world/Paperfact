@@ -151,3 +151,23 @@ def test_pending_bar_check_does_not_apply_to_replaced_context(app, workspace, mo
         release.set()
         bar._status_worker.close()
         bar.close()
+
+
+def test_an_unchanged_status_does_not_restyle_the_bar(app, monkeypatch):
+    """The bar is polled every two seconds while any analysis runs; restyling the same
+    button each time made the reader's header flicker."""
+    bar = analysis_bar.AnalysisBar(SimpleNamespace(analysis_running=lambda *a: False), palette())
+    styled = []
+    original = analysis_bar.ai_style.mark
+    monkeypatch.setattr(analysis_bar.ai_style, "mark",
+                        lambda *a, **k: styled.append(1) or original(*a, **k))
+    view = analysis_bar.describe({"dive": True, "cites": False}, False, {})
+    bar._render(view)
+    bar.label.setToolTip("Checking saved analysis...")
+    bar._render(dict(view))
+    assert len(styled) == 1
+    assert bar.label.toolTip() == view["tip"]
+    bar._render(analysis_bar.describe({"dive": True, "cites": True}, False, {}))
+    assert len(styled) == 2
+    bar._status_worker.close()
+    bar.close()

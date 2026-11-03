@@ -164,7 +164,7 @@ class ReadingPositionController(QObject):
         self.view = self.suggestion = self._key = None
         self._epoch = 0
         self._thread = self._pending = self._previous = None
-        self._paused = self._disposed = False
+        self._paused = self._disposed = self._quiet = False
         self._schema_required = False
         self.observer = NativePositionObserver(reader.pdf)
         self.observer.observed.connect(self._observed)
@@ -177,7 +177,9 @@ class ReadingPositionController(QObject):
         self.poll = QTimer(self)
         self.poll.setInterval(5000)
         self.poll.timeout.connect(
-            lambda: self.check() if not self._paused and not self._schema_required else None
+            lambda: self.check(quiet=True)
+            if not self._paused and not self._schema_required
+            else None
         )
         self.poll.start()
         self.remember_button = QPushButton(message("remember", locale))
@@ -253,7 +255,7 @@ class ReadingPositionController(QObject):
         self.remember_button.setEnabled(ready and not self.busy)
         self.resume_button.setEnabled(ready and self.suggestion is not None and not self.busy)
         self.check_button.setEnabled(not self.busy and self._context() is not None)
-        self.stop_button.setVisible(self.busy)
+        self.stop_button.setVisible(self.busy and not self._quiet)
 
     def invalidate(self):
         self._epoch += 1
@@ -290,9 +292,10 @@ class ReadingPositionController(QObject):
             "capture", (self.reader._highlight_view, self.reader.pdf.position_source_version())
         )
 
-    def _start(self, kind, data):
+    def _start(self, kind, data, *, quiet=False):
         if self.busy or not self._valid():
             return False
+        self._quiet = quiet
         self._started_epoch = self._epoch
         self._started_key = self._key
         self._resume_draft = (self.reader.ask_box.text(), self.reader.note_edit.toPlainText())
@@ -303,6 +306,12 @@ class ReadingPositionController(QObject):
         worker.finished.connect(self._finished)
         worker.finished.connect(lambda: _release(worker))
         _LIVE_WORKERS.add(worker)
+        if quiet:
+            # The five-second background check must not touch the toolbar: a status
+            # line that rewraps and a stop button that appears and vanishes resize
+            # the row above the PDF, and the page visibly jumps every few seconds.
+            worker.start()
+            return True
         self._text(
             "resuming"
             if kind == "resume"
@@ -317,6 +326,7 @@ class ReadingPositionController(QObject):
     @Slot()
     def _finished(self):
         worker, self._thread = self._thread, None
+        self._quiet = False
         if worker is None or self._disposed:
             return
         if self._epoch != self._started_epoch or self._context() != self._started_key:
@@ -395,12 +405,12 @@ class ReadingPositionController(QObject):
             return False
         return self._start("remember", (self.view, page, None, None))
 
-    def check(self):
+    def check(self, *, quiet=False):
         if self.busy or self._pending is not None or self.observer.pending_input:
             return False
         if self.view is None or not self._valid():
             return self.bind()
-        return self._start("check", self.view)
+        return self._start("check", self.view, quiet=quiet)
 
     def resume(self):
         if self.busy or self._pending is not None or self.view is None or not self._valid():

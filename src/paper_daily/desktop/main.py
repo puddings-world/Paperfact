@@ -1162,6 +1162,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self._qa_epoch += 1
         self._clear_passage()
         self._page_context = None
+        # Nothing said about the previous paper may stay on screen while this one
+        # loads; each line is rewritten below once this paper's state is known.
+        self.pdf_note.setText("")
+        self.highlight_status.setText("")
+        self.ask_status.setText("")
         self.ask_box.setText(self._qa_drafts.get((self._qa_view_database, paper.id), ""))
         self.paper = paper
         from paper_daily.desktop import highlight_actions
@@ -1228,7 +1233,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 f'<a href="res:others" style="color:{pal["muted"]};">'
                 f"文中提到的連結 {len(self._others)}</a>"
             )
-        if self._running(self._res_job):
+        if self._running(self._res_job) and self._res_for == paper.id:
             links.append(f'<span style="color:{pal["muted"]};">正在找程式碼…</span>')
         self.facts.setText(
             " ".join(self._facts_bits) + ("&nbsp;&nbsp;" + " · ".join(links) if links else "")
@@ -1266,7 +1271,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             return
         self._res_poll.stop()
         self._res_job = None
-        if self.paper and self.paper.id == self._res_for:
+        # The reader may have moved on; the paper now on screen gets its own check.
+        if self.paper:
             self._render_facts()
             self._check_resources()
 

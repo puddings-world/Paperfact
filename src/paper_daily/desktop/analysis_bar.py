@@ -72,6 +72,7 @@ class AnalysisBar(QWidget):
         self._state: dict[str, bool] = {}
         self._was_running = False
         self._epoch = 0
+        self._shown_view = None
         self._status_worker = analysis_status.LatestStatus(self)
         self._status_worker.failed.connect(self.label_error)
         row = QHBoxLayout(self)
@@ -170,6 +171,12 @@ class AnalysisBar(QWidget):
         self._was_running = mine
 
     def _render(self, view: dict) -> None:
+        # Polled every two seconds while any analysis runs; restyling an unchanged
+        # button re-polishes it and makes the reader's header flicker.
+        if view == self._shown_view:
+            self.label.setToolTip(view["tip"])
+            return
+        self._shown_view = view
         pal = self.pal
         colour = {"done": pal["done"], "busy": pal["ai"], "warn": pal["warn"], "todo": pal["faint"]}
         chips = "&nbsp;&nbsp;".join(

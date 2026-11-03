@@ -552,3 +552,36 @@ def test_controls_have_concise_bilingual_labels_and_responsive_geometry(reader, 
             assert button.minimumSizeHint().width() <= button.width()
     assert message("remember", locale) and message("resume", locale)
     assert "automatically" in message("coverage", "en")
+
+
+def test_background_check_leaves_the_toolbar_still(reader, monkeypatch):
+    """The five-second poll ran visibly: a "checking" line and a stop button came and
+    went, the toolbar rewrapped and the PDF below it jumped every few seconds."""
+    app, _widget, controller, _database, _path, _gates = reader
+    entered, release = gate(monkeypatch, reader, "refresh")
+    before = (controller.status.text(), controller.remember_button.isEnabled(),
+              controller.check_button.isEnabled())
+    assert controller.check(quiet=True)
+    assert entered.wait(20)
+    app.processEvents()
+    assert controller.busy
+    assert not controller.stop_button.isVisible()
+    assert (controller.status.text(), controller.remember_button.isEnabled(),
+            controller.check_button.isEnabled()) == before
+    release.set()
+    idle(app, controller)
+    assert controller.status.text() == before[0]
+    assert controller.poll.isActive()
+
+
+def test_an_asked_check_still_shows_that_it_is_working(reader, monkeypatch):
+    app, _widget, controller, _database, _path, _gates = reader
+    entered, release = gate(monkeypatch, reader, "refresh")
+    assert controller.check()
+    assert entered.wait(20)
+    app.processEvents()
+    assert controller.stop_button.isVisible()
+    assert controller.status.text() == message("checking", "en")
+    release.set()
+    idle(app, controller)
+    assert not controller.stop_button.isVisible()
