@@ -38,6 +38,9 @@ def verify(command, workspace, env):
             assert {t.name for t in tools.tools} == {
                 "lists.list",
                 "lists.read",
+                "lists.context",
+                "papers.search",
+                "papers.read",
                 "analysis.audit",
                 "imports.propose",
                 "imports.commit",
@@ -56,6 +59,6 @@ def verify(command, workspace, env):
                 "operations.inspect", {"operation_id": "acceptance"}
             )
             assert receipt.structured_content["result"]["state"] == "committed"
-        return {"mcp_tools": 7, "retry_preserved": True, "restart_recovery": True}
+        return {"mcp_tools": 10, "retry_preserved": True, "restart_recovery": True}
 
     return asyncio.run(exercise())

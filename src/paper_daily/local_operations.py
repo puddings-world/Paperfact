@@ -403,9 +403,48 @@ def audit_paper(paper_id: str) -> dict:
         ) from None
 
 
+def _reading(fn):
+    """research_read reports its own errors; give them the shared envelope."""
+    from functools import wraps
+
+    @wraps(fn)
+    def call(*args, **kwargs):
+        from paper_daily.research_read import ReadError
+
+        try:
+            return fn(*args, **kwargs)
+        except ReadError as error:
+            raise OperationError(error.code, str(error)) from None
+
+    return call
+
+
+def read_paper(paper_id, sections=None, max_chars=20_000, offset=0):
+    from paper_daily import research_read
+
+    return _reading(research_read.read_paper)(paper_id, sections, max_chars, offset)
+
+
+def list_context(list_id):
+    from paper_daily import research_read
+
+    return _reading(research_read.list_context)(_id(list_id, "list_id"))
+
+
+def search_papers(query, list_id=None, limit=20):
+    from paper_daily import research_read
+
+    if list_id is not None:
+        _id(list_id, "list_id")
+    return _reading(research_read.search_papers)(query, list_id, limit)
+
+
 OPERATIONS = {
     "lists.list": list_collections,
     "lists.read": read_collection,
+    "lists.context": list_context,
+    "papers.search": search_papers,
+    "papers.read": read_paper,
     "analysis.audit": audit_paper,
     "imports.propose": propose,
     "imports.commit": commit,
