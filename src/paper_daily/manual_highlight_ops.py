@@ -91,16 +91,31 @@ def capture_owner(database, paper_id):
     database = Path(database).resolve(strict=True)
     identity = generation._identity(database)
     with closing(generation._connect(database)) as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            owner = capture_owner_in(conn, paper_id, expected_identity=identity)
-            if generation._identity(database) != identity:
-                raise ValueError("Highlight owner changed during capture")
-            conn.commit()
-        except BaseException:
-            conn.rollback()
-            raise
-    return owner
+        # Opening a paper only reads: a deferred transaction is one WAL snapshot and
+        # never queues the reader window behind another writer's slow commit. Only a
+        # workspace that still lacks the lifecycle table needs the write lock.
+        for begin in ("BEGIN", "BEGIN IMMEDIATE"):
+            conn.execute(begin)
+            try:
+                if begin == "BEGIN" and not _lifecycle_installed(conn):
+                    conn.rollback()
+                    continue
+                owner = capture_owner_in(conn, paper_id, expected_identity=identity)
+                if generation._identity(database) != identity:
+                    raise ValueError("Highlight owner changed during capture")
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+            return owner
+
+
+def _lifecycle_installed(conn):
+    from paper_daily.research_lifecycle import TABLE
+
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (TABLE,)
+    ).fetchone() is not None
 
 
 def _file_identity(path):

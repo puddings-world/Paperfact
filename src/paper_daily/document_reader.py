@@ -52,12 +52,15 @@ FEW_NAMES = 25
 
 
 def _aliases(conn, name):
-    """Papers whose PDF file name is `name`. In LIKE, "_" matches any one character,
-    so the file name itself finds every id that could map to it (a superset, as LIKE
-    also ignores ASCII case); the exact mapping then decides."""
+    """Papers whose PDF file name is `name`. The mapping keeps every safe character and
+    the length, so an id maps here only if it matches the name with each "_" read as
+    any one character; the exact mapping then decides. GLOB is case-sensitive, so it
+    searches the id index from the name's first "_" on, where a case-blind LIKE read
+    the whole index on every paper opened."""
+    pattern = name.replace("_", "?")
     return sum(
         1
-        for (identity,) in conn.execute("SELECT id FROM papers WHERE id LIKE ?", (name,))
+        for (identity,) in conn.execute("SELECT id FROM papers WHERE id GLOB ?", (pattern,))
         if _safe_name(identity) == name
     )
 

@@ -393,3 +393,25 @@ def test_a_few_names_are_counted_the_same_way_one_by_one():
                      [(i,) for i in ("a_b", "a:b", "A_B", "x:y", "plain")])
     assert reader_module._alias_counts(conn, {"a_b", "x_y", "missing"}) == {
         "a_b": 2, "x_y": 1, "missing": 0}
+
+
+def test_one_opened_paper_searches_the_id_index_instead_of_reading_every_id():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
+    ids = ["ICLR:2015:s1", "ICLR_2015_s1", "iclr:2015:s1", "ICLR:2015:é1", "ICLR:2015:s12",
+           "ICLR::2015:s1", "ref:%1", "ref_x1", "plain.v2", "Plain.v2"]
+    ids += [f"NeurIPS:2020:s{n}" for n in range(300)]
+    conn.executemany("INSERT INTO papers VALUES (?)", [(i,) for i in ids])
+    names = {reader_module._safe_name(i) for i in ids[:10]} | {"missing_name"}
+
+    statements = []
+    conn.set_trace_callback(statements.append)
+    counts = reader_module._alias_counts(conn, names)
+    conn.set_trace_callback(None)
+
+    assert len(names) <= reader_module.FEW_NAMES
+    assert counts == {name: sum(reader_module._safe_name(i) == name for i in ids) for name in names}
+    assert counts["ICLR_2015_s1"] == 2 and counts["iclr_2015_s1"] == 1
+    for sql in statements:
+        plan = " ".join(row[3] for row in conn.execute("EXPLAIN QUERY PLAN " + sql))
+        assert "SEARCH" in plan, (sql, plan)

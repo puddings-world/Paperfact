@@ -346,3 +346,32 @@ def test_malformed_pdf_fails_closed_without_raw_parser_exception(view):
     with pytest.raises(ValueError, match="PDF verification failed"):
         ops.load(view.owner, path, document_hash(path))
     assert rows(view.owner.database, "SELECT * FROM pdf_highlights") == []
+
+
+def test_capturing_owner_on_open_never_waits_behind_another_writer(workspace):
+    import threading
+    import time
+
+    database = workspace[0]
+    expected = ops.capture_owner(database, "paper")
+    holding, release = threading.Event(), threading.Event()
+
+    def hold_write_lock():
+        with closing(sqlite3.connect(database)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            holding.set()
+            release.wait(5)
+            conn.rollback()
+
+    writer = threading.Thread(target=hold_write_lock)
+    writer.start()
+    try:
+        assert holding.wait(5)
+        started = time.perf_counter()
+        owner = ops.capture_owner(database, "paper")
+        elapsed = time.perf_counter() - started
+    finally:
+        release.set()
+        writer.join()
+    assert elapsed < 1
+    assert owner == expected
