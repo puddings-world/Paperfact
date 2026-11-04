@@ -81,9 +81,10 @@ ROOT = runtime.bundle_root()
 # Neighbours per side the map shows before 全部畫出 is asked for: past this the
 # labels no longer fit and the shape is lost in the crowd.
 GRAPH_LIMIT = 30
-# Cards made per turn of the event loop: enough that a list fills in well under a
-# second, few enough that scrolling and clicks are never held up.
-CHUNK = 12
+# Cards made per turn of the event loop. A card costs about 20 ms to lay out, and the
+# first turn runs inside the tab switch: twelve held the switch for a third of a
+# second, four fill the visible part of the page and keep every turn short.
+CHUNK = 4
 
 
 def coverage(
@@ -252,6 +253,13 @@ class CitesPane(QScrollArea):
         self._watch = QTimer(self)
         self._watch.setInterval(1500)
         self._watch.timeout.connect(self._links_done)
+        # Measuring the page lays out every card made so far. After each few cards
+        # that grew with the list; while cards stream in, once a tenth of a second
+        # keeps the page the right height.
+        self._fit_soon = QTimer(self)
+        self._fit_soon.setSingleShot(True)
+        self._fit_soon.setInterval(100)
+        self._fit_soon.timeout.connect(self._fit)
 
         self.setWidgetResizable(True)
         self._inner = QWidget()
@@ -819,21 +827,29 @@ class CitesPane(QScrollArea):
         cards = ((r, make) for r in rows)
         self._pending[side] = cards
         generation = self._generation
+        first = True
 
         def step() -> None:
+            nonlocal first
             if (not self._admitted() or generation != self._generation
                     or self._pending.get(side) is not cards):
                 return
+            done = False
             for _ in range(CHUNK):
                 if not self._add_card(side, box, cards):
                     self._pending.pop(side, None)
                     if side != self._side:
                         self._measure(side)
+                    done = True
                     break
             else:
                 QTimer.singleShot(0, step)
             if self._side_widgets[side].isVisible():
-                self._fit()
+                if first or done:
+                    self._fit()
+                elif not self._fit_soon.isActive():
+                    self._fit_soon.start()
+            first = False
 
         step()
 

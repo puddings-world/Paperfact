@@ -176,3 +176,17 @@ def test_the_map_legend_shows_each_verdict_in_the_colour_the_map_draws_it():
     for verdict, (_fill, line) in VERDICT_STYLE.items():
         assert f"color:{LIGHT[line]};font-size:14px;'>●</span>&nbsp;{verdict}" in legend
     assert "B 引用了 A" in legend and "雙擊開啟" in legend
+
+
+def test_loading_makes_only_the_first_screen_then_fills_the_whole_page(pane):
+    # The fixture's load ran inside one call, as a tab switch does.
+    made_in_switch = len(_titles(pane, "refs"))
+    assert 0 < made_in_switch <= 4
+    pane.settle()
+    time.sleep(0.15)
+    QApplication.processEvents()
+    assert len(_titles(pane, "refs")) == 40
+    # The page is as tall as all forty cards, not squeezed to the window.
+    cards = [card for (kind, _t), (side, card) in pane._cards.items()
+             if kind == "title" and side == "refs"]
+    assert pane._inner.minimumHeight() >= sum(card.height() for card in cards)
