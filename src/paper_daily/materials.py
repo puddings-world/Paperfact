@@ -212,12 +212,12 @@ def _pages(paper_id: str, *, document=None) -> list[tuple[int | None, str]]:
         return []
     pdf_path = document.path if document is not None else PDF_DIR / (_safe_name(paper_id) + ".pdf")
     if pdf_path.exists():
-        import pymupdf
+        from paper_daily import pdf_text
 
         try:
-            with pymupdf.open(pdf_path) as doc:
-                pages = [(i + 1, doc[i].get_text()) for i in range(min(len(doc), MAX_PAGES))]
-                return pages if document_current(document) else []
+            text = pdf_text.pages(pdf_path)
+            pages = [(i + 1, t) for i, t in enumerate(text[:MAX_PAGES])]
+            return pages if document_current(document) else []
         except (RuntimeError, ValueError, OSError):
             pass
     if document is not None:

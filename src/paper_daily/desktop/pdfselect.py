@@ -176,7 +176,10 @@ class SelectionOverlay(QWidget):
         self._doc = None
         self._words: dict[int, list[Word]] = {}
         self._selected: list[Word] = []
-        self._marks: list[tuple[dict, list[Word]]] = []
+        # Marks resolve to words as their pages come into view: cutting every marked
+        # page into words up front cost 0.4 s each time a marked paper was opened.
+        self._mark_records: list[dict] = []
+        self._mark_words: dict[int, list[Word]] = {}
         self._records: list[dict] = []
         self.hidden_layers: set[str] = set()
         # Focus mode's reading ruler: the lines around the pointer stay lit.
@@ -221,7 +224,8 @@ class SelectionOverlay(QWidget):
             except Exception:
                 return False
         self.clear()
-        self._marks.clear()
+        self._mark_records = []
+        self._mark_words = {}
         self._records = []
         self._words.clear()
         self._close()
@@ -326,22 +330,46 @@ class SelectionOverlay(QWidget):
 
     def set_highlights(self, records: list[dict]) -> None:
         self._records = list(records)
-        self._marks = []
-        for record in self._records:
-            if self.layer(record) in self.hidden_layers:
-                continue
-            anchor = record["anchor"]
-            words = [w for page in range(anchor["p0"], anchor["p1"] + 1)
-                     for w in self.words_on(page)
-                     if (page, w.order) >= (anchor["p0"], anchor["o0"])
-                     and (page, w.order) <= (anchor["p1"], anchor["o1"])]
-            if words:
-                self._marks.append((record, words))
+        self._mark_records = [r for r in self._records if self.layer(r) not in self.hidden_layers]
+        self._mark_words = {}
         self.update()
+
+    def _words_of_mark(self, index: int) -> list[Word]:
+        if index not in self._mark_words:
+            anchor = self._mark_records[index]["anchor"]
+            self._mark_words[index] = [
+                w for page in range(anchor["p0"], anchor["p1"] + 1)
+                for w in self.words_on(page)
+                if (page, w.order) >= (anchor["p0"], anchor["o0"])
+                and (page, w.order) <= (anchor["p1"], anchor["o1"])
+            ]
+        return self._mark_words[index]
+
+    def marks_on(self, pages=None) -> list[tuple[dict, list[Word]]]:
+        """(record, words) of the shown marks touching `pages`, or of every mark."""
+        out = []
+        for index, record in enumerate(self._mark_records):
+            anchor = record["anchor"]
+            if pages is not None and not any(anchor["p0"] <= p <= anchor["p1"] for p in pages):
+                continue
+            words = self._words_of_mark(index)
+            if words:
+                out.append((record, words))
+        return out
+
+    @property
+    def _marks(self) -> list[tuple[dict, list[Word]]]:
+        return self.marks_on()
+
+    def _pages_in_view(self, pages) -> set[int]:
+        top = self.map.view.verticalScrollBar().value()
+        return {i for i, (_x, y, _w, h, _sx, _sy) in enumerate(pages)
+                if y - top < self.height() and y + h - top > 0}
 
     def selected_highlights(self) -> list[int]:
         selected = {(w.page, w.order) for w in self._selected}
-        return [record["id"] for record, words in self._marks
+        pages = {w.page for w in self._selected}
+        return [record["id"] for record, words in self.marks_on(pages)
                 if any((w.page, w.order) in selected for w in words)]
 
     # ---- anchors ---------------------------------------------------------
@@ -504,7 +532,7 @@ class SelectionOverlay(QWidget):
         if len(text.strip()) < 2:
             point = event.position().toPoint()
             pages = self.map.pages()
-            for _record, words in reversed(self._marks):
+            for _record, words in reversed(self.marks_on(self._pages_in_view(pages))):
                 if any(self.map.rect_for(word, pages).contains(point) for word in words):
                     self._selected = words[:]
                     self.update()
@@ -535,7 +563,7 @@ class SelectionOverlay(QWidget):
 
     def paintEvent(self, _event) -> None:
         band = self.ruler_band()
-        if not self._selected and not self._marks and band is None:
+        if not self._selected and not self._mark_records and band is None:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -543,7 +571,7 @@ class SelectionOverlay(QWidget):
         painter.setBrush(QColor(255, 224, 45, 100))
         painted = set()
         pages = self.map.pages()
-        for record, words in self._marks:
+        for record, words in self.marks_on(self._pages_in_view(pages)):
             painter.setBrush(
                 QColor(95, 218, 145, 100) if record.get("origin") == "ai"
                 else QColor(255, 224, 45, 100)

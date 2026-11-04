@@ -209,3 +209,39 @@ def test_single_source_id_cannot_replace_original_text_or_page():
         PAGES,
     )
     assert result[0]["text"] == PAGES[1]["text"] and result[0]["page"] == 2
+
+
+def test_a_passed_check_is_not_repeated_until_the_original_or_cache_changes(tmp_path, monkeypatch):
+    """Checking the cache read every page of the PDF each time a paper opened; once it
+    has passed, it stands until the original or the cache file changes."""
+    monkeypatch.setattr(highlights, "CACHE_DIR", tmp_path / "paper-highlights")
+    monkeypatch.setattr(highlights, "PDF_DIR", tmp_path)
+    monkeypatch.setattr(highlights, "TEXT_DIR", tmp_path)
+    monkeypatch.setattr(highlights.llm, "settings", lambda **kwargs: "configured-provider")
+    source = tmp_path / "paper.txt"
+    source.write_text(PAGES[0]["text"], encoding="utf-8")
+    monkeypatch.setattr(
+        highlights.llm, "complete_result", lambda *a, **k: fake_reply({"items": [choice()]})
+    )
+    assert highlights.generate("paper")[1] == "ok"
+    original, reads = highlights.read_original, []
+
+    def counted(paper_id):
+        reads.append(paper_id)
+        return original(paper_id)
+
+    monkeypatch.setattr(highlights, "read_original", counted)
+    first = highlights.cached("paper")
+    assert first is not None and len(reads) == 1
+    assert highlights.cached("paper") == first and len(reads) == 1  # Not read again.
+    # The note lives outside the research folders that backups account for.
+    assert not [f for f in highlights.CACHE_DIR.iterdir() if f != highlights._path("paper")]
+
+    source.write_text(PAGES[0]["text"] + " Changed.", encoding="utf-8")
+    assert highlights.cached("paper") is None and len(reads) == 2
+    source.write_text(PAGES[0]["text"], encoding="utf-8")
+    assert highlights.cached("paper") is not None and len(reads) == 3
+    data = json.loads(highlights._path("paper").read_text(encoding="utf-8"))
+    data["items"][0]["text"] = "Not in the original at all, fabricated."
+    highlights._path("paper").write_text(json.dumps(data), encoding="utf-8")
+    assert highlights.cached("paper") is None and len(reads) == 4  # An edited cache is rechecked.

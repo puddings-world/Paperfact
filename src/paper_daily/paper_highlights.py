@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from paper_daily import llm
-from paper_daily.config import DATA_DIR, PDF_DIR, TEXT_DIR
+from paper_daily.config import DATA_DIR, HTTP_CACHE, PDF_DIR, TEXT_DIR
 from paper_daily.fetch import _safe_name
 from paper_daily.presentations import _atomic_json
 
@@ -43,13 +43,21 @@ def normalize(text: str) -> str:
     return " ".join(text.split())
 
 
-def read_original(paper_id: str) -> list[dict]:
+def _source(paper_id: str) -> Path:
     pdf = PDF_DIR / (_safe_name(paper_id) + ".pdf")
-    path = pdf if pdf.exists() else TEXT_DIR / (_safe_name(paper_id) + ".txt")
+    return pdf if pdf.exists() else TEXT_DIR / (_safe_name(paper_id) + ".txt")
+
+
+def _identity(path: Path) -> list:
+    stat = path.stat()
+    return [str(path.resolve()), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size]
+
+
+def read_original(paper_id: str) -> list[dict]:
+    path = _source(paper_id)
     if not path.exists():
         return []
-    stat = path.stat()
-    pages = _original_pages(str(path.resolve()), stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+    pages = _original_pages(*_identity(path))
     return [dict(page) for page in pages]
 
 
@@ -57,12 +65,12 @@ def read_original(paper_id: str) -> list[dict]:
 def _original_pages(filename, modified, changed, size):
     path = Path(filename)
     if path.suffix == ".pdf":
-        import pymupdf
+        from paper_daily import pdf_text
 
-        with pymupdf.open(path) as doc:
-            return tuple(
-                {"page": i + 1, "text": normalize(p.get_text())} for i, p in enumerate(doc)
-            )
+        return tuple(
+            {"page": i + 1, "text": normalize(text)}
+            for i, text in enumerate(pdf_text.pages(path))
+        )
     return ({"page": None, "text": normalize(path.read_text(encoding="utf-8"))},)
 
 
@@ -74,21 +82,44 @@ def _path(paper_id: str):
     return CACHE_DIR / (hashlib.sha256(paper_id.encode()).hexdigest() + ".json")
 
 
+def _checked_path(paper_id: str) -> Path:
+    # A disposable machine-local note, kept out of the research folders that exports,
+    # sync and backups account for file by file; losing it only costs one re-check.
+    return CACHE_DIR.parent / HTTP_CACHE.name / "highlight-checks" / _path(paper_id).name
+
+
 def cached(paper_id: str, pages: list[dict] | None = None) -> dict | None:
     dest = _path(paper_id)
     if not dest.exists():
         return None
     try:
-        pages = read_original(paper_id) if pages is None else pages
         data = json.loads(dest.read_text(encoding="utf-8"))
         if (
             not isinstance(data, dict)
             or data.get("version") != VERSION
             or data.get("paper_id") != paper_id
-            or data.get("source_hash") != _hash(pages)
         ):
             return None
+        # Checking a cache against its original means reading every page of the PDF,
+        # a third of a second on the reader's thread each time a paper opens. Once a
+        # check has passed, the original's identity is recorded beside the cache;
+        # while neither has changed since, the check stands.
+        witness = None
+        if pages is None:
+            source = _source(paper_id)
+            witness = {"source": _identity(source) if source.exists() else None,
+                       "cache": _identity(dest), "source_hash": data.get("source_hash")}
+            try:
+                if json.loads(_checked_path(paper_id).read_text(encoding="utf-8")) == witness:
+                    return data
+            except (OSError, ValueError):
+                pass
+            pages = read_original(paper_id)
+        if data.get("source_hash") != _hash(pages):
+            return None
         _validate(data.get("items"), pages, maximum=16)
+        if witness is not None and witness["source"] is not None:
+            _atomic_json(_checked_path(paper_id), witness)
         return data
     except (ValueError, TypeError, KeyError, OSError, RuntimeError):
         return None
