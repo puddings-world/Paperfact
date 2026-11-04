@@ -1027,23 +1027,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.passage_chip.hide()
         al.addWidget(self.passage_chip)
         ask_bar = QHBoxLayout()
-        self.ask_box = QLineEdit()
-        self.ask_box.setPlaceholderText("問這篇論文的任何問題…")
-        self.ask_box.returnPressed.connect(lambda: self._ask_from_box(self.ask_box.text()))
-        self.ask_box.setStyleSheet(
-            f"background:{pal['surface']};color:{pal['ink']};"
-            f"border:1px solid {pal['firm']};padding:8px;"
-        )
-        ask_bar.addWidget(self.ask_box, 1)
-        self.ask_btn = QPushButton("送出")
-        ai_style.mark(self.ask_btn, pal, primary=True)
-        self.ask_btn.clicked.connect(lambda: self._ask_from_box(self.ask_box.text()))
-        ask_bar.addWidget(self.ask_btn)
-        al.addLayout(ask_bar)
         # 精要 answers one question at a time: a conclusion and page-cited support, without
-        # earlier turns. 接續上一題 brings the last exchange back for one follow-up.
-        style_bar = QHBoxLayout()
-        style_bar.setSpacing(6)
+        # earlier turns. 接續上一題 brings the last exchange back for one follow-up. They sit
+        # on the question's own row: a row of their own pushed the composer off a short
+        # window.
         self.concise_btn = QPushButton("精要")
         self.concise_btn.setCheckable(True)
         self.concise_btn.setToolTip(
@@ -1059,9 +1046,20 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 f"QPushButton:checked{{border-color:{pal['accent']};color:{pal['accent']};"
                 f"background:{pal['accentSoft']};}}")
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-            style_bar.addWidget(button)
-        style_bar.addStretch(1)
-        al.addLayout(style_bar)
+            ask_bar.addWidget(button)
+        self.ask_box = QLineEdit()
+        self.ask_box.setPlaceholderText("問這篇論文的任何問題…")
+        self.ask_box.returnPressed.connect(lambda: self._ask_from_box(self.ask_box.text()))
+        self.ask_box.setStyleSheet(
+            f"background:{pal['surface']};color:{pal['ink']};"
+            f"border:1px solid {pal['firm']};padding:8px;"
+        )
+        ask_bar.addWidget(self.ask_box, 1)
+        self.ask_btn = QPushButton("送出")
+        ai_style.mark(self.ask_btn, pal, primary=True)
+        self.ask_btn.clicked.connect(lambda: self._ask_from_box(self.ask_box.text()))
+        ask_bar.addWidget(self.ask_btn)
+        al.addLayout(ask_bar)
         with connect() as conn:
             self.concise_btn.setChecked(ui_state.read(conn, "ui.ask.concise", True) is not False)
         self.concise_btn.toggled.connect(lambda on: ui_state.save("ui.ask.concise", on))
