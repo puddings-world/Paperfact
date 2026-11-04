@@ -405,6 +405,22 @@ def connect(*, timeout: float = 30, path=None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def keep_open(path=None) -> sqlite3.Connection:
+    """An idle connection the desktop window holds for its lifetime.
+
+    Closing a database's last connection checkpoints the WAL into the main file and
+    deletes it, and the next connection creates it again. The window opens and closes
+    many short connections, so on a hard disk every write cost about 110 ms and every
+    paper opened about half a second. While this one stays open, a write costs about
+    9 ms. It never holds a transaction, so it blocks no writer and no checkpoint.
+    Another workspace opens in its own process, and restores publish to new folders,
+    so the open file is never one this process must replace.
+    """
+    conn = sqlite3.connect(path or DB_PATH, timeout=5)
+    conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    return conn
+
+
 def init_db() -> None:
     from paper_daily.sync_capture import enabled
 

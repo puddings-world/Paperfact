@@ -4541,6 +4541,8 @@ def run(
         return 0
 
     window = MainWindow(open_next=open_next)
+    keeper = store.keep_open()
+    app.aboutToQuit.connect(keeper.close)
     from paper_daily.desktop.usage_monitor import UsageMonitor
 
     window.usage_monitor = UsageMonitor(window)
