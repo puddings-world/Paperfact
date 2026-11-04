@@ -36,3 +36,22 @@ def test_condensing_goes_through_the_model_service_and_says_why_it_failed(monkey
     assert drafted.startswith("## SAM2") and calls == [("ask", "fixture")]
     assert key_notes.condense("T", "Q", "A", connections={})[0] is None
     assert key_notes.condense("T", "Q", "A", connections={}) == (None, "rate limited")
+
+
+def test_the_suggested_follow_up_questions_never_reach_a_note():
+    """A concise answer may end by listing the parts it did not answer; in a note
+    that line broke the card's shape."""
+    answer = "結論：用幾何先驗。\n依據：\n- 點提示（p.3）\n\n也可以問:\n- 速度如何?\n- 失敗案例?"
+    assert key_notes.answer_for_note(answer) == "結論：用幾何先驗。\n依據：\n- 點提示（p.3）"
+    assert key_notes.answer_for_note("A (p.2)\n**也可以問：** 速度?") == "A (p.2)"
+    assert key_notes.answer_for_note("沒有建議的回答 (p.1)") == "沒有建議的回答 (p.1)"
+    # Mentioning the phrase mid-sentence is part of the answer.
+    assert key_notes.answer_for_note("作者說也可以問：為何有效") == "作者說也可以問：為何有效"
+
+
+def test_condensing_does_not_send_the_suggestions(monkeypatch):
+    sent = []
+    monkeypatch.setattr(llm, "complete",
+                        lambda prompt, *a, **k: sent.append(prompt) or (CARD, "ok"))
+    key_notes.condense("T", "Q", "答案 (p.2)\n也可以問：其他?", connections={})
+    assert "答案 (p.2)" in sent[0] and "其他?" not in sent[0]

@@ -1995,8 +1995,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             None,
         )
 
+        from paper_daily.key_notes import answer_for_note
+
         quote = " ".join((question["body"] if question else "").split())[:400]
-        body = f"> {quote}\n\n{answer['body']}" if quote else answer["body"]
+        kept = answer_for_note(answer["body"])
+        body = f"> {quote}\n\n{kept}" if quote else kept
         self.win.data.add_note(
             self.paper.id,
             body,

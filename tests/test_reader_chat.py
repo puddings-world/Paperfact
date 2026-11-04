@@ -327,3 +327,21 @@ def test_an_answer_becomes_a_key_note_only_after_the_reader_saves_it(reader, mon
     (note,) = [n for n in notes() if n not in before]
     assert note["kind"] == key_notes.KIND and "## 主張" in note["body"]
     assert main.note_headline(note["body"], note["kind"])[0] == "主張"
+
+
+def test_a_kept_answer_leaves_its_suggested_questions_in_the_conversation(reader, monkeypatch):
+    from PySide6.QtCore import QUrl
+
+    _, window, view = reader
+    deferred = Deferred()
+    monkeypatch.setattr(view, "runner", deferred)
+    llm.save_settings(profile="a", backend="openai", model="m", isolated=True)
+    monkeypatch.setattr(llm, "complete", lambda prompt, *a, **k: (
+        "結論：一句。\n依據：\n- 點（p.2）\n\n也可以問:\n- 第二題?", "ok"))
+    view._ask("What is new, and how fast?")
+    deferred.run()
+    answer = next(r for r in window.data.chat("local-paper") if r["role"] == "assistant")
+    assert "也可以問" in answer["body"]  # Still offered in the conversation.
+    view._note_action(QUrl(f"keep:{answer['id']}"))
+    (note,) = [dict(n) for n in window.data.notes("local-paper") if n["kind"] == "ask"]
+    assert note["body"].endswith("- 點（p.2）") and "第二題" not in note["body"]

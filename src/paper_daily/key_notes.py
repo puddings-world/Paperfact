@@ -8,6 +8,8 @@ reader asks for it, and the card opens in the editor before anything is saved.
 
 from __future__ import annotations
 
+import re
+
 from paper_daily import llm
 
 KIND = "key"
@@ -55,13 +57,26 @@ def note_body(question: str, card_text: str) -> str:
     return f"> {quote}\n\n{card_text}" if quote else card_text
 
 
+# A concise answer to a many-part question ends by listing the other parts under
+# this label (see ask.CONCISE_RULES). They are suggestions for the conversation,
+# not part of the answer, and a note that keeps them no longer reads as one card.
+FOLLOW_UPS = re.compile(r"^[\s>*_#-]*也可以問[\s*_]*[:：]", re.MULTILINE)
+
+
+def answer_for_note(answer: str) -> str:
+    """The answer without its trailing 也可以問 suggestions."""
+    found = list(FOLLOW_UPS.finditer(answer))
+    return answer[: found[-1].start()].rstrip() if found else answer
+
+
 def condense(title: str, question: str, answer: str, *, connections=None, cfg=None):
     """(card, reason): the drafted card, or None and why not.
 
     `connections` and `cfg` are captured when the reader asks, so switching account
     while it runs cannot move the work to another one."""
     with llm.connection_scope(connections):
-        result, reason = llm.complete(prompt(title, question, answer), cfg=cfg, timeout=300,
+        result, reason = llm.complete(prompt(title, question, answer_for_note(answer)),
+                                      cfg=cfg, timeout=300,
                                       task="ask")
     if not result:
         return None, reason or "AI 沒有回覆"
