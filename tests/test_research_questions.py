@@ -119,3 +119,47 @@ def test_late_questions_cannot_replace_a_different_paper(context, monkeypatch):
     assert widget.picker.count() == 0 and widget.paper_id == "b"
     widget.deleteLater()
     app.processEvents()
+
+
+def test_showing_the_tab_or_switching_papers_starts_no_ai(tmp_path, monkeypatch):
+    """Showing the tab started an AI job by itself: a model call nobody asked for, and
+    a failed job in the tray on every paper not yet analysed."""
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(rq, "CACHE_DIR", tmp_path)
+    started = []
+    monkeypatch.setattr(AskRunner, "start", lambda self, *a, **k: started.append(a))
+    widget = ResearchQuestions()
+    widget.load("a")
+    widget.show()
+    widget.load("b")
+    for _ in range(5):
+        app.processEvents()
+    assert started == []
+    assert "AI 更新建議" in widget.status.text()
+    widget.refresh_button.click()  # Asking for it is what starts the job.
+    assert len(started) == 1
+    widget.deleteLater()
+    app.processEvents()
+
+
+def test_asking_before_the_paper_is_analysed_says_what_to_do_first(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(rq, "CACHE_DIR", tmp_path)
+
+    def refuse(pid, force=False):
+        raise ValueError("Complete the deep explanation and close reading first")
+
+    monkeypatch.setattr(rq, "ensure", refuse)
+
+    def run_now(self, prompt, done, fail, call=None, **kwargs):
+        answer, reason = call(prompt)
+        return done(answer) if answer else fail(reason)
+
+    monkeypatch.setattr(AskRunner, "start", run_now)
+    widget = ResearchQuestions()
+    widget.load("a")
+    widget.refresh_button.click()
+    assert "先完成深入分析" in widget.status.text()
+    assert "ValueError" not in widget.status.text()
+    widget.deleteLater()
+    app.processEvents()

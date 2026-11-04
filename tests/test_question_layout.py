@@ -99,6 +99,7 @@ def test_background_question_completion_preserves_typed_draft_and_focus(shell, m
     window.resize(740, 400)
     window.show()
     window.activateWindow()
+    questions.generate(force=True)
     process(app, lambda: questions.runner.busy)
     try:
         assert questions.runner.busy

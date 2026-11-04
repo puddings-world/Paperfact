@@ -217,18 +217,16 @@ class ResearchQuestions(QWidget):
         self._saved_known = bool(saved.get("known"))
         self._has_saved = bool(saved.get("items"))
         self._fill(saved.get("items", []))
+        # Suggestions are made by 深入分析, or when the reader presses 更新建議. Showing
+        # the tab used to start an AI job on its own: a model call nobody asked for on
+        # analysed papers, and a failed job on every paper not yet analysed.
         self.status.setText("已保存本文建議；選擇後可編輯，送出才會詢問 AI。"
                             if self.picker.count()
-                            else "完成深入分析後，這裡會提供本文專屬的提問建議。")
+                            else "還沒有本文的提問建議：深入分析會一併產生；"
+                                 "已分析過的論文可按「AI 更新建議」。")
         if self._legacy_unverified:
             self.status.setText("舊版建議尚未核對原文版本；更新建議前不會自動呼叫 AI。")
         self._adoption_controls()
-        if self.isVisible():
-            QTimer.singleShot(0, self.generate)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        QTimer.singleShot(0, self.generate)
 
     def open_browser(self):
         if self.browser.isVisible():
@@ -329,20 +327,26 @@ class ResearchQuestions(QWidget):
         self.status.setText("正在準備本文候選問題（使用論文問答的 AI）…")
 
         def call(_prompt):
-            if database is None:
-                result, reason = research_questions.ensure(pid, force=force)
-            else:
-                from paper_daily.research_question_jobs import ensure
+            try:
+                if database is None:
+                    result, reason = research_questions.ensure(pid, force=force)
+                else:
+                    from paper_daily.research_question_jobs import ensure
 
-                result, reason = ensure(database, pid, force=force, connections=connections)
+                    result, reason = ensure(database, pid, force=force, connections=connections)
+            except ValueError as exc:
+                # The job refuses before any model call when its inputs are missing;
+                # say which, instead of a bare exception name in the job tray.
+                return None, (
+                    "需要先完成深入分析（深度講解與逐節精讀），才能產生本文的提問建議。"
+                    if "deep explanation" in str(exc) else f"無法產生提問建議：{exc}"
+                )
             return json.dumps(result, ensure_ascii=False) if result else None, reason
 
         def finish(value=None, reason=""):
             self.refresh_button.setEnabled(True)
             QTimer.singleShot(25, self, self._after_generation)
             if (self.paper_id, self._database, self._load_epoch) != (pid, database, epoch):
-                if self.isVisible():
-                    QTimer.singleShot(0, self.generate)
                 return
             if value:
                 saved = json.loads(value)
