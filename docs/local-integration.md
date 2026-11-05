@@ -95,17 +95,49 @@ sequenceDiagram
 |---|---|
 | `lists.list` | IDs, names and paper counts; pagination up to 100 lists |
 | `lists.read` | Ordered titles, identifiers and source URLs; up to 100 papers per page |
+| `lists.context` | v0.5 development: a list's note, reading goal, field survey and read-state counts |
+| `papers.search` | v0.5 development: paper IDs whose title, notes or Q&A contain every query word; whole workspace or one list |
+| `papers.read` | v0.5 development: everything saved about one paper, by section (below) |
 | `imports.propose` | Validate 1–500 structured papers and save a preview for seven days |
 | `imports.commit` | Save selected candidate IDs in their supplied order, atomically |
 | `imports.discard` | Cancel a preview, leaving saved research untouched |
 | `operations.inspect` | Recover a completed commit by operation ID |
 | `analysis.audit` | v0.5 development: check saved evidence offline against the owned PDF; no AI or edits |
 
-All six operations are **offline and use no AI**. Metadata supplied by an agent
+All ten operations are **offline and use no AI**. Metadata supplied by an agent
 is not publication verification. Sources are stored as data; URLs are not fetched
 by these tools. Open the list to use the desktop's existing PDF preparation,
 or request AI analysis separately through the app or the existing `analyze` CLI.
 MCP analysis/job-control tools are not included in this release.
+
+### Reading a paper's research
+
+`papers.read` takes a `paper_id`, an optional `sections` list, `max_chars` (default
+20 000, at most 100 000) and `offset`. Leaving out `sections` returns every section
+except `full_text`.
+
+| Section | Contents |
+|---|---|
+| `paper` | Metadata, authors, abstract, links, and each list it is in with its read state |
+| `dive` / `close_reading` | The deep dive and the section-by-section close reading (Markdown) |
+| `notes` | Reader notes: `note` (handwritten), `ask` (a kept answer), `key` (a key-note card) |
+| `chat` | Every Q&A turn, in order |
+| `highlights` | AI marks and the reader's own marks with pages, plus the AI highlight analysis |
+| `questions` / `context` | Research questions; the research-context summary and reading order |
+| `citations` / `later_work` | What each reference does in the paper; later work and how it relates |
+| `resources` | Code, data and model links |
+| `full_text` | The extracted text of the paper; only when named |
+
+Long texts return `text`, `length` and `next_offset`. To read further, name that one
+section and pass `offset=next_offset`. Lists return at most 300 items with `more`.
+
+```sh
+printf '%s' '{"paper_id":"PAPER_ID","sections":["dive","notes"]}' | paperfact integration papers.read --workspace /absolute/workspace
+```
+
+Success prints `{"ok": true, "result": {"paper_id": ..., "sections": {"dive": {"text": ...}, "notes": {"items": [...]}}}}`.
+Notes and Q&A are the reader's own research; a connected cloud-backed host sees
+them in its model context, like titles.
 
 ## JSON CLI from any project
 
