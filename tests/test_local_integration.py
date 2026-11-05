@@ -258,6 +258,43 @@ def test_cli_workspace_isolation_unicode_json_and_retries(tmp_path):
     assert bad.returncode == 2 and not json.loads(bad.stdout)["ok"]
 
 
+def test_cli_runs_every_operation_the_mcp_server_offers(tmp_path):
+    """Hosts without the MCP server read the same research by running one command."""
+    workspace = tmp_path / "workspace"
+
+    def call(*argv, arguments=None):
+        return subprocess.run(
+            [sys.executable, "-m", "paper_daily", "integration", *argv,
+             "--workspace", str(workspace)],
+            input=json.dumps(arguments or {}, ensure_ascii=False),
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            env=dict(os.environ, PAPERFACT_DATA=str(tmp_path / "elsewhere")),
+            timeout=30,
+        )
+
+    usage = call("--help").stdout
+    assert all(name in usage for name in ops.OPERATIONS)
+
+    def result(operation, arguments):
+        done = call(operation, arguments=arguments)
+        assert done.returncode == 0, done.stderr + done.stdout
+        return json.loads(done.stdout)["result"]
+
+    staged = result("imports.propose", {"name": "跨專案", "papers": papers()})
+    committed = result(
+        "imports.commit",
+        dict(preview_id=staged["preview_id"], operation_id="read", selected=["0", "1"]),
+    )
+    list_id = committed["list_id"]
+    assert result("lists.context", {"list_id": list_id})
+    found = result("papers.search", {"query": "Research B"})["papers"]
+    assert [paper["title"] for paper in found] == ["Research B"]
+    paper = result("papers.read", {"paper_id": found[0]["id"], "sections": ["paper"]})
+    assert paper["sections"]["paper"]["title"] == "Research B"
+
+
 @pytest.mark.parametrize("outer_source", ["current", "foreign"])
 def test_official_sdk_stdio_discovery_commit_errors_and_disconnect(
     tmp_path, monkeypatch, outer_source
