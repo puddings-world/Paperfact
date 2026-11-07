@@ -75,3 +75,14 @@ def test_unavailable_registered_store_is_not_created_by_production(bound, tmp_pa
     assert len(bound.journal.pending()) == count
     with store.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM reading_log").fetchone()[0] == 0
+
+
+def test_the_same_storage_reached_by_another_spelling_is_not_a_migration(bound, tmp_path):
+    seed()
+    (tmp_path / "elsewhere").mkdir()
+    again = tmp_path / "elsewhere" / ".."
+    with bound.journal.transaction() as conn:
+        register_paths(conn, "workspace", BlobStore(tmp_path / "blobs"), tmp_path / "versions")
+        register_paths(conn, "workspace", BlobStore(again / "blobs"), again / "versions")
+        with pytest.raises(ValueError, match="explicit migration"):
+            register_paths(conn, "workspace", BlobStore(tmp_path / "other"), tmp_path / "versions")

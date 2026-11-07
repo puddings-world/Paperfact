@@ -166,6 +166,11 @@ def initialize(conn):
         conn.execute(f"CREATE TABLE IF NOT EXISTS {table} ({definition})")
 
 
+def _location(row):
+    workspace, blob_root, version_root = row
+    return workspace, Path(blob_root).resolve(), Path(version_root).resolve()
+
+
 def register_paths(conn, workspace, store, version_root):
     if not conn.in_transaction or not isinstance(store, BlobStore):
         raise ValueError("Artifact paths require a transaction and explicit store")
@@ -179,7 +184,9 @@ def register_paths(conn, workspace, store, version_root):
         "SELECT workspace,blob_root,version_root FROM research_file_paths WHERE id=1"
     ).fetchone()
     expected = (workspace, str(store.root), str(root))
-    if row is not None and tuple(row) != expected:
+    # Compare locations, not spellings: on macOS a temporary folder is reached as
+    # both /var/... and /private/var/..., and the links were checked above.
+    if row is not None and _location(row) != _location(expected):
         raise ValueError("Changing artifact storage requires explicit migration")
     conn.execute("INSERT OR IGNORE INTO research_file_paths VALUES(1,?,?,?)", expected)
 
