@@ -333,3 +333,17 @@ def test_transport_rejects_unbounded_or_malformed_responses(responder, monkeypat
     with HttpTransport(url) as transport, pytest.raises(ValueError) as error:
         transport.pull("fixture-token")
     assert "must not appear" not in str(error.value)
+
+
+def test_starting_the_server_never_waits_on_a_dns_lookup(tmp_path, monkeypatch):
+    import socket
+
+    def no_dns(*_args):
+        raise AssertionError("a loopback server must not look up the host name")
+
+    monkeypatch.setattr(socket, "getfqdn", no_dns)
+    server = make_server(ReferenceService(tmp_path / "service.db"))
+    try:
+        assert server.server_name == "127.0.0.1" and server.server_port > 0
+    finally:
+        server.server_close()
