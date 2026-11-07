@@ -1,6 +1,7 @@
 """A bounded local activity view. No accounts, transport, or model work."""
 
 from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -162,6 +163,10 @@ class ResearchUpdatesDialog(QDialog):
             tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             tree.itemSelectionChanged.connect(self._buttons)
             tree.itemActivated.connect(lambda _item, _column: self.open_selected())
+            # On macOS a tree takes Return as "edit" and never emits itemActivated.
+            for name in ("Return", "Enter"):
+                shortcut = QShortcut(QKeySequence(name), tree, self.open_selected)
+                shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
             self.tabs.addTab(tree, self.t[key])
             self.trees.append(tree)
         self.tabs.currentChanged.connect(self._buttons)
