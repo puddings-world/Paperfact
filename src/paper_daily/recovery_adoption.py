@@ -684,14 +684,17 @@ class _Baseline:
     def __init__(self, service, inspection, database, value, ticket, seal):
         if seal is not _SEAL:
             raise ValueError("Recovered baseline requires its native inspection")
-        self.service, self.inspection, self.database = service, inspection, database
+        # Enrollment hands back the resolved path; on macOS a temporary folder's
+        # /var/... and /private/var/... spellings name the same staged database.
+        self.service, self.inspection = service, inspection
+        self.database = Path(database).resolve()
         if canonical_json(value) != inspection._snapshot or inspection._owner is not service:
             raise ValueError("Recovered baseline differs from its inspected source")
         self.value, self.ticket, self.seal = value, ticket, seal
         self.normalized_version = file_change.version(database)
 
     def check(self, database):
-        if self.seal is not _SEAL or Path(database) != self.database:
+        if self.seal is not _SEAL or Path(database).resolve() != self.database:
             raise ValueError("Recovered baseline belongs to another staged workspace")
         if file_change.version(self.database) != self.normalized_version:
             raise SnapshotChanged("Private recovered baseline changed before publication")

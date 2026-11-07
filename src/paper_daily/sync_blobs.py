@@ -43,8 +43,8 @@ def system_link(link, folder, *, posix=os.name == "posix") -> bool:
     return (
         posix
         and stat.S_ISLNK(link.st_mode)
-        and link.st_uid == 0
-        and folder.st_uid == 0
+        and getattr(link, "st_uid", None) == 0
+        and getattr(folder, "st_uid", None) == 0
         and not folder.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
     )
 
