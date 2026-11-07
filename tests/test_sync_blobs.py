@@ -290,3 +290,24 @@ def test_retry_after_failed_flush_still_flushes_before_acknowledgment(store, mon
     assert store.append(item, 0, data) == len(data)
     assert len(attempts) == 2
     assert store.finalize(item).read_bytes() == data
+
+
+def _entry(kind, uid, mode=0o755):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(st_mode=kind | mode, st_uid=uid)
+
+
+def test_only_a_system_owned_link_in_a_system_folder_is_part_of_the_layout():
+    from paper_daily.sync_blobs import system_link
+
+    link, folder = _entry(stat.S_IFLNK, 0), _entry(stat.S_IFDIR, 0)
+    # macOS puts every temporary folder under /var -> private/var.
+    assert system_link(link, folder, posix=True)
+    assert not system_link(_entry(stat.S_IFLNK, 501), folder, posix=True)
+    assert not system_link(link, _entry(stat.S_IFDIR, 501), posix=True)
+    assert not system_link(link, _entry(stat.S_IFDIR, 0, 0o777), posix=True)
+    assert not system_link(link, _entry(stat.S_IFDIR, 0, 0o775), posix=True)
+    assert not system_link(_entry(stat.S_IFDIR, 0), folder, posix=True)
+    # Windows reports uid 0 for every file, so ownership proves nothing there.
+    assert not system_link(link, folder, posix=False)
