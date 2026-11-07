@@ -162,7 +162,9 @@ class FigurePane(QScrollArea):
         if not self._valid(worker):
             worker.cancel()
             return
+        pending = self._pending_scroll
         self._clear()
+        self._pending_scroll = pending
         found = worker.figures
         if worker.source is not None:
             digest = worker.source.view.fingerprint
@@ -495,6 +497,13 @@ class FigurePane(QScrollArea):
     def scroll_to(self, index: int) -> None:
         """Bring entry `index` to the top of the list, under the contents line."""
         if not 0 <= index < len(self._entries):
+            worker = self._running
+            # Extraction may have finished before its queued GUI initialization.
+            # Retain only a selection for this still-current worker's real figures.
+            if (not self._entries and worker is not None and worker.mode == "extract"
+                    and self._valid(worker) and 0 <= index < len(worker.figures)):
+                self._pending_scroll = index
+                worker.priority = index
             return
         if self._entries[index] is None:
             self._pending_scroll = index

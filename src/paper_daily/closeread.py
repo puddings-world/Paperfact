@@ -96,13 +96,23 @@ CLOSE_INSTRUCTIONS = """\
 
 
 def write(
-    paper_id: str, timeout: int = 1800, *, database=None, connections=None
+    paper_id: str,
+    timeout: int = 1800,
+    *,
+    database=None,
+    connections=None,
+    expected_owner=None,
+    expected_document_hash=None,
 ) -> tuple[str | None, str]:
     """Generate once against loaded inputs; retain stale results without overwriting."""
     from paper_daily import research_generation as generation
     from paper_daily import research_job_lock, store
 
     database = (database or store.DB_PATH).resolve()
+    if expected_owner is not None and (
+        expected_owner.database != database or expected_owner.paper_id != paper_id
+    ):
+        raise ValueError("Close reading belongs to another research owner")
     with (
         research_job_lock.claim(database, "close_reading", paper_id) as acquired,
         llm.connection_scope(connections),
@@ -110,6 +120,8 @@ def write(
         if not acquired:
             return None, "close reading is already in progress"
         with closing(generation._connect(database)) as conn, conn:
+            if expected_owner is not None:
+                expected_owner.check(conn)
             row = conn.execute(
                 "SELECT p.*, q.role, q.reason FROM papers p "
                 "LEFT JOIN queue q ON q.paper_id=p.id WHERE p.id=?",
@@ -120,6 +132,13 @@ def write(
             context = generation.begin_generation(conn, table="close_readings", owner_id=paper_id)
             prepared = brief.pack_text(conn, row)
             pack, pdf = prepared
+            if expected_document_hash is not None and (
+                not isinstance(prepared, brief.PreparedPack)
+                or prepared.document is None
+                or not prepared.document.available
+                or prepared.document.sha256 != expected_document_hash
+            ):
+                return None, "The deep dive original changed before close reading"
             if isinstance(prepared, brief.PreparedPack):
                 context = generation.bind_inputs(
                     context, document=prepared.document, input_snapshot=prepared.snapshot
@@ -131,7 +150,9 @@ def write(
         body, reason = llm.complete(pack, system=CLOSE_INSTRUCTIONS, timeout=timeout, task="dive")
         if not body:
             return None, reason
-        if len(body) < 3000:
+        # Short papers can still have a substantive section-by-section reading.
+        sections = sum(1 for line in body.splitlines() if line.startswith("## "))
+        if len(body) < 3000 and not (sections and len(body) >= 600):
             return None, f"reply too short to be a close reading: {body.splitlines()[0][:120]}"
         result = generation.publish_generated(
             context,

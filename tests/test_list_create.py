@@ -80,3 +80,20 @@ def test_malformed_topic_response_leaves_workspace_unchanged(db, monkeypatch, re
     with pytest.raises(ValueError, match="格式"):
         list_create.create("Research", "a research topic", "topic")
     assert db.execute("SELECT count(*) FROM lists").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        '```\n{"queries": ["a"]}\n```',
+        '好的：\n```json\n{"queries": ["a"]}\n```',
+        '{"queries": ["a"]}',
+    ],
+)
+def test_topic_replies_with_any_fence_or_preface_are_read(reply):
+    assert list_create._json(reply) == {"queries": ["a"]}
+
+
+def test_an_unreadable_topic_reply_names_the_problem_in_chinese():
+    with pytest.raises(ValueError, match="AI 回傳的格式無法讀取"):
+        list_create._json("not json")

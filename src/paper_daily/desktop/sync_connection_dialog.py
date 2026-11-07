@@ -58,13 +58,9 @@ COPY = {
             "置 ID 與裝置憑證；這不是 AI 或 Google 帳號登入。"
         ),
         "privacy": (
-
-
             "憑證預設只保留於本次 App 使用；可選擇將驗證過的連線存入此裝"
             "置的系統憑證庫。憑證不會進入研究資料、資料包、備份或 App 設"
             "定。載入已儲存連線後仍需驗證。"
-
-
         ),
         "server": "服務網址",
         "workspace": "工作區 ID",
@@ -85,9 +81,7 @@ COPY = {
             "可以另外加入到新的資料夾。"
         ),
         "gates": (
-
             "仍需完成既有研究的完整啟用流程、正式裝置發證與撤銷介面。不支援的資料會停止接收，不會略過。"
-
         ),
         "checking": "正在確認服務回覆的工作區與裝置身分…",
         "connected": "已確認裝置身分；尚未傳送研究內容。",
@@ -114,12 +108,10 @@ COPY = {
             "r Google login."
         ),
         "privacy": (
-
             "Credentials stay in this app session unless you choose to remember t"
             "he verified connection in this device's system credential store. The"
             "y never enter research, packages, backups or app settings. Loading s"
             "aved details still requires verification."
-
         ),
         "server": "Service URL",
         "workspace": "Workspace ID",
@@ -148,11 +140,9 @@ COPY = {
             "directory."
         ),
         "gates": (
-
             "Still required: complete first enrollment of existing research and p"
             "roduction device issuance/revocation UI. Unsupported records stop re"
             "ceive; they are never skipped."
-
         ),
         "checking": ("Checking the service's authenticated workspace/device identity…"),
         "connected": ("Device identity verified; no research has been sent."),
@@ -197,12 +187,6 @@ COPY = {
         "empty": ("Enter the service URL, workspace ID, device ID and credential."),
     },
 }
-
-
-
-
-
-
 
 
 class SyncWorker(QThread):
@@ -278,11 +262,29 @@ class SyncConnectionDialog(QDialog):
         layout = QVBoxLayout(body)
         scroll.setWidget(body)
         outer.addWidget(scroll)
-        for text in (str(session.workspace.path.parent), self.t["intro"], self.t["privacy"]):
+        for text in (
+            (
+                "先載入已儲存連線，或展開新連線設定。驗證成功後再選擇同步。"
+                if self.zh
+                else "Load a saved connection or set up a new one. Verify it before syncing."
+            ),
+        ):
             label = QLabel(text)
             label.setWordWrap(True)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(label)
+        self.setup_button = QPushButton(
+            "設定新連線／修改連線" if self.zh else "Set up or edit a connection"
+        )
+        self.setup_button.setCheckable(True)
+        self.setup_button.setObjectName("sync-manual-setup")
+        layout.addWidget(self.setup_button)
+        self.setup_panel = QWidget()
+        setup_layout = QVBoxLayout(self.setup_panel)
+        setup_layout.setContentsMargins(0, 0, 0, 0)
+        setup_intro = QLabel(self.t["intro"])
+        setup_intro.setWordWrap(True)
+        setup_layout.addWidget(setup_intro)
         form = QFormLayout()
         self.endpoint, self.workspace_id, self.device_id, self.credential = (
             QLineEdit() for _ in range(4)
@@ -298,21 +300,24 @@ class SyncConnectionDialog(QDialog):
             field.setMaxLength(4096 if key == "token" else 2048 if key == "server" else 128)
             field.textChanged.connect(self._edited)
             form.addRow(self.t[key], field)
-        layout.addLayout(form)
+        setup_layout.addLayout(form)
         row = QHBoxLayout()
         self.connect_button = QPushButton(self.t["connect"])
         self.connect_button.clicked.connect(self.connect_session)
         self.disconnect_button = QPushButton(self.t["disconnect"])
         self.disconnect_button.clicked.connect(self.disconnect)
         row.addWidget(self.connect_button)
-        row.addWidget(self.disconnect_button)
+
         self.devices_button = QPushButton("裝置…" if self.zh else "Devices…")
         self.devices_button.clicked.connect(self.open_devices)
-        row.addWidget(self.devices_button)
-        layout.addLayout(row)
+
+        setup_layout.addLayout(row)
         self.remember_box = QCheckBox(self.v["remember"])
         self.remember_box.setChecked(False)
-        layout.addWidget(self.remember_box)
+        setup_layout.addWidget(self.remember_box)
+        layout.addWidget(self.setup_panel)
+        self.setup_panel.hide()
+        self.setup_button.toggled.connect(self.setup_panel.setVisible)
         saved_row = QHBoxLayout()
         self.load_saved_button = QPushButton(self.v["load"])
         self.forget_saved_button = QPushButton(self.v["forget"])
@@ -320,7 +325,11 @@ class SyncConnectionDialog(QDialog):
         self.forget_saved_button.clicked.connect(self.forget_saved)
         saved_row.addWidget(self.load_saved_button)
         saved_row.addWidget(self.forget_saved_button)
-        layout.addLayout(saved_row)
+        layout.insertLayout(1, saved_row)
+        connection_row = QHBoxLayout()
+        connection_row.addWidget(self.disconnect_button)
+        connection_row.addWidget(self.devices_button)
+        layout.addLayout(connection_row)
         self.identity_label = QLabel()
         self.identity_label.setWordWrap(True)
         layout.addWidget(self.identity_label)
@@ -331,11 +340,13 @@ class SyncConnectionDialog(QDialog):
         self.sync_button.clicked.connect(self.sync_now)
         layout.addWidget(self.sync_button)
         self.automatic_box = QCheckBox(
-            "自動同步此工作區（本次開啟期間）" if self.zh
+            "自動同步此工作區（本次開啟期間）"
+            if self.zh
             else "Sync this workspace automatically during this app session"
         )
         self.automatic_box.setToolTip(
-            "開啟後會背景傳送及接收研究資料；關閉不會刪除本機內容。" if self.zh
+            "開啟後會背景傳送及接收研究資料；關閉不會刪除本機內容。"
+            if self.zh
             else "Enabling sends and receives this workspace's research in the background."
         )
         self.automatic_box.setVisible(self.automatic is not None)
@@ -346,21 +357,38 @@ class SyncConnectionDialog(QDialog):
         layout.addWidget(self.automatic_status)
         if self.automatic is not None:
             self.automatic.changed.connect(self._automatic_changed)
+        self.advanced_button = QPushButton(
+            "進階：加入其他工作區與連線說明"
+            if self.zh
+            else "Advanced: join another workspace and connection details"
+        )
+        self.advanced_button.setCheckable(True)
+        layout.addWidget(self.advanced_button)
+        self.advanced_panel = QWidget()
+        advanced_layout = QVBoxLayout(self.advanced_panel)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.advanced_panel)
+        self.advanced_panel.hide()
+        self.advanced_button.toggled.connect(self.advanced_panel.setVisible)
         self.join_button = QPushButton(self.t["join"])
         self.join_button.clicked.connect(self.choose_join)
-        layout.addWidget(self.join_button)
+        advanced_layout.addWidget(self.join_button)
         self.open_created_button = QPushButton(
             "開啟新工作區視窗" if self.zh else "Open created workspace"
         )
         self.open_created_button.clicked.connect(self.open_created)
-        layout.addWidget(self.open_created_button)
+        advanced_layout.addWidget(self.open_created_button)
         self.destination_label = QLabel()
         self.destination_label.setWordWrap(True)
         self.destination_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.destination_label)
+        advanced_layout.addWidget(self.destination_label)
         gates = QLabel(self.t["gates"])
         gates.setWordWrap(True)
-        layout.addWidget(gates)
+        advanced_layout.addWidget(gates)
+        for text in (self.t["privacy"], str(session.workspace.path.parent)):
+            note = QLabel(text)
+            note.setWordWrap(True)
+            advanced_layout.addWidget(note)
         layout.addStretch()
         self.status = QLabel()
         self.status.setWordWrap(True)
@@ -398,8 +426,11 @@ class SyncConnectionDialog(QDialog):
         if self.automatic is None:
             return
         if checked:
-            if (not self.eligible or self.binding != self.session.summary()["identity"]
-                    or not self.automatic.enable()):
+            if (
+                not self.eligible
+                or self.binding != self.session.summary()["identity"]
+                or not self.automatic.enable()
+            ):
                 self.automatic_box.blockSignals(True)
                 self.automatic_box.setChecked(False)
                 self.automatic_box.blockSignals(False)
@@ -421,10 +452,15 @@ class SyncConnectionDialog(QDialog):
 
     def open_devices(self):
         summary = self.session.summary()
-        if (self.busy or self.disposed or self._invalid
-                or (self.automatic is not None and self.automatic.busy)
-                or not summary["authenticated"] or not self.eligible
-                or self.binding != summary["identity"]):
+        if (
+            self.busy
+            or self.disposed
+            or self._invalid
+            or (self.automatic is not None and self.automatic.busy)
+            or not summary["authenticated"]
+            or not self.eligible
+            or self.binding != summary["identity"]
+        ):
             return False
         from paper_daily.desktop.devices_dialog import DevicesDialog
 
@@ -464,8 +500,11 @@ class SyncConnectionDialog(QDialog):
         self.automatic_box.setChecked(checked)
         self.automatic_box.blockSignals(False)
         self.automatic_box.setEnabled(
-            not self.disposed and (checked or (available and live and self.eligible
-                                              and self.binding == summary["identity"]))
+            not self.disposed
+            and (
+                checked
+                or (available and live and self.eligible and self.binding == summary["identity"])
+            )
         )
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
@@ -515,9 +554,11 @@ class SyncConnectionDialog(QDialog):
         self.identity_label.setText(
             (("連線狀態：" if self.zh else "Connection state: ") + state)
             + (
-                (("\n上次成功同步：" if self.zh else "\nLast successful sync: ")
-                 if self.automatic is not None else
-                 ("\n上次手動同步：" if self.zh else "\nLast manual sync: "))
+                (
+                    ("\n上次成功同步：" if self.zh else "\nLast successful sync: ")
+                    if self.automatic is not None
+                    else ("\n上次手動同步：" if self.zh else "\nLast manual sync: ")
+                )
                 + summary["last_success"]
                 if summary["last_success"]
                 else ""
@@ -525,8 +566,12 @@ class SyncConnectionDialog(QDialog):
         )
 
     def _start(self, kind, task):
-        if (self.busy or self.disposed or self._invalid
-                or (kind != "probe" and self.automatic is not None and self.automatic.busy)):
+        if (
+            self.busy
+            or self.disposed
+            or self._invalid
+            or (kind != "probe" and self.automatic is not None and self.automatic.busy)
+        ):
             return False
         worker = SyncWorker(task, self)
         self._worker = worker
@@ -698,8 +743,11 @@ class SyncConnectionDialog(QDialog):
             return
         self._worker = None
         self._check_workspace()
-        if (not self._invalid and not self._closing
-                and kind in {"load_saved", "forget_saved", "connect"}):
+        if (
+            not self._invalid
+            and not self._closing
+            and kind in {"load_saved", "forget_saved", "connect"}
+        ):
             self._connection_scope_current()
         if not self._invalid and not self._closing:
             if worker.error:
@@ -722,8 +770,9 @@ class SyncConnectionDialog(QDialog):
                 self._setting = False
                 remembered = worker.result.get("remembered")
                 self.status.setText(
-                    self.v["memory"] if remembered is False else self.t["connected"]
-                    + ("\n" + self.v["stored"] if remembered else "")
+                    self.v["memory"]
+                    if remembered is False
+                    else self.t["connected"] + ("\n" + self.v["stored"] if remembered else "")
                 )
             elif kind == "load_saved":
                 record, worker.result = worker.result, None
@@ -744,6 +793,7 @@ class SyncConnectionDialog(QDialog):
                     finally:
                         self._setting = False
                     self.status.setText(self.v["loaded"])
+                    self.setup_button.setChecked(True)
             elif kind == "forget_saved":
                 self.status.setText(self.v["forgotten"])
             elif kind == "sync":
@@ -893,29 +943,35 @@ class SyncConnectionDialog(QDialog):
         event.accept()
 
 
-def open_offline_connection(owner, parent, database, *, current_path=None, language='zh-TW',
-                            dialog_factory=SyncConnectionDialog):
+def open_offline_connection(
+    owner,
+    parent,
+    database,
+    *,
+    current_path=None,
+    language="zh-TW",
+    dialog_factory=SyncConnectionDialog,
+):
     """Use the same process-memory session owned by WorkspaceDialog, only on a user action."""
     from paper_daily.workspace_sync import SyncSession
 
     path = Path(database).resolve(strict=True)
     current_path = current_path or (lambda: path)
     if Path(current_path()).resolve() != path:
-        raise ValueError('The selected workspace changed')
+        raise ValueError("The selected workspace changed")
     info = path.stat()
     identity = (info.st_dev, info.st_ino)
-    session = getattr(owner, '_workspace_sync_session', None)
-    if (session is None or session.workspace.path != path
-            or session.workspace.identity != identity):
+    session = getattr(owner, "_workspace_sync_session", None)
+    if session is None or session.workspace.path != path or session.workspace.identity != identity:
         if session is not None:
             session.disconnect()
         session = SyncSession(path, current_path=current_path)
         owner._workspace_sync_session = session
-    workspace = getattr(owner, '_workspace_dialog', None)
-    existing = getattr(workspace, '_sync_dialog', None)
+    workspace = getattr(owner, "_workspace_dialog", None)
+    existing = getattr(workspace, "_sync_dialog", None)
     if existing is None or existing.disposed or existing.session is not session:
-        existing = getattr(parent, '_connection_dialog', None)
-    if (existing is not None and not existing.disposed and existing.session is session):
+        existing = getattr(parent, "_connection_dialog", None)
+    if existing is not None and not existing.disposed and existing.session is session:
         existing.show()
         existing.raise_()
         existing.activateWindow()
@@ -925,7 +981,8 @@ def open_offline_connection(owner, parent, database, *, current_path=None, langu
         from paper_daily.desktop.continuous_sync import controller_for
 
         kwargs["automatic"] = controller_for(
-            owner, session, blocked=lambda: _background_busy(owner))
+            owner, session, blocked=lambda: _background_busy(owner)
+        )
     dialog = dialog_factory(session, parent, **kwargs)
     dialog.open()
     return dialog
@@ -937,5 +994,7 @@ def _background_busy(owner):
 
     if any(thread.isRunning() for thread in owner.findChildren(QThread)):
         return True
-    return any(getattr(getattr(owner, name, None), "busy", False) for name in (
-        "_workspace_dialog", "_offline_dialog"))
+    return any(
+        getattr(getattr(owner, name, None), "busy", False)
+        for name in ("_workspace_dialog", "_offline_dialog")
+    )

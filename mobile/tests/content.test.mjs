@@ -56,6 +56,15 @@ function payload(feature) {
   const annotation = annotationFixtures.find(item => item.valid && item.feature === feature);
   if(annotation) { data.body_json = structuredClone(annotation.body); data.source_hash = hash; data.document_hash = hash; }
   if(feature === 'claims') { data.body_json=structuredClone(claimFixture); data.source_hash=hash; data.document_hash=claimFixture.report.source.document_hash; }
+  if(feature === 'later_outcome') {
+    data.document_hash=hash;
+    data.body_json={format:'paperfact.later-outcome.v1',state:'queried_no_judged_inputs',
+      policy:'followups.empty-query.v1',input_hash:hash,
+      query:{request_id:'11111111-1111-4111-8111-111111111111',queried_at:stamp,
+        lookup:{title:'Paper',doi:null,s2_id:null,arxiv_id:null},
+        providers:{openalex:'queried_empty',semantic_scholar:'unknown'}},
+      source:{availability:'available',document_hash:hash,desired_hash:null}};
+  }
   return {
     scope,
     feature,

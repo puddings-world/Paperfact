@@ -22,6 +22,7 @@ RESEARCH = CORE | {
     "paper_research_questions",
     "close_readings",
     "paper_context",
+    "paper_later_outcomes",
     "list_surveys",
     "list_reading_goals",
     "cites",

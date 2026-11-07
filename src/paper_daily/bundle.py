@@ -43,12 +43,17 @@ MAX_QUEUE_PINS = 10000
 PER_PAPER = (
     "dives", "close_readings", "cites", "followups", "paper_context", "resources",
     *annotation_content.FEATURES.values(), "paper_annotation_known", "reading_positions",
+    "paper_later_outcomes",
 )
 KV_KEYS = ("citegraph.{pid}", "followups.checked.{pid}", "resources:{pid}")
 
 
 def _required_capabilities(tables):
     capabilities = []
+    if tables.get("deck_proposals"):
+        capabilities.append("deck_proposals")
+    if tables.get("paper_later_outcomes"):
+        capabilities.append("later_outcome")
     if tables.get("reading_positions"):
         capabilities.append("reading_position")
     if tables.get("queue_pins"):
@@ -231,6 +236,17 @@ def export(
             raise ValueError(
                 "Include PDFs to share saved reading positions with their exact originals"
             )
+        if (
+            not with_pdfs
+            and conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='paper_later_outcomes'"
+            ).fetchone()
+            and conn.execute(
+                "SELECT 1 FROM paper_later_outcomes WHERE document_hash IS NOT NULL "
+                f"AND paper_id IN ({marks_sql}) LIMIT 1", ids
+            ).fetchone()
+        ):
+            raise ValueError("Include exact PDFs to share source-bound later outcomes")
         tables = {
             "papers": _rows(conn, f"SELECT * FROM papers WHERE id IN ({marks_sql})", ids),
             # Every graph edge touching the list, with the papers at the far end:
@@ -254,7 +270,9 @@ def export(
             conn, f"SELECT * FROM papers WHERE id IN ({','.join('?' * len(far))})", far
         )
         for table in PER_PAPER:
-            optional = table in (*annotation_content.FEATURES.values(), "reading_positions")
+            optional = table in (
+                *annotation_content.FEATURES.values(), "reading_positions", "paper_later_outcomes"
+            )
             if optional and not conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (table,)
             ).fetchone():
@@ -304,6 +322,9 @@ def export(
                             )
         keys = [k.format(pid=pid) for pid in ids for k in KV_KEYS]
         kv = _rows(conn, f"SELECT * FROM kv WHERE key IN ({','.join('?' * len(keys))})", keys)
+        from paper_daily.later_outcome_history import redundant_hint
+
+        kv = [row for row in kv if not redundant_hint(conn, row)]
 
     pdfs, captured, paths = {}, {}, {}
     for row in tables["papers"]:
@@ -358,6 +379,16 @@ def export(
 
     position_export = export_sources(database, tables, files, with_pdfs=with_pdfs)
     position_sources = list(position_export.records) if position_export else []
+    from paper_daily.later_outcome_packages import export_sources as export_later_sources
+
+    later_export = export_later_sources(database, tables, files, with_pdfs=with_pdfs)
+    later_sources = list(later_export.records) if later_export else []
+    from paper_daily import deck_proposal_packages
+
+    proposal_export = deck_proposal_packages.collect(database, ids, with_pdfs=with_pdfs)
+    if proposal_export is not None:
+        tables[deck_proposal_packages.TABLE] = list(proposal_export.rows)
+        files.update(dict(proposal_export.files))
     capabilities = _required_capabilities(tables)
     manifest = {
         "format": 2 if capabilities else FORMAT,
@@ -367,13 +398,18 @@ def export(
         "pdfs": pdfs,
         "notes_included": notes,
         "pdfs_included": with_pdfs,
-        "file_hashes": {f.as_posix(): _sha256(source.read_bytes()) for f, source in files.items()},
+        "file_hashes": {
+            f.as_posix(): _sha256(source if isinstance(source, bytes) else source.read_bytes())
+            for f, source in files.items()
+        },
         "counts": {t: len(rows) for t, rows in tables.items()} | {"files": len(files)},
     }
     if "claim_evidence" in capabilities:
         manifest["claim_sources"] = claim_sources
     if position_sources:
         manifest["position_sources"] = position_sources
+    if later_sources:
+        manifest["later_sources"] = later_sources
     if capabilities:
         manifest["capabilities"] = capabilities
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -386,7 +422,10 @@ def export(
             z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1))
             z.writestr("tables.json", json.dumps({**tables, "kv": kv}, ensure_ascii=False))
             for rel, source in files.items():
-                z.write(source, "files/" + rel.as_posix())
+                if isinstance(source, bytes):
+                    z.writestr("files/" + rel.as_posix(), source)
+                else:
+                    z.write(source, "files/" + rel.as_posix())
         # Detect research files changed during packing before replacing a prior export.
         with zipfile.ZipFile(staged) as z:
             _validated(z)
@@ -401,6 +440,10 @@ def export(
         from paper_daily.reading_position_packages import check_export
 
         check_export(position_export)
+        from paper_daily.later_outcome_packages import check_export as check_later_export
+
+        check_later_export(later_export)
+        deck_proposal_packages.check_export(proposal_export)
         os.replace(staged, out)
     finally:
         staged.unlink(missing_ok=True)
@@ -523,6 +566,9 @@ def _validated(z):
             isinstance(listing.get(k), str) and listing[k] for k in ("id", "name", "created_at")
         ):
             raise ValueError("資料包缺少清單資訊")
+        from paper_daily import deck_proposal_packages
+
+        deck_proposal_packages.validate_package(z, manifest, tables)
         required = _required_capabilities(tables)
         capabilities = manifest.get("capabilities", [])
         if manifest["format"] == 2:
@@ -550,6 +596,9 @@ def _validated(z):
         from paper_daily.reading_position_packages import validate_package
 
         validate_package(z, manifest, tables)
+        from paper_daily.later_outcome_packages import validate_package as validate_later_package
+
+        validate_later_package(z, manifest, tables)
 
         for feature, table in annotation_content.FEATURES.items():
             for row in tables.get(table, []):
@@ -630,6 +679,13 @@ def _validated(z):
         if expected and _sha256(blob) != expected:
             raise ValueError(f"資料包檔案核對失敗：{relative}")
         if rel.parts[0] == "pdf":
+            if len(rel.parts) == 4 and rel.parts[1] == ".later-outcomes":
+                declared = next((item for item in manifest.get("later_sources", [])
+                                 if item["path"] == relative and item["paper_id"] == owner), None)
+                if declared is None or _sha256(blob) != declared["sha256"]:
+                    raise ValueError("Undeclared or changed later-outcome source")
+                owners[relative] = owner
+                continue
             claim_source = len(rel.parts) == 4 and rel.parts[1] == ".claim-evidence"
             position_source = len(rel.parts) == 4 and rel.parts[1] == ".reading-positions"
             if position_source:
@@ -650,6 +706,20 @@ def _validated(z):
 
 def _owns_file(pid, rel):
     parts = rel.parts
+    if len(parts) == 3 and parts[0] == "deck-proposals":
+        from paper_daily.deck_proposal_packages import relative
+
+        try:
+            return rel == relative(pid, parts[2])
+        except ValueError:
+            return False
+    if len(parts) == 4 and parts[:2] == ("pdf", ".later-outcomes"):
+        from paper_daily.later_outcome_packages import relative
+
+        try:
+            return rel == relative(pid, rel.stem)
+        except ValueError:
+            return False
     if len(parts) == 4 and parts[:2] == ("pdf", ".reading-positions"):
         from paper_daily.reading_position_packages import relative
 
@@ -722,9 +792,11 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
     from paper_daily.file_change import version as file_version
 
     package_version = file_version(Path(path))
+    from paper_daily import later_outcome_packages as later_packages
     from paper_daily import reading_position_packages as position_packages
 
-    with zipfile.ZipFile(path) as z, position_packages.ImportLease() as position_lease:
+    with (zipfile.ZipFile(path) as z, position_packages.ImportLease() as position_lease,
+          later_packages.ImportLease() as later_lease):
         manifest, tables, owners = _validated(z)
         package_hash = hashlib.sha256()
         original_position = z.fp.tell()
@@ -733,6 +805,10 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             package_hash.update(block)
         z.fp.seek(original_position)
         package_sha256 = package_hash.hexdigest()
+        from paper_daily import deck_proposal_packages
+
+        proposal_imports = deck_proposal_packages.prepare_local_imports(
+            database, z, tables, package_sha256)
         if file_version(Path(path)) != package_version:
             raise ValueError("The selected package changed during import; retry")
         listing = manifest["list"]
@@ -766,7 +842,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
                 conflicts.add(pid)
         # Imported page numbers must never be attached to a different local PDF.
         for table in (*PER_PAPER, "pdf_ai_highlights", "pdf_highlights", "notes", "chat"):
-            if table != "reading_positions":
+            if table not in {"reading_positions", "paper_later_outcomes"}:
                 tables[table] = [r for r in tables.get(table, []) if r["paper_id"] not in conflicts]
         tables["kv"] = [
             r
@@ -780,9 +856,14 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             if not name.startswith("files/") or name.endswith("/"):
                 continue
             relative = Path(name.removeprefix("files/"))
+            if relative.parts[0] == "deck-proposals":
+                continue
             owner = owners[relative.as_posix()]
             if owner in conflicts and not (
-                len(relative.parts) == 4 and relative.parts[:2] == ("pdf", ".reading-positions")
+                len(relative.parts) == 4
+                and relative.parts[:2] in {
+                    ("pdf", ".reading-positions"), ("pdf", ".later-outcomes")
+                }
             ):
                 continue
             if relative.parts[0] == "pdf" and len(relative.parts) == 2 and owner in managed:
@@ -799,6 +880,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             database, z, manifest, tables, excluded=conflicts,
         )
         position_originals = position_lease.prepare(database, z, manifest, tables)
+        later_originals = later_lease.prepare(database, z, manifest, tables)
         immutable_originals = {
             _claim_source_relative(item.paper_id, item.sha256) for item in originals
         }
@@ -807,101 +889,120 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
                                        json.loads(item.row_json)["document_hash"])
             for item in position_originals
         )
+        immutable_originals.update(
+            later_packages.relative(json.loads(item.row_json)["paper_id"],
+                                    json.loads(item.row_json)["document_hash"])
+            for item in later_originals if json.loads(item.row_json)["document_hash"]
+        )
         relatives = [relative for relative in relatives if relative not in immutable_originals]
         # Stage bytes before taking a database write lock. A failed file write or
         # database commit restores installed files as the connection rolls back.
         with bundle_files.stage(DATA_DIR, z, relatives) as staged, connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            local_source_owners.ensure_import_in(conn, originals)
-            position_packages.ensure_import_in(conn, position_originals)
-            _check_workspace_aliases(conn, owners)
-            report["papers"] = _insert(conn, "papers", tables["papers"], replace)
-            # Context only: never let the bundle overwrite a paper the receiver keeps.
-            report["cited_papers"] = _insert(
-                conn, "papers", tables.get("cited_papers", []), replace=False
-            )
-            conn.execute(
-                "INSERT OR IGNORE INTO lists(id, name, note, created_at) VALUES (?,?,?,?)",
-                (listing["id"], listing["name"], listing.get("note"), listing["created_at"]),
-            )
-            have = {
-                r[0]
-                for r in conn.execute(
-                    "SELECT paper_id FROM list_papers WHERE list_id=?", (listing["id"],)
+            with deck_proposal_packages.local_imports_in(
+                conn, proposal_imports, allow_updates=replace
+            ) as grant:
+                local_source_owners.ensure_import_in(conn, originals)
+                position_packages.ensure_import_in(conn, position_originals)
+                later_packages.ensure_import_in(conn, later_originals)
+                _check_workspace_aliases(conn, owners)
+                report["papers"] = _insert(conn, "papers", tables["papers"], replace)
+                # Context only: never let the bundle overwrite a paper the receiver keeps.
+                report["cited_papers"] = _insert(
+                    conn, "papers", tables.get("cited_papers", []), replace=False
                 )
-            }
-            last = conn.execute(
-                "SELECT COALESCE(MAX(position), -1) FROM list_papers WHERE list_id=?",
-                (listing["id"],),
-            ).fetchone()[0]
-            joined = 0
-            for m in manifest["members"]:
-                if m["paper_id"] in have:
-                    continue
-                last += 1
                 conn.execute(
-                    "INSERT INTO list_papers(list_id, paper_id, position, state, citation, "
-                    "added_at) VALUES (?,?,?,'pending',?,?)",
-                    (listing["id"], m["paper_id"], last, m.get("citation"), m["added_at"]),
+                    "INSERT OR IGNORE INTO lists(id, name, note, created_at) VALUES (?,?,?,?)",
+                    (listing["id"], listing["name"], listing.get("note"), listing["created_at"]),
                 )
-                joined += 1
-            report["joined_list"] = joined
-            pins = [{"scope": listing["id"], **pin} for pin in tables.get("pins", [])]
-            report["pins"] = _insert(conn, "pins", pins, replace=False)
-            incoming_queue_pins = [
-                {"scope": "queue", **pin} for pin in tables.get("queue_pins", [])
-            ]
-            report["queue_pin_preserved"] = [
-                {"package_sha256": package_sha256, "source_owner": pin["paper_id"],
-                 "receiver_owner": pin["paper_id"], "incoming_pinned_at": pin["pinned_at"],
-                 "receiver_pinned_at": current[0]}
-                for pin in tables.get("queue_pins", [])
-                if (current := conn.execute(
-                    "SELECT pinned_at FROM pins WHERE scope='queue' AND paper_id=?",
-                    (pin["paper_id"],),
-                ).fetchone()) and current[0] != pin["pinned_at"]
-            ]
-            report["queue_pins"] = _insert(conn, "pins", incoming_queue_pins, replace=False)
-            from paper_daily.queue_pins import retain_imports_in
+                have = {
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT paper_id FROM list_papers WHERE list_id=?", (listing["id"],)
+                    )
+                }
+                last = conn.execute(
+                    "SELECT COALESCE(MAX(position), -1) FROM list_papers WHERE list_id=?",
+                    (listing["id"],),
+                ).fetchone()[0]
+                joined = 0
+                for m in manifest["members"]:
+                    if m["paper_id"] in have:
+                        continue
+                    last += 1
+                    conn.execute(
+                        "INSERT INTO list_papers(list_id, paper_id, position, state, citation, "
+                        "added_at) VALUES (?,?,?,'pending',?,?)",
+                        (listing["id"], m["paper_id"], last, m.get("citation"), m["added_at"]),
+                    )
+                    joined += 1
+                report["joined_list"] = joined
+                pins = [{"scope": listing["id"], **pin} for pin in tables.get("pins", [])]
+                report["pins"] = _insert(conn, "pins", pins, replace=False)
+                incoming_queue_pins = [
+                    {"scope": "queue", **pin} for pin in tables.get("queue_pins", [])
+                ]
+                report["queue_pin_preserved"] = [
+                    {"package_sha256": package_sha256, "source_owner": pin["paper_id"],
+                     "receiver_owner": pin["paper_id"], "incoming_pinned_at": pin["pinned_at"],
+                     "receiver_pinned_at": current[0]}
+                    for pin in tables.get("queue_pins", [])
+                    if (current := conn.execute(
+                        "SELECT pinned_at FROM pins WHERE scope='queue' AND paper_id=?",
+                        (pin["paper_id"],),
+                    ).fetchone()) and current[0] != pin["pinned_at"]
+                ]
+                report["queue_pins"] = _insert(conn, "pins", incoming_queue_pins, replace=False)
+                from paper_daily.queue_pins import retain_imports_in
 
-            retain_imports_in(conn, report["queue_pin_preserved"])
-            for table in ("refs", "list_surveys", "list_reading_goals", *PER_PAPER):
-                if table != "reading_positions":
+                retain_imports_in(conn, report["queue_pin_preserved"])
+                for table in ("refs", "list_surveys", "list_reading_goals", *PER_PAPER):
+                    if table not in {"reading_positions", "paper_later_outcomes"}:
+                        report[table] = _insert(conn, table, tables.get(table, []), replace)
+                report.update(position_packages.write_import_in(
+                    conn, position_originals, replace=replace, package_sha256=package_sha256
+                ))
+                report.update(later_packages.write_import_in(
+                    conn, later_originals, replace=replace, package_sha256=package_sha256
+                ))
+                report["kv"] = _insert(conn, "kv", tables.get("kv", []), replace)
+                for table in ("pdf_ai_highlights", "pdf_highlights"):
                     report[table] = _insert(conn, table, tables.get(table, []), replace)
-            report.update(position_packages.write_import_in(
-                conn, position_originals, replace=replace, package_sha256=package_sha256
-            ))
-            report["kv"] = _insert(conn, "kv", tables.get("kv", []), replace)
-            for table in ("pdf_ai_highlights", "pdf_highlights"):
-                report[table] = _insert(conn, table, tables.get(table, []), replace)
-            seen = {(r[0], r[1]) for r in conn.execute("SELECT paper_id, body FROM notes")}
-            fresh = [r for r in tables.get("notes", []) if (r["paper_id"], r["body"]) not in seen]
-            report["notes"] = _insert(conn, "notes", fresh, replace=False)
-            # A conversation is a sequence of turns: skipping one duplicate turn in
-            # the middle would pair a question with the wrong answer, so only a
-            # paper with no conversation here yet receives one.
-            talked = {r[0] for r in conn.execute("SELECT DISTINCT paper_id FROM chat")}
-            from paper_daily.research_chat import import_shared_turn
+                seen = {(r[0], r[1]) for r in conn.execute("SELECT paper_id, body FROM notes")}
+                fresh = [r for r in tables.get("notes", [])
+                         if (r["paper_id"], r["body"]) not in seen]
+                report["notes"] = _insert(conn, "notes", fresh, replace=False)
+                # A conversation is a sequence of turns: skipping one duplicate turn in
+                # the middle would pair a question with the wrong answer, so only a
+                # paper with no conversation here yet receives one.
+                talked = {r[0] for r in conn.execute("SELECT DISTINCT paper_id FROM chat")}
+                from paper_daily.research_chat import import_shared_turn
 
-            fresh = [
-                r
-                for r in tables.get("chat", [])
-                if not r.get("message_id") and r["paper_id"] not in talked
-            ]
-            report["chat"] = _insert(conn, "chat", fresh, replace=False)
-            for turn in tables.get("chat", []):
-                if turn.get("message_id"):
-                    report["chat"] += import_shared_turn(conn, turn)
-            from paper_daily.document_reader import document_current
+                fresh = [
+                    r
+                    for r in tables.get("chat", [])
+                    if not r.get("message_id") and r["paper_id"] not in talked
+                ]
+                report["chat"] = _insert(conn, "chat", fresh, replace=False)
+                for turn in tables.get("chat", []):
+                    if turn.get("message_id"):
+                        report["chat"] += import_shared_turn(conn, turn)
+                from paper_daily.document_reader import document_current
 
-            if any(
-                not document_current(item) for pid, item in managed.items() if pid not in conflicts
-            ):
-                raise ValueError("The document version changed during import; retry")
-            if file_version(Path(path)) != package_version:
-                raise ValueError("The selected package changed during import; retry")
-            report["files"] = staged.install()
-            report["owned_originals"] = local_source_owners.register_import_in(conn, originals)
+                if any(
+                    not document_current(item) for pid, item in managed.items()
+                    if pid not in conflicts
+                ):
+                    raise ValueError("The document version changed during import; retry")
+                if file_version(Path(path)) != package_version:
+                    raise ValueError("The selected package changed during import; retry")
+                report["files"] = staged.install()
+                report["owned_originals"] = local_source_owners.register_import_in(conn, originals)
+                proposal_ids = grant.adopt()
+                if proposal_ids:
+                    report["deck_proposals"] = len(proposal_imports.prepared)
+                    report["proposal_replayed"] = len(proposal_imports.reused)
+                    report["proposal_ids"] = proposal_ids
     if pdfs:
         titles = {r["id"]: r["title"] for r in tables["papers"]}
         report |= fetch_pdfs(manifest.get("pdfs") or {}, titles, log, replace=replace)

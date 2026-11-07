@@ -339,6 +339,25 @@ def capture(document):
     return EvidenceSnapshot(_json(source), data, document, _snapshot_seal(source, data, document))
 
 
+def capture_original(proof, *, cancelled=lambda: False):
+    """Worker: reuse an actual receiver-owned retained-original read capability.
+
+    This grants content verification only, never research publication. Old paths,
+    hashes or hand-built current-document objects are not accepted authority.
+    """
+    from paper_daily import resumed_draft_originals
+
+    fresh = resumed_draft_originals.revalidate(proof, cancelled=cancelled)
+    payload = json.loads(fresh.prepared.payload)
+    source = {"paper_id": payload["paper_id"], "document_hash": fresh.document_hash}
+    data = fresh.data
+    if not isinstance(data, bytes) or len(data) > MAX_PDF_BYTES:
+        _fail("pdf_limit")
+    if hashlib.sha256(data).hexdigest() != source["document_hash"]:
+        _fail("source_changed")
+    return EvidenceSnapshot(_json(source), data, fresh, _snapshot_seal(source, data, fresh))
+
+
 def _checked_snapshot(snapshot):
     if (
         not isinstance(snapshot, EvidenceSnapshot)
@@ -511,3 +530,78 @@ def verify(document, proposals, *, cancelled=None):
     report = _verify_bytes(data, source, payload, cancelled)
     _check_source(document)
     return report
+
+
+QUOTE_FORMAT = "paperfact.quote-locations.proposals.v1"
+QUOTE_REPORT = "paperfact.quote-locations.report.v1"
+
+
+def locate_quotes_snapshot(snapshot, proposals, *, cancelled=None):
+    """Locate bounded quotes without creating assertions or semantic judgments.
+
+    This reuses the same normalization/anchor engine as claim verification.
+    Results describe captured bytes only, never permission to publish research.
+    """
+    _cancel(cancelled)
+    source, data = _checked_snapshot(snapshot)
+    try:
+        encoded = _json(proposals).encode("utf-8")
+    except UnicodeError:
+        _fail("invalid_schema")
+    if len(encoded) > MAX_REQUEST_BYTES:
+        _fail("request_limit")
+    payload = json.loads(encoded)
+    _keys(payload, {"format", "source", "passages"})
+    if payload["format"] != QUOTE_FORMAT:
+        _fail("invalid_schema")
+    _keys(payload["source"], {"paper_id", "document_hash"})
+    _text(payload["source"]["paper_id"], 4096)
+    fingerprint = payload["source"]["document_hash"]
+    if not isinstance(fingerprint, str) or not re.fullmatch("[0-9a-f]{64}", fingerprint):
+        _fail("invalid_schema")
+    if payload["source"]["paper_id"] != source["paper_id"]:
+        _fail("source_identity_mismatch")
+    if fingerprint != source["document_hash"]:
+        _fail("source_hash_mismatch")
+    passages = payload["passages"]
+    if not isinstance(passages, list) or not 1 <= len(passages) <= MAX_PASSAGES:
+        _fail("passage_limit")
+    used = set()
+    for passage in passages:
+        _keys(passage, {"quote", "page", "anchor"})
+        quote = _normalize(_text(passage["quote"], MAX_QUOTE_CHARS))
+        if not quote or (passage["page"] is not None and type(passage["page"]) is not int):
+            _fail("invalid_schema")
+        anchor = passage["anchor"]
+        if anchor is not None:
+            _keys(anchor, ANCHOR_KEYS)
+            if any(type(anchor[key]) is not int for key in ANCHOR_KEYS):
+                _fail("invalid_schema")
+        key = _json([quote, passage["page"], anchor])
+        if key in used:
+            _fail("duplicate_passage")
+        used.add(key)
+    pages, indexes, whole = _extract(data, cancelled)
+    results = []
+    for passage in passages:
+        _cancel(cancelled)
+        results.append(
+            dict(
+                quote=passage["quote"],
+                page_hint=passage["page"],
+                location=_locate(passage, pages, indexes, whole),
+            )
+        )
+    _cancel(cancelled)
+    _checked_snapshot(snapshot)
+    report = dict(
+        format=QUOTE_REPORT,
+        source=source,
+        normalization=RULE,
+        page_count=len(pages),
+        empty_pages=[i + 1 for i, page in enumerate(pages) if not page],
+        passages=results,
+        verification_scope="original_snapshot",
+        semantic_validation="not_performed",
+    )
+    return {**report, "id": _hash(report)}

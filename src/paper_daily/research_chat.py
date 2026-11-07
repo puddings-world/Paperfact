@@ -7,7 +7,7 @@ import json
 import os
 import sqlite3
 import tempfile
-from contextlib import closing
+from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -279,7 +279,35 @@ def _commit(conn):
         conn.commit()
 
 
-def prepare_chat(request):
+def _prompt_history(rows):
+    """Project completed typed exchanges without changing captured CAS inputs.
+
+    Unlinked legacy rows keep their existing prompt behavior. Their ordering is
+    historical context, not proof of pairing or a completed portable exchange.
+    """
+    users = {}
+    for index, row in enumerate(rows):
+        if row["role"] == "user" and row.get("message_id") and row.get("exchange_id"):
+            users.setdefault(row["message_id"], []).append((index, row))
+    completed = set()
+    for index, row in enumerate(rows):
+        matches = users.get(row.get("reply_to"), [])
+        if row["role"] != "assistant" or len(matches) != 1:
+            continue
+        parent_index, parent = matches[0]
+        if (row.get("message_id") and row.get("exchange_id") == parent["exchange_id"]
+                and row.get("paper_id") == parent.get("paper_id")
+                and row.get("source_hash") == parent.get("source_hash")):
+            completed.update((parent_index, index))
+    return [
+        (row["role"], row["body"]) for index, row in enumerate(rows)
+        if index in completed or not any(
+            row.get(key) is not None for key in ("message_id", "exchange_id", "reply_to")
+        )
+    ]
+
+
+def prepare_chat(request, *, replacement=None):
     """Resolve exact PDF bytes and history off-thread, then durably append the question."""
     data = request.data
     with closing(generation._connect(request.db_path)) as conn:
@@ -360,7 +388,7 @@ def prepare_chat(request):
     request = replace(
         request, encoded=_json(data), document=document if document.available else None
     )
-    with closing(generation._connect(request.db_path)) as conn:
+    with closing(generation._connect(request.db_path)) as conn, ExitStack() as scopes:
         conn.execute("BEGIN IMMEDIATE")
         if reason := _stale(conn, request):
             raise ValueError(reason)
@@ -368,6 +396,26 @@ def prepare_chat(request):
             "SELECT * FROM research_chat_requests WHERE request_id=?", (request.request_id,)
         ).fetchone()
         if prior is None:
+            if replacement is not None:
+                rows = replacement["rows"]
+                if len(rows) != 1 or rows[0]["row"]["role"] != "user":
+                    raise ValueError("Only an unanswered question can be retried")
+                old = rows[0]["row"]
+                current = history(conn, data["paper_id"])
+                if any(row.get("reply_to") == old.get("message_id")
+                       and row["role"] == "assistant" for row in current):
+                    raise ValueError("The original question has already been answered")
+                receipt = conn.execute(
+                    "SELECT answer_json FROM research_chat_requests WHERE request_id=?",
+                    (old.get("exchange_id"),),
+                ).fetchone()
+                if receipt and receipt[0] is not None:
+                    raise ValueError("Review the retained answer before replacing its question")
+                scopes.enter_context(
+                    _delete_messages(conn, data["paper_id"], rows, expected=replacement)
+                )
+                data["history"] = _inputs(conn, data["paper_id"])
+                request = replace(request, encoded=_json(data))
             question_row = _append(
                 conn,
                 data,
@@ -401,7 +449,7 @@ def prepare_chat(request):
         paper["year"],
         paper["abstract"],
         text,
-        [(r["role"], r["body"]) for r in data["history"]],
+        _prompt_history(data["history"]),
         data["question"],
     )
     return request, prompt
@@ -787,9 +835,15 @@ def answer_record(request):
 
 
 def delete_messages(conn, paper_id, snapshots, *, expected):
+    conn.execute("BEGIN IMMEDIATE")
+    with _delete_messages(conn, paper_id, snapshots, expected=expected):
+        conn.commit()
+
+
+@contextmanager
+def _delete_messages(conn, paper_id, snapshots, *, expected):
     from paper_daily.research_lifecycle import parent_lifecycle
 
-    conn.execute("BEGIN IMMEDIATE")
     if (
         not _original(conn, expected)
         or not expected["parent_lifecycle"]
@@ -819,7 +873,7 @@ def delete_messages(conn, paper_id, snapshots, *, expected):
                 "DELETE FROM research_chat_links WHERE local_id=?",
                 [(s["row"]["id"],) for s in snapshots],
             )
-        conn.commit()
+        yield
 
 
 def validate_link(record):

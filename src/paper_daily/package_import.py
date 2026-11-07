@@ -128,6 +128,7 @@ class PreparedImport:
     blob_store: object
     version_root: Path
     work: Path
+    proposals: tuple = ()
 
     def preview(self):
         value = json.loads(self.report)
@@ -182,6 +183,11 @@ class PackageImporter:
         if conn is not None and _binding(conn, _tables(conn)) != self.binding:
             raise WorkspaceChanged("The import workspace binding changed")
 
+    def _current_ticket(self, ticket):
+        ticket.check()
+        self._check()
+        return True
+
     def _inventory(self, archive, ticket):
         selected = _safe_path(archive)
         before = version(selected)
@@ -220,6 +226,7 @@ class PackageImporter:
                 "list_reading_goals",
                 "pins",
                 "queue_pins",
+                "deck_proposals",
                 *bundle.PER_PAPER,
                 "pdf_ai_highlights",
                 "pdf_highlights",
@@ -318,6 +325,19 @@ class PackageImporter:
         selected, stamp, fingerprint, manifest, tables, owners, files = self._inventory(
             archive, ticket
         )
+        proposal_store_index = None
+        if tables.get("deck_proposals"):
+            from paper_daily.local_blob_binding import bind
+            from paper_daily.research_lifecycle import ensure_lifecycle
+
+            self._check()
+            # Explicit local setup, before observing a parent or staging content;
+            # this neither enrolls a device nor publishes a research operation.
+            with self.client.journal.transaction() as metadata:
+                self._check(metadata)
+                ensure_lifecycle(metadata)
+            proposal_store_index = bind(self.client, self.store)
+            self._check()
         mapping_option = dict(paper_mapping or {})
         if (target_list_id or mapping_option) and not confirmed_mapping:
             raise UnsupportedPackage("Existing targets require an explicitly confirmed mapping")
@@ -402,6 +422,18 @@ class PackageImporter:
                 raise ValueError("The confirmed mapping contains a paper outside this package")
             if target_list_id and not graph.get(("list", list_id), {}).get("active"):
                 raise ValueError("The confirmed list is missing or deleted")
+            # Capture before any staging or ending this target read snapshot.
+            proposal_parents = []
+            if tables.get("deck_proposals"):
+                from paper_daily.research_lifecycle import parent_lifecycle
+
+                for local in sorted({item["local_id"] for item in papers.values()}):
+                    exists = conn.execute(
+                        "SELECT 1 FROM papers WHERE id=?", (local,)).fetchone()
+                    token = parent_lifecycle(conn, "paper", local)
+                    if exists and token is None:
+                        raise ValueError("Proposal receiver requires a known local lifecycle")
+                    proposal_parents.append([local, bool(exists), token])
             operations, observations = [], {}
             report = {
                 "enrolled": True,
@@ -554,6 +586,14 @@ class PackageImporter:
                     ticket,
                     report,
                 )
+                from paper_daily import deck_proposal_packages
+
+                proposals = deck_proposal_packages.prepare_imports(
+                    tables.get("deck_proposals", []), files, papers, request, self.store,
+                    client=self.client, expected_native=self.identity,
+                    current=lambda: self._current_ticket(ticket))
+                if proposals:
+                    report["deck_proposals"] = len(proposals)
                 self._content(conn, manifest, tables, identities, list_id, fingerprint, add, report)
                 self._prepare_decks(
                     conn,
@@ -598,6 +638,9 @@ class PackageImporter:
                     "fingerprint": action_fingerprint,
                     "namespace_roster": namespace_roster,
                     "queue_pin_intent": bool(tables.get("queue_pins")),
+                    "proposal_store_index": proposal_store_index,
+                    "proposal_parents": proposal_parents,
+                    "proposal_replace": replace,
                 }
                 return PreparedImport(
                     _SEAL,
@@ -611,6 +654,7 @@ class PackageImporter:
                     self.store,
                     self.version_root,
                     work,
+                    proposals,
                 )
             except BaseException:
                 self._cleanup(work)
@@ -669,6 +713,9 @@ class PackageImporter:
             (item["paper_id"], item, True) for item in manifest.get("position_sources", [])
         ]
         records += [
+            (item["paper_id"], item, True) for item in manifest.get("later_sources", [])
+        ]
+        records += [
             (old, {"sha256": row["sha256"],
                    "path": "pdf/" + bundle._safe_name(old) + ".pdf"}, False)
             for old, row in manifest.get("pdfs", {}).items()
@@ -676,6 +723,14 @@ class PackageImporter:
         ]
         records += [
             (old, record, False) for old, record in manifest.get("claim_sources", {}).items()
+        ]
+        from paper_daily.deck_proposal_packages import relative
+
+        records += [
+            (row["paper_id"], {"sha256": original["sha256"],
+             "path": relative(row["paper_id"], original["sha256"]).as_posix()}, True)
+            for row in tables.get("deck_proposals", [])
+            for original in row["manifest"]["originals"]
         ]
         seen = set()
         for old, record, position in records:
@@ -710,7 +765,8 @@ class PackageImporter:
             _table, natural, field_names = sync_content.FEATURES[feature]
             for index, row in enumerate(rows):
                 old = row.get("paper_id")
-                if old in report["pdf_conflicts"] and feature != "reading_position":
+                if (old in report["pdf_conflicts"]
+                        and feature not in {"reading_position", "later_outcome"}):
                     continue
                 if feature in {"list_survey", "reading_goal", "list_pin"}:
                     scope = {"kind": "list", "id": list_id}
@@ -756,6 +812,17 @@ class PackageImporter:
                         "receiver_owner": identities[old], "document_hash": key,
                         "incoming_json": canonical_json(data).decode(),
                         "receiver_json": canonical_json(installed["payload"]["data"]).decode(),
+                    })
+                if feature == "later_outcome" and installed and installed["payload"] != payload:
+                    current_data = installed["payload"]["data"]
+                    incoming = {"paper_id": old, **row}
+                    receiver = {"paper_id": scope["id"], **current_data,
+                                "body_json": canonical_json(current_data["body_json"]).decode()}
+                    report.setdefault("later_outcome_import_candidates", []).append({
+                        "package_sha256": fingerprint, "source_owner": old,
+                        "receiver_owner": scope["id"],
+                        "incoming_json": canonical_json(incoming).decode(),
+                        "receiver_json": canonical_json(receiver).decode(),
                     })
         for row in tables.get("queue_pins", []):
             scope = {"kind": "paper", "id": identities[row["paper_id"]]}
@@ -855,7 +922,8 @@ class PackageImporter:
                 report["files"] += 1
             consumed.add(relative)
         for relative in files:
-            if relative.startswith("pdf/") or relative in consumed:
+            if (relative.startswith(("pdf/", "deck-proposals/"))
+                    or relative in consumed):
                 continue
             if Path(relative).parts[0] not in {
                 "presentations",
@@ -919,6 +987,20 @@ class PackageImporter:
                     "availability_rechecked": False,
                 }
             else:
+                if data.get("proposal_store_index") is not None:
+                    index = self.store.root / "index.sqlite"
+                    info = index.stat()
+                    if [info.st_dev, info.st_ino] != data["proposal_store_index"]:
+                        raise WorkspaceChanged("Proposal artifact index was replaced")
+                    from paper_daily.research_lifecycle import parent_lifecycle
+
+                    for local, existed, token in data["proposal_parents"]:
+                        exists = conn.execute(
+                            "SELECT 1 FROM papers WHERE id=?", (local,)).fetchone()
+                        if (bool(exists) != existed
+                                or parent_lifecycle(conn, "paper", local) != token):
+                            raise WorkspaceChanged(
+                                "Proposal receiver lifecycle changed after preview")
                 if data.get("queue_pin_intent") and not sync_content.pin_cleanup_ready(conn):
                     raise UnsupportedPackage("Queue pin cleanup requires explicit installation")
                 if data.get("namespace_roster") is not None:
@@ -934,78 +1016,101 @@ class PackageImporter:
                 for kind, identity, expected in json.loads(prepared.observations):
                     if _snapshot(conn, self.client, kind, identity) != expected:
                         raise ValueError("Import targets changed after preview; prepare again")
-                register_paths(
-                    conn,
-                    self.client.journal.workspace_id,
-                    prepared.blob_store,
-                    prepared.version_root,
-                )
-                from paper_daily.document_reader import register_document_paths
+                from paper_daily import deck_proposal_packages
 
-                if self.reader_paths:
-                    current_reader = conn.execute(
-                        "SELECT workspace,blob_root,projection_root,legacy_root "
-                        "FROM document_reader_paths WHERE id=1"
-                    ).fetchone()
-                    if tuple(current_reader or ()) != self.reader_paths:
-                        raise WorkspaceChanged("The document storage registration changed")
-                else:
-                    register_document_paths(
+                with deck_proposal_packages.import_targets_in(
+                    conn, self.client, prepared.proposals,
+                    current=lambda: self._current_ticket(ticket),
+                    allow_updates=data.get("proposal_replace", False),
+                ) as proposal_grant:
+                    register_paths(
                         conn,
-                        workspace_id=self.client.journal.workspace_id,
-                        blob_root=prepared.blob_store.root,
-                        projection_root=self.root / ".package-reader",
-                        legacy_root=self.root / "pdf",
+                        self.client.journal.workspace_id,
+                        prepared.blob_store,
+                        prepared.version_root,
                     )
-                originals = {op["operation_id"]: staged for staged, op in prepared.originals}
-                from paper_daily.sync_source_files import publish_source_in
+                    from paper_daily.document_reader import register_document_paths
 
-                for operation in json.loads(prepared.operations):
-                    ticket.check()
-                    actual = self.client.new_graph_operation_in(
-                        conn,
-                        operation["entity_type"],
-                        operation["entity_id"],
-                        operation["payload"],
-                        operation_id=operation["operation_id"],
-                    )
-                    if canonical_operation(actual) != canonical_operation(operation):
-                        raise ValueError("Import graph changed before its observed write")
-                    if operation["operation_id"] in originals:
-                        published = publish_source_in(
-                            conn, self.client, originals[operation["operation_id"]]
-                        )
-                        if published != operation:
-                            raise ValueError("Original source differs from its prepared operation")
+                    if self.reader_paths:
+                        current_reader = conn.execute(
+                            "SELECT workspace,blob_root,projection_root,legacy_root "
+                            "FROM document_reader_paths WHERE id=1"
+                        ).fetchone()
+                        if tuple(current_reader or ()) != self.reader_paths:
+                            raise WorkspaceChanged("The document storage registration changed")
                     else:
-                        self.client.journal.apply_in(conn, operation, self.client.writer)
-                for target, proof in prepared.documents:
-                    if not bind_verified_document(conn, target, proof):
-                        raise ValueError("Imported PDF target changed before activation")
-                for operation, directory in prepared.artifacts:
-                    if not activate(conn, operation, directory):
-                        raise ValueError("Imported artifact target changed before activation")
-                report = json.loads(prepared.report)
-                from paper_daily.reading_position_packages import retain_imports_in
+                        register_document_paths(
+                            conn,
+                            workspace_id=self.client.journal.workspace_id,
+                            blob_root=prepared.blob_store.root,
+                            projection_root=self.root / ".package-reader",
+                            legacy_root=self.root / "pdf",
+                        )
+                    originals = {op["operation_id"]: staged for staged, op in prepared.originals}
+                    from paper_daily.sync_source_files import publish_source_in
 
-                retain_imports_in(conn, report.get("position_import_candidates", []))
-                from paper_daily.queue_pins import retain_imports_in
+                    for operation in json.loads(prepared.operations):
+                        ticket.check()
+                        actual = self.client.new_graph_operation_in(
+                            conn,
+                            operation["entity_type"],
+                            operation["entity_id"],
+                            operation["payload"],
+                            operation_id=operation["operation_id"],
+                        )
+                        if canonical_operation(actual) != canonical_operation(operation):
+                            raise ValueError("Import graph changed before its observed write")
+                        if operation["operation_id"] in originals:
+                            published = publish_source_in(
+                                conn, self.client, originals[operation["operation_id"]]
+                            )
+                            if published != operation:
+                                raise ValueError(
+                                    "Original source differs from its prepared operation"
+                                )
+                        else:
+                            self.client.journal.apply_in(conn, operation, self.client.writer)
+                    for target, proof in prepared.documents:
+                        if not bind_verified_document(conn, target, proof):
+                            raise ValueError("Imported PDF target changed before activation")
+                    for operation, directory in prepared.artifacts:
+                        if not activate(conn, operation, directory):
+                            raise ValueError("Imported artifact target changed before activation")
+                    from paper_daily import deck_proposal_packages
 
-                retain_imports_in(conn, report.get("queue_pin_preserved", []))
-                conn.execute(
-                    f"CREATE TABLE IF NOT EXISTS {_RECEIPTS}(request_id TEXT PRIMARY KEY, "
-                    "fingerprint TEXT NOT NULL, result_json TEXT NOT NULL)"
-                )
-                conn.execute(
-                    f"INSERT INTO {_RECEIPTS} VALUES(?,?,?)",
-                    (
-                        data["request"],
-                        data["fingerprint"],
-                        canonical_json(report).decode(),
-                    ),
-                )
+                    adopted = proposal_grant.adopt()
+                    report = json.loads(prepared.report)
+                    if adopted:
+                        report["proposal_ids"] = adopted
+                    from paper_daily.reading_position_packages import retain_imports_in
+
+                    retain_imports_in(conn, report.get("position_import_candidates", []))
+                    from paper_daily.later_outcome_packages import (
+                        retain_imports_in as retain_later_imports,
+                    )
+                    from paper_daily.queue_pins import retain_imports_in
+
+                    retain_later_imports(conn, report.get("later_outcome_import_candidates", []))
+
+                    retain_imports_in(conn, report.get("queue_pin_preserved", []))
+                    conn.execute(
+                        f"CREATE TABLE IF NOT EXISTS {_RECEIPTS}(request_id TEXT PRIMARY KEY, "
+                        "fingerprint TEXT NOT NULL, result_json TEXT NOT NULL)"
+                    )
+                    conn.execute(
+                        f"INSERT INTO {_RECEIPTS} VALUES(?,?,?)",
+                        (
+                            data["request"],
+                            data["fingerprint"],
+                            canonical_json(report).decode(),
+                        ),
+                    )
             ticket.check()
             self._check(conn)
+            if data.get("proposal_store_index") is not None:
+                info = (self.store.root / "index.sqlite").stat()
+                if [info.st_dev, info.st_ino] != data["proposal_store_index"]:
+                    raise WorkspaceChanged("Proposal artifact index changed before commit")
 
             def commit():
                 nonlocal ended

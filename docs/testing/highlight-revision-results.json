@@ -1,0 +1,120 @@
+{
+  "gate": {
+    "exit_code": 0,
+    "seconds": 535.09,
+    "selection": [
+      "tests/test_snapshot_quote_locations.py",
+      "tests/test_highlight_draft_revision.py",
+      "tests/test_highlight_revision_producer.py",
+      "tests/test_highlight_material_navigation.py",
+      "tests/test_legacy_highlight_material_preview.py",
+      "tests/test_research_evidence.py",
+      "tests/test_claim_draft_revision.py",
+      "tests/test_annotation_content.py",
+      "tests/test_pdf_highlights.py",
+      "tests/test_highlight_generation.py",
+      "tests/test_manual_highlight_ops.py",
+      "tests/test_manual_highlight_ui.py",
+      "tests/test_annotation_review.py",
+      "tests/test_material_reader_ui.py",
+      "tests/test_material_original_navigation_audit.py"
+    ],
+    "frozen_inputs": 1137,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 318,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 2.811,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.226,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 531.224,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_snapshot_quote_locations.py",
+          "tests/test_highlight_draft_revision.py",
+          "tests/test_highlight_revision_producer.py",
+          "tests/test_highlight_material_navigation.py",
+          "tests/test_legacy_highlight_material_preview.py",
+          "tests/test_research_evidence.py",
+          "tests/test_claim_draft_revision.py",
+          "tests/test_annotation_content.py",
+          "tests/test_pdf_highlights.py",
+          "tests/test_highlight_generation.py",
+          "tests/test_manual_highlight_ops.py",
+          "tests/test_manual_highlight_ui.py",
+          "tests/test_annotation_review.py",
+          "tests/test_material_reader_ui.py",
+          "tests/test_material_original_navigation_audit.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 534.279
+    }
+  },
+  "groups": [
+    {
+      "theme": "正式讀取器的素材跳轉",
+      "cases": 9,
+      "seconds": 48.12,
+      "meaning": "等待、連按、改選、離開、失敗重試與缺少重點"
+    },
+    {
+      "theme": "舊讀取器相容預覽",
+      "cases": 7,
+      "seconds": 3.35,
+      "meaning": "重用已載入標記、來源失效拒絕及壞資料保留原畫面"
+    },
+    {
+      "theme": "人工修訂內容核心",
+      "cases": 18,
+      "seconds": 22.57,
+      "meaning": "引句、理由、角色、位置、涵蓋與整組結果"
+    },
+    {
+      "theme": "共用引句定位",
+      "cases": 7,
+      "seconds": 5.48,
+      "meaning": "唯一／重複／缺失、取消與來源身分"
+    },
+    {
+      "theme": "真正分析產物銜接",
+      "cases": 2,
+      "seconds": 3.22,
+      "meaning": "固定回覆跑真正HighlightJob，修訂不再叫AI"
+    },
+    {
+      "theme": "既有相關回歸",
+      "cases": 275,
+      "seconds": 437.61,
+      "meaning": "既有引句、主張、分析／標記、正式讀取器與A／B原文導航"
+    }
+  ],
+  "new_functions": 30,
+  "new_cases": 43,
+  "full_check_passed": false
+}

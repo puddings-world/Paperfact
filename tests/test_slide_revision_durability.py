@@ -416,3 +416,38 @@ def test_open_deck_from_rebound_workspace_is_rejected_before_generation(pair, co
     loaded._file_observation["workspace_id"] = "another-workspace"
     with pytest.raises(ValueError, match="reopen"):
         slide_revision.begin(loaded, 0, "Do not spend AI on this stale editor")
+
+
+@pytest.mark.parametrize("legacy_hash", ["", "legacy-evidence"])
+def test_revision_pins_the_actual_evidence_snapshot_for_legacy_decks(
+    pane, monkeypatch, legacy_hash
+):
+    import hashlib
+
+    widget, callbacks, _ = setup_revision(pane, monkeypatch)
+    widget.deck.source_hash = legacy_hash
+    widget.canvas.revise_button.click()
+    finish(callbacks)
+    job, record = retained(widget)
+    assert record["status"] == "accepted"
+    saved = presentations.load_deck(widget.paper_id, "guide")
+    # Blank-source legacy decks retain that identity; their exact snapshot lives
+    # in the durable revision receipt and is included by recovery.
+    evidence = record["evidence"]
+    if legacy_hash:
+        evidence = json.loads(
+            (job.destination.parent / "evidence" / (saved.source_hash + ".json")).read_text("utf-8")
+        )
+    else:
+        assert saved.source_hash == ""
+    payload = {key: value for key, value in evidence.items() if key != "source_hash"}
+    digest = hashlib.sha256(json.dumps(
+        payload, sort_keys=True, ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")).hexdigest()
+    assert record["evidence"]["source_hash"] == digest
+    if legacy_hash:
+        assert saved.source_hash == digest
+    assert evidence["sources"] == record["evidence"]["sources"]
+    assert saved.slides[0].title == "Clinical result"
+    monkeypatch.setattr(llm, "complete_result", lambda *a, **k: pytest.fail("Retry invoked AI"))
+    assert slide_revision.publish(job) == "accepted"

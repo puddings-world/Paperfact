@@ -1,0 +1,88 @@
+{
+  "format": "paperfact.claim-continuity-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "unreleased": true,
+  "full_check_passed": false,
+  "result": {
+    "exit_code": 0,
+    "seconds": 524.53,
+    "selection": [
+      "tests/test_claim_review_continuity.py",
+      "tests/test_claim_conflict_intent.py",
+      "tests/test_review_document_observation.py",
+      "tests/test_claim_draft_storage.py",
+      "tests/test_claim_draft_application.py",
+      "tests/test_claim_draft_ui.py",
+      "tests/test_claim_review_operations.py",
+      "tests/test_claim_review_transports.py",
+      "tests/test_note_source_mapping.py",
+      "tests/test_resumed_draft_originals.py"
+    ],
+    "frozen_inputs": 1123,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 111,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 3.179,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.285,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 520.659,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_claim_review_continuity.py",
+          "tests/test_claim_conflict_intent.py",
+          "tests/test_review_document_observation.py",
+          "tests/test_claim_draft_storage.py",
+          "tests/test_claim_draft_application.py",
+          "tests/test_claim_draft_ui.py",
+          "tests/test_claim_review_operations.py",
+          "tests/test_claim_review_transports.py",
+          "tests/test_note_source_mapping.py",
+          "tests/test_resumed_draft_originals.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 524.134
+    }
+  },
+  "new_cases": 10,
+  "existing_cases": 101,
+  "existing_tests_unchanged": true,
+  "scope": "Synthetic SQLite/PDF, actual local reference service and Qt, CLI subprocess/official MCP. No installed-device/production/model acceptance.",
+  "external_gates": [
+    "complete application check",
+    "canonical product integration",
+    "platform installers",
+    "native remote/cancelled-result button journeys",
+    "installed Windows/Apple Silicon Mac",
+    "physical phone",
+    "production hosting, access, pairing and recovery",
+    "expert research review"
+  ]
+}

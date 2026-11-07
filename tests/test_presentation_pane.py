@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent, Qt  # noqa: E402
+from PySide6.QtCore import QCoreApplication, QEvent, QSize, Qt  # noqa: E402
 from PySide6.QtGui import QFont, QFontDatabase  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -51,6 +51,7 @@ def pane(tmp_path, monkeypatch):
         "2026-10-12",
     )
     presentations.save_deck(deck)
+    # Each owned thumbnail renderer starts with no remembered images.
     widget = PresentationPane()
     widget.load(deck.paper_id, deck.paper_title)
     yield widget, deck, app, tmp_path
@@ -73,10 +74,90 @@ def test_hidden_deck_load_defers_thumbnails_until_the_tab_is_shown(pane, monkeyp
     assert widget.paper_id == deck.paper_id and widget.deck is None
     assert not rendered
     widget.show()
-    app.processEvents()
+    drain(app, widget)
     assert widget.deck.paper_id == deck.paper_id
-    assert rendered == list(range(len(deck.slides)))
+    assert sorted(rendered) == list(range(len(deck.slides)))
     widget.hide()
+
+
+def drain(app, widget):
+    for _ in range(500):
+        app.processEvents()
+        if not widget._thumbnails.pending:
+            return
+    assert not widget._thumbnails.pending, "Owned thumbnail queue did not drain"
+
+
+def drawn(widget, index):
+    """A drawn thumbnail has the slide's blue edge; the placeholder is white."""
+    image = widget.outline.item(index).icon().pixmap(QSize(288, 162)).toImage()
+    edge = image.pixelColor(1, image.height() // 2)
+    return edge.blue() > 150 and edge.red() < 100
+
+
+def counting_thumbnail_loads(widget, monkeypatch):
+    loads = []
+    original = widget._thumbnail_canvas.load
+    monkeypatch.setattr(
+        widget._thumbnail_canvas, "load", lambda deck, i: (loads.append(i), original(deck, i))
+    )
+    return loads
+
+
+def test_opening_a_deck_draws_its_thumbnails_after_showing_it(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    widget._thumbnails.clear_images()
+    widget._thumbnails.timer.setInterval(0)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget._show_deck(None)
+    widget.load(deck.paper_id, deck.paper_title)
+    # Loading draws nothing itself; the list already holds every page, as placeholders.
+    assert loads == [] and widget.outline.count() == len(deck.slides)
+    assert not any(drawn(widget, i) for i in range(len(deck.slides)))
+    app.processEvents()
+    assert len(loads) < len(deck.slides)
+    drain(app, widget)
+    assert sorted(loads) == list(range(len(deck.slides)))
+    assert all(drawn(widget, i) for i in range(len(deck.slides)))
+
+
+def test_a_deck_seen_before_shows_its_thumbnails_at_once(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    drain(app, widget)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget.mode.setCurrentIndex(widget.mode.findData("notes"))
+    widget.mode.setCurrentIndex(widget.mode.findData("guide"))
+    assert all(drawn(widget, i) for i in range(len(deck.slides)))
+    drain(app, widget)
+    assert loads == []
+
+
+def test_an_edited_or_moved_slide_gets_a_new_thumbnail(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    drain(app, widget)
+    loads = counting_thumbnail_loads(widget, monkeypatch)
+    widget.slide_title.setText("新的標題")
+    assert widget.save_changes()
+    assert loads == [0]
+    loads.clear()
+    widget._move(1)
+    drain(app, widget)
+    # Only the two pages that changed place are drawn again: their page numbers moved.
+    assert sorted(loads) == [0, 1]
+    assert all(drawn(widget, i) for i in range(len(widget.deck.slides)))
+
+
+def test_removing_a_slide_while_thumbnails_are_drawn_finishes_the_new_deck(pane, monkeypatch):
+    widget, deck, app, _tmp = pane
+    widget._thumbnails.clear_images()
+    widget._thumbnails.timer.setInterval(0)
+    widget._show_deck(presentations.load_deck(deck.paper_id, "guide"))
+    app.processEvents()
+    widget.outline.setCurrentRow(2)
+    widget._remove()
+    drain(app, widget)
+    assert widget.outline.count() == len(deck.slides) - 1
+    assert all(drawn(widget, i) for i in range(widget.outline.count()))
 
 
 def test_editing_and_switching_modes_keeps_independent_decks(pane):
@@ -540,3 +621,35 @@ def test_form_figure_replacement_preserves_geometry_without_duplicate_figures(pa
     assert "原圖讀取失敗" in widget.preview.toPlainText()
     widget.figure.setCurrentIndex(0)
     assert not any(o["kind"] == "figure" for o in widget.canvas.snapshot())
+
+
+def test_an_autosave_after_generation_cannot_overwrite_the_new_deck(pane):
+    from uuid import uuid4
+
+    widget, deck, _app, tmp = pane
+    widget._generating = True
+    widget.slide_title.setText("生成期間的修改")
+    assert widget._dirty and widget._autosave.isActive()
+    fresh = presentations.deck_from_dict(deck.to_dict())
+    fresh.deck_id = uuid4().hex
+    fresh.title = "新產生的簡報"
+    # The background producer saves before its UI callback; keep the stale UI timer active.
+    previous = presentations.deck_from_dict(deck.to_dict())
+    previous.slides[0] = presentations.validate_slide(
+        widget._raw_slide(),
+        {s["id"] for s in previous.sources},
+        {f["id"] for f in previous.figures},
+    )
+    presentations.save_deck(previous)
+    presentations.save_deck(fresh)
+    assert widget._dirty and widget._autosave.isActive()
+    widget._generated(json.dumps(fresh.to_dict(), ensure_ascii=False))
+    widget._save_canvas()
+    widget._autosave.timeout.emit()
+    saved = presentations.load_deck(deck.paper_id, "guide")
+    assert saved.deck_id == fresh.deck_id and saved.title == "新產生的簡報"
+    assert widget.deck.title == "新產生的簡報"
+    # The edit typed during generation went into the old deck's history entry.
+    history = presentations._folder(deck.paper_id) / "history"
+    archived = [json.loads(p.read_text(encoding="utf-8")) for p in history.glob("guide-*.json")]
+    assert [a["slides"][0]["title"] for a in archived] == ["生成期間的修改"]

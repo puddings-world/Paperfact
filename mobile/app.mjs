@@ -1,3 +1,4 @@
+import {readWorkspaceHint,rememberWorkspace,forgetWorkspaceHint} from './workspace-startup.mjs';
 import { pinBadge } from './list-pins.mjs';
 import {parsePositionJSON} from './position-json.mjs';
 import {readingPositionDialog} from './position-dialog.mjs';
@@ -5,6 +6,7 @@ import {positionLabel} from './position-view.mjs';
 import {inboxLabel,researchInboxDialog} from './inbox-view.mjs';
 import {activityLabel,activityReport,researchActivityDialog,activateActivity,canOpenSavedNote} from './research-activity.mjs';
 import { renderLegacyWorkflow } from './legacy-view.mjs';
+import { laterOutcomeText } from './later-outcomes.mjs';
 import { renderReadingGoal } from './reading-goal.mjs';
 import {
   IndexedStore,
@@ -36,7 +38,8 @@ import {
 } from './i18n.mjs';
 import {
   ReaderView,
-  flushDrafts
+  flushDrafts,
+  trackNoteObservation
 } from './view.mjs';
 import { renderChatCards } from './chat-view.mjs';
 import { renderAnnotations } from './annotations.mjs';
@@ -108,19 +111,26 @@ function announce(code, progress) {
 }
 async function openWorkspace(workspace, device, transport, {
   token = null,
-  fixture = false
+  fixture = false,
+  existingStore = null,
+  remember = true
 } = {}) {
+  let next=null,adopted=false;
   switchingWorkspace = true;
   render();
   try {
     clearTimeout(draftTimer);
     if(store) await flushDrafts(store, view);
-    const next = await IndexedStore.open(workspace, device);
+    next = existingStore ?? await IndexedStore.open(workspace, device);
+    const initial=await next.read();
+    if(initial.workspace!==workspace || initial.device!==device)throw Error('wrong_scope');
+    projection(initial);
     engine?.disconnect();
     clearPdf();
-    store?.close();
+    if(store!==next)store?.close();
     connected = false;
     store = next;
+    adopted=true;
     engine = new Engine(store, {
       transport,
       onChange: announce
@@ -135,12 +145,17 @@ async function openWorkspace(workspace, device, transport, {
     }
     if(fixture) await engine.importProjection(demoProjection);
     await refresh();
+    if(remember) {
+      const saved=fixture?forgetWorkspaceHint():rememberWorkspace({workspace,device,origin:transport.origin});
+      if(!saved){notice='workspaceChoiceNotSaved';isError=true;}
+    }
   } finally {
+    if(next && !adopted && next!==store)next.close();
     switchingWorkspace = false;
     render();
   }
 }
-async function startDemo() {
+async function startDemo({remember=true}={}) {
   const authority = await IndexedStore.open('demo-workspace', 'fixture-authority');
   const retained = Object.values((await authority.read()).receipts).sort((a, b) => a.sequence - b.sequence);
   const transport = await demoTransport(retained.length ? retained: null);
@@ -148,9 +163,10 @@ async function startDemo() {
   await transport.persist(transport.events);
   await openWorkspace('demo-workspace', 'demo-phone', transport, {
     token: 'fixture-token',
-    fixture: true
+    fixture: true,
+    remember
   });
-  notice = 'demoHelp';
+  if(notice!=='workspaceChoiceNotSaved')notice = 'demoHelp';
   render();
 }
 function retainFocus() {
@@ -450,6 +466,8 @@ function renderOverview(panel, paper, data) {
     class: 'prose'
   }, paper.abstract ?? '')
   ));
+  if(paper.later_outcome) panel.append(el('p',{class:'notice',role:'status'},
+    laterOutcomeText(paper.later_outcome,language,pdfURL?pdfHash:null)));
   const sections = paper.analysis_sections ??[];
   if(! sections.length) panel.append(el('div', {
     class: 'card'
@@ -521,8 +539,8 @@ function renderNotes(panel, paper, data) {
   note = notes.find(n => n.id === id),
   body = own(view.drafts, id) ?? own(state.drafts, id) ?? note?.body ?? '',
   editable = active(state, 'paper', paper.id) &&(note?.editable !== false);
-  if(! Object.hasOwn(view.observed, id)) put(view.observed, id, observeNote(state, id, paper.id));
   const currentObservation = observeNote(state, id, paper.id);
+  trackNoteObservation(view, state, id, currentObservation);
   const stale = view.observed[id].note_operation_id !== currentObservation.note_operation_id || view.observed[id].paper_incarnation !== currentObservation.paper_incarnation;
   if(stale) {
     panel.append(el(
@@ -906,6 +924,7 @@ function showConnection() {
     autocomplete: 'off'
   }),
   origin = el('input', {
+    value: engine?.transport?.origin ?? '',
     placeholder: 'https://sync.example.org',
     autocomplete: 'off'
   }),
@@ -1085,7 +1104,25 @@ if('serviceWorker' in navigator) void navigator.serviceWorker.register('./sw.mjs
   type: 'module'
 }).catch(() => {});
 try {
-  await startDemo();
+  const resume=readWorkspaceHint();
+  let restored=false,resumeStatus=resume.status;
+  if(resume.hint) {
+    let cached=null;
+    try {
+      cached=await IndexedStore.openExisting(resume.hint.workspace,resume.hint.device);
+      if(cached) {
+        await openWorkspace(resume.hint.workspace,resume.hint.device,new HttpTransport(resume.hint.origin),{existingStore:cached,remember:false});
+        restored=true;notice='workspaceRestored';isError=false;render();
+      } else resumeStatus='missing';
+    } catch {
+      if(cached && cached!==store)cached.close();
+      resumeStatus='unavailable';
+    }
+  }
+  if(!restored) {
+    await startDemo({remember:false});
+    if(resumeStatus!=='empty') {notice='workspaceResumeUnavailable';isError=true;render();}
+  }
 } catch(error) {
   app.replaceChildren(el('main', {}, el('h1', {}, 'Paperfact'), text(error.message), text('copyHint')));
 }

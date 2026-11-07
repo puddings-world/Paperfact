@@ -28,6 +28,8 @@ MAX_RECEIPTS = 10000
 _PUBLICATION_LOCK = threading.RLock()
 _DEFAULT_POLICY = object()
 POSITION_FORMATS = {"paperfact.position-source-owner.v1", "paperfact.position-source-owner.v2"}
+NOTE_FORMAT = "paperfact.note-source-owner.v1"
+ATOMIC_FORMATS = {"paperfact.position-source-owner.v2", NOTE_FORMAT}
 
 
 def _owner(context, snapshot):
@@ -81,6 +83,7 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
     position = (
         isinstance(owner, dict) and owner.get("format") in POSITION_FORMATS
     )
+    note = isinstance(owner, dict) and owner.get("format") == NOTE_FORMAT
     claim_content.closed(
         owner,
         {
@@ -90,9 +93,9 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
             "paper_id",
             "parent_lifecycle",
             "source_owner_id",
-        } | ({"position_key"} if position else set()),
+        } | ({"position_key"} if position else set()) | ({"draft_key"} if note else set()),
     )
-    if owner["format"] not in {"paperfact.source-owner.v1", *POSITION_FORMATS}:
+    if owner["format"] not in {"paperfact.source-owner.v1", NOTE_FORMAT, *POSITION_FORMATS}:
         raise ValueError("Unsupported source snapshot owner")
     identity = owner["database_identity"]
     if (
@@ -112,13 +115,18 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
         r"[0-9a-f]{32}", owner["parent_lifecycle"]
     ):
         raise ValueError("Invalid source snapshot parent epoch")
+    if note:
+        claim_content.digest(owner["draft_key"])
+        if (owner["source_owner_id"] != owner["paper_id"] or row["request_id"] !=
+                "note-choice:" + claim_content.hashed(owner)):
+            raise ValueError("Note choice receipt requires its exact typed owner")
     claim_content.digest(row["sha256"])
     if position and (
         owner["position_key"] != row["sha256"] or owner["source_owner_id"] != owner["paper_id"]
     ):
         raise ValueError("Position original belongs to another exact position owner")
     if max_pdf_bytes is _DEFAULT_POLICY:
-        max_pdf_bytes = primary_limit if position else evidence.MAX_PDF_BYTES
+        max_pdf_bytes = primary_limit if position or note else evidence.MAX_PDF_BYTES
     if type(max_pdf_bytes) is not int or not 0 < max_pdf_bytes <= primary_limit:
         raise ValueError("Invalid trusted source receipt size policy")
     claim_content.number(row["size"], max_pdf_bytes, 1)
@@ -135,14 +143,14 @@ def receipt_path(database, row):
     owner = json.loads(validate(row)["owner_json"])
     root = Path(database).parent / ".paperfact-source-snapshots" / _namespace(owner)
     key = claim_content.hashed(row["request_id"])
-    if owner["format"] == "paperfact.position-source-owner.v2":
+    if owner["format"] in ATOMIC_FORMATS:
         return owned_path(root / key / "receipt.json")
     return owned_path(root / (key + ".json"))
 
 
 def source_path(database, row, *, max_pdf_bytes=_DEFAULT_POLICY):
     owner = json.loads(validate(row, max_pdf_bytes=max_pdf_bytes)["owner_json"])
-    if owner["format"] == "paperfact.position-source-owner.v2":
+    if owner["format"] in ATOMIC_FORMATS:
         return owned_path(receipt_path(database, row).parent / "original.pdf")
     if owner["format"] == "paperfact.position-source-owner.v1":
         alias = claim_content.hashed(["reading-position-owner", owner["paper_id"]])[:24]

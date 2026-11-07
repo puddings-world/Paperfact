@@ -59,3 +59,32 @@ def test_build_keeps_the_draft_inside_its_script(share_dir):
     end = html.index(";\n", start)
     assert "</script>" in json.loads(html[start:end].replace("<\/", "</"))
     assert built["missing"] == ["fig/x/a.png"]
+
+
+def _facts(pid):
+    return {"short": pid, "title": pid, "venue": "V", "authors": "A", "doi": "", "figures": 0,
+            "tables": 0, "cites": 0, "worth": 0, "notes": 0, "dive": "d", "abstract": "a"}
+
+
+@pytest.fixture
+def compare_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(share, "SHARE_DIR", tmp_path)
+    monkeypatch.setattr(share, "_paper_md", lambda conn, pid, out: (f"## {pid}\n", _facts(pid)))
+    calls = []
+    monkeypatch.setattr(
+        share, "compare", lambda facts: (calls.append(facts), ("#### 對照", "ok"))[1]
+    )
+    return calls
+
+
+def test_a_second_compare_draft_does_not_pay_for_an_unused_comparison(compare_dir):
+    ids = ["p1", "p2", "p3"]
+    first = share.draft(ids, slug="s", with_compare=True)
+    text = first["path"].read_text(encoding="utf-8")
+    assert len(compare_dir) == 1 and "#### 對照" in text
+    assert "依各篇的深度講解" in text and "兩篇" not in text
+    again = share.draft(ids, slug="s", with_compare=True)
+    assert len(compare_dir) == 1
+    assert "draft.md 已存在" in again["compare_failed"]
+    forced = share.draft(ids, slug="s", with_compare=True, force=True)
+    assert len(compare_dir) == 2 and forced["path"].name == "draft.new.md"

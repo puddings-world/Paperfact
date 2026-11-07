@@ -332,3 +332,14 @@ Object.assign(messages['zh-TW'], {
   claimCitationUnresolved:'建議的引用身分尚未透過可信對應核實。',
   unsupported_claim_set:'已儲存的主張格式或來源綁定未通過驗證。'
 });
+
+Object.assign(messages.en, {
+  workspaceRestored:'Local workspace reopened · connect to resume synchronization',
+  workspaceResumeUnavailable:'The last workspace could not be reopened. Choose Connection; cached research is unchanged.',
+  workspaceChoiceNotSaved:'Workspace open · this browser could not remember your choice for next time.'
+});
+Object.assign(messages['zh-TW'], {
+  workspaceRestored:'已開啟上次的本機工作區；連線後即可繼續同步',
+  workspaceResumeUnavailable:'未能開啟上次工作區。請從「連線」選擇；既有本機研究資料未變更。',
+  workspaceChoiceNotSaved:'工作區已開啟；瀏覽器無法記住本次選擇，下次需重新選取。'
+});

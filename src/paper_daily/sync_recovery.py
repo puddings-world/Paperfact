@@ -63,9 +63,23 @@ RESEARCH_TABLES = frozenset(
         "chat",
     }
 )
-OPTIONAL_RESEARCH_TABLES = {"list_reading_goals", "reading_positions"} | INBOX_RESEARCH
+OPTIONAL_RESEARCH_TABLES = {
+    "list_reading_goals", "reading_positions", "paper_later_outcomes"
+} | INBOX_RESEARCH
 
 PROTOCOL = {
+    "research_observed_current_deck_recovery": "paper_id slot parent_token manifest_json",
+    "research_common_primary_recovery": "paper_id parent_token sha256 size media_type",
+    "research_local_deck_proposals": (
+        "proposal_id request_id paper_id captured_json owner_json manifest_json fingerprint"
+    ),
+    "research_enrolled_deck_proposals": (
+        "proposal_id request_id local_id portable_id captured_json owner_json "
+        "manifest_json fingerprint"
+    ),
+    "research_common_deck_proposal_recovery": (
+        "record_id paper_id proposal_id manifest_json provenance_json"
+    ),
     "research_reading_position_receipts": "request_id request_json result_json",
     **INBOX_PROTOCOL,
     "research_legacy_brief_recovery": "local_id paper_id sha256 size media_type legacy_day",
@@ -133,6 +147,7 @@ PROTOCOL = {
         "request_id context_json mutations_json status candidate_id reason"
     ),
     "research_slide_revision_recovery": "request_id manifest",
+    "research_deck_draft_recovery": "candidate_id manifest",
     "research_legacy_source_recovery": "sha256 size media_type",
     "research_legacy_deck_recovery": "paper_id slot request_id parent_token deck",
     "research_file_desired": "entity_id operation active",
@@ -141,6 +156,7 @@ PROTOCOL = {
     "research_file_intents": "operation_id entity_id state",
     "research_file_candidates": "candidate_id entity_id payload observation",
     "research_file_drafts": "candidate_id entity_id deck observation",
+    "research_file_draft_closures": "candidate_id source_sha256 payload inventory",
     "integration_operations": "id fingerprint result created_at",
 }
 EXCLUDED_PROTOCOL = {
@@ -276,6 +292,7 @@ class _Records:
         self.annotation_owners = set()
         self.queue_pin_owners = set()
         self.slide_revisions = {}
+        self.raw_drafts, self.draft_closures, self.deck_receipts = {}, {}, {}
         self.legacy_sources = {}
         self.archived_sources = {}
         self.legacy_decks = {}
@@ -283,6 +300,14 @@ class _Records:
         self.recovered_provenance = []
         self.legacy_briefs, self.legacy_events = {}, {}
         self.reading_positions = {}
+        self.common_catalogs, self.common_proposals, self.archived_common_proposals = {}, {}, {}
+        self.archived_common_catalogs = {}
+        self.common_primaries = {}
+        self.observed_currents = {}
+        self.archived_observed_currents = {}
+        from paper_daily.later_outcome_recovery import Records as LaterRecords
+
+        self.later_outcomes = LaterRecords()
         from paper_daily.inbox_recovery import Records as InboxRecords
 
         self.inbox = InboxRecords()
@@ -296,6 +321,64 @@ class _Records:
         )
 
     def row(self, name, row):
+        if name == "research_observed_current_deck_recovery":
+            from paper_daily import proposal_recovery_current as observed
+
+            value = observed.validate(row)
+            key = row["paper_id"], row["slot"]
+            if self.workspace is not None or key in self.observed_currents:
+                raise RecoveryError("Observed manual current has foreign/duplicate scope")
+            self.observed_currents[key] = row
+            for item in observed.references(row):
+                _add_blob(self.refs, item)
+            self.research_sources.update(item["sha256"] for item in value["originals"])
+            return
+        if name == "research_common_primary_recovery":
+            from paper_daily.proposal_recovery_primary import validate
+
+            validate(row)
+            if self.workspace is not None or row["paper_id"] in self.common_primaries:
+                raise RecoveryError("Observed local primary has foreign or duplicate source scope")
+            self.common_primaries[row["paper_id"]] = row
+            _add_blob(self.refs, row)
+            return
+        if name in {"research_local_deck_proposals", "research_enrolled_deck_proposals"}:
+            from paper_daily import enrolled_deck_proposals, local_deck_proposals
+
+            kind = "local" if name == local_deck_proposals.TABLE else "enrolled"
+            module = local_deck_proposals if kind == "local" else enrolled_deck_proposals
+            module.validate_record(row)
+            key = kind, row["proposal_id"]
+            if key in self.common_catalogs:
+                raise RecoveryError("Duplicate common proposal catalog identity")
+            self.common_catalogs[key] = row
+            return
+        if name == "research_common_deck_proposal_recovery":
+            from paper_daily import proposal_recovery
+
+            proposal_recovery.validate_row(row)
+            if row["record_id"] in self.common_proposals:
+                raise RecoveryError("Duplicate common proposal carrier")
+            self.common_proposals[row["record_id"]] = row
+            for item in proposal_recovery.references(row):
+                _add_blob(self.refs, item)
+            self.research_sources.update(
+                item["sha256"] for item in _load(row["manifest_json"])["originals"]
+            )
+            return
+        if name in {
+            "paper_later_outcomes",
+            "research_local_source_owners",
+            "research_source_snapshot_recovery",
+            "research_paper_projection",
+            "research_file_desired",
+            "research_file_applied",
+        }:
+            self.later_outcomes.add(name, row)
+        if name == "paper_later_outcomes":
+            self.annotation_owners.add(row["paper_id"])
+            if row["document_hash"] is not None:
+                self.research_sources.add(row["document_hash"])
         if name == "pins" and row["scope"] == "queue":
             from paper_daily.sync_content import _stamp, _text
 
@@ -319,6 +402,33 @@ class _Records:
             owner = _load(row["request_json"])["owner"]
             if owner["binding"] is not None and owner["binding"]["workspace_id"] != self.workspace:
                 raise RecoveryError("Position receipt belongs to another workspace")
+        if name == "research_history_archive" and row.get("protocol") == (
+            "research_observed_current_deck_recovery"
+        ):
+            from paper_daily import enrollment_history, proposal_recovery_current
+
+            archived, _sources = enrollment_history.validate(row)
+            self.archived_observed_currents[row["record_id"]] = archived
+            for item in proposal_recovery_current.references(archived):
+                _add_blob(self.refs, item)
+        if name == "research_history_archive" and row.get("protocol") in {
+            "research_local_deck_proposals",
+            "research_enrolled_deck_proposals",
+        }:
+            from paper_daily import enrollment_history
+
+            archived, _sources = enrollment_history.validate(row)
+            kind = "local" if row["protocol"] == "research_local_deck_proposals" else "enrolled"
+            self.archived_common_catalogs[(kind, archived["proposal_id"])] = archived
+        if name == "research_history_archive" and row.get("protocol") == (
+            "research_common_deck_proposal_recovery"
+        ):
+            from paper_daily import enrollment_history, proposal_recovery
+
+            carrier, _sources = enrollment_history.validate(row)
+            self.archived_common_proposals[carrier["record_id"]] = carrier
+            for item in proposal_recovery.references(carrier):
+                _add_blob(self.refs, item)
         if name in INBOX_RESEARCH | set(INBOX_PROTOCOL):
             self.inbox.add(name, row)
             return
@@ -504,11 +614,17 @@ class _Records:
                     for asset in payload["assets"]
                     if asset["role"] == "figure"
                 }
-            for figure in raw["figures"]:
-                if figure.get("asset") not in known:
-                    raise RecoveryError(
-                        "Draft contains unpinned research assets; migrate before backup"
-                    )
+            from paper_daily.raw_deck_closure import summarize
+
+            self.raw_drafts[row["candidate_id"]] = (summarize(row, strict=False), known)
+        elif name == "research_file_draft_closures":
+            from paper_daily.raw_deck_closure import validate_row
+
+            payload, inventory = validate_row(row)
+            self.draft_closures[row["candidate_id"]] = row
+            self._artifact(payload)
+            for item in [payload["body"], *payload["assets"], *inventory["images"]]:
+                _add_blob(self.refs, item)
         elif name == "research_file_candidates":
             from paper_daily.sync_files import validate_payload
 
@@ -535,6 +651,19 @@ class _Records:
                 raise RecoveryError("Duplicate archive-only source manifest")
             self.legacy_sources[row["sha256"]] = row
             _add_blob(self.refs, row)
+        elif name == "research_deck_draft_recovery":
+            from paper_daily import raw_deck_receipts
+
+            manifest = raw_deck_receipts.validate_manifest(row)
+            if manifest["workspace_id"] != self.workspace:
+                raise RecoveryError("Draft receipt belongs to another workspace")
+            if row["candidate_id"] in self.deck_receipts:
+                raise RecoveryError("Duplicate full-deck byte receipt")
+            self.deck_receipts[row["candidate_id"]] = row
+            self._artifact(manifest["payload"])
+            self.research_sources.update(manifest["documents"])
+            for item in raw_deck_receipts.references(manifest):
+                _add_blob(self.refs, item)
         elif name == "research_slide_revision_recovery":
             from paper_daily import sync_slide_recovery
 
@@ -680,9 +809,98 @@ class _Records:
             if re.fullmatch(r"con|prn|aux|nul|com[1-9]|lpt[1-9]", key.split(".", 1)[0]):
                 raise RecoveryError("Detached PDF alias is not a portable filename")
             result[name] = (target["sha256"], target["size"])
+        for local, row in self.common_primaries.items():
+            name = re.sub(r"[^A-Za-z0-9._-]", "_", local) + ".pdf"
+            key = name.casefold()
+            if (
+                len(name) > 240
+                or owners.get(key) != local
+                or name in result
+                or re.fullmatch(r"con|prn|aux|nul|com[1-9]|lpt[1-9]", key.split(".", 1)[0])
+            ):
+                raise RecoveryError("Ambiguous observed local primary alias")
+            result[name] = (row["sha256"], row["size"])
         return result
 
     def finish(self):
+        from paper_daily.raw_deck_closure import validate_summary
+
+        if set(self.draft_closures) - set(self.raw_drafts):
+            raise RecoveryError("Raw draft closure has no retained source record")
+        for identity, (summary, known) in self.raw_drafts.items():
+            if identity in self.draft_closures:
+                validate_summary(summary, self.draft_closures[identity])
+                self.research_sources.update(summary["documents"])
+            elif identity in self.deck_receipts:
+                from paper_daily.raw_deck_receipts import validate_manifest
+                from paper_daily.sync_files import file_id
+
+                retained = validate_manifest(self.deck_receipts[identity])
+                payload = retained["payload"]
+                expected_entity = file_id(payload["paper_id"], "deck", payload["slot"])
+                if (
+                    retained["source_sha256"] != summary["source_sha256"]
+                    or retained["documents"] != summary["documents"]
+                    or summary["entity_id"] != expected_entity
+                ):
+                    raise RecoveryError("Draft receipt differs from its original raw row")
+                self.research_sources.update(summary["documents"])
+            elif any(asset not in known for asset in summary["figures"].values()):
+                raise RecoveryError(
+                    "Draft contains unpinned research assets; migrate before backup"
+                )
+        from paper_daily import proposal_recovery
+
+        represented = set()
+        for carrier in self.common_proposals.values():
+            parsed = proposal_recovery.validate_row(
+                carrier, papers=self.paper_ids, paper_map=self.paper_map, workspace=self.workspace
+            )
+            provenance = parsed["provenance"]
+            key = provenance["source_kind"], carrier["proposal_id"]
+            if self.common_catalogs.get(key) != provenance["record"]:
+                raise RecoveryError("Common carrier lacks its exact archived source catalog row")
+            represented.add(key)
+        if represented != set(self.common_catalogs):
+            raise RecoveryError("Common proposal catalog lacks its complete content carrier")
+        archived_represented = set()
+        for carrier in self.archived_common_proposals.values():
+            parsed = proposal_recovery.validate_row(carrier, papers=self.paper_ids)
+            provenance = parsed["provenance"]
+            key = provenance["source_kind"], carrier["proposal_id"]
+            if key in self.archived_common_catalogs:
+                if self.archived_common_catalogs[key] != provenance["record"]:
+                    raise RecoveryError("Archived common catalog differs from its content carrier")
+                archived_represented.add(key)
+        if archived_represented != set(self.archived_common_catalogs):
+            raise RecoveryError("Archived common catalog lacks complete scientific bytes")
+        for row in self.common_primaries.values():
+            parent = self.parent_lifecycles.get(("paper", row["paper_id"]))
+            if (
+                row["paper_id"] not in self.paper_ids
+                or parent is None
+                or not parent["active"]
+                or parent["token"] != row["parent_token"]
+            ):
+                raise RecoveryError("Observed local primary differs from its actual source parent")
+        for key, row in self.observed_currents.items():
+            parent = self.parent_lifecycles.get(("paper", row["paper_id"]))
+            if (
+                row["paper_id"] not in self.paper_ids
+                or parent is None
+                or not parent["active"]
+                or parent["token"] != row["parent_token"]
+                or key in self.legacy_decks
+            ):
+                raise RecoveryError("Observed manual current has ambiguous/retired parent")
+            if any(
+                operation["payload"]["feature"] == "deck"
+                and self.paper_map.get(operation["payload"]["paper_id"]) == key[0]
+                and operation["payload"]["slot"] == key[1]
+                for operation in self.applied_files.values()
+            ):
+                raise RecoveryError("Observed manual current has multiple saved owners")
+        self.later_outcomes.finish(self)
         self.inbox.finish()
         from paper_daily.legacy_brief_recovery import validate_records
 
@@ -805,6 +1023,7 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
     source, output = _path(database), _path(output)
     if not source.is_file() or output.exists():
         raise RecoveryError("Select an existing database and a new backup filename")
+    common_native = (source.stat().st_dev, source.stat().st_ino)
     if output.parent == source.parent and output.name in {
         source.name + suffix for suffix in ("", "-wal", "-shm", "-journal")
     }:
@@ -955,6 +1174,12 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         except (OSError, ValueError):
                             owned = None
                         if owned is not None:
+                            # The immutable object satisfies the required bytes,
+                            # but a history-only copy may also exist in an owned
+                            # PDF root. Verify and account for those exact aliases
+                            # before the complete-workspace legacy check. Names
+                            # alone never excuse unknown or modified research.
+                            legacy_sources.find(digest, records.refs[digest])
                             continue
                     found = legacy_sources.find(digest, records.refs.get(digest))
                     if found is None and digest not in records.refs:
@@ -963,8 +1188,44 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         )
                 return list(legacy_sources.manifests.values())
 
+            from paper_daily import raw_deck_receipts
             from paper_daily.source_snapshots import list_owned
 
+            draft_rows, draft_objects, draft_aliases = raw_deck_receipts.collect(source, temporary)
+            from paper_daily import proposal_recovery
+
+            common = proposal_recovery.collect(
+                source, conn, temporary, expected_native=common_native
+            )
+            from paper_daily import proposal_recovery_primary
+
+            local_common = [
+                row["paper_id"]
+                for row in common.rows
+                if (
+                    _load(row["provenance_json"])["source_kind"] == "local"
+                    and _load(row["provenance_json"])["current_parent"]
+                )
+            ]
+            observed_primary = proposal_recovery_primary.collect(
+                source, conn, local_common, temporary, expected_native=common_native
+            )
+            from paper_daily import proposal_recovery_current
+
+            try:
+                observed_current = proposal_recovery_current.collect(
+                    source,
+                    conn,
+                    temporary,
+                    expected_native=common_native,
+                    represented=slide_aliases,
+                    source_resolver=legacy_sources,
+                    source_objects=common.objects,
+                )
+            except (ValueError, OSError, sqlite3.Error) as error:
+                raise RecoveryError(
+                    "Current presentation requires complete migration before backup"
+                ) from error
             source_aliases, source_caches, source_cache_bytes = {}, {}, 0
             for name, loader in (
                 ("research_source_snapshot_recovery", list_owned),
@@ -972,6 +1233,10 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 ("research_chat_recovery", research_chat.list_recovery_requests),
                 ("research_compound_recovery", research_compound.list_recovery_requests),
                 ("research_slide_revision_recovery", lambda _source: slide_rows),
+                ("research_deck_draft_recovery", lambda _source: draft_rows),
+                ("research_common_deck_proposal_recovery", lambda _source: common.rows),
+                ("research_common_primary_recovery", lambda _source: observed_primary.rows),
+                ("research_observed_current_deck_recovery", lambda _source: observed_current.rows),
                 ("research_legacy_deck_recovery", lambda _source: legacy_decks),
                 ("research_legacy_brief_recovery", lambda _source: brief_rows),
                 ("research_legacy_source_recovery", lambda _source: adopted_sources()),
@@ -1022,7 +1287,14 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         )
                     )
             records.finish()
-            represented = {**slide_aliases, **legacy_sources.aliases, **brief_aliases}
+            represented = {
+                **slide_aliases,
+                **legacy_sources.aliases,
+                **brief_aliases,
+                **draft_aliases,
+                **observed_primary.aliases,
+                **observed_current.aliases,
+            }
             _legacy_check(
                 source.parent, records.pdf_aliases(), represented, verified_sources=source_aliases
             )
@@ -1032,7 +1304,15 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 )
             objects = []
             for digest, size in sorted(records.refs.items()):
-                if digest in brief_objects:
+                if digest in common.objects:
+                    path = common.objects[digest]
+                elif digest in observed_current.objects:
+                    path = observed_current.objects[digest]
+                elif digest in observed_primary.objects:
+                    path = observed_primary.objects[digest]
+                elif digest in draft_objects:
+                    path = draft_objects[digest]
+                elif digest in brief_objects:
                     path = brief_objects[digest]
                 elif digest in slide_objects:
                     path = slide_objects[digest]
@@ -1089,6 +1369,12 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                         raise RecoveryError("Owned source cache changed during backup")
                 except (OSError, ValueError) as error:
                     raise RecoveryError("Owned source cache changed during backup") from error
+            for location, expected in draft_aliases.items():
+                if _fingerprint(location) != expected:
+                    raise RecoveryError("Owned draft receipt changed during backup")
+            common.check()
+            observed_primary.check()
+            observed_current.check()
             # Hard-link publication is exclusive, unlike replace() after an exists check.
             os.link(stage, output)
         finally:
@@ -1275,11 +1561,30 @@ def _validate_positions(records, read):
 def _validate_closures(records, read):
     """Validate independent original archive groups without merging their identities."""
     from paper_daily.legacy_briefs import validate_markdown
+    from paper_daily.raw_deck_closure import verify_summary
     from paper_daily.recovery_decks import legacy_snapshot
     from paper_daily.sync_files import validate_closure
     from paper_daily.sync_legacy_sources import validate_pdf
     from paper_daily.sync_slide_recovery import read_retained
 
+    for identity, row in records.draft_closures.items():
+        verify_summary(records.raw_drafts[identity][0], row, read)
+    from paper_daily import raw_deck_receipts
+
+    for identity, row in records.deck_receipts.items():
+        retained = raw_deck_receipts.read_retained(row, read)
+        if identity in records.raw_drafts:
+            verify_summary(records.raw_drafts[identity][0], retained["closure"], read)
+    from paper_daily import proposal_recovery
+
+    for row in [*records.common_proposals.values(), *records.archived_common_proposals.values()]:
+        proposal_recovery.read(row, read)
+    for row in records.common_primaries.values():
+        validate_pdf(read(row))
+    from paper_daily import proposal_recovery_current
+
+    for row in [*records.observed_currents.values(), *records.archived_observed_currents.values()]:
+        proposal_recovery_current.read(row, read)
     _validate_positions(records, read)
     for row in records.legacy_briefs.values():
         validate_markdown(read(row))
@@ -1308,6 +1613,9 @@ def _detached_files(stage, records):
     from paper_daily.recovery_decks import restore_legacy
 
     restore_legacy(stage, records.legacy_decks, records.slide_revisions)
+    from paper_daily.proposal_recovery_current import restore as restore_observed
+
+    restore_observed(stage, records.observed_currents)
     from paper_daily.legacy_brief_recovery import restore as restore_briefs
 
     restore_briefs(stage, records)

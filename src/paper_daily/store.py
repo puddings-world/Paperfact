@@ -467,6 +467,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     from paper_daily.inbox_content import initialize as initialize_inbox
 
     initialize_inbox(conn)
+    from paper_daily.later_outcomes import initialize as initialize_later_outcomes
+
+    initialize_later_outcomes(conn)
 
     from paper_daily.reading_positions import initialize as initialize_positions
 

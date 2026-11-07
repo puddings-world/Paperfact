@@ -27,19 +27,31 @@ import {
 import {createInterface} from 'node:readline';
 const executable = process.argv[2] ?? process.env.PAPERFACT_TEST_BROWSER;
 const testPage=process.env.PAPERFACT_TEST_PAGE??'browser-test.html';
-if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
+if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html','workspace-startup-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
 if(! executable) throw new Error('Pass an explicit Chromium/Edge executable path.');
 const root = fileURLToPath(new URL('.', import.meta.url)), profile = await mkdtemp(join(tmpdir(), 'paperfact-mobile-fixture-'));
+const plainNoteMode=!!process.env.PAPERFACT_NOTE_SERVICE_PYTHON;
+const fixtureResearchRequests=[];
 let positionService,positionReady,positionErrors='';
 const serviceLines=[],serviceWaiting=[];
 async function serviceMessage(command) {
-  if(command)positionService.stdin.write(command+'\n');
+  if(command)positionService.stdin.write((plainNoteMode?JSON.stringify(command):command)+'\n');
   return JSON.parse(await new Promise((resolve,reject)=>{
     if(serviceLines.length){resolve(serviceLines.shift());return;}
     const timer=setTimeout(()=>reject(Error('Isolated position service timed out: '+positionErrors)),30000);
     serviceWaiting.push(line=>{clearTimeout(timer);resolve(line);});
     positionService.once('exit',code=>{clearTimeout(timer);reject(Error('Position service exited '+code+': '+positionErrors));});
   }));
+}
+if(plainNoteMode) {
+  if(testPage!=='browser-test.html')throw Error('Plain-note fixtures require the ordinary browser test page.');
+  positionService=spawn(process.env.PAPERFACT_NOTE_SERVICE_PYTHON,[join(root,'plain-note-service-fixture.py'),resolve(root,'..')],
+    {stdio:['pipe','pipe','pipe'],windowsHide:true});
+  positionService.stderr.on('data',chunk=>positionErrors+=chunk);
+  createInterface({input:positionService.stdout}).on('line',line=>{const next=serviceWaiting.shift();if(next)next(line);else serviceLines.push(line);});
+  positionReady=await serviceMessage();
+  const origin=new URL(positionReady.url);
+  if(origin.protocol!=='http:'||origin.hostname!=='127.0.0.1'||origin.pathname!=='/')throw Error('Invalid note fixture origin.');
 }
 if(['position-browser-test.html','position-ui-browser-test.html'].includes(testPage) && process.env.PAPERFACT_POSITION_SERVICE_PYTHON) {
   positionService=spawn(process.env.PAPERFACT_POSITION_SERVICE_PYTHON,[join(root,'position-service-fixture.py'),resolve(root,'..')],
@@ -67,6 +79,7 @@ const server = createServer(async(request, response) => {
     if(!['/v1/session/info','/v1/pull','/v1/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit'].includes(request.url) || request.method!=='POST') {
       response.writeHead(404);response.end();return;
     }
+    if(plainNoteMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
     const upstream=await fetch(positionReady.url+request.url,{method:'POST',body,
       headers:{'Content-Type':'application/json',Authorization:request.headers.authorization??''},redirect:'error'});
     response.writeHead(upstream.status,{'Content-Type':'application/json','Cache-Control':'no-store'});
@@ -142,6 +155,138 @@ const send =(method, params = {}, sessionId = session) => new Promise((resolve, 
     : {})
   }));
 });
+async function plainNoteMainHook() {
+  const evaluate=async(expression,awaitPromise=false)=>{
+    const value=await send('Runtime.evaluate',{expression,awaitPromise,returnByValue:true});
+    if(value.exceptionDetails)throw Error('Plain-note app evaluation failed: '+(value.exceptionDetails.exception?.description??value.exceptionDetails.text));
+    return value.result.value;
+  };
+  const wait=async(expression,label)=>{
+    for(let tick=0;tick<150;tick++){
+      if(await evaluate(expression,true))return;
+      await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    const notice=await evaluate('document.querySelector("#notice-text")?.textContent');
+    throw Error('Plain-note app timed out: '+label+' '+notice);
+  };
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  const config={workspace:positionReady.workspace,device:positionReady.device,origin,token:positionReady.token};
+  const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs'),s=await IndexedStore.open(${JSON.stringify(config.workspace)},${JSON.stringify(config.device)});try{return await s.read();}finally{s.close();}})()`;
+  const connect=async(token)=>{
+    await evaluate('[...document.querySelectorAll("header button")].find(b=>["Connection","連線"].includes(b.textContent)).click()');
+    await evaluate(`(()=>{const c=${JSON.stringify({...config,token})},d=document.querySelector('dialog'),inputs=d.querySelectorAll('.fields input');[c.workspace,c.device,c.origin,c.token].forEach((v,i)=>inputs[i].value=v);d.querySelector('button.primary').click();})()`);
+    await wait(`document.querySelector('.workspace')?.textContent===${JSON.stringify(config.workspace)} && !document.querySelector('.status[data-busy="true"]') && !!(document.querySelector('.paper-card') || document.querySelector('#tab-notes'))`,'open fixture workspace');
+    await evaluate('document.querySelector(".paper-card")?.click();document.querySelector("#tab-notes").click()');
+    await wait('!!document.querySelector("#note-editor") && !document.querySelector("#note-editor").disabled','editable unpositioned desktop text');
+  };
+  await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+  await send('Network.enable');
+  await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+  await send('Page.addScriptToEvaluateOnNewDocument',{source:`{
+    const original=globalThis.fetch;
+    globalThis.__workspaceFetchTrace=[];
+    globalThis.fetch=function(input,options){
+      const url=new URL(typeof input==='string'?input:input.url,location.href);
+      if(url.pathname.startsWith('/v1/')){
+        const entry={path:url.pathname,document:performance.timeOrigin};
+        globalThis.__workspaceFetchTrace.push(entry);
+        const headers=new Headers(options?.headers);headers.set('X-Paperfact-Test-Document',String(performance.timeOrigin));options={...options,headers};
+      }
+      return original.call(this,input,options);
+    };
+  }`});
+  await send('Page.navigate',{url:origin+'/index.html'});
+  await wait('!!document.querySelector(".layout")','startup');
+  await connect(config.token);
+  if(await evaluate('document.querySelector("#note-editor").value')!=='Desktop plain note')throw Error('Wrong desktop note on phone');
+  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+  await evaluate(`(()=>{const e=document.querySelector('#note-editor');e.focus();e.value='Actual PWA offline edit';e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await wait(`(async()=>{const s=await ${stateExpression};return s.drafts[${JSON.stringify(positionReady.note)}]==='Actual PWA offline edit';})()`,'durable debounced draft');
+  await evaluate(`(()=>{const b=[...document.querySelectorAll('main button')].find(b=>['Save note','儲存筆記'].includes(b.textContent));b.click();b.click();})()`);
+  await wait(`(async()=>{const s=await ${stateExpression};return s.outbox.length===1&&s.outbox[0].operation.payload.body==='Actual PWA offline edit';})()`,'one offline note operation');
+  await evaluate('navigator.serviceWorker.ready',true);
+  const beforeReloadRequests=fixtureResearchRequests.length;
+  const beforeReloadDocument=await evaluate('performance.timeOrigin');
+  await evaluate('globalThis.__plainNoteBeforeReload=true');
+  await send('Page.reload');
+  await wait('globalThis.__plainNoteBeforeReload!==true && document.readyState==="complete" && !!document.querySelector(".layout")','fresh offline cached shell reload');
+  await wait(`document.querySelector('.workspace')?.textContent===${JSON.stringify(config.workspace)} && !!document.querySelector('#tab-notes')`,'automatic cached workspace restore');
+  await evaluate('document.querySelector("#tab-notes").click()');
+  await wait('!!document.querySelector("#note-editor")','restored note editor');
+  const resumedDocument=await evaluate('performance.timeOrigin');
+  const newPageRequests=await evaluate('globalThis.__workspaceFetchTrace');
+  const completedOutgoing=fixtureResearchRequests.slice(beforeReloadRequests);
+  if(resumedDocument===beforeReloadDocument || !Array.isArray(newPageRequests) || newPageRequests.length ||
+    completedOutgoing.some(request=>request.document!==String(beforeReloadDocument)||request.path!=='/v1/session/info'))
+    throw Error('Restored page made a request, or an unowned old request completed: '+JSON.stringify({newPageRequests,completedOutgoing}));
+  const hint=await evaluate(`JSON.parse(window.localStorage.getItem('paperfact.last-workspace.v1'))`);
+  if(JSON.stringify(Object.keys(hint).sort())!==JSON.stringify(['version','workspace','device','origin'].sort())||hint.workspace!==config.workspace||hint.device!==config.device||hint.origin!==config.origin)throw Error('Resume hint changed owner or stored extra data');
+  if(!await evaluate('document.querySelector("header button").disabled'))throw Error('Resume reused a credential');
+  if(await evaluate('document.querySelector("#note-editor").value')!=='Actual PWA offline edit')throw Error('Reload lost offline text');
+  const offline=await evaluate(stateExpression,true);
+  if(offline.outbox.length!==1||offline.outbox[0].operation.payload.created_at===undefined)throw Error('Reload lost queue/creation metadata');
+  await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+  await connect(config.token);
+  await wait(`(async()=>{const s=await ${stateExpression};return s.outbox.length===0;})()`,'reconnected upload');
+  const accepted=await serviceMessage({command:'inspect'});
+  if(accepted.note.body!=='Actual PWA offline edit'||accepted.note.created_at!==offline.outbox[0].operation.payload.created_at)throw Error('Desktop did not receive exact text/identity');
+  await serviceMessage({command:'edit',body:'Desktop edit after PWA reload'});
+  await wait('document.querySelector("header button") && !document.querySelector("header button").disabled','enabled sync action');
+  await evaluate('document.querySelector("header button").click()');
+  await wait(`document.querySelector('#note-editor')?.value==='Desktop edit after PWA reload' && !document.querySelector('#note-editor').disabled`,'desktop reply remains editable');
+  await wait(`!![...document.querySelectorAll('main button')].find(b=>['Save note','儲存筆記'].includes(b.textContent)&&!b.disabled)`,'clean remote update allows saving');
+  await evaluate(`(()=>{const e=document.querySelector('#note-editor');e.value='Phone continues after desktop reply';e.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('main button')].find(b=>['Save note','儲存筆記'].includes(b.textContent)).click();})()`);
+  await wait(`(async()=>{const s=await ${stateExpression};return s.outbox.length===1&&s.outbox[0].operation.payload.body==='Phone continues after desktop reply';})()`,'continued phone save');
+  await wait('document.querySelector("header button") && !document.querySelector("header button").disabled','enabled sync action');
+  await evaluate('document.querySelector("header button").click()');
+  await wait(`(async()=>{const s=await ${stateExpression};return s.outbox.length===0;})()`,'continued phone upload');
+  const final=await serviceMessage({command:'inspect'});
+  if(final.note.body!=='Phone continues after desktop reply')throw Error('Clean editor could not continue roundtrip');
+  const result={scenarios:2,offlineReload:true,manualWorkspaceSelection:false,automaticWorkspaceResume:true,backgroundResearchRequestsOnResume:0,outgoingAuthenticationRequestsCompletedDuringReload:completedOutgoing.length,duplicateSaves:1,metadataPreserved:true,desktopRoundTrip:true,cleanRemoteEditable:true,errors:0};
+  if(process.env.PAPERFACT_TEST_SCREENSHOTS){
+    await mkdir(process.env.PAPERFACT_TEST_SCREENSHOTS,{recursive:true});
+    for(const width of [1100,600,390,320]){
+      await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+      const metric=await evaluate(`({language:document.documentElement.lang,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,
+        buttons:[...document.querySelectorAll('header button')].map(b=>({height:b.getBoundingClientRect().height,width:b.getBoundingClientRect().width,scroll:b.scrollWidth,client:b.clientWidth,text:b.textContent}))})`);
+      if(metric.scrollWidth>width||metric.buttons.some(b=>b.height<44||b.scroll>b.client))throw Error('Header labels/touch targets overflow: '+JSON.stringify(metric));
+      result.viewports??=[];result.viewports.push(metric);
+      const shot=await send('Page.captureScreenshot',{format:'png'});
+      await writeFile(join(process.env.PAPERFACT_TEST_SCREENSHOTS,`plain-note-${width}.png`),Buffer.from(shot.data,'base64'));
+    }
+
+  }
+  await evaluate('[...document.querySelectorAll("header button")].find(b=>["Connection","連線"].includes(b.textContent)).click()');
+  await evaluate(`(()=>{const select=document.querySelector('dialog select');select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  for(const width of [320,390,600,1100]){
+    await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
+    const metric=await evaluate(`({language:document.documentElement.lang,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,
+      buttons:[...document.querySelectorAll('header button')].map(b=>({height:b.getBoundingClientRect().height,scroll:b.scrollWidth,client:b.clientWidth,text:b.textContent}))})`);
+    if(metric.scrollWidth>width||metric.buttons.some(b=>b.height<44||b.scroll>b.client))throw Error('English header overflow: '+JSON.stringify(metric));
+    result.viewports??=[];result.viewports.push(metric);
+    if(width===390&&process.env.PAPERFACT_TEST_SCREENSHOTS){const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(process.env.PAPERFACT_TEST_SCREENSHOTS,'workspace-resume-en-390.png'),Buffer.from(shot.data,'base64'));}
+  }
+  await evaluate(`[...document.querySelectorAll('header button')].find(b=>b.textContent==='Connection').focus()`);
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',text:'\r',unmodifiedText:'\r',windowsVirtualKeyCode:13});
+  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+  await wait('!!document.querySelector("dialog")','keyboard connection action');
+  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await wait('!document.querySelector("dialog")','keyboard dialog dismissal');
+  result.keyboardConnection=true;
+  await evaluate(`(()=>{const e=document.querySelector('#note-editor');e.value='Actual unsaved phone words';e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await wait(`(async()=>{const s=await ${stateExpression};return s.drafts[${JSON.stringify(positionReady.note)}]==='Actual unsaved phone words';})()`,'persist real unsaved words');
+  await serviceMessage({command:'edit',body:'New desktop while phone is typing'});
+  await wait('document.querySelector("header button") && !document.querySelector("header button").disabled','enabled sync action');
+  await evaluate('document.querySelector("header button").click()');
+  await wait(`document.querySelector('#note-editor')?.value==='Actual unsaved phone words' && !![...document.querySelectorAll('main button')].find(b=>['Save note','儲存筆記'].includes(b.textContent)&&b.disabled)`,'dirty remote update retains words and blocks stale save');
+  const protectedState=await evaluate(stateExpression,true);
+  if(protectedState.outbox.length!==0||protectedState.drafts[positionReady.note]!=='Actual unsaved phone words')throw Error('Dirty editor changed newer research or lost private text');
+  result.unsavedDraftPreserved=true;
+  if(process.env.PAPERFACT_TEST_SCREENSHOTS)await writeFile(join(process.env.PAPERFACT_TEST_SCREENSHOTS,'plain-note-browser-result.json'),JSON.stringify(result,null,2));
+  console.log('PASS actual PWA offline note UI, IndexedDB save/reload/automatic cached scope reopen, one queued save and desktop Data roundtrip preserving metadata');
+}
+
 async function positionMainHook() {
   await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   const evaluate=async(expression,awaitPromise=false)=>(await send('Runtime.evaluate',
@@ -307,6 +452,7 @@ try {
     );
     throw new Error('Browser fixture timed out: ' + result.result.value);
   }
+  if(plainNoteMode && process.exitCode!==1)await plainNoteMainHook();
   if(process.argv[3]) {
     await mkdir(process.argv[3], {
       recursive: true
@@ -360,7 +506,7 @@ try {
   browser.kill();
   server.close();
   if(positionService) {
-    positionService.stdin.end('quit\n');
+    positionService.stdin.end(plainNoteMode ? JSON.stringify({command:'quit'})+'\n' : 'quit\n');
     const code=await new Promise(resolve=>{if(positionService.exitCode!==null){resolve(positionService.exitCode);return;}
       positionService.once('exit',resolve);setTimeout(()=>{positionService.kill();resolve(null);},5000).unref();});
     if(code!==0){process.exitCode=1;console.error('Position service cleanup failed: '+positionErrors);}

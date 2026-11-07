@@ -1,9 +1,17 @@
 # Mobile reader implementation — v0.5
 
-Status: integrated into `feature/0.5-sync-foundation` from the isolated
-`feature/0.5-mobile-implementation` worktree, 2026-10-26. This is not a public release or completed cross-device
-acceptance. Published baseline remains v0.4.1. Ownership is `mobile/` and this file;
-the parent owns root check integration, core schema evolution and final acceptance.
+Status: isolated `0.5.0.dev` integration candidate, updated 2026-11-02. This is not
+a public release or completed cross-device acceptance. The separately maintained
+0.4.x line remains for daily use. See [current status](status-0.5.0.md) for exact
+evidence and remaining gates.
+
+## Local startup and header
+
+The last successfully opened workspace reopens offline from existing IndexedDB,
+with paper selection/drafts/outbox preserved and no cached credential or automatic
+authentication. A metadata-only hint remembers workspace/device/origin. Missing or
+corrupt cache refuses rather than initializing empty research. Narrow headers use
+two rows with complete labels and touch targets. [Contract and exact limits](mobile-workspace-startup.md).
 
 ## Implemented slice
 
@@ -78,18 +86,20 @@ Authenticated synchronization starts at cursor zero and requires complete retain
 service history. Missing/noncontiguous history is an explicit error. New entity
 kinds or unsupported operation versions stop the receiving transaction without
 advancing its cursor; they are never silently dropped. The later parent SQL
-`research_content`/rich-note contract is now supported for read-only receipt and
-projection, with all closed fields and historical source hashes preserved.
+`research_content` and rich notes support closed receipt/projection with historical
+source hashes preserved. Canonical unpositioned text notes also support guarded
+body edits while retaining their desktop metadata.
 
 The implementation supports the baseline list/paper/membership/note/reading-state/
 ordering/primary-document/research-content event kinds. Rich notes preserve
-kind/time/page/anchor and remain noneditable, including a guard against plain
-overwrite/delete. Singleton analyses, citations and highlights project into the
+kind/time/page/anchor. Validated `kind=note` rows without page/anchor can be edited
+or explicitly deleted; anchored/quotation and unsupported kinds remain read-only,
+with their flatten/delete rejection guards unchanged. Singleton analyses, citations and highlights project into the
 reader; chat, resource and followup records have read-only cards. Canonical content
 tombstones suppress old imported singleton/citation rows. Where legacy highlight
 snapshot IDs cannot be matched to portable content IDs, the retained snapshot is
 shown separately without enabling coordinates, instead of reviving a deleted
-canonical highlight. It does not advertise rich/anchored note writes,
+canonical highlight. It does not advertise anchored/quotation note writes,
 research-content writes, retirement of every conflict kind, or a complete
 server-side validation reimplementation. The actual authority remains responsible
 for authorization and canonical graph acceptance. Reading-state conflict history
@@ -151,3 +161,5 @@ were not tested. No deployed service, real research, paid calls or account login
 was used. Parent must integrate this command into `scripts/check.py` and run the
 full repository check after merging the isolated worktree; this slice alone does
 not claim that acceptance.
+
+Current unpositioned text-note behavior and exact limits: [desktop/mobile editing](mobile-note-editing.md).

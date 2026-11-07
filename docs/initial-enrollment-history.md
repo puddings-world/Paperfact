@@ -30,6 +30,9 @@ Supported archive adapters:
 | `research_generation_recovery` | Same validator plus trusted sidecar ownership/location checks | Preserve completed cancelled/failed-delivery output, including its original source. |
 | `research_chat_requests` / `research_chat_recovery` | Maintained QA validator plus closed nested input, graph observation, target and source checks; strict owned sidecar decoding | Retain prepared questions and completed candidates privately. Never synthesize an assistant turn or reactivate a request. |
 | `research_chat_links` | Typed message/exchange/reply/source identity plus exact current SQL turn validation | Install only links whose current turns exist, after adapter initialization and before baseline capture. Orphan links remain archive-only. |
+| `research_chat_review_receipts` | Strict bounded duplicate-key-safe nested JSON, original QA input validation, displayed target/graph identity and receipt fingerprint | Preserve the complete human-reviewed answer and observations privately, with every declared original; install no active review/job table. |
+| `research_review_receipts` | Closed seven-column scalar/result/provenance validation | Retain exact private decision history and declared originals; no old live decision authority. |
+| `research_review_drafts` | Maintained draft validator plus strict nested JSON, SQL snapshots and conflict graphs | Preserve each draft_id independently of request_id, exact text/bases and originals; inspect prepared-copy history read-only. Prepared/detached inspection is read-only; fresh reattachment remains open. |
 | `research_parent_lifecycle` | `research_lifecycle.validate_record` plus exact six trusted trigger definitions | Archive original epochs; install fresh local epochs for copied live parents. |
 
 Unknown protocols, columns, nested inputs, malformed records, duplicate JSON keys,
@@ -97,13 +100,11 @@ This slice does not claim arbitrary workspaces are fully migratable. The central
 recovery registry also lists these stable formats that need separate closed
 initial-enrollment adapters:
 
-- Chat review receipts: retain reviewed question/answer/source observations
-  without reviving old request authority.
 - Compound requests/recovery: preserve each typed mutation and all original sources.
 - Capture candidates: strengthen the current shallow observation/mutation wrapper
   validator before treating nested SQL-row snapshots as an archive contract.
-- Review drafts/receipts: retain private edits and preview bases without reviving
-  old database/parent authority.
+- Review drafts: finish fresh current-target/source reattachment; private
+  preservation and prepared/detached inspection are implemented.
 - File candidates/drafts and slide/legacy deck recovery: preserve full validated
   JSON/image/evidence/source closure through the shared file codec.
 - Integration/action receipts: identify closed result variants and preserve retry
@@ -113,3 +114,26 @@ initial-enrollment adapters:
 
 Unknown/unmigrated formats remain visible blockers. Passing the focused fixtures
 is partial evidence; the combined candidate still requires the project's full gate.
+
+## Reviewed-Q&A first-enrollment integration (2026-11-01)
+
+Reviewed-QA/history/first-enrollment/recovery integration: **131 passed, 0 failures/errors/skips**, 337.98s pytest /339.39s wrapper on932 unchanged inputs. Bilingual preview/prepare and maintained desktop copy controls: **27 passed, 0 failures/errors/skips**,34.24s pytest /35.69s wrapper on933 unchanged inputs. The exact backend-to-UI delta is three added coverage labels/entries in the dialog and one new UI test file; backend modules/tests are unchanged. These are separate partial gates, not a full app pass. Earlier24new-case selection passed52.70s pytest/54.19s wrapper; it overlaps and is not an extra total. Ruff passes.
+
+The actual flow covers reviewed A beside current B, exact private receipt backup/detached restore, peer message/source transfer and a captured peer note returning. Another actual C survives only in review history after prior turns/jobs are removed; its absence or mutation blocks the copy. No observed context path is followed. See [actions and limits](testing/initial-enrollment-review-scenarios.md).
+
+## Review decision history (2026-11-01)
+
+`research_review_receipts` now has a closed seven-column adapter. Original result/provenance strings and declared source hashes are retained privately, without live request/decision tables or observed-path access. Both applied and kept decisions have real copy/backup/detached-restore coverage; history-only original absence or mutation refuses publication. The bilingual preview names this coverage. [Actual actions and limits](testing/initial-enrollment-decision-scenarios.md). Edited-draft resumption and other outstanding formats remain open.
+
+## Saved draft variants (2026-11-01)
+
+Two real variants sharing a request survive copy, backup and detached storage with exact strings and originals. The prepared-copy service and bilingual Qt view can inspect/copy them; historical Keep/Apply is blocked. The integrated citation/draft/review/recovery selection passed240 cases on942 unchanged inputs. The earlier detached reader audit exposed missing entries. That reader is now repaired; reviewed current-target/source resumption remains required before calling the full journey done. [Actions and limits](testing/saved-draft-scenarios.md).
+
+## Independent draft reading (2026-11-01)
+
+Prepared and recovered archive wrappers, plus raw direct-backup draft rows, now
+share one bounded private read projection. Old contexts stay observations;
+records/IDs/text remain exact, duplicate generic entries are suppressed, and
+no live old protocol or mutation authority is installed. The shared89-case
+selection passes on943 inputs. Fresh target/source edited application is still
+required. [Actual reader controls](testing/detached-draft-reader-scenarios.md).

@@ -1,17 +1,25 @@
-"""One revocable GUI draw per turn; no rendered-image or asset-authority cache."""
+"""Revocable GUI draws with bounded per-pane reuse of asset-free text icons."""
 
+import hashlib
+import json
 import weakref
 from collections import OrderedDict
 from contextlib import suppress
+from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, QRectF, Qt, QTimer
 from PySide6.QtGui import QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QApplication
 from shiboken6 import isValid
 
+from paper_daily import store
+from paper_daily.desktop import fonts
 from paper_daily.desktop.window_workspace import current_for
+from paper_daily.slide_layout import elements_for
 
 SIZE = (288, 162)
+MAX_TEXT_ICONS = 64
+MAX_KEY_BYTES = 64 * 1024
 COPY = {
     "en": (
         "Thumbnail preparing; slides remain available.",
@@ -34,6 +42,45 @@ def draw(pane, deck, index):
     return image
 
 
+def _text_key(pane, deck, index):
+    """Only actual asset-free canvas objects can reuse a visual; never a figure."""
+    try:
+        if not current_for(pane.window()):
+            return None
+        objects = elements_for(deck.slides[index])
+        if any(obj.get("kind") not in ("text", "table") for obj in objects):
+            return None
+        # This local key grants no research/source authority. A native workspace
+        # replacement or location change must still end even text-image reuse.
+        database = Path(store.DB_PATH).resolve()
+        try:
+            info = database.stat()
+            native = (info.st_dev, info.st_ino)
+        except FileNotFoundError:
+            native = None
+        slide = deck.slides[index]
+        labels = [
+            (sid, next((str(item.get("label", sid)) for item in deck.sources
+                        if item["id"] == sid), sid))
+            for sid in slide.sources
+        ]
+        visual = [deck.paper_id, deck.mode, index, len(deck.slides), objects, labels,
+                  QApplication.palette().cacheKey(), QApplication.font().key(),
+                  fonts.font().key(), pane.outline.iconSize().width(),
+                  pane.outline.iconSize().height(), pane.devicePixelRatioF()]
+        chunks, size = [], 0
+        for chunk in json.JSONEncoder(ensure_ascii=False, allow_nan=False,
+                                      sort_keys=True).iterencode(visual):
+            data = chunk.encode("utf-8")
+            size += len(data)
+            if size > MAX_KEY_BYTES:
+                return None
+            chunks.append(data)
+        return str(database), native, hashlib.sha256(b"".join(chunks)).digest()
+    except (OSError, ValueError, TypeError, KeyError, IndexError, AttributeError):
+        return None
+
+
 class SlideThumbnails(QObject):
     def __init__(self, pane):
         super().__init__(pane)
@@ -41,6 +88,7 @@ class SlideThumbnails(QObject):
         self._deck = None
         self._generation = self._serial = 0
         self._pending = OrderedDict()
+        self._images = OrderedDict()
         self._tokens = {}
         self._paused = self._closed = self._disposed = False
         self._drawing = False
@@ -72,6 +120,7 @@ class SlideThumbnails(QObject):
 
     def dispose(self, *_args):
         self._disposed = True
+        self.clear_images()
         with suppress(RuntimeError):
             self.reset()
 
@@ -102,6 +151,21 @@ class SlideThumbnails(QObject):
         language = getattr(pane.window(), "language", "zh-TW")
         item.setToolTip(COPY.get(language, COPY["en"])[0])
 
+    def clear_images(self):
+        self._images.clear()
+
+    def _restore(self, pane, index):
+        key = _text_key(pane, self._deck, index)
+        if key is None or key not in self._images or self._stamp(pane, index) is None:
+            return False
+        icon = self._images[key]
+        self._images.move_to_end(key)
+        self._pending.pop(index, None)
+        self._tokens.pop(index, None)
+        pane.outline.item(index).setIcon(icon)
+        pane.outline.item(index).setToolTip("")
+        return True
+
     def request(self, index, *, priority=False):
         pane = self._pane()
         if self._disposed or self._closed or pane is None or not isValid(pane):
@@ -110,16 +174,39 @@ class SlideThumbnails(QObject):
         if deck is None:
             self.reset()
             return
+        if not 0 <= index < min(len(deck.slides), pane.outline.count()):
+            return
+        loading = getattr(pane, "_loading", False)
         if self._deck is not deck:
             self.reset()
             self._deck = deck
             for i in range(min(len(deck.slides), pane.outline.count())):
-                self._enqueue(pane, i)
+                if not ((i != index or loading or priority) and self._restore(pane, i)):
+                    self._enqueue(pane, i)
+        # Explicit redraw requests remain fresh; selecting an already complete
+        # text page or restoring its mode can retain its exact current visual.
+        if (loading or priority) and self._restore(pane, index):
+            return
         self._enqueue(pane, index)
         if priority and index in self._pending:
             self._pending.move_to_end(index, last=False)
         if self._pending and not self._paused and not self._drawing and not self.timer.isActive():
             self.timer.start()
+
+    def render_selected_if_small(self):
+        """Refresh at most one small text icon after an explicit successful save."""
+        pane = self._pane()
+        if (self._drawing or self._paused or pane is None or not isValid(pane)
+                or pane._index not in self._pending or self._deck is None):
+            return
+        if _text_key(pane, self._deck, pane._index) is None:
+            return
+        objects = elements_for(self._deck.slides[pane._index])
+        chars = sum(len(obj.get("text", "")) + sum(len(cell) for row in obj.get("rows", [])
+                                                   for cell in row) for obj in objects)
+        if len(objects) <= 8 and chars <= 2500:
+            self.timer.stop()
+            self._next()
 
     def refresh(self):
         if self._disposed or self._closed or self._paused:
@@ -127,6 +214,7 @@ class SlideThumbnails(QObject):
         pane = self._pane()
         if pane is None or not isValid(pane) or pane.deck is None:
             return
+        self.clear_images()
         self.reset()
         self._deck = pane.deck
         for i in range(min(len(self._deck.slides), pane.outline.count())):
@@ -179,6 +267,7 @@ class SlideThumbnails(QObject):
         if stamp is None:
             self.reset()
             return
+        visual = _text_key(pane, self._deck, index)
         self._drawing = True
         try:
             image = draw(pane, self._deck, index)
@@ -190,6 +279,11 @@ class SlideThumbnails(QObject):
             if stamp == self._stamp(pane, index) and self._tokens.get(index) == token:
                 pane.outline.item(index).setIcon(QIcon(image))
                 pane.outline.item(index).setToolTip("")
+                if visual is not None and visual == _text_key(pane, self._deck, index):
+                    self._images[visual] = QIcon(image)
+                    self._images.move_to_end(visual)
+                    while len(self._images) > MAX_TEXT_ICONS:
+                        self._images.popitem(last=False)
         finally:
             self._drawing = False
         if (
@@ -204,6 +298,7 @@ class SlideThumbnails(QObject):
     def eventFilter(self, watched, event):
         kind = event.type()
         if kind in (QEvent.Type.Hide, QEvent.Type.Close):
+            self.clear_images()
             self._paused = True
             self._closed = kind == QEvent.Type.Close
             self.reset()

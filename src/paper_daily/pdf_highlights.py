@@ -8,20 +8,39 @@ from pathlib import Path
 
 from paper_daily.store import connect, now
 
+# Opening a paper asks for its PDF's hash several times (highlights, slide
+# materials, their positions), each a read of the whole file; a file that has not
+# changed keeps its hash.
+_hashes: dict[tuple[str, int, int], str] = {}
+
 
 def document_hash(path: Path) -> str:
-    with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    if key not in _hashes:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if len(_hashes) > 256:
+            _hashes.clear()
+        _hashes[key] = digest
+    return _hashes[key]
 
 
-def list_marks(paper_id: str, fingerprint: str) -> list[dict]:
-    with connect() as conn:
+def list_marks(paper_id: str, fingerprint: str, *, database=None) -> list[dict]:
+    if database is None:
+        scope = connect()
+    else:
+        from contextlib import closing
+
+        from paper_daily.manual_highlight_ops import _readonly_connection
+
+        scope = closing(_readonly_connection(database))
+    with scope as conn:
         rows = conn.execute(
             "SELECT id, anchor, quote FROM pdf_highlights WHERE paper_id=? AND document_hash=? "
             "ORDER BY id",
             (paper_id, fingerprint),
         ).fetchall()
-    with connect() as conn:
         auto = conn.execute(
             "SELECT id, anchor, quote, reason FROM pdf_ai_highlights "
             "WHERE paper_id=? AND document_hash=? AND hidden=0 ORDER BY id",

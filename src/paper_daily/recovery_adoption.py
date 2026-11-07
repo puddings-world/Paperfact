@@ -81,7 +81,8 @@ def _report(value, *, private_files=0):
             and operation["payload"]["feature"] == "deck"
             for operation in records.applied_files.values()
         )
-        + len(records.legacy_decks),
+        + len(records.legacy_decks)
+        + len(records.observed_currents),
         retained_bytes=sum(item["size"] for item in manifest["blobs"]),
         requires_explicit_editable_copy=True,
         uploaded=False,
@@ -560,6 +561,9 @@ class RecoveryAdoptionService:
                     from paper_daily.recovery_position_sources import stage as stage_positions
 
                     stage_positions(self, inspection, conn, value, ticket)
+                    from paper_daily.later_outcome_recovery import stage as stage_later_outcomes
+
+                    stage_later_outcomes(self, inspection, conn, value, ticket)
                     conn.commit()
                 records = _records(value)
                 pdfs = {}
@@ -567,6 +571,13 @@ class RecoveryAdoptionService:
                     if portable in records.hidden_pdf:
                         continue
                     local = records.paper_map[portable]
+                    path = root / "pdf" / (str(len(pdfs)) + ".pdf")
+                    path.parent.mkdir(exist_ok=True)
+                    shutil.copyfile(self.root / "objects" / target["sha256"], path)
+                    pdfs[local] = path
+                for local, target in records.common_primaries.items():
+                    if local in pdfs:
+                        raise ValueError("Recovered primary scope is declared twice")
                     path = root / "pdf" / (str(len(pdfs)) + ".pdf")
                     path.parent.mkdir(exist_ok=True)
                     shutil.copyfile(self.root / "objects" / target["sha256"], path)
@@ -657,13 +668,14 @@ def _stage_legacy_workflow(conn, value, original_root, staged_root, ticket):
 
 
 def _records(value):
-    manifest = value["manifest"]
-    records = sync_recovery._Records(manifest["workspace_id"], manifest["cursor"])
-    for table in manifest["tables"]:
-        for row in value["tables"][table["name"]]:
-            records.row(table["name"], row)
-    records.finish()
-    return records
+    with recovery_provenance.schema_definition_scope():
+        manifest = value["manifest"]
+        records = sync_recovery._Records(manifest["workspace_id"], manifest["cursor"])
+        for table in manifest["tables"]:
+            for row in value["tables"][table["name"]]:
+                records.row(table["name"], row)
+        records.finish()
+        return records
 
 
 class _Baseline:
@@ -727,6 +739,8 @@ class _Baseline:
             slot_sources[(local, payload["slot"])] = payload["source_document_hash"]
         for row in records.legacy_decks.values():
             slot_sources[(row["paper_id"], row["slot"])] = None
+        for row in records.observed_currents.values():
+            slot_sources[(row["paper_id"], row["slot"])] = None
         for (local, mode), document_hash in slot_sources.items():
             self.ticket.check()
             detached, deck = recovery_decks.load(self.service.database, local, mode)
@@ -772,6 +786,20 @@ class _Baseline:
             hashes = {item.get("document_hash") for item in deck.sources + deck.figures}
             hashes.add(document_hash)
             requested_sources.update((local, digest) for digest in hashes - {None})
+        from paper_daily.proposal_recovery_review import all_carriers
+
+        carriers = all_carriers(records)
+        for carrier in carriers:
+            from paper_daily import proposal_recovery
+
+            self.ticket.check()
+            for item in proposal_recovery.references(carrier):
+                data = _safe_path(self.service.root / "objects" / item["sha256"]).read_bytes()
+                if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+                    raise SnapshotChanged("Recovered common proposal bytes changed")
+                sync_artifacts.stage_bytes(blobs, {item["sha256"]: data})
+            for item in json.loads(carrier["manifest_json"])["originals"]:
+                requested_sources.add((carrier["paper_id"], item["sha256"]))
         for local, digest in sorted(requested_sources):
             self.ticket.check()
             if digest not in records.refs:

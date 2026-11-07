@@ -228,6 +228,8 @@ def current(corpus):
         if generation._identity(database) != data["database_identity"]:
             _fail("database_changed")
         with closing(generation._connect(database)) as conn:
+            if generation._identity(database) != data["database_identity"]:
+                _fail("database_changed")
             conn.execute("BEGIN")
             if generation._binding(conn) != data["binding"]:
                 _fail("workspace_changed")

@@ -42,7 +42,7 @@ def stage_file(store: BlobStore, path: Path) -> BlobManifest:
     return manifest
 
 
-def attach_document(actions, paper_id, manifest, *, store, request_id):
+def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=None):
     """Commit one manifest and outbox operation after verifying immutable PDF bytes.
 
     File validation happens outside the write transaction. Rebuilding the target
@@ -59,10 +59,15 @@ def attach_document(actions, paper_id, manifest, *, store, request_id):
         "media_type": "application/pdf",
     }
     validate_manifest(payload, paper_id=paper_id)
+    legacy = None
+    request = {"mode": "attach_document", **payload}
+    if _legacy is not None:
+        from paper_daily.legacy_primary_migration import validate_for_attach
+
+        legacy = validate_for_attach(_legacy, actions, paper_id, manifest, store, request_id)
+        request = {"mode": "migrate_legacy_primary", **payload, "observation": legacy.fingerprint}
     fingerprint = hashlib.sha256(
-        json.dumps(
-            {"mode": "attach_document", **payload}, sort_keys=True, separators=(",", ":")
-        ).encode()
+        json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     journal = actions.client.journal
 
@@ -104,22 +109,38 @@ def attach_document(actions, paper_id, manifest, *, store, request_id):
     with journal.transaction() as conn:
         previous = receipt(conn)
         if previous is not None:
+            if legacy is not None:
+                legacy._replay_in(conn, previous)
             return previous
+        if legacy is not None:
+            legacy._check_in(conn)
         operation = build(conn)
     expected = target(operation)
     verified = verify_document(store, expected)
-    with journal.transaction() as conn:
-        previous = receipt(conn)
-        if previous is not None:
-            return previous
-        current = build(conn)
-        if current != operation or not verified.matches(expected):
-            raise ValueError("Document changed while verifying; retry the action")
-        journal.apply_in(conn, current, actions.client.writer)
-        result = {"paper_id": paper_id, "operation_id": current["operation_id"], **payload}
-        encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
-        conn.execute(
-            "INSERT INTO research_action_receipts VALUES(?,?,?)",
-            (request_id, fingerprint, encoded),
-        )
-        return json.loads(encoded)
+
+    def publish():
+        with journal.transaction() as conn:
+            previous = receipt(conn)
+            if previous is not None:
+                if legacy is not None:
+                    legacy._replay_in(conn, previous)
+                return previous
+            if legacy is not None:
+                legacy._check_in(conn)
+            current = build(conn)
+            if current != operation or not verified.matches(expected):
+                raise ValueError("Document changed while verifying; retry the action")
+            journal.apply_in(conn, current, actions.client.writer)
+            if legacy is not None:
+                legacy._bind_in(conn, target(current), verified)
+            result = {"paper_id": paper_id, "operation_id": current["operation_id"], **payload}
+            encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
+            if legacy is not None:
+                legacy._before_receipt(conn, target(current))
+            conn.execute(
+                "INSERT INTO research_action_receipts VALUES(?,?,?)",
+                (request_id, fingerprint, encoded),
+            )
+            return json.loads(encoded)
+
+    return legacy._publish(publish) if legacy is not None else publish()

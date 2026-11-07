@@ -26,6 +26,8 @@ from paper_daily.store import connect, init_db, now
 Log = Callable[[str], None]
 
 SURVEY_SPEC = "2026-10-survey"
+# Topic selection reasons and the search log need explicit replacement intent.
+ROADMAP_SPEC = "topic-roadmap-v1"
 
 # The whole digest goes into one call. A list of 40 papers at this budget is about
 # 4k characters each, enough for the parts of a dive that carry the field.
@@ -173,6 +175,8 @@ def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tupl
             old = context.target
             if old and old["edited"] and not force:
                 return False, "edited by hand (pass --force to replace it)"
+            if old and old["spec"] == ROADMAP_SPEC and not force:
+                return False, "research roadmap (pass --force to replace it)"
             text, count = build_input_from_snapshot(context.inputs, list_id)
         if not count:
             return False, f"no papers in list {list_id}"
@@ -187,7 +191,8 @@ def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tupl
             "spec": SURVEY_SPEC, "written_at": now(), "edited": 0,
         })
         if result.status != "accepted":
-            return False, f"{result.reason}; generated survey retained: {result.candidate_id}"
+            return False, (f"{result.reason}; research changed or was edited while writing; "
+                           f"generated survey retained: {result.candidate_id}")
         log(f"  survey written: {len(body):,} characters")
         return True, "ok"
 

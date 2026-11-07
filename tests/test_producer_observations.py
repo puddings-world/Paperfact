@@ -11,7 +11,7 @@ import pytest
 from test_research_generation import BODY, pdf, rows
 from test_research_generation import workspace as workspace
 
-from paper_daily import cli, dive, followups, llm, store
+from paper_daily import cli, closeread, dive, followups, llm, store
 from paper_daily import research_generation as generation
 from paper_daily.sync_capture import StaleCaptureError, suppress_capture
 
@@ -43,7 +43,10 @@ def test_dive_actual_generation_publishes_before_count_and_retries_without_ai(
     assert context["document"]["sha256"] == document.sha256
     assert context["target"] is None
     assert generation.retry_publication(path, saved["request_id"]).status == "accepted"
-    assert len(calls) == 1
+    assert [call["system"] for call in calls] == [
+        dive.DIVE_INSTRUCTIONS, closeread.CLOSE_INSTRUCTIONS
+    ]
+    assert rows(path, "SELECT body FROM close_readings") == [{"body": BODY}]
     if client:
         with client.journal.transaction() as conn:
             operations = [
@@ -91,7 +94,7 @@ def test_dive_workspace_switch_keeps_original_destination(workspace, monkeypatch
 
     calls = []
     def complete(*args, **kwargs):
-        calls.append(1)
+        calls.append(kwargs["system"])
         monkeypatch.setattr(store, "DB_PATH", replacement)
         return BODY, "ok"
 
@@ -104,7 +107,9 @@ def test_dive_workspace_switch_keeps_original_destination(workspace, monkeypatch
     assert dive.dive_ahead(paper_id="paper") == 1
     assert rows(path, "SELECT body FROM dives") == [{"body": BODY}]
     assert rows(replacement, "SELECT * FROM dives") == []
-    assert calls == [1]
+    assert calls == [dive.DIVE_INSTRUCTIONS, closeread.CLOSE_INSTRUCTIONS]
+    assert rows(path, "SELECT body FROM close_readings") == [{"body": BODY}]
+    assert rows(replacement, "SELECT * FROM close_readings") == []
 
 
 def test_duplicate_dive_jobs_make_one_call_and_failed_job_can_retry(workspace, monkeypatch):

@@ -188,6 +188,12 @@ Additional AI analysis is a separate action. The older `import-list` command sti
 uses Paperfact's configured AI to parse rough references.
 [How MCP works here, with a call-flow diagram →](docs/local-integration.md)
 
+## Version, updates and support
+
+Click the bottom-right version label to copy build details, check for updates,
+or preview a diagnostic report. Reports stay local until you choose to share them.
+See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenance-0.4.4.md).
+
 ## Next milestone: v0.5.0 (planned)
 
 - Continue research across desktop, Mac, and a private mobile reader.
@@ -200,10 +206,12 @@ uses Paperfact's configured AI to parse rough references.
 - Understand why a paper exists: the gap it fills in earlier work and how later work
   built on it, quoted from the papers themselves.
 
-These are planned capabilities, not features in v0.4.1.
+These are planned capabilities, not features in v0.4.x releases.
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
-[Implementation plan](docs/implementation-0.5.0.md)
+[Implementation plan](docs/implementation-0.5.0.md) |
+[Current development status](docs/status-0.5.0.md) |
+[Test explanations](docs/testing/README.md)
 
 ## Go further
 

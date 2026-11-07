@@ -1,0 +1,121 @@
+{
+  "format": "paperfact.highlight-native-editor-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "published": false,
+  "gate": {
+    "exit_code": 0,
+    "seconds": 706.7,
+    "selection": [
+      "tests/test_highlight_draft_ui.py",
+      "tests/test_structured_review_retirement.py",
+      "tests/test_claim_draft_ui.py",
+      "tests/test_claim_original_read_ui.py",
+      "tests/test_resumed_draft_original_ui.py",
+      "tests/test_retained_original_ui.py",
+      "tests/test_original_version_ui.py",
+      "tests/test_local_original_version_ui.py",
+      "tests/test_review_dialog.py",
+      "tests/test_review_decisions.py"
+    ],
+    "frozen_inputs": 1155,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 130,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 3.183,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.286,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 702.276,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_highlight_draft_ui.py",
+          "tests/test_structured_review_retirement.py",
+          "tests/test_claim_draft_ui.py",
+          "tests/test_claim_original_read_ui.py",
+          "tests/test_resumed_draft_original_ui.py",
+          "tests/test_retained_original_ui.py",
+          "tests/test_original_version_ui.py",
+          "tests/test_local_original_version_ui.py",
+          "tests/test_review_dialog.py",
+          "tests/test_review_decisions.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 705.764
+    }
+  },
+  "new_functions": 17,
+  "new_cases": 24,
+  "existing_cases": 106,
+  "groups": [
+    {
+      "theme": "新增：真正螢光筆編輯操作",
+      "cases": 22,
+      "seconds": 103.19,
+      "meaning": "中英文欄位、鍵盤、私存／重開、原文A、確認／恢復、取消／關閉、失敗重試及版號"
+    },
+    {
+      "theme": "新增：關閉與原生資源釋放",
+      "cases": 2,
+      "seconds": 7.86,
+      "meaning": "獨立／父子視窗由GUI釋放；關閉後仍可查不可見與重複關閉"
+    },
+    {
+      "theme": "既有：研究主張編輯與原文",
+      "cases": 33,
+      "seconds": 370.94,
+      "meaning": "共用生命週期及原文讀取不破壞主張欄位、私稿、核對及套用"
+    },
+    {
+      "theme": "既有：恢復稿與保留原文",
+      "cases": 18,
+      "seconds": 128.42,
+      "meaning": "讀A時保留B、取消／切換／關閉／失敗重試，不晚開舊視窗"
+    },
+    {
+      "theme": "既有：PDF版本與本地來源",
+      "cases": 29,
+      "seconds": 56.23,
+      "meaning": "原生PDF與備援讀取器的來源版本及關閉邊界"
+    },
+    {
+      "theme": "既有：審閱清單與決策",
+      "cases": 26,
+      "seconds": 28.74,
+      "meaning": "原清單決策、私稿及父子視窗關閉相容"
+    }
+  ],
+  "full_check_passed": false,
+  "limitations": [
+    "Synthetic retained generation inputs; complete recovered/remote native journeys remain open",
+    "No highlight CLI/MCP acceptance",
+    "No installed Windows/Mac/phone or production service acceptance",
+    "No live model or academic-quality certification"
+  ]
+}

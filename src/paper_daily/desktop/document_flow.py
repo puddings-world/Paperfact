@@ -343,5 +343,5 @@ class ManagedDocumentReader:
         self.pdf_note.setText(
             message("pages").format(count=self.pdf.page_count(), hash=result.sha256[:12])
         )
-        self._load_highlights(result.path, fingerprint=result.sha256)
+        self._load_highlights(result.path, fingerprint=result.sha256, prepare=True)
         self._figures_stale = True

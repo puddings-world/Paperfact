@@ -414,7 +414,11 @@ class PresentationPane(QWidget):
         for surface in self.views.findChildren(QWidget):
             surface.installEventFilter(self)
         split.addWidget(self.views)
+        from paper_daily.desktop.off_thread import OffThread
+
+        self._materials_read = OffThread(self, lane="presentation-materials")
         self.materials_panel = MaterialsPanel()
+        self.materials_panel.refresh_requested.connect(self._load_materials)
         self.materials_panel.hide()
         self.materials_panel.chosen.connect(self._insert_material)
         self.materials_panel.analyze_requested.connect(self._analyze_highlights)
@@ -486,7 +490,21 @@ class PresentationPane(QWidget):
         self._save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
         self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._save_shortcut.activated.connect(self.save_changes)
+        from paper_daily.desktop.pending_generation import PendingDeckPanel
+
+        self.pending_panel = PendingDeckPanel(self)
+        layout.insertWidget(1, self.pending_panel)
         self._show_deck(None)
+        if self.pending_panel.pending:
+            self.status.setText(self.pending_panel.copy["notice"])
+
+    def closeEvent(self, event):
+        if self._pending_generation:
+            self.status.setText(self.pending_panel.copy["notice"])
+            event.ignore()
+            return
+        self._materials_read.cancel("materials")
+        super().closeEvent(event)
 
     def _views_focus_target(self):
         return self.canvas.view if self.views.currentIndex() == 0 else self.views.currentWidget()
@@ -709,9 +727,15 @@ class PresentationPane(QWidget):
         return self._producer_busy or bool(getattr(self, "_deck_audit_running", 0))
 
     @property
+    def _pending_generation(self) -> bool:
+        panel = getattr(self, "pending_panel", None)
+        return bool(panel is not None and panel.pending)
+
+    @property
     def _producer_busy(self) -> bool:
         return (
-            self._generating
+            self._pending_generation
+            or self._generating
             or self._revising
             or self.runner.busy
             or self._pdf_job is not None
@@ -720,6 +744,11 @@ class PresentationPane(QWidget):
         )
 
     def load(self, paper_id: str, title: str, *, defer=False) -> None:
+        if self._pending_generation:
+            self.status.setText(self.pending_panel.copy["notice"])
+            return
+        background_materials = bool(getattr(self, "_pending_load", None))
+        self._materials_read.cancel("materials")
         self._pending_load = None
         self.paper_id = paper_id
         from paper_daily.desktop.reading_annotation_ui import bind
@@ -735,7 +764,7 @@ class PresentationPane(QWidget):
             self._pending_load = (paper_id, title)
             return
         if self.materials_button.isChecked():
-            self._load_materials()
+            self._load_materials(background=background_materials)
         else:
             self._materials_for = None
             self.materials_panel.clear()
@@ -772,6 +801,8 @@ class PresentationPane(QWidget):
         return presentations._folder(self.paper_id) / f"{self._mode}{suffix}-recovery.json"
 
     def save_recovery(self):
+        if self._pending_generation:
+            raise ValueError(self.pending_panel.copy["notice"])
         if self.deck and self._dirty:
             presentations._atomic_json(
                 self._recovery_path(),
@@ -896,7 +927,8 @@ class PresentationPane(QWidget):
 
     def _update_controls(self) -> None:
         blocked = (
-            self._generating
+            self._pending_generation
+            or self._generating
             or self._revising
             or self._pdf_job is not None
             or self._cloud_busy
@@ -984,17 +1016,45 @@ class PresentationPane(QWidget):
         else:
             self.status.setText("這篇尚無可用原圖，請先加入原文 PDF 並抽取圖表。")
 
-    def _load_materials(self) -> None:
+    def _load_materials(self, *, background=False) -> None:
+        preparation = getattr(self, "_material_preparation", None)
+        if preparation is not None:
+            preparation.request()
+            return
         if not self.paper_id:
             return
-        try:
-            found = materials.collect(self.paper_id)
-        except (ValueError, OSError) as exc:
-            self.materials_panel.load(None)
-            self.status.setText(f"素材讀取失敗：{exc}")
-            return
-        self._materials_for = self.paper_id
-        self.materials_panel.load(found)
+        from paper_daily import store
+
+        paper_id = self.paper_id
+        database = Path(store.DB_PATH).resolve()
+        paths = materials.MaterialPaths.capture()
+
+        def collect():
+            import sqlite3
+
+            try:
+                found = (materials.collect(paper_id, database=database, paths=paths)
+                         if background else materials.collect(paper_id))
+                return found, None
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return None, str(exc)
+
+        def show(result):
+            if self.paper_id != paper_id or Path(store.DB_PATH).resolve() != database:
+                return
+            found, error = result
+            if error is not None:
+                self.materials_panel.load(None)
+                self.status.setText(f"素材讀取失敗：{error}")
+                return
+            self._materials_for = paper_id
+            self.materials_panel.load(found)
+
+        if background:
+            self._materials_read.run("materials", collect, show)
+        else:
+            self._materials_read.cancel("materials")
+            show(collect())
 
     def _highlight_status(self, text):
         self.materials_panel.analysis_status.setText(text)
@@ -1424,6 +1484,9 @@ class PresentationPane(QWidget):
         }
 
     def save_changes(self) -> bool:
+        if self._pending_generation:
+            self.status.setText(self.pending_panel.copy["notice"])
+            return False
         if not self.deck or not self._dirty or self._index < 0:
             return True
         try:
@@ -1476,6 +1539,7 @@ class PresentationPane(QWidget):
         self._render_preview()
         if not canvas_only:
             self.canvas.load(self.deck, self._index)
+        self._thumbnails.render_selected_if_small()
         return True
 
     def _selected(self, index: int) -> None:
@@ -1665,23 +1729,28 @@ class PresentationPane(QWidget):
             inputs={k for k, box in self.inputs.items() if box.isChecked()},
             cfg=cfg,
         )
+        from paper_daily.desktop.presentation_delivery import GenerationDelivery
+
+        try:
+            delivery = GenerationDelivery(self, paper_id, options)
+        except (ValueError, OSError):
+            self.status.setText("原工作區暫時無法使用；目前簡報未變動。")
+            return
+        self._generation_delivery = delivery
         self._generating = True
         self._update_controls()
         self.status.setText("正在讀取來源並生成投影片與講稿，通常需要數分鐘…可繼續閱讀。")
 
-        def make(_prompt):
-            try:
-                deck, reason = presentations.generate(paper_id, **options)
-                return (json.dumps(deck.to_dict(), ensure_ascii=False) if deck else None), reason
-            except Exception as exc:  # noqa: BLE001 - keep the worker lifecycle intact
-                return None, f"簡報工作失敗：{type(exc).__name__}"
+        self.runner.start("", delivery.done, delivery.failed, call=delivery.run, task="slides")
 
-        self.runner.start("", self._generated, self._failed, call=make, task="slides")
-
-    def _generated(self, text: str) -> None:
+    def _generated(self, text: str, *, _published=None) -> None:
         self._generating = False
         try:
             deck = presentations.deck_from_dict(json.loads(text))
+            if _published is not None:
+                if deck.to_dict() != _published.to_dict():
+                    raise ValueError("Published presentation differs from its delivered content")
+                deck = _published
         except (ValueError, TypeError) as exc:
             self._failed(str(exc))
             return

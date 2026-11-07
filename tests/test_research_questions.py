@@ -119,3 +119,54 @@ def test_late_questions_cannot_replace_a_different_paper(context, monkeypatch):
     assert widget.picker.count() == 0 and widget.paper_id == "b"
     widget.deleteLater()
     app.processEvents()
+
+
+def test_one_unverifiable_question_costs_only_itself(context, monkeypatch):
+    fabricated = {**ITEM, "question": "另一題？", "evidence": "fabricated evidence is not here"}
+    monkeypatch.setattr(
+        rq.llm,
+        "complete_result",
+        lambda *a, **kw: Completion(
+            "以下是問題（共 [2] 題）：\n```\n"
+            + json.dumps({"questions": [fabricated, ITEM]}, ensure_ascii=False)
+            + "\n```"
+        ),
+    )
+    value, _ = rq.ensure("p")
+    assert [item["question"] for item in value["items"]] == [ITEM["question"]]
+
+
+def test_failed_questions_show_their_reason_and_the_retry_button(context, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(
+        rq.llm, "complete_result", lambda *a, **kw: Completion("Sorry, I cannot help.")
+    )
+    assert rq.ensure("p")[0] is None
+    widget = ResearchQuestions()
+    widget.load("p")
+    text = widget.status.text()
+    assert "格式無法解析" in text and "AI 更新建議" in text
+    assert "完成深入分析後" not in text
+    widget.deleteLater()
+    app.processEvents()
+
+
+def test_a_refresh_that_fails_says_the_previous_questions_were_kept(context, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    rq.ensure("p")
+    monkeypatch.setattr(
+        rq.llm, "complete_result", lambda *a, **kw: Completion(None, "timed out after 240s")
+    )
+    widget = ResearchQuestions()
+    widget.load("p")
+    monkeypatch.setattr(
+        AskRunner,
+        "start",
+        lambda self, prompt, done, failed, call=None, **kw: failed(call("")[1]),
+    )
+    widget.generate(force=True)
+    text = widget.status.text()
+    assert "保留先前建議" in text and "timed out" in text and "AI 更新建議" in text
+    assert widget.picker.count() == 1
+    widget.deleteLater()
+    app.processEvents()

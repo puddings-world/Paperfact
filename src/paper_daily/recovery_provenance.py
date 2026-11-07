@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import defaultdict
+from contextlib import contextmanager
 from contextvars import ContextVar
 from threading import get_ident
 from types import MappingProxyType
@@ -231,18 +232,25 @@ def _validate_groups(rows, *, depth=0):
     return result
 
 
+@contextmanager
+def schema_definition_scope():
+    """Fresh operation-local column definitions; yields no validation or source authority."""
+    scope = _SchemaScope()
+    token = _SCHEMA_SCOPE.set(scope)
+    try:
+        yield
+    finally:
+        scope.close()
+        _SCHEMA_SCOPE.reset(token)
+
+
 def validate_groups(rows, *, depth=0):
     """Share trusted column metadata only within this call and its nested groups."""
     current = _SCHEMA_SCOPE.get()
     if current is not None and current.current() and depth != 0:
         return _validate_groups(rows, depth=depth)
-    scope = _SchemaScope()
-    token = _SCHEMA_SCOPE.set(scope)
-    try:
+    with schema_definition_scope():
         return _validate_groups(rows, depth=depth)
-    finally:
-        scope.close()
-        _SCHEMA_SCOPE.reset(token)
 
 
 def retain_in(conn, rows):

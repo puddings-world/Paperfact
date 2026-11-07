@@ -237,10 +237,19 @@ pages typeset the same way.
 **深入分析** sits at the right end of the tab bar: a violet button, and beside it
 which parts exist (講解 · 承先 · 啟後, ✓ when done, … while running, ✗ when a step
 failed, with the reason in the tooltip). One press makes everything the paper is
-missing: the PDF, the deep dive and close reading, the marked passages, the reading
-of every reference (承先) and the field's later work with the 研究脈絡 (啟後). The
-explanation and the citations run side by side, so it takes three to six minutes,
-and each tab redraws itself as its part lands. The nightly job does the same for the
+missing: the PDF, the deep dive and close reading, the marked passages and the 核心論點
+cards made from them (see 筆記), the reading of every reference (承先) and the field's
+later work with the 研究脈絡 (啟後). The explanation and the citations run side by
+side, so it takes three to six minutes, and each tab redraws itself as its part
+lands; the 研究脈絡 is written last, from the deep dive and the verdicts together.
+
+A part counts as done only when it covers the paper. 承先 needs answers for at least
+80% of the references it asked about: a reply that stops early is followed by one
+short request for the rest, and a fragment is kept but leaves 承先 unfinished, so the
+button stays and a second press completes it. 啟後 needs its 研究脈絡 — or the finding
+that nothing was judged to write one from, which the 脈絡 tab then says instead of
+offering a button that would do nothing. A step that failed shows the reason there
+and in the chip's tooltip. The nightly job does the same for the
 next papers in reading order, so most papers arrive complete; the button is for the
 one you jumped to. 簡報 is separate and made only on request.
 
@@ -324,6 +333,13 @@ window — navigation, ticking, pinning — stays blue or grey.
   a Markdown editor with three views, 編輯 / 分割 / 預覽; 分割 puts the source and the
   rendered note side by side, scrolling together, and the view chosen is remembered.
   Half the notes are answers worth rewriting in your own words once understood.
+  **AI 論點** cards are the three to five claims the paper stands on, picked by the
+  AI from its marked passages (原文重點) after 深入分析: each card's headline is the
+  claim in one sentence, its body says what supports it in the paper, why it is
+  central and where it stops holding, and its passage link lands on the sentence in
+  the PDF. Only verified highlights can be picked, so every card points at text that
+  is really there. **AI 整理核心論點** in the 筆記 tab makes them for a paper analysed
+  before this existed, or remakes them; a card you have edited is kept.
 - **問 AI** — questions answered from the paper's own extracted text through the
   AI profile chosen in settings, including CLI, vendor APIs or local models.
   **問這一頁** in the PDF toolbar narrows that to the page on screen; a question asked

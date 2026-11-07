@@ -7,6 +7,8 @@ boundary wrong silently merges two papers into one.
 
 import json
 
+import pytest
+
 from paper_daily.lists import _paper_from_match, clean_bibliography
 
 RAW = """REFERENCES
@@ -327,3 +329,28 @@ def test_same_paper_refuses_a_neighbouring_paper_in_the_same_field():
         "RP-SAM2: Refined prompt SAM2 for surgical segmentation",
         "Foam Segmentation in Wastewater Treatment Plants: A Federated Learning Approach",
     )
+
+
+@pytest.mark.parametrize(
+    "written, year", [("2021a", 2021), ("n.d.", 0), ("in press", 0), (2019, 2019), (None, 0),
+                      ("(2018)", 2018)]
+)
+def test_a_citation_year_written_loosely_does_not_stop_the_import(written, year):
+    row = _paper_from_match({"title": "A paper", "year": written}, None)
+    assert row["year"] == year
+    matched = _paper_from_match({"title": "A paper", "year": written}, {"title": "A paper"})
+    assert matched["year"] == year
+
+
+FENCE = '`' * 3
+
+
+def test_a_bibliography_reply_with_bracketed_prose_is_still_read(monkeypatch):
+    from paper_daily import lists, llm
+
+    body = '[{"title": "A paper", "year": "2020b"}]'
+    reply = f"參考 [12] 如下：\n{FENCE}json\n{body}\n{FENCE}"
+    monkeypatch.setattr(llm, "complete", lambda *a, **k: (reply, "ok"))
+    assert lists.parse_bibliography("A paper 2020", strict=True) == [
+        {"title": "A paper", "year": "2020b"}
+    ]

@@ -1,0 +1,114 @@
+{
+  "format": "paperfact.parent-review-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "published": false,
+  "accepted": {
+    "exit_code": 0,
+    "seconds": 482.22,
+    "selection": [
+      "tests/test_review_decisions.py",
+      "tests/test_parent_claim_review_refresh.py",
+      "tests/test_review_dialog.py",
+      "tests/test_research_review.py",
+      "tests/test_review_records.py",
+      "tests/test_review_draft_ui.py",
+      "tests/test_compound_review_ui.py",
+      "tests/test_claim_remote_ui.py",
+      "tests/test_claim_review_operations.py",
+      "tests/test_claim_review_transports.py",
+      "tests/test_archived_review_draft_ui.py",
+      "tests/test_enrolled_proposal_review_ui.py",
+      "tests/test_local_proposal_review_ui.py"
+    ],
+    "frozen_inputs": 1131,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 114,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.785,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.141,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 479.898,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_review_decisions.py",
+          "tests/test_parent_claim_review_refresh.py",
+          "tests/test_review_dialog.py",
+          "tests/test_research_review.py",
+          "tests/test_review_records.py",
+          "tests/test_review_draft_ui.py",
+          "tests/test_compound_review_ui.py",
+          "tests/test_claim_remote_ui.py",
+          "tests/test_claim_review_operations.py",
+          "tests/test_claim_review_transports.py",
+          "tests/test_archived_review_draft_ui.py",
+          "tests/test_enrolled_proposal_review_ui.py",
+          "tests/test_local_proposal_review_ui.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 481.835
+    }
+  },
+  "new_cases": 25,
+  "existing_cases": 89,
+  "groups": [
+    {
+      "theme": "\u672c\u8f2a\u72c0\u614b\u8b80\u53d6",
+      "cases": 16,
+      "testcase_seconds": 10.73,
+      "expected": "\u6c7a\u5b9a\u5c0d\u61c9\u3001\u4f86\u6e90\u8eab\u5206\u3001\u95dc\u9589\u3001\u63db\u6a94\u53ca\u7a7a\uff0f\u975e\u7a7aWAL"
+    },
+    {
+      "theme": "\u672c\u8f2a\u771f\u6b63\u7236\u5b50\u8996\u7a97",
+      "cases": 9,
+      "testcase_seconds": 135.63,
+      "expected": "\u4fee\u8a02\u5f8c\u5237\u65b0\u3001\u53d6\u6d88\u3001\u672a\u5b58\u5c0e\u89bd\u3001\u8b80\u53d6\u5931\u6557\u8207\u665a\u5230\u7d50\u679c"
+    },
+    {
+      "theme": "\u65e2\u6709\u5be9\u95b1\u8207\u8349\u7a3f",
+      "cases": 50,
+      "testcase_seconds": 70.53,
+      "expected": "\u539f\u6709\u4fdd\u5b58\u3001\u8349\u7a3f\u3001\u78ba\u8a8d\u3001\u8907\u88fd\u53ca\u7fa4\u7d44\u5be9\u95b1\u4fdd\u6301"
+    },
+    {
+      "theme": "\u65e2\u6709\u4e3b\u5f35\u8207\u5de5\u5177",
+      "cases": 30,
+      "testcase_seconds": 219.61,
+      "expected": "\u539f\u885d\u7a81\u4fee\u8a02\u3001CLI\uff0fMCP\u8207\u91cd\u555f\uff0f\u91cd\u8a66\u4fdd\u6301"
+    },
+    {
+      "theme": "\u65e2\u6709\u6062\u5fa9\u8207\u7c21\u5831",
+      "cases": 9,
+      "testcase_seconds": 39.2,
+      "expected": "\u6b77\u53f2\u8349\u7a3f\u3001\u53ef\u651c\u8207\u672c\u6a5f\u7c21\u5831\u7684\u6e05\u55ae\u5165\u53e3\u4fdd\u6301"
+    }
+  ],
+  "full_check_passed": false
+}

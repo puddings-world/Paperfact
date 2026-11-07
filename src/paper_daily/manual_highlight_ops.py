@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,7 +66,7 @@ class HighlightOwner:
             raise ValueError("Loaded paper or workspace changed; reopen the paper before editing")
 
 
-def capture_owner_in(conn, paper_id, *, expected_identity=None):
+def capture_owner_in(conn, paper_id, *, expected_identity=None, initialize=True):
     """Capture actual owner metadata in the caller's transaction; never commit."""
     if not conn.in_transaction:
         raise ValueError("Highlight owner capture requires a caller transaction")
@@ -75,7 +76,8 @@ def capture_owner_in(conn, paper_id, *, expected_identity=None):
         raise ValueError("Highlight owner changed during capture")
     if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
         raise ValueError("Highlight paper is no longer present")
-    ensure_lifecycle(conn)
+    if initialize:
+        ensure_lifecycle(conn)
     data = dict(
         database_identity=identity, binding=generation._binding(conn),
         parent=parent_lifecycle(conn, "paper", paper_id),
@@ -100,6 +102,33 @@ def capture_owner(database, paper_id):
         except BaseException:
             conn.rollback()
             raise
+    return owner
+
+
+def _readonly_connection(database):
+    conn = sqlite3.connect(
+        Path(database).as_uri() + "?mode=ro", uri=True,
+        factory=sync_capture.CaptureConnection, timeout=0.05,
+    )
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def observe_owner(database, paper_id, *, expected_native):
+    """Read an existing native paper lifetime; create no schema, identity or receipt."""
+    database = Path(database).resolve(strict=True)
+    expected = list(expected_native)
+    if (len(expected) != 2 or any(type(n) is not int for n in expected)
+            or expected[0] < 0 or expected[1] <= 0
+            or generation._identity(database) != expected):
+        raise ValueError("Observed paper database changed")
+    with closing(_readonly_connection(database)) as conn:
+        conn.execute("BEGIN")
+        owner = capture_owner_in(conn, paper_id, expected_identity=expected, initialize=False)
+        owner.check(conn)
+        conn.rollback()
+    if generation._identity(database) != expected:
+        raise ValueError("Observed paper database changed")
     return owner
 
 
@@ -230,7 +259,7 @@ class HighlightView:
         return result
 
 
-def load(owner, path, fingerprint, *, document=None):
+def load(owner, path, fingerprint, *, document=None, readonly=False):
     """Load displayed mark rows and their exact observations, not the current global DB."""
     if not isinstance(owner, HighlightOwner):
         raise ValueError("Reopen a stored paper before editing its highlights")
@@ -246,7 +275,8 @@ def load(owner, path, fingerprint, *, document=None):
     _source(view)
     with _pdf_document(path) as pdf:
         page_count = len(pdf)
-    with closing(generation._connect(owner.database)) as conn:
+    connection = _readonly_connection if readonly else generation._connect
+    with closing(connection(owner.database)) as conn:
         conn.execute("BEGIN")
         owner.check(conn)
         records = _read(conn, owner, fingerprint)

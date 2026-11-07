@@ -2,7 +2,7 @@
 import json
 import sqlite3
 import threading
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -16,6 +16,17 @@ from paper_daily import (
     reading_links,
     store,
 )
+
+
+@contextmanager
+def automatic(pane):
+    """Suppress repeated passive notices only; never cache account capability."""
+    previous = getattr(pane, "_annotation_automatic", False)
+    pane._annotation_automatic = True
+    try:
+        yield
+    finally:
+        pane._annotation_automatic = previous
 
 
 def bind(pane):
@@ -108,7 +119,10 @@ def start(pane, *, force=True):
 
                 reason = '請先在 AI 設定登入所選帳號，再分析原文重點或連結講解。'
                 pane._highlight_status(reason)
-                login(pane, task, reason)
+                passive = getattr(pane, "_annotation_automatic", False)
+                if not passive or not getattr(pane, "_annotation_login_notified", False):
+                    pane._annotation_login_notified = True
+                    login(pane, task, reason)
                 return False
     except (OSError, ValueError, sqlite3.Error):
         pane._highlight_status('無法讀取這份已載入研究的註記狀態；請重新開啟後重試。')
@@ -156,6 +170,8 @@ def start(pane, *, force=True):
             text = f"已儲存 {marks['mapped']} 段原文標註與講解連結。"
         else:
             text = '沒有可重新套用的重點；已刪除的內容不會自動恢復。'
+        if task is None and not prepared.get('cancelled'):
+            text = '沿用已儲存的原文標註與講解連結。 ' + text
         pane._highlight_status(text)
 
     def failed(reason):

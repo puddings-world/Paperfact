@@ -20,6 +20,9 @@ FORMATS = {
         "request_id context_json question_json answer_json status candidate_id reason"
     ),
     "research_chat_links": "local_id message_id exchange_id reply_to source_hash",
+    "research_chat_review_receipts": (
+        "request_id fingerprint record_json target_json answer_json result_json"
+    ),
 }
 SQL_TURN = {"id", "paper_id", "role", "body", "created_at", "page", "anchor"}
 LINK = {"message_id", "exchange_id", "reply_to", "source_hash"}
@@ -127,6 +130,10 @@ def validate_record(protocol, record):
     if protocol == "research_chat_links":
         research_chat.validate_link(record)
         return {record["source_hash"]} if record["source_hash"] is not None else set()
+    if protocol == "research_chat_review_receipts":
+        from paper_daily.enrollment_chat_reviews import source_hashes
+
+        return source_hashes(record)
     data = _value(record["context_json"])
     question = _value(record["question_json"])
     if record["answer_json"] is not None:

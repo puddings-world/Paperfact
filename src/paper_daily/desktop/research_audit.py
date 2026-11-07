@@ -68,8 +68,8 @@ TEXT = {
             'otation borrowed.'
         ),
         "linked_analysis_changed": (
-            'Linked highlight input changed; old quote ind'
-            'ex is unresolved.'
+            "Explanation or highlight content changed, or the old link cannot be verified. "
+            "Saved text is preserved; review this link again."
         ),
         "linked_source_mismatch": (
             'Linked highlight belongs to a different origi'
@@ -106,9 +106,7 @@ TEXT = {
             '\u5f15\u6587\u3002'
         ),
         'linked_analysis_changed': (
-            '\u9023\u7d50\u7684\u91cd\u9ede\u8f38\u5165\u5df2'
-            '\u8b8a\u66f4\uff1b\u820a\u5f15\u6587\u7d22\u5f15'
-            '\u672a\u89e3\u6790\u3002'
+            "講解或重點內容已變更，或舊連結無法核實。內容已保留，請重新核對連結。"
         ),
         'linked_source_mismatch': (
             '\u9023\u7d50\u7684\u91cd\u9ede\u5c6c\u65bc\u4e0d'

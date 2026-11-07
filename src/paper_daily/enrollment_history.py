@@ -17,6 +17,27 @@ SCHEMA = (
     "record_id TEXT PRIMARY KEY,protocol TEXT NOT NULL,body_json TEXT NOT NULL);"
 )
 FORMATS = {
+    "research_observed_current_deck_recovery": "paper_id slot parent_token manifest_json",
+    "research_local_deck_proposals": (
+        "proposal_id request_id paper_id captured_json owner_json manifest_json fingerprint"
+    ),
+    "research_enrolled_deck_proposals": (
+        "proposal_id request_id local_id portable_id captured_json owner_json "
+        "manifest_json fingerprint"
+    ),
+    "research_common_deck_proposal_recovery": (
+        "record_id paper_id proposal_id manifest_json provenance_json"
+    ),
+    "common_proposal_adoption_v1": "source_id proposal_id receiver_json fingerprint",
+    "later_outcome_import_v1": (
+        "package_sha256 source_owner receiver_owner incoming_json receiver_json"
+    ),
+    "research_compound_requests": (
+        "request_id context_json mutations_json status candidate_id reason"
+    ),
+    "research_compound_recovery": (
+        "request_id context_json mutations_json status candidate_id reason"
+    ),
     "reading_position_import_v1": (
         "package_sha256 source_owner receiver_owner document_hash incoming_json receiver_json"
     ),
@@ -27,6 +48,13 @@ FORMATS = {
     "research_generation_requests": "request_id context_json row_json status candidate_id reason",
     "research_generation_recovery": "request_id context_json row_json status candidate_id reason",
     "research_parent_lifecycle": "kind entity_id token active",
+    "research_review_receipts": (
+        "request_id fingerprint origin origin_id decision result provenance"
+    ),
+    "research_review_drafts": (
+        "draft_id origin origin_id owner_json preview_json body request_id revision "
+        "updated_at save_order fingerprint"
+    ),
     **CHAT_FORMATS,
     **INBOX_FORMATS,
 }
@@ -155,6 +183,10 @@ def generation_sources(row):
                 raise ValueError("Archived overview input exceeds its bound")
             for value in inputs[key]:
                 closed(value, fields)
+    elif reader == "later_outcome":
+        from paper_daily.later_outcome_history import generation_inputs
+
+        generation_inputs(inputs)
     elif reader == "survey":
         closed(inputs, {"list", "papers", "_members"})
         _snapshot("lists", inputs["list"], owner)
@@ -174,6 +206,38 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol == "research_observed_current_deck_recovery":
+        from paper_daily.proposal_recovery_current import validate as validate_current
+
+        value = validate_current(record)
+        return {item["sha256"] for item in value["originals"]}
+    if protocol in {"research_local_deck_proposals", "research_enrolled_deck_proposals"}:
+        from paper_daily import enrolled_deck_proposals, local_deck_proposals
+
+        module = (
+            local_deck_proposals
+            if protocol == local_deck_proposals.TABLE
+            else enrolled_deck_proposals
+        )
+        module.validate_record(record)
+        return set()  # Full bytes are declared only by the separately validated carrier.
+    if protocol == "research_common_deck_proposal_recovery":
+        from paper_daily import proposal_recovery
+
+        manifest = proposal_recovery.validate_row(record)["manifest"]
+        return {item["sha256"] for item in manifest["originals"]}
+    if protocol == "common_proposal_adoption_v1":
+        from paper_daily.proposal_recovery_review import validate_link
+
+        return validate_link(record)
+    if protocol == "later_outcome_import_v1":
+        from paper_daily.later_outcome_packages import validate_import_record
+
+        return validate_import_record(record)
+    if protocol in {"research_compound_requests", "research_compound_recovery"}:
+        from paper_daily.later_outcome_history import query_sources
+
+        return query_sources(record)
     if protocol == "reading_position_import_v1":
         from paper_daily.reading_position_packages import validate_import_record
 
@@ -192,6 +256,14 @@ def validate_record(protocol, record):
 
         validate_inbox(protocol, record)
         return set()
+    if protocol == "research_review_receipts":
+        from paper_daily.enrollment_review_decisions import source_hashes
+
+        return source_hashes(record)
+    if protocol == "research_review_drafts":
+        from paper_daily.enrollment_review_drafts import source_hashes
+
+        return source_hashes(record)
     if protocol in CHAT_FORMATS:
         from paper_daily.enrollment_chat_history import validate_record as validate_chat
 
@@ -355,7 +427,9 @@ def collect(conn, database, ticket):
             value = dict(zip(columns, raw, strict=True))
             wrapped = wrap(protocol, value)
             logical = (
-                (protocol, value.get("request_id"))
+                (protocol, value["draft_id"])
+                if protocol == "research_review_drafts"
+                else (protocol, value.get("request_id"))
                 if protocol not in {"research_parent_lifecycle", "research_chat_links"}
                 else (protocol, value["local_id"])
                 if protocol == "research_chat_links"
@@ -398,6 +472,20 @@ def collect(conn, database, ticket):
         if not location.is_relative_to(root):
             raise ValueError("Owned history sidecar is outside the selected workspace")
         metadata.append(str(location))
+    from paper_daily import research_compound as compound
+
+    for value in compound.list_recovery_requests(database):
+        ticket.check()
+        wrapped = wrap("research_compound_recovery", value)
+        if wrapped["record_id"] not in records:
+            total += len(wrapped["body_json"].encode())
+        records[wrapped["record_id"]] = wrapped
+        sources.update(validate(wrapped)[1])
+        location = compound._recovery_path(compound.Context(value["context_json"]))
+        if not location.is_relative_to(root):
+            raise ValueError("Owned empty-query sidecar is outside selected workspace")
+        metadata.append(str(location))
+        counts["research_compound_recovery"] = counts.get("research_compound_recovery", 0) + 1
     if len(records) > MAX_RECORDS or total > MAX_TOTAL:
         raise ValueError("Private history exceeds its inventory bound")
     for value in records.values():

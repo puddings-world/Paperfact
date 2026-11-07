@@ -259,3 +259,47 @@ def test_main_analysis_uses_created_list_and_existing_login_guard():
     MainWindow._analyze_created_list(window, "created-list")
     assert opened == ["created-list"]
     assert started == [["analyze", "--list", "created-list", "--jobs", "1"]]
+
+
+def test_one_failing_annotation_batch_keeps_the_others(db, monkeypatch):
+    ids = tuple(f"p{i}" for i in range(8))
+    candidates = {pid: paper(pid, pid) for pid in ids}
+    calls = []
+
+    def complete(prompt, **kwargs):
+        batch = json.loads(prompt)["papers"]
+        calls.append([row["id"] for row in batch])
+        if batch[0]["id"] == "p4":
+            return "not json at all", "ok"
+        return json.dumps(dict(annotations=[annotation(row["id"]) for row in batch])), "ok"
+
+    monkeypatch.setattr(llm, "complete", complete)
+    warnings = []
+    result = rp.annotate(selection(ids)["papers"], candidates, None, lambda _: None, warnings)
+    # The failed batch is asked once more, then marked rather than sinking the survey.
+    assert [c[0] for c in calls] == ["p0", "p4", "p4"]
+    assert result["p0"]["findings"] == "A reported finding"
+    assert result["p5"] == rp.UNAVAILABLE
+    assert warnings and "4 篇" in warnings[0]
+    plan = dict(id="x" * 16, topic="t", depth="quick", created_at="now", summary="s", gaps=[],
+                items=selection(ids)["papers"], candidates=candidates, queries=[],
+                warnings=warnings, limitation="", output="annotated", brief={}, annotations=result)
+    assert "未能產生" in rp.report(plan)
+    assert rp.commit("Annotated", plan, list(ids))["added"] == 8
+
+
+def test_a_retried_annotation_batch_can_still_succeed(monkeypatch):
+    replies = iter(["oops", json.dumps(dict(annotations=[annotation("p1"), annotation("p2")]))])
+    monkeypatch.setattr(llm, "complete", lambda *a, **k: (next(replies), "ok"))
+    result = rp.annotate(selection()["papers"], {"p1": paper(), "p2": paper("p2")}, None,
+                         lambda _: None)
+    assert result["p2"]["method"] == "A described method"
+
+
+def test_request_timeout_grows_with_the_request(monkeypatch):
+    seen = []
+    monkeypatch.setattr(llm, "complete",
+                        lambda prompt, **k: (seen.append(k["timeout"]), ('{"ok": 1}', "ok"))[1])
+    rp._ask({"topic": "small"}, "system", None)
+    rp._ask({"papers": ["x" * 2000] * 30}, "system", None)
+    assert seen[0] < seen[1] <= 900

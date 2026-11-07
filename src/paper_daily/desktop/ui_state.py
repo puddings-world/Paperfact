@@ -57,7 +57,9 @@ def _run() -> None:
 
 
 def _write() -> bool:
-    # Close-time flush and the background worker must commit in snapshot order.
+    # The worker and a close/restart flush must snapshot and commit in order.
+    # Otherwise an older worker batch can commit AFTER flush's newer values.
+    # Keep save/read on the separate lightweight lock so UI input stays responsive.
     with _write_lock:
         return _write_batch()
 

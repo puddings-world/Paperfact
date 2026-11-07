@@ -49,6 +49,13 @@ def clean_bibliography(raw: str) -> str:
     return "\n".join(ln for ln in raw.splitlines() if not _NOISE.match(ln))
 
 
+def needs_ai_parse(citation: str) -> bool:
+    """Whether the single-paper append path needs bibliography interpretation."""
+    text = clean_bibliography(citation).strip()
+    return bool(text and not arxiv.BARE_ID.match(text)
+                and (len(text.splitlines()) > 1 or len(text) > 160))
+
+
 def _fallback_parse(text: str) -> list[dict]:
     """Split on blank-line-separated blocks. Only used when the CLI is unavailable;
     it gets the entry boundaries roughly right and leaves the title to the matcher."""
@@ -91,6 +98,17 @@ def parse_bibliography(raw: str, log: Log = lambda _m: None, *, strict=False) ->
     return [e for e in entries if e.get("title")]
 
 
+def _year(*values) -> int:
+    """The first usable year; citations write "2021a", "n.d." or "in press"."""
+    for value in values:
+        if type(value) is int and value > 0:
+            return value
+        found = re.search(r"(?<!\d)(1[89]|20|21)\d{2}(?!\d)", str(value or ""))
+        if found:
+            return int(found.group())
+    return 0
+
+
 def _paper_from_match(entry: dict, match: dict | None) -> dict:
     """Build a papers row, preferring Semantic Scholar over the citation text."""
     if match:
@@ -103,7 +121,7 @@ def _paper_from_match(entry: dict, match: dict | None) -> dict:
             "id": "ref:" + (match.get("paperId") or title_key(title))[:24],
             "title_key": title_key(title),
             "venue": (match.get("venue") or entry.get("venue") or "arXiv")[:120],
-            "year": int(match.get("year") or entry.get("year") or 0),
+            "year": _year(match.get("year"), entry.get("year")),
             "title": title,
             "authors_json": json.dumps(names or entry.get("authors") or [], ensure_ascii=False),
             "abstract": match.get("abstract"),
@@ -122,7 +140,7 @@ def _paper_from_match(entry: dict, match: dict | None) -> dict:
         "id": "ref:" + title_key(entry["title"])[:24],
         "title_key": title_key(entry["title"]),
         "venue": (entry.get("venue") or "unknown")[:120],
-        "year": int(entry.get("year") or 0),
+        "year": _year(entry.get("year")),
         "title": entry["title"],
         "authors_json": json.dumps(entry.get("authors") or [], ensure_ascii=False),
         "abstract": entry.get("abstract"),
@@ -284,7 +302,7 @@ def add_paper(
     # and the parser is what repairs hyphenation and pulls the year out.
     entries = [{**paper, "venue": "arXiv", "url": None}] if paper else (
         parse_bibliography(text, log)
-        if len(text.splitlines()) > 1 or len(text) > 160
+        if needs_ai_parse(text)
         else [{"title": text, "authors": [], "venue": "", "year": 0, "url": None}]
     )
     if not entries:

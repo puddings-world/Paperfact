@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from paper_daily import model_catalog
+from paper_daily import executables, model_catalog
 from paper_daily.ai_types import Settings
 
 CLI_NAMES = {"cli": "claude", "codex": "codex", "gemini": "gemini"}
@@ -117,7 +116,7 @@ def command(backend: str) -> list[str]:
     name = CLI_NAMES.get(backend)
     if not name:
         raise ValueError("此連線使用 API 金鑰，不需要 CLI 登入")
-    exe = shutil.which(name)
+    exe = executables.which(name)
     if not exe:
         raise ValueError(f"尚未安裝 {name} CLI；請先安裝官方 CLI 後重新開啟 Paperfact")
     if backend in ("codex", "gemini") and Path(exe).suffix.lower() in (".cmd", ".bat", ".ps1"):
@@ -129,7 +128,7 @@ def command(backend: str) -> list[str]:
         script = Path(exe).parent / "node_modules" / relative
         if backend == "gemini" and not script.exists():
             script = Path(exe).parent / "node_modules/@google/gemini-cli/dist/index.js"
-        node = shutil.which("node")
+        node = executables.which("node")
         if not node or not script.is_file():
             raise ValueError(f"找不到 {name} 的 Node 啟動程式，請重新安裝官方 CLI")
         return [node, str(script)]

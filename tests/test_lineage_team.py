@@ -6,7 +6,7 @@ import time
 import urllib.parse
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 from test_cites_views import _titles
 from test_cites_views import pane as _pane
 
@@ -120,6 +120,19 @@ def test_the_switch_filters_both_sides_and_labels_why(pane, monkeypatch):
     card = pane._cards[("title", "referencenumber7onmatrixfunctions")][1]
     assert "同作者：Ada" in card.layout().itemAt(0).widget().text()
     assert "參考文獻 1 篇、後續研究 1 篇" in pane._team_note.text()
+    visible = []
+    box = pane._boxes["refs"]
+    for index in range(box.count()):
+        card = box.itemAt(index).widget()
+        if card is not None and card.isVisible():
+            visible.extend(label.text() for label in card.findChildren(QLabel)
+                           if label.isVisible())
+    displayed = "\n".join(visible)
+    assert "Reference number 7 on matrix functions" in displayed
+    assert "Reference number 8 on matrix functions" not in displayed
+    assert pane._team_note.isVisible()
     pane._set_team("all")
     pane.settle()
     assert len(_titles(pane, "refs")) == 40 and not pane._team_note.isVisible()
+    assert all("OpenAlex \u67e5\u5230" not in label.text()
+               for label in pane._list_face.findChildren(QLabel) if label.isVisible())

@@ -41,15 +41,26 @@ def capture(database, paper_id):
 
 
 def read(scope):
-    """Run on a worker: hash current source bytes and return only the captured scope."""
+    """Run on a worker: retain source/owner guards and prepare reject-only delivery."""
+    from paper_daily import later_outcomes, sync_capture
+    from paper_daily.desktop.later_outcome_status import fence, prepared
+
     database, paper_id = Path(scope[0]), scope[1]
     if capture(database, paper_id) != scope:
         return None
-    with closing(generation._connect(database)) as conn:
+    before = fence(database)
+    with closing(sqlite3.connect(
+        database.as_uri() + "?mode=ro", uri=True,
+        factory=sync_capture.CaptureConnection, timeout=0.25,
+    )) as conn:
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=250")
         state = analyze.status(conn, paper_id, verify_sources=True)
         failures = {step: analyze.failed(conn, paper_id, step) or "" for step in state}
-    return (state, failures) if capture(database, paper_id) == scope else None
+        outcome = later_outcomes.coverage(conn, paper_id, verify_source=True)
+    if capture(database, paper_id) != scope:
+        return None
+    return state, failures, prepared(outcome, database, before, fence(database))
 
 
 class LatestStatus(QObject):

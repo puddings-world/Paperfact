@@ -197,7 +197,10 @@ class ActivityHub(QObject):
             # Do not finish until the output reader has enqueued the last event.
             if code is not None and getattr(process, "_paperfact_output_done", False):
                 self._processes.pop(token)
-                self.finish(token, code == 0, cancelled=code < 0)
+                handoff = getattr(process, "_paperfact_ai_handoff", None)
+                effective = handoff.effective_code(code) if handoff is not None else code
+                transport_failed = handoff is not None and handoff.failed
+                self.finish(token, effective == 0, cancelled=code < 0 and not transport_failed)
         self.changed.emit()
 
     def finish(self, token, ok=True, message=None, *, cancelled=False):
@@ -235,6 +238,9 @@ class ActivityHub(QObject):
             owner.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def watch_popen(self, handle, process):
+        if getattr(process, "_paperfact_reader_started", False):
+            return
+        process._paperfact_reader_started = True
         self._processes[handle.token] = process
         if getattr(process, "stdout", None) is None:
             process._paperfact_output_done = True
@@ -242,13 +248,19 @@ class ActivityHub(QObject):
 
         def read():
             try:
+                handoff = getattr(process, "_paperfact_ai_handoff", None)
+                if handoff is not None:
+                    handoff.read(handle.update)
+                    return
                 for line in process.stdout:
                     event = work_progress.parse(line.strip())
                     if event:
                         handle.update(event)
             finally:
-                process.stdout.close()
-                process._paperfact_output_done = True
+                handoff = getattr(process, "_paperfact_ai_handoff", None)
+                if handoff is None:
+                    process.stdout.close()
+                process._paperfact_output_done = handoff.done if handoff is not None else True
 
         threading.Thread(target=read, daemon=True).start()
 

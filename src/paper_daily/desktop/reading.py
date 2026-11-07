@@ -32,6 +32,27 @@ def _md(text: str, palette: dict[str, str], rich: bool) -> str:
 
 
 def _figure_html(fig, palette: dict[str, str], rich: bool = False) -> str:
+    preview = fig.meta.get("preview_data_url")
+    if preview is not None:
+        # Only the worker's immutable snapshot supplies this PNG data URL. It is
+        # display content, never an original-source link or reusable file proof.
+        unverified = fig.meta.get("preview_unverified", True)
+        label = (
+            "Unverified cached figure — original-source provenance not verified. "
+            if unverified
+            else ""
+        )
+        caption = html.escape(label + fig.caption)
+        if not unverified:
+            caption += f" (p{fig.page})"
+        width = min(MAX_WIDTH, max(1, fig.meta["preview_width"] // 2))
+        return (
+            '<figure class="paper"><img src="'
+            + html.escape(preview, quote=True)
+            + f'" width="{width}"><figcaption>'
+            + caption
+            + "</figcaption></figure>"
+        )
     caption = fig.caption if len(fig.caption) <= 260 else fig.caption[:259] + "…"
     if rich:
         return (
@@ -67,12 +88,15 @@ def render(
     if (old_dive and not dive) or (old_close and not close):
         notice = _md(
             "**先前的 AI 回覆未包含完整正文，已隱藏格式異常的內容。** "
-            "請重新分析；原始儲存資料未被覆寫。", palette, rich,
+            "請重新分析；原始儲存資料未被覆寫。",
+            palette,
+            rich,
         )
     elif old_dive and final_text(old_dive) is None:
         notice = _md(
             "_先前回覆格式異常，以下保留可辨識的正式章節；原始資料未改動。_",
-            palette, rich,
+            palette,
+            rich,
         )
     if highlights:
         return notice + _with_evidence(dive, close, figures, palette, highlights, links, rich)
@@ -149,9 +173,7 @@ def _with_evidence(dive, close, figures, pal, analysis, links, rich=False):
             if 0 <= index < len(analysis["items"]):
                 used.add(index)
                 out.append(
-                    _evidence_card(
-                        index, analysis["items"][index], link["explanation"], pal, rich
-                    )
+                    _evidence_card(index, analysis["items"][index], link["explanation"], pal, rich)
                 )
     remaining = [i for i in range(len(analysis["items"])) if i not in used]
     if remaining:

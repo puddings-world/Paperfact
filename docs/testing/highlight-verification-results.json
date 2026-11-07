@@ -1,0 +1,104 @@
+{
+  "gate": {
+    "exit_code": 0,
+    "seconds": 809.14,
+    "selection": [
+      "tests/test_highlight_draft_verification.py",
+      "tests/test_highlight_original_recovery.py",
+      "tests/test_claim_draft_originals.py",
+      "tests/test_claim_original_read_ui.py",
+      "tests/test_claim_review_transports.py",
+      "tests/test_resumed_draft_originals.py",
+      "tests/test_resumed_draft_original_ui.py",
+      "tests/test_highlight_draft_storage.py",
+      "tests/test_highlight_draft_revision.py",
+      "tests/test_review_records.py"
+    ],
+    "frozen_inputs": 1147,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 121,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.957,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.154,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 806.409,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_highlight_draft_verification.py",
+          "tests/test_highlight_original_recovery.py",
+          "tests/test_claim_draft_originals.py",
+          "tests/test_claim_original_read_ui.py",
+          "tests/test_claim_review_transports.py",
+          "tests/test_resumed_draft_originals.py",
+          "tests/test_resumed_draft_original_ui.py",
+          "tests/test_highlight_draft_storage.py",
+          "tests/test_highlight_draft_revision.py",
+          "tests/test_review_records.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 808.532
+    }
+  },
+  "new_functions": 13,
+  "new_cases": 17,
+  "groups": [
+    {
+      "theme": "新的原文核對與獨立閱讀",
+      "cases": 16,
+      "seconds": 57.72,
+      "meaning": "A／B分離、完整標記、取消、撤銷、精確私稿版本與來源退役"
+    },
+    {
+      "theme": "恢復後讀A並核對",
+      "cases": 1,
+      "seconds": 14.09,
+      "meaning": "舊資料夾不可用，接管後讀原文及核對，不發布研究"
+    },
+    {
+      "theme": "既有主張來源／介面／工具",
+      "cases": 24,
+      "seconds": 526.43,
+      "meaning": "已決定後閱讀、真正Qt、CLI／官方MCP與同儕來源"
+    },
+    {
+      "theme": "既有文字／筆記原文",
+      "cases": 18,
+      "seconds": 96.0,
+      "meaning": "既有暫存來源、檢視、取消／關閉及背景重查"
+    },
+    {
+      "theme": "既有私稿／修訂／紀錄",
+      "cases": 62,
+      "seconds": 108.56,
+      "meaning": "私存閉合格式、人工位置核心及原有審閱記錄"
+    }
+  ],
+  "full_check_passed": false
+}

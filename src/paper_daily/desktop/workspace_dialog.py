@@ -59,8 +59,8 @@ TEXT = {
             "還原只建立新的離線工作區；目前資料不覆蓋、不切換，也不啟用舊裝置待傳操作。"
         ),
         "unavailable": (
-            "尚未提供：現有資料的首次同步啟用、裝置管理、"
-            "離線釘選／清理及搬移使用中的工作區。"
+            "副本與備份僅在本機準備；跨裝置同步需另行設定連線。"
+            "尚未提供：搬移使用中的工作區。"
         ),
         "busy": ("請先等候目前背景研究工作完成，再建立備份。"),
         "new_folder": ("新工作區資料夾"),
@@ -118,10 +118,8 @@ TEXT = {
             "s outbox."
         ),
         "unavailable": (
-            "Not available yet: sync enrollme"
-            "nt/device management, offline pi"
-            "nning/eviction and active worksp"
-            "ace relocation."
+            "Copies and backups are prepared locally. Configure a separate connection "
+            "for cross-device sync. Not available yet: moving the active workspace."
         ),
         "busy": ("Wait for active background research jobs before creating a backup."),
         "new_folder": ("New workspace folder"),
@@ -180,11 +178,29 @@ class WorkspaceDialog(QDialog):
         current_path=None,
         writers_busy=lambda: False,
         open_workspace=None,
+        migration_source=None,
     ):
         super().__init__(parent)
         self.t = TEXT.get(language, TEXT["en"])
         self.zh = language == "zh-TW"
+        from paper_daily.workspace_primary_migration import MigrationSource, PrimaryMigration
+
+        if migration_source is not None and (
+            not isinstance(migration_source, MigrationSource)
+            or migration_source.database != Path(database).resolve()
+            or not migration_source.workspace_current()
+            or (
+                getattr(parent, "_workspace_owner", migration_source.owner)
+                is not migration_source.owner
+            )
+        ):
+            raise WorkspaceChanged("Original workspace window changed")
         self.service = WorkspaceService(database, current_path=current_path)
+        self._primary_controller = (
+            PrimaryMigration(self.service, migration_source)
+            if migration_source is not None else None
+        )
+        self._primary_kind = None
         from paper_daily.workspace_open import open_workspace as launch_workspace
 
         self._open_workspace = open_workspace or launch_workspace
@@ -249,6 +265,13 @@ class WorkspaceDialog(QDialog):
         row.addWidget(self.backup_button)
         row.addWidget(self.inspect_button)
         group.addLayout(row)
+        from paper_daily.desktop.primary_migration_review import PrimaryMigrationReview
+
+        self.primary_migration = PrimaryMigrationReview(self, zh=self.zh)
+        self.primary_migration.review_requested.connect(self._review_primary)
+        self.primary_migration.stage_requested.connect(self._stage_primary)
+        self.primary_migration.commit_requested.connect(self._commit_primary)
+        group.addWidget(self.primary_migration)
         self.preview_label = QLabel()
         self.preview_label.setWordWrap(True)
         self.preview_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -274,7 +297,9 @@ class WorkspaceDialog(QDialog):
         unavailable = QLabel(self.t["unavailable"])
         unavailable.setWordWrap(True)
         layout.addWidget(unavailable)
-        layout.addStretch()
+        from paper_daily.desktop.workspace_navigation import arrange
+
+        arrange(self, layout, actions, recovery, unavailable)
         self.status = QLabel(self.t["loading"])
         self.status.setWordWrap(True)
         self.status.setAccessibleName("Workspace operation status")
@@ -319,6 +344,12 @@ class WorkspaceDialog(QDialog):
         )
         self.cancel_button.setEnabled(self.busy)
         self.progress.setVisible(self.busy)
+        controller = self._primary_controller
+        self.primary_migration.set_active(
+            bool(active and self._ready and controller is not None and controller.current())
+        )
+        if self.primary_migration.plan is not None:
+            self.backup_button.setEnabled(False)
 
     def _start(self, kind, task):
         if self.busy or self.disposed or self._invalid:
@@ -345,6 +376,9 @@ class WorkspaceDialog(QDialog):
 
     def _finished(self, worker, kind):
         if self._worker is not worker:
+            return
+        if kind.startswith("primary_"):
+            self._finished_primary(worker, kind)
             return
         self._worker = None
         self._check_workspace()
@@ -395,6 +429,136 @@ class WorkspaceDialog(QDialog):
         self._buttons()
         if self._closing:
             self.close()
+
+    def _primary_notice(self):
+        return (
+            "檢查內容已改變；請先重新檢查。尚未建立備份。"
+            if self.zh else (
+                "Reviewed inputs changed. Refresh before reviewing local PDFs again. "
+                "Backup not created."
+            )
+        )
+
+    def _start_primary(self, kind, task, *, reset=False):
+        controller = self._primary_controller
+        if self.busy or self.disposed or self._invalid or controller is None:
+            return False
+        if not controller.current():
+            self.status.setText(self._primary_notice())
+            return False
+        if kind in {"primary_stage", "primary_commit"} and self.writers_busy():
+            self.status.setText(self.t["busy"])
+            return False
+        if reset:
+            controller.reset()
+        self._primary_kind = kind
+        if kind == "primary_ready":
+            self._ready = False
+        started = self._start(kind, lambda _ticket, _progress: task())
+        if not started:
+            self._primary_kind = None
+        else:
+            if kind != "primary_ready":
+                self.task_tabs.setCurrentIndex(1)
+            labels = {
+                "primary_catalog": ("讀取本機 PDF 狀態...", "Reading local PDF status..."),
+                "primary_stage": ("檢查並暫存本機 PDF...", "Checking and staging local PDFs..."),
+                "primary_commit": ("準備所選 PDF...", "Preparing selected PDFs..."),
+                "primary_ready": ("檢查備份準備狀態...", "Reviewing backup readiness..."),
+            }
+            self.status.setText(labels[kind][0 if self.zh else 1])
+        return started
+
+    def _review_primary(self, after=""):
+        controller = self._primary_controller
+        if controller is None:
+            return False
+        return self._start_primary(
+            "primary_catalog", lambda: controller.catalog(after=after), reset=True
+        )
+
+    def _stage_primary(self, selected):
+        controller = self._primary_controller
+        catalog = self.primary_migration.catalog
+        if controller is None or not controller.catalog_current(catalog):
+            self.status.setText(self._primary_notice())
+            return False
+        return self._start_primary(
+            "primary_stage", lambda: controller.stage(catalog, selected), reset=True
+        )
+
+    def _commit_primary(self):
+        if self.busy:
+            return False
+        controller = self._primary_controller
+        plan = self.primary_migration.plan
+        if controller is None or not controller.plan_current(plan):
+            if controller is not None:
+                controller.reset()
+                self.primary_migration.clear_plan()
+                self._ready = not controller.needs_refresh
+                self._buttons()
+            self.status.setText(self._primary_notice())
+            return False
+        return self._start_primary("primary_commit", lambda: controller.commit(plan))
+
+    def _finished_primary(self, worker, kind):
+        controller = self._primary_controller
+        try:
+            self._check_workspace()
+            if self._invalid or self._closing:
+                return
+            if not controller.current():
+                self.primary_migration.clear_plan()
+                self.status.setText(self._primary_notice())
+                return
+            if worker.error:
+                self.primary_migration.clear_plan()
+                self.status.setText(
+                    self._primary_notice() if worker.error in {"changed", "snapshot_changed"}
+                    else self.t[worker.error]
+                )
+                if controller.needs_refresh:
+                    self._ready = False
+            elif kind == "primary_catalog":
+                if controller.catalog_current(worker.result):
+                    self.primary_migration.show_catalog(worker.result)
+                    self.status.setText(
+                        "請選擇本機 PDF；不會下載或呼叫 AI。"
+                        if self.zh else (
+                            "Select local PDFs. This does not download files or call AI."
+                        )
+                    )
+                else:
+                    self.status.setText(self._primary_notice())
+            elif kind == "primary_stage":
+                if controller.plan_current(worker.result):
+                    self.primary_migration.show_plan(worker.result)
+                    self.status.setText(
+                        "請檢閱暫存檔案後確認；尚未建立備份。"
+                        if self.zh else "Review staged files, then confirm. Backup not created."
+                    )
+                else:
+                    controller.cancel()
+                    self.primary_migration.clear_plan()
+                    self._ready = False
+                    self.status.setText(self._primary_notice())
+            elif kind == "primary_commit":
+                self.primary_migration.show_result(worker.result)
+                self._ready = False
+                self.status.setText(self.primary_migration.summary.text())
+            elif kind == "primary_ready":
+                self.service, status = worker.result
+                self.primary_migration.clear_review()
+                self._show_status(status)
+        finally:
+            # Keep parent busy until the actual queued install/discard drains.
+            self._worker = None
+            self._primary_kind = None
+            worker.deleteLater()
+            self._buttons()
+            if self._closing:
+                self.close()
 
     def open_created(self):
         if self.busy or self.disposed or self._invalid or self._opened:
@@ -578,6 +742,9 @@ class WorkspaceDialog(QDialog):
         self.status.setText("本機狀態已更新。" if self.zh else "Local status refreshed.")
 
     def refresh(self):
+        controller = self._primary_controller
+        if controller is not None and controller.needs_refresh:
+            return self._start_primary("primary_ready", controller.refresh_readiness, reset=True)
         return self._start("status", lambda ticket, _progress: self.service.status(ticket))
 
     def open_folder(self):
@@ -669,7 +836,10 @@ class WorkspaceDialog(QDialog):
 
     def cancel(self):
         if self._worker:
-            self._worker.ticket.cancel()
+            if self._primary_kind is not None and self._primary_controller is not None:
+                self._primary_controller.cancel()
+            else:
+                self._worker.ticket.cancel()
             self.status.setText(self.t["cancelling"])
 
     def _check_workspace(self):
@@ -684,7 +854,10 @@ class WorkspaceDialog(QDialog):
         if changed:
             self._invalid = True
             if self._worker:
-                self._worker.ticket.cancel()
+                if self._primary_kind is not None and self._primary_controller is not None:
+                    self._primary_controller.cancel()
+                else:
+                    self._worker.ticket.cancel()
             self.status.setText(self.t["changed"])
             self._buttons()
 
@@ -715,6 +888,9 @@ class WorkspaceDialog(QDialog):
             self.cancel()
             event.ignore()
             return
+        if self._primary_controller is not None:
+            self._primary_controller.dispose()
+            self.primary_migration.clear_plan()
         self.disposed = True
         self._poll.stop()
         self.done(QDialog.DialogCode.Rejected)

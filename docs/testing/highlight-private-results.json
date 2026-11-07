@@ -1,0 +1,112 @@
+{
+  "gate": {
+    "exit_code": 0,
+    "seconds": 544.69,
+    "selection": [
+      "tests/test_highlight_draft_storage.py",
+      "tests/test_highlight_draft_recovery.py",
+      "tests/test_highlight_draft_remote.py",
+      "tests/test_material_navigation_handoff.py",
+      "tests/test_highlight_material_navigation.py",
+      "tests/test_legacy_highlight_material_preview.py",
+      "tests/test_material_reader_ui.py",
+      "tests/test_material_original_navigation_audit.py",
+      "tests/test_highlight_draft_revision.py",
+      "tests/test_claim_draft_storage.py",
+      "tests/test_research_review_drafts.py",
+      "tests/test_enrollment_review_draft_validation.py",
+      "tests/test_detached_review_drafts.py",
+      "tests/test_annotation_review.py"
+    ],
+    "frozen_inputs": 1142,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 196,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 2.424,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.145,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 541.167,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_highlight_draft_storage.py",
+          "tests/test_highlight_draft_recovery.py",
+          "tests/test_highlight_draft_remote.py",
+          "tests/test_material_navigation_handoff.py",
+          "tests/test_highlight_material_navigation.py",
+          "tests/test_legacy_highlight_material_preview.py",
+          "tests/test_material_reader_ui.py",
+          "tests/test_material_original_navigation_audit.py",
+          "tests/test_highlight_draft_revision.py",
+          "tests/test_claim_draft_storage.py",
+          "tests/test_research_review_drafts.py",
+          "tests/test_enrollment_review_draft_validation.py",
+          "tests/test_detached_review_drafts.py",
+          "tests/test_annotation_review.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 543.754
+    }
+  },
+  "new_functions": 23,
+  "new_cases": 45,
+  "groups": [
+    {
+      "theme": "保存與重開",
+      "cases": 37,
+      "seconds": 75.01,
+      "meaning": "兩份人工稿、競爭保存、失敗回滾、來源層變動與旁存"
+    },
+    {
+      "theme": "獨立恢復與關閉",
+      "cases": 2,
+      "seconds": 12.69,
+      "meaning": "舊資料夾不可用後接管再保存；已允許保存可收尾"
+    },
+    {
+      "theme": "真正遠端衝突",
+      "cases": 2,
+      "seconds": 10.61,
+      "meaning": "兩份SQLite及本機參考服務、斷線私存與單一標記拒絕"
+    },
+    {
+      "theme": "素材工作交接",
+      "cases": 4,
+      "seconds": 24.79,
+      "meaning": "A收尾時保留B請求，取消的跳轉不復活"
+    },
+    {
+      "theme": "既有相關回歸",
+      "cases": 151,
+      "seconds": 412.26,
+      "meaning": "原有主張／草稿／歷史恢復、群組標註與素材原文導航"
+    }
+  ],
+  "full_check_passed": false
+}

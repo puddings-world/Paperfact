@@ -8,6 +8,8 @@ import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication
+from test_manual_highlight_ui import loaded as _owned_reader
+from test_research_generation import workspace as _workspace
 
 from paper_daily import pdf_highlights, store
 from paper_daily.desktop.main import MainWindow, ReaderPage, palette
@@ -286,3 +288,278 @@ def test_showing_reader_retries_preparation_after_hidden_load(reader, monkeypatc
     widget.show()
     app.processEvents()
     assert calls
+
+
+workspace = _workspace
+owned_reader = _owned_reader
+
+
+@pytest.fixture
+def source_reader(owned_reader):
+    """The real resolved original and completed native load own the saved-input read."""
+    import time
+
+    w = owned_reader
+    w.widget._active_document = w.document
+    w.paper._loaded_document = w.document
+    end = time.monotonic() + 10
+    while (w.widget.pdf.position_source_version() is None
+           or w.widget.reading_positions.busy or w.widget.preparation.busy):
+        assert time.monotonic() < end, "Native source preparation did not settle"
+        w.app.processEvents()
+    assert w.widget.pdf.position_identity()[1] == w.document.path
+    w.widget._load_highlights(w.document.path, fingerprint=w.document.sha256)
+    assert w.widget._highlight_view.document is w.document
+    # Drain actual queued native-load/page-record admission before holding a new job.
+    # A ready accessor alone does not mean its already-posted GUI callbacks ran.
+    from PySide6.QtCore import QTimer
+
+    admitted = []
+    QTimer.singleShot(0, w.widget, lambda: admitted.append(True))
+    end = time.monotonic() + 10
+    while not admitted or w.widget.reading_positions.busy or w.widget.preparation.busy:
+        assert time.monotonic() < end, "Native load admission did not settle"
+        w.app.processEvents()
+    yield w
+    w.widget.preparation.dispose()
+    end = time.monotonic() + 10
+    while w.widget.preparation.busy:
+        assert time.monotonic() < end, "Owned mark preparation did not drain"
+        w.app.processEvents()
+
+
+def test_a_mark_drawn_before_the_saved_ones_arrive_is_kept(source_reader, monkeypatch):
+    """A held, real owned saved-input read cannot replace a newer manual UI mark."""
+    import threading
+    import time
+
+    from paper_daily import reader_saved_inputs as saved
+
+    w = source_reader
+    widget, app = w.widget, w.app
+    selection = widget.pdf.selection
+    gate, entered = threading.Event(), threading.Event()
+    original, real = saved.read, pdf_highlights.list_marks
+    snapshots = []
+
+    def slow(request, *, document=None):
+        found = original(request, document=document)
+        snapshots.append(found)
+        entered.set()
+        assert gate.wait(5)
+        return found
+
+    monkeypatch.setattr(saved, "read", slow)
+    widget.ask_box.setText("Unsent question")
+    widget.note_edit.setPlainText("Unsent note")
+    widget._load_highlights(w.paper.pdf_path, fingerprint=w.document.sha256, prepare=True)
+    try:
+        assert entered.wait(2), "Saved highlights did not enter the owned worker lane"
+        assert widget.preparation.busy and snapshots[0].data["marks"] == []
+        assert widget._pdf_fingerprint
+        assert selection.focus(selection.find(0, "Original experiment"))
+        selection.bar.buttons["highlight"].click()
+        assert len(real(widget.paper.id, widget._pdf_fingerprint)) == 1
+        assert len(selection._marks) == 1
+    finally:
+        gate.set()
+    end = time.monotonic() + 10
+    while widget.preparation.busy and time.monotonic() < end:
+        app.processEvents()
+    assert not widget.preparation.busy
+    assert len(real(widget.paper.id, widget._pdf_fingerprint)) == 1
+    assert len(selection._marks) == 1
+    assert selection._marks[0][0]["origin"] == "manual"
+    assert selection._marks[0][0]["quote"] == "Original experiment"
+    assert widget.ask_box.text() == "Unsent question"
+    assert widget.note_edit.toPlainText() == "Unsent note"
+
+
+def _until_marks(w, predicate):
+    import time
+
+    end = time.monotonic() + 10
+    while not predicate() and time.monotonic() < end:
+        w.app.processEvents()
+    assert predicate(), "Owned mark display did not reach its expected state"
+
+
+def _held_marks(monkeypatch):
+    import threading
+
+    from paper_daily import reader_saved_inputs as saved
+
+    entered, release, snapshots = threading.Event(), threading.Event(), []
+    original = saved.read
+
+    def read(request, *, document=None):
+        assert threading.current_thread() is not threading.main_thread()
+        result = original(request, document=document)
+        snapshots.append(result)
+        entered.set()
+        assert release.wait(5)
+        return result
+
+    monkeypatch.setattr(saved, "read", read)
+    return entered, release, snapshots
+
+
+@pytest.mark.parametrize("change", ["paper", "workspace", "source", "parent", "close"])
+def test_pending_saved_marks_cannot_repaint_a_changed_owner(
+    source_reader, monkeypatch, tmp_path, change
+):
+    w = source_reader
+    widget, selection = w.widget, w.widget.pdf.selection
+    entered, release, _snapshots = _held_marks(monkeypatch)
+    installed, original = [], selection.set_highlights
+
+    def display(marks):
+        installed.append(marks)
+        return original(marks)
+
+    monkeypatch.setattr(selection, "set_highlights", display)
+    widget.ask_box.setText("Keep current question")
+    widget.note_edit.setPlainText("Keep current note")
+    widget._load_highlights(w.document.path, prepare=True)
+    try:
+        assert entered.wait(2) and widget.preparation.busy
+        if change == "paper":
+            widget.paper = SimpleNamespace(id="other-paper", pdf_path=w.document.path)
+            widget._qa_epoch += 1
+        elif change == "workspace":
+            monkeypatch.setattr(store, "DB_PATH", tmp_path / "other.db")
+        elif change == "source":
+            other = tmp_path / "other.pdf"
+            with pymupdf.open() as doc:
+                doc.new_page().insert_text((40, 50), "Different source")
+                doc.save(other)
+            assert widget.pdf.load(other)
+        elif change == "parent":
+            from paper_daily import sync_capture
+
+            with store.connect() as conn, sync_capture.suppress_capture(conn):
+                conn.execute("DELETE FROM papers WHERE id=?", (w.paper.id,))
+        else:
+            assert not widget.preparation.request_close()
+            assert widget.isVisible() and widget.preparation.busy
+    finally:
+        release.set()
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert installed == [] and selection._marks == []
+    assert widget.ask_box.text() == "Keep current question"
+    assert widget.note_edit.toPlainText() == "Keep current note"
+    assert not (tmp_path / "other.db").exists()
+
+
+def test_removing_a_mark_while_saved_display_is_held_cannot_resurrect_it(
+    source_reader, monkeypatch
+):
+    w = source_reader
+    widget, selection = w.widget, w.widget.pdf.selection
+    assert selection.focus(selection.find(0, "Original experiment"))
+    selection.bar.buttons["highlight"].click()
+    assert len(selection._marks) == 1
+    entered, release, snapshots = _held_marks(monkeypatch)
+    widget._load_highlights(w.document.path, prepare=True)
+    try:
+        assert entered.wait(2) and len(snapshots[0].data["marks"]) == 1
+        assert selection.focus(selection.find(0, "Original experiment"))
+        selection.bar.buttons["highlight"].click()
+        assert not selection._marks
+    finally:
+        release.set()
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert not selection._marks
+    assert not pdf_highlights.list_marks(w.paper.id, w.document.sha256)
+
+
+def test_mark_display_coalesces_repeated_requests_and_primes_words_off_gui(
+    source_reader, monkeypatch
+):
+    import threading
+
+    from paper_daily.desktop import pdfselect, reader_preparation
+
+    w = source_reader
+    widget, selection = w.widget, w.widget.pdf.selection
+    assert selection.focus(selection.find(0, "Original experiment"))
+    selection.bar.buttons["highlight"].click()
+    entered, release, snapshots = _held_marks(monkeypatch)
+    reads, original = [], pdfselect.words_in
+    preparations, prepare = [], reader_preparation._prepare
+
+    def prepared(request, cancelled):
+        preparations.append(request.attempt)
+        return prepare(request, cancelled)
+
+    def words(*args):
+        assert threading.current_thread() is not threading.main_thread()
+        reads.append(args)
+        return original(*args)
+
+    monkeypatch.setattr(pdfselect, "words_in", words)
+    monkeypatch.setattr(reader_preparation, "_prepare", prepared)
+    widget._load_highlights(w.document.path, prepare=True)
+    try:
+        assert entered.wait(2)
+        for _ in range(30):
+            assert not widget.preparation.request(marks=True)
+        assert len(snapshots) == 1
+    finally:
+        release.set()
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert preparations == [0]
+    assert len(reads) == 1 and len(snapshots) == 2
+    assert len(selection._marks) == 1
+    assert len(pdf_highlights.list_marks(w.paper.id, w.document.sha256)) == 1
+
+
+def test_mark_display_error_keeps_prior_overlay_and_explicit_retry_works(
+    source_reader, monkeypatch
+):
+    from paper_daily.desktop import pdfselect
+
+    w = source_reader
+    widget, selection = w.widget, w.widget.pdf.selection
+    assert selection.focus(selection.find(0, "Original experiment"))
+    selection.bar.buttons["highlight"].click()
+    prior = list(selection._marks)
+    original = pdfselect.words_in
+
+    def fail(*_args):
+        raise ValueError("Private fixture parsing error")
+
+    monkeypatch.setattr(pdfselect, "words_in", fail)
+    widget._load_highlights(w.document.path, prepare=True)
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert selection._marks == prior
+    assert "Private fixture" not in widget.ask_status.text()
+    assert "reopen" in widget.ask_status.text()
+    monkeypatch.setattr(pdfselect, "words_in", original)
+    widget._load_highlights(w.document.path, prepare=True)
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert len(selection._marks) == 1
+    assert selection._marks[0][0]["quote"] == "Original experiment"
+
+
+def test_native_original_arrival_prepares_saved_overlay_on_the_owned_lane(
+    source_reader, monkeypatch
+):
+    w = source_reader
+    widget, selection = w.widget, w.widget.pdf.selection
+    assert selection.focus(selection.find(0, "Original experiment"))
+    selection.bar.buttons["highlight"].click()
+    entered, release, snapshots = _held_marks(monkeypatch)
+    widget.ask_box.setText("Keep reading question")
+    widget._document_arrived(w.paper.id, w.document)
+    try:
+        assert entered.wait(2) and widget.preparation.busy
+        assert len(snapshots[0].data["marks"]) == 1
+        assert selection._marks == []
+        assert widget._highlight_view.document is w.document
+    finally:
+        release.set()
+    _until_marks(w, lambda: not widget.preparation.busy)
+    assert len(selection._marks) == 1
+    assert selection._marks[0][0]["quote"] == "Original experiment"
+    assert widget.ask_box.text() == "Keep reading question"

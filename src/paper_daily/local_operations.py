@@ -9,13 +9,19 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 import time
 import uuid
+from contextlib import closing, contextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from paper_daily import store
+from paper_daily.claim_review_operations import OPERATIONS as CLAIM_REVIEW_OPERATIONS
+from paper_daily.highlight_review_operations import OPERATIONS as HIGHLIGHT_REVIEW_OPERATIONS
+from paper_daily.note_review_operations import OPERATIONS as NOTE_REVIEW_OPERATIONS
 
 PREVIEW_TTL = 7 * 86400
 MAX_BYTES = 2_000_000
@@ -95,9 +101,32 @@ def _page(limit, offset):
         raise OperationError("invalid_input", "limit must be 1–100; offset must be nonnegative")
 
 
+@contextmanager
+def _read():
+    database = Path(store.DB_PATH).resolve(strict=True)
+    with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=0.2)) as conn:
+        conn.row_factory = sqlite3.Row
+        yield conn
+
+
+def _recovery_workspace():
+    if not Path(store.DB_PATH).is_file():
+        return False
+    with _read() as conn:
+        return (
+            conn.execute("SELECT 1 FROM sqlite_master WHERE name='recovery_identity'").fetchone()
+            is not None
+        )
+
+
+def bootstrap():
+    if not _recovery_workspace():
+        store.init_db()
+
+
 def list_collections(limit=100, offset=0):
     _page(limit, offset)
-    with store.connect(timeout=0.2) as conn:
+    with _read() as conn:
         total = conn.execute("SELECT COUNT(*) FROM lists").fetchone()[0]
         rows = conn.execute(
             "SELECT l.id,l.name,COUNT(lp.paper_id) AS count FROM lists l "
@@ -115,7 +144,7 @@ def list_collections(limit=100, offset=0):
 def read_collection(list_id, limit=100, offset=0):
     _id(list_id, "list_id")
     _page(limit, offset)
-    with store.connect(timeout=0.2) as conn:
+    with _read() as conn:
         listing = conn.execute("SELECT id,name FROM lists WHERE id=?", (list_id,)).fetchone()
         if not listing:
             raise OperationError("not_found", "List does not exist in this workspace")
@@ -228,7 +257,7 @@ def discard(preview_id: str) -> dict:
 
 def inspect_operation(operation_id: str) -> dict:
     _id(operation_id, "operation_id")
-    with store.connect(timeout=0.2) as conn:
+    with _read() as conn:
         row = conn.execute(
             "SELECT result FROM integration_operations WHERE id=?", (operation_id,)
         ).fetchone()
@@ -404,6 +433,9 @@ def audit_paper(paper_id: str) -> dict:
 
 
 OPERATIONS = {
+    **NOTE_REVIEW_OPERATIONS,
+    **CLAIM_REVIEW_OPERATIONS,
+    **HIGHLIGHT_REVIEW_OPERATIONS,
     "lists.list": list_collections,
     "lists.read": read_collection,
     "analysis.audit": audit_paper,
@@ -429,6 +461,13 @@ def dispatch(operation: str, arguments: dict) -> dict:
             inspect.signature(fn).bind(**arguments)
         except TypeError:
             raise OperationError("invalid_input", "Missing or unexpected arguments") from None
+        if (
+            operation in {"imports.propose", "imports.commit", "imports.discard"}
+            and _recovery_workspace()
+        ):
+            raise OperationError(
+                "read_only_workspace", "Create an editable copy before changing recovered research"
+            )
         return {"ok": True, "result": fn(**arguments)}
     except OperationError as exc:
         return {"ok": False, "error": {"code": exc.code, "message": str(exc)}}

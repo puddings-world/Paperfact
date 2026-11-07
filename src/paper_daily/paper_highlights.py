@@ -74,8 +74,9 @@ def _path(paper_id: str):
     return CACHE_DIR / (hashlib.sha256(paper_id.encode()).hexdigest() + ".json")
 
 
-def cached(paper_id: str, pages: list[dict] | None = None) -> dict | None:
-    dest = _path(paper_id)
+def cached(paper_id: str, pages: list[dict] | None = None, *, cache_root=None) -> dict | None:
+    dest = (_path(paper_id) if cache_root is None else
+            Path(cache_root) / (hashlib.sha256(paper_id.encode()).hexdigest() + ".json"))
     if not dest.exists():
         return None
     try:
@@ -151,13 +152,14 @@ def _passages(chunk: list[dict]) -> list[dict]:
     return result
 
 
-def _resolve(items, passages: list[dict], chunk: list[dict]) -> list[dict]:
-    if not isinstance(items, list) or len(items) > 8:
-        raise ValueError("AI 重點清單格式或數量無效")
-    resolved = []
-    for item in items:
+def _resolve_items(items, passages: list[dict], chunk: list[dict]) -> tuple[list, list]:
+    if not isinstance(items, list):
+        raise _Unreadable(TRANSIENT + UNREADABLE)
+    resolved, dropped = [], []
+    for item in items[:8]:
         if not isinstance(item, dict):
-            raise ValueError("AI 重點格式無效")
+            dropped.append("AI 重點格式無效")
+            continue
         ids = [item["id"]] if "id" in item else item.get("ids")
         if (
             not isinstance(ids, list)
@@ -165,15 +167,64 @@ def _resolve(items, passages: list[dict], chunk: list[dict]) -> list[dict]:
             or any(type(i) is not int or not 0 <= i < len(passages) for i in ids)
             or ids != list(range(ids[0], ids[0] + len(ids)))
         ):
-            raise ValueError("AI 選取了無效或不相鄰的原文片段；舊結果未變動")
+            dropped.append("AI 選取了無效或不相鄰的原文片段；舊結果未變動")
+            continue
         first, last = passages[ids[0]], passages[ids[-1]]
         if first["part"] != last["part"]:
-            raise ValueError("AI 引句不可跨頁拼接；舊結果未變動")
+            dropped.append("AI 引句不可跨頁拼接；舊結果未變動")
+            continue
         text = chunk[first["part"]]["text"][first["start"] : last["end"]].strip()
         resolved.append(
             dict(text=text, page=first["page"], kind=item.get("kind"), reason=item.get("reason"))
         )
-    return _validate(resolved, chunk)
+    kept, invalid = _verify(resolved, chunk, maximum=8)
+    return kept, dropped + invalid
+
+
+def _verify(items, pages: list[dict], *, maximum: int) -> tuple[list, list]:
+    if not isinstance(items, list) or len(items) > maximum:
+        raise ValueError("AI 重點清單格式或數量無效")
+    result, seen, dropped = [], set(), []
+    for item in items:
+        if not isinstance(item, dict):
+            dropped.append("AI 重點格式無效")
+            continue
+        quote, reason, kind, page = (item.get(k) for k in ("text", "reason", "kind", "page"))
+        if (
+            not isinstance(quote, str)
+            or not 20 <= len(quote) <= 1600
+            or not isinstance(reason, str)
+            or not reason.strip()
+            or len(reason) > 1200
+            or kind not in KINDS
+            or (page is not None and type(page) is not int)
+        ):
+            dropped.append("AI 重點缺少有效原句、理由、分類或頁碼")
+            continue
+        quote = normalize(quote)
+        if not any(p["page"] == page and quote in p["text"] for p in pages):
+            dropped.append("AI 選句無法在所標示的原文頁面核對；舊結果未變動")
+            continue
+        if quote in seen:
+            continue
+        seen.add(quote)
+        result.append(
+            dict(
+                text=quote,
+                reason=reason.strip(),
+                kind=kind,
+                page=page,
+                source=f"page:{page}" if page is not None else "original",
+            )
+        )
+    return result, dropped
+
+
+def _resolve(items, passages: list[dict], chunk: list[dict]) -> list[dict]:
+    kept, dropped = _resolve_items(items, passages, chunk)
+    if dropped and not kept:
+        raise ValueError(dropped[0])
+    return kept
 
 
 def _validate(items, pages: list[dict], *, maximum: int = 8) -> list[dict]:
@@ -212,10 +263,59 @@ def _validate(items, pages: list[dict], *, maximum: int = 8) -> list[dict]:
     return result
 
 
+class _Unreadable(ValueError):
+    """The model answered, but not with the JSON the prompt asked for."""
+
+
+TRANSIENT = "暫時性失敗："
+UNREADABLE = "AI 回覆格式無法解析，請重試；舊結果未變動。"
+# Failures a later attempt can fix on its own. Matched in lower case against the
+# provider reasons llm.complete_result passes through.
+_TRANSIENT_NEEDLES = (
+    "timed out",
+    "逾時",
+    "request failed",
+    "unavailable",
+    "http 429",
+    "http 500",
+    "http 502",
+    "http 503",
+    "http 504",
+    "http 529",
+    "api error: 500",
+    "api error: 502",
+    "api error: 503",
+    "api error: 504",
+    "api error: 529",
+    "rate limit",
+    "速率上限",
+    "overloaded",
+    "could not run",
+    "cli 失敗",
+    "invalid json",
+    "non-object reply",
+    "未完成回覆",
+    "未回傳完整",
+    "未包含完整正文",
+)
+
+
+def transient(reason: str) -> bool:
+    """Whether a reason from `generate` / `prepare_reading` is worth retrying later."""
+    return (reason or "").startswith(TRANSIENT)
+
+
+def _call_failure(reason: str) -> str:
+    low = (reason or "").lower()
+    if any(needle in low for needle in _TRANSIENT_NEEDLES):
+        return TRANSIENT + reason
+    return reason
+
+
 def _reply(prompt: str, cfg, receipts: list) -> dict:
     answer = llm.complete_result(prompt, system=SYSTEM, task="paper_highlights", cfg=cfg)
     if answer.text is None:
-        raise ValueError(answer.reason)
+        raise ValueError(_call_failure(answer.reason))
     receipts.append(
         dict(
             backend=answer.backend,
@@ -224,14 +324,10 @@ def _reply(prompt: str, cfg, receipts: list) -> dict:
             request_id=answer.request_id,
         )
     )
-    text = answer.text.strip()
-    # Some providers wrap a JSON-only response in a code fence.
-    if text.startswith(chr(96) * 3):
-        text = re.sub(r"^" + chr(96) * 3 + r"(?:json)?\s*|\s*" + chr(96) * 3 + r"$", "", text)
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("AI 未回傳 JSON 物件")
-    return data
+    try:
+        return llm.reply_json(answer.text, expect=dict)
+    except ValueError:
+        raise _Unreadable(TRANSIENT + UNREADABLE) from None
 
 
 def _rank(items: list[dict], cfg, receipts: list) -> list[dict]:
@@ -246,15 +342,53 @@ def _rank(items: list[dict], cfg, receipts: list) -> list[dict]:
         receipts,
     )
     ids = data.get("ids")
-    if (
-        not isinstance(ids, list)
-        or not ids
-        or len(ids) > 16
-        or any(type(i) is not int or not 0 <= i < len(items) for i in ids)
-        or len(set(ids)) != len(ids)
-    ):
+    if not isinstance(ids, list):
         raise ValueError("AI 研究重點排序無效；舊結果未變動")
-    return [items[i] for i in ids]
+    ranked = []
+    for i in ids:
+        if type(i) is int and 0 <= i < len(items) and i not in ranked:
+            ranked.append(i)
+    if not ranked:
+        raise ValueError("AI 研究重點排序無效；舊結果未變動")
+    return [items[i] for i in ranked[:16]]
+
+
+def _progress_key(pages, cfg):
+    # Store only a digest; no endpoint, account path, credential or prompt is
+    # copied into the progress envelope. Prior receipts keep actual attribution.
+    route = (
+        tuple(
+            getattr(cfg, name, None)
+            for name in (
+                "backend",
+                "profile",
+                "model",
+                "account_id",
+                "cli_home",
+                "base_url",
+                "max_tokens",
+            )
+        )
+        if not isinstance(cfg, str)
+        else cfg
+    )
+    return hashlib.sha256(repr((VERSION, CHUNK_CHARS, _hash(pages), route)).encode()).hexdigest()
+
+
+def _load_progress(path, key):
+    try:
+        if path.stat().st_size > 8 * 1024 * 1024:
+            return {}
+        data = json.loads(path.read_text("utf-8"))
+        if (
+            isinstance(data, dict)
+            and data.get("key") == key
+            and isinstance(data.get("chunks"), dict)
+        ):
+            return data["chunks"]
+    except (OSError, ValueError):
+        pass
+    return {}
 
 
 def generate(paper_id: str, *, force: bool = False, cfg=None) -> tuple[dict | None, str]:
@@ -265,49 +399,94 @@ def generate(paper_id: str, *, force: bool = False, cfg=None) -> tuple[dict | No
         existing = cached(paper_id, pages)
         if existing is not None and not force:
             return existing, "cached"
-        produced, reason = produce(pages, cfg=cfg)
+        cfg = cfg or llm.settings(task="paper_highlights")
+        progress_path = _path(paper_id).with_suffix(".chunks.json")
+        progress_key = _progress_key(pages, cfg)
+        done = _load_progress(progress_path, progress_key)
+
+        def remember(index, entry):
+            done[index] = entry
+            _atomic_json(progress_path, {"key": progress_key, "chunks": done})
+
+        produced, reason = produce(pages, cfg=cfg, previous_chunks=done, on_chunk=remember)
         if produced is None:
             return None, reason
         result = dict(paper_id=paper_id, **produced)
         if _hash(read_original(paper_id)) != result["source_hash"]:
             return None, "分析期間原文已變更，請重新分析；舊結果未變動。"
         _atomic_json(_path(paper_id), result)
+        progress_path.unlink(missing_ok=True)
         return result, reason
     except (ValueError, TypeError, KeyError, OSError, RuntimeError) as exc:
         return None, str(exc)
 
 
-def produce(pages: list[dict], *, cfg=None) -> tuple[dict | None, str]:
+def produce(
+    pages: list[dict], *, cfg=None, previous_chunks=None, on_chunk=None
+) -> tuple[dict | None, str]:
     """Generate from captured pages without reading global paths or saving a cache."""
     try:
         if not any(p["text"] for p in pages):
             return None, "沒有可讀取的原文文字，請先取得 PDF；掃描檔需先做 OCR。"
         cfg = cfg or llm.settings(task="paper_highlights")
-        chunks, receipts, candidates, seen = _chunks(pages), [], [], set()
+        chunks, receipts, candidates, seen, dropped = _chunks(pages), [], [], set(), []
         for index, chunk in enumerate(chunks):
-            passages = _passages(chunk)
-            data = _reply(
-                f"原文第 {index + 1}/{len(chunks)} 區塊。從以下完整區塊選最多8個高資訊量重點，"
-                "依重要性排序；沒有實質研究資訊可回傳空清單。"
-                "每項僅選一個片段的整數 id；不要輸出原句或自行提供頁碼。\n"
-                '格式：{"items":[{"id":0,"kind":"method",'
-                '"reason":"為什麼此句對理解研究重要"}]}\n'
-                + "kind 只能是 "
-                + ", ".join(KINDS)
-                + "\n"
-                + json.dumps(
-                    [{k: p[k] for k in ("id", "page", "text")} for p in passages],
-                    ensure_ascii=False,
-                ),
-                cfg,
-                receipts,
-            )
-            for item in _resolve(data.get("items"), passages, chunk):
+            prior = (previous_chunks or {}).get(str(index))
+            found = None
+            if isinstance(prior, dict) and set(prior) == {"items", "receipts"}:
+                try:
+                    found = _validate(prior["items"], chunk)
+                    saved_receipts = prior["receipts"]
+                    if not isinstance(saved_receipts, list) or len(saved_receipts) > 16:
+                        raise ValueError("Invalid cached generation receipts")
+                    for receipt in saved_receipts:
+                        if (
+                            not isinstance(receipt, dict)
+                            or set(receipt)
+                            != {
+                                "backend",
+                                "profile",
+                                "model",
+                                "request_id",
+                            }
+                            or any(
+                                v is not None and (not isinstance(v, str) or len(v) > 512)
+                                for v in receipt.values()
+                            )
+                        ):
+                            raise ValueError("Invalid cached generation receipt")
+                    receipts.extend(saved_receipts)
+                except (ValueError, TypeError, KeyError):
+                    found = None
+            if found is None:
+                passages = _passages(chunk)
+                receipt_start = len(receipts)
+                data = _reply(
+                    f"原文第 {index + 1}/{len(chunks)} 區塊。從以下完整區塊選最多8個高資訊量重點，"
+                    "依重要性排序；沒有實質研究資訊可回傳空清單。"
+                    "每項僅選一個片段的整數 id；不要輸出原句或自行提供頁碼。\n"
+                    '格式：{"items":[{"id":0,"kind":"method",'
+                    '"reason":"為什麼此句對理解研究重要"}]}\n'
+                    + "kind 只能是 "
+                    + ", ".join(KINDS)
+                    + "\n"
+                    + json.dumps(
+                        [{k: p[k] for k in ("id", "page", "text")} for p in passages],
+                        ensure_ascii=False,
+                    ),
+                    cfg,
+                    receipts,
+                )
+                found, invalid = _resolve_items(data.get("items"), passages, chunk)
+                dropped.extend(invalid)
+                if on_chunk is not None and len(chunks) > 1:
+                    on_chunk(str(index), {"items": found, "receipts": receipts[receipt_start:]})
+            for item in found:
                 if item["text"] not in seen:
                     seen.add(item["text"])
                     candidates.append(item)
         if not candidates:
-            return None, "AI 未選出可核對的研究重點；舊結果未變動。"
+            return None, dropped[0] if dropped else "AI 未選出可核對的研究重點；舊結果未變動。"
         if len(chunks) > 1:
             while len(candidates) > 32:
                 reduced = []

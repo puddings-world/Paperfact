@@ -1,0 +1,98 @@
+{
+  "kind": "manually reviewed scenario map, not generated-name summaries",
+  "scenarios": [
+    {
+      "title": "Complete local journey",
+      "setup": "A previously recorded source A and current local B; or no recorded original",
+      "actions": "Click Review, select, Stage, Confirm, Refresh, create a new backup, restore, create editable copy",
+      "outcomes": "Current B and retained A/explicit absence survive; drafts/raw originals unchanged; no automatic archive or account call",
+      "functions": [
+        "test_actual_buttons_prepare_review_backup_restore_and_editable_copy"
+      ]
+    },
+    {
+      "title": "Stop and repeated clicks",
+      "setup": "Real staging worker held on synthetic PDF",
+      "actions": "Repeat buttons, cancel or close while work is held",
+      "outcomes": "One worker/receipt; close waits for actual drain; no document intent after cancelled staging",
+      "functions": [
+        "test_actual_stage_and_commit_flood_have_one_worker_and_one_saved_receipt",
+        "test_actual_stage_cancel_or_close_drains_without_document_mutation"
+      ]
+    },
+    {
+      "title": "Queued stale delivery",
+      "setup": "Native thread finished with GUI install still queued",
+      "actions": "Replace source PDF or switch outer workspace before processing queued delivery",
+      "outcomes": "No accepted plan or foreign workspace write/read lock",
+      "functions": [
+        "test_queued_staging_delivery_rejects_changed_source_or_workspace"
+      ]
+    },
+    {
+      "title": "Actual application launch barriers",
+      "setup": "Real MainWindow and real held staging worker",
+      "actions": "Restart/update/verified installer/close, including hidden dialog",
+      "outcomes": "No installer, lost draft or abandoned worker; original owner remains bound",
+      "functions": [
+        "test_actual_main_entry_keeps_worker_owned_before_restart_update_or_close"
+      ]
+    },
+    {
+      "title": "Explicit retry and independent account settings",
+      "setup": "Failure or fake account settings change while local work is held",
+      "actions": "Refresh/review again, or finish the original local request",
+      "outcomes": "One saved result; no route/model selection; changed paper row preserved",
+      "functions": [
+        "test_actual_staging_failure_then_explicit_refresh_retry_has_one_saved_result",
+        "test_account_configuration_changes_cannot_reroute_local_staging",
+        "test_paper_update_while_staging_is_preserved_and_no_old_source_is_published"
+      ]
+    },
+    {
+      "title": "Readable compact review",
+      "setup": "Chinese 440x520 native dialog with full source hash",
+      "actions": "Stage a source and resize",
+      "outcomes": "No horizontal overflow; unchanged full text and height-for-width; actions reachable",
+      "functions": [
+        "test_small_native_staging_review_keeps_full_source_and_actions_reachable"
+      ]
+    },
+    {
+      "title": "Exact local setup and ownership",
+      "setup": "Existing complete binding, owned BlobStore, actual native identities",
+      "actions": "Stage, race source/parent/native/schema, update registration inside readiness",
+      "outcomes": "Refuse unknown/foreign/stale data without ownership mint; preserve independent actor changes",
+      "functions": [
+        "test_explicit_setup_refuses_foreign_ledger_without_replacing_it",
+        "test_setup_checks_actual_connection_path_not_only_journal_path",
+        "test_store_native_identity_is_not_recaptured_after_initial_binding_read",
+        "test_readiness_rejects_exact_scope_change_inside_status"
+      ]
+    },
+    {
+      "title": "Partial batches and first registration",
+      "setup": "One bootstrap original, then registered multi-paper batch",
+      "actions": "Prepare one first; explicitly refresh/review remaining; cancel/fail after an atomic leaf commit",
+      "outcomes": "Completed papers remain; remaining papers can be retried without duplicates",
+      "functions": [
+        "test_first_registration_requires_one_paper_then_explicit_second_review",
+        "test_batch_cancel_after_commit_reports_that_success_and_stops_remaining",
+        "test_partial_failure_is_reported_and_retry_does_not_duplicate_committed_paper"
+      ]
+    }
+  ],
+  "not_proven": [
+    "full project integration/check",
+    "real owner data or real account/service/device acceptance",
+    "power-loss crash recovery",
+    "scientific quality/model accuracy",
+    "CLI/MCP entry or missing-owned-store setup"
+  ],
+  "local_case_counts": {
+    "tests/test_workspace_primary_migration.py": 30,
+    "tests/test_legacy_primary_migration.py": 29,
+    "tests/test_workspace_primary_migration_ui.py": 16,
+    "tests/test_workspace_dialog.py": 13
+  }
+}

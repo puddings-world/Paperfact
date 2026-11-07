@@ -38,7 +38,8 @@ def test_progress_updates_rows_without_resetting_selection_and_keeps_list_identi
     def worker(pid, progress, cancel):
         calls.append(pid)
         progress("downloading", 512, 1024, "")
-        entered.set()
+        if pid == "p2":
+            entered.set()  # Wait for the exact row whose 50% state is asserted.
         assert release.wait(3)
         dest = tmp_path / (pid + ".pdf")
         dest.write_bytes(b"synthetic saved bytes")

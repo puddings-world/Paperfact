@@ -434,3 +434,63 @@ def test_a_slide_that_cannot_be_fixed_is_named(research, monkeypatch):
     monkeypatch.setattr(llm, "complete_result", model)
     deck, reason = _generate()
     assert deck is None and "第 3 頁" in reason
+
+
+def _generate_from(monkeypatch, text, slide_count=4):
+    monkeypatch.setattr(llm, "complete_result", lambda *a, **k: Completion(text))
+    return slides.generate(
+        "ref:deck",
+        mode="guide",
+        audience="",
+        minutes=10,
+        slide_count=slide_count,
+        inputs={"original", "dive"},
+    )
+
+
+def _reply_with(count):
+    raw = json.loads(reply())
+    raw["slides"] = [dict(raw["slides"][0], title=f"Section {i + 1}") for i in range(count)]
+    return json.dumps(raw)
+
+
+def test_a_deck_one_page_long_is_trimmed_before_its_closing_slide(research, monkeypatch):
+    generated, reason = _generate_from(monkeypatch, _reply_with(5))
+    assert reason == "ok"
+    assert [s.title for s in generated.slides] == [
+        "Section 1", "Section 2", "Section 3", "Section 5"
+    ]
+
+
+def test_a_deck_one_page_short_is_kept(research, monkeypatch):
+    generated, reason = _generate_from(monkeypatch, _reply_with(3))
+    assert reason == "ok" and len(generated.slides) == 3
+
+
+def test_a_deck_far_from_the_requested_length_is_rejected(research, monkeypatch):
+    generated, reason = _generate_from(monkeypatch, _reply_with(8))
+    assert generated is None and "要 4 頁，AI 給了 8 頁" in reason
+
+
+def test_a_deck_wrapped_in_prose_and_fences_is_read(research, monkeypatch):
+    text = "以下是簡報 [草稿]：\n```json\n" + reply() + "\n```\n希望有幫助。"
+    generated, reason = _generate_from(monkeypatch, text)
+    assert reason == "ok" and len(generated.slides) == 4
+
+
+def test_an_unreadable_reply_names_no_parser_internals(research, monkeypatch):
+    generated, reason = _generate_from(monkeypatch, '{"title": "Cut off", "slides": [')
+    assert generated is None and "AI 回覆格式無法解析，請重試" in reason
+    assert "Expecting" not in reason and "char" not in reason
+
+
+def test_generation_can_leave_saving_to_the_caller(research, deck, monkeypatch):
+    slides.save_deck(deck)
+    before = slides._path(deck.paper_id, deck.mode).read_bytes()
+    monkeypatch.setattr(llm, "complete_result", lambda *a, **k: Completion(reply()))
+    generated, reason = slides.generate(
+        "ref:deck", mode="guide", audience="", minutes=10, slide_count=4,
+        inputs={"original", "dive"}, save=False,
+    )
+    assert reason == "ok" and generated.deck_id != deck.deck_id
+    assert slides._path(deck.paper_id, deck.mode).read_bytes() == before

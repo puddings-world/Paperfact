@@ -32,7 +32,7 @@ def test_status_says_what_exists(monkeypatch, tmp_path):
         "INSERT INTO close_readings(paper_id, body, written_at) VALUES ('ref:a', 'x', 'now')"
     )
     store.set_kv(conn, "followups.checked.ref:a", "2026-10-08")
-    assert not analyze.status(conn, "ref:a")["later"]
+    assert analyze.status(conn, "ref:a")["later"] is False
     conn.execute(
         "INSERT INTO paper_context(paper_id,summary,written_at) VALUES ('ref:a','Context','now')"
     )

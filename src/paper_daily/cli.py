@@ -252,8 +252,11 @@ def cmd_doctor(args) -> int:
         line("LLM backend", f"invalid AI settings: {exc}", False)
     else:
         if cfg.backend == "none":
-            line("LLM backend", "optional -- choose AI settings when you want AI assistance",
-                 not getattr(args, "ai", False))
+            line(
+                "LLM backend",
+                "optional -- choose AI settings when you want AI assistance",
+                not getattr(args, "ai", False),
+            )
         elif getattr(args, "ai", False):
             # Being configured is not the same as being able to answer: a whole night of
             # dives failed on an expired OAuth session while this check said "installed".
@@ -280,11 +283,13 @@ def cmd_doctor(args) -> int:
         )
         task = subprocess.run(
             ["schtasks", "/query", "/tn", "paper-daily nightly"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         line(
             "nightly task",
-            "registered" if task.returncode == 0
+            "registered"
+            if task.returncode == 0
             else "not registered -- run scripts/register-nightly.ps1",
         )
 
@@ -430,9 +435,7 @@ def cmd_sync_queue(args) -> int:
             "reason": r["reason"],
             # Lets the reader show which rows it can actually open with text, and
             # filter down to them, without a per-row lookup against the store.
-            "hasText": (
-                prefetched / (re.sub(r"[^A-Za-z0-9._-]", "_", r["id"]) + ".json")
-            ).exists(),
+            "hasText": (prefetched / (re.sub(r"[^A-Za-z0-9._-]", "_", r["id"]) + ".json")).exists(),
         }
         for r in rows
     ]
@@ -548,8 +551,12 @@ def cmd_dive_ahead(args) -> int:
         print("skipped: analysis runs only on an explicit user action")
         return 0
     n = dive.dive_ahead(
-        count=args.n, log=_log, paper_id=args.paper, list_id=args.list,
-        rewrite=args.rewrite, jobs=args.jobs,
+        count=args.n,
+        log=_log,
+        paper_id=args.paper,
+        list_id=args.list,
+        rewrite=args.rewrite,
+        jobs=args.jobs,
     )
     print(f"{n} deep dive(s) written")
     return 0
@@ -705,8 +712,11 @@ def cmd_duplicates(args) -> int:
     if args.json:
         print(json.dumps([g.__dict__ for g in groups], ensure_ascii=False, indent=1))
         return 0
-    labels = {"same": "same paper", "check": "check: identifiers match, titles differ",
-              "likely": "likely the same paper"}
+    labels = {
+        "same": "same paper",
+        "check": "check: identifiers match, titles differ",
+        "likely": "likely the same paper",
+    }
     for g in groups:
         print(f"{labels[g.kind]}  ({', '.join(g.reasons)})")
         for pid in g.papers:
@@ -762,6 +772,7 @@ def cmd_cites(args) -> int:
     """Work out what each reference is doing in a paper, so the useful ones stand out."""
     from paper_daily import cites
 
+    completion_calls = getattr(args, "completion_calls", 0)
     if args.list:
         # A whole list in one go, skipping what is already analysed: each paper is a
         # model call of a minute or two, and a rerun should only pay for the gaps.
@@ -771,13 +782,19 @@ def cmd_cites(args) -> int:
                 if conn.execute("SELECT 1 FROM cites WHERE paper_id=? LIMIT 1", (pid,)).fetchone():
                     continue
             _log(pid)
-            done += bool(cites.analyse(pid, limit=args.limit, log=_log))
+            done += bool(
+                cites.analyse(
+                    pid, limit=args.limit, log=_log, max_additional_calls=completion_calls
+                )
+            )
         print(f"{done} paper(s) analysed")
         return 0
     if not args.paper_id:
         print("cites needs a paper id or --list", file=sys.stderr)
         return 2
-    n = cites.analyse(args.paper_id, limit=args.limit, log=_log)
+    n = cites.analyse(
+        args.paper_id, limit=args.limit, log=_log, max_additional_calls=completion_calls
+    )
     if not n:
         return 1
     with connect() as conn:
@@ -799,7 +816,10 @@ def cmd_share(args) -> int:
         if not args.ids:
             print("share draft needs at least one paper id", file=sys.stderr)
             return 2
-        made = share.draft(args.ids, slug=args.slug, with_compare=args.compare)
+        options = dict(slug=args.slug, with_compare=args.compare)
+        if getattr(args, "force", False):
+            options["force"] = True
+        made = share.draft(args.ids, **options)
         print(f"draft: {made['path']}")
         if made["path"].name == "draft.new.md":
             print("  draft.md already exists and was left alone; merge what you want from this one")
@@ -923,10 +943,7 @@ def cmd_web_assets(args) -> int:
     from paper_daily import web_assets
 
     done = web_assets.install(log=_log)
-    print(
-        f"web assets: {', '.join(done) if done else 'already installed'} "
-        f"in {web_assets.WEB_DIR}"
-    )
+    print(f"web assets: {', '.join(done) if done else 'already installed'} in {web_assets.WEB_DIR}")
     return 0
 
 
@@ -989,8 +1006,14 @@ def cmd_list_import_url(args) -> int:
         with TemporaryDirectory(prefix="paperfact-shared-") as folder:
             source = research_service.download_bundle(args.url, Path(folder) / "shared.zip")
             preview = research_service.inspect_bundle(source)
-            result = preview if args.preview else research_service.import_bundle(
-                source, replace=args.replace, pdfs=False,
+            result = (
+                preview
+                if args.preview
+                else research_service.import_bundle(
+                    source,
+                    replace=args.replace,
+                    pdfs=False,
+                )
             )
             print(json.dumps(result, ensure_ascii=False, default=str))
         return 0
@@ -1064,9 +1087,13 @@ def cmd_llm(args) -> int:
     from paper_daily import llm
 
     fields = {
-        "backend": args.backend, "model": args.model, "api_key": args.key,
-        "base_url": args.base_url, "api_key_env": args.key_env,
-        "max_tokens": args.max_tokens, "token_parameter": args.token_parameter,
+        "backend": args.backend,
+        "model": args.model,
+        "api_key": args.key,
+        "base_url": args.base_url,
+        "api_key_env": args.key_env,
+        "max_tokens": args.max_tokens,
+        "token_parameter": args.token_parameter,
         "requires_key": args.requires_key,
     }
     try:
@@ -1208,10 +1235,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_status)
 
     sp = sub.add_parser("doctor", help="check local prerequisites without model or network calls")
-    sp.add_argument("--ai", action="store_true",
-                    help="explicitly test the selected AI with a model call (may use quota)")
-    sp.add_argument("--sources", action="store_true",
-                    help="also contact the optional scholarly source services")
+    sp.add_argument(
+        "--ai",
+        action="store_true",
+        help="explicitly test the selected AI with a model call (may use quota)",
+    )
+    sp.add_argument(
+        "--sources", action="store_true", help="also contact the optional scholarly source services"
+    )
     sp.set_defaults(func=cmd_doctor)
 
     sp = sub.add_parser("reader-doc", help="write the reader artifact's JSON for a day")
@@ -1223,72 +1254,95 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_sync_queue)
 
     sp = sub.add_parser("app", help="open the desktop reader")
-    sp.add_argument("--next", action="store_true",
-                    help="open straight onto the next unread paper")
-    sp.add_argument("--restart", action="store_true",
-                    help="save drafts and safely restart the running reader")
-    sp.add_argument("--paper", metavar="ID",
-                    help="open this paper, in the running reader if there is one")
+    sp.add_argument("--next", action="store_true", help="open straight onto the next unread paper")
+    sp.add_argument(
+        "--restart", action="store_true", help="save drafts and safely restart the running reader"
+    )
+    sp.add_argument(
+        "--paper", metavar="ID", help="open this paper, in the running reader if there is one"
+    )
     sp.set_defaults(func=cmd_app)
 
     sp = sub.add_parser("followups", help="what cites a paper across the field, judged")
     sp.add_argument("paper_ids", nargs="*")
     sp.add_argument("--list", default=None, help="every paper in a reading list")
-    sp.add_argument("--ahead", type=int, default=0,
-                    help="the next N listed or queued papers never asked about")
-    sp.add_argument("--with-cites", action="store_true",
-                    help="analyse the references first when a paper has none")
+    sp.add_argument(
+        "--ahead", type=int, default=0, help="the next N listed or queued papers never asked about"
+    )
+    sp.add_argument(
+        "--with-cites",
+        action="store_true",
+        help="analyse the references first when a paper has none",
+    )
     sp.set_defaults(func=cmd_followups)
 
-    sp = sub.add_parser("close-read",
-                        help="walk a paper's method and experiments section by section")
+    sp = sub.add_parser(
+        "close-read", help="walk a paper's method and experiments section by section"
+    )
     sp.add_argument("paper_ids", nargs="*")
     sp.add_argument("--list", default=None, help="every paper in a reading list ('all' for all)")
     sp.add_argument("--jobs", type=int, default=3, help="how many to write at once")
-    sp.add_argument("--rewrite", action="store_true",
-                    help="also redo ones written under an older specification")
+    sp.add_argument(
+        "--rewrite", action="store_true", help="also redo ones written under an older specification"
+    )
     sp.add_argument("--force", action="store_true", help="redo every paper given")
     sp.set_defaults(func=cmd_close_read)
 
     sp = sub.add_parser("fonts", help="download the typefaces the reader ships with")
     sp.set_defaults(func=cmd_fonts)
 
-    sp = sub.add_parser(
-        "web-assets", help="download the formula, code and diagram renderers"
-    )
+    sp = sub.add_parser("web-assets", help="download the formula, code and diagram renderers")
     sp.set_defaults(func=cmd_web_assets)
 
     sp = sub.add_parser("storage", help="disk use by folder and by list, and what is prunable")
-    sp.add_argument("--cache-days", type=int, default=30,
-                    help="HTTP cache entries older than this count as prunable (default 30)")
+    sp.add_argument(
+        "--cache-days",
+        type=int,
+        default=30,
+        help="HTTP cache entries older than this count as prunable (default 30)",
+    )
     sp.set_defaults(func=cmd_storage)
 
     sp = sub.add_parser(
         "prune", help="delete old HTTP cache and unclaimed papers' files (dry run by default)"
     )
-    sp.add_argument("--cache-days", type=int, default=30,
-                    help="delete HTTP cache entries older than this many days (default 30)")
+    sp.add_argument(
+        "--cache-days",
+        type=int,
+        default=30,
+        help="delete HTTP cache entries older than this many days (default 30)",
+    )
     sp.add_argument("--yes", action="store_true", help="actually delete; without it, only list")
     sp.add_argument("--vacuum", action="store_true", help="also compact papers.db afterwards")
     sp.set_defaults(func=cmd_prune)
 
-    sp = sub.add_parser("list-export",
-                        help="pack a reading list and its analyses into one file to share")
+    sp = sub.add_parser(
+        "list-export", help="pack a reading list and its analyses into one file to share"
+    )
     sp.add_argument("list_id")
     sp.add_argument("-o", "--out", default=None, help="the .zip to write")
     sp.add_argument("--no-notes", action="store_true", help="leave out notes and Q&A")
-    sp.add_argument("--with-pdfs", action="store_true", default=True,
-                    help="include all local PDFs (default)")
-    sp.add_argument("--without-pdfs", action="store_false", dest="with_pdfs",
-                    help="export a smaller package using verified download URLs instead")
+    sp.add_argument(
+        "--with-pdfs", action="store_true", default=True, help="include all local PDFs (default)"
+    )
+    sp.add_argument(
+        "--without-pdfs",
+        action="store_false",
+        dest="with_pdfs",
+        help="export a smaller package using verified download URLs instead",
+    )
     sp.set_defaults(func=cmd_list_export)
 
     sp = sub.add_parser("list-import", help="bring in a list exported with list-export")
     sp.add_argument("path")
-    sp.add_argument("--replace", action="store_true",
-                    help="overwrite analyses and files that already exist here")
-    sp.add_argument("--no-pdfs", action="store_true",
-                    help="do not download the PDFs from their verified URLs")
+    sp.add_argument(
+        "--replace",
+        action="store_true",
+        help="overwrite analyses and files that already exist here",
+    )
+    sp.add_argument(
+        "--no-pdfs", action="store_true", help="do not download the PDFs from their verified URLs"
+    )
     sp.set_defaults(func=cmd_list_import)
 
     sp = sub.add_parser("list-import-url", help="download and import a shared research package")
@@ -1304,23 +1358,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("survey", help="a survey of the field a reading list covers")
     sp.add_argument("list_id")
-    sp.add_argument("--force", action="store_true",
-                    help="replace a survey that was edited by hand")
+    sp.add_argument("--force", action="store_true", help="replace a survey that was edited by hand")
     sp.set_defaults(func=cmd_survey)
 
-    sp = sub.add_parser("cite-links",
-                        help="which of a paper's references and citing works cite each other")
+    sp = sub.add_parser(
+        "cite-links", help="which of a paper's references and citing works cite each other"
+    )
     sp.add_argument("paper_ids", nargs="*")
     sp.add_argument("--list", default=None, help="every paper in a reading list")
     sp.set_defaults(func=cmd_cite_links)
 
     sp = sub.add_parser("share", help="a page about one or more papers, to share")
     sp.add_argument("action", choices=("draft", "build"))
-    sp.add_argument("ids", nargs="*",
-                    help="draft: paper ids, in reading order; build: the draft's slug")
+    sp.add_argument(
+        "ids", nargs="*", help="draft: paper ids, in reading order; build: the draft's slug"
+    )
     sp.add_argument("--slug", default=None, help="folder name under data/share/")
-    sp.add_argument("--compare", action="store_true",
-                    help="draft: have the model write the side-by-side from the dives")
+    sp.add_argument(
+        "--compare",
+        action="store_true",
+        help="draft: have the model write the side-by-side from the dives",
+    )
+    sp.add_argument(
+        "--force",
+        action="store_true",
+        help="draft: explicitly regenerate the AI comparison when a draft exists",
+    )
     sp.set_defaults(func=cmd_share)
 
     sp = sub.add_parser("backfill", help="fill in missing authors, abstracts and ids")
@@ -1329,16 +1392,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("dive-ahead", help="pre-write deep dives for the next N papers")
     sp.add_argument("n", nargs="?", type=int, default=3)
-    sp.add_argument("--paper", default=None,
-                    help="write one specific paper instead, read or not")
-    sp.add_argument("--list", default=None,
-                help="take the next N from a reading list, or 'all' for every list")
-    sp.add_argument("--rewrite", action="store_true",
-                    help="rewrite dives written before the current spec, in queue order")
-    sp.add_argument("--jobs", type=int, default=1,
-                    help="how many dives to write at once (each one waits on the model)")
-    sp.add_argument("--scheduled", action="store_true",
-                    help="skip automatic rewrites when analysis is manual-only")
+    sp.add_argument("--paper", default=None, help="write one specific paper instead, read or not")
+    sp.add_argument(
+        "--list", default=None, help="take the next N from a reading list, or 'all' for every list"
+    )
+    sp.add_argument(
+        "--rewrite",
+        action="store_true",
+        help="rewrite dives written before the current spec, in queue order",
+    )
+    sp.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="how many dives to write at once (each one waits on the model)",
+    )
+    sp.add_argument(
+        "--scheduled",
+        action="store_true",
+        help="skip automatic rewrites when analysis is manual-only",
+    )
     sp.set_defaults(func=cmd_dive_ahead)
 
     sp = sub.add_parser("import-list", help="import a bibliography as a reading list")
@@ -1366,8 +1439,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--base-url", dest="base_url", help="API base URL, including /v1 when required")
     sp.add_argument("--max-tokens", type=int, help="maximum output tokens per request")
     sp.add_argument("--token-parameter", choices=["max_completion_tokens", "max_tokens"])
-    sp.add_argument("--requires-key", action=argparse.BooleanOptionalAction, default=None,
-                    help="use --no-requires-key for a local service without authentication")
+    sp.add_argument(
+        "--requires-key",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="use --no-requires-key for a local service without authentication",
+    )
     sp.add_argument("--test", action="store_true", help="send one small request and report")
     sp.set_defaults(func=cmd_llm)
 
@@ -1376,8 +1453,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("citation", nargs="?", help="a citation, a title, or an arXiv id")
     sp.add_argument("--file", help="read the reference(s) from a file instead")
     sp.add_argument("--doi", help="resolve by DOI instead of searching for the title")
-    sp.add_argument("--create", metavar="NAME",
-                    help="create the list under this display name if it does not exist")
+    sp.add_argument(
+        "--create",
+        metavar="NAME",
+        help="create the list under this display name if it does not exist",
+    )
     sp.set_defaults(func=cmd_list_add)
 
     sp = sub.add_parser("list-remove", help="drop a paper from a reading list")
@@ -1401,47 +1481,63 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("paper_id")
     sp.set_defaults(func=cmd_queue_remove)
 
-    sp = sub.add_parser("resolve-missing",
-                        help="retry the PDF hunt for papers that have no route to one")
+    sp = sub.add_parser(
+        "resolve-missing", help="retry the PDF hunt for papers that have no route to one"
+    )
     sp.add_argument("n", nargs="?", type=int, default=20)
     sp.set_defaults(func=cmd_resolve_missing)
 
     sp = sub.add_parser("venues", help="find where preprint-only papers were published")
     sp.add_argument("paper_ids", nargs="*")
-    sp.add_argument("--list", default=None,
-                    help="every paper in a reading list, or 'all' for every list")
+    sp.add_argument(
+        "--list", default=None, help="every paper in a reading list, or 'all' for every list"
+    )
     sp.set_defaults(func=cmd_venues)
 
-    sp = sub.add_parser("duplicates",
-                        help="propose library records that are the same paper (changes nothing)")
-    sp.add_argument("--list", default=None,
-                    help="only groups touching a reading list's papers, or 'all' for every list")
+    sp = sub.add_parser(
+        "duplicates", help="propose library records that are the same paper (changes nothing)"
+    )
+    sp.add_argument(
+        "--list",
+        default=None,
+        help="only groups touching a reading list's papers, or 'all' for every list",
+    )
     sp.add_argument("--json", action="store_true", help="machine-readable output")
     sp.set_defaults(func=cmd_duplicates)
 
-    sp = sub.add_parser(
-        "analyze", help="make everything a paper is missing: PDF, dive, 承先, 啟後"
-    )
+    sp = sub.add_parser("analyze", help="make everything a paper is missing: PDF, dive, 承先, 啟後")
     sp.add_argument("paper_ids", nargs="*")
-    sp.add_argument("--list", default=None,
-                    help="every paper in a reading list, or 'all' for every list")
+    sp.add_argument(
+        "--list", default=None, help="every paper in a reading list, or 'all' for every list"
+    )
     sp.add_argument("--jobs", type=int, default=3, help="papers analysed at once")
-    sp.add_argument("--retry", action="store_true",
-                    help="try again the steps that failed before (e.g. a missing PDF)")
-    sp.add_argument("--ahead", type=int, metavar="N", default=0,
-                    help="the next N unread papers still missing something, in reading "
-                    "order: the main queue, or --list ID / --list all")
-    sp.add_argument("--scheduled", action="store_true",
-                    help="the nightly run: as often and as many as the reader's 分析排程 "
-                    "settings say, recording what it finished so the reader can announce it")
+    sp.add_argument(
+        "--retry",
+        action="store_true",
+        help="try again the steps that failed before (e.g. a missing PDF)",
+    )
+    sp.add_argument(
+        "--ahead",
+        type=int,
+        metavar="N",
+        default=0,
+        help="the next N unread papers still missing something, in reading "
+        "order: the main queue, or --list ID / --list all",
+    )
+    sp.add_argument(
+        "--scheduled",
+        action="store_true",
+        help="the nightly run: as often and as many as the reader's 分析排程 "
+        "settings say, recording what it finished so the reader can announce it",
+    )
     sp.set_defaults(func=cmd_analyze)
 
     sp = sub.add_parser("resources", help="find a paper's code, data and models")
     sp.add_argument("paper_ids", nargs="*")
-    sp.add_argument("--list", default=None,
-                    help="every paper in a reading list, or 'all' for every list")
-    sp.add_argument("--force", action="store_true",
-                    help="look again at papers already checked")
+    sp.add_argument(
+        "--list", default=None, help="every paper in a reading list, or 'all' for every list"
+    )
+    sp.add_argument("--force", action="store_true", help="look again at papers already checked")
     sp.set_defaults(func=cmd_resources)
 
     sp = sub.add_parser("repdf", help="read a paper from another PDF, notes re-anchored")
@@ -1452,18 +1548,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("cites", help="what each reference is doing in a paper")
     sp.add_argument("paper_id", nargs="?")
-    sp.add_argument("--list", default=None,
-                    help="every paper in a reading list that has no analysis yet")
-    sp.add_argument("--limit", type=int, default=120,
-                    help="how many cited works with a citing sentence to analyse")
+    sp.add_argument(
+        "--list", default=None, help="every paper in a reading list that has no analysis yet"
+    )
+    sp.add_argument(
+        "--limit",
+        type=int,
+        default=120,
+        help="how many cited works with a citing sentence to analyse",
+    )
+    sp.add_argument(
+        "--completion-calls",
+        type=int,
+        choices=(0, 1, 2),
+        default=0,
+        help="extra AI calls for missing references (default: 0; each uses your account)",
+    )
     sp.set_defaults(func=cmd_cites)
 
     sp = sub.add_parser("cites-ahead", help="analyse citations for the next N papers")
     sp.add_argument("n", nargs="?", type=int, default=2)
-    sp.add_argument("--rewrite", action="store_true",
-                    help="redo papers analysed under an older specification")
-    sp.add_argument("--scheduled", action="store_true",
-                    help="skip automatic rewrites when analysis is manual-only")
+    sp.add_argument(
+        "--rewrite", action="store_true", help="redo papers analysed under an older specification"
+    )
+    sp.add_argument(
+        "--scheduled",
+        action="store_true",
+        help="skip automatic rewrites when analysis is manual-only",
+    )
     sp.set_defaults(func=cmd_cites_ahead)
 
     sp = sub.add_parser("lists", help="show the reading lists")
@@ -1481,8 +1593,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("prefetch", help="download + extract the next N queued papers")
     sp.add_argument("n", nargs="?", type=int, default=20)
     sp.add_argument("--force", action="store_true", help="re-extract papers already done")
-    sp.add_argument("--list", default=None,
-                help="fetch a reading list instead of the queue, or 'all' for every list")
+    sp.add_argument(
+        "--list",
+        default=None,
+        help="fetch a reading list instead of the queue, or 'all' for every list",
+    )
     sp.set_defaults(func=cmd_prefetch)
 
     sp = sub.add_parser("sync-read", help="mark the first N pending papers read")

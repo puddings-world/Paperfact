@@ -32,13 +32,18 @@ EXPLAIN = (
 
 
 def describe(
-    state: dict[str, bool], running: bool, failures: dict[str, str]
+    state: dict[str, bool], running: bool, failures: dict[str, str],
+    *, later_outcome: str | None = None, later_query_label: str | None = None,
 ) -> dict[str, object]:
     """What the bar says for a paper: the chips, the button (None for none) and
     whether the button is the one the view is waiting on."""
+    empty = (later_outcome == "queried_no_judged_inputs"
+             and not state.get("later") and not failures.get("later"))
     chips = []
     for step, name in SHOWN:
-        if state.get(step):
+        if step == "later" and empty:
+            chips.append(("todo", f"{name}: 已查詢，尚無可整理資料"))
+        elif state.get(step):
             chips.append(("done", f"{name} ✓"))
         elif running:
             chips.append(("busy", f"{name} …"))
@@ -46,9 +51,20 @@ def describe(
             chips.append(("warn", f"{name} ✗"))
         else:
             chips.append(("todo", name))
-    complete = all(state.get(step) for step, _ in SHOWN)
+    complete = all(state.get(step) or (step == "later" and empty) for step, _ in SHOWN)
     tip = [f"{analyze.STEPS[s]}：{'已完成' if ok else failures.get(s) or '尚未'}"
            for s, ok in state.items()]
+    if empty:
+        tip = [line for step, line in zip(state, tip, strict=True) if step != "later"]
+        tip.append(
+            "啟後：已查詢，尚無可整理的已判讀資料。"
+            " No overview generated: no judged references or later work in the current inputs."
+        )
+    if empty and later_query_label:
+        tip.append(later_query_label)
+    if complete and empty and not running:
+        return {"lead": "可用項目已處理", "chips": chips, "button": None,
+                "primary": False, "tip": "\n".join(tip)}
     if running:
         return {"lead": "深入分析中", "chips": chips, "button": "停止",
                 "primary": False, "tip": "\n".join(tip)}
@@ -146,7 +162,7 @@ class AnalysisBar(QWidget):
     def label_error(self, message):
         self.label.setToolTip(message)
 
-    def _apply_status(self, state, failures):
+    def _apply_status(self, state, failures, later_outcome=None):
         mine = self.win.analysis_running(self.paper_id)
         activity = getattr(self.win, "_analysis_activity", None)
         if mine and activity is not None:
@@ -156,7 +172,13 @@ class AnalysisBar(QWidget):
         busy = self.win.analysis_running()
         new = [s for s, ok in state.items() if ok and self._state and not self._state.get(s)]
         self._state = state
-        self._render(describe(state, mine, failures))
+        from paper_daily.desktop.later_outcome_status import PreparedEmptyStatus
+
+        checked = (later_outcome if isinstance(later_outcome, PreparedEmptyStatus)
+                   and later_outcome.unchanged() else None)
+        self._render(describe(state, mine, failures,
+                              later_outcome=checked.state if checked else None,
+                              later_query_label=checked.query_label if checked else None))
         if new:
             self.landed.emit(new)
         if busy and not self._poll.isActive():

@@ -46,7 +46,7 @@ def test_preflight_checks_task_route_and_does_not_run_on_a_changed_paper(monkeyp
     owner.paper_id = "first"
     bridge = ai_access.AccessBridge(owner)
     observed, callbacks = [], []
-    monkeypatch.setattr(llm, "settings", lambda task: Settings("codex", profile=task))
+    monkeypatch.setattr(llm, "settings", lambda task="default": Settings("codex", profile=task))
     monkeypatch.setattr(bridge, "check", lambda cfg, task: observed.append(cfg.profile) or "")
 
     def start(prompt, done, failed, call):
@@ -131,4 +131,33 @@ def test_missing_login_opens_one_account_picker_for_requested_feature(monkeypatc
     bridge.dialog.reject()
     assert bridge.dialog is None
     owner.deleteLater()
+    app.processEvents()
+
+
+def test_a_request_made_during_another_check_waits_instead_of_vanishing(monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    first, second = QWidget(), QWidget()
+    bridge = ai_access.AccessBridge(first)
+    monkeypatch.setattr(llm, "settings", lambda task="default": Settings("codex", profile=task))
+    checked = []
+    monkeypatch.setattr(bridge, "check", lambda cfg, task: checked.append(task) or "")
+    running = []
+
+    def start(prompt, done, failed, call):
+        value, _reason = call(prompt)
+        running.append(lambda: done(value))
+
+    monkeypatch.setattr(bridge.runner, "start", start)
+    monkeypatch.setattr(type(bridge.runner), "busy", property(lambda self: bool(running)))
+    ran = []
+    bridge.run(first, ["slides"], lambda: ran.append("slides"))
+    bridge.run(first, ["slides"], lambda: ran.append("slides again"))
+    bridge.run(second, ["survey"], lambda: ran.append("survey"))
+    assert checked == ["slides"] and len(running) == 1
+    running.pop()()
+    assert ran == ["slides"] and checked == ["slides", "survey"]
+    running.pop()()
+    assert ran == ["slides", "survey"]
+    first.deleteLater()
+    second.deleteLater()
     app.processEvents()

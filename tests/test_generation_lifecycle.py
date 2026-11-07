@@ -1,6 +1,7 @@
 """Offline generation must distinguish identical parent IDs after replacement."""
 
 import json
+import sqlite3
 from contextlib import closing
 
 import pytest
@@ -52,6 +53,15 @@ def test_metadata_change_preserves_epoch_and_target_only_edit(workspace):
 
 def test_observing_inside_transaction_does_not_commit_callers_writes(workspace):
     path, _, _ = workspace
+    from paper_daily.research_lifecycle import TABLE, TRIGGERS
+
+    # This scenario starts before lifecycle installation. Enrollment now installs
+    # epochs eagerly, so explicitly reconstruct the legacy fixture rather than
+    # accidentally observing an already-committed epoch.
+    with closing(sqlite3.connect(path)) as conn, conn:
+        for trigger in TRIGGERS:
+            conn.execute(f'DROP TRIGGER IF EXISTS "{trigger}"')
+        conn.execute(f'DROP TABLE IF EXISTS "{TABLE}"')
     with closing(generation._connect(path)) as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute("UPDATE papers SET title='Uncommitted' WHERE id='paper'")

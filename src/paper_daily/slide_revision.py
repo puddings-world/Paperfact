@@ -210,11 +210,17 @@ def _prepare(job):
     evidence = _evidence(job)
     if len(json.dumps(evidence, ensure_ascii=False).encode("utf-8")) > 8 * 1024**2:
         raise ValueError("Revision evidence exceeds 8 MiB")
-    evidence = dict(
-        evidence,
-        coverage=evidence.get("coverage", job.deck.coverage),
-        source_hash=evidence.get("source_hash", job.deck.source_hash),
-    )
+    evidence = dict(evidence, coverage=evidence.get("coverage", job.deck.coverage))
+    # This receipt owns the exact snapshot used for this revision, including a
+    # newly collected snapshot for a legacy deck. Its hash identifies these bytes,
+    # not an older deck's evidence or the paper's PDF.
+    payload = {key: value for key, value in evidence.items() if key != "source_hash"}
+    encoded = json.dumps(
+        payload, sort_keys=True, ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    if len(encoded) > 8 * 1024**2:
+        raise ValueError("Revision evidence exceeds 8 MiB")
+    evidence["source_hash"] = hashlib.sha256(encoded).hexdigest()
     from paper_daily.sync_deck_files import validate_png
 
     images = {}
@@ -281,12 +287,18 @@ def publish(job):
         else:
             job.updated._revision_database = job.database
             job.updated._revision_guard = lambda: job.workspace_current()
+            evidence = job.deck._revision_evidence
+            if evidence is not None and not job.updated.source_hash:
+                # A blank-source legacy deck keeps its unknown input identity. A local
+                # file has no hash-named place for that snapshot, so the receipt keeps
+                # it; a synced deck carries it, so recovery can still export it.
+                evidence = None if job.client is None else dict(evidence, source_hash="")
             with publication_scope(job.client):
                 presentations.save_deck(
                     job.updated,
                     observation=getattr(job.deck, "_file_observation", None),
                     request_id=job.request_id,
-                    evidence=job.deck._revision_evidence,
+                    evidence=evidence,
                 )
         job.record.update(status="accepted", reason=None, result=job.updated.to_dict())
     except (OSError, sqlite3.Error, ValueError) as exc:
@@ -325,6 +337,8 @@ def run(job):
                 slide.elements = None
                 candidate.slides[job.index] = slide
                 candidate.edited = True
+                if candidate.source_hash:
+                    candidate.source_hash = job.deck._revision_evidence["source_hash"]
                 presentations.deck_from_dict(candidate.to_dict())
                 job.updated = candidate
                 job.record.update(

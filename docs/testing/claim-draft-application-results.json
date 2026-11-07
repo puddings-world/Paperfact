@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "scope": "isolated interacting claim/source/reader and recovery gate",
+  "installed_device_acceptance": false,
+  "new_cases": 22,
+  "exit_code": 0,
+  "seconds": 392.92,
+  "selection": [
+    "tests/test_document_reader.py",
+    "tests/test_document_reader_rebinding.py",
+    "tests/test_claim_draft_application.py",
+    "tests/test_claim_draft_storage.py",
+    "tests/test_claim_draft_revision.py",
+    "tests/test_claim_review_guards.py",
+    "tests/test_claim_jobs.py",
+    "tests/test_sync_source_files.py",
+    "tests/test_resumed_draft_originals.py",
+    "tests/test_research_evidence.py",
+    "tests/test_research_evidence_cjk.py",
+    "tests/test_archived_draft_resumption.py::test_receiver_draft_can_restart_verify_edit_apply_and_retry_without_replacing_b",
+    "tests/test_note_draft_resumption.py::test_rich_note_draft_survives_real_conflict_backup_adoption_resume_and_retry",
+    "tests/test_legacy_primary_migration.py::test_explicit_migration_full_backup_and_fresh_editable_receiver"
+  ],
+  "frozen_inputs": 984,
+  "source_drift": [],
+  "full_check_passed": false,
+  "totals": {
+    "tests": 231,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

@@ -122,7 +122,7 @@ async() => {
   lastEditor.dispatchEvent(new Event('input', {
     bubbles: true
   }));
-  [...doc.querySelectorAll('header button')][1].click();
+  [...doc.querySelectorAll('header button')].find(button => ['Connection', '連線'].includes(button.textContent)).click();
   const demoButton =[...doc.querySelectorAll('dialog button')].find(button =>['Open demo workspace', '開啟示範工作區'].includes(button.textContent));
   demoButton.click();
   await until(() => ! doc.querySelector('dialog'));

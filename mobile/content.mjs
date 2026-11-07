@@ -4,6 +4,7 @@ import { ANNOTATION_FEATURES, validateAnnotations } from './annotations.mjs';
 import { validateClaims } from './claims.mjs';
 import { LEGACY_FIELDS, validateWorkflow } from './legacy-workflow.mjs';
 import {validatePositionContent} from './reading-position-schema.mjs';
+import {validateLaterData} from './later-outcomes.mjs';
 const HASH = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -23,7 +24,8 @@ export const CONTENT_FIELDS = {
   reading_goal: 'body written_at',
   reference_edge: 'influential',
   list_pin: 'pinned_at',
-  queue_pin: 'pinned_at'
+  queue_pin: 'pinned_at',
+  later_outcome: 'body_json document_hash written_at'
 };
 const bytes = value => new TextEncoder().encode(value).length;
 function expect(value) {
@@ -81,7 +83,35 @@ export function validateAnchor(anchor) {
   expect(anchor.p1 > anchor.p0 ||(anchor.p1 === anchor.p0 && anchor.o1 >= anchor.o0));
   if(Object.hasOwn(anchor, 'document_hash')) hash(anchor.document_hash, true);
 }
+export function validateNoteAnchor(anchor) {
+  if(anchor === null || !Object.hasOwn(anchor, 'selection')) { validateAnchor(anchor); return; }
+  closed(anchor, ['p0', 'o0', 'p1', 'o1', 'document_hash', 'selection']);
+  const {selection, ...geometry} = anchor;
+  validateAnchor(geometry);
+  hash(anchor.document_hash);
+  closed(selection, ['version', 'quote', 'extractor']);
+  expect(selection.version === 1);
+  text(selection.quote, 32768, {nullable:false, nonempty:true});
+  closed(selection.extractor, ['name','engine','version']);
+  expect(selection.extractor.name === 'paperfact.level_words' && selection.extractor.engine === 'pymupdf');
+  expect(typeof selection.extractor.version === 'string' && /^[0-9A-Za-z.+_-]{1,80}$/.test(selection.extractor.version));
+  expect(anchor.p1 - anchor.p0 < 100);
+}
 export {stamp as validateContentTimestamp};
+
+// Unpositioned text remains editable even when desktop metadata is present.
+export function editableTextNote(payload) {
+  try {
+    if (payload && Object.keys(payload).length === 2) {
+      closed(payload, ['paper_id', 'body']);
+      expect(typeof payload.paper_id === 'string' && ID.test(payload.paper_id));
+      text(payload.body, 200 * 1024, {nullable:false});
+      return true;
+    }
+    validateRichNote(payload);
+    return payload.kind === 'note' && payload.page === null && payload.anchor === null;
+  } catch { return false; }
+}
 
 export function validateRichNote(payload) {
   closed(payload, ['paper_id', 'body', 'kind', 'created_at', 'page', 'anchor']);
@@ -96,7 +126,7 @@ export function validateRichNote(payload) {
   stamp(payload.created_at);
   integer(payload.page, 1000001, true);
   expect(payload.page !== 0);
-  validateAnchor(payload.anchor);
+  validateNoteAnchor(payload.anchor);
   if(payload.anchor !== null) expect(payload.page === null || payload.page === payload.anchor.p0 + 1);
 }
 export function validateContent(payload, id, parents) {
@@ -121,7 +151,7 @@ export function validateContent(payload, id, parents) {
     nullable: false,
     nonempty: true
   });
-  if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal', 'queue_entry', 'queue_pin', ...ANNOTATION_FEATURES].includes(feature)) expect(key === 'main');
+  if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal', 'queue_entry', 'queue_pin', 'later_outcome', ...ANNOTATION_FEATURES].includes(feature)) expect(key === 'main');
   if(['manual_highlight', 'chat', 'reading_event'].includes(feature)) expect(UUID.test(key));
   if(feature === 'resource') {
     expect(/^https?:\/\//i.test(key));
@@ -152,6 +182,7 @@ export function validateContent(payload, id, parents) {
     p.kind === endpoints[index][0] && p.id === endpoints[index][1]));
   hash(source, !['manual_highlight', 'ai_highlight'].includes(feature));
   if(Object.hasOwn(LEGACY_FIELDS,feature)) { validateWorkflow(payload,stamp); return; }
+  if(feature==='later_outcome') { validateLaterData(data,source,stamp); return; }
   closed(data, CONTENT_FIELDS[feature].split(' '), feature === 'chat' ? ['exchange_id', 'reply_to']: []);
   if(feature === 'chat') {
     const linked = Object.hasOwn(data, 'exchange_id');
@@ -230,6 +261,7 @@ export function projectContent(papers, lists, rows) {
     const target =(scope.kind === 'paper' ? papers: lists).find(item => item.id === scope.id);
     if(! target) continue;
     if(feature === 'queue_pin') target.queue_pin = {pinned_at:data.pinned_at};
+    if(feature==='later_outcome') target.later_outcome={body:structuredClone(data.body_json),document_hash:source,written_at:data.written_at};
     if(feature === 'list_pin') {
       const member = target.members?.find(item => item.paper_id === key);
       if(member) { member.pinned = true; member.pinned_at = data.pinned_at; }
@@ -326,7 +358,7 @@ export function initialAnnotationDeletion(op, heads = []) {
     row.operation.entity_id === parent.id && row.operation.action === 'put');
   if(!current || current.operation.incarnation !== parent.incarnation) return null;
   const scope = {kind: 'paper', id: parent.id};
-  const feature = ANNOTATION_FEATURES.find(value => contentId(scope,value,'main') === op.entity_id);
+  const feature = [...ANNOTATION_FEATURES,'later_outcome'].find(value => contentId(scope,value,'main') === op.entity_id);
   return feature ? {scope, feature, key: 'main'} : null;
 }
 
@@ -362,6 +394,7 @@ export function suppressSnapshotContent(papers, lists, heads, receipts, highligh
       }
     }
     if(feature==='queue_pin') target.queue_pin=null;
+    if(feature==='later_outcome') delete target.later_outcome;
     if(feature==='queue_entry') { target.legacy_queue=null; target.legacy_queue_known=true; }
     if(feature==='reading_event') target.reading_events=(target.reading_events??[]).filter(row=>row.id!==key);
     if(feature === 'list_pin') {

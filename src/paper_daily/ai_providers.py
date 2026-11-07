@@ -86,12 +86,13 @@ def _base_url(value: str) -> str:
 _CLI_ERROR = re.compile(r"(?:API Error\b|Error:|Execution error\b)", re.IGNORECASE)
 _CLI_CATEGORIES = (
     (("usage policy", "violat", "safety", "content filter", "flagged", "refus"),
-     "{name} request refused by usage policy; adjust content and retry"),
-    (("rate limit", "rate_limit", "usage limit", "limit reached", "quota", "429",
-      "credit balance", "out of credits", "overloaded", "529"),
-     "{name} usage limit or rate limit reached; retry later or switch accounts"),
+     "{name} 因使用政策拒絕這次請求；請調整內容後重試"),
+    (("usage limit", "quota", "credit balance", "out of credits", "usage credits"),
+     "{name} 已達用量限制；請稍後重試或切換帳號"),
+    (("rate limit", "rate_limit", "limit reached", "429", "overloaded", "529"),
+     "{name} 暫時達到速率上限；請稍後重試"),
     (("authenticat", "oauth", "login", "log in", "401", "invalid api key", "unauthorized"),
-     "{name} authentication failed; sign in again"),
+     "{name} 驗證失敗；請重新登入"),
 )
 
 
@@ -101,6 +102,12 @@ def _cli_failure(name: str, stdout: str, stderr: str) -> str | None:
     for needles, message in _CLI_CATEGORIES:
         if any(needle in low for needle in needles):
             return message.format(name=name)
+    # Expose only an anchored three-digit status, never the CLI error body.
+    # This preserves a useful diagnostic without reflecting paper text or tokens.
+    for value in (stdout, stderr):
+        status = re.match(r"^\s*API Error:\s*([1-5]\d{2})\b", value[:128], re.IGNORECASE)
+        if status:
+            return f"{name} API Error: {status.group(1)}；AI 服務回報錯誤，請稍後重試"
     return None
 
 

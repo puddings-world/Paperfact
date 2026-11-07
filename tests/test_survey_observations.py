@@ -328,10 +328,22 @@ def test_background_process_is_bound_and_survives_closed_dialog(conn, dialog, mo
     from paper_daily import runtime
 
     monkeypatch.setenv("PAPERFACT_DATA", "wrong-inherited-workspace")
+    child = """
+import os
+import sys
+from paper_daily.cli_job_protocol import hello_line, read_frame, ready_line
+identity, command = sys.argv[2], sys.argv[3:]
+sys.stdout.buffer.write(hello_line(identity))
+sys.stdout.buffer.flush()
+read_frame(sys.stdin.buffer, expected_request_id=identity, expected_command=command)
+sys.stdout.buffer.write(ready_line(identity))
+sys.stdout.buffer.flush()
+print(os.environ['PAPERFACT_DATA'], flush=True)
+"""
     monkeypatch.setattr(
         runtime,
         "cli_command",
-        lambda *_args: [sys.executable, "-c", "import os; print(os.environ['PAPERFACT_DATA'])"],
+        lambda *args: [sys.executable, "-c", child, *args],
     )
     dialog.show()
     dialog._run_ready()

@@ -101,11 +101,34 @@ sequenceDiagram
 | `operations.inspect` | Recover a completed commit by operation ID |
 | `analysis.audit` | v0.5 development: check saved evidence offline against the owned PDF; no AI or edits |
 
-All six operations are **offline and use no AI**. Metadata supplied by an agent
+The six original list/import operations are **offline and use no AI**. Metadata supplied by an agent
 is not publication verification. Sources are stored as data; URLs are not fetched
 by these tools. Open the list to use the desktop's existing PDF preparation,
 or request AI analysis separately through the app or the existing `analyze` CLI.
 MCP analysis/job-control tools are not included in this release.
+
+## v0.5 development: continue a recovered note
+
+Ten `review.notes.*` operations now connect historical-note continuation to the
+same native rules used by desktop review: explicit target, durable private draft,
+owned source inspection, revision checks and retry-safe Apply. They are an
+unreleased development candidate. The current registry has 26 tools, including
+the nine claim tools below; all are offline;
+adding these tools does not add AI jobs or remote synchronization.
+
+[Workflow, source rules and limits](local-note-review.md) ·
+[Executed user scenarios](testing/local-note-review-scenarios.md)
+
+## v0.5 development: revise retained research claims
+
+Nine `review.claims.*` tools expose explicit receiver choice, private structured
+edits, fresh original/quotation inspection and atomic confirmed Apply. They share
+the desktop native review boundary. Accepted retries remain stable across process
+restart and do not overwrite later research. No model, login or selected-PDF
+activation is implicit. Detached recovery remains read-only until editable adoption.
+
+[Operation contract and workflow](local-claim-review.md) ·
+[Executed scenarios and limits](testing/claim-review-operation-scenarios.md)
 
 ## JSON CLI from any project
 

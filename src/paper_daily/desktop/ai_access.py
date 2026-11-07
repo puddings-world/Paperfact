@@ -3,7 +3,7 @@
 import time
 from functools import wraps
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from shiboken6 import isValid
 
 from paper_daily import ai_accounts, ai_choices, llm
@@ -45,6 +45,8 @@ class AccessBridge(QObject):
         self.runner.activity_label = "檢查 AI 登入"
         self.good = {}
         self.dialog = None
+        self._queue = []
+        self._current = None
         self.needed.connect(self.show_login)
 
     def check(self, cfg, task):
@@ -82,23 +84,58 @@ class AccessBridge(QObject):
         self.dialog.open()
 
     def run(self, owner, tasks, callback):
-        if self.runner.busy:
+        tasks = tuple(tasks)
+        key = (id(owner), tasks)
+        if self._current is not None and not self.runner.busy:
+            # The runner was stopped (window closing) without delivering a result.
+            self._current = None
+        # Another feature's request waits for the running check instead of being
+        # dropped; a repeated click of the same feature is the only thing ignored.
+        if key != self._current and all(key != queued[0] for queued in self._queue):
+            scope = _scope(owner)
+            was_visible = owner.isVisible() if hasattr(owner, "isVisible") else False
+            connections = llm.capture_configured_connections()
+            self._queue.append((key, owner, tasks, callback, scope, was_visible, connections))
+        self._drain()
+
+    def _drain(self):
+        if self._current is not None or not self._queue:
             return
-        scope = _scope(owner)
-        was_visible = owner.isVisible() if hasattr(owner, "isVisible") else False
+        if self.runner.busy:
+            QTimer.singleShot(20, self, self._drain)
+            return
+        key, owner, tasks, callback, scope, was_visible, connections = self._queue.pop(0)
+        self._current = key
+
+        admitted = None
 
         def call(_):
+            nonlocal admitted
+            # Availability/discovery is resolved once. The same immutable routes
+            # checked here must reach the callback and any private child frame.
+            resolved = llm.freeze_connections(tasks)
             for task in tasks:
-                reason = self.check(llm.settings(task=task), task)
+                reason = self.check(resolved.settings(task), task)
                 if reason:
                     return None, reason
+            admitted = resolved
             return "ready", "ok"
 
-        def done(_):
-            if isValid(owner) and _scope(owner) == scope and (not was_visible or owner.isVisible()):
-                callback()
+        def finished():
+            self._current = None
+            self._drain()
 
-        self.runner.start("", done, lambda _reason: None, call=call)
+        def done(_):
+            nonlocal admitted
+            resolved, admitted = admitted, None
+            finished()
+            if (resolved is not None and isValid(owner) and _scope(owner) == scope
+                    and (not was_visible or owner.isVisible())):
+                with llm.connection_scope(resolved):
+                    callback()
+
+        with llm.connection_scope(connections):
+            self.runner.start("", done, lambda _reason: finished(), call=call)
 
 
 def install(parent):

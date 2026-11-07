@@ -13,10 +13,12 @@ export class ReaderView {
     this.observed = {};
     this.dirty = new Set();
     this.scroll = {};
+    this.selectionLoaded = false;
   }
   select(list, paper = null) {
     this.list = list;
     this.paper = paper;
+    this.selectionLoaded = true;
     this.note = null;
   }
   edit(id, body) {
@@ -24,7 +26,10 @@ export class ReaderView {
     this.dirty.add(id);
   }
   saved(id, body) {
-    if(this.drafts[id] === body) this.dirty.delete(id);
+    if(this.drafts[id] === body) {
+      this.dirty.delete(id);
+      delete this.drafts[id];
+    }
   }
   refresh(state) {
     // Incoming data never selects another paper, overwrites a draft or scrolls.
@@ -32,9 +37,12 @@ export class ReaderView {
     id, body);
     for(const [id, base] of Object.entries(state.draftBases ?? {})) if(! Object.hasOwn(this.observed,
     id)) put(this.observed, id, base);
-    if(this.list === null && state.selection?.list) {
-      this.list = state.selection.list;
-      this.paper = state.selection.paper;
+    if(!this.selectionLoaded) {
+      if(this.list === null && this.paper === null && state.selection) {
+        this.list = state.selection.list ?? null;
+        this.paper = state.selection.paper ?? null;
+      }
+      this.selectionLoaded = true;
     }
   }
 }
@@ -60,4 +68,11 @@ export async function flushDrafts(store, view) {
       if(draft.observed) put(state.draftBases, draft.id, draft.observed);
     }
   });
+}
+
+// Refresh a clean note's base; keep any real local or persisted draft on its old base.
+export function trackNoteObservation(view, state, id, current) {
+  const unsaved=view.dirty.has(id) || Object.hasOwn(view.drafts,id) || Object.hasOwn(state.drafts,id);
+  if(!unsaved || !Object.hasOwn(view.observed,id))put(view.observed,id,copy(current));
+  return view.observed[id];
 }
