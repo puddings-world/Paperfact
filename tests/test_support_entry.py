@@ -1,11 +1,13 @@
 from PySide6.QtCore import QTimer
 from test_reader_chat import reader as reader_fixture
 from test_research_chat import legacy as legacy_fixture
+from test_update_notices import workspace as workspace_fixture
 
 from paper_daily.desktop import support_dialog
 
 reader = reader_fixture
 legacy = legacy_fixture
+workspace = workspace_fixture
 
 
 def test_footer_opens_single_support_dialog_and_can_reopen(reader, tmp_path, monkeypatch):
