@@ -58,6 +58,27 @@ def test_a_stall_is_written_once_with_the_stuck_function(tmp_path):
     assert (tmp_path / "ui-stalls.log").read_text(encoding="utf-8") == log
 
 
+def test_a_stall_ends_with_the_next_beat_even_if_the_watcher_wakes_late(tmp_path):
+    thread, release = _busy_thread()
+    clock = Clock()
+    watch = ui_stalls.Watchdog(
+        tmp_path / "ui-stalls.log", thread_id=thread.ident, clock=clock, prefix=__name__
+    )
+    try:
+        watch.heartbeat()
+        clock.now += 0.4
+        watch.check()  # stalled
+        watch.heartbeat()  # the GUI comes back for one beat...
+        clock.now += 0.4
+        watch.check()  # ...but the watcher only looks once the next gap has begun
+    finally:
+        release.set()
+        thread.join()
+    log = (tmp_path / "ui-stalls.log").read_text(encoding="utf-8")
+    assert log.count(" stall ") == 1 and "stall 400 ms" in log
+    assert "slow_render_of_the_notes" in log
+
+
 def test_the_log_stays_bounded(tmp_path, monkeypatch):
     monkeypatch.setattr(ui_stalls, "LIMIT", 200)
     path = tmp_path / "ui-stalls.log"

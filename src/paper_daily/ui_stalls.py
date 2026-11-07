@@ -87,7 +87,10 @@ class Watchdog:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop watching; a stall that has already ended is written before returning."""
         self.stopped.set()
+        if self._thread.is_alive() and self._thread is not threading.current_thread():
+            self._thread.join(timeout=1.0)
 
     def heartbeat(self) -> None:
         self.beat = self.clock()
@@ -117,9 +120,11 @@ class Watchdog:
     def check(self) -> None:
         """One watcher step; separate from the loop so tests can drive it."""
         now = self.clock()
+        if self.samples and self.beat != self.stall_started:
+            # The GUI beat again, so that stall is over, even when a busy machine
+            # wakes this watcher only after the next gap has begun.
+            self._write(self.beat - self.stall_started)
         if now - self.beat < THRESHOLD:
-            if self.samples:
-                self._write(self.beat - self.stall_started)
             return
         if self.stall_started is None:
             self.stall_started = self.beat
@@ -130,6 +135,7 @@ class Watchdog:
     def _run(self) -> None:
         while not self.stopped.wait(SAMPLE_EVERY):
             self.check()
+        self.check()
 
     def _write(self, seconds: float) -> None:
         stack, hits = self.samples.most_common(1)[0]
