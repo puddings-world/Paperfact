@@ -208,7 +208,9 @@ the installed reader as background-only.
   points. Invalid flags stop packaging before an existing candidate is replaced.
 - `verify_built_app.py` additionally launches the generated reader fixture through
   Launch Services with Cocoa. `verify_mac_app.swift` requires a regular activation
-  policy, actual active-app state, and normal termination. The macOS job fails if
+  policy, actual active-app state, and normal termination (a quit request is
+  repeated each second for up to 15 s, as a user would press Cmd-Q again while a
+  just-opened paper finishes preparing; it never force quits). The macOS job fails if
   these checks fail; an offscreen pass cannot substitute for them.
 - `tests/test_mac_packaging.py` covers explicit foreground overrides, invalid or
   missing flags, wrong entry points, missing executables, and corrupt staging.

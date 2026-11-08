@@ -47,10 +47,17 @@ while !app.isTerminated && Date() < activationDeadline {
     }
     RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 }
-// Request a normal close; the app's smoke deadline is a fallback, never force quit.
-_ = app.terminate()
+// Request a normal close, never force quit. Right after a paper opens, the app
+// declines a quit while figures or settings are still preparing and asks the user
+// to retry once they stop, so ask again each second, as a person pressing Cmd-Q
+// again would.
 let closeDeadline = Date().addingTimeInterval(15)
+var nextRequest = Date()
 while !app.isTerminated && Date() < closeDeadline {
+    if Date() >= nextRequest {
+        _ = app.terminate()
+        nextRequest = Date().addingTimeInterval(1)
+    }
     RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 }
 guard active else { fail("Paperfact did not become a regular active macOS app") }
