@@ -18,6 +18,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
+from functools import lru_cache
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -108,6 +109,7 @@ def _analysed(paper) -> int:
 
 
 NOTE_TAG = re.compile(r"#([^\s#]+)")
+MOVING = ("waiting", "resolving", "downloading", "verifying")
 
 
 def _plain(text: str) -> str:
@@ -120,14 +122,21 @@ def note_parts(paper) -> tuple[list[str], str]:
     An import from a bibliography keeps the citation line as the note -- the title
     again, give or take punctuation, authors and year -- which says nothing about
     why the paper is there, so it is not shown."""
-    note = (paper.reason or "").strip()
-    title, said = _plain(paper.title), _plain(note)
+    tags, words = _note_parts(paper.title or "", (paper.reason or "").strip())
+    return list(tags), words
+
+
+# Every row's paint asks for its note, and the fuzzy title comparison was a tenth of
+# the list's repaint time while downloads animated it.
+@lru_cache(maxsize=4096)
+def _note_parts(title_text: str, note: str) -> tuple[tuple[str, ...], str]:
+    title, said = _plain(title_text), _plain(note)
     if not note or (title and (title in said or said in title)):
-        return [], ""
+        return (), ""
     lead = said[: len(title)]
     if len(title) >= 12 and SequenceMatcher(None, lead, title).ratio() >= 0.8:
-        return [], ""
-    return NOTE_TAG.findall(note), " ".join(NOTE_TAG.sub(" ", note).split())
+        return (), ""
+    return tuple(NOTE_TAG.findall(note)), " ".join(NOTE_TAG.sub(" ", note).split())
 
 
 def opened_label(stamp: str | None, now: datetime | None = None) -> str | None:
@@ -1190,15 +1199,20 @@ class QueuePage(QWidget):
                     index = self.model.index(i)
                     self.model.dataChanged.emit(index, index)
         current = [states[p.id] for p in self.win.papers if p.id in states]
-        active = sum(s.phase in ("waiting", "resolving", "downloading", "verifying")
-                     for s in current)
+        active = sum(s.phase in MOVING for s in current)
         queued = sum(s.phase == "queued" for s in current)
         errors = sum(s.phase == "error" for s in current)
         self.pdf_status.setText(f"進行中 {active} · 等待 {queued} · 未完成 {errors}")
         self.pause_pdf.setEnabled(bool(active or queued))
         self.retry_pdf.setEnabled(any(not p.has_pdf for p in self.win.papers))
         if active:
-            self.view.viewport().update()  # Animate unknown-length progress without a fake percent.
+            # Animate unknown-length progress without a fake percent, on the rows that
+            # move: repainting the whole list four times a second kept the window at
+            # half a core while a list's PDFs downloaded.
+            for i, (_position, paper) in enumerate(self.model._rows):
+                state = states.get(paper.id)
+                if state is not None and state.phase in MOVING:
+                    self.view.update(self.model.index(i))
 
     def _show_survey(self) -> None:
         from paper_daily.desktop.survey_dialog import SurveyDialog

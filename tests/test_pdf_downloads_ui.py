@@ -205,3 +205,39 @@ def test_inline_progress_stays_short_and_inside_the_title_line(width):
     assert row.contains(slot) and slot.top() == row.top() + 7
     assert slot.bottom() < row.top() + 29  # No overlap with tags or authors.
     assert slot.left() > 100 and slot.right() < width - 52  # Title and pin retain space.
+
+
+def test_a_moving_download_repaints_its_own_row_not_the_whole_list(workspace, page):
+    view, win = page
+    for paper in win.papers:
+        paper._has_pdf = False
+    release, entered = threading.Event(), threading.Event()
+
+    def worker(pid, progress, cancel):
+        progress("resolving", 0, None, "")
+        entered.set()
+        assert release.wait(3)
+        return None
+
+    manager = dl.DownloadQueue(worker, limit=1)
+    whole, rows = [], []
+    viewport = view.view.viewport()
+    try:
+        view.enable_downloads(manager)
+        assert entered.wait(2)
+        view._pdf_poll.stop()
+        view._poll_pdfs()
+        viewport.update = lambda *args: whole.append(args)
+        view.view.update = lambda index: rows.append(index.row())
+        for _ in range(3):
+            view._poll_pdfs()
+        moving = {
+            i
+            for i, (_position, paper) in enumerate(view.model._rows)
+            if manager.snapshot().get(paper.id).phase == "resolving"
+        }
+        assert len(moving) == 1 and whole == [] and rows and set(rows) == moving
+    finally:
+        del viewport.update, view.view.update
+        release.set()
+        manager.close()

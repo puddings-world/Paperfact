@@ -53,6 +53,11 @@ class _Frame(QWidget):
         self.inner = inner
         self.phase = 0.0
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        if inner:
+            # The moving band covers every pixel of its ring. Said so, Qt repaints only
+            # the ring on each step; otherwise it repaints the panel underneath, and a
+            # paper list redrew all its rows 20 times a second.
+            self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.setGeometry(parent.rect())
         if inner:
             self._timer = QTimer(self)
@@ -74,8 +79,9 @@ class _Frame(QWidget):
     def resizeEvent(self, _event) -> None:
         # Only the ring is this widget's: each animation step then repaints a
         # two-pixel outline, not the PDF or slides underneath it.
+        ring = self.width_px if self.inner else 3
         whole = QRegion(self.rect())
-        self.setMask(whole.subtracted(QRegion(self.rect().adjusted(3, 3, -3, -3))))
+        self.setMask(whole.subtracted(QRegion(self.rect().adjusted(ring, ring, -ring, -ring))))
 
     def _advance(self) -> None:
         if not self.window().isActiveWindow():
@@ -93,12 +99,12 @@ class _Frame(QWidget):
             band.setColorAt(0.0, QColor(FOCUS_DEEP))
             band.setColorAt(0.5, QColor(FOCUS_LIGHT))
             band.setColorAt(1.0, QColor(FOCUS_DEEP))
-            pen = QPen(QBrush(band), self.width_px)
-        else:
-            faint = QColor(FOCUS_DEEP)
-            faint.setAlpha(70)
-            pen = QPen(faint, self.width_px)
-        painter.setPen(pen)
+            # The mask is the ring, so filling the rectangle paints exactly the ring.
+            painter.fillRect(self.rect(), QBrush(band))
+            return
+        faint = QColor(FOCUS_DEEP)
+        faint.setAlpha(70)
+        painter.setPen(QPen(faint, self.width_px))
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
 
 

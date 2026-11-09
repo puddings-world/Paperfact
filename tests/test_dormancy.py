@@ -87,6 +87,27 @@ def test_the_focus_band_only_animates_while_the_app_is_in_front(window):
     assert frame._timer.isActive()
 
 
+def test_the_moving_focus_band_never_repaints_the_panel_under_it(window):
+    painted = []
+
+    class Panel(QWidget):
+        def paintEvent(self, _event):
+            painted.append(1)
+
+    window.resize(300, 200)
+    panel = Panel(window)
+    panel.resize(300, 200)
+    frame = focus_scope._Frame(panel, inner=True)
+    window.show()
+    QTest.qWait(50)
+    painted.clear()
+    for _ in range(5):
+        frame.phase += 0.1
+        frame.update()
+        QTest.qWait(20)
+    assert painted == []
+
+
 def test_the_watcher_thread_waits_instead_of_spinning_while_paused(tmp_path):
     watch = ui_stalls.Watchdog(tmp_path / "log")
     checks = []
