@@ -7,7 +7,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QObject
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication,
@@ -125,6 +125,27 @@ def test_elapsed_wait_is_dynamic_but_does_not_invent_a_percentage(surface):
     handle.stage("stale event")
     hub.tick()
     assert "stale" not in board.text.text()
+
+
+def test_a_running_job_ticking_does_not_restyle_the_row_until_its_state_changes(surface):
+    window, hub, board, _ = surface
+    handle = begin(window, "Analyse")
+    hub.tick()
+    restyled = []
+
+    class Watch(QObject):
+        def eventFilter(self, obj, event):
+            if event.type() == QEvent.Type.StyleChange and obj is board.running:
+                restyled.append(event)
+            return False
+
+    watch = Watch()
+    board.running.installEventFilter(watch)
+    for _ in range(8):
+        hub.tick()
+    assert restyled == [] and board.isVisible()
+    handle.finish()
+    assert len(restyled) == 1 and "內容已更新" in board.text.text()
 
 
 def test_progress_counts_are_scoped_to_paper_and_partial_is_not_success(surface):

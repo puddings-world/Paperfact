@@ -574,8 +574,12 @@ class ActivityBoard(QWidget):
         self.bar.setToolTip("依實際完成項目計算；不是剩餘時間估計" if job.total else "等待工作回覆")
         color = self.pal["accent"] if active else self.pal["done"] if job.state == "done" else (
             self.pal["warn"])
-        self.running.setStyleSheet(f"QWidget{{background:{self.pal['sunk']};}}"
-                                   f"QLabel{{color:{color};font-size:12px;}}")
+        style = f"QWidget{{background:{self.pal['sunk']};}}QLabel{{color:{color};font-size:12px;}}"
+        # The hub redraws this four times a second while a job runs. Setting a style
+        # sheet re-polishes every child and wakes every application event filter, which
+        # kept an idle window at a third of a core for the whole of a deep dive.
+        if style != self.running.styleSheet():
+            self.running.setStyleSheet(style)
 
     def _goto(self):
         if job := self.job():
