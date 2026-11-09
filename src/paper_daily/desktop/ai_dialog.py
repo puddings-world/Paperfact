@@ -92,6 +92,10 @@ class AIStatusButton(QPushButton):
 class AISettingsDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        # Someone setting up AI may just have installed or removed the Claude CLI.
+        from paper_daily.ai_profiles import recheck_claude
+
+        recheck_claude()
         style_settings(self)
         self.setWindowTitle("Paperfact · AI 帳號與連線")
         self.resize(660, 700)

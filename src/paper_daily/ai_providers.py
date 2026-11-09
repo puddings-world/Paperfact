@@ -138,6 +138,10 @@ class ClaudeCLI:
         except subprocess.TimeoutExpired:
             return Completion(None, f"timed out after {request.timeout}s")
         except OSError as exc:
+            # Removed or moved since it was found: the next settings read should know.
+            from paper_daily.ai_profiles import recheck_claude
+
+            recheck_claude()
             return Completion(None, f"could not run claude: {type(exc).__name__}")
         answer = (proc.stdout or "").strip()
         if proc.returncode == 0 and answer and not _CLI_ERROR.match(answer):

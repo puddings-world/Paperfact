@@ -4569,6 +4569,10 @@ def run(
     _install_error_log()
     rich_view.prepare()
     runtime.adopt_login_path()
+    # The window resolves AI settings while it builds; find the CLI meanwhile.
+    from paper_daily.ai_profiles import recheck_claude
+
+    recheck_claude()
     app = QApplication.instance() or QApplication(sys.argv)
     style(app)
     fonts.load()

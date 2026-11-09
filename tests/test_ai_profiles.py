@@ -186,11 +186,11 @@ def test_ai_can_be_disabled_without_removing_the_saved_profiles(clean):
     assert llm.available()
 
 
-def test_auto_backend_asks_for_the_claude_cli_at_most_every_30_seconds(clean, monkeypatch):
-    # Settings are read several times a second while the window is open; walking PATH
-    # each time froze it on Windows.
-    calls = []
-    monkeypatch.setattr(llm.shutil, "which", lambda name: calls.append(name) or "/bin/claude")
+def test_auto_backend_asks_for_the_claude_cli_once_per_path_or_when_asked_again(clean, monkeypatch):
+    # Settings are read several times a second on the window's thread; walking PATH
+    # each time froze it on Windows, and a busy disk held one walk for 52 seconds.
+    calls, installed = [], ["/bin/claude"]
+    monkeypatch.setattr(llm.shutil, "which", lambda name: calls.append(name) or installed[0])
     llm.save_settings(profile="default", backend="auto")
     assert llm.settings().backend == "cli"
     assert llm.settings().backend == "cli"
@@ -200,6 +200,34 @@ def test_auto_backend_asks_for_the_claude_cli_at_most_every_30_seconds(clean, mo
     assert calls == ["claude", "claude"]
     from paper_daily import ai_profiles
 
-    monkeypatch.setattr(ai_profiles, "CLAUDE_RECHECK", -1.0)
-    monkeypatch.setattr(llm.shutil, "which", lambda name: calls.append(name))
+    installed[0] = None
+    for _ in range(3):
+        assert llm.settings().backend == "cli"
+    assert calls == ["claude", "claude"]
+    ai_profiles.recheck_claude(wait=True)
+    assert llm.settings().backend == "none"
+    assert calls == ["claude", "claude", "claude"]
+
+
+def test_looking_for_the_claude_cli_again_never_holds_the_caller(clean, monkeypatch):
+    import threading
+
+    from paper_daily import ai_profiles
+
+    release, installed = threading.Event(), ["/bin/claude"]
+
+    def which(name):
+        if installed[0] is None:
+            release.wait(5)
+        return installed[0]
+
+    monkeypatch.setattr(llm.shutil, "which", which)
+    llm.save_settings(profile="default", backend="auto")
+    assert llm.settings().backend == "cli"
+    installed[0] = None
+    worker = ai_profiles.recheck_claude()
+    assert worker.is_alive()
+    assert llm.settings().backend == "cli"
+    release.set()
+    worker.join(5)
     assert llm.settings().backend == "none"

@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 import tempfile
-import time
+import threading
 from pathlib import Path
 
 from paper_daily.ai_types import DEFAULT_MAX_TOKENS, Settings
@@ -234,23 +234,47 @@ def assign(path: Path, selections: dict, backends: tuple[str, ...]) -> Path:
 
 
 _claude_found: dict = {}
-CLAUDE_RECHECK = 30.0
+_claude_lock = threading.Lock()
+
+
+def _claude_key():
+    return (shutil.which, os.environ.get("PATH"))
+
+
+def _look_for_claude(key) -> bool:
+    found = bool(shutil.which("claude"))
+    with _claude_lock:
+        _claude_found.clear()
+        _claude_found[key] = found
+    return found
 
 
 def _claude_on_path() -> bool:
-    """Whether the Claude CLI is installed, re-asked at most every 30 seconds.
+    """Whether the Claude CLI is installed, looked up once per PATH.
 
-    `which` walks every PATH folder; settings are resolved several times a second
-    while the window is open, and on Windows that walk froze it for up to 0.6 s.
-    The key includes the lookup itself and PATH, so a changed PATH (or a test's
-    stand-in) is asked again at once."""
-    key = (shutil.which, os.environ.get("PATH"))
-    found = _claude_found.get(key)
-    if found is None or time.monotonic() - found[0] > CLAUDE_RECHECK:
-        found = (time.monotonic(), bool(shutil.which("claude")))
-        _claude_found.clear()
-        _claude_found[key] = found
-    return found[1]
+    `which` tries every extension in every PATH folder, and a busy disk has held one
+    of those checks for 52 seconds. Settings are resolved several times a second on
+    the window's thread, so the answer is kept until PATH changes (or a test's
+    stand-in replaces the lookup), or `recheck_claude` is asked for."""
+    key = _claude_key()
+    with _claude_lock:
+        found = _claude_found.get(key)
+    return _look_for_claude(key) if found is None else found
+
+
+def recheck_claude(*, wait: bool = False) -> threading.Thread:
+    """Look for the Claude CLI again, off the caller's thread.
+
+    For the moments it can have changed from the reader's side: opening the AI
+    settings, or a call that could not start the CLI. Until it finishes, settings
+    keep the previous answer."""
+    worker = threading.Thread(
+        target=_look_for_claude, args=(_claude_key(),), name="claude-lookup", daemon=True
+    )
+    worker.start()
+    if wait:
+        worker.join()
+    return worker
 
 
 def resolve(
