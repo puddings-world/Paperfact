@@ -3,7 +3,8 @@
 Four sources, tried in order of how likely each is to have this kind of paper and how
 good the answer is when it does:
 
-1. **CVF** for CVPR / ICCV / WACV -- the publisher's own PDF, no intermediary.
+1. **CVF** for CVPR / ICCV / WACV, and the **MICCAI** paper page the row already
+   links -- the publisher's own PDF, no intermediary.
 2. **arXiv** -- the preprint, which for ML work is usually the same paper.
 3. **OpenAlex** -- ~250M works across every publisher, and the only source here that
    carries a direct link to a legally free copy of a journal paper.
@@ -21,7 +22,8 @@ from __future__ import annotations
 
 import json
 
-from paper_daily.sources import arxiv, cvf, openalex
+from paper_daily.http import FetchError, fetch_text
+from paper_daily.sources import arxiv, cvf, miccai, openalex
 from paper_daily.sources.openalex import _norm
 from paper_daily.store import title_key
 
@@ -32,6 +34,24 @@ def fill_gaps(row: dict) -> tuple[dict, list[str]]:
     title = row.get("title")
     if not title:
         return row, found
+
+    if miccai.is_page(row.get("page_url")) and not (
+        row.get("pdf_url")
+        and row.get("abstract")
+        and row.get("authors_json") not in (None, "", "[]")
+    ):
+        try:
+            page = miccai.parse(fetch_text(row["page_url"], max_age=86400), row["page_url"])
+        except FetchError:
+            page = {}
+        if page.get("pdf_url") and not row.get("pdf_url"):
+            row["pdf_url"] = page["pdf_url"]
+            found.append("miccai")
+        for field in ("abstract", "doi"):
+            if page.get(field) and not row.get(field):
+                row[field] = page[field]
+        if page.get("authors") and row.get("authors_json") in (None, "", "[]"):
+            row["authors_json"] = json.dumps(page["authors"], ensure_ascii=False)
 
     if not row.get("pdf_url") and not row.get("arxiv_id"):
         url = cvf.pdf_url(title, row.get("venue"), row.get("year"))

@@ -97,6 +97,7 @@ from paper_daily.desktop.focus_scope import scopes
 from paper_daily.desktop.import_dialog import run_import
 from paper_daily.desktop.key_hints import KeyHints
 from paper_daily.desktop.note_editor import NoteEditor
+from paper_daily.desktop.pdf_hunt import FIND_PDF, hunt_message, no_pdf_message
 from paper_daily.desktop.pocket_dialog import PocketDialog
 from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
@@ -722,6 +723,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.document_runner = DocumentRunner(self)
         self._active_document = None
         self._res_job: subprocess.Popen | None = None
+        self._pdf_hunt: str | None = None
+        self._pdf_hunt_poll = QTimer(self)
+        self._pdf_hunt_poll.setInterval(500)
+        self._pdf_hunt_poll.timeout.connect(self._pdf_hunt_tick)
         self._res_poll = QTimer(self)
         self._res_poll.setInterval(800)
         self._res_poll.timeout.connect(self._resources_poll)
@@ -747,13 +752,23 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.title.setWordWrap(True)
         self.title.setFont(fonts.font(fonts.SERIF, 17, QFont.Weight.DemiBold))
         self.title.setStyleSheet(f"color:{pal['ink']};")
+        # Readers copy the title to search for the paper elsewhere.
+        self.title.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         head_layout.addWidget(self.title)
         self.byline = QLabel()
         self.byline.setWordWrap(True)
         self.byline.setStyleSheet(f"color:{pal['muted']};font-size:12px;")
+        self.byline.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         head_layout.addWidget(self.byline)
         self.facts = QLabel()
         self.facts.setTextFormat(Qt.TextFormat.RichText)
+        self.facts.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         self.facts.linkActivated.connect(self._facts_link)
         self.facts.setWordWrap(True)
         head_layout.addWidget(self.facts)
@@ -932,7 +947,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.pdf_missing.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.pdf_missing.setContentsMargins(24, 24, 24, 24)
         self.pdf_missing.setStyleSheet(f"color:{pal['muted']};font-size:13px;")
-        self.pdf_missing.setOpenExternalLinks(True)
+        self.pdf_missing.linkActivated.connect(self._pdf_missing_link)
         self.pdf_missing.hide()
         left_layout.addWidget(self.pdf_missing, 1)
         split.addWidget(left)
@@ -1310,10 +1325,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         # the queue in order, so any paper reached by a lineage link or by pressing
         # past the buffer arrives with nothing downloaded.
         if not target:
-            self.pdf_missing.setText(
-                "這篇沒有可取得的 PDF 連結。Semantic Scholar 與 arXiv 都查不到,"
-                "只能用右邊的摘要與會議頁面。"
-            )
+            self.pdf_missing.setText(no_pdf_message(pal["accent"]))
             self.pdf_note.setText("無來源")
         elif self.fetcher.start(self.paper.id, self._pdf_arrived):
             self.pdf_missing.setText("正在下載原文…" + link)
@@ -1579,6 +1591,40 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self._load_highlights(self.paper.pdf_path)
         self._refresh_highlight_materials()
         self.pdf_note.setText("已移除選取範圍的螢光標記。")
+
+    def _pdf_missing_link(self, href: str) -> None:
+        if href == FIND_PDF:
+            self._find_pdf()
+        else:
+            QDesktopServices.openUrl(QUrl(href))
+
+    def _find_pdf(self) -> None:
+        """Run the full lookup for this paper alone, on the shared download queue,
+        so it never races the list's own download of the same paper."""
+        downloads = getattr(self.win, "pdf_downloads", None)
+        if not self.paper or downloads is None:
+            return
+        downloads.submit([self.paper.id], retry=True)
+        self._pdf_hunt = self.paper.id
+        self._pdf_hunt_poll.start()
+        self._pdf_hunt_tick()
+
+    def _pdf_hunt_tick(self) -> None:
+        downloads = getattr(self.win, "pdf_downloads", None)
+        paper_id = self._pdf_hunt
+        state = downloads.snapshot().get(paper_id) if downloads and paper_id else None
+        if state is None or not self.paper or self.paper.id != paper_id:
+            self._pdf_hunt_poll.stop()
+            return
+        if state.phase == "done":
+            self._pdf_hunt_poll.stop()
+            self._pdf_arrived(paper_id, True)
+            return
+        failed = state.phase in ("error", "cancelled")
+        if failed:
+            self._pdf_hunt_poll.stop()
+        self.pdf_missing.setText(hunt_message(state, self.win.pal["accent"]))
+        self.pdf_note.setText("尚無 PDF" if failed else "查找中")
 
     def _pdf_arrived(self, paper_id: str, ok: bool) -> None:
         """Redraw only if the reader is still on the paper that was being fetched."""

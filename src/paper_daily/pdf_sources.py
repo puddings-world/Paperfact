@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlencode, urlsplit
 
 from paper_daily.http import FetchError, fetch
+from paper_daily.sources import miccai
 from paper_daily.store import title_key
 
 
@@ -92,6 +93,20 @@ def discover(row, check=lambda: None):
             dict(search_query='ti:"' + title.replace('"', ' ') + '"', max_results=5))),
     ]
     errors = []
+    # The publisher's own page names its PDF before any index has the paper, and it is
+    # the paper the row already points at, so no title match is needed.
+    if miccai.is_page(row.get("page_url")):
+        check()
+        try:
+            page = fetch(row["page_url"], retries=1, timeout=12, max_age=86400)
+            check()
+            link = web_url(
+                miccai.parse(page.decode("utf-8", "replace"), row["page_url"])["pdf_url"]
+            )
+            if link:
+                yield link
+        except FetchError:
+            errors.append("miccai")
     for source, url in urls:
         check()
         try:

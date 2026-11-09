@@ -89,9 +89,10 @@ docs/agent-workflows.md.
 
 ## Finding an original
 
-`resolve.fill_gaps` is the PDF hunt: CVF, arXiv, OpenAlex, after Semantic Scholar has
-had its turn on the citation. Matching a paraphrased citation is allowed (see
-`openalex.same_paper`) but the thresholds are load-bearing: a wrong match hands the
+`resolve.fill_gaps` is the PDF hunt: the MICCAI page a row links, CVF, arXiv, OpenAlex,
+after Semantic Scholar has had its turn on the citation. The reader's 查找原文 runs
+`pdf_sources.discover` for one paper on the shared download queue. Matching a
+paraphrased citation is allowed (see `openalex.same_paper`) but the thresholds are load-bearing: a wrong match hands the
 reader an explanation of a different paper. A lookup that fails is never final --
 `resolve-missing` runs nightly, because both APIs refuse when busy.
 
