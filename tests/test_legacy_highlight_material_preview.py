@@ -85,8 +85,8 @@ def test_malformed_loaded_mark_cannot_replace_visible_preview(reader, field, val
     widget.browse_highlights.click()
     previous = panel.tree.currentItem().data(0, Qt.ItemDataRole.UserRole)
     selection = widget.pdf.selection
-    mark, words = selection._marks[0]
-    selection._marks = [(dict(mark, **{field: value}), words)]
+    # Shown marks are derived from the loaded records on demand; damage the record.
+    selection._mark_records[0] = dict(selection._mark_records[0], **{field: value})
     assert not widget.material_preparation.request()
     app.processEvents()
     assert panel.tree.currentItem().data(0, Qt.ItemDataRole.UserRole) == previous

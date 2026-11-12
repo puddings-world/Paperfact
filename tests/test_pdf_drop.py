@@ -164,7 +164,9 @@ def test_the_dialog_shows_the_guess_and_passes_the_file_along(workspace, monkeyp
         assert "10.5555/12345.678" in widget.status.text()
         widget._start_ready()
         args = commands[-1]
-        assert args[:2] == ("list-add", "x")
+        # The job is handed to the AI-job wrapper; the command it carries is what matters.
+        at = args.index("list-add")
+        assert args[at : at + 2] == ("list-add", "x")
         assert args[args.index("--pdf") + 1] == str(pdf)
         assert args[args.index("--doi") + 1] == "10.5555/12345.678"
     finally:
