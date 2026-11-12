@@ -13,6 +13,26 @@ from paper_daily.desktop.ask import AskRunner
 
 workspace, surface = _workspace, _surface
 
+# What a real AI child prints and reads before it does any work.
+HANDSHAKE = (
+    "import sys\n"
+    "from paper_daily.cli_job_protocol import hello_line, ready_line\n"
+    "sys.stdout.write(hello_line(sys.argv[1]).decode('ascii')); sys.stdout.flush()\n"
+    "sys.stdin.buffer.read()\n"
+    "sys.stdout.write(ready_line(sys.argv[1]).decode('ascii')); sys.stdout.flush()\n"
+)
+
+
+def child(args, body):
+    """The asked-for command and a stand-in process for it.
+
+    An AI job is launched behind a private startup handshake; the stand-in answers
+    it the way the real child does, then runs `body`.
+    """
+    if args and args[0] == "_desktop-job-v1":
+        return list(args[2:]), [sys.executable, "-c", HANDSHAKE + body, args[1]]
+    return list(args), [sys.executable, "-c", body]
+
 
 def test_the_poll_sleeps_when_nothing_runs_and_wakes_for_new_work(surface):
     window, hub, _board, _ = surface
@@ -211,8 +231,9 @@ def test_retrying_a_list_analysis_asks_again_for_the_failed_steps(workspace, mon
     runs = []
 
     def command(*args):
-        runs.append(list(args))
-        return [sys.executable, "-c", f"print({event!r}, flush=True)"]
+        asked, process = child(args, f"print({event!r}, flush=True)")
+        runs.append(asked)
+        return process
 
     monkeypatch.setattr(runtime, "cli_command", command)
     window = MainWindow()
@@ -322,9 +343,10 @@ def test_a_deep_analysis_asked_for_during_a_list_analysis_runs_after_it(workspac
     runs = []
 
     def command(*args):
-        runs.append(args[0] if args[0] != "analyze" or "--list" in args else args[1])
         code = "import time; time.sleep(30)" if "--list" in args else "print('done')"
-        return [sys.executable, "-c", code]
+        asked, process = child(args, code)
+        runs.append(asked[0] if asked[0] != "analyze" or "--list" in asked else asked[1])
+        return process
 
     monkeypatch.setattr(runtime, "cli_command", command)
     window = MainWindow()

@@ -99,7 +99,7 @@ def test_official_sdk_discovers_and_continues_note_review_after_server_restart(r
         async with Client(params) as client:
             tools = await client.list_tools()
             assert {tool.name for tool in tools.tools} == set(ops.OPERATIONS)
-            assert len(tools.tools) == 35
+            assert len(tools.tools) == 38
 
             async def call(name, args):
                 reply = await client.call_tool("review.notes." + name, args)

@@ -240,6 +240,8 @@ def test_a_failed_question_is_retryable_and_left_out_of_later_prompts(asking):
     reader._ask("Second question")
     assert "Lost question" not in calls[1][0]
     calls[1][1]("Second answer")
+    # A concise answer carries the previous exchange only when asked to.
+    reader.follow_btn.setChecked(True)
     reader._ask("Third question")
     assert "Second question" in calls[2][0] and "Lost question" not in calls[2][0]
 

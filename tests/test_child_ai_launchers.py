@@ -223,7 +223,8 @@ def test_user_stop_remains_cancelled_after_late_crash_signal(scene):
                         then=lambda: continued.append(True))
     process, token = widget._job, widget._activity.token
     widget._toggle_analyze()
-    assert window.activity_hub.jobs[token].state == "cancelled"
+    # The job holds its place in the AI queue until the process has really ended.
+    assert window.activity_hub.jobs[token].state == "running"
     process.finished.emit(-9, QProcess.ExitStatus.CrashExit)
     assert widget._job is None and continued == []
     assert window.activity_hub.jobs[token].state == "cancelled"

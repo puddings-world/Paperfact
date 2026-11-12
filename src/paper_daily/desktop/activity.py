@@ -232,10 +232,7 @@ class ActivityHub(QObject):
             job.state = "queued"
         job.list_id = _list_of(key)
         if paper_id or job.list_id:
-            from paper_daily import store
-
-            with store.connect() as conn:
-                job.place = _place_name(conn, dict(key=key, paper_id=paper_id))
+            job.place = _place(dict(key=key, paper_id=paper_id))
         self.jobs[token] = job
         self._restage()
         self._remember()
@@ -644,6 +641,26 @@ STATES = dict(running="進行中", queued="排隊中", done="完成", partial="�
 def _list_of(key):
     key = str(key or "")
     return key.partition(":")[2] or None if key.startswith(("queue:", "survey:")) else None
+
+
+def _place(item):
+    """The paper or list a job belongs to, read without disturbing the database files.
+
+    Closing a writing connection can checkpoint the WAL, and a sealed audit snapshot
+    of the same database reads that as its saved content having changed.
+    """
+    import sqlite3
+    from contextlib import closing
+    from pathlib import Path
+
+    from paper_daily import store
+
+    uri = Path(store.DB_PATH).resolve().as_uri() + "?mode=ro"
+    try:
+        with closing(sqlite3.connect(uri, uri=True, timeout=0.25)) as conn:
+            return _place_name(conn, item)
+    except sqlite3.Error:
+        return None
 
 
 def _place_name(conn, item):

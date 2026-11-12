@@ -168,8 +168,9 @@ class ChatPresentation(QObject):
                 return
             if same and failed:
                 reader.preparation.request()
+            # Opening another paper clears the line; anything else there is newer news.
             elif (reader.paper is not None and reader.paper.id != run[1]
-                  and reader._qa_job is job and reader.ask_status.text() == run[2]):
+                  and reader._qa_job is job and reader.ask_status.text() in (run[2], "")):
                 reader.ask_status.setText("先前論文的問答已結束；目前論文與草稿保留。")
         except (OSError, ValueError, RuntimeError, sqlite3.Error):
             self.view_changed()

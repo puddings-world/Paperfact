@@ -93,7 +93,7 @@ def test_official_mcp_discovers_highlight_tools_and_rechecks_after_server_restar
         async with Client(params) as client:
             tools = await client.list_tools()
             assert {tool.name for tool in tools.tools} == set(ops.OPERATIONS)
-            assert len(tools.tools) == 35
+            assert len(tools.tools) == 38
             for tool in tools.tools:
                 if tool.name in {
                     "review.highlights.list",
