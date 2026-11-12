@@ -49,21 +49,26 @@ def context(paper_id):
 def validate(items, pages):
     if not isinstance(items, list) or not 1 <= len(items) <= 6:
         raise ValueError("候選問題須為 1–6 題")
-    result, seen = [], set()
+    result, seen, dropped = [], set(), []
     for item in items:
         if not isinstance(item, dict):
-            raise ValueError("問題格式錯誤")
+            dropped.append("問題格式錯誤")
+            continue
         values = {key: item.get(key) for key in ("question", "why", "evidence")}
         if any(not isinstance(value, str) or not value.strip() for value in values.values()):
-            raise ValueError("問題缺少理由或原文依據")
+            dropped.append("問題缺少理由或原文依據")
+            continue
         question, why, quote = (values[key].strip() for key in ("question", "why", "evidence"))
         quote = paper_highlights.normalize(quote)
         source = next((p for p in pages if quote in paper_highlights.normalize(p["text"])), None)
         if len(quote) < 15 or source is None or len(question) > 280 or len(why) > 800:
-            raise ValueError("候選問題的原文依據無法核對")
+            dropped.append("候選問題的原文依據無法核對")
+            continue
         if question.casefold() not in seen:
             result.append(dict(question=question, why=why, evidence=quote, page=source["page"]))
             seen.add(question.casefold())
+    if not result:
+        raise ValueError(dropped[0] if dropped else "AI 沒有提出候選問題")
     return result
 
 
@@ -120,13 +125,17 @@ def produce(source):
     if reply.text:
         try:
             data = llm.reply_json(reply.text, expect=dict)
+        except ValueError as exc:
+            result["reason"] = f"AI 回覆格式無法解析：{exc}"
+        else:
             questions = data.get("questions")
             if isinstance(questions, list) and not questions:
                 result["reason"] = "本次未辨識出有原文支持的研究問題。"
             else:
-                result["items"] = validate(questions, source["pages"])
-        except (ValueError, AttributeError) as exc:
-            result["reason"] = str(exc)
+                try:
+                    result["items"] = validate(questions, source["pages"])
+                except ValueError as exc:
+                    result["reason"] = str(exc)
     else:
         result["reason"] = reply.reason
     return result

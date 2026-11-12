@@ -306,3 +306,262 @@ def current(snapshot, *, document=None):
         return read(snapshot.request, document=document).payload_json == snapshot.payload_json
     except (OSError, ValueError, sqlite3.Error):
         return False
+
+
+# These are display-only snapshots. They neither adopt a cache nor authorize a
+# source jump/publication. All bytes stay immutable after the worker returns.
+MAX_PREVIEW_ASSETS = 128
+MAX_PREVIEW_BYTES = 24 * 1024 * 1024
+MAX_PREVIEW_INDEX = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class PreviewRequest:
+    root: Path
+    options: tuple
+    frame: object = None
+    source: object = None
+    records_json: str | None = None
+
+
+@dataclass(frozen=True)
+class PreviewSnapshot:
+    figures: tuple
+    revisions: tuple
+    notice: str = ""
+
+
+def capture_preview(root, options, frame=None):
+    """Metadata only; capture an existing owned frame, never read a cache here."""
+    from paper_daily.desktop.figure_loading import Worker
+
+    source, records = None, None
+    if (
+        type(frame) is Worker
+        and frame.mode == "extract"
+        and frame.success
+        and frame.ready_emitted
+        and frame.source is not None
+        and len(frame.figures) <= MAX_PREVIEW_ASSETS
+    ):
+        source = frame.source
+        records = _json(
+            [
+                dict(
+                    label=f.label,
+                    caption=f.caption,
+                    page=f.page,
+                    file=f.path.name,
+                    kind=f.kind,
+                    **f.meta,
+                )
+                for f in frame.figures
+            ]
+        )
+    return PreviewRequest(
+        Path(root).resolve(), tuple(sorted(options.items())), frame, source, records
+    )
+
+
+def _preview_version(path):
+    return file_change.version(path) if path.is_file() else None
+
+
+def preview_current(preview):
+    """Bounded native metadata only; bytes and parsing remain worker-only."""
+    try:
+        return all(
+            path.resolve() == resolved and _preview_version(path) == revision
+            for path, revision, resolved in preview.revisions
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def _preview_bytes(path, root, revision, limit):
+    """Admit the resolved name and actual opened stream before reading content."""
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError("Preview file escaped its captured cache")
+    with path.open("rb") as stream:
+        if file_change.version(path, stream=stream) != revision or path.resolve() != resolved:
+            raise ValueError("Opened preview differs from its captured file")
+        blob = stream.read(limit + 1)
+        if (
+            len(blob) != revision[2]
+            or file_change.version(path, stream=stream) != revision
+            or path.resolve() != resolved
+        ):
+            raise ValueError("Preview file changed during its bounded read")
+    if _preview_version(path) != revision:
+        raise ValueError("Preview file changed after reading")
+    return blob, resolved
+
+
+def _unique_pairs(pairs):
+    result = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError("Duplicate preview field")
+        result[name] = value
+    return result
+
+
+def read_preview(snapshot, request, *, document=None, cancelled=lambda: False):
+    """Read bounded cache content, explicitly unverified unless an actual frame owns it.
+
+    A matching manifest SHA is consistency, not proof of original provenance.
+    Unknown/legacy previews stay readable with no original page/source action.
+    """
+    import base64
+    import math
+    import struct
+
+    from paper_daily import figures
+
+    worker_only()
+    if not isinstance(snapshot, SavedSnapshot) or not isinstance(request, PreviewRequest):
+        raise ValueError("Captured saved content and preview intent are required")
+    data = snapshot.data
+    if not data["dives"] or not data["close_readings"]:
+        return PreviewSnapshot((), ())
+    digest = data["source"]["document_hash"]
+    managed = document is not None and document.managed
+    options = dict(request.options)
+    encoded = json.dumps(options, sort_keys=True, separators=(",", ":"))
+    relative = (
+        Path("documents")
+        / digest
+        / ("figures-v1-" + hashlib.sha256(encoded.encode()).hexdigest()[:24])
+        if managed and digest
+        else Path(figures._safe(snapshot.request.paper_id))
+    )
+    folder = (request.root / relative).resolve()
+    if not folder.is_relative_to(request.root):
+        raise ValueError("Preview cache escaped its captured root")
+    index = folder / "index.json"
+    revisions, result = [], []
+    verified = False
+    try:
+        if request.source is not None and request.records_json is not None:
+            source = request.source
+            if (
+                source.document is not document
+                or source.view.owner.database != Path(snapshot.request.database)
+                or source.view.owner.paper_id != snapshot.request.paper_id
+                or source.view.owner._json != snapshot.request.owner_json
+                or source.view.fingerprint != digest
+            ):
+                raise ValueError("Owned figure frame differs from the captured original")
+            figures.loaded_current(source)
+            rows = json.loads(request.records_json)
+            verified = True
+        else:
+            if not index.resolve().is_relative_to(folder):
+                raise ValueError("Preview index escaped its captured cache")
+            revision = _preview_version(index)
+            if revision is None:
+                return PreviewSnapshot(
+                    (), (), "Cached figures are unavailable; saved text is unchanged."
+                )
+            if not 0 < revision[2] <= MAX_PREVIEW_INDEX:
+                raise ValueError("Preview index exceeds its budget")
+            raw, resolved_index = _preview_bytes(index, folder, revision, MAX_PREVIEW_INDEX)
+            rows = json.loads(raw, object_pairs_hook=_unique_pairs)
+            revisions.append((index, revision, resolved_index))
+        if not isinstance(rows, list) or len(rows) > MAX_PREVIEW_ASSETS:
+            raise ValueError("Preview figure count exceeds its budget")
+        used, total = set(), 0
+        for item in rows:
+            if cancelled():
+                return PreviewSnapshot((), (), "Figure preview was cancelled.")
+            required = {"label", "caption", "page", "file", "kind"}
+            allowed = required | {"rect", "document_hash", "cache_key", "asset_sha256"}
+            if not isinstance(item, dict) or not required <= item.keys() or item.keys() - allowed:
+                raise ValueError("Malformed figure preview")
+            label, caption, name = item["label"], item["caption"], item["file"]
+            if (
+                not isinstance(label, str)
+                or not 0 < len(label) <= 1000
+                or not isinstance(caption, str)
+                or len(caption) > 20000
+                or not isinstance(name, str)
+                or Path(name).name != name
+                or not name.lower().endswith(".png")
+                or name in used
+                or type(item["page"]) is not int
+                or not 1 <= item["page"] <= 100000
+                or item["kind"] not in ("figure", "table")
+            ):
+                raise ValueError("Malformed figure preview")
+            used.add(name)
+            if "rect" in item and (
+                not isinstance(item["rect"], list)
+                or len(item["rect"]) != 4
+                or any(type(n) not in (int, float) or not math.isfinite(n) for n in item["rect"])
+            ):
+                raise ValueError("Malformed preview region")
+            tagged = item.get("document_hash")
+            if tagged is not None and (
+                not isinstance(tagged, str)
+                or len(tagged) != 64
+                or any(c not in "0123456789abcdef" for c in tagged)
+                or (digest is not None and tagged != digest)
+            ):
+                raise ValueError("Preview belongs to another original")
+            if managed and tagged != digest:
+                raise ValueError("Managed preview has no matching original binding")
+            if "cache_key" in item and item["cache_key"] != relative.as_posix():
+                raise ValueError("Preview cache binding changed")
+            path = (folder / name).resolve()
+            if not path.is_relative_to(folder):
+                raise ValueError("Preview path escaped its captured cache")
+            revision = _preview_version(path)
+            if revision is None or not 0 < revision[2] <= MAX_PREVIEW_BYTES:
+                raise ValueError("Preview image is missing or exceeds its budget")
+            total += revision[2]
+            if total > MAX_PREVIEW_BYTES:
+                raise ValueError("Preview images exceed their total budget")
+            blob, resolved_asset = _preview_bytes(path, folder, revision, MAX_PREVIEW_BYTES)
+            expected = item.get("asset_sha256")
+            if expected is not None and (
+                not isinstance(expected, str) or hashlib.sha256(blob).hexdigest() != expected
+            ):
+                raise ValueError("Preview bytes differ from the declared snapshot")
+            if verified and expected is None:
+                raise ValueError("Owned preview has no generated digest")
+            if len(blob) < 24 or blob[:8] != b"\x89PNG\r\n\x1a\n" or blob[12:16] != b"IHDR":
+                raise ValueError("Preview image is not a supported PNG")
+            width, height = struct.unpack(">II", blob[16:24])
+            if width <= 0 or height <= 0 or width * height > 32_000_000:
+                raise ValueError("Preview dimensions exceed their budget")
+            result.append(
+                figures.Figure(
+                    snapshot.request.paper_id,
+                    label,
+                    caption,
+                    item["page"],
+                    path,
+                    item["kind"],
+                    dict(
+                        preview_data_url="data:image/png;base64,"
+                        + base64.b64encode(blob).decode("ascii"),
+                        preview_unverified=not verified,
+                        preview_width=width,
+                    ),
+                )
+            )
+            revisions.append((path, revision, resolved_asset))
+        preview = PreviewSnapshot(tuple(result), tuple(revisions))
+        if not preview_current(preview):
+            raise ValueError("Preview closure changed")
+        if verified:
+            figures.loaded_current(request.source)
+        return preview
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+        return PreviewSnapshot(
+            (),
+            (),
+            "Cached figures could not be checked (missing, malformed, changed, mismatched, "
+            "or over budget); saved text is unchanged. Reopen to retry.",
+        )

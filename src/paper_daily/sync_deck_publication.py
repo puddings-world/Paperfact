@@ -8,6 +8,7 @@ import sqlite3
 from contextlib import closing, contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
+from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,6 +25,20 @@ from paper_daily.sync_artifacts import (
 from paper_daily.sync_files import canonical_json, file_id
 
 
+@dataclass(frozen=True)
+class DraftRetention:
+    candidate_id: str
+    state: str
+    deck: object = field(repr=False, compare=False)
+    evidence: object = field(repr=False, compare=False)
+    reason: str | None = None
+    _capture: bytes | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def durable(self):
+        return self.state in {"cas", "receipt"}
+
+
 class StaleDeckError(ValueError):
     def __init__(self, candidate_id, message=None):
         self.candidate_id = candidate_id
@@ -32,33 +47,30 @@ class StaleDeckError(ValueError):
         )
 
 
-def _retain_original_draft(observation, deck):
-    """Keep a late producer result in its ORIGINAL database, never the replacement."""
-    path = Path(observation["database"])
-    stat = path.stat()
-    if [stat.st_dev, stat.st_ino] != observation["database_identity"]:
-        raise ValueError("Original workspace was replaced; preserve the open draft")
-    encoded = canonical_json(deck.to_dict())
-    if len(encoded) > 8 * 1024**2:
-        raise ValueError("Draft is oversized; preserve the open editor before changing workspace")
-    identity = str(uuid4())
-    with sqlite3.connect(path.as_uri() + "?mode=rw", uri=True) as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute(
-            "SELECT workspace,origin FROM research_sync_binding WHERE id=1"
-        ).fetchone()
-        if row is None or tuple(row) != (observation["workspace_id"], observation["device_id"]):
-            raise ValueError("Original workspace binding changed; preserve the open draft")
-        conn.execute(
-            "INSERT INTO research_file_drafts VALUES(?,?,?,?)",
-            (
-                identity,
-                observation["entity_id"],
-                encoded.decode(),
-                canonical_json(observation).decode(),
-            ),
-        )
-    return identity
+class IncompleteDraftRetention(StaleDeckError):
+    """A stale-save refusal carrying the actual result, without claiming durability."""
+    def __init__(self, retention, *, context=None):
+        self.retention = retention
+        detail = "Draft retention is incomplete; preserve the actual unsaved result"
+        super().__init__(retention.candidate_id, f"{context}; {detail}" if context else detail)
+
+
+def _retained_original(observation, deck, *, evidence=None, request_id=None, message):
+    from paper_daily.raw_deck_closure import retain_outcome
+
+    outcome = retain_outcome(observation, deck, evidence=evidence, request_id=request_id)
+    if not outcome.durable:
+        raise IncompleteDraftRetention(outcome, context=message.partition(";")[0])
+    error = StaleDeckError(outcome.candidate_id, message)
+    error.retention = outcome
+    raise error
+
+
+def _retain_original_draft(observation, deck, *, evidence=None, request_id=None):
+    """Keep raw content and available byte closure in its original native workspace."""
+    from paper_daily.raw_deck_closure import retain
+
+    return retain(observation, deck, evidence=evidence, request_id=request_id)
 
 
 _CAPTURED_RUNTIME = ContextVar("deck_publication_runtime", default=())
@@ -175,6 +187,7 @@ def _observation(conn, client, local_id, mode):
     if len(encoded_inputs) > 8 * 1024**2:
         raise ValueError("Deck input snapshot exceeds 8 MiB; no research was truncated")
     input_hash = hashlib.sha256(encoded_inputs).hexdigest()
+    from paper_daily.research_lifecycle import parent_lifecycle
     from paper_daily.sync_documents import applied_document, desired_document
 
     desired, applied = desired_document(conn, portable), applied_document(conn, portable)
@@ -195,6 +208,7 @@ def _observation(conn, client, local_id, mode):
         ]
     db = client.journal.path.resolve()
     stat = db.stat()
+    local_parent = parent_lifecycle(conn, "paper", local_id)
     return {
         "database": str(db),
         "database_identity": [stat.st_dev, stat.st_ino],
@@ -204,6 +218,7 @@ def _observation(conn, client, local_id, mode):
         "paper_id": portable,
         "entity_id": identity,
         "mode": mode,
+        **({"local_parent_lifecycle": local_parent} if local_parent is not None else {}),
         "observed": observed,
         "artifact": desired_file(conn, identity),
         "desired_document": desired,
@@ -258,8 +273,8 @@ def publish_deck(deck, *, observation, request_id=None, evidence=None):
     client = runtime()
     if client is None:
         if observation is not None:
-            retained = _retain_original_draft(observation, deck)
-            raise StaleDeckError(retained, "Workspace changed; original draft retained")
+            _retained_original(observation, deck, evidence=evidence, request_id=request_id,
+                               message="Workspace changed; original draft retained")
         return None
     if (
         not isinstance(observation, dict)
@@ -280,10 +295,9 @@ def publish_deck(deck, *, observation, request_id=None, evidence=None):
         client.journal.workspace_id,
         client.journal.device_id,
     ):
-        retained = _retain_original_draft(observation, deck)
-        raise StaleDeckError(
-            retained, "Deck belongs to another workspace/device; original draft retained"
-        )
+        _retained_original(observation, deck, evidence=evidence, request_id=request_id,
+                           message=("Deck belongs to another workspace/device; "
+                                    "original draft retained"))
     with client.journal.transaction() as conn:
         configured = paths(conn)
     if configured is None:

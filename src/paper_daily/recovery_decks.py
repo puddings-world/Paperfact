@@ -119,7 +119,7 @@ def _records(database):
         rows = conn.execute(
             "SELECT table_name,data FROM recovery_records WHERE table_name IN "
             "('research_paper_identity','research_file_applied',"
-            "'research_slide_revision_recovery','research_legacy_deck_recovery',"
+            "'research_slide_revision_recovery','research_legacy_deck_recovery','research_observed_current_deck_recovery',"
             "'research_parent_lifecycle') LIMIT 10001"
         ).fetchall()
     if len(rows) > 10000 or sum(len(raw.encode()) for _, raw in rows) > 256 * 1024**2:
@@ -164,8 +164,26 @@ def _snapshot(database, paper_id, slot, rows):
         for name, row in rows
         if name == TABLE and (row["paper_id"], row["slot"]) == (paper_id, slot)
     ]
-    if len(applied) + len(legacy) != 1:
+    observed = [
+        row
+        for name, row in rows
+        if name == "research_observed_current_deck_recovery"
+        and (row["paper_id"], row["slot"]) == (paper_id, slot)
+    ]
+    if len(applied) + len(legacy) + len(observed) != 1:
         raise ValueError("Restored deck has no unique retained owner")
+    if observed:
+        from paper_daily.proposal_recovery_current import snapshot
+
+        parents = {
+            row["entity_id"]: row
+            for name, row in rows
+            if name == "research_parent_lifecycle" and row["kind"] == "paper"
+        }
+        parent = parents.get(paper_id)
+        if not parent or not parent["active"] or parent["token"] != observed[0]["parent_token"]:
+            raise ValueError("Observed manual deck belongs to a retired paper")
+        return snapshot(observed[0], lambda item: _verified(roots, item))
     if legacy:
         parents = {
             row["entity_id"]: row

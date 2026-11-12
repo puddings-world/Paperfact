@@ -78,6 +78,10 @@ def _schema():
         conn.execute(source_archive_schema)
         conn.execute(history_archive_schema)
         conn.execute(local_owner_schema)
+        from paper_daily import enrolled_deck_proposals, local_deck_proposals
+
+        local_deck_proposals._schema(conn, create=True)
+        enrolled_deck_proposals._schema(conn, create=True)
         objects = {
             row[0]
             for row in conn.execute(
@@ -157,6 +161,11 @@ def _database(conn, ticket, *, history=None):
             digest.update(table.encode() + b"\0" + encoded + b"\n")
             value = dict(zip(columns, raw, strict=True))
             if table == "kv" and value["key"] != "lists.order":
+                from paper_daily.later_outcome_history import redundant_hint
+
+                if redundant_hint(conn, value):
+                    excluded += 1
+                    continue
                 if sync_recovery._kv_allowed(value["key"], set()):
                     blockers.append("unsupported research KV: " + value["key"])
                 elif value["key"].startswith(("citegraph.", "followups.checked.", "resources:")):
@@ -366,6 +375,14 @@ class EnrollmentService:
 
         history = enrollment_history.collect(conn, self.database, ticket)
         live_chat = enrollment_chat_history.live_inventory(conn, ticket)
+        from paper_daily.proposal_recovery_review import inventory as common_inventory
+
+        common = common_inventory(conn, self.database, ticket)
+        for row in common["rows"]:
+            wrapped = enrollment_history.wrap("research_common_deck_proposal_recovery", row)
+            if not any(old["record_id"] == wrapped["record_id"] for old in history["records"]):
+                history["records"].append(wrapped)
+        history["records"].sort(key=lambda row: row["record_id"])
         history["idle_job_locks"] = enrollment_history.idle_lock_files(self.database)
         rows, counts, digest, excluded, blockers = _database(conn, ticket, history=history)
         from paper_daily import legacy_workflow
@@ -402,6 +419,7 @@ class EnrollmentService:
             }
             for row in imported
         )
+        owned_sources.extend(common["objects"])
         seen_owned = {(item["path"], item["sha256"]) for item in owned_sources}
         for archived in provenance.values():
             receipt = source_provenance.validate(archived)
@@ -451,20 +469,80 @@ class EnrollmentService:
             owned_sources=owned_sources,
             receipt_paths=[source_snapshots.receipt_path(self.database, row) for row in receipts]
             + history["sidecars"]
-            + history["idle_job_locks"],
+            + history["idle_job_locks"]
+            + common["private"],
             source_inventory=sources,
             briefs=workflow["briefs"].values(),
         )
         enrollment_chat_history.add_live_sources(
             sources, live_chat, manifests, owned_sources, papers
         )
+        for row in common["rows"]:
+            manifest = json.loads(row["manifest_json"])
+            for item in manifest["originals"]:
+                selected = next(
+                    value for value in common["objects"] if value["sha256"] == item["sha256"]
+                )
+                sources[(row["paper_id"], item["sha256"])] = selected
         from paper_daily.reading_position_ops import add_enrollment_sources
 
         add_enrollment_sources(
             conn, rows.get("reading_positions", []), imported, sources, ticket=ticket
         )
+        from paper_daily.later_outcome_packages import add_enrollment_sources as add_later_sources
+
+        add_later_sources(conn, rows.get("paper_later_outcomes", []), sources, ticket=ticket)
+        from collections import Counter
+
+        from paper_daily import manual_deck_enrollment
+
+        selected = dict(sources)
+        selected.update({(owner, item["sha256"]): item for owner, item in manifests.items()})
+        manual = manual_deck_enrollment.inventory(conn, self.database, selected, ticket)
+        for row in manual.rows:
+            wrapped = enrollment_history.wrap("research_observed_current_deck_recovery", row)
+            if not any(old["record_id"] == wrapped["record_id"] for old in history["records"]):
+                history["records"].append(wrapped)
+        history["records"].sort(key=lambda item: item["record_id"])
+        if (
+            len(history["records"]) > enrollment_history.MAX_RECORDS
+            or sum(len(item["body_json"].encode()) for item in history["records"])
+            > enrollment_history.MAX_TOTAL
+        ):
+            raise ValueError("Merged enrollment history exceeds its bounded format")
+        history["archive_counts"] = dict(Counter(item["protocol"] for item in history["records"]))
+        history["sources"] = sorted(
+            set(history["sources"]) | {sha for _paper, sha in manual.sources}
+        )
+        if manual.rows:
+            for item in manual.objects:
+                if not any(
+                    old["path"] == item["path"] and old["sha256"] == item["sha256"]
+                    for old in owned_sources
+                ):
+                    owned_sources.append(item)
+            sources.update(manual.sources)
+            manifests, files, file_blockers = _files(
+                self.source_root,
+                self.database,
+                pdfs,
+                papers,
+                ticket,
+                claim_sources=rows.get("paper_claim_sets", []),
+                owned_sources=owned_sources,
+                receipt_paths=[
+                    source_snapshots.receipt_path(self.database, row) for row in receipts
+                ]
+                + history["sidecars"]
+                + history["idle_job_locks"]
+                + common["private"]
+                + manual.private,
+                source_inventory=sources,
+                briefs=workflow["briefs"].values(),
+            )
         return {
             "rows": rows,
+            "manual_current": manual,
             "legacy_workflow": workflow,
             "live_chat": live_chat,
             "history": history,
@@ -733,6 +811,16 @@ class EnrollmentService:
                             version_root=stage / "research-versions",
                             request_id="enroll-source:" + portable + ":" + digest[:32],
                         )
+                    from paper_daily.manual_deck_enrollment import publish as publish_manual
+
+                    publish_manual(
+                        client,
+                        blobs,
+                        stage / "research-versions",
+                        before["manual_current"],
+                        request_id=request_id,
+                        ticket=ticket,
+                    )
                     if _recovered is not None:
                         _recovered.publish(client, blobs, stage / "research-versions")
                     with client.journal.transaction() as conn:
@@ -750,9 +838,14 @@ class EnrollmentService:
                                     compare_baseline as compare_inbox,
                                 )
 
-                                compare_inbox(table, expected, current,
-                                              before["rows"].get(inbox_items, []),
-                                              inbox_seeds, inbox_enrolled)
+                                compare_inbox(
+                                    table,
+                                    expected,
+                                    current,
+                                    before["rows"].get(inbox_items, []),
+                                    inbox_seeds,
+                                    inbox_enrolled,
+                                )
                                 continue
                             if table == "reading_log":
                                 from paper_daily.legacy_briefs import compare_baseline

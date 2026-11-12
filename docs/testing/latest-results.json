@@ -1,0 +1,69 @@
+{
+  "format": "paperfact.local-validation-summary.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "published": false,
+  "scope": "Isolated integration candidate; selected mobile/browser checks, not whole application or installed devices.",
+  "stages": [
+    {
+      "stage": "ruff",
+      "exit_code": 0,
+      "seconds": 0.66
+    },
+    {
+      "stage": "startup-browser",
+      "exit_code": 0,
+      "seconds": 1.44
+    },
+    {
+      "stage": "note-browser",
+      "exit_code": 0,
+      "seconds": 5.27
+    },
+    {
+      "stage": "mobile",
+      "exit_code": 0,
+      "seconds": 40.89
+    }
+  ],
+  "seconds": 48.5,
+  "frozen_source_inputs": 1105,
+  "source_drift": [],
+  "inputs_sha256": "120a0303a218b7690e8b0e4788859836f4c35c511300478117f34dd3e161fd4c",
+  "mobile": {
+    "unit_cases": 535,
+    "passed": 535,
+    "failed": 0,
+    "http_scenario_programs": 13,
+    "http_programs_passed": 13
+  },
+  "browser": {
+    "startup_groups_passed": 8,
+    "actual_offline_note_journey_passed": true,
+    "physical_device_tested": false
+  },
+  "repaired_regressions": [
+    "Resume library paper without selected list",
+    "Preserve explicit navigation across refresh"
+  ],
+  "full_check_passed": false,
+  "last_full_attempt": {
+    "historical": true,
+    "python_passed": 392,
+    "python_failed": 1,
+    "frontend_reached": false,
+    "mobile_reached": false
+  },
+  "remaining": [
+    "Citation continuation/completion regression boundary",
+    "Complete writer/history/structured recovery coverage",
+    "Canonical product integration and matching whole check",
+    "Production identity/hosting/recovery decisions",
+    "Packaged Windows/Apple Silicon Mac/physical mobile acceptance"
+  ],
+  "offline_shell": {
+    "revision": 16,
+    "upgrade_preserves_research_cache_tested": true,
+    "application_version_unchanged": true
+  }
+}

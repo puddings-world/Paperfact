@@ -3,6 +3,15 @@
 How a version of Paperfact reaches the people using it: the installers, the
 release notes that announce it, and the update banner that installs it.
 
+## Version numbers
+
+The version number changes only for a public release. Fixes made before a
+candidate is published join that candidate under the same number; candidate
+builds are told apart by their source commit and build (`build-info.json`, the
+version dialog), not by new patch numbers. The next patch number starts with the
+first fix after a public release. A second-number bump (0.5) belongs to the
+feature branch that develops it.
+
 ## Cutting a release
 
 For the first public beta, use a candidate branch and **workflow_dispatch** to
@@ -183,3 +192,45 @@ resolved). The same pictures locally:
 
 `--demo` builds a throwaway workspace (`scripts/demo_workspace.py`): one list and
 one paper with a generated PDF and a deep dive, written for the purpose.
+
+## macOS foreground-app acceptance (0.4.5)
+
+A console helper in a GUI bundle must not turn the enclosing app into a background
+process. PyInstaller's COLLECT inherits `console` from the last EXE; BUNDLE then
+uses it to default `LSBackgroundOnly` to true. Paperfact 0.4.4 collected the CLI
+last, so offscreen startup and data round-trip checks passed while macOS treated
+the installed reader as background-only.
+
+- Set `LSBackgroundOnly=false` and `LSUIElement=false` explicitly in the bundle
+  spec, before PyInstaller signs it. Keep `CFBundleExecutable=Paperfact`; retain
+  `paperfact-cli` for background operations.
+- `build_app.py` validates the emitted and DMG-staged Info.plist and both entry
+  points. Invalid flags stop packaging before an existing candidate is replaced.
+- `verify_built_app.py` additionally launches the generated reader fixture through
+  Launch Services with Cocoa. `verify_mac_app.swift` requires a regular activation
+  policy, actual active-app state, and normal termination (a quit request is
+  repeated each second for up to 15 s, as a user would press Cmd-Q again while a
+  just-opened paper finishes preparing; it never force quits). The macOS job fails if
+  these checks fail; an offscreen pass cannot substitute for them.
+- `tests/test_mac_packaging.py` covers explicit foreground overrides, invalid or
+  missing flags, wrong entry points, missing executables, and corrupt staging.
+- On the owner's Mac, still check Finder launch, Dock/Cmd-Tab activation, typing
+  into Q&A, switching away/back, and normal quit/reopen. CI activation is not proof
+  that every input method or existing workspace behaves correctly.
+
+Evidence status: unit checks validated locally; native release acceptance is
+recorded in `acceptance-macos/mac-foreground.log` for each built commit. This is a
+project packaging lesson, not a new global skill. Do not modify installed signed
+bundles as the permanent fix or overwrite the already-tested version's tag.
+
+References: [PyInstaller bundle generation](https://github.com/pyinstaller/pyinstaller/blob/develop/PyInstaller/building/osx.py)
+and [Apple Launch Services keys](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html).
+
+
+The first 0.4.5 Mac CI run also exposed two existing concurrency problems. The
+PDF progress fixture now waits for the selected paper's progress event, retaining
+all its original assertions. More importantly, a deterministic regression test
+reproduced a stale background preference write committing after a newer flush.
+0.4.6 serializes snapshot/commit operations while keeping UI saves and reads
+nonblocking. Do not dismiss repeated cross-platform failures as runner noise;
+preserve the failure evidence and pin the actual interleaving in a small test.

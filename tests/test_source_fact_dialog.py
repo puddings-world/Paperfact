@@ -27,7 +27,8 @@ def wait(app, condition, seconds=20):
     while not condition() and time.monotonic() < deadline:
         app.processEvents()
         time.sleep(0.003)
-    app.processEvents()
+    # Check at once: one more event pass may start follow-up work, such as the
+    # dialog re-reading a changed AI route, and hide that the awaited state came.
     assert condition(), "Isolated source-fact UI did not settle"
 
 

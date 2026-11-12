@@ -19,6 +19,7 @@ import time
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from functools import lru_cache
+from pathlib import Path
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -1240,6 +1241,7 @@ class QueuePage(QWidget):
             return str(parallel(conn))
 
     def _start(self, args: list[str], then=None) -> None:
+        args = list(args)
         from paper_daily.desktop.ai_access import ANALYSIS_TASKS, requires_ai
 
         if args and args[0] == "analyze":
@@ -1248,7 +1250,13 @@ class QueuePage(QWidget):
             self._start_ready(args, then)
 
     def _start_ready(self, args: list[str], then=None) -> None:
-        """Run a paper-daily command beside the window, its last line on the bar."""
+        """Run a workspace-owned command beside the window, its last line on the bar."""
+        from paper_daily import store
+        from paper_daily.desktop.window_workspace import current_for
+
+        if not args or not current_for(self.win):
+            return
+        original_database = Path(store.DB_PATH).resolve()
         if self._job is not None or self._waiting():
             self.analysis.setText("上一個工作還在跑或排隊,等它結束或先停止。")
             return
@@ -1276,7 +1284,7 @@ class QueuePage(QWidget):
         if not self._activity.accepted:
             return
         handle = self._activity
-        when_ready(handle, lambda: self._launch(handle, args, then))
+        when_ready(handle, lambda: self._launch(handle, args, then, original_database))
         if getattr(handle, "waiting", False):
             if not getattr(self, "_watching_queue", False):
                 self._watching_queue = True
@@ -1292,7 +1300,13 @@ class QueuePage(QWidget):
         activity = getattr(self, "_activity", None)
         return bool(getattr(activity, "waiting", False))
 
-    def _launch(self, handle, args: list[str], then=None) -> None:
+    def _launch(self, handle, args: list[str], then, original_database) -> None:
+        from paper_daily import store
+        from paper_daily.desktop.window_workspace import current_for
+
+        if not current_for(self.win) or Path(store.DB_PATH).resolve() != original_database:
+            handle.finish(cancelled=True)
+            return
         if self._job is not None:
             handle.finish(False, "上一個工作還在跑，請稍後重試。")
             return
@@ -1300,24 +1314,41 @@ class QueuePage(QWidget):
         self._stopping = False
         self._activity_pending = ""
         env = QProcessEnvironment.systemEnvironment()
+        env.insert("PAPERFACT_DATA", str(original_database.parent))
         env.insert("PAPERFACT_PROGRESS", "1")
         env.insert("PYTHONUNBUFFERED", "1")
         env.insert("PYTHONIOENCODING", "utf-8")
-        self._job = QProcess(self)
+        self._job = job = QProcess(self)
         self._job.setProcessEnvironment(env)
         self._job.setWorkingDirectory(str(ROOT))
         self._job.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        self._job.readyReadStandardOutput.connect(self._job_output)
-        self._job.finished.connect(self._job_done)
-        self._job.errorOccurred.connect(self._job_error)
+        job.readyReadStandardOutput.connect(lambda: self._job_output(expected=job))
+        job.finished.connect(lambda code, status: self._job_done(code, status, expected=job))
+        job.errorOccurred.connect(lambda error: self._job_error(error, expected=job))
         self._then = then
         self._job_line = "開始…"
         self._say_analysis()
-        program, *rest = runtime.cli_command(*args)
-        self._job.start(program, rest)
+        try:
+            if args[0] == "analyze":
+                from paper_daily.desktop.ai_access import ANALYSIS_TASKS
+                from paper_daily.desktop.cli_job import prepare
 
-    def _job_output(self) -> None:
-        chunk = bytes(self._job.readAllStandardOutput()).decode("utf-8", "replace")
+                program, *rest = prepare(job, args, ANALYSIS_TASKS)
+            else:
+                program, *rest = runtime.cli_command(*args)
+        except (OSError, ValueError):
+            self._job_error(QProcess.ProcessError.FailedToStart, expected=job)
+            return
+        job.start(program, rest)
+
+    def _job_output(self, *, expected=None) -> None:
+        if self._job is None or expected is not None and self._job is not expected:
+            return
+        raw = bytes(self._job.readAllStandardOutput())
+        handoff = getattr(self._job, "_ai_job_handoff", None)
+        if handoff is not None:
+            raw = handoff.filter_output(raw)
+        chunk = raw.decode("utf-8", "replace")
         from paper_daily.desktop.activity import consume
 
         self._activity_pending = consume(self._activity, chunk, self._activity_pending)
@@ -1339,23 +1370,39 @@ class QueuePage(QWidget):
             self._stopping = True
             self._job.kill()
 
-    def _job_done(self, code: int, _status) -> None:
-        if self._job is not None:
-            self._job_output()
+    def _job_done(self, code: int, _status, *, expected=None) -> None:
+        if self._job is None or expected is not None and self._job is not expected:
+            return
+        from paper_daily.desktop.window_workspace import current_for
+
+        job = self._job
+        self._job_output(expected=job)
+        handoff = getattr(job, "_ai_job_handoff", None)
+        if handoff is not None:
+            code = handoff.complete(code)
         self._activity.finish(code == 0, cancelled=getattr(self, "_stopping", False))
         self._stopping = False
         self._job = None
+        job.deleteLater()
         then, self._then = self._then, None
+        if not current_for(self.win):
+            return
         self.win.reload()
         if then is not None and code == 0:
             then()
 
-    def _job_error(self, error) -> None:
+    def _job_error(self, error, *, expected=None) -> None:
+        if expected is not None and self._job is not expected:
+            return
         if error == QProcess.ProcessError.FailedToStart and self._job is not None:
             job, self._job = self._job, None
             self._then = None
             self._activity.finish(False)
             job.deleteLater()
+            from paper_daily.desktop.window_workspace import current_for
+
+            if not current_for(self.win):
+                return
             self.win.reload()
             self.analysis.setText("無法啟動背景工作；請確認安裝後重試。")
 

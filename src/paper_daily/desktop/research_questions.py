@@ -58,6 +58,11 @@ def question_preview(question):
     return text if len(text) <= 64 else text[:63] + "…"
 
 
+def _retry_hint(reason, kept=False):
+    state = "本文建議未更新，保留先前建議" if kept else "本文建議未產生"
+    return f"{state}：{reason.rstrip('。')}。可按「AI 更新建議」重試。"
+
+
 class ResearchQuestions(QWidget):
     chosen = Signal(str)
     return_to_draft = Signal()
@@ -224,6 +229,8 @@ class ResearchQuestions(QWidget):
                             if self.picker.count()
                             else "還沒有本文的提問建議：深入分析會一併產生；"
                                  "已分析過的論文可按「AI 更新建議」。")
+        if saved.get("reason") and not self._has_saved:
+            self.status.setText(_retry_hint(saved["reason"]))
         if self._legacy_unverified:
             self.status.setText("舊版建議尚未核對原文版本；更新建議前不會自動呼叫 AI。")
         self._adoption_controls()
@@ -358,7 +365,7 @@ class ResearchQuestions(QWidget):
             self._prepared_adoption = None
             self._prepared_context = None
             if not value:
-                self.status.setText(reason)
+                self.status.setText(_retry_hint(reason, kept=bool(self.picker.count())))
             elif self._legacy_unverified:
                 self.status.setText("舊版建議尚未核對原文版本；更新建議前不會自動呼叫 AI。")
             else:

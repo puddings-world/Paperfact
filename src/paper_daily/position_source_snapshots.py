@@ -82,7 +82,7 @@ def cleanup_stage(lease, database):
 
 def verify(database, row, *, known_version=None):
     source_snapshots.validate(row)
-    if json.loads(row["owner_json"])["format"] != FORMAT:
+    if json.loads(row["owner_json"])["format"] not in source_snapshots.ATOMIC_FORMATS:
         raise ValueError("Atomic position originals require their exact private format")
     receipt = source_snapshots.receipt_path(database, row)
     directory = owned_path(receipt.parent)
@@ -120,7 +120,8 @@ def publish(database, row, *, data=None, stage=None, version=None):
 
     validate(row)
     metadata = json.loads(row["owner_json"])
-    if metadata["format"] != FORMAT or (data is None) == (stage is None):
+    if (metadata["format"] not in source_snapshots.ATOMIC_FORMATS
+            or (data is None) == (stage is None)):
         raise ValueError("Position publication requires its checked bytes or owned stage")
     directory = source_snapshots.receipt_path(database, row).parent
     if directory.exists():

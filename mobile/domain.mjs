@@ -2,6 +2,7 @@ import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
 import { validateArtifact } from './artifacts.mjs';
 import { inboxUUID, validateInbox, validateInboxProjection } from './inbox-schema.mjs';
 import {validatePositionProjection,positionReceived} from './reading-position-schema.mjs';
+import {validateLaterProjection} from './later-outcomes.mjs';
 import { queueClosure, queueParents, requireLegacy } from './legacy-workflow.mjs';
 import {
   copy,
@@ -12,6 +13,7 @@ import {
   validateContent,
   validateContentTimestamp,
   validateRichNote,
+  editableTextNote,
   projectContent,
   suppressSnapshotContent
 } from './content.mjs';
@@ -422,8 +424,13 @@ export function buildOperation(state, kind, id, payload, {
   canonical = state.entities[key],
   prior = view.entities[key],
   graph = view.graph[key];
-  if(kind === 'note' && prior?.operation.action === 'put') requireThat(Object.keys(prior.operation.payload).length === 2,
-  'rich_note_read_only');
+  if(kind === 'note' && prior?.operation.action === 'put') {
+    requireThat(editableTextNote(prior.operation.payload), 'rich_note_read_only');
+    if (action === 'put' && Object.keys(prior.operation.payload).length !== 2) {
+      requireThat(stable({...prior.operation.payload, body:null}) === stable({...payload, body:null}),
+        'changed_note_metadata');
+    }
+  }
   const conflict = resolutionOf ? own(state.conflicts, resolutionOf): null;
   if(resolutionOf) requireThat(
   conflict && ! conflict.resolvedBy && keyOf(conflict.event.operation.entity_type, conflict.event.operation.entity_id) === key,
@@ -527,8 +534,10 @@ export function validateProjection(value, workspace) {
   const required=value.required_capabilities??[];
   requireThat(!Object.hasOwn(value,'required_capabilities') || required.length>0,'unused_capability');
   requireThat(Array.isArray(required) && stable(required)===stable([...new Set(required)].sort()) &&
-    required.every(cap=>['inbox','queue_pin','reading_position'].includes(cap)),'unsupported_capability');
+    required.every(cap=>['inbox','queue_pin','reading_position','later_outcome'].includes(cap)),'unsupported_capability');
   requireThat(required.includes('inbox')===Object.hasOwn(value,'inbox'),'inbox_capability_required');
+  const hasLater=value.papers.some(row=>Object.hasOwn(row,'later_outcome'));
+  requireThat(required.includes('later_outcome')===hasLater,'later_outcome_capability_required');
   const hasQueuePin=value.papers.some(row=>Object.hasOwn(row,'queue_pin'));
   requireThat(required.includes('queue_pin')===hasQueuePin,'queue_pin_capability_required');
   requireThat(required.includes('reading_position')===Object.hasOwn(value,'reading_positions'),'position_capability_required');
@@ -578,8 +587,9 @@ export function validateProjection(value, workspace) {
     closed(paper.queue_pin,['pinned_at']);
     validateContentTimestamp(paper.queue_pin.pinned_at);
   }
+  for(const paper of value.papers) if(Object.hasOwn(paper,'later_outcome'))validateLaterProjection(paper.later_outcome,validateContentTimestamp);
   result.papers = value.papers.map(row =>({
-    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id','queue_pin']),
+    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id','queue_pin','later_outcome']),
     analysis_sections: sections(row.analysis_sections),
     citations: (row.citations ??[]).map(c => pick(c, ['ref_key', 'title', 'doi', 'purpose', 'gist', 'verdict',
     'why', 'basis', 'year']))
@@ -645,7 +655,7 @@ export function projection(state) {
   }) =>({
     ...op.payload,
     id: op.entity_id,
-    editable: op.version === 2 && Object.keys(op.payload).length === 2,
+    editable: op.version === 2 && editableTextNote(op.payload),
     pdf_hash: op.payload.anchor?.document_hash ?? null,
     status: statusFor(state, 'note', op.entity_id)
   }));

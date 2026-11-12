@@ -160,7 +160,7 @@ def test_saving_invalid_selection_is_atomic(setup):
 
 def test_native_account_task_choice_preserves_implicit_default(setup, monkeypatch):
     llm.SETTINGS_PATH.unlink()
-    monkeypatch.setattr(ai_profiles.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ai_profiles.executables.shutil, "which", lambda name: None)
     llm.save_task_choices({"ask": (Settings("codex"), "custom")})
     assert llm.settings().backend == "none"
     assert llm.settings(task="ask").backend == "codex"

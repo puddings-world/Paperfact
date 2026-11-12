@@ -14,6 +14,7 @@ import shutil
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from uuid import uuid4
 import httpx
 
 from paper_daily import ai_profiles
+from paper_daily.ai_job_intent import FrozenRoutes
 from paper_daily.ai_providers import Anthropic, ClaudeCLI, CodexCLI, OpenAICompatible, Provider
 from paper_daily.ai_types import (
     DEFAULT_MAX_TOKENS as DEFAULT_MAX_TOKENS,
@@ -50,7 +52,11 @@ _PROVIDERS: dict[str, Provider] = {
     "gateway": OpenAICompatible(),
 }
 BACKENDS = tuple(_PROVIDERS)
-_CONNECTIONS: ContextVar[tuple | None] = ContextVar("paperfact_ai_connections", default=None)
+_CONNECTIONS: ContextVar[tuple | FrozenRoutes | None] = ContextVar(
+    "paperfact_ai_connections", default=None,
+)
+# A private CLI child has one job. Fresh pool threads inherit this immutable map.
+_PROCESS_CONNECTIONS: FrozenRoutes | None = None
 # Optional host preflight. Desktop installs a thread-safe login notifier; CLI and
 # library consumers remain independent of Qt.
 ACCESS_CHECK = None
@@ -129,7 +135,10 @@ def save_task_choices(selections: dict) -> Path:
 
 
 def settings(task: str = "default", profile: str | None = None) -> Settings:
-    data, environ, directory = _CONNECTIONS.get() or capture_connections()
+    captured = capture_connections()
+    if isinstance(captured, FrozenRoutes):
+        return captured.settings(task, profile=profile)
+    data, environ, directory = captured
     if isinstance(data, Exception):
         raise ValueError(str(data)) from data
     return ai_profiles.resolve(
@@ -142,22 +151,60 @@ def settings(task: str = "default", profile: str | None = None) -> Settings:
     )
 
 
-def capture_connections():
+def capture_configured_connections():
+    """Read a new independent UI request, ignoring an older callback's scope."""
+    if _PROCESS_CONNECTIONS is not None:
+        return _PROCESS_CONNECTIONS
     try:
         data = _stored()
     except (ValueError, OSError) as exc:
-        # A non-AI operation may share the worker without needing valid AI settings.
+        # Non-AI work can carry an invalid configuration without using a model.
         data = exc
     return data, dict(os.environ), SETTINGS_PATH.parent
 
 
+def capture_connections():
+    """Nested work inherits its admitted request instead of rereading live settings."""
+    captured = _CONNECTIONS.get()
+    if captured is None:
+        captured = capture_configured_connections()
+    return captured if isinstance(captured, FrozenRoutes) else deepcopy(captured)
+
+
 @contextmanager
 def connection_scope(snapshot=None):
-    token = _CONNECTIONS.set(snapshot or _CONNECTIONS.get() or capture_connections())
+    captured = snapshot if snapshot is not None else capture_connections()
+    token = _CONNECTIONS.set(deepcopy(captured))
     try:
         yield
     finally:
         _CONNECTIONS.reset(token)
+
+
+def freeze_connections(tasks, *, profiles=()):
+    """Resolve only the declared job routes from its already admitted snapshot."""
+    captured = capture_connections()
+    with connection_scope(captured):
+        default = settings()
+        resolved = {task: settings(task) for task in tuple(tasks)}
+        explicit = {name: settings(profile=name) for name in tuple(profiles)}
+    directory = (captured.account_directory if isinstance(captured, FrozenRoutes)
+                 else str(captured[2] / "ai-accounts"))
+    return FrozenRoutes(default, resolved, profiles=explicit, account_directory=directory)
+
+
+@contextmanager
+def private_job_scope(routes):
+    """One validated job per CLI child, including independently created threads."""
+    global _PROCESS_CONNECTIONS
+    if not isinstance(routes, FrozenRoutes) or _PROCESS_CONNECTIONS is not None:
+        raise ValueError("Invalid private job scope")
+    _PROCESS_CONNECTIONS = routes
+    try:
+        with connection_scope(routes):
+            yield
+    finally:
+        _PROCESS_CONNECTIONS = None
 
 
 def describe(cfg: Settings | None = None) -> str:
@@ -218,7 +265,8 @@ def _post(url: str, headers: dict, payload: dict, timeout: int) -> tuple[dict | 
 
 _FAILURE_KINDS = (
     ("policy", ("policy", "使用政策")),
-    ("limit", ("usage limit", "rate limit", "quota", "credits", "用量", "http 429", "http 402")),
+    ("limit", ("usage limit", "rate limit", "quota", "credits", "用量", "速率上限",
+               "http 429", "http 402")),
     ("auth", ("sign in", "authenticat", "credential rejected", "登入", "api_key", "http 401")),
     ("timeout", ("timed out", "逾時")),
 )

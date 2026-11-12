@@ -30,6 +30,7 @@ REGISTRY = {
     "paper_research_questions": ("paper", "paper_id", "research_questions", "questions"),
     "dives": ("paper", "paper_id", "dive", "brief"),
     "paper_context": ("paper", "paper_id", "context", "overview"),
+    "paper_later_outcomes": ("paper", "paper_id", "later_outcome", "later_outcome"),
     "close_readings": ("paper", "paper_id", "close_reading", "brief"),
     "list_surveys": ("list", "list_id", "list_survey", "survey"),
     "list_reading_goals": ("list", "list_id", "reading_goal", "target"),
@@ -88,6 +89,10 @@ def _target(conn, table, owner_id):
 def _inputs(conn, reader, owner_id):
     if reader == "highlights":
         from paper_daily.highlight_publication import inputs
+
+        return inputs(conn, owner_id)
+    if reader == "later_outcome":
+        from paper_daily.later_outcomes import inputs
 
         return inputs(conn, owner_id)
     if reader == "target":
@@ -448,6 +453,11 @@ def _stale(conn, context):
         return "Research content changed"
     if _inputs(conn, data["input_reader"], data["owner_id"]) != data["inputs"]:
         return "Research inputs changed"
+    if data["table"] == "paper_later_outcomes":
+        from paper_daily.later_outcomes import source_current
+
+        if not source_current(context):
+            return "Later outcome source availability changed"
     if data["table"] == "paper_highlight_analysis" and "highlight_plan" in data:
         from paper_daily.highlight_publication import stale
 
@@ -538,6 +548,11 @@ def validate_request_record(record):
         "document",
     }
     allowed = (fields, fields | {"parent_lifecycle"})
+    if isinstance(data, dict) and data.get("table") == "paper_later_outcomes":
+        from paper_daily.later_outcomes import validate_private
+
+        allowed = (fields | {"parent_lifecycle", "later_source"},)
+        validate_private(data.get("later_source"), document=data.get("document"))
     if isinstance(data, dict) and data.get("table") == "paper_highlight_analysis":
         allowed = (fields | {"parent_lifecycle", "highlight_plan"},)
     if (
@@ -674,6 +689,12 @@ def publish_generation(context, *, row):
     from paper_daily.sync_source_files import stage_claim_source
 
     prepared_source = stage_claim_source(context, row)
+    if context.table == "paper_later_outcomes":
+        from paper_daily.later_outcome_sources import stage
+        from paper_daily.later_outcomes import validate_generation
+
+        validate_generation(context, row)
+        prepared_source = stage(context, row)
     try:
         if _identity(context.db_path) != data["database_identity"]:
             return _retain_outside_database(context, row, "Research database was replaced")
@@ -733,7 +754,12 @@ def publish_generation(context, *, row):
             with sync_capture.expecting(conn, observations, source_hashes=sources):
                 from paper_daily.sync_source_files import apply_claim_source_in
 
-                apply_claim_source_in(conn, context, row, prepared_source)
+                if context.table == "paper_later_outcomes":
+                    from paper_daily.later_outcome_sources import apply_in
+
+                    apply_in(conn, context, row, prepared_source)
+                else:
+                    apply_claim_source_in(conn, context, row, prepared_source)
                 if (
                     data["table"] == "paper_claim_sets"
                     and data.get("claim_restore")
@@ -764,6 +790,10 @@ def publish_generation(context, *, row):
                         "INSERT INTO research_generation_requests VALUES(?,?,?,?,?,?)",
                         (context.request_id, context._json, row_json, status, None, "ok"),
                     )
+                if context.table == "paper_later_outcomes":
+                    from paper_daily.store import set_kv
+
+                    set_kv(conn, "analyze.failed.later." + context.owner_id, None)
                 conn.commit()
         else:
             with sync_capture.suppress_capture(conn):

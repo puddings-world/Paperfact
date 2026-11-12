@@ -59,7 +59,7 @@ def _markdown(text, palette, rich):
     return rich_html.markdown(text) if rich else md.to_html(text, palette)
 
 
-def _exchange(question, answer, pending, pal, rich):
+def _exchange(question, answer, pending, pal, rich, active_request=None):
     asked, _, passage = (question["body"] if question else "").partition(PASSAGE_MARK)
     where = f" · 第 {question['page']} 頁" if question and question["page"] else ""
     head = (
@@ -76,14 +76,19 @@ def _exchange(question, answer, pending, pal, rich):
         )
     head += "</td>"
     if answer is None:
-        body = f'<span style="color:{pal["faint"]};">思考中…</span>'
-        links = ""
+        body = f'<span style="color:{pal["faint"]};">未完成，可重試</span>'
+        links = (f'<a href="retryq:{int(question["id"])}">修改後重問</a>&nbsp; '
+                 if question else "")
         item = pending.get(question.get("message_id")) if question else None
         if item:
+            text = ("思考中…" if item["request_id"] == active_request
+                    and item["status"] == "prepared" else
+                    "未完成，可重試" if item["status"] == "prepared" else "已保留回答，待核對")
+            body = f'<span style="color:{pal["faint"]};">{text}</span>'
             action = "resumeqa" if item["status"] == "prepared" else "reviewqa"
             label = "選擇目前 AI 繼續" if item["status"] == "prepared" else "檢視保留答案"
             identity = html.escape(item["request_id"], quote=True)
-            links = f'<a href="{action}:{identity}">{label}</a>&nbsp; '
+            links += f'<a href="{action}:{identity}">{label}</a>&nbsp; '
     else:
         body = _markdown(answer["body"], pal, rich)
         links = (
@@ -112,10 +117,12 @@ class RenderedSaved:
     chat_html: str
     dive_html: str
     coverage: tuple[str, ...]
+    highlights: dict | None = None
 
 
-def render(snapshot, palette, *, rich=False):
-    """Typeset saved content on a worker. Figure preparation remains a named gap."""
+def render(snapshot, palette, *, rich=False, dive_rich=None, figures=(), empty_dive=None,
+           active_request=None):
+    """Typeset captured saved content; figure previews never grant source authority."""
     worker_only()
     if not isinstance(snapshot, SavedSnapshot):
         raise ValueError("A saved-reader snapshot is required")
@@ -125,7 +132,9 @@ def render(snapshot, palette, *, rich=False):
     pending = {item["user_key"]: item for item in data["pending"]}
     chat = (
         "<h3>問答紀錄</h3>"
-        + "".join(_exchange(q, a, pending, pal, rich) for q, a in pair_exchanges(rows))
+        + "".join(
+            _exchange(q, a, pending, pal, rich, active_request) for q, a in pair_exchanges(rows)
+        )
         if rows
         else f'<div style="color:{pal["faint"]};font-size:12px;">'
         "問答紀錄 · 尚無對話。可在底部自行輸入，或先選擇提問建議。</div>"
@@ -146,7 +155,24 @@ def render(snapshot, palette, *, rich=False):
             == reading_links._key(reading_links.sections(dive, close), analysis)
         ):
             links = saved_links["body"]
-    page = reading.render(dive, close, [], pal, highlights=analysis, links=links, rich=rich)
+    target_rich = rich if dive_rich is None else dive_rich
+    page = (
+        reading.render(
+            dive, close, list(figures), pal, highlights=analysis, links=links, rich=target_rich
+        )
+        if dive or empty_dive is None
+        else _markdown(empty_dive, pal, target_rich)
+    )
+    if figures and len(chat.encode()) + len(page.encode()) > MAX_BYTES * 8:
+        page = reading.render(
+            dive, close, [], pal, highlights=analysis, links=links, rich=target_rich
+        )
+        page += "<p>Cached figure previews exceed the display budget; saved text is unchanged.</p>"
     if len(chat.encode()) + len(page.encode()) > MAX_BYTES * 8:
         raise ValueError("Rendered saved content exceeds its supported budget")
-    return RenderedSaved(snapshot, chat, page, tuple(data["not_prepared"]))
+    navigation = (
+        {**analysis, "items": [{**item, "document_hash": digest} for item in analysis["items"]]}
+        if analysis
+        else None
+    )
+    return RenderedSaved(snapshot, chat, page, tuple(data["not_prepared"]), navigation)

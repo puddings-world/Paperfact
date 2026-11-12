@@ -47,6 +47,8 @@ _SEAL = object()
 def validate(row):
     source_snapshots.validate(row, max_pdf_bytes=MAX_PDF_BYTES)
     owner = json.loads(row["owner_json"])
+    if owner["format"] == source_snapshots.NOTE_FORMAT:
+        return row
     if owner["format"] in source_snapshots.POSITION_FORMATS:
         if row["request_id"] != "position:" + hashlib.sha256(canonical_json(owner)).hexdigest():
             raise ValueError("Position source receipt requires its exact typed owner")

@@ -33,6 +33,7 @@ FEATURES = {
         "relation contexts_json arxiv_id edited fetched_at",
     ),
     "context": ("paper_context", None, "summary reading_json written_at edited"),
+    "later_outcome": ("paper_later_outcomes", None, "body_json document_hash written_at"),
     "resource": (
         "resources",
         "url",
@@ -184,7 +185,9 @@ def validate_rich_note(payload):
     _integer(payload["page"], nullable=True, maximum=1000001)
     if payload["page"] == 0:
         raise ValueError("Visible note page is one-based")
-    validate_anchor(payload["anchor"])
+    from paper_daily.note_positions import validate as validate_note_anchor
+
+    validate_note_anchor(payload["anchor"])
     if payload["anchor"] is not None and payload["page"] not in (
         None,
         payload["anchor"]["p0"] + 1,
@@ -265,6 +268,11 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     if feature in ("manual_highlight", "ai_highlight"):
         _hash(payload["source_document_hash"])
     data = payload["data"]
+    if feature == "later_outcome":
+        from paper_daily.later_outcomes import validate_wire
+
+        validate_wire(payload)
+        return
     if feature == "reading_position":
         from paper_daily.reading_positions import validate_wire
 
@@ -359,10 +367,17 @@ def initialize_content(conn):
     if not conn.in_transaction:
         raise ValueError("Content initialization requires a caller transaction")
     annotation_content.initialize(conn)
+    from paper_daily.later_outcomes import initialize as initialize_later_outcomes
+
+    initialize_later_outcomes(conn)
     from paper_daily.legacy_briefs import TARGET_SCHEMA
 
     conn.execute(TARGET_SCHEMA)
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if {"papers", "lists"} <= tables:
+        from paper_daily.research_lifecycle import ensure_lifecycle
+
+        ensure_lifecycle(conn)  # Explicit protocol initialization precedes guarded projection.
     # Optional metadata may be initialized before the caller creates paper storage.
     # A cleanup trigger can be installed only once its real parent table exists.
     if "papers" in tables:

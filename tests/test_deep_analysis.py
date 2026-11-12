@@ -107,7 +107,8 @@ def test_the_explanation_and_the_citations_are_made_side_by_side(db, monkeypatch
     monkeypatch.setattr(closeread, "write", lambda pid: ("close reading", "ok"))
     monkeypatch.setattr(cites, "analyse", read_references)
     monkeypatch.setattr(
-        followups, "analyse", lambda pid, log: seen.setdefault("later", citing.is_set())
+        followups, "analyse",
+        lambda pid, log, overview_too: (seen.setdefault("later", citing.is_set()), ""),
     )
     monkeypatch.setattr(
         reading_annotation_jobs, "prepare",
@@ -198,19 +199,86 @@ class _Job:
 
 @pytest.fixture
 def window(db, monkeypatch):
+    import io
+
+    from paper_daily import llm
+    from paper_daily.ai_job_intent import FrozenRoutes
+    from paper_daily.ai_types import Settings
+    from paper_daily.cli_job_protocol import decode_frame, hello_line, ready_line
     from paper_daily.desktop import main
+    from paper_daily.desktop.ai_access import ANALYSIS_TASKS
 
-    spawned = []
+    spawned, errors = [], []
 
-    def popen(cmd, **_kw):
-        spawned.append(_Job(cmd[3:]))
-        return spawned[-1]
+    def popen(cmd, **options):
+        # Preserve logical-command assertions while exercising the new physical
+        # private prefix and the exact binary request/command binding.
+        assert cmd[3] == "_desktop-job-v1"
+        request, logical = cmd[4], tuple(cmd[5:])
+        assert options["stdin"] == main.subprocess.PIPE
+        job = _Job(list(logical))
+        ended = threading.Event()
+
+        def terminate():
+            job.alive = False
+            ended.set()
+
+        def wait(timeout=None):
+            if not ended.wait(timeout):
+                raise main.subprocess.TimeoutExpired("fixture", timeout)
+            return 0
+
+        job.kill = job.terminate = terminate
+        job.wait = wait
+
+        class Input:
+            def __init__(self):
+                self.buffer = self
+                self.data = bytearray()
+                self.closed = False
+
+            def write(self, data):
+                self.data.extend(data)
+                return len(data)
+
+            def flush(self):
+                pass
+
+            def close(self):
+                if self.closed:
+                    return
+                self.closed = True
+                try:
+                    bound = decode_frame(bytes(self.data), expected_request_id=request,
+                                         expected_command=logical)
+                    assert bound.command == logical
+                except Exception as error:
+                    errors.append(error)
+
+        class Output(io.StringIO):
+            def __init__(self):
+                super().__init__((hello_line(request) + ready_line(request)).decode("ascii"))
+
+        job.stdin, job.stdout = Input(), Output()
+        spawned.append(job)
+        return job
 
     monkeypatch.setattr(main.subprocess, "Popen", popen)
-    app = QApplication.instance() or QApplication([])
-    win = main.MainWindow()
-    app.processEvents()
-    return win, spawned
+    synthetic = FrozenRoutes(Settings("none"), {
+        task: Settings("none") for task in ANALYSIS_TASKS
+    })
+    with llm.connection_scope(synthetic):
+        app = QApplication.instance() or QApplication([])
+        win = main.MainWindow()
+        app.processEvents()
+        yield win, spawned
+        for job in spawned:
+            job.terminate()
+        for job in spawned:
+            handoff = getattr(job, "_paperfact_ai_handoff", None)
+            if handoff is not None:
+                handoff._timer.cancel()
+        assert not errors
 
 
 def test_the_button_analyses_the_paper_on_screen_once_and_idle_work_gives_way(

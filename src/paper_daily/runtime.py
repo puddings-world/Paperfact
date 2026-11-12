@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 APP_NAME = "Paperfact"
@@ -18,6 +19,7 @@ FROZEN = bool(getattr(sys, "frozen", False))
 # The console twin of the windowed app, shipped beside it: background jobs need
 # stdout, which a windowed executable on Windows does not have.
 CLI_NAME = "paperfact-cli"
+_PRIVATE_JOB_ENV = False
 
 
 def bundle_root() -> Path:
@@ -93,10 +95,23 @@ def load_env_file(env=os.environ, frozen: bool = FROZEN, path: Path | None = Non
     """Apply a checkout's .env, so one ignored file keeps a maintainer's data folder
     and keys out of the repo. A variable already set in the environment wins, and an
     installed build has no checkout, so it never reads one."""
-    if frozen:
+    if frozen or _PRIVATE_JOB_ENV:
         return
     for key, value in read_env_file(path or bundle_root() / ".env").items():
         env.setdefault(key, value)
+
+
+@contextmanager
+def private_job_environment():
+    """Only a validated private bootstrap suppresses checkout dotenv loading."""
+    global _PRIVATE_JOB_ENV
+    if _PRIVATE_JOB_ENV:
+        raise ValueError("Private job environment already active")
+    _PRIVATE_JOB_ENV = True
+    try:
+        yield
+    finally:
+        _PRIVATE_JOB_ENV = False
 
 
 def cli_command(*args: str, frozen: bool = FROZEN, executable: str = sys.executable) -> list[str]:

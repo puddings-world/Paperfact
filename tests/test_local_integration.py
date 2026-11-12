@@ -358,7 +358,8 @@ def test_packaged_acceptance_contract_also_runs_against_source(tmp_path, monkeyp
     report = verify(
         [sys.executable, "-m", "paper_daily"], tmp_path / "acceptance", dict(os.environ)
     )
-    assert report == {"mcp_tools": 10, "retry_preserved": True, "restart_recovery": True}
+    # Preserve seven original and ten note tools; add nine typed claim-review tools.
+    assert report == {"mcp_tools": 35, "retry_preserved": True, "restart_recovery": True}
 
 
 def test_distinct_concurrent_operations_share_strong_paper_identity(workspace):

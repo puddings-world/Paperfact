@@ -1,0 +1,163 @@
+{
+  "format": "paperfact.claim-original-reading-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "published": false,
+  "accepted": {
+    "exit_code": 0,
+    "seconds": 887.11,
+    "selection": [
+      "tests/test_claim_draft_originals.py",
+      "tests/test_claim_original_read_ui.py",
+      "tests/test_claim_original_read_transports.py",
+      "tests/test_claim_review_operations.py",
+      "tests/test_claim_review_transports.py",
+      "tests/test_claim_draft_ui.py",
+      "tests/test_claim_remote_ui.py",
+      "tests/test_original_version_ui.py",
+      "tests/test_local_original_version_ui.py",
+      "tests/test_active_original_ui.py",
+      "tests/test_retained_original_ui.py",
+      "tests/test_resumed_draft_original_ui.py",
+      "tests/test_material_original_snapshot.py"
+    ],
+    "frozen_inputs": 1128,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 151,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 4.235,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.169,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 882.326,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_claim_draft_originals.py",
+          "tests/test_claim_original_read_ui.py",
+          "tests/test_claim_original_read_transports.py",
+          "tests/test_claim_review_operations.py",
+          "tests/test_claim_review_transports.py",
+          "tests/test_claim_draft_ui.py",
+          "tests/test_claim_remote_ui.py",
+          "tests/test_original_version_ui.py",
+          "tests/test_local_original_version_ui.py",
+          "tests/test_active_original_ui.py",
+          "tests/test_retained_original_ui.py",
+          "tests/test_resumed_draft_original_ui.py",
+          "tests/test_material_original_snapshot.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 886.741
+    }
+  },
+  "new_cases": 22,
+  "existing_cases": 129,
+  "reviewed_functions": 18,
+  "full_check_passed": false,
+  "groups": [
+    {
+      "theme": "\u672c\u8f2a\u65b0\u529f\u80fd",
+      "cases": 22,
+      "testcase_seconds": 329.62,
+      "expected": "\u5b8c\u6210\u5f8c\u4ecd\u80fd\u8b80A\uff1b\u4e0d\u6539B\u3001\u4e0d\u91cd\u958b\u5957\u7528\u6b0a\u9650\uff1b\u5931\u6557\uff0f\u53d6\u6d88\uff0f\u95dc\u9589\u5b89\u5168",
+      "files": [
+        "tests/test_claim_draft_originals.py",
+        "tests/test_claim_original_read_ui.py",
+        "tests/test_claim_original_read_transports.py"
+      ]
+    },
+    {
+      "theme": "\u65e2\u6709\u4e3b\u5f35\u4fee\u8a02\u8207\u5de5\u5177",
+      "cases": 52,
+      "testcase_seconds": 295.33,
+      "expected": "\u6b04\u4f4d\u3001\u79c1\u5b58\u3001\u6838\u5c0d\u3001\u78ba\u8a8d\u3001\u885d\u7a81\u53ca\u91cd\u555f\u5de5\u5177\u7684\u539f\u884c\u70ba\u4ecd\u7dad\u6301",
+      "files": [
+        "tests/test_claim_review_operations.py",
+        "tests/test_claim_review_transports.py",
+        "tests/test_claim_draft_ui.py",
+        "tests/test_claim_remote_ui.py"
+      ]
+    },
+    {
+      "theme": "\u4e00\u822c\u8207\u532f\u5165\u539f\u6587",
+      "cases": 29,
+      "testcase_seconds": 40.95,
+      "expected": "\u76ee\u524d\uff0f\u532f\u5165\u4f86\u6e90\u7684\u6b78\u5c6c\u3001\u91cd\u8a66\u3001\u63db\u6a94\u8207\u552f\u8b80\u8996\u7a97\u7dad\u6301",
+      "files": [
+        "tests/test_original_version_ui.py",
+        "tests/test_local_original_version_ui.py"
+      ]
+    },
+    {
+      "theme": "\u5df2\u5b58\u7c21\u5831\u7684\u539f\u6587",
+      "cases": 24,
+      "testcase_seconds": 113.32,
+      "expected": "\u7c21\u5831\u4f86\u6e90\u53ef\u8b80\u3001\u8349\u7a3f\u4fdd\u7559\u3001\u95dc\u9589\u8207\u5de5\u4f5c\u5340\u5207\u63db\u4e0d\u8aa4\u7528\u820a\u7d50\u679c",
+      "files": [
+        "tests/test_active_original_ui.py"
+      ]
+    },
+    {
+      "theme": "\u4fdd\u7559\u8207\u6062\u5fa9\u8349\u7a3f\u7684\u539f\u6587",
+      "cases": 18,
+      "testcase_seconds": 81.31,
+      "expected": "\u7c21\u5831\uff0f\u6062\u5fa9\u7a3f\u80fd\u8b80\u6b63\u78ba\u7248\u672c\uff0c\u4f86\u6e90\u5931\u6548\u8207\u95dc\u9589\u4ecd\u5b89\u5168",
+      "files": [
+        "tests/test_retained_original_ui.py",
+        "tests/test_resumed_draft_original_ui.py"
+      ]
+    },
+    {
+      "theme": "\u7d20\u6750\u539f\u6587",
+      "cases": 6,
+      "testcase_seconds": 17.37,
+      "expected": "\u7d20\u6750\u7684\u7368\u7acb\u4f86\u6e90\u8cc7\u683c\u7dad\u6301\uff0c\u4e0d\u501f\u7528\u7c21\u5831\u6216\u4e3b\u5f35\u6b0a\u9650",
+      "files": [
+        "tests/test_material_original_snapshot.py"
+      ]
+    }
+  ],
+  "limits": [
+    "isolated fixtures",
+    "no installed-device/production acceptance",
+    "no actual AI or scholarly-quality evaluation"
+  ],
+  "regression_before": {
+    "ui": {
+      "tests": 1,
+      "failures": 1,
+      "seconds": 21.25
+    },
+    "transports": {
+      "tests": 2,
+      "failures": 2,
+      "seconds": 31.14
+    }
+  }
+}

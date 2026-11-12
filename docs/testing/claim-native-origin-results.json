@@ -1,0 +1,74 @@
+{
+  "format": "paperfact.claim-native-origin-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "unreleased": true,
+  "full_check_passed": false,
+  "result": {
+    "exit_code": 0,
+    "seconds": 256.09,
+    "selection": [
+      "tests/test_claim_remote_ui.py",
+      "tests/test_claim_draft_ui.py",
+      "tests/test_review_dialog.py",
+      "tests/test_retained_original_ui.py",
+      "tests/test_resumed_draft_original_ui.py"
+    ],
+    "frozen_inputs": 1124,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 58,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.862,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.175,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 253.645,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_claim_remote_ui.py",
+          "tests/test_claim_draft_ui.py",
+          "tests/test_review_dialog.py",
+          "tests/test_retained_original_ui.py",
+          "tests/test_resumed_draft_original_ui.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 255.689
+    }
+  },
+  "new_cases": 8,
+  "existing_cases": 50,
+  "previous_tests_unchanged": true,
+  "backend_and_mobile_unchanged": true,
+  "scope": "Actual offscreen Qt entry/fields/confirmation/original viewer, local reference-service sync. Synthetic research only.",
+  "limitations": [
+    "not a complete app check",
+    "no installed Mac/phone/production/actual model acceptance",
+    "known state display is not ongoing synchronization or backend authority"
+  ]
+}

@@ -263,3 +263,16 @@ def test_missing_metadata_does_not_claim_bundled_packages_are_absent(tmp_path, m
     report = d.collect(tmp_path)
     assert report['install'] == 'release'
     assert set(report['packages'].values()) == {'version-unavailable'}
+
+
+def test_package_versions_are_read_once_per_run(tmp_path, monkeypatch):
+    # Reading distribution metadata scans site-packages; the 診斷與回報 dialog took
+    # half a second to open while it did that on every refresh.
+    calls = []
+    monkeypatch.setattr(
+        d.importlib.metadata, 'version', lambda name: calls.append(name) or '1.2.3'
+    )
+    first = d.collect(tmp_path)['packages']
+    second = d.collect(tmp_path)['packages']
+    assert first == second == {name: '1.2.3' for name in d.PACKAGES}
+    assert sorted(calls) == sorted(d.PACKAGES)

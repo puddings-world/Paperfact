@@ -54,7 +54,7 @@ SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(])")
 
 
 def _expand(spec: str) -> list[str]:
-    """"1-3" -> ["1","2","3"]; "4,5" -> ["4","5"].
+    """ "1-3" -> ["1","2","3"]; "4,5" -> ["4","5"].
 
     Numbers are normalised, because a page that prints "001" and one that prints "1"
     mean the same reference and must not become two entries.
@@ -97,7 +97,8 @@ def contexts(text: str, max_per_key: int = 3, highest: int | None = None) -> dic
     # A line that closes an author-year citation is short and full of digits too --
     # "sarian et al., 2021]." -- and dropping it loses the citation it finishes.
     keep = [
-        ln for ln in text.splitlines()
+        ln
+        for ln in text.splitlines()
         if "http" not in ln
         and "www." not in ln
         and (
@@ -122,14 +123,12 @@ def contexts(text: str, max_per_key: int = 3, highest: int | None = None) -> dic
         for m in BRACKET_RE.finditer(sentence):
             keys.extend(_expand(m.group(1)))
         for m in AUTHOR_YEAR_RE.finditer(sentence):
-            keys.extend(
-                re.sub(r"-\s(?=[a-z])", "", one).strip() for one in m.group(1).split(";")
-            )
+            keys.extend(re.sub(r"-\s(?=[a-z])", "", one).strip() for one in m.group(1).split(";"))
         if not keys:
             # Superscripts only when nothing else matched: a bracketed paper also
             # contains years and figure numbers glued to words.
             for m in SUPER_RE.finditer(sentence):
-                if ARCHITECTURE_RE.search(sentence[max(0, m.start() - 14):m.start()]):
+                if ARCHITECTURE_RE.search(sentence[max(0, m.start() - 14) : m.start()]):
                     continue
                 keys.extend(_expand(m.group(1)))
         if highest:
@@ -217,35 +216,71 @@ def _pack(
 
 
 def analyse(
-    paper_id: str, limit: int = 120, log: Log = lambda _m: None, *, database=None, connections=None
+    paper_id: str,
+    limit: int = 120,
+    log: Log = lambda _m: None,
+    *,
+    database=None,
+    connections=None,
+    max_additional_calls: int = 0,
 ) -> int:
+    """Return saved reference count; analyse_result also reports an incomplete outcome."""
+    return analyse_result(
+        paper_id,
+        limit,
+        log,
+        database=database,
+        connections=connections,
+        max_additional_calls=max_additional_calls,
+    )[0]
+
+
+def analyse_result(
+    paper_id: str,
+    limit: int = 120,
+    log: Log = lambda _m: None,
+    *,
+    database=None,
+    connections=None,
+    max_additional_calls: int = 0,
+) -> tuple[int, str]:
+    """Run the same scoped publication, returning its saved count and actual reason.
+
+    This entry point shares the job lock, inputs, source guards and connection
+    routing with analyse. It does not turn a partial result into completion or
+    issue another model request unless max_additional_calls explicitly permits it.
+    """
     from contextlib import closing
 
     from paper_daily import llm, research_job_lock, store
     from paper_daily import research_compound as compound
     from paper_daily import research_generation as generation
+    from paper_daily.citation_completion import budget
     from paper_daily.config import PDF_DIR, TEXT_DIR
 
+    budget(max_additional_calls)
     database = (database or store.DB_PATH).resolve()
     with (
         research_job_lock.claim(database, "citations", paper_id) as acquired,
         llm.connection_scope(connections),
     ):
         if not acquired:
-            log("Citation analysis is already in progress")
-            return 0
+            reason = "Citation analysis is already in progress"
+            log(reason)
+            return 0, reason
         with closing(generation._connect(database)) as conn:
             if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
-                return 0
+                return 0, "The selected paper no longer exists"
             context = compound.begin(conn, phase="citations", owner_id=paper_id)
         context, text, _first = compound.read_text(context, pdf_root=PDF_DIR, text_root=TEXT_DIR)
         if not text:
-            log("No extracted text; open or download the paper first")
-            return 0
-        return _analyse(context, text, limit, log)
+            reason = "No extracted text; open or download the paper first"
+            log(reason)
+            return 0, reason
+        return _analyse(context, text, limit, log, max_additional_calls=max_additional_calls)
 
 
-def _analyse(context, text, limit, log):
+def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int, str]:
     from paper_daily import llm
     from paper_daily import research_compound as compound
     from paper_daily.enrich import s2
@@ -260,8 +295,9 @@ def _analyse(context, text, limit, log):
 
     ctx = contexts(text, highest=highest)
     if not ctx and not numbered:
-        log("  no citation markers found in the text")
-        return 0
+        reason = "No citation markers found in the text"
+        log("  " + reason)
+        return 0, reason
     refs = s2.references(row["s2_id"]) if row["s2_id"] else []
     # A DOI resolves a reference exactly; a citation string from the publisher's list
     # is a poor search query, because the author block outweighs the title in it.
@@ -276,17 +312,46 @@ def _analyse(context, text, limit, log):
     context = compound.with_prompt(context, prompt)
     body, reason = llm.complete(prompt, system=INSTRUCTIONS, timeout=900, task="citations")
     if not body:
+        reason = reason or "The AI returned no citation analysis"
         log(f"  failed: {reason}")
-        return 0
+        return 0, reason
 
     try:
         entries = llm.reply_json(body, expect=list, items=dict)
     except ValueError as e:
         log(f"  invalid JSON ({e})")
-        return 0
+        return 0, "The AI reply is not a valid citation JSON list"
 
     if not isinstance(entries, list):
-        return 0
+        return 0, "The AI reply is not a citation list"
+    from paper_daily.citation_completion import extend
+
+    entries = extend(
+        entries,
+        prompt=lambda missing: _pack(
+            row,
+            refs,
+            {key: value for key, value in ctx.items() if key in missing},
+            {key: value for key, value in numbered.items() if key in missing},
+            limit,
+        ),
+        sent=[
+            key
+            for key in sent
+            if not any(
+                old["ref_key"] == key and old.get("edited") and compound.citation_answered(old)
+                for old in context.rows
+            )
+        ],
+        calls=max_additional_calls,
+        current=lambda: compound.scope_current(context) and compound._input_current(context),
+        complete=lambda request: llm.complete(
+            request, system=INSTRUCTIONS, timeout=900, task="citations"
+        ),
+        decode=lambda reply: llm.reply_json(reply, expect=list, items=dict),
+        answered=compound.citation_answered,
+        log=log,
+    )
     puts = {}
     originals = {r["ref_key"]: r for r in context.rows}
     for e in entries:
@@ -296,7 +361,8 @@ def _analyse(context, text, limit, log):
         if key.isdigit():
             key = str(int(key))
         if (
-            key not in sent or originals.get(key, {}).get("edited")
+            key not in sent
+            or originals.get(key, {}).get("edited")
             or not compound.citation_answered(e)
         ):
             continue
@@ -325,25 +391,35 @@ def _analyse(context, text, limit, log):
             written_at=context.started_at,
         )
     if not puts:
-        return 0
-    edited = {key for key, old in originals.items()
-              if old.get("edited") and compound.citation_answered(old)}
+        return 0, "The AI reply contains no valid citation answers"
+    edited = {
+        key
+        for key, old in originals.items()
+        if old.get("edited") and compound.citation_answered(old)
+    }
     answered = sorted((set(puts) | edited) & set(sent))
     whole = len(answered) * 5 >= len(sent) * 4
     deletes = [
-        key for key, old in originals.items()
-        if whole and key not in puts and not old.get("edited")
+        key for key, old in originals.items() if whole and key not in puts and not old.get("edited")
     ]
     result = compound.publish(
-        context, puts=list(puts.values()), deletes=deletes,
+        context,
+        puts=list(puts.values()),
+        deletes=deletes,
         completion={"kind": "citation_coverage", "sent": sent, "answered": answered},
     )
     if result.status != "accepted":
-        log(f"{result.reason}; generated result retained: {result.candidate_id}")
-        return 0
-    if not whole:
-        log(f"Partial citation analysis: {len(answered)}/{len(sent)} references answered")
-    return len(puts)
+        reason = f"{result.reason}; generated result retained: {result.candidate_id}"
+        log(reason)
+        return 0, reason
+    reason = (
+        ""
+        if whole
+        else (f"Partial citation analysis: {len(answered)}/{len(sent)} references answered")
+    )
+    if reason:
+        log(reason)
+    return len(puts), reason
 
 
 def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
@@ -360,8 +436,12 @@ def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
     from paper_daily import research_generation as generation
     from paper_daily.research_lifecycle import parent_lifecycle
 
-    unknown = {"state": "unknown", "sent": None, "answered": None,
-               "reason": "Citation coverage has not been verified for the current source"}
+    unknown = {
+        "state": "unknown",
+        "sent": None,
+        "answered": None,
+        "reason": "Citation coverage has not been verified for the current source",
+    }
     try:
         if not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_compound_requests'"
@@ -378,8 +458,20 @@ def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
         ).fetchone()
         if found is None:
             return unknown
-        record = dict(zip(("request_id", "context_json", "mutations_json", "status",
-                           "candidate_id", "reason"), found, strict=True))
+        record = dict(
+            zip(
+                (
+                    "request_id",
+                    "context_json",
+                    "mutations_json",
+                    "status",
+                    "candidate_id",
+                    "reason",
+                ),
+                found,
+                strict=True,
+            )
+        )
         compound.validate_request_record(record)
         data, mutations = json.loads(record["context_json"]), json.loads(record["mutations_json"])
         evidence = mutations["completion"]
@@ -408,9 +500,12 @@ def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
         source = data["document"] or data["text_source"]
         if not source or not source.get("sha256") or not compound._input_current(context):
             return unknown
-        saved = {row["ref_key"]: dict(row) for row in conn.execute(
-            "SELECT * FROM cites WHERE paper_id=? LIMIT ?", (paper_id, compound.MAX_ROWS + 1)
-        )}
+        saved = {
+            row["ref_key"]: dict(row)
+            for row in conn.execute(
+                "SELECT * FROM cites WHERE paper_id=? LIMIT ?", (paper_id, compound.MAX_ROWS + 1)
+            )
+        }
         expected_rows = {row["ref_key"]: row for row in data["rows"]}
         expected_rows.update({row["ref_key"]: row for row in mutations["puts"]})
         if len(saved) > compound.MAX_ROWS or any(
@@ -421,8 +516,12 @@ def coverage(conn, paper_id: str, *, verify_source: bool = False) -> dict:
         if not compound.scope_current(context):
             return unknown
         whole = answered * 5 >= sent * 4
-        return {"state": "complete" if whole else "partial", "sent": sent, "answered": answered,
-                "reason": "" if whole else f"Citation analysis covers {answered}/{sent} references"}
+        return {
+            "state": "complete" if whole else "partial",
+            "sent": sent,
+            "answered": answered,
+            "reason": "" if whole else f"Citation analysis covers {answered}/{sent} references",
+        }
     except (OSError, ValueError, TypeError, KeyError, sqlite3.DatabaseError):
         return unknown
 

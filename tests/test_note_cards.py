@@ -28,6 +28,7 @@ def _page():
         ),
         paper=SimpleNamespace(id="p1"),
         _open_notes=set(),
+        _show_claims_button=lambda: None,
         note_log=rich_view.RichView(pal),
     )
     page._card = lambda row: ReaderPage._card(page, row)

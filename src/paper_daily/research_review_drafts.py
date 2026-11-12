@@ -67,8 +67,20 @@ def _hash(value, size=64, nullable=False):
         raise ValueError("Invalid saved draft hash")
 
 
-def _body(value):
-    if not isinstance(value, str) or len(value.encode("utf-8")) > MAX_BODY:
+def _body_limit(origin):
+    if origin == "highlight_resume":
+        from paper_daily.highlight_draft_revision import MAX_BYTES
+
+        return MAX_BYTES
+    if origin == "claim_resume":
+        from paper_daily.claim_draft_revision import MAX_BYTES
+
+        return MAX_BYTES
+    return MAX_BODY
+
+
+def _body(value, origin=None):
+    if not isinstance(value, str) or len(value.encode("utf-8")) > _body_limit(origin):
         raise ValueError("Draft text exceeds its supported size")
 
 
@@ -86,7 +98,10 @@ def validate_record(row):
         maximum = 128 if key == "request_id" else 256
         if not isinstance(row[key], str) or not 1 <= len(row[key]) <= maximum:
             raise ValueError("Invalid draft request identity")
-    if row["origin"] not in {"generation", "sidecar", "remote"}:
+    if row["origin"] not in {
+        "generation", "sidecar", "remote", "archived_resume", "archived_note_resume",
+        "claim_resume", "highlight_resume",
+    }:
         raise ValueError("Unsupported saved draft origin")
     if type(row["revision"]) is not int or row["revision"] < 1:
         raise ValueError("Invalid draft revision")
@@ -95,7 +110,7 @@ def validate_record(row):
     stamp = datetime.fromisoformat(row["updated_at"])
     if stamp.tzinfo is None or len(row["updated_at"]) > 64:
         raise ValueError("Invalid draft timestamp")
-    _body(row["body"])
+    _body(row["body"], row["origin"])
     owner = json.loads(row["owner_json"])
     if not isinstance(owner, dict) or set(owner) != {"path", "identity", "binding"}:
         raise ValueError("Invalid saved draft owner")
@@ -129,7 +144,11 @@ def validate_record(row):
             raise ValueError("Invalid saved draft capability")
     if not isinstance(snapshot["reason"], str) or len(snapshot["reason"]) > 1000:
         raise ValueError("Invalid saved draft reason")
-    if row["origin"] in {"generation", "sidecar"}:
+    if row["origin"] in {"generation", "sidecar", "archived_resume"}:
+        if row["origin"] == "archived_resume":
+            from paper_daily.archived_draft_resume import validate_snapshot
+
+            validate_snapshot(snapshot)
         expected = generation.GenerationContext(snapshot["expected"])
         data = expected.data
         if (
@@ -160,6 +179,20 @@ def validate_record(row):
                 or not isinstance(target["title"], str)
             ):
                 raise ValueError("Invalid explicitly selected draft target")
+    elif row["origin"] == "highlight_resume":
+        from paper_daily.enrollment_history import _value
+        from paper_daily.highlight_draft_resume import validate_snapshot
+
+        owner, snapshot = _value(row["owner_json"]), _value(row["preview_json"])
+        validate_snapshot(snapshot, owner, row["body"])
+    elif row["origin"] == "claim_resume":
+        from paper_daily.claim_draft_resume import validate_snapshot
+
+        validate_snapshot(snapshot, owner, row["body"])
+    elif row["origin"] == "archived_note_resume":
+        from paper_daily.archived_note_resume import validate_snapshot
+
+        validate_snapshot(snapshot, owner)
     else:
         from paper_daily.sync_client import validate_event
         from paper_daily.sync_journal import canonical_operation
@@ -241,86 +274,99 @@ class DraftStore:
             )
 
     def save(self, preview, body, request_id, *, draft_id=None, revision=None):
-        """CAS-save an edited draft. Failures never modify research or the outbox."""
+        """CAS-save an edited draft in its own transaction."""
+        with closing(self._connect()) as conn:
+            conn.execute("PRAGMA busy_timeout=250")
+            conn.execute("BEGIN IMMEDIATE")
+            result = self.save_in(conn, preview, body, request_id,
+                                  draft_id=draft_id, revision=revision)
+            conn.commit()
+            return result
+
+    def save_in(self, conn, preview, body, request_id, *, draft_id=None, revision=None):
+        """Caller-owned transaction: private save and an outer retry receipt commit together."""
+        if not conn.in_transaction:
+            raise ValueError("Private draft save requires the caller's transaction")
+        self._check(conn)
         data = self.review._verify_preview(preview)
-        _body(body)
+        _body(body, data["origin"])
+        if data["origin"] == "highlight_resume" and draft_id is None:
+            raise ValueError("Choose a stable highlight draft identity before saving")
+        if data["origin"] == "claim_resume" and draft_id is None:
+            raise ValueError("Choose a stable claim draft identity before saving")
         snapshot = {key: data[key] for key in SNAPSHOT}
         draft_id = draft_id or str(uuid4())
         if revision is not None and (type(revision) is not int or revision < 1):
             raise ValueError("Invalid expected draft revision")
-        with closing(self._connect()) as conn:
-            conn.execute("PRAGMA busy_timeout=250")
-            conn.execute("BEGIN IMMEDIATE")
-            self._setup(conn)
-            existing = conn.execute(
-                f"SELECT * FROM {TABLE} WHERE draft_id=?", (draft_id,)
-            ).fetchone()
-            old = dict(existing) if existing else None
-            if old:
-                validate_record(old)
-                if (old["origin"], old["origin_id"], old["owner_json"]) != (
-                    data["origin"],
-                    data["id"],
-                    encode(self.owner),
-                ):
-                    raise ValueError("Draft identity belongs to another target or owner")
-                if (old["body"], old["preview_json"], old["request_id"]) == (
-                    body,
-                    encode(snapshot),
-                    request_id,
-                ):
-                    return {"draft_id": draft_id, "revision": old["revision"]}
-                if revision != old["revision"]:
-                    raise DraftConflict(
-                        "This draft changed in another window; your text is still here"
-                    )
-            elif revision is not None:
-                raise DraftConflict("Saved draft disappeared; your text is still here")
-            row = {
-                "draft_id": draft_id,
-                "origin": data["origin"],
-                "origin_id": data["id"],
-                "owner_json": encode(self.owner),
-                "preview_json": encode(snapshot),
-                "body": body,
-                "request_id": request_id,
-                "revision": (old["revision"] + 1) if old else 1,
-                "updated_at": datetime.now(UTC).isoformat(),
-                "save_order": conn.execute(
-                    f"SELECT coalesce(max(save_order),0)+1 FROM {TABLE}"
-                ).fetchone()[0],
-                "fingerprint": "",
-            }
-            row["fingerprint"] = _fingerprint(row)
-            validate_record(row)
-            count, used = conn.execute(
-                f"SELECT count(*),coalesce(sum(length(CAST(owner_json AS BLOB)) + "
-                f"length(CAST(preview_json AS BLOB)) + length(CAST(body AS BLOB))),0) FROM {TABLE}"
-            ).fetchone()
-
-            def size(value):
-                return sum(
-                    len(value[key].encode("utf-8"))
-                    for key in ("owner_json", "preview_json", "body")
-                )
-
-            if (
-                count + (0 if old else 1) > MAX_DRAFTS
-                or used - (size(old) if old else 0) + size(row) > MAX_TOTAL
+        self._setup(conn)
+        existing = conn.execute(
+            f"SELECT * FROM {TABLE} WHERE draft_id=?", (draft_id,)
+        ).fetchone()
+        old = dict(existing) if existing else None
+        if old:
+            validate_record(old)
+            if (old["origin"], old["origin_id"], old["owner_json"]) != (
+                data["origin"],
+                data["id"],
+                encode(self.owner),
             ):
-                raise ValueError("Draft storage limit reached; export your text before closing")
-            columns = list(row)
-            with sync_capture.suppress_capture(conn):
-                conn.execute(
-                    f"INSERT INTO {TABLE}({','.join(columns)}) VALUES("
-                    + ",".join("?" for _ in columns)
-                    + ") ON CONFLICT(draft_id) DO UPDATE SET "
-                    + ",".join(f"{key}=excluded.{key}" for key in columns if key != "draft_id"),
-                    tuple(row.values()),
+                raise ValueError("Draft identity belongs to another target or owner")
+            if (old["body"], old["preview_json"], old["request_id"]) == (
+                body,
+                encode(snapshot),
+                request_id,
+            ):
+                return {"draft_id": draft_id, "revision": old["revision"]}
+            if revision != old["revision"]:
+                raise DraftConflict(
+                    "This draft changed in another window; your text is still here"
                 )
-            self._check(conn)
-            conn.commit()
-            return {"draft_id": draft_id, "revision": row["revision"]}
+        elif revision is not None:
+            raise DraftConflict("Saved draft disappeared; your text is still here")
+        row = {
+            "draft_id": draft_id,
+            "origin": data["origin"],
+            "origin_id": data["id"],
+            "owner_json": encode(self.owner),
+            "preview_json": encode(snapshot),
+            "body": body,
+            "request_id": request_id,
+            "revision": (old["revision"] + 1) if old else 1,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "save_order": conn.execute(
+                f"SELECT coalesce(max(save_order),0)+1 FROM {TABLE}"
+            ).fetchone()[0],
+            "fingerprint": "",
+        }
+        row["fingerprint"] = _fingerprint(row)
+        validate_record(row)
+        count, used = conn.execute(
+            f"SELECT count(*),coalesce(sum(length(CAST(owner_json AS BLOB)) + "
+            f"length(CAST(preview_json AS BLOB)) + length(CAST(body AS BLOB))),0) FROM {TABLE}"
+        ).fetchone()
+
+        def size(value):
+            return sum(
+                len(value[key].encode("utf-8"))
+                for key in ("owner_json", "preview_json", "body")
+            )
+
+        if (
+            count + (0 if old else 1) > MAX_DRAFTS
+            or used - (size(old) if old else 0) + size(row) > MAX_TOTAL
+        ):
+            raise ValueError("Draft storage limit reached; export your text before closing")
+        columns = list(row)
+        with sync_capture.suppress_capture(conn):
+            conn.execute(
+                f"INSERT INTO {TABLE}({','.join(columns)}) VALUES("
+                + ",".join("?" for _ in columns)
+                + ") ON CONFLICT(draft_id) DO UPDATE SET "
+                + ",".join(f"{key}=excluded.{key}" for key in columns if key != "draft_id"),
+                tuple(row.values()),
+            )
+        self._check(conn)
+        return {"draft_id": draft_id, "revision": row["revision"]}
 
     def list(self, origin, identity, *, before=None, limit=20):
         """Bounded lightweight variant list; details are validated only when opened."""
@@ -364,7 +410,7 @@ class DraftStore:
             if (
                 type(found[1]) is not int
                 or type(found[2]) is not int
-                or found[1] > MAX_BODY
+                or found[1] > _body_limit(origin)
                 or found[2] > MAX_DETAIL
             ):
                 return {
@@ -404,7 +450,7 @@ class DraftStore:
                     original = self.review._record(conn, origin, identity)
                     if digest(original) != data["record_hash"]:
                         raise ValueError("Retained record changed")
-                    if origin in {"generation", "sidecar"}:
+                    if origin in {"generation", "sidecar", "archived_resume"}:
                         expected = generation.GenerationContext(data["expected"])
                         stale = generation._stale(conn, expected)
                         kind = generation.REGISTRY[expected.table][0]
@@ -420,6 +466,18 @@ class DraftStore:
                             != data["parent_token"]
                         ):
                             raise ValueError(stale or "Selected parent changed")
+                    elif origin == "highlight_resume":
+                        from paper_daily.highlight_draft_resume import check_base
+
+                        check_base(self.review, conn, data)
+                    elif origin == "claim_resume":
+                        from paper_daily.claim_draft_resume import check_base
+
+                        check_base(self.review, conn, data)
+                    elif origin == "archived_note_resume":
+                        from paper_daily.archived_note_resume import check_base
+
+                        check_base(self.review, conn, data)
                     elif (
                         conn._capture_client.conflict_observation_in(conn, int(identity))
                         != data["expected"]
@@ -443,6 +501,18 @@ class DraftStore:
                         "decided",
                         "This draft already has a saved decision; review again before new changes",
                     )
+            if origin in {"claim_resume", "highlight_resume"}:
+                data["apply"] = False
+            if (
+                origin in {
+                    "archived_resume", "archived_note_resume", "claim_resume", "highlight_resume"
+                } and state == "ready"
+            ):
+                data["apply"] = False
+                state, reason = (
+                    "verification_required",
+                    "Draft restored with its displayed base; verify the retained original again",
+                )
             data["session"] = self.review.session
             data["resume_state"] = state
             serialized = encode(data)

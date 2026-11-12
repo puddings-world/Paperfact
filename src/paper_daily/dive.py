@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from paper_daily import brief, llm
+from paper_daily import brief, closeread, llm
 from paper_daily.store import connect, init_db, now
 
 Log = Callable[[str], None]
@@ -176,6 +176,10 @@ def _select(conn, count: int, paper_id: str | None, list_id: str | None, rewrite
         ).fetchall()
 
     have_dive = "d.paper_id IS NOT NULL AND COALESCE(d.spec,'') != ?" if rewrite else None
+    have_dive = (
+        f"({have_dive or 'd.paper_id IS NULL'}) "
+        "AND NOT EXISTS (SELECT 1 FROM kv WHERE kv.key = 'dive.gave_up.' || p.id)"
+    )
     args: list = [DIVE_SPEC] if rewrite else []
 
     if list_id:
@@ -222,7 +226,14 @@ class DiveCompletion(tuple):
         return value
 
 
-def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None):
+def _generate_for(
+    paper_id: str,
+    *,
+    database=None,
+    timeout=900,
+    connections=None,
+    expected_owner=None,
+):
     """Capture, generate and publish on the original workspace; no DB lock during AI."""
     from contextlib import closing
 
@@ -230,12 +241,21 @@ def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None
     from paper_daily import research_job_lock, store
 
     database = (database or store.DB_PATH).resolve()
+    if expected_owner is not None and (
+        expected_owner.database != database or expected_owner.paper_id != paper_id
+    ):
+        return DiveResult(None, "Queued deep dive belongs to another research owner")
     with research_job_lock.claim(database, "dive", paper_id) as acquired:
         if not acquired:
             return DiveResult(None, "deep dive is already in progress")
         with llm.connection_scope(connections):
             cfg = llm.settings(task="dive")
             with closing(generation._connect(database)) as conn, conn:
+                if expected_owner is not None:
+                    try:
+                        expected_owner.check(conn)
+                    except ValueError as exc:
+                        return DiveResult(None, str(exc))
                 row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
                 if row is None:
                     return DiveResult(None, "paper vanished between selection and writing")
@@ -253,15 +273,24 @@ def _generate_for(paper_id: str, *, database=None, timeout=900, connections=None
             from paper_daily.manual_highlight_ops import capture_owner
 
             annotation = None
-            if (isinstance(prepared, brief.PreparedPack) and prepared.document is not None
-                    and prepared.document.available):
+            if (
+                isinstance(prepared, brief.PreparedPack)
+                and prepared.document is not None
+                and prepared.document.available
+            ):
                 annotation = (capture_owner(database, paper_id), prepared.document.sha256)
             body, reason = _from_pack(pack, timeout, cfg=cfg)
         if body is None:
             return DiveResult(None, reason)
-        result = generation.publish_generated(context, row={
-            "paper_id": paper_id, "body": body, "written_at": now(), "spec": DIVE_SPEC,
-        })
+        result = generation.publish_generated(
+            context,
+            row={
+                "paper_id": paper_id,
+                "body": body,
+                "written_at": now(),
+                "spec": DIVE_SPEC,
+            },
+        )
         if result.status != "accepted":
             return DiveResult(
                 None, f"{result.reason}; generated result retained: {result.candidate_id}", result
@@ -287,10 +316,15 @@ def save(paper_id, body, *, expected=None):
             expected = edit_snapshot(conn, paper_id)
     if expected.table != "dives" or expected.owner_id != paper_id:
         raise ValueError("The deep dive edit belongs to another paper")
-    result = publish_edit(expected, row={
-        "paper_id": paper_id, "body": body,
-        "written_at": expected.started_at, "spec": (expected.target or {}).get("spec"),
-    })
+    result = publish_edit(
+        expected,
+        row={
+            "paper_id": paper_id,
+            "body": body,
+            "written_at": expected.started_at,
+            "spec": (expected.target or {}).get("spec"),
+        },
+    )
     if result.status != "accepted":
         raise StaleCaptureError(result.candidate_id)
     return result
@@ -303,9 +337,20 @@ def _fatal(reason: str) -> bool:
     whole batch reporting "out of usage credits" one paper at a time.
     """
     low = reason.lower()
+    if llm.failure_kind(reason) == "auth":
+        return True
+    # Temporary throttling is not an exhausted subscription. The provider may
+    # accept the next paper; never classify every HTTP 429 as a dead account.
     return any(
-        phrase in low
-        for phrase in ("authenticate", "sign in", "usage credits", "usage limit", "quota")
+        word in low
+        for word in (
+            "usage credits",
+            "usage limit",
+            "quota",
+            "out of credits",
+            "http 402",
+            "用量",
+        )
     )
 
 
@@ -329,6 +374,7 @@ def dive_ahead(
     `jobs` runs that many dives at once. Each one is a subprocess or an HTTPS call
     waiting on a model, so the time is spent waiting, not computing.
     """
+    import sqlite3
     from contextlib import closing
 
     from paper_daily import research_generation as generation
@@ -337,64 +383,148 @@ def dive_ahead(
     init_db()
     database = store.DB_PATH.resolve()
     connections = llm.capture_connections()
-    with closing(generation._connect(database)) as conn:
+    from paper_daily.manual_highlight_ops import capture_owner_in
+
+    with closing(generation._connect(database)) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
         rows = _select(conn, count, paper_id, list_id, rewrite)
         # Custom legacy iterators keep the four-item interface. Observe their
         # fallback targets before execution, in the same explicit workspace.
         fallback = {row["id"]: edit_snapshot(conn, row["id"]) for row in rows}
+        owners = {
+            pid: capture_owner_in(
+                conn,
+                pid,
+                expected_identity=context.data["database_identity"],
+            )
+            for pid, context in fallback.items()
+        }
         auto_highlights = store.get_kv(conn, "ui.auto_highlights") == "1"
     # Compatibility iterators lack their own source receipt. Observe their owner
     # and available PDF before starting work; never resolve a later global target.
     from paper_daily import paper_highlights
     from paper_daily.document_reader import from_workspace
-    from paper_daily.manual_highlight_ops import capture_owner
 
     legacy_root = paper_highlights.PDF_DIR
     fallback_annotations = {}
     for row in rows if auto_highlights else []:
         document = from_workspace(database, legacy_root=legacy_root).resolve(row["id"])
         if document.available:
-            fallback_annotations[row["id"]] = (
-                capture_owner(database, row["id"]), document.sha256
-            )
+            fallback_annotations[row["id"]] = (owners[row["id"]], document.sha256)
     if not rows:
         log("  nothing to write: every paper in scope is already on the current spec")
         return 0
     written = 0
-    for completion in _run(rows, jobs, log, database, connections):
+    for completion in _run(rows, jobs, log, database, connections, owners):
         paper_id_, body, reason, label = completion
         if not body:
             log(f"    failed [{label}]: {reason}")
             if _fatal(reason):
                 log("  stopping: nothing will succeed until the login is renewed")
                 break
+            if getattr(completion, "publication", None) is None:
+                _note_failure(paper_id_, reason, log, database, owners[paper_id_])
             continue
         if getattr(completion, "publication", None) is None:
             expected = fallback[paper_id_]
             if expected.data["binding"] is not None:
                 log("    custom generation has no captured input provenance")
                 continue
-            result = generation.publish_generation(expected, row={
-                "paper_id": paper_id_, "body": body, "written_at": now(), "spec": DIVE_SPEC,
-            })
+            result = generation.publish_generation(
+                expected,
+                row={
+                    "paper_id": paper_id_,
+                    "body": body,
+                    "written_at": now(),
+                    "spec": DIVE_SPEC,
+                },
+            )
             if result.status != "accepted":
                 log(f"    retained for review: {result.candidate_id}")
                 continue
+        # Follow-ups keep the selected paper's lifetime, database and account
+        # snapshot. A late completion must not create work for a recreated ID.
+        try:
+            with closing(generation._connect(database)) as conn, conn:
+                owners[paper_id_].check(conn)
+                store.set_kv(conn, f"dive.failures.{paper_id_}", None)
+                store.set_kv(conn, f"dive.gave_up.{paper_id_}", None)
+                missing = closeread.get(conn, paper_id_) is None
+        except (ValueError, OSError, sqlite3.DatabaseError) as exc:
+            log(f"    follow-up skipped for changed research owner: {exc}")
+            continue
         written += 1
         log(f"    stored {len(body)} chars [{label}]")
         annotation = getattr(completion, "annotation", None)
         if annotation is None and getattr(completion, "publication", None) is None:
             annotation = fallback_annotations.get(paper_id_)
+        if missing:
+            try:
+                close, why = closeread.write(
+                    paper_id_,
+                    database=database,
+                    connections=connections,
+                    expected_owner=owners[paper_id_],
+                    expected_document_hash=annotation[1] if annotation else None,
+                )
+            except (ValueError, OSError, RuntimeError, sqlite3.DatabaseError) as exc:
+                close, why = None, str(exc)
+            log(f"    逐節精讀 {len(close):,} chars" if close else f"    逐節精讀未完成：{why}")
         if annotation is not None:
             _prepare_highlights(
-                paper_id_, log, database=database, connections=connections,
-                owner=annotation[0], expected_document_hash=annotation[1], legacy_root=legacy_root,
+                paper_id_,
+                log,
+                database=database,
+                connections=connections,
+                owner=annotation[0],
+                expected_document_hash=annotation[1],
+                legacy_root=legacy_root,
             )
     return written
 
 
-def _prepare_highlights(paper_id: str, log: Log, *, database=None, connections=None,
-                        owner=None, expected_document_hash=None, legacy_root=None):
+GIVE_UP_AFTER = 3
+REFUSALS = ("safeguard", "usage policy", "flagged", "使用政策", "安全機制")
+
+
+def _note_failure(paper_id, reason, log, database, owner):
+    """Local retry state belongs to the original observed paper lifetime."""
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily import paper_highlights, store
+    from paper_daily import research_generation as generation
+
+    if paper_highlights._call_failure(reason).startswith(paper_highlights.TRANSIENT):
+        return
+    if "already in progress" in reason.lower():
+        return
+    try:
+        with closing(generation._connect(database)) as conn, conn:
+            owner.check(conn)
+            seen = store.get_kv(conn, f"dive.failures.{paper_id}") or {}
+            prior = seen.get("count", 0) if isinstance(seen, dict) else 0
+            count = prior + 1 if type(prior) is int and prior >= 0 else 1
+            store.set_kv(
+                conn, f"dive.failures.{paper_id}", {"count": count, "reason": reason[:300]}
+            )
+            if count >= GIVE_UP_AFTER or any(word in reason.lower() for word in REFUSALS):
+                store.set_kv(conn, f"dive.gave_up.{paper_id}", now())
+                log(f"    not picking this paper again on its own ({count} failure(s))")
+    except (ValueError, OSError, sqlite3.DatabaseError) as exc:
+        log(f"    retry state not applied to changed research owner: {exc}")
+
+
+def _prepare_highlights(
+    paper_id: str,
+    log: Log,
+    *,
+    database=None,
+    connections=None,
+    owner=None,
+    expected_document_hash=None,
+    legacy_root=None,
+):
     import sqlite3
     from contextlib import closing
     from pathlib import Path
@@ -426,8 +556,12 @@ def _prepare_highlights(paper_id: str, log: Log, *, database=None, connections=N
                 return
             expected_document_hash = document.sha256
         prepared, reason = reading_annotation_jobs.prepare(
-            database, paper_id, legacy_root=legacy_root, connections=connections,
-            owner=owner, expected_document_hash=expected_document_hash,
+            database,
+            paper_id,
+            legacy_root=legacy_root,
+            connections=connections,
+            owner=owner,
+            expected_document_hash=expected_document_hash,
         )
     except (ValueError, OSError, RuntimeError, sqlite3.DatabaseError) as exc:
         prepared, reason = None, str(exc)
@@ -442,15 +576,21 @@ def _prepare_highlights(paper_id: str, log: Log, *, database=None, connections=N
             # A deleted/recreated paper cannot receive a late failure marker either.
             if owner is not None:
                 owner.check(conn)
-            set_kv(conn, f"analyze.failed.highlights.{paper_id}", None if ok else reason)
+            transient = paper_highlights.transient(reason)
+            set_kv(
+                conn, f"analyze.failed.highlights.{paper_id}", None if ok or transient else reason
+            )
     except (ValueError, OSError, sqlite3.DatabaseError) as exc:
         log(f"    Highlight status not applied to a changed research owner: {exc}")
         return
-    log(f"    原文重點 {marks['mapped']}/{marks['total']} 段已標記並同步素材"
-        if marks else f"    原文重點未完成（講解已保存）：{reason}")
+    log(
+        f"    原文重點 {marks['mapped']}/{marks['total']} 段已標記並同步素材"
+        if marks
+        else f"    原文重點未完成（講解已保存）：{reason}"
+    )
 
 
-def _run(rows, jobs: int, log: Log, database=None, connections=None):
+def _run(rows, jobs: int, log: Log, database=None, connections=None, owners=None):
     """Yield (paper_id, body, reason, label) as each dive comes back."""
     from paper_daily import store
 
@@ -460,14 +600,25 @@ def _run(rows, jobs: int, log: Log, database=None, connections=None):
     if jobs <= 1:
         for r in rows:
             log(f"  writing: {labels[r['id']]}")
-            result = _generate_for(r["id"], database=database, connections=connections)
+            result = _generate_for(
+                r["id"],
+                database=database,
+                connections=connections,
+                expected_owner=(owners or {}).get(r["id"]),
+            )
             yield DiveCompletion(r["id"], result, labels[r["id"]])
         return
 
     log(f"  writing {len(rows)} dives, {jobs} at a time")
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         futures = {
-            pool.submit(_generate_for, r["id"], database=database, connections=connections): r["id"]
+            pool.submit(
+                _generate_for,
+                r["id"],
+                database=database,
+                connections=connections,
+                expected_owner=(owners or {}).get(r["id"]),
+            ): r["id"]
             for r in rows
         }
         try:

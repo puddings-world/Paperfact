@@ -143,7 +143,11 @@ Each new CLI account has a separate directory under `data/ai-accounts`. A second
 feature can reuse that account directly in the task table. **本機連線** uses your
 existing terminal login; Paperfact will not log it in or out. Claude accounts use
 the official subscription login, not the
-Console login. Codex accounts use the official Codex browser login. Gemini uses the
+Console login. Each person signs in to their own Claude account through the
+unmodified official CLI on their own computer; Paperfact never sees or shares the
+credentials, and requests draw on that person's own subscription limits. Anyone who
+would rather keep Paperfact off their subscription can use the `anthropic` backend
+with their own API key (see the table below). Codex accounts use the official Codex browser login. Gemini uses the
 official CLI's ACP `authenticate` method for Google login, independently of Slides
 authorization. Gemini's cached login status is local; it does not prove service
 access, and the consumer CLI path has been discontinued as described above.

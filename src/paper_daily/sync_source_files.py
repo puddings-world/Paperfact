@@ -509,15 +509,8 @@ def prepare_source(
     return value
 
 
-def publish_source_in(conn, client, prepared):
-    """Caller-owned transaction; no file I/O beyond native proof freshness checks.
-
-    Research file/outbox ownership rolls back with the caller. Byte staging may
-    remain as a harmless local cache; it grants no graph or current-PDF authority.
-    """
-    from paper_daily import sync_capture
-    from paper_daily.sync_artifacts import desired_file, register_paths
-
+def check_prepared_source_in(conn, client, prepared):
+    """Read-only native/binding/source verification; grants no ownership or write."""
     if (
         not conn.in_transaction
         or not isinstance(prepared, PreparedSource)
@@ -544,8 +537,25 @@ def publish_source_in(conn, client, prepared):
         raise ValueError("Original source staging payload changed")
     if _parent(conn, client, payload["paper_id"]) != prepared.parent:
         raise ValueError("Original source paper incarnation changed")
+    return payload
+
+
+def publish_source_in(conn, client, prepared):
+    """Caller-owned transaction; no file I/O beyond native proof freshness checks.
+
+    Research file/outbox ownership rolls back with the caller. Byte staging may
+    remain as a harmless local cache; it grants no graph or current-PDF authority.
+    """
+    from paper_daily import sync_capture
+    from paper_daily.sync_artifacts import desired_file, register_paths
+
+    payload = check_prepared_source_in(conn, client, prepared)
     identity = file_id(payload["paper_id"], FEATURE, payload["slot"])
     parent = [{"kind": "paper", "id": payload["paper_id"], "incarnation": prepared.parent}]
+    # A past publication receipt is not permission to use a now-retired source.
+    graph = client._optimistic_graph(conn)[0].get(("research_file", identity))
+    if graph and (not graph["active"] or graph["parents"] != parent):
+        raise ValueError("Deleted or retired original requires explicit source restoration")
     prior = conn.execute(
         "SELECT operation FROM research_file_versions WHERE operation_id=?", (prepared.request,)
     ).fetchone()
@@ -561,9 +571,6 @@ def publish_source_in(conn, client, prepared):
         return operation
     if existing and existing["payload"] == payload and existing["parents"] == parent:
         return existing
-    graph = client._optimistic_graph(conn)[0].get(("research_file", identity))
-    if graph and (not graph["active"] or graph["parents"] != parent):
-        raise ValueError("Deleted or retired original requires explicit source restoration")
     operation = client.new_graph_operation_in(
         conn, "research_file", identity, payload, operation_id=prepared.request
     )

@@ -44,8 +44,7 @@ NEWEST = 50
 JUDGE_BATCH = 60
 
 SELECT = (
-    "id,doi,display_name,publication_year,cited_by_count,primary_location,"
-    "abstract_inverted_index"
+    "id,doi,display_name,publication_year,cited_by_count,primary_location,abstract_inverted_index"
 )
 
 VERDICTS = ("必讀", "值得", "參考", "略過")
@@ -128,10 +127,17 @@ def _citing_openalex(wid: str) -> list[dict]:
         taken = 0
         while cursor and taken < limit:
             page = _get(
-                {"filter": f"cites:{wid}", "sort": sort, "per-page": 50,
-                 "cursor": cursor, "select": SELECT}
+                {
+                    "filter": f"cites:{wid}",
+                    "sort": sort,
+                    "per-page": 50,
+                    "cursor": cursor,
+                    "select": SELECT,
+                }
             )
-            results = page.get("results") or []
+            if not isinstance(page, dict) or not isinstance(page.get("results"), list):
+                raise ValueError("OpenAlex citing response has no valid results inventory")
+            results = page["results"]
             for w in results:
                 wid2 = w["id"].rsplit("/", 1)[-1]
                 # OpenAlex occasionally lists a work among its own citers.
@@ -179,22 +185,28 @@ def _citing_s2(row) -> list[dict] | None:
             page = json.loads(fetch_text(url, max_age=7 * 86400, retries=6))
         except FetchError:
             return out or None
-        for item in page.get("data") or []:
+        if not isinstance(page, dict) or not isinstance(page.get("data"), list):
+            raise ValueError("Semantic Scholar citing response has no valid data inventory")
+        for item in page["data"]:
+            if not isinstance(item, dict) or not isinstance(item.get("citingPaper"), dict):
+                raise ValueError("Semantic Scholar citing response has an invalid paper entry")
             w = item.get("citingPaper") or {}
             if not w.get("paperId") or not w.get("title"):
-                continue
+                return out or None  # Unusable records are unknown, never empty evidence.
             ext = w.get("externalIds") or {}
-            out.append({
-                "id": f"S2:{w['paperId']}",
-                "title": w["title"],
-                "year": w.get("year"),
-                "venue": w.get("venue") or None,
-                "doi": ext.get("DOI"),
-                "arxiv_id": ext.get("ArXiv"),
-                "citations": w.get("citationCount"),
-                "abstract": w.get("abstract"),
-                "contexts": [c for c in (item.get("contexts") or []) if c][:4],
-            })
+            out.append(
+                {
+                    "id": f"S2:{w['paperId']}",
+                    "title": w["title"],
+                    "year": w.get("year"),
+                    "venue": w.get("venue") or None,
+                    "doi": ext.get("DOI"),
+                    "arxiv_id": ext.get("ArXiv"),
+                    "citations": w.get("citationCount"),
+                    "abstract": w.get("abstract"),
+                    "contexts": [c for c in (item.get("contexts") or []) if c][:4],
+                }
+            )
         if page.get("next") is None:
             break
         offset = page["next"]
@@ -245,8 +257,10 @@ def fetch(paper_id: str, log: Log = lambda _m: None, *, database=None, connectio
 
 
 def _fetch(context, log):
+    from paper_daily import later_outcomes
     from paper_daily import research_compound as compound
 
+    empty_prepared = later_outcomes.prepare(context)
     row = context.paper
     wid = work_id(row)
     openalex = _citing_openalex(wid) if wid else []
@@ -282,14 +296,22 @@ def _fetch(context, log):
     if result.status != "accepted":
         log(f"{result.reason}; lookup result retained: {result.candidate_id}")
         return 0
+    if not works:
+        later_outcomes.complete(
+            empty_prepared,
+            context,
+            {
+                "openalex": "queried_empty" if wid is not None else "unknown",
+                "semantic_scholar": "queried_empty" if s2 is not None else "unknown",
+            },
+        )
     log(f"  {len(works)} citing work(s): {len(openalex)} from OpenAlex, {len(s2 or [])} from S2")
     return len(works)
 
 
 # ---- judging --------------------------------------------------------------------
 def _json(text: str, opener: str, closer: str):
-    return llm.reply_json(text, list if opener == "[" else dict,
-                          dict if opener == "[" else None)
+    return llm.reply_json(text, list if opener == "[" else dict, dict if opener == "[" else None)
 
 
 def judge(
@@ -393,8 +415,12 @@ def overview_inputs(conn, paper_id, *, limit=2000):
     ).fetchone()
     dive = conn.execute("SELECT body FROM dives WHERE paper_id=?", (paper_id,)).fetchone()
     verdicts = ("必讀", "值得")
-    refs = [r for r in references(conn, paper_id) if r.get("verdict") in verdicts][:30]
-    later = [r for r in for_paper(conn, paper_id) if r.get("verdict") in verdicts][:30]
+    all_refs, all_later = references(conn, paper_id), for_paper(conn, paper_id)
+    refs = [row for row in all_refs if row.get("verdict") in verdicts][:30]
+    later = [row for row in all_later if row.get("verdict") in verdicts][:30]
+    if not refs and not later:
+        refs = [row for row in all_refs if row.get("verdict")][:30]
+        later = [row for row in all_later if row.get("verdict")][:30]
     return {
         "paper": dict(paper) if paper else None,
         "dive": (dive["body"] or "")[:3500] if dive else "",
@@ -421,6 +447,12 @@ def overview(
         if not acquired:
             return False, "overview is already in progress"
         with llm.connection_scope(connections):
+            with closing(generation._connect(database)) as conn:
+                if nothing_to_tell(conn, paper_id):
+                    return (
+                        False,
+                        "Queried successfully; no judged inputs are available for an overview",
+                    )
             cfg = llm.settings(task="overview")
             with closing(generation._connect(database)) as conn:
                 if conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone() is None:
@@ -473,21 +505,36 @@ def _write_overview(context, cfg, log):
         ):
             raise ValueError("Invalid overview fields")
         reading = [
-            {"title": str(x.get("title") or ""), "direction": str(x.get("direction") or ""),
-             "why": str(x.get("why") or "")}
-            for x in (data.get("reading") or []) if isinstance(x, dict) and x.get("title")
+            {
+                "title": str(x.get("title") or ""),
+                "direction": str(x.get("direction") or ""),
+                "why": str(x.get("why") or ""),
+            }
+            for x in (data.get("reading") or [])
+            if isinstance(x, dict) and x.get("title")
         ][:6]
-        result = publish_generated(context, row={
-            "paper_id": context.owner_id, "summary": str(data.get("summary") or ""),
-            "reading_json": json.dumps(reading, ensure_ascii=False),
-            "written_at": now(), "edited": 0,
-        })
+        result = publish_generated(
+            context,
+            row={
+                "paper_id": context.owner_id,
+                "summary": str(data.get("summary") or ""),
+                "reading_json": json.dumps(reading, ensure_ascii=False),
+                "written_at": now(),
+                "edited": 0,
+            },
+        )
     except (ValueError, TypeError, AttributeError):
         return False, "the model's answer was not a valid overview"
     if result.status != "accepted":
         return False, f"{result.reason}; generated result retained: {result.candidate_id}"
     log("  overview written")
     return True, ""
+
+
+def nothing_to_tell(conn, paper_id: str, *, verify_source=True) -> bool:
+    from paper_daily.later_outcomes import settled
+
+    return settled(conn, paper_id, verify_source=verify_source)
 
 
 def done(conn, paper_id: str) -> bool:
@@ -499,9 +546,32 @@ def done(conn, paper_id: str) -> bool:
 
 
 def analyse(
-    paper_id: str, log: Log = lambda _m: None, *, database=None, connections=None,
+    paper_id: str,
+    log: Log = lambda _m: None,
+    *,
+    database=None,
+    connections=None,
     overview_too: bool = True,
 ) -> int:
+    """Compatibility entry point sharing the scoped result operation."""
+    count, _reason = analyse_result(
+        paper_id,
+        log=log,
+        database=database,
+        connections=connections,
+        overview_too=overview_too,
+    )
+    return count
+
+
+def analyse_result(
+    paper_id: str,
+    log: Log = lambda _m: None,
+    *,
+    database=None,
+    connections=None,
+    overview_too: bool = True,
+) -> tuple[int, str]:
     from contextlib import closing
 
     from paper_daily import citegraph, research_job_lock, store
@@ -516,14 +586,21 @@ def analyse(
     ):
         if not acquired:
             log("Followup research is already in progress")
-            return 0
+            return 0, "Followup research is already in progress"
         with closing(generation._connect(database)) as conn:
+            if not conn.execute("SELECT 1 FROM papers WHERE id=?", (paper_id,)).fetchone():
+                return 0, "The selected paper no longer exists"
             observed = compound.begin(conn, phase="fetch", owner_id=paper_id)
         original_scope = observed
-        _fetch(observed, log)
+        try:
+            _fetch(observed, log)
+        except FetchError as exc:
+            reason = f"後續研究服務暫時無法連線：{exc}"
+            log(reason)
+            return 0, reason
         if not compound.scope_current(original_scope):
             log("Original research owner changed; remaining phases skipped")
-            return 0
+            return 0, "Original research owner changed; remaining phases skipped"
         with closing(generation._connect(database)) as conn:
             observed = compound.begin(conn, phase="judge", owner_id=paper_id)
         done, reason = _judge(observed, log)
@@ -531,15 +608,17 @@ def analyse(
             log(f"  judging skipped: {reason}")
         if not compound.scope_current(original_scope):
             log("Original research owner changed; remaining phases skipped")
-            return done
+            return done, "Original research owner changed; remaining phases skipped"
+        reason = "" if reason == "nothing to judge" else reason
         if overview_too:
             wrote, why = overview(paper_id, log, database=database, connections=connections)
             if not wrote and why != "edited by hand":
                 log(f"  overview skipped: {why}")
+                reason = reason or why
         # The older graph enrichment writer has no explicit workspace contract.
         if store.DB_PATH.resolve() == database and compound.scope_current(original_scope):
             citegraph.links(paper_id, log)
-        return done
+        return done, reason
 
 
 def ahead(count: int = 3, log: Log = lambda _m: None) -> int:
@@ -611,31 +690,38 @@ def references(conn, paper_id: str) -> list[dict]:
     paper = conn.execute("SELECT title FROM papers WHERE id=?", (paper_id,)).fetchone()
     own = short_name(paper["title"]).casefold() if paper else ""
     out = [
-        r for r in cites.for_paper(conn, paper_id, "verdict")
+        r
+        for r in cites.for_paper(conn, paper_id, "verdict")
         if not (own and own in (r["title"] or "").casefold())
     ]
     listed = {title_key(r["title"] or "") for r in out}
     for r in pipeline.lineage_of(conn, paper_id)["ancestors"]:
         if title_key(r["title"]) in listed:
             continue
-        out.append({
-            "ref_key": "", "title": r["title"], "year": r["year"], "venue": r["venue"],
-            "doi": None, "verdict": None, "citations": None, "corpus_id": r["id"],
-            "influential": r["influential"], "contexts": [], "basis": "graph",
-            "purpose": "Semantic Scholar 引用圖裡的參考文獻,還沒讀內文判斷",
-        })
+        out.append(
+            {
+                "ref_key": "",
+                "title": r["title"],
+                "year": r["year"],
+                "venue": r["venue"],
+                "doi": None,
+                "verdict": None,
+                "citations": None,
+                "corpus_id": r["id"],
+                "influential": r["influential"],
+                "contexts": [],
+                "basis": "graph",
+                "purpose": "Semantic Scholar 引用圖裡的參考文獻,還沒讀內文判斷",
+            }
+        )
     return out
 
 
-def in_corpus(
-    conn, doi: str | None, title: str | None, known: str | None = None
-) -> dict | None:
+def in_corpus(conn, doi: str | None, title: str | None, known: str | None = None) -> dict | None:
     """The corpus row for a work, if it is already here, with its reading state."""
     row = {"id": known} if known else None
     if row is None and doi:
-        row = conn.execute(
-            "SELECT id FROM papers WHERE doi = ? COLLATE NOCASE", (doi,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM papers WHERE doi = ? COLLATE NOCASE", (doi,)).fetchone()
     if row is None and title:
         row = conn.execute(
             "SELECT id FROM papers WHERE title_key=?", (title_key(title),)
@@ -721,10 +807,15 @@ def edit_overview(paper_id: str, summary: str, reading: list[dict], *, expected=
             expected = overview_edit_snapshot(conn, paper_id)
     if expected.table != "paper_context" or expected.owner_id != paper_id:
         raise ValueError("The overview edit belongs to another paper")
-    result = publish_edit(expected, row={
-        "paper_id": paper_id, "summary": summary,
-        "reading_json": json.dumps(reading, ensure_ascii=False),
-        "written_at": expected.started_at, "edited": 1,
-    })
+    result = publish_edit(
+        expected,
+        row={
+            "paper_id": paper_id,
+            "summary": summary,
+            "reading_json": json.dumps(reading, ensure_ascii=False),
+            "written_at": expected.started_at,
+            "edited": 1,
+        },
+    )
     if result.status != "accepted":
         raise StaleCaptureError(result.candidate_id)

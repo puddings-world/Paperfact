@@ -89,3 +89,12 @@ def test_the_reader_puts_each_figure_where_it_is_discussed(tmp_path):
 
     pending = reading.render("## 一句話結論\n一句。", None, [], PALETTE)
     assert "逐節精讀" in pending and "close-read" in pending
+
+
+def test_a_short_paper_read_section_by_section_is_kept(conn, monkeypatch):
+    monkeypatch.setattr(closeread.brief, "pack_text", lambda c, row: ("pack", Path("a.pdf")))
+    reading = "\n".join(["## 2 Method", "方法逐段講解。" * 60, "## 3 Results", "結果。" * 60])
+    assert len(reading) < 3000
+    monkeypatch.setattr(closeread.llm, "complete", lambda *a, **k: (reading, "ok"))
+    body, reason = closeread.write("a")
+    assert reason == "ok" and closeread.get(conn, "a") == reading

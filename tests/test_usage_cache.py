@@ -135,6 +135,7 @@ def test_monitor_prefetches_unsaved_terminal_accounts_once_per_identity(setup, m
     owner = QWidget()
     monitor = UsageMonitor(owner)
     app.processEvents()
+    assert monitor._reads.wait()
     assert requested == [("cli", "saved"), ("codex", "local"), ("gemini", "local")]
     monitor.timer.stop()
     owner.deleteLater()
@@ -155,11 +156,44 @@ def test_a_window_in_the_background_does_no_usage_work_until_it_is_brought_forwa
     owner = QWidget()
     monitor = UsageMonitor(owner)
     app.processEvents()
+    assert monitor._reads.wait()
+    app.processEvents()
     assert looks == [1]  # The look at startup.
     assert not monitor.timer.isActive()
 
     QApplication.sendEvent(owner, QEvent(QEvent.Type.WindowActivate))
+    assert monitor._reads.wait()
+    app.processEvents()
     assert looks == [1, 1] and monitor.timer.isActive()
     QApplication.sendEvent(owner, QEvent(QEvent.Type.WindowDeactivate))
     assert not monitor.timer.isActive()
+    owner.deleteLater()
+
+
+def test_the_monitor_reads_settings_off_the_windows_thread(setup, monkeypatch):
+    # Read on the window's thread every two seconds, the settings files froze it
+    # for up to two seconds whenever the disk was busy, for as long as it was open.
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    from paper_daily.desktop.usage_monitor import UsageMonitor
+
+    app = QApplication.instance() or QApplication([])
+    saved = Settings("cli", account_id="saved")
+    on_main = []
+
+    def accounts():
+        on_main.append(threading.current_thread() is threading.main_thread())
+        return [saved]
+
+    monkeypatch.setattr(ai_choices, "accounts", accounts)
+    monkeypatch.setattr(ai_choices, "choices", lambda backend: [])
+    monkeypatch.setattr(setup, "refresh_background", lambda cfg: None)
+    owner = QWidget()
+    monitor = UsageMonitor(owner)
+    monitor.timer.stop()
+    app.processEvents()
+    monitor.tick_in_background()
+    assert monitor._reads.wait()
+    app.processEvents()
+    assert on_main and not any(on_main)
     owner.deleteLater()

@@ -1,0 +1,143 @@
+{
+  "format": "paperfact.claim-review-operation-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "unreleased": true,
+  "full_check_passed": false,
+  "scope": "Isolated local integration; synthetic research; actual Qt, CLI subprocess and official MCP SDK.",
+  "first_interaction_result": {
+    "exit_code": 1,
+    "seconds": 446.92,
+    "selection": [
+      "tests/test_claim_review_operations.py",
+      "tests/test_claim_review_transports.py",
+      "tests/test_note_review_operations.py",
+      "tests/test_note_review_transports.py",
+      "tests/test_note_review_boundaries.py",
+      "tests/test_claim_draft_application.py",
+      "tests/test_claim_draft_ui.py",
+      "tests/test_local_integration.py",
+      "tests/test_audit_integration.py",
+      "tests/test_research_job_lock.py"
+    ],
+    "frozen_inputs": 1119,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 102,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "failed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.852,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.229,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "failed",
+          "seconds": 444.386,
+          "exit_code": 1
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_claim_review_operations.py",
+          "tests/test_claim_review_transports.py",
+          "tests/test_note_review_operations.py",
+          "tests/test_note_review_transports.py",
+          "tests/test_note_review_boundaries.py",
+          "tests/test_claim_draft_application.py",
+          "tests/test_claim_draft_ui.py",
+          "tests/test_local_integration.py",
+          "tests/test_audit_integration.py",
+          "tests/test_research_job_lock.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 446.476
+    }
+  },
+  "followup_result": {
+    "exit_code": 0,
+    "seconds": 30.69,
+    "selection": [
+      "tests/test_local_integration.py",
+      "tests/test_audit_integration.py",
+      "tests/test_research_job_lock.py"
+    ],
+    "frozen_inputs": 1119,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 2.031,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.156,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 28.115,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_local_integration.py",
+          "tests/test_audit_integration.py",
+          "tests/test_research_job_lock.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 30.31
+    }
+  },
+  "evidence_kind": "Separate maintained focused runs; unchanged product source; overlapping cases not summed.",
+  "new_cases": {
+    "operations": 18,
+    "transports": 4
+  },
+  "existing_test_change": "Two tool-count expectations 17 to 26 and exact packaged tool inventory extended by nine; original tool/retry/restart assertions retained.",
+  "external_gates": [
+    "matching full check",
+    "canonical product integration",
+    "platform installers",
+    "installed Windows and Apple Silicon Mac",
+    "physical phone",
+    "production identity, hosting, enrollment and recovery",
+    "scholarly quality"
+  ]
+}

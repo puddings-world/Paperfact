@@ -1,0 +1,38 @@
+{
+  "format": "paperfact.local-validation-summary.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "scope": "Structured claim private backend and interacting existing draft/recovery safeguards; not source application, native UI or whole application.",
+  "result": {
+    "exit_code": 0,
+    "seconds": 157.92,
+    "selection": [
+      "tests/test_claim_draft_storage.py",
+      "tests/test_claim_draft_revision.py",
+      "tests/test_claim_review_guards.py",
+      "tests/test_research_review_drafts.py",
+      "tests/test_enrollment_review_draft_validation.py",
+      "tests/test_detached_review_drafts.py::test_detached_draft_variants_remain_readable_without_the_old_workspace",
+      "tests/test_detached_review_drafts.py::test_mixed_live_and_recovery_carriers_are_deduplicated_and_paginate_without_writes",
+      "tests/test_archived_draft_resumption.py::test_receiver_draft_can_restart_verify_edit_apply_and_retry_without_replacing_b",
+      "tests/test_note_draft_resumption.py::test_rich_note_draft_survives_real_conflict_backup_adoption_resume_and_retry"
+    ],
+    "frozen_inputs": 981,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 93,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "new_storage_cases": 22,
+  "existing_cases": 71,
+  "inputs_sha256": "8d18bdb232912af83e4063f4bd0e576f3e0636341a4172b0aa902c7850811ef9",
+  "exposed_in_app": false,
+  "source_apply_supported": false,
+  "full_check_passed": false,
+  "physical_devices_tested": false,
+  "production_tested": false
+}

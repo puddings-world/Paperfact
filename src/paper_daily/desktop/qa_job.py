@@ -1,23 +1,27 @@
 """One immutable QA target; model and durable publication both stay off the UI thread."""
 
 import json
+from contextlib import suppress
 
 from paper_daily import llm, research_chat
 
 
 class ChatJob:
-    def __init__(self, request, connections, cfg, *, resume=False):
+    def __init__(self, request, connections, cfg, *, resume=False, prepared=None, replacement=None):
         self.request = request
         self.connections = connections
         self.cfg = cfg
         self.answer = research_chat.answer_record(request)
         self.result = None
         self.resume = resume
+        self.prepared = prepared
+        self.replacement = replacement
 
     def __call__(self, _prompt):
         from paper_daily.research_job_lock import claim
         from paper_daily.work_progress import report
 
+        prepared = self.prepared
         with claim(self.request.db_path, "ask", self.request.data["paper_id"]) as accepted:
             if not accepted:
                 return None, "這篇論文的問答正在執行，請稍候。"
@@ -34,9 +38,16 @@ class ChatJob:
                     return None, reason
             if self.answer is None:
                 report("正在核對原始論文與問答紀錄")
-                self.request, prompt = research_chat.prepare_chat(self.request)
+                self.request, prompt = research_chat.prepare_chat(
+                    self.request, replacement=self.replacement
+                )
                 self.answer = research_chat.answer_record(self.request)
                 if self.answer is None:
+                    # Presentation is optional and cannot change durable work or
+                    # make a failed observer repeat a paid invocation.
+                    if prepared is not None:
+                        with suppress(Exception):
+                            prepared(self.request)
                     with llm.connection_scope(self.connections):
                         self.answer, reason = llm.complete(
                             prompt, cfg=self.cfg, timeout=300, task="ask"

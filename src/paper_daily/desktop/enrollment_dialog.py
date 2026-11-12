@@ -100,6 +100,10 @@ COPY = {
         "papers": "Papers",
         "lists": "Lists",
         "notes": "Notes",
+        "manual_decks": "Additional saved local decks",
+        "retained_decks": "Retained research decks (review before applying)",
+        "qa_reviews": "Q&A review history",
+        "review_decisions": "Review decision history",
         "pdfs": "Current PDFs",
         "originals": "Retained original PDFs",
         "receipts": "Archived source receipts",
@@ -147,6 +151,10 @@ COPY = {
         "papers": "論文",
         "lists": "清單",
         "notes": "筆記",
+        "manual_decks": "另含已存本機簡報",
+        "retained_decks": "保留研究簡報（需核對後套用）",
+        "qa_reviews": "問答審閱歷史",
+        "review_decisions": "審閱決策歷史",
         "pdfs": "現行 PDF",
         "originals": "保留版本原文",
         "receipts": "原文歸檔紀錄",
@@ -487,6 +495,16 @@ class EnrollmentDialog(QDialog):
             f"{self.t['receipts']}: {plan.get('archived_source_receipts', 0):,}",
             f"{self.t['excluded']}: {plan.get('excluded_private_kv', 0):,}",
         ]
+        archived = plan.get("archived_history_by_protocol", {})
+        for label, protocol in (
+            ("manual_decks", "research_observed_current_deck_recovery"),
+            ("retained_decks", "research_common_deck_proposal_recovery"),
+            ("qa_reviews", "research_chat_review_receipts"),
+            ("review_decisions", "research_review_receipts"),
+        ):
+            count = archived.get(protocol, 0)
+            if count:
+                lines.append(f"{self.t[label]}: {count:,}")
         if plan.get("blockers"):
             lines += ["", self.t["unsupported"], *["- " + item for item in plan["blockers"]]]
         lines += ["", self.t["mapping"]]

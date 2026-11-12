@@ -52,8 +52,9 @@ export class MemoryStore {
   }
 }
 export class IndexedStore {
-  constructor(db, workspace, device) {
+  constructor(db, workspace, device, {existingOnly=false}={}) {
     this.db = db;
+    this.existingOnly = existingOnly;
     this.workspace = workspace;
     this.device = device;
     this.key = scopeKey(workspace, device);
@@ -70,6 +71,27 @@ export class IndexedStore {
     db.onversionchange =() => db.close();
     return new IndexedStore(db, workspace, device);
   }
+  static async openExisting(workspace,device,indexedDB=globalThis.indexedDB) {
+    if(!indexedDB)throw Error('storage_unavailable');
+    const db=await new Promise((resolve,reject)=>{
+      let absent=false,settled=false;
+      const request=indexedDB.open('paperfact-mobile-v1',1);
+      request.onupgradeneeded=()=>{absent=true;request.transaction.abort();};
+      request.onerror=event=>{event.preventDefault();if(settled)return;settled=true;absent?resolve(null):reject(Error('storage_unavailable'));};
+      request.onblocked=()=>{settled=true;reject(Error('storage_blocked'));};
+      request.onsuccess=()=>{
+        const opened=request.result;
+        if(settled){opened.close();return;}
+        settled=true;
+        if(!opened.objectStoreNames.contains('scopes')){opened.close();reject(Error('storage_unavailable'));return;}
+        opened.onversionchange=()=>opened.close();resolve(opened);
+      };
+    });
+    if(db===null)return null;
+    const store=new IndexedStore(db,workspace,device,{existingOnly:true});
+    try { await store.read();return store; }
+    catch(error){store.close();if(error.message==='workspace_not_cached')return null;throw error;}
+  }
   async read() {
     return this.transaction('readonly', null);
   }
@@ -85,6 +107,8 @@ export class IndexedStore {
       const request = table.get(this.key);
       request.onsuccess =() => {
         try {
+          if(this.existingOnly && request.result===undefined)throw Error('workspace_not_cached');
+          if(this.existingOnly && (!request.result || typeof request.result!=='object' || Array.isArray(request.result)))throw Error('wrong_scope');
           const state = request.result ?? emptyState(this.workspace, this.device);
           if(state.workspace !== this.workspace || state.device !== this.device) throw new Error('wrong_scope');
           result = change ? change(state): state;

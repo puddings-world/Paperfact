@@ -46,6 +46,34 @@ def verify(command, workspace, env):
                 "imports.commit",
                 "imports.discard",
                 "operations.inspect",
+                "review.notes.list",
+                "review.notes.targets",
+                "review.notes.open",
+                "review.notes.read",
+                "review.notes.sources",
+                "review.notes.page",
+                "review.notes.map",
+                "review.notes.clear",
+                "review.notes.save",
+                "review.notes.decide",
+                "review.claims.list",
+                "review.claims.inspect",
+                "review.claims.targets",
+                "review.claims.open",
+                "review.claims.read",
+                "review.claims.save",
+                "review.claims.verify",
+                "review.claims.page",
+                "review.claims.apply",
+                "review.highlights.list",
+                "review.highlights.inspect",
+                "review.highlights.targets",
+                "review.highlights.open",
+                "review.highlights.read",
+                "review.highlights.save",
+                "review.highlights.verify",
+                "review.highlights.page",
+                "review.highlights.apply",
             }
             arguments = dict(preview_id=preview, operation_id="acceptance", selected=["0"])
             first = await client.call_tool("imports.commit", arguments)
@@ -59,6 +87,6 @@ def verify(command, workspace, env):
                 "operations.inspect", {"operation_id": "acceptance"}
             )
             assert receipt.structured_content["result"]["state"] == "committed"
-        return {"mcp_tools": 10, "retry_preserved": True, "restart_recovery": True}
+        return {"mcp_tools": len(tools.tools), "retry_preserved": True, "restart_recovery": True}
 
     return asyncio.run(exercise())

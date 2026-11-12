@@ -68,6 +68,12 @@ class OriginalSnapshot:
     registry: tuple | None = field(repr=False)
     local_proof: object | None = field(repr=False)
     _seal: object = field(repr=False)
+    retained_proof: object | None = field(default=None, repr=False)
+    active_proof: object | None = field(default=None, repr=False)
+    material_proof: object | None = field(default=None, repr=False)
+    draft_proof: object | None = field(default=None, repr=False)
+    claim_read_proof: object | None = field(default=None, repr=False)
+    highlight_read_proof: object | None = field(default=None, repr=False)
 
 
 def _connection(owner):
@@ -107,6 +113,30 @@ def metadata_current(snapshot):
     ):
         return False
     try:
+        if getattr(snapshot, "highlight_read_proof", None) is not None:
+            return highlight_read_status(snapshot) == "ready"
+        if getattr(snapshot, "claim_read_proof", None) is not None:
+            return claim_read_status(snapshot) == "ready"
+        proof = getattr(snapshot, "draft_proof", None)
+        if proof is not None:
+            return draft_status(snapshot) == "ready"
+        proof = getattr(snapshot, "material_proof", None)
+        if proof is not None:
+            return material_status(snapshot) == "ready"
+        proof = getattr(snapshot, "active_proof", None)
+        if proof is not None:
+            return active_status(snapshot) == "ready"
+        proof = getattr(snapshot, "retained_proof", None)
+        if proof is not None:
+            from paper_daily import retained_originals
+
+            return bool(
+                snapshot.data is proof.data
+                and snapshot.source == proof.source
+                and snapshot.document_hash == proof.document_hash
+                and snapshot.file_version == proof.file_version
+                and retained_originals.metadata_current(proof)
+            )
         if snapshot.local_proof is not None:
             from paper_daily import local_source_owners
 
@@ -135,6 +165,362 @@ def metadata_current(snapshot):
         return False
 
 
+def active_status(snapshot):
+    """Native-only status for the separately sealed active saved-deck adapter."""
+    from paper_daily import active_deck_originals
+
+    proof = getattr(snapshot, "active_proof", None)
+    if (
+        not isinstance(snapshot, OriginalSnapshot)
+        or getattr(snapshot, "_seal", None) is not _SNAPSHOT_SEAL
+        or getattr(snapshot, "claim_read_proof", None) is not None
+        or getattr(snapshot, "highlight_read_proof", None) is not None
+        or proof is None
+        or snapshot.data is not proof.data
+        or snapshot.document_hash != proof.document_hash
+        or snapshot.pages != proof.pages
+        or snapshot.source != proof.source_path
+    ):
+        return "revoked"
+    return active_deck_originals.gui_status(proof)
+
+
+def material_status(snapshot):
+    from paper_daily import material_sources
+
+    proof = getattr(snapshot, "material_proof", None)
+    if (
+        not isinstance(snapshot, OriginalSnapshot)
+        or getattr(snapshot, "_seal", None) is not _SNAPSHOT_SEAL
+        or not isinstance(proof, material_sources.OriginalProof)
+        or getattr(snapshot, "claim_read_proof", None) is not None
+        or getattr(snapshot, "highlight_read_proof", None) is not None
+        or getattr(snapshot, "active_proof", None) is not None
+        or snapshot.data is not proof.data
+        or snapshot.document_hash != proof.document_hash
+        or snapshot.pages != proof.pages
+        or snapshot.source != proof.source_path
+    ):
+        return "revoked"
+    return material_sources.gui_status(proof)
+
+
+def draft_status(snapshot):
+    from paper_daily import resumed_draft_originals
+
+    proof = getattr(snapshot, "draft_proof", None)
+    if (
+        not isinstance(snapshot, OriginalSnapshot)
+        or getattr(snapshot, "_seal", None) is not _SNAPSHOT_SEAL
+        or not isinstance(proof, resumed_draft_originals.OriginalProof)
+        or any(
+            getattr(snapshot, name, None) is not None
+            for name in (
+                "local_proof",
+                "retained_proof",
+                "active_proof",
+                "material_proof",
+                "claim_read_proof",
+                "highlight_read_proof",
+            )
+        )
+        or snapshot.data is not proof.data
+        or snapshot.document_hash != proof.document_hash
+        or snapshot.pages != proof.pages
+        or snapshot.source != proof.source_path
+        or snapshot.file_version != proof.file_version
+    ):
+        return "revoked"
+    return resumed_draft_originals.gui_status(proof)
+
+
+def _read_status(snapshot, domain):
+    """Only a separately sealed typed read can enter this native-only admission."""
+    from paper_daily import claim_draft_originals, highlight_draft_originals
+    from paper_daily.review_draft_originals import DraftReadProof
+
+    if domain not in {"claim_resume", "highlight_resume"}:
+        return "revoked"
+    field_name = "claim_read_proof" if domain == "claim_resume" else "highlight_read_proof"
+    proof = getattr(snapshot, field_name, None)
+    excluded = {
+        "owner",
+        "portable_id",
+        "operation",
+        "claim",
+        "registry",
+        "local_proof",
+        "retained_proof",
+        "active_proof",
+        "material_proof",
+        "draft_proof",
+        "claim_read_proof",
+        "highlight_read_proof",
+    } - {field_name}
+    if (
+        not isinstance(snapshot, OriginalSnapshot)
+        or getattr(snapshot, "_seal", None) is not _SNAPSHOT_SEAL
+        or not isinstance(proof, DraftReadProof)
+        or proof.domain != domain
+        or any(getattr(snapshot, name, None) is not None for name in excluded)
+        or snapshot.data is not proof.data
+        or snapshot.document_hash != proof.document_hash
+        or snapshot.pages != proof.pages
+        or snapshot.source != proof.source_path
+        or snapshot.file_version != proof.file_version
+    ):
+        return "revoked"
+    adapter = claim_draft_originals if domain == "claim_resume" else highlight_draft_originals
+    return adapter.gui_status(proof)
+
+
+def claim_read_status(snapshot):
+    return _read_status(snapshot, "claim_resume")
+
+
+def highlight_read_status(snapshot):
+    return _read_status(snapshot, "highlight_resume")
+
+
+def _read_snapshot(proof, domain):
+    snapshot = object.__new__(OriginalSnapshot)
+    values = dict(
+        owner=None,
+        portable_id=None,
+        document_hash=proof.document_hash,
+        data=proof.data,
+        pages=proof.pages,
+        source=proof.source_path,
+        file_version=proof.file_version,
+        operation=None,
+        claim=None,
+        registry=None,
+        local_proof=None,
+        retained_proof=None,
+        active_proof=None,
+        material_proof=None,
+        draft_proof=None,
+        claim_read_proof=None,
+        highlight_read_proof=None,
+        _seal=_SNAPSHOT_SEAL,
+    )
+    if domain not in {"claim_resume", "highlight_resume"} or proof.domain != domain:
+        raise OriginalUnavailable("Independent original has a different review domain")
+    values["claim_read_proof" if domain == "claim_resume" else "highlight_read_proof"] = proof
+    for name, value in values.items():
+        object.__setattr__(snapshot, name, value)
+    if not metadata_current(snapshot):
+        raise OriginalUnavailable("Original changed before delivery")
+    return snapshot
+
+
+def _claim_read_snapshot(proof):
+    return _read_snapshot(proof, "claim_resume")
+
+
+def prepare_highlight_draft_read(
+    service, preview, document_hash, *, reference=None, cancelled=lambda: False
+):
+    from paper_daily import highlight_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = highlight_draft_originals.prepare(
+            service, preview, document_hash, reference=reference, cancelled=cancelled
+        )
+        return None if cancelled() else _read_snapshot(proof, "highlight_resume")
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable("Highlight original is not independently available") from error
+
+
+def refresh_highlight_draft_read(snapshot, cancelled):
+    from paper_daily import highlight_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = highlight_draft_originals.revalidate(
+            snapshot.highlight_read_proof, cancelled=cancelled
+        )
+        return None if cancelled() else _read_snapshot(proof, "highlight_resume")
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable("Highlight original read permission changed") from error
+
+
+def prepare_claim_draft_read(
+    service, preview, document_hash, *, reference=None, cancelled=lambda: False
+):
+    from paper_daily import claim_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = claim_draft_originals.prepare(
+            service, preview, document_hash, reference=reference, cancelled=cancelled
+        )
+        return None if cancelled() else _claim_read_snapshot(proof)
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable("Claim original is not independently available") from error
+
+
+def refresh_claim_draft_read(snapshot, cancelled):
+    from paper_daily import claim_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = claim_draft_originals.revalidate(snapshot.claim_read_proof, cancelled=cancelled)
+        return None if cancelled() else _claim_read_snapshot(proof)
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable("Claim original read permission changed") from error
+
+
+def _draft_snapshot(proof):
+    from paper_daily import resumed_draft_originals
+
+    if resumed_draft_originals.gui_status(proof) != "ready":
+        raise OriginalUnavailable("Resumed draft original changed before delivery")
+    snapshot = object.__new__(OriginalSnapshot)
+    for name, value in dict(
+        owner=None,
+        portable_id=None,
+        document_hash=proof.document_hash,
+        data=proof.data,
+        pages=proof.pages,
+        source=proof.source_path,
+        file_version=proof.file_version,
+        operation=None,
+        claim=None,
+        registry=None,
+        local_proof=None,
+        retained_proof=None,
+        active_proof=None,
+        material_proof=None,
+        draft_proof=proof,
+        _seal=_SNAPSHOT_SEAL,
+    ).items():
+        object.__setattr__(snapshot, name, value)
+    if not metadata_current(snapshot):
+        raise OriginalUnavailable("Resumed draft original changed before delivery")
+    return snapshot
+
+
+def prepare_resumed_draft(service, preview, document_hash, *, cancelled=lambda: False):
+    from paper_daily import resumed_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = resumed_draft_originals.prepare(
+            service, preview, document_hash, cancelled=cancelled
+        )
+        return None if cancelled() else _draft_snapshot(proof)
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable(
+            "Resumed draft original unavailable; verify draft sources and retry"
+        ) from error
+
+
+def refresh_draft(snapshot, cancelled):
+    from paper_daily import resumed_draft_originals
+
+    if cancelled():
+        return None
+    try:
+        proof = resumed_draft_originals.revalidate(snapshot.draft_proof, cancelled=cancelled)
+        return None if cancelled() else _draft_snapshot(proof)
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable(
+            "Resumed draft original unavailable; verify draft sources and retry"
+        ) from error
+
+
+def prepare_material(proof):
+    """Worker adapter for its own collected-material permission; no deck or claim."""
+    from paper_daily import material_sources
+
+    if material_sources.gui_status(proof) != "ready":
+        raise OriginalUnavailable("Collected original changed before delivery")
+    snapshot = object.__new__(OriginalSnapshot)
+    for name, value in dict(
+        owner=None,
+        portable_id=None,
+        document_hash=proof.document_hash,
+        data=proof.data,
+        pages=proof.pages,
+        source=proof.source_path,
+        file_version=file_change.version(proof.source_path),
+        operation=None,
+        claim=None,
+        registry=None,
+        local_proof=None,
+        retained_proof=None,
+        active_proof=None,
+        material_proof=proof,
+        _seal=_SNAPSHOT_SEAL,
+    ).items():
+        object.__setattr__(snapshot, name, value)
+    if not metadata_current(snapshot):
+        raise OriginalUnavailable("Collected original changed before delivery")
+    return snapshot
+
+
+def refresh_material(snapshot, cancelled):
+    from paper_daily import material_sources
+
+    proof = material_sources.revalidate(snapshot.material_proof, current=lambda: not cancelled())
+    return None if cancelled() else prepare_material(proof)
+
+
+def prepare_active(proof):
+    """Worker-only adapter; the active reader, claims and retained grants stay separate."""
+    from paper_daily import active_deck_originals
+
+    if active_deck_originals.gui_status(proof) != "ready":
+        raise OriginalUnavailable("Saved-deck original changed before delivery")
+    snapshot = object.__new__(OriginalSnapshot)
+    for name, value in dict(
+        owner=None,
+        portable_id=None,
+        document_hash=proof.document_hash,
+        data=proof.data,
+        pages=proof.pages,
+        source=proof.source_path,
+        file_version=file_change.version(proof.source_path),
+        operation=None,
+        claim=None,
+        registry=None,
+        local_proof=None,
+        retained_proof=None,
+        active_proof=proof,
+        _seal=_SNAPSHOT_SEAL,
+    ).items():
+        object.__setattr__(snapshot, name, value)
+    if not metadata_current(snapshot):
+        raise OriginalUnavailable("Saved-deck original changed before delivery")
+    return snapshot
+
+
+def refresh_active(snapshot, cancelled):
+    from paper_daily import active_deck_originals
+
+    proof = active_deck_originals.revalidate(snapshot.active_proof, current=lambda: not cancelled())
+    return None if cancelled() else prepare_active(proof)
+
+
 def prepare(owner, expected, *, cancelled=lambda: False):
     """Inspect the existing owner's local or portable source without enrollment."""
     if cancelled():
@@ -147,6 +533,48 @@ def prepare(owner, expected, *, cancelled=lambda: False):
         # Damage/retirement in a declared portable source never falls through to another cache.
         return _portable_prepare(owner, expected, cancelled=cancelled)
     return _local_prepare(owner, expected, cancelled=cancelled)
+
+
+def prepare_retained(service, preview, document_hash, *, cancelled=lambda: False):
+    """Worker adapter for a declared proposal original; never read a current PDF."""
+    from paper_daily import retained_originals
+
+    try:
+        proof = retained_originals.prepare(service, preview, document_hash, cancelled=cancelled)
+        if proof is None or cancelled():
+            return None
+        with pymupdf.open(stream=proof.data, filetype="pdf") as document:
+            if document.is_encrypted or document.page_count < 1:
+                raise OriginalUnavailable("The retained original is not a readable PDF")
+            pages = document.page_count
+        if cancelled():
+            return None
+        snapshot = object.__new__(OriginalSnapshot)
+        for name, value in dict(
+            owner=service,
+            portable_id=None,
+            document_hash=proof.document_hash,
+            data=proof.data,
+            pages=pages,
+            source=proof.source,
+            file_version=proof.file_version,
+            operation=proof.operation,
+            claim=None,
+            registry=None,
+            local_proof=None,
+            retained_proof=proof,
+            _seal=_SNAPSHOT_SEAL,
+        ).items():
+            object.__setattr__(snapshot, name, value)
+        if not metadata_current(snapshot):
+            raise OriginalUnavailable("The retained original changed before opening")
+        return snapshot
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
+        if cancelled():
+            return None
+        raise OriginalUnavailable(
+            "Retained original unavailable; refresh or check retained files"
+        ) from error
 
 
 def _local_prepare(owner, expected, *, cancelled):
@@ -301,7 +729,7 @@ class OriginalVersionDialog(QDialog):
     closed = Signal()
     invalidated = Signal()
 
-    def __init__(self, snapshot, parent, *, current, language="en", native=None):
+    def __init__(self, snapshot, parent, *, current, language="en", native=None, palette=None):
         if not metadata_current(snapshot):
             raise OriginalUnavailable("Original ownership changed before opening")
         super().__init__(parent)
@@ -311,6 +739,7 @@ class OriginalVersionDialog(QDialog):
         self._worker = None
         self._wanted_page, self._rendered_page = 0, -1
         self._needs_check = False
+        self._native_loaded = False
         self._pixmap = None
         self.native = HAVE_QTPDF if native is None else native and HAVE_QTPDF
         zh = language == "zh-TW"
@@ -318,7 +747,7 @@ class OriginalVersionDialog(QDialog):
         self.setWindowTitle("原始版本 · 唯讀" if zh else "Original version · read-only")
         self.resize(860, 820)
         self.setFont(parent.font())
-        p = parent.pal
+        p = parent.pal if palette is None else palette
         self.setStyleSheet(
             parent.styleSheet()
             + f"""
@@ -400,12 +829,68 @@ class OriginalVersionDialog(QDialog):
         worker.start()
         return True
 
+    def _admit(self):
+        """Pause a changed metadata fence for worker revalidation; never adopt new authority."""
+        if not self.current():
+            self._invalidate()
+            return False
+        material = getattr(self.snapshot, "material_proof", None) is not None
+        draft = getattr(self.snapshot, "draft_proof", None) is not None
+        claim_read = getattr(self.snapshot, "claim_read_proof", None) is not None
+        highlight_read = getattr(self.snapshot, "highlight_read_proof", None) is not None
+        if (
+            highlight_read
+            or claim_read
+            or draft
+            or material
+            or getattr(self.snapshot, "active_proof", None) is not None
+        ):
+            state = (
+                highlight_read_status(self.snapshot)
+                if highlight_read
+                else claim_read_status(self.snapshot)
+                if claim_read
+                else draft_status(self.snapshot)
+                if draft
+                else material_status(self.snapshot)
+                if material
+                else active_status(self.snapshot)
+            )
+            if state == "recheck":
+                self.view.setEnabled(False)
+                self.status.setText(
+                    "正在重新核對引用來源…" if self.zh else "Rechecking cited source…"
+                )
+                if not self.busy:
+                    snapshot = self.snapshot
+                    refresh = (
+                        refresh_highlight_draft_read
+                        if highlight_read
+                        else refresh_claim_draft_read
+                        if claim_read
+                        else refresh_draft
+                        if draft
+                        else refresh_material
+                        if material
+                        else refresh_active
+                    )
+                    self._start("refresh", lambda cancelled: refresh(snapshot, cancelled))
+                return False
+            if state == "revoked":
+                self._invalidate()
+                return False
+        elif not metadata_current(self.snapshot):
+            self._invalidate()
+            return False
+        self.view.setEnabled(True)
+        return True
+
     @Slot()
     def _load_native(self):
         if not self.disposed and not self._closing:
-            if not self.current() or not metadata_current(self.snapshot):
-                self._invalidate()
+            if not self._admit():
                 return
+            self._native_loaded = True
             self.pdf.load(self._buffer)
 
     @Slot(object)
@@ -415,11 +900,12 @@ class OriginalVersionDialog(QDialog):
         if (
             status == QPdfDocument.Status.Error
             or status == QPdfDocument.Status.Ready
-            and (self.pdf.pageCount() != self.snapshot.pages or not metadata_current(self.snapshot))
+            and self.pdf.pageCount() != self.snapshot.pages
         ):
             self._invalidate()
-        elif status == QPdfDocument.Status.Ready:
+        elif status == QPdfDocument.Status.Ready and self._admit():
             self.status.clear()
+            self.view.pageNavigator().jump(self._wanted_page, QPointF(0, 0))
 
     @Slot(int)
     def _native_page(self, page):
@@ -431,7 +917,8 @@ class OriginalVersionDialog(QDialog):
     def _page_changed(self, value):
         self._wanted_page = value - 1
         if self.native:
-            self.view.pageNavigator().jump(value - 1, QPointF(0, 0))
+            if self._admit():
+                self.view.pageNavigator().jump(value - 1, QPointF(0, 0))
         else:
             self._render()
 
@@ -464,7 +951,7 @@ class OriginalVersionDialog(QDialog):
             self._zoom_changed(0)
 
     def _render(self):
-        if self.busy or self.disposed or self._closing:
+        if self.busy or self.disposed or self._closing or not self._admit():
             return
         snapshot, page = self.snapshot, self._wanted_page
         self.status.setText(
@@ -476,9 +963,9 @@ class OriginalVersionDialog(QDialog):
     def check(self):
         if self.disposed or self._closing:
             return
-        if not self.current():
-            self._invalidate()
-        elif self.busy:
+        if not self._admit():
+            return
+        if self.busy:
             self._needs_check = True
         else:
             snapshot = self.snapshot
@@ -490,13 +977,15 @@ class OriginalVersionDialog(QDialog):
         if worker is not self._worker:
             return
         self._worker = None
+        if worker.kind == "refresh" and not self._closing:
+            if worker.error or not worker.result:
+                self._invalidate()
+            else:
+                self.snapshot = worker.result
         if not self._closing:
-            if (
-                worker.error
-                or not worker.result
-                or not self.current()
-                or not metadata_current(self.snapshot)
-            ):
+            if not self._admit():
+                pass
+            elif worker.error or not worker.result or not self.current():
                 self._invalidate()
             elif worker.kind == "render":
                 raw, width, height, stride, page = worker.result
@@ -507,6 +996,10 @@ class OriginalVersionDialog(QDialog):
                     self._rendered_page = page
                     self.status.clear()
                     self._zoom_changed(self.zoom.currentIndex())
+            elif worker.kind == "refresh":
+                self.status.clear()
+                if self.native and not self._native_loaded:
+                    self._load_native()
         worker.deleteLater()
         if self._closing:
             self.close()

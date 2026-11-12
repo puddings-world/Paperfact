@@ -193,9 +193,15 @@ def test_source_less_typed_rows_do_not_promote_input_digest_to_document_hash(sou
     report = capture(source).run()
     item = next(row for row in report["items"] if row["feature"] == feature)
     assert item["document_hash"] is None and item["provenance"]["input_hash"] == source.sha256
-    assert all(
-        row["state"] == "source_unknown" for row in report["checks"] if row["feature"] == feature
-    )
+    expected_states = {"source_unknown"}
+    if feature == "reading_links":
+        # Owner-approved: legacy links without complete input provenance need review.
+        expected_states.add("linked_analysis_changed")
+        assert item["passages"] == []
+        assert item["provenance"]["link_state"] == "analysis_changed"
+    assert {
+        row["state"] for row in report["checks"] if row["feature"] == feature
+    } == expected_states
 
 
 @pytest.mark.parametrize(

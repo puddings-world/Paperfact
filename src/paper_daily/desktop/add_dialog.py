@@ -155,6 +155,9 @@ class AddToListDialog(QDialog):
         self.pdf = pdf
         self.doi: str | None = None
         self.repo_root = repo_root
+        from paper_daily.desktop.window_workspace import WindowWorkspace
+
+        self._workspace_owner = WindowWorkspace.capture()
         self.process: QProcess | None = None
         self._temp: Path | None = None
         self.added = False
@@ -233,6 +236,14 @@ class AddToListDialog(QDialog):
         requires_ai("list_parse")(type(self)._start_ready)(self)
 
     def _start_ready(self) -> None:
+        if not self._workspace_owner.current():
+            self.status.setText("The workspace changed; reopen the original list.")
+            return
+        with connect() as conn:
+            exists = conn.execute("SELECT 1 FROM lists WHERE id=?", (self.list_id,)).fetchone()
+        if not exists:
+            self.status.setText("This list is no longer available. Your draft remains here.")
+            return
         raw = self.body.toPlainText().strip()
         if len(raw) < 8:
             self.status.setText("標題太短了,再多打幾個字。")
@@ -257,23 +268,39 @@ class AddToListDialog(QDialog):
         self._activity_pending = ""
         self.go.setEnabled(False)
         self.status.setText("正在比對,並找程式碼和資料集…幾秒鐘。")
-        self.process = QProcess(self)
-        process_environment(self.process)
-        self.process.setWorkingDirectory(str(self.repo_root))
-        self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self._progress)
-        self.process.finished.connect(self._finished)
-        self.process.errorOccurred.connect(self._error)
+        self.process = job = QProcess(self)
+        process_environment(job)
+        environment = job.processEnvironment()
+        environment.insert("PAPERFACT_DATA", str(self._workspace_owner.database.parent))
+        job.setProcessEnvironment(environment)
+        job.setWorkingDirectory(str(self.repo_root))
+        job.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        job.readyReadStandardOutput.connect(lambda: self._progress(expected=job))
+        job.finished.connect(lambda code, status: self._finished(code, status, expected=job))
+        job.errorOccurred.connect(lambda error: self._error(error, expected=job))
+        from paper_daily.desktop.cli_job import prepare
+
         extra = ["--pdf", str(self.pdf)] if self.pdf is not None else []
         extra += ["--doi", self.doi] if self.doi else []
-        program, *rest = runtime.cli_command(
-            "list-add", self.list_id, "--file", str(self._temp), *extra
-        )
-        self.process.start(program, rest)
 
-    def _progress(self) -> None:
-        assert self.process
-        chunk = bytes(self.process.readAllStandardOutput()).decode("utf-8", "replace")
+        try:
+            program, *rest = prepare(
+                job, ["list-add", self.list_id, "--file", str(self._temp), *extra],
+                ("list_parse",),
+            )
+        except (OSError, ValueError):
+            self._error(QProcess.ProcessError.FailedToStart, expected=job)
+            return
+        job.start(program, rest)
+
+    def _progress(self, *, expected=None) -> None:
+        if self.process is None or expected is not None and self.process is not expected:
+            return
+        raw = bytes(self.process.readAllStandardOutput())
+        handoff = getattr(self.process, "_ai_job_handoff", None)
+        if handoff is not None:
+            raw = handoff.filter_output(raw)
+        chunk = raw.decode("utf-8", "replace")
         from paper_daily.desktop.activity import consume
 
         self._activity_pending = consume(self._activity, chunk, self._activity_pending)
@@ -282,15 +309,22 @@ class AddToListDialog(QDialog):
         if lines:
             self.status.setText(lines[-1][:160])
 
-    def _finished(self, code: int, _status) -> None:
-        if self.process is not None:
-            self._progress()
+    def _finished(self, code: int, _status, *, expected=None) -> None:
+        if self.process is None or expected is not None and self.process is not expected:
+            return
+        self._progress(expected=self.process)
+        handoff = getattr(self.process, "_ai_job_handoff", None)
+        if handoff is not None:
+            code = handoff.complete(code)
         self._activity.finish(code == 0, cancelled=code < 0)
         self.go.setEnabled(True)
         if self.process is not None:
             self.process.deleteLater()
         self.process = None
         self._clear_temp()
+        if not self._workspace_owner.current():
+            self.status.setText("The workspace changed; reopen the original list.")
+            return
         if code == 0:
             self.added = True
             self.accept()
@@ -305,7 +339,9 @@ class AddToListDialog(QDialog):
             Path(self._temp).unlink(missing_ok=True)
             self._temp = None
 
-    def _error(self, error):
+    def _error(self, error, *, expected=None):
+        if expected is not None and self.process is not expected:
+            return
         if error == QProcess.ProcessError.FailedToStart and self.process is not None:
             self.process.deleteLater()
             self.process = None
@@ -314,10 +350,26 @@ class AddToListDialog(QDialog):
             self.go.setEnabled(True)
             self.status.setText("無法啟動新增論文工作；輸入已保留，可重試。")
 
+    def _cancel_pending(self) -> None:
+        job, self.process = self.process, None
+        if job is not None:
+            self._activity.finish(cancelled=True)
+            handoff = getattr(job, "_ai_job_handoff", None)
+            job.finished.connect(job.deleteLater)
+            if handoff is not None:
+                handoff.cancel()
+            if job.state() == QProcess.ProcessState.NotRunning:
+                job.deleteLater()
+            else:
+                job.kill()
+        self._clear_temp()
+
+    def reject(self) -> None:
+        self._cancel_pending()
+        super().reject()
+
     def closeEvent(self, event) -> None:
-        if self.process is not None:
-            self.process.kill()
-            self.process.waitForFinished(3000)
+        self._cancel_pending()
         super().closeEvent(event)
 
 

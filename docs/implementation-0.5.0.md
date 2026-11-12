@@ -2,7 +2,8 @@
 
 Status: local implementation in development, updated 2026-10-30. Build identity
 is `0.5.0.dev`; this is not the daily-use maintenance release. See
-[the current delivery map](delivery-status-0.5.md) for implemented coverage,
+[current isolated integration status](status-0.5.0.md) and
+[the historical delivery ledger](delivery-status-0.5.md) for implemented coverage,
 latest exact evidence and remaining gates. The work ledger below records
 historical iterations; old pending descriptions are not current status.
 No production deployment, research migration, credential change or release

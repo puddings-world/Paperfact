@@ -83,3 +83,19 @@ if(pythonIndex >= 0) {
     ...(coreIndex>=0?[process.argv[coreIndex+1]]:[])],{cwd,stdio:'inherit'});
   if(positions.status!==0)process.exit(positions.status??1);
 }
+
+if(pythonIndex >= 0) {
+  const coreIndex=process.argv.indexOf('--core-root');
+  const later=spawnSync(process.execPath,
+    ['later-outcome-service-check.mjs',process.argv[pythonIndex+1],
+      ...(coreIndex>=0?[process.argv[coreIndex+1]]:[])],{cwd,stdio:'inherit'});
+  if(later.status!==0)process.exit(later.status??1);
+}
+
+if(pythonIndex >= 0) {
+  const coreIndex=process.argv.indexOf('--core-root');
+  const notes=spawnSync(process.execPath,
+    ['plain-note-service-check.mjs',process.argv[pythonIndex+1],
+      ...(coreIndex>=0?[process.argv[coreIndex+1]]:[])],{cwd,stdio:'inherit'});
+  if(notes.status!==0)process.exit(notes.status??1);
+}

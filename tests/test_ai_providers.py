@@ -232,3 +232,96 @@ def test_an_adapter_can_be_added_without_changing_feature_code(isolated, monkeyp
     assert llm.complete("paper", cfg=Settings("custom"), task="ask") == ("custom reply", "ok")
     with pytest.raises(ValueError, match="already registered"):
         llm.register_provider("custom", Custom())
+
+
+def _fake_cli(monkeypatch, returncode, stdout, stderr=""):
+    monkeypatch.setattr(ai_providers.shutil, "which", lambda name: "claude")
+    monkeypatch.setattr(
+        ai_providers.subprocess,
+        "run",
+        lambda argv, **kwargs: SimpleNamespace(
+            returncode=returncode, stdout=stdout, stderr=stderr
+        ),
+    )
+
+
+def test_cli_refusal_printed_with_exit_zero_is_not_an_answer(isolated, monkeypatch):
+    _fake_cli(monkeypatch, 0, "API Error: 400 Output blocked by content filtering policy")
+    result = llm.complete_result("private prompt", cfg=Settings("cli"))
+    assert result.text is None
+    assert "使用政策" in result.reason
+    row = json.loads((isolated / "ai-usage.jsonl").read_text())
+    assert row["success"] is False and row["failure"] == "policy"
+    assert "private" not in json.dumps(row)
+
+
+@pytest.mark.parametrize(
+    "stdout, stderr, expected, kind",
+    [
+        ("Claude AI usage limit reached|1760000000", "", "用量", "limit"),
+        ("", "Invalid API key · Please run /login", "重新登入", "auth"),
+        ("API Error: 500 internal server error", "", "API Error: 500", "error"),
+    ],
+)
+def test_cli_failure_keeps_the_real_reason_in_short_form(
+    isolated, monkeypatch, stdout, stderr, expected, kind
+):
+    _fake_cli(monkeypatch, 1, stdout, stderr)
+    result = llm.complete_result("prompt", cfg=Settings("cli"))
+    assert result.text is None and expected in result.reason
+    assert "exit 1" not in result.reason
+    assert json.loads((isolated / "ai-usage.jsonl").read_text())["failure"] == kind
+
+
+def test_cli_error_snippet_is_bounded_and_drops_tokens(isolated, monkeypatch):
+    token = "sk-ant-" + "x" * 40
+    _fake_cli(monkeypatch, 1, f"API Error: 500 {token} " + "y " * 200)
+    result = llm.complete_result("prompt", cfg=Settings("cli"))
+    assert token not in result.reason and len(result.reason) < 200
+
+
+def test_expired_cli_login_still_stops_a_bulk_run(isolated, monkeypatch):
+    from paper_daily import dive
+
+    _fake_cli(monkeypatch, 1, "", "OAuth token has expired")
+    assert dive._fatal(llm.complete_result("prompt", cfg=Settings("cli")).reason)
+
+
+def test_codex_failure_names_the_category(isolated, monkeypatch):
+    monkeypatch.setattr(ai_providers.ai_accounts, "command", lambda name: ["codex"])
+    monkeypatch.setattr(
+        ai_providers.subprocess,
+        "run",
+        lambda argv, **kwargs: SimpleNamespace(
+            returncode=1, stdout="", stderr="ERROR: You've hit your usage limit."
+        ),
+    )
+    result = llm.complete_result("prompt", cfg=Settings("codex"))
+    assert result.text is None and "用量" in result.reason
+
+
+def test_usage_log_records_timeouts_and_successes(isolated, monkeypatch):
+    monkeypatch.setattr(llm, "_post", lambda *args: (None, "ReadTimeout: timed out"))
+    llm.complete("paper", cfg=Settings("openai", api_key="secret"))
+    monkeypatch.setattr(
+        llm, "_post", lambda *args: ({"choices": [{"message": {"content": "answer"}}]}, "ok")
+    )
+    llm.complete("paper", cfg=Settings("openai", api_key="secret"))
+    rows = [json.loads(line) for line in (isolated / "ai-usage.jsonl").read_text().splitlines()]
+    assert [row["failure"] for row in rows] == ["timeout", None]
+
+
+def test_gemini_failure_names_the_category(isolated, monkeypatch):
+    from paper_daily import gemini_cli
+
+    monkeypatch.setattr(gemini_cli, "status", lambda cfg: (True, "ok"))
+    monkeypatch.setattr(gemini_cli.ai_accounts, "command", lambda name: ["gemini"])
+    monkeypatch.setattr(
+        gemini_cli.subprocess,
+        "run",
+        lambda argv, **kwargs: SimpleNamespace(
+            returncode=1, stdout="", stderr="Quota exceeded for quota metric (429)"
+        ),
+    )
+    result = llm.complete_result("prompt", cfg=Settings("gemini"))
+    assert result.text is None and "用量" in result.reason

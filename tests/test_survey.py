@@ -109,3 +109,51 @@ def test_a_short_reply_is_not_kept_as_a_survey(conn, monkeypatch):
     written, reason = survey.write("cat")
     assert not written and "too short" in reason
     assert survey.get(conn, "cat") is None
+
+
+def _long_reply(*_args, **_kwargs):
+    return "## 這個領域在解決什麼\n" + "白內障手術影片分析。" * 300, "ok"
+
+
+def test_a_topic_roadmap_is_not_replaced_unless_forced(conn, monkeypatch):
+    conn.execute(
+        "INSERT INTO list_surveys(list_id, body, papers, spec, written_at, edited) "
+        "VALUES ('cat', '# 研究路線', 2, ?, 'now', 0)",
+        (survey.ROADMAP_SPEC,),
+    )
+    conn.commit()
+    monkeypatch.setattr(survey.llm, "complete", _long_reply)
+    written, reason = survey.write("cat")
+    assert not written and "roadmap" in reason
+    assert survey.get(conn, "cat")["body"] == "# 研究路線"
+    assert survey.write("cat", force=True) == (True, "ok")
+    assert survey.get(conn, "cat")["spec"] == survey.SURVEY_SPEC
+
+
+def test_an_edit_saved_while_the_survey_is_written_wins(conn, monkeypatch):
+    monkeypatch.setattr(survey.llm, "complete", _long_reply)
+    assert survey.write("cat") == (True, "ok")
+
+    def edited_meanwhile(*args, **kwargs):
+        survey.edit("cat", "撰寫期間我改過的綜覽")
+        return _long_reply()
+
+    monkeypatch.setattr(survey.llm, "complete", edited_meanwhile)
+    written, reason = survey.write("cat")
+    assert not written and "edited while" in reason
+    stored = survey.get(conn, "cat")
+    assert stored["body"] == "撰寫期間我改過的綜覽" and stored["edited"]
+
+
+def test_a_forced_rewrite_still_keeps_an_edit_made_during_the_call(conn, monkeypatch):
+    monkeypatch.setattr(survey.llm, "complete", _long_reply)
+    survey.write("cat")
+    survey.edit("cat", "第一次修改")
+
+    def edited_meanwhile(*args, **kwargs):
+        survey.edit("cat", "第二次修改")
+        return _long_reply()
+
+    monkeypatch.setattr(survey.llm, "complete", edited_meanwhile)
+    written, _reason = survey.write("cat", force=True)
+    assert not written and survey.get(conn, "cat")["body"] == "第二次修改"

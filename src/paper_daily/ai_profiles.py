@@ -10,6 +10,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from paper_daily import executables
 from paper_daily.ai_types import DEFAULT_MAX_TOKENS, Settings
 
 FIELDS = {
@@ -233,33 +234,21 @@ def assign(path: Path, selections: dict, backends: tuple[str, ...]) -> Path:
     return write(path, data)
 
 
-_claude_found: dict = {}
-_claude_lock = threading.Lock()
-
-
-def _claude_key():
-    return (shutil.which, os.environ.get("PATH"))
-
-
-def _look_for_claude(key) -> bool:
-    found = bool(shutil.which("claude"))
-    with _claude_lock:
-        _claude_found.clear()
-        _claude_found[key] = found
-    return found
+CLAUDE_RECHECK = 30.0
 
 
 def _claude_on_path() -> bool:
-    """Whether the Claude CLI is installed, looked up once per PATH.
+    """Display-only presence; stale filesystem discovery refreshes off the caller.
 
     `which` tries every extension in every PATH folder, and a busy disk has held one
-    of those checks for 52 seconds. Settings are resolved several times a second on
-    the window's thread, so the answer is kept until PATH changes (or a test's
-    stand-in replaces the lookup), or `recheck_claude` is asked for."""
-    key = _claude_key()
-    with _claude_lock:
-        found = _claude_found.get(key)
-    return _look_for_claude(key) if found is None else found
+    of those checks for 52 seconds, so settings (resolved several times a second on
+    the window's thread) keep the last answer while a worker asks again. Negative
+    recheck keeps the existing explicit uncached behavior. Execution and account
+    authorization still require their own fresh checks.
+    """
+    if CLAUDE_RECHECK < 0:
+        return bool(shutil.which("claude"))
+    return bool(executables.which("claude", recheck=CLAUDE_RECHECK))
 
 
 def recheck_claude(*, wait: bool = False) -> threading.Thread:
@@ -269,7 +258,7 @@ def recheck_claude(*, wait: bool = False) -> threading.Thread:
     settings, or a call that could not start the CLI. Until it finishes, settings
     keep the previous answer."""
     worker = threading.Thread(
-        target=_look_for_claude, args=(_claude_key(),), name="claude-lookup", daemon=True
+        target=executables.refresh, args=("claude",), name="claude-lookup", daemon=True
     )
     worker.start()
     if wait:

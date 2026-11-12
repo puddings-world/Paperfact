@@ -36,10 +36,25 @@ class BlobManifest:
             raise BlobError("Expected a nonnegative byte size")
 
 
+def system_link(link, folder, *, posix=os.name == "posix") -> bool:
+    """A root-owned link in a root-owned folder nobody else may write, such as macOS
+    /var -> private/var under every temporary folder. Only an administrator can
+    redirect it, so it is part of the system layout, not a link into the store."""
+    return (
+        posix
+        and stat.S_ISLNK(link.st_mode)
+        and getattr(link, "st_uid", None) == 0
+        and getattr(folder, "st_uid", None) == 0
+        and not folder.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    )
+
+
 def _no_link(path: Path) -> None:
     try:
         info = path.lstat()
     except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) and system_link(info, path.parent.lstat()):
         return
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & getattr(
         stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0

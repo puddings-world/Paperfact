@@ -12,6 +12,7 @@ import json
 import math
 import re
 import socket
+import socketserver
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -185,6 +186,13 @@ def _finish_rejection(connection, incoming, outgoing):
 
 class _Server(ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # HTTPServer.server_bind asks DNS for the host's full name, which can take
+        # half a minute on a Mac with no reverse lookup for the address. A loopback
+        # server never uses that name.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def handle_error(self, request, client_address):
         # Exceptions must not print request context, credentials or research.

@@ -1,0 +1,120 @@
+{
+  "format": "paperfact.highlight-application-results.v1",
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "published": false,
+  "gate": {
+    "exit_code": 0,
+    "seconds": 614.83,
+    "selection": [
+      "tests/test_highlight_draft_application.py",
+      "tests/test_highlight_apply_journeys.py",
+      "tests/test_highlight_draft_verification.py",
+      "tests/test_highlight_draft_storage.py",
+      "tests/test_highlight_draft_revision.py",
+      "tests/test_highlight_generation.py",
+      "tests/test_annotation_review.py",
+      "tests/test_manual_highlight_ops.py",
+      "tests/test_reading_annotation_jobs.py",
+      "tests/test_review_decisions.py",
+      "tests/test_review_records.py",
+      "tests/test_enrollment_review_decisions.py"
+    ],
+    "frozen_inputs": 1150,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 269,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.848,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.142,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 611.933,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_highlight_draft_application.py",
+          "tests/test_highlight_apply_journeys.py",
+          "tests/test_highlight_draft_verification.py",
+          "tests/test_highlight_draft_storage.py",
+          "tests/test_highlight_draft_revision.py",
+          "tests/test_highlight_generation.py",
+          "tests/test_annotation_review.py",
+          "tests/test_manual_highlight_ops.py",
+          "tests/test_reading_annotation_jobs.py",
+          "tests/test_review_decisions.py",
+          "tests/test_review_records.py",
+          "tests/test_enrollment_review_decisions.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 613.935
+    }
+  },
+  "new_functions": 20,
+  "new_cases": 38,
+  "existing_cases": 231,
+  "groups": [
+    {
+      "theme": "新增：確認套用與失敗保護",
+      "cases": 35,
+      "seconds": 134.34,
+      "meaning": "保存內容、手動／隱藏／刪除選擇、取消、並行／失去回覆重試、來源與資料庫更換"
+    },
+    {
+      "theme": "新增：恢復與真正同儕往返",
+      "cases": 3,
+      "seconds": 43.07,
+      "meaning": "私有A共同回滾、兩份私稿／A／B恢復、離線隱藏與筆記、衝突關閉及再次備份"
+    },
+    {
+      "theme": "既有：核對、私稿與人工修訂",
+      "cases": 71,
+      "seconds": 158.52,
+      "meaning": "來源與位置核對、私稿版本及閉合格式不退步"
+    },
+    {
+      "theme": "既有：分析、手動畫線與講解連結",
+      "cases": 113,
+      "seconds": 191.27,
+      "meaning": "真正產物保存、既有分組審閱、手動畫線及儲存後再連結的流程"
+    },
+    {
+      "theme": "既有：審閱決策與備份格式",
+      "cases": 47,
+      "seconds": 81.08,
+      "meaning": "父清單決策狀態與既有私有收據／恢復格式相容"
+    }
+  ],
+  "full_check_passed": false,
+  "not_proven": [
+    "Native highlight editor and CLI/MCP",
+    "Installed Windows/Apple Silicon Mac/phone",
+    "Production identity/hosting",
+    "Live model or scholarly quality",
+    "Complete application gate"
+  ]
+}

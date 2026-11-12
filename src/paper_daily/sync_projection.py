@@ -24,6 +24,7 @@ _SOURCE_FIELDS = {
     "list_papers": ("list_id", "paper_id", "position", "state"),
     "pins": ("scope", "paper_id", "pinned_at"),
     "reading_positions": ("paper_id", "document_hash", "page", "recorded_at", "method"),
+    "paper_later_outcomes": ("paper_id", "body_json", "document_hash", "written_at"),
     "papers": ("id", "title", "authors_json", "year", "doi", "page_url"),
     "notes": ("id", "paper_id", "body", "created_at", "kind", "page", "anchor"),
     "dives": ("paper_id", "body", "written_at"),
@@ -155,7 +156,7 @@ def _preflight(conn, max_records, max_bytes):
     records, size = 0, 0
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table, fields in _SOURCE_FIELDS.items():
-        if table == "reading_positions" and table not in tables:
+        if table in {"reading_positions", "paper_later_outcomes"} and table not in tables:
             continue
         lengths = "+".join(f"COALESCE(length(CAST({field} AS BLOB)),0)" for field in fields)
         row = conn.execute(f"SELECT COUNT(*),COALESCE(SUM({lengths}),0) FROM {table}").fetchone()
@@ -254,6 +255,16 @@ def _project(conn, workspace_id, max_records, max_bytes, *, position_rows=None):
     for pin in conn.execute("SELECT paper_id,pinned_at FROM pins WHERE scope='queue'"):
         paper = _require_link(papers, pin["paper_id"])
         paper["queue_pin"] = {"pinned_at": _reading_timestamp(_text(pin["pinned_at"]))}
+    if "paper_later_outcomes" in tables:
+        from paper_daily.later_outcomes import decode, validate_row
+
+        for row in conn.execute("SELECT * FROM paper_later_outcomes ORDER BY paper_id"):
+            value = dict(row)
+            validate_row(value)
+            _require_link(papers, row["paper_id"])["later_outcome"] = {
+                "body": decode(row["body_json"]), "document_hash": row["document_hash"],
+                "written_at": row["written_at"],
+            }
     pin_rows = {
         (row["scope"], row["paper_id"]): _reading_timestamp(_text(row["pinned_at"]))
         for row in conn.execute(
@@ -403,8 +414,13 @@ def _project(conn, workspace_id, max_records, max_bytes, *, position_rows=None):
         "decks": [],
         "assets": [],
     }
+    required = set()
     if any("queue_pin" in paper for paper in papers.values()):
-        result["required_capabilities"] = ["queue_pin"]
+        required.add("queue_pin")
+    if any("later_outcome" in paper for paper in papers.values()):
+        required.add("later_outcome")
+    if required:
+        result["required_capabilities"] = sorted(required)
     return result
 
 

@@ -105,13 +105,13 @@ def _contexts(value):
 
 def _note_source(row):
     """Association with a recorded original is not a claim that note prose is quoted."""
-    from paper_daily.sync_content import validate_anchor
+    from paper_daily.note_positions import validate as validate_note_anchor
 
     if row["anchor"] is None:
         return None
     try:
         anchor = json.loads(row["anchor"])
-        validate_anchor(anchor)
+        validate_note_anchor(anchor)
         if anchor is None:
             return None
         if row["page"] not in (None, anchor["p0"] + 1):
@@ -246,13 +246,20 @@ def read_items(conn, paper_id):
         if table in tables:
             matches = _saved_rows(conn, table, "paper_id " + annotation_content.FIELDS, paper_id)
             related = matches[0] if matches else None
+        from paper_daily.reading_links import sections as explanation_sections
+
+        explanation = []
+        for name in ("dives", "close_readings"):
+            saved = _rows(conn, name, "paper_id body", paper_id) if name in tables else []
+            explanation.append(saved[0]["body"] if saved else "")
+        parts = explanation_sections(*explanation)
         for feature in ("reading_links", "research_questions"):
             table = annotation_content.FEATURES[feature]
             if table in tables:
                 for row in _saved_rows(
                     conn, table, "paper_id " + annotation_content.FIELDS, paper_id
                 ):
-                    items.extend(annotation_items(feature, row, related=related))
+                    items.extend(annotation_items(feature, row, related=related, sections=parts))
         if "paper_context" in tables:
             for row in _saved_rows(
                 conn, "paper_context", "paper_id summary reading_json written_at edited", paper_id

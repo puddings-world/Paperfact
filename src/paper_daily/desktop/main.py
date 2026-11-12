@@ -54,7 +54,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import (
-    closeread,
+    claims,
     llm,
     pdf_highlights,
     pocket,
@@ -70,7 +70,6 @@ from paper_daily.desktop import (
     button_style,
     fonts,
     pdfpane,
-    reading,
     rich_view,
     ui_state,
     window_events,
@@ -219,6 +218,17 @@ class Paper:
         return self._has_pdf
 
 
+def _pdf_names() -> set[str]:
+    """The PDFs on disk, from one listing of the folder. Asking each paper in turn
+    was a stat() per paper: half a second for a list of five thousand, every time
+    the list was shown."""
+    try:
+        with os.scandir(PDF_DIR) as entries:
+            return {entry.name for entry in entries}
+    except OSError:
+        return set()
+
+
 def _row_to_paper(r: sqlite3.Row) -> Paper:
     try:
         authors = json.loads(r["authors_json"] or "[]")
@@ -304,7 +314,11 @@ class Data:
                 for paper in papers:
                     paper._document_reader = resolver
                     paper._document_status = states[paper.id]
-            return papers
+        on_disk = _pdf_names()
+        for paper in papers:
+            if not managed(paper):
+                paper._has_pdf = paper.pdf_path.name in on_disk
+        return papers
 
     def pins(self, scope: str) -> set[str]:
         with connect() as conn:
@@ -981,6 +995,17 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.note_status.setStyleSheet(f"color:{pal['faint']};font-size:11px;")
         note_bar.addWidget(self.note_status)
         note_bar.addStretch(1)
+        self.claims_btn = QPushButton("AI 整理核心論點")
+        self.claims_btn.setToolTip("從已核對的原文重點整理核心論點筆記；你改過的卡片會保留。")
+        self.claims_btn.clicked.connect(self._make_claims)
+        ai_style.mark(self.claims_btn, pal)
+        self.claims_btn.hide()
+        note_bar.addWidget(self.claims_btn)
+        self._claims_work = AskRunner(self)
+        self._claims_work.activity_label = "整理核心論點"
+        self._claims_for = None
+        self.tabs.currentChanged.connect(
+            lambda _index: self._show_claims_button() if self.paper else None)
         nl.addLayout(note_bar)
         self.note_log = rich_view.RichView(pal)
         self.note_log.anchorClicked.connect(self._note_action)
@@ -1095,12 +1120,12 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.tabs.addTab(self.cites_pane, "脈絡")
         scopes(pal["accent"])  # before the slide panels register theirs
         self.presentation_pane = PresentationPane(self)
-        self.presentation_pane.source_requested.connect(self._jump_to_source)
+        self.presentation_pane.source_requested.connect(self._jump_to_deck_source)
         if hasattr(self.presentation_pane, "editable_copy_ready"):
             self.presentation_pane.editable_copy_ready.connect(self._open_created_workspace)
         self.presentation_pane.highlights_ready.connect(self._highlights_ready)
         self.presentation_pane.highlights_status.connect(self._highlight_status_changed)
-        self.presentation_pane.materials_panel.source_requested.connect(self._jump_to_source)
+        self.presentation_pane.materials_panel.source_requested.connect(self._jump_to_material_source)
         self.tabs.addTab(self.presentation_pane, "簡報")
         # Beside the tabs it fills; the 簡報 tab is made separately, on request.
         self.analysis_bar = AnalysisBar(self.win, pal)
@@ -1161,10 +1186,38 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         from paper_daily.desktop.reader_preparation import ReaderPreparation
 
         self.preparation = ReaderPreparation(self)
+        from paper_daily.desktop.qa_presentation import ChatPresentation
+
+        self.qa_presentation = ChatPresentation(self)
         self.pdf.source_changed.connect(self.preparation.source_changed)
+        from paper_daily.desktop.active_original_ui import ActiveOriginalController
+
+        self.active_originals = ActiveOriginalController(self)
+        self.pdf.source_changed.connect(self.active_originals.invalidate)
+        from paper_daily.desktop.material_original_ui import MaterialOriginalController
+        from paper_daily.desktop.material_preparation import MaterialPreparation
+
+        self.material_preparation = MaterialPreparation(self)
+        self.presentation_pane._material_preparation = self.material_preparation
+        self.material_originals = MaterialOriginalController(self)
+        self.presentation_pane.materials_panel.source_selection_requested.connect(
+            self.material_originals.open
+        )
+        self.pdf.source_changed.connect(self.material_preparation.source_changed)
+        self.pdf.source_changed.connect(self.material_originals.invalidate)
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper: Paper) -> None:
+        material_preparation = getattr(self, "material_preparation", None)
+        if material_preparation is not None:
+            material_preparation.invalidate(clear=True)
+        material_originals = getattr(self, "material_originals", None)
+        if material_originals is not None:
+            material_originals.invalidate()
+        originals = getattr(self, "active_originals", None)
+        if originals is not None:
+            originals.invalidate()
+        self.qa_presentation.view_changed()
         self.preparation.invalidate(clear=True)
         self.figure_pane.invalidate()
         self.reading_positions.invalidate()
@@ -1305,7 +1358,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 f"{self.pdf.page_count()} 頁 · {pdfpane.backend_name()}"
             )
             self.open_external.setEnabled(True)
-            self._load_highlights(path)
+            self._load_highlights(path, prepare=True)
             QTimer.singleShot(0, self._prepare_reading_highlights)
             return
 
@@ -1365,11 +1418,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         pane = self.presentation_pane
         self.tabs.setCurrentWidget(pane)
         pane.materials_button.setChecked(True)
-        pane._load_materials()
-        if pane.materials_panel.select_highlight(mark_id):
-            pane.materials_panel._locate_selected()
-        else:
-            self.highlight_status.setText("尚無可用重點；按「分析／補上標註」開始。")
+        if not self.material_preparation.show_highlight(mark_id):
+            self.highlight_status.setText("無法定位目前重點；請查看素材整理狀態並重試。")
 
     def _refresh_highlight_materials(self):
         if self.paper and self.presentation_pane.paper_id == self.paper.id:
@@ -1431,7 +1481,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self.highlight_status.setText("正在處理論文，稍後同步原文重點與素材。")
             QTimer.singleShot(1000, self._prepare_reading_highlights)
             return
-        pane._analyze_highlights(force=False)
+        from paper_daily.desktop.reading_annotation_ui import automatic
+
+        with automatic(pane):
+            pane._analyze_highlights(force=False)
         if pane.busy:
             self._highlight_attempts.add(key)
 
@@ -1511,7 +1564,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 count = sum(mark.get("origin") == "ai" for mark in selection._records)
                 self.pdf_note.setText(f"已同步 {count} 段 AI 重點（綠色）與素材。")
 
-    def _load_highlights(self, path: Path, *, fingerprint=None) -> None:
+    def _load_highlights(self, path: Path, *, fingerprint=None, prepare=False) -> None:
         selection = getattr(self.pdf, "selection", None)
         if managed(self.paper):
             active = getattr(self, "_active_document", None)
@@ -1538,11 +1591,24 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 marks = highlight_actions.load(self, path, self._pdf_fingerprint)
             else:
                 marks = pdf_highlights.list_marks(self.paper.id, self._pdf_fingerprint)
-            selection.set_highlights(marks)
+            if (prepare and active is not None and hasattr(self, "_highlight_owner")
+                    and self._highlight_view is not None
+                    and self._highlight_view.document is active):
+                self.preparation.request(marks=True)
+            else:
+                selection.set_highlights(marks)
             QTimer.singleShot(0, self.reading_positions.bind)
             self._mark_status(marks, selection.hidden_layers)
         except (OSError, sqlite3.Error, ValueError) as exc:
             self.highlight_status.setText(f"螢光標記無法載入：{exc}")
+
+    def _show_highlight_count(self, marks) -> None:
+        ai = sum(mark.get("origin") == "ai" for mark in marks)
+        manual = len(marks) - ai
+        self.highlight_status.setText(
+            f"原文重點：AI {ai} 段（綠色） · 手動 {manual} 段（黃色）"
+            if marks else "尚未標註原文重點；可按「分析／補上標註」。"
+        )
 
     def _highlight_selection(self) -> None:
         if hasattr(self, "_highlight_owner"):
@@ -1643,31 +1709,6 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     def _load_dive(self) -> None:
         assert self.paper
-        pal = self.win.pal
-        body = self.win.data.dive(self.paper.id)
-        if body:
-            from paper_daily.figures import extract
-
-            with connect() as conn:
-                close = closeread.get(conn, self.paper.id)
-            # Only the close reading places figures, and only an extracted figure
-            # can be placed, so the PDF is read for them only when both exist.
-            figures = (
-                extract(self.paper.id, self.paper.pdf_path, cached_only=True)
-                if close and self.paper.has_pdf
-                else []
-            )
-            from paper_daily import paper_highlights, reading_links
-
-            self._dive_highlights = paper_highlights.cached(self.paper.id)
-            links = (reading_links.cached(self.paper.id, reading_links.sections(body, close),
-                                          self._dive_highlights)
-                     if self._dive_highlights else None)
-            self.dive_view.setHtml(reading.render(
-                body, close, figures, pal, highlights=self._dive_highlights, links=links,
-                rich=self.dive_view.rich,
-            ))
-            return
         parts = []
         if self.paper.abstract:
             parts.append("## Abstract\n\n" + self.paper.abstract)
@@ -1687,7 +1728,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                 "\n\n每晚的排程也會替接下來要讀的幾篇先做好。若按了沒有反應，"
                 "從上方「AI 設定」檢查目前的 AI 服務。"
             )
-        self.dive_view.setHtml(self.dive_view.markdown("\n".join(parts)))
+        self.preparation.request(dive=True, empty_dive="\n".join(parts))
 
     def _dive_source(self, url):
         if url.scheme() == "paperfact-highlight":
@@ -1750,8 +1791,82 @@ class ReaderPage(ManagedDocumentReader, QWidget):
     # A long answer kept as a note turns the tab back into the wall of text the
     # cards exist to avoid, so a card shows its opening and opens on request.
 
+    def _show_claims_button(self) -> None:
+        if not self.paper:
+            self.claims_btn.hide()
+            return
+        with connect() as conn:
+            document = getattr(self, "_active_document", None)
+            if document is not None and document.available:
+                ready = conn.execute(
+                    "SELECT count(*) FROM pdf_ai_highlights WHERE paper_id=? "
+                    "AND document_hash=? AND hidden=0",
+                    (self.paper.id, document.sha256),
+                ).fetchone()[0] >= 3
+            else:
+                ready = len(claims.highlights(conn, self.paper.id)) >= 3
+            made = claims.has_cards(conn, self.paper.id)
+        busy = self._claims_for is not None
+        self.claims_btn.setVisible(ready or self._claims_for == self.paper.id)
+        self.claims_btn.setEnabled(not busy)
+        self.claims_btn.setText("整理中…" if busy else
+                               "AI 重新整理核心論點" if made else "AI 整理核心論點")
+
+    @requires_ai("paper_highlights")
+    def _make_claims(self) -> None:
+        from paper_daily import claim_notes
+
+        if not self.paper or self._claims_for or self._claims_work.busy:
+            return
+        paper, epoch = self.paper, self._qa_epoch
+        workspace = self.win._workspace_owner
+        self._claims_for = paper.id
+        try:
+            with connect() as conn:
+                again = claims.has_cards(conn, paper.id)
+            connections = llm.capture_connections()
+            with llm.connection_scope(connections):
+                cfg = llm.settings(task=claims.TASK)
+            job = claim_notes.ClaimNotesJob(
+                getattr(self, "_highlight_owner", None),
+                getattr(self, "_active_document", None), connections, cfg)
+            self.note_status.setText("AI 正在從原文重點挑出核心論點…")
+            self._show_claims_button()
+        except Exception:
+            self._claims_for = None
+            self.claims_btn.setEnabled(True)
+            self.note_status.setText("無法準備核心論點；原有卡片保留，請重新開啟論文後重試。")
+            return
+
+        def finish(made, reason):
+            self._claims_for = None
+            if workspace.current() and self.paper is paper and self._qa_epoch == epoch:
+                self.note_status.setText(f"已整理 {made} 張核心論點卡" if made else reason)
+                self._load_notes()
+            elif workspace.current():
+                self._show_claims_button()
+
+        def work(_prompt):
+            try:
+                with claim_notes.scope(job):
+                    made, reason = claims.write(paper.id, force=again)
+                return json.dumps([made, reason]), "ok"
+            except ValueError as exc:
+                return None, str(exc)[:500]
+            except Exception as exc:
+                return None, f"核心論點未完成，原有卡片保留：{type(exc).__name__}"
+
+        try:
+            self._claims_work.start("", lambda value: finish(*json.loads(value)),
+                                    lambda reason: finish(0, reason), call=work, task=claims.TASK)
+        except Exception:
+            self._claims_for = None
+            self.claims_btn.setEnabled(True)
+            self.note_status.setText("無法啟動核心論點工作；原有卡片保留，請重試。")
+
     def _load_notes(self) -> None:
         assert self.paper
+        self._show_claims_button()
         pal = self.win.pal
         rows = self.win.data.notes(self.paper.id)
         self._visible_notes = {int(row["id"]): dict(row) for row in rows}
@@ -1779,16 +1894,22 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         kind = row["kind"] or "note"
         asked = kind == "ask"
         key = kind == "key"
-        accent = pal["done"] if key else pal["accent"] if asked else pal["award"]
-        tint = pal["doneSoft"] if key else pal["accentSoft"] if asked else pal["awardSoft"]
+        by_ai = asked or kind == claims.KIND
+        accent = pal["done"] if key else pal["accent"] if by_ai else pal["award"]
+        tint = (
+            pal["doneSoft"] if key else pal["accentSoft"] if by_ai else pal["awardSoft"]
+        )
         headline, passage, content = note_headline(row["body"] or "", kind)
         opened = note_id in self._open_notes
 
         stamp = (row["created_at"] or "")[:16].replace("T", " ")
         where = f" · 第 {row['page']} 頁" if row["page"] else ""
+        label = (
+            "★ 關鍵" if key else "問 AI" if asked else "AI 論點" if kind == claims.KIND else "手寫"
+        )
         chip = (
             f'<span style="background:{tint};color:{accent};font-size:10px;">'
-            f'&nbsp;{"★ 關鍵" if key else "問 AI" if asked else "手寫"}&nbsp;</span>'
+            f'&nbsp;{label}&nbsp;</span>'
         )
         meta = (
             f'<div style="color:{pal["faint"]};font-size:10px;margin-top:3px;">'
@@ -1923,6 +2044,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         elif what == "toggle":
             self._open_notes.symmetric_difference_update({ident})
             self._load_notes()
+        elif what == "retryq":
+            self._retry_question(ident)
         elif what == "delq":
             self._forget_exchange(ident)
         elif what == "keep":
@@ -2078,18 +2201,25 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             )
         head += "</td>"
         if answer is None:
-            body = f'<span style="color:{pal["faint"]};">思考中…</span>'
-            links = ""
+            body = f'<span style="color:{pal["faint"]};">未完成，可重試</span>'
+            links = (f'<a href="retryq:{int(question["id"])}">修改後重問</a>&nbsp; '
+                     if question else "")
             item = (
                 getattr(self, "_qa_pending", {}).get(question.get("message_id"))
                 if question
                 else None
             )
             if item:
+                presentation = getattr(self, "qa_presentation", None)
+                active = presentation.state()[0] if presentation is not None else None
+                text = ("思考中…" if item["request_id"] == active
+                        and item["status"] == "prepared" else
+                        "未完成，可重試" if item["status"] == "prepared" else "已保留回答，待核對")
+                body = f'<span style="color:{pal["faint"]};">{text}</span>'
                 action = "resumeqa" if item["status"] == "prepared" else "reviewqa"
                 label = "選擇目前 AI 繼續" if item["status"] == "prepared" else "檢視保留答案"
                 identity = html.escape(item["request_id"], quote=True)
-                links = f'<a href="{action}:{identity}">{label}</a>&nbsp; '
+                links += f'<a href="{action}:{identity}">{label}</a>&nbsp; '
         else:
             body = self.chat_view.markdown(answer["body"])
             links = (
@@ -2111,6 +2241,47 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             f'<div style="color:{pal["ink"]};font-size:13px;">{body}</div>'
             f'<div align="right" style="font-size:11px;">{links}</div></td></tr></table>'
         )
+
+    def _retry_question(self, question_id: int) -> None:
+        """Copy an unanswered question to the draft; replace only on successful preparation."""
+        from paper_daily import store
+
+        if not self.paper or self.runner.busy or self._qa_starting:
+            return
+        snapshot = getattr(self, "_chat_snapshot", None)
+        if not snapshot or not any(item["row"]["id"] == question_id
+                                   for item in snapshot["rows"]):
+            # The worker can finish before its queued conversation projection arrives.
+            # Admit only the exact question receipt owned by this visible run.
+            job = self._qa_job
+            record = getattr(job.request, "_receipt", None) if job else None
+            if (not record or job.answer is not None
+                    or job.request.db_path != Path(store.DB_PATH).resolve()
+                    or self._qa_submitted_epoch != self._qa_epoch
+                    or job.request.data["paper_id"] != self.paper.id):
+                return
+            original = json.loads(record["question_json"])
+            if original["id"] != question_id:
+                return
+            try:
+                snapshot = self.win.data.chat_snapshot(self.paper.id, [question_id])
+                if snapshot["rows"][0]["row"] != original:
+                    return
+            except (ValueError, OSError):
+                return
+        if snapshot["paper_id"] != self.paper.id:
+            return
+        rows = [item["row"] for item in snapshot["rows"]]
+        for question, answer in _exchanges(rows):
+            if question and question["id"] == question_id and answer is None:
+                expected = {**snapshot, "rows": [item for item in snapshot["rows"]
+                                                if item["row"]["id"] == question_id]}
+                self._qa_edit_retry = (self._qa_epoch, expected)
+                self._passage = None
+                self.ask_box.setText(question["body"])
+                self.ask_box.setFocus()
+                self.ask_status.setText("可修改問題後送出；送出前會保留原問題。")
+                return
 
     def _forget_exchange(self, question_id: int) -> None:
         """Delete precisely the exchange that was rendered, not a refreshed replacement."""
@@ -2158,6 +2329,26 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         if self.paper and self._cites_stale and self.tabs.currentWidget() is self.cites_pane:
             self._cites_stale = False
             self.cites_pane.load(self.paper.id)
+
+    def _jump_to_material_source(self, source: dict) -> None:
+        if source.get("navigation_available") is False:
+            self.presentation_pane.status.setText("這項素材尚未核對到原文位置；內容仍保留。")
+            return
+        claimed = source.get("document_hash")
+        if claimed is not None and claimed != getattr(self, "_pdf_fingerprint", None):
+            self.presentation_pane.status.setText("????????????????????")
+            return  # Only the separate typed selection may authorize historical reading.
+        self._jump_to_source(source)
+
+    def _jump_to_deck_source(self, source: dict) -> None:
+        # Only the actual presentation signal gets saved-deck source authority.
+        # Materials retain their independent provenance and current-PDF guard.
+        if (source.get("kind") not in ("citations", "dive", "close_reading")
+                and source.get("document_hash") is not None
+                and source.get("document_hash") != getattr(self, "_pdf_fingerprint", None)
+                and self.active_originals.open(source)):
+            return
+        self._jump_to_source(source)
 
     def _jump_to_source(self, source: dict) -> None:
         """Keep source checks inside the reader, beside the slide being edited."""
@@ -2423,8 +2614,14 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             retry = self._qa_job
             from paper_daily import store
 
+            edit = getattr(self, "_qa_edit_retry", None)
+            replacement = (edit[1] if edit and edit[0] == self._qa_epoch
+                           and edit[1]["paper_id"] == self.paper.id
+                           and edit[1]["db_path"] == str(Path(store.DB_PATH).resolve()) else None)
+
             if (
-                retry is not None
+                replacement is None
+                and retry is not None
                 and getattr(retry.request, "_receipt", None) is not None
                 and retry.result is None
                 and retry.request.data["paper_id"] == self.paper.id
@@ -2443,8 +2640,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                     style=self._answer_style(),
                 )
                 self.follow_btn.setChecked(False)
-                job = ChatJob(request, connections, cfg)
+                job = ChatJob(request, connections, cfg, replacement=replacement)
+            self._qa_edit_retry = None
             self._qa_job = job
+            job.prepared = self.qa_presentation.begin(job, self.paper, self._qa_epoch)
             self.runner.start("", self._ask_done, self._ask_failed, call=job, task="ask")
         except Exception:
             self.ask_status.setText("無法準備問答；問題已保留，請重試。")
@@ -2508,6 +2707,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self._qa_preserve_draft = self.ask_box.text() != request.data["question"]
             self._qa_job = job
             self.ask_status.setText("正在繼續原問題；原始問題與帳號選擇已固定。")
+            job.prepared = self.qa_presentation.begin(job, self.paper, epoch)
             self.runner.start("", self._ask_done, self._ask_failed, call=job, task="ask")
         except Exception:
             self.ask_status.setText(
@@ -2557,6 +2757,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             return False
 
     def _ask_done(self, _answer: str) -> None:
+        presentation = getattr(self, "qa_presentation", None)
+        if presentation is not None:
+            presentation.finished(self._qa_job)
         if self._qa_current():
             self._load_chat()
             if self._qa_epoch == self._qa_submitted_epoch:
@@ -2574,6 +2777,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.ask_btn.setEnabled(True)
 
     def _ask_failed(self, message: str) -> None:
+        presentation = getattr(self, "qa_presentation", None)
+        if presentation is not None:
+            presentation.finished(self._qa_job, failed=True)
         if self._qa_current() and self._qa_epoch == self._qa_submitted_epoch:
             self.ask_status.setText(message)
         self.ask_btn.setEnabled(True)
@@ -2721,6 +2927,11 @@ class MainWindow(QWidget):
         self.offline_action = data_menu.addAction("離線準備所選論文…", self._offline_selected)
         self.review_action = data_menu.addAction("審閱保留內容…", self._review_retained)
         self.review_action.setToolTip("核對未套用的 AI 結果與同步衝突；不會重新呼叫 AI")
+        from paper_daily.desktop.rescue_import_dialog import COPY as rescue_copy
+
+        rescue_words = rescue_copy.get(getattr(self, "language", "zh-TW"), rescue_copy["en"])
+        self.rescue_import_action = data_menu.addAction(
+            rescue_words["entry"], self._rescue_import)
         data_menu.addAction("本地整合 · 連接 agent…", self._local_integration)
         self.research_data_button.setMenu(data_menu)
         bar.addWidget(self.research_data_button)
@@ -2999,6 +3210,7 @@ class MainWindow(QWidget):
     def _workspace_settings(self):
         from paper_daily import store
         from paper_daily.desktop.workspace_dialog import WorkspaceDialog
+        from paper_daily.workspace_primary_migration import MigrationSource
 
         existing = getattr(self, "_workspace_dialog", None)
         if existing is not None and not existing.disposed:
@@ -3012,18 +3224,42 @@ class MainWindow(QWidget):
             from paper_daily.desktop.workspace_dialog import WorkspaceWorker
 
             return (self.activity_hub.busy or self.analysis_running()
-                    or bool(getattr(self.pdf_downloads, "busy", False))
+                    or bool(getattr(getattr(self, "pdf_downloads", None), "busy", False))
                     or any(thread.isRunning() for thread in self.findChildren(QThread)
                            if not isinstance(thread, WorkspaceWorker)))
 
         try:
             dialog = WorkspaceDialog(store.DB_PATH, parent=self,
                                      current_path=lambda: store.DB_PATH,
-                                     writers_busy=writers_busy)
+                                     writers_busy=writers_busy,
+                                      migration_source=MigrationSource.capture(
+                                          self._workspace_owner, PDF_DIR))
         except (OSError, ValueError):
             QMessageBox.warning(self, "無法開啟工作區", "資料庫目前無法讀取；未變更資料。")
             return
         self._workspace_dialog = dialog
+        dialog.open()
+
+    def _rescue_import(self):
+        from shiboken6 import isValid
+
+        from paper_daily.desktop.rescue_import_dialog import RescueImportDialog
+
+        existing = getattr(self, "_rescue_dialog", None)
+        if existing is not None and isValid(existing) and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            return
+        if not self._workspace_owner.current():
+            self._workspace_changed_notice()
+            return
+        paper = self.reader_page.paper
+        dialog = RescueImportDialog(
+            self._workspace_owner, self, language=getattr(self, "language", "zh-TW"),
+            selected_paper=paper.id if paper is not None else None)
+        self._rescue_dialog = dialog
+        dialog.finished.connect(dialog.deleteLater)
         dialog.open()
 
     def _review_retained(self):
@@ -3348,11 +3584,22 @@ class MainWindow(QWidget):
         figure_ready = figures is None or figures.request_close()
         preparation = getattr(reader, "preparation", None)
         prepared = preparation is None or preparation.request_close()
-        if not figure_ready or not prepared:
+        originals = getattr(reader, "active_originals", None)
+        originals_ready = originals is None or originals.request_close()
+        materials = getattr(reader, "material_preparation", None)
+        material_ready = materials is None or materials.request_close()
+        material_originals = getattr(reader, "material_originals", None)
+        material_originals_ready = material_originals is None or material_originals.request_close()
+        if (not figure_ready or not prepared or not originals_ready
+                or not material_ready or not material_originals_ready):
             self.reader_page.ask_status.setText(
                 "Figures are still preparing; wait for them to stop, then retry."
                 if not figure_ready else
                 "Saved conversation is still preparing; wait for it to stop, then retry."
+                if not prepared else
+                "Cited original is still preparing; wait for it to stop, then retry."
+                if not originals_ready else
+                "Materials are still preparing; wait for them to stop, then retry."
             )
             return False
         return True
@@ -3678,7 +3925,8 @@ class MainWindow(QWidget):
             return
         hub = getattr(self, "activity_hub", None)
         workers = (getattr(reader, name, None) for name in
-                   ("runner", "translate_runner", "refine_runner", "fetcher", "document_runner"))
+                   ("runner", "translate_runner", "refine_runner", "fetcher", "document_runner",
+                    "_claims_work"))
         if (hub is not None and hub.busy) or any(r is not None and r.busy for r in workers):
             event.ignore()
             board = getattr(self, "activity_board", None)
@@ -3797,6 +4045,9 @@ class MainWindow(QWidget):
         preparation = getattr(self.reader_page, "preparation", None)
         if preparation is not None:
             preparation.dispose()
+        presentation = getattr(self.reader_page, "qa_presentation", None)
+        if presentation is not None:
+            presentation.dispose()
         self.workspace_changes.close()
         super().closeEvent(event)
 
@@ -3846,6 +4097,8 @@ class MainWindow(QWidget):
         when_ready(handle, lambda: self._launch_job(handle, args, paper_id, original_database))
 
     def _launch_job(self, handle, args, paper_id, original_database) -> None:
+        from paper_daily.desktop.popen_job import launch
+
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         if not current_for(self):
             handle.finish(cancelled=True)
@@ -3853,8 +4106,8 @@ class MainWindow(QWidget):
         self._analysis_activity = handle
         self._job_paper = paper_id
         try:
-            self._dive_job = subprocess.Popen(
-                runtime.cli_command(*args),
+            self._dive_job = launch(
+                args, popen=subprocess.Popen,
                 cwd=str(ROOT),
                 creationflags=flags,
                 stdout=subprocess.PIPE,
@@ -3871,7 +4124,7 @@ class MainWindow(QWidget):
                 },
             )
             self.activity_hub.watch_popen(self._analysis_activity, self._dive_job)
-        except OSError:
+        except (OSError, ValueError):
             self._analysis_activity.finish(False, "無法啟動分析，請重試")
             self._dive_job = None
 
@@ -3884,6 +4137,9 @@ class MainWindow(QWidget):
         what already exists, it loses nothing it had finished. Behind a list
         analysis it waits in the job queue.
         """
+        if self.reader_page.cites_pane.lookups_running():
+            self.activity_board.setFocus()
+            return
         if self.analysis_running(paper_id):
             self.activity_board.setFocus()
             return

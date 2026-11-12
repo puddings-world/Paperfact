@@ -21,13 +21,75 @@ MAX_PAPERS = 200
 class ResearchOperations:
     """One retry identity and one transaction for a compound research action."""
 
-    def __init__(self, client):
+    def __init__(self, client, *, expected=None):
+        # Explicit local preparation may initialize the ledger only in its
+        # originally observed database. Existing callers keep their contract.
+        def current(conn=None):
+            if expected is None:
+                return
+            from pathlib import Path
+
+            if (
+                not isinstance(expected, tuple)
+                or len(expected) != 2
+                or not isinstance(expected[1], tuple)
+                or len(expected[1]) != 2
+                or any(type(value) is not int for value in expected[1])
+                or not expected[1][1]
+            ):
+                raise ValueError("Expected a known original database identity")
+            path = Path(expected[0]).resolve()
+            info = path.stat()
+            if (
+                Path(client.journal.path).resolve() != path
+                or (info.st_dev, info.st_ino) != expected[1]
+            ):
+                raise ValueError("Original action database was replaced")
+            if conn is not None:
+                actual = next(
+                    (row[2] for row in conn.execute("PRAGMA database_list") if row[1] == "main"),
+                    None,
+                )
+                if not actual or Path(actual).resolve() != path:
+                    raise ValueError("Action connection belongs to another database")
+
+        def ledger(conn):
+            if expected is None:
+                return
+            row = conn.execute(
+                "SELECT type,sql FROM sqlite_master WHERE name='research_action_receipts'"
+            ).fetchone()
+            if row is not None and row[0] == "table":
+                columns = [tuple(value) for value in conn.execute(
+                    "PRAGMA table_info(research_action_receipts)"
+                )]
+                if columns != [
+                    (0, "request_id", "TEXT", 0, None, 1),
+                    (1, "fingerprint", "TEXT", 1, None, 0),
+                    (2, "result", "TEXT", 1, None, 0),
+                ]:
+                    raise ValueError("Existing action ledger columns are unsupported")
+            wanted = (
+                "CREATE TABLE research_action_receipts "
+                "(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,result TEXT NOT NULL)"
+            )
+            def normalize(value):
+                return "".join(value.upper().split()).replace("IFNOTEXISTS", "")
+            if row is not None and (
+                row[0] != "table" or not row[1] or normalize(row[1]) != normalize(wanted)
+            ):
+                raise ValueError("Existing action ledger schema is unsupported")
+
+        current()
         self.client = client
         with client.journal.transaction() as conn:
+            current(conn)
+            ledger(conn)
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS research_action_receipts "
                 "(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,result TEXT NOT NULL)"
             )
+            current(conn)
 
     def create_list(self, name, papers, *, request_id, note=""):
         return self._intake("create", None, name, note, papers, request_id)

@@ -30,7 +30,7 @@ def _passage(quote, row, page):
     return dict(quote=quote, document_hash=row["document_hash"], page=page, anchor=None)
 
 
-def annotation_items(feature, row, *, related=None):
+def annotation_items(feature, row, *, related=None, sections=None):
     """Use closed saved content, not cache paths or the currently loaded document."""
     try:
         annotation_content.validate_row(feature, row)
@@ -62,11 +62,23 @@ def annotation_items(feature, row, *, related=None):
                 if row["document_hash"] != related["document_hash"]
                 else "matched"
             )
+        # Input hashes include ordered highlights and full explanation sections.
+        # The page-text digest alone cannot prove that a positional quote still means
+        # the same thing after human edits. Legacy rows without proof need review.
+        fingerprint_matches = False
+        if state == "matched" and sections is not None:
+            from paper_daily.reading_links import _key
+
+            fingerprint_matches = row["source_hash"] == _key(
+                sections, {**analysis, "source_hash": related["source_hash"]}
+            )
         items = []
         for index, link in enumerate(body["links"]):
             linked = state
             if linked == "matched" and link["quote"] >= len(analysis["items"]):
                 linked = "quote_missing"
+            elif linked == "matched" and not fingerprint_matches:
+                linked = "analysis_changed"
             passages = []
             if linked == "matched":
                 quote = analysis["items"][link["quote"]]
@@ -83,7 +95,16 @@ def annotation_items(feature, row, *, related=None):
                 )
             )
         return items or [
-            _item("reading_links:empty", feature, "", row, related=related, state=state)
+            _item(
+                "reading_links:empty",
+                feature,
+                "",
+                row,
+                related=related,
+                state="analysis_changed"
+                if state == "matched" and not fingerprint_matches
+                else state,
+            )
         ]
     except (ValueError, TypeError, KeyError, RecursionError, UnicodeError):
         raise research_audit.AuditError("invalid_saved_content") from None

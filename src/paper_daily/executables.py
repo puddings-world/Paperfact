@@ -83,3 +83,15 @@ def _ask_again(key):
     finally:
         with _lock:
             _rechecking.discard(key)
+
+def refresh(name: str) -> str | None:
+    """Ask again now, on the caller's thread, and keep the answer for this context.
+
+    For an explicit "look again" (settings opened, a start that failed); display
+    callers keep using `which`, which never waits on a stale entry."""
+    key = _key(name)
+    answer = key[1](name)
+    with _lock:
+        if _key(name) == key:
+            _remember(key, answer)
+    return answer

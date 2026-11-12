@@ -179,7 +179,11 @@ class _QtPdfPane(QWidget):
                 status == QPdfDocument.Status.Ready
                 and candidate.status() == QPdfDocument.Status.Ready
             )
-            if self._doc is candidate:
+            # Only a finished load changes the source. Closing or destroying the
+            # document (as when the window shuts) also changes its status, and the
+            # pane may already be half destroyed then.
+            finished = status in (QPdfDocument.Status.Ready, QPdfDocument.Status.Error)
+            if finished and self._doc is candidate:
                 self.source_changed.emit()
 
         candidate.statusChanged.connect(completed)

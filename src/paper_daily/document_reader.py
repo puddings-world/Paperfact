@@ -260,7 +260,8 @@ class DocumentReader:
                     raise ValueError("Managed research database has no paper table")
                 return self._legacy_inspection(identities)
             binding, registration = _binding(conn, tables), _registration(conn, tables)
-            context = (binding, registration)
+            native = self.db_path.stat()
+            context = (binding, registration, (native.st_dev, native.st_ino))
             # Every query is limited to the asked-for papers: the reader inspects on
             # each click, and reading whole tables made a jump to the source take
             # most of a second in a workspace of ~80,000 papers.
@@ -353,6 +354,7 @@ class DocumentReader:
                 if (
                     status == "unchecked"
                     and cached is not None
+                    and cached.paper_id == portable
                     and (cached._target, cached._context, cached._generation, cached.mode)
                     == (item._target, context, self._generation, item.mode)
                 ):

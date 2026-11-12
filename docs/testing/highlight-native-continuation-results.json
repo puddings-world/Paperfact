@@ -1,0 +1,58 @@
+{
+  "format": "paperfact.highlight-native-continuation-results.v1",
+  "date": "2026-11-02",
+  "gate": {
+    "exit_code": 0,
+    "seconds": 79.09,
+    "selection": [
+      "tests/test_highlight_native_continuation.py"
+    ],
+    "frozen_inputs": 1156,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "check": {
+      "profile": "focused",
+      "status": "passed",
+      "full_check_passed": false,
+      "stages": [
+        {
+          "name": "Privacy scan",
+          "status": "passed",
+          "seconds": 1.794,
+          "exit_code": 0
+        },
+        {
+          "name": "Ruff",
+          "status": "passed",
+          "seconds": 0.146,
+          "exit_code": 0
+        },
+        {
+          "name": "Selected Python tests",
+          "status": "passed",
+          "seconds": 76.586,
+          "exit_code": 0
+        }
+      ],
+      "selection": {
+        "python": [
+          "tests/test_highlight_native_continuation.py"
+        ],
+        "frontend": [],
+        "mobile": false
+      },
+      "seconds": 78.534
+    }
+  },
+  "product_changed": false,
+  "previous_130_case_inputs_unchanged": true,
+  "full_check_passed": false,
+  "new_functions": 4,
+  "new_cases": 6
+}

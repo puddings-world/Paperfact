@@ -156,6 +156,10 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
         with scoped_connection() as conn:
             have = status(conn, paper_id, verify_sources=True)[step]
             gave_up = failed(conn, paper_id, step)
+        if step == "later":
+            with scoped_connection() as conn:
+                if followups.nothing_to_tell(conn, paper_id):
+                    return False
         return not have and (retry or not gave_up)
 
     with scoped_connection() as conn:
@@ -287,6 +291,7 @@ def _analyse(paper_id, log, retry, database, connections) -> dict[str, bool]:
             story_pending = (
                 get_kv(conn, f"followups.checked.{paper_id}") is not None
                 and not followups.done(conn, paper_id)
+                and not followups.nothing_to_tell(conn, paper_id)
             )
         if story_pending:
             import hashlib
@@ -343,7 +348,11 @@ def left(
     gave_up = {s for s in STEPS if failed(conn, paper_id, s)}
     if not have["pdf"] and "pdf" in gave_up:
         gave_up.update(NEEDS_PDF)
-    return [s for s, ok in have.items() if not ok and (retry or s not in gave_up)]
+    from paper_daily.followups import nothing_to_tell
+
+    settled_later = nothing_to_tell(conn, paper_id, verify_source=verify_sources)
+    return [s for s, ok in have.items()
+            if not ok and (retry or s not in gave_up) and not (s == "later" and settled_later)]
 
 
 def pending(conn, paper_ids: list[str], retry: bool = False) -> list[str]:
@@ -387,7 +396,14 @@ def ahead(count: int, list_id: str | None = None, jobs: int = 2, log: Log = prin
     """Analyse the next few papers before they are reached. Returns how many came
     out complete."""
     with connect() as conn:
-        ids = upcoming(conn, count, list_id)
+        # This is the worker, unlike the desktop's cheap candidate preview.
+        # Exact-source settled outcomes must not occupy all requested slots.
+        ids = []
+        for paper_id in upcoming(conn, 300, list_id):
+            if left(conn, paper_id):
+                ids.append(paper_id)
+                if len(ids) == count:
+                    break
     if not ids:
         log("nothing to analyse: the papers coming up already have all they can get")
         return 0

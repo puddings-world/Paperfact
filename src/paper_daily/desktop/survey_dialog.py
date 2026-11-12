@@ -68,6 +68,13 @@ class SurveyDialog(QDialog):
         self._editing = False
         self.pal = palette
         self.job: QProcess | None = None
+
+        from paper_daily.desktop.activity import hub_for
+        from paper_daily.desktop.window_workspace import WindowWorkspace
+
+        self._workspace_owner = WindowWorkspace.capture()
+        self._hub = hub_for(self)
+        self._shown_running = False
         self.setWindowTitle(f"清單綜覽 · {list_name}")
         self.resize(1000, 820)
         layout = QVBoxLayout(self)
@@ -97,10 +104,34 @@ class SurveyDialog(QDialog):
             f"border:1px solid {palette['border']};padding:18px;font-size:14px;}}"
         )
         layout.addWidget(self.view, 1)
+        if self._hub is not None:
+            self._hub.changed.connect(self._hub_changed)
         self._load()
 
     def _workspace_matches(self) -> bool:
-        return Path(store.DB_PATH).resolve() == self._database
+        return self._workspace_owner.current() and Path(store.DB_PATH).resolve() == self._database
+
+    def _running(self) -> bool:
+        from shiboken6 import isValid
+
+        from paper_daily.desktop.window_workspace import current_for
+
+        if self.job is not None:
+            return True
+        hub = self._hub
+        return bool(
+            self._workspace_matches() and hub is not None and isValid(hub)
+            and current_for(hub.window)
+            and any(job.key == f"survey:{self.list_id}" and job.state == "running"
+                    for job in hub.jobs.values())
+        )
+
+    def _hub_changed(self) -> None:
+        from shiboken6 import isValid
+
+        if isValid(self) and (not self._workspace_matches()
+                             or self._running() != self._shown_running):
+            self._load()
 
     def _load(self) -> None:
         if not self._workspace_matches():
@@ -120,7 +151,8 @@ class SurveyDialog(QDialog):
             ).fetchone()[0]
         self._stored = stored
         waiting = self._waiting()
-        running = self.job is not None or waiting
+        running = self._running() or waiting
+        self._shown_running = running
         self.run_btn.setEnabled(not running)
         self.run_btn.setText(
             "排隊中…" if waiting else "撰寫中…" if running
@@ -167,7 +199,7 @@ class SurveyDialog(QDialog):
         if not self._workspace_matches():
             self.status.setText(self._edit_text["workspace"])
             return
-        if self.job is not None or self._waiting():
+        if self._running() or self._waiting():
             return
         with connect() as conn:
             stored = survey.get(conn, self.list_id)
@@ -179,6 +211,24 @@ class SurveyDialog(QDialog):
             if answer != QMessageBox.StandardButton.Yes:
                 return
             args.append("--force")
+        elif stored and stored["spec"] == survey.ROADMAP_SPEC:
+            answer = QMessageBox.question(
+                self,
+                "重新撰寫綜覽",
+                "目前的綜覽是建立清單時的研究路線(選入理由與搜尋紀錄),"
+                "重新撰寫會取代它。要繼續嗎?",
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            args.append("--force")
+        # The confirmation may run an event loop while other edits arrive.
+        if not self._workspace_matches():
+            self.status.setText(self._edit_text["workspace"])
+            return
+        with connect() as conn:
+            if survey.get(conn, self.list_id) != stored:
+                self.status.setText(self._edit_text["changed"])
+                return
         from paper_daily.desktop.activity import begin, when_ready
 
         self._activity = begin(self, "撰寫清單綜覽", key=f"survey:{self.list_id}",
@@ -222,13 +272,26 @@ class SurveyDialog(QDialog):
         environment = self.job.processEnvironment()
         environment.insert("PAPERFACT_DATA", str(self._database.parent))
         self.job.setProcessEnvironment(environment)
-        self.job.readyReadStandardOutput.connect(self._output)
+        job = self.job
+        job.readyReadStandardOutput.connect(lambda: self._output(expected=job))
         self.job.setWorkingDirectory(str(ROOT))
         self.job.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        self.job.finished.connect(self._done)
-        self.job.errorOccurred.connect(self._error)
+        job.finished.connect(
+            lambda code, status: self._done(code, status, expected=job)
+        )
+        job.errorOccurred.connect(lambda error: self._error(error, expected=job))
         self._load()
-        program, *rest = runtime.cli_command(*args)
+        from paper_daily.desktop.cli_job import prepare
+
+        try:
+            program, *rest = prepare(job, args, ("survey",))
+        except (OSError, ValueError):
+            job.deleteLater()
+            self.job = None
+            self._activity.finish(False)
+            self._load()
+            self.status.setText("AI job startup failed; please retry.")
+            return
         self.job.start(program, rest)
 
     def _stop(self):
@@ -246,18 +309,27 @@ class SurveyDialog(QDialog):
         self.raise_()
         self.view.setFocus()
 
-    def _output(self):
+    def _output(self, *, expected=None):
+        if self.job is None or expected is not None and self.job is not expected:
+            return
         from paper_daily.desktop.activity import consume
 
-        chunk = bytes(self.job.readAllStandardOutput()).decode("utf-8", "replace")
+        raw = bytes(self.job.readAllStandardOutput())
+        handoff = getattr(self.job, "_ai_job_handoff", None)
+        if handoff is not None:
+            raw = handoff.filter_output(raw)
+        chunk = raw.decode("utf-8", "replace")
         self._activity_pending = consume(self._activity, chunk, self._activity_pending)
         self._output_tail = (self._output_tail + chunk)[-4096:]
 
-    def _done(self, code: int, _status) -> None:
-        if self.job is None:
+    def _done(self, code: int, _status, *, expected=None) -> None:
+        if self.job is None or expected is not None and self.job is not expected:
             return
         self._output()
         output = self._output_tail.strip()
+        handoff = getattr(self.job, "_ai_job_handoff", None)
+        if handoff is not None:
+            code = handoff.complete(code)
         self.job.deleteLater()
         self.job = None
         self._activity.finish(code == 0, cancelled=self._stopping)
@@ -273,7 +345,9 @@ class SurveyDialog(QDialog):
         if code:
             self.status.setText(f"沒有寫成:{output.splitlines()[-1] if output else code}")
 
-    def _error(self, error) -> None:
+    def _error(self, error, *, expected=None) -> None:
+        if expected is not None and self.job is not expected:
+            return
         if error == QProcess.ProcessError.FailedToStart and self.job is not None:
             job, self.job = self.job, None
             job.deleteLater()
@@ -282,7 +356,7 @@ class SurveyDialog(QDialog):
             self.status.setText("無法啟動清單綜覽；請確認安裝後重試。")
 
     def _edit(self) -> None:
-        if self._editing or self.job is not None:
+        if self._editing or self._running():
             return
         if not self._workspace_matches():
             self.status.setText(self._edit_text["workspace"])

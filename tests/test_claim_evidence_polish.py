@@ -17,9 +17,12 @@ from paper_daily.desktop.main import DARK
 
 claims, ready, view, workspace = _claims, _ready, _view, _workspace
 
+# Well under the full 660; macOS fonts wrap the empty state to about 441.
+COMPACT = 460
+
 
 def test_empty_and_deleted_states_are_compact_and_have_one_status_explanation(view):
-    assert view.d.height() <= 440 and not view.d.stop_button.isVisible()
+    assert view.d.height() <= COMPACT and not view.d.stop_button.isVisible()
     labels = view.d.findChildren(QLabel)
     assert sum(label.text() == TEXT["en"]["empty"] for label in labels) == 1
     assert any(label.text() == TEXT["en"]["empty_heading"] for label in labels)
@@ -29,7 +32,7 @@ def test_empty_and_deleted_states_are_compact_and_have_one_status_explanation(vi
     wait(view.app, lambda: not view.d.busy)
     labels = view.d.findChildren(QLabel)
     assert sum(label.text() == TEXT["en"]["deleted"] for label in labels) == 1
-    assert view.d.height() <= 440 and not view.d.version.isVisible()
+    assert view.d.height() <= COMPACT and not view.d.version.isVisible()
     assert view.d.generate_button.isEnabled()
 
 

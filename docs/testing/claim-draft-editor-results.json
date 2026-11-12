@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-02",
+  "version": "0.5.0.dev",
+  "scope": "isolated native Qt claim editor and interacting review/original flows",
+  "new_cases": 20,
+  "installed_device_acceptance": false,
+  "supplemental_field_controls": {
+    "exit_code": 0,
+    "seconds": 6.33,
+    "selection": [
+      "tests/test_claim_draft_ui.py::test_add_remove_and_external_reference_fields_save_complete_private_content",
+      "tests/test_claim_draft_ui.py::test_field_collection_controls_bound_repeated_clicks_and_empty_selection"
+    ],
+    "frozen_inputs": 987,
+    "source_drift": [],
+    "full_check_passed": false,
+    "totals": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "supplemental_product_unchanged": true,
+  "exit_code": 0,
+  "seconds": 263.97,
+  "selection": [
+    "tests/test_claim_draft_ui.py",
+    "tests/test_review_dialog.py",
+    "tests/test_archived_draft_resume_ui.py",
+    "tests/test_note_draft_resumption_ui.py",
+    "tests/test_retained_original_ui.py",
+    "tests/test_resumed_draft_original_ui.py"
+  ],
+  "frozen_inputs": 987,
+  "source_drift": [],
+  "full_check_passed": false,
+  "totals": {
+    "tests": 60,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

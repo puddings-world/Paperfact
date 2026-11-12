@@ -11,6 +11,7 @@ import hmac
 import json
 import secrets
 import sqlite3
+import threading
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from paper_daily.research_lifecycle import ensure_lifecycle, parent_lifecycle
 MAX_DETAIL = 8 * 1024 * 1024
 MAX_EXPORT = 2 * 1024 * 1024
 COMPOUND_ORIGINS = {"compound", "compound_sidecar", "compound_recovery"}
+FILE_ORIGINS = {"file", "file_draft", "local_deck", "enrolled_deck"}
 RECEIPT_FIELDS = {
     "request_id",
     "fingerprint",
@@ -39,6 +41,8 @@ TABLES = {
     "compound_recovery": ("recovery_records", "rowid"),
     "file": ("research_file_candidates", "candidate_id"),
     "file_draft": ("research_file_drafts", "candidate_id"),
+    "local_deck": ("research_local_deck_proposals", "proposal_id"),
+    "enrolled_deck": ("research_enrolled_deck_proposals", "proposal_id"),
     "remote": ("paperfact_sync_conflicts", "sequence"),
     "recovery": ("recovery_records", "rowid"),
 }
@@ -63,9 +67,11 @@ SOURCE_AWARE_REASON = "Claim sets require source-aware review"
 def _source_aware_required(view):
     scope = view.get("scope") or {}
     retained = view.get("retained")
-    return (scope.get("table") == "paper_claim_sets"
-            or (view.get("origin") == "remote" and isinstance(retained, dict)
-                and retained.get("feature") == "claims"))
+    return scope.get("table") == "paper_claim_sets" or (
+        view.get("origin") == "remote"
+        and isinstance(retained, dict)
+        and retained.get("feature") == "claims"
+    )
 
 
 def _source_aware_block(view):
@@ -93,10 +99,15 @@ def validate_receipt(row):
     for key in ("request_id", "origin_id"):
         if not isinstance(row[key], str) or not 1 <= len(row[key]) <= 256:
             raise ValueError("Invalid review receipt identity")
-    if row["origin"] not in {*TABLES, "sidecar", "compound_sidecar"} or row["decision"] not in {
-        "applied",
-        "kept",
-    }:
+    if row["origin"] not in {
+        *TABLES,
+        "sidecar",
+        "compound_sidecar",
+        "archived_resume",
+        "archived_note_resume",
+        "claim_resume",
+        "highlight_resume",
+    } or row["decision"] not in {"applied", "kept"}:
         raise ValueError("Invalid review receipt decision")
     if not isinstance(row["fingerprint"], str) or len(row["fingerprint"]) != 64:
         raise ValueError("Invalid review fingerprint")
@@ -149,8 +160,16 @@ class Preview:
 
 
 class ResearchReview:
-    def __init__(self, database):
+    def __init__(self, database, *, presentation_root=None):
         self.path = Path(database).resolve(strict=True)
+        if presentation_root is None:
+            from paper_daily import presentations, store
+
+            if Path(store.DB_PATH).resolve() == self.path:
+                presentation_root = presentations.DECK_DIR
+            else:
+                presentation_root = self.path.parent / "presentations"
+        self.presentation_root = Path(presentation_root).absolute()
         self.identity = generation._identity(self.path)
         with closing(generation._connect(self.path)) as conn:
             self.binding = generation._binding(conn)
@@ -158,6 +177,12 @@ class ResearchReview:
         self.session = str(uuid4())
         self._seal_key = secrets.token_bytes(32)
         self.closed = False
+        self._file_apply_lock = threading.RLock()
+        self._claim_revisions = {}
+        self._highlight_verifications = {}
+        self._resume_sources = {}
+        self._resume_documents = {}
+        self._resume_cache_owners = {}
 
     def close(self):
         self.closed = True
@@ -231,6 +256,10 @@ class ResearchReview:
                         f" AND table_name {comparison} "
                         "('research_compound_requests','research_compound_recovery')"
                     )
+                    if origin == "recovery":
+                        from paper_daily.archived_review_drafts import RECOVERY_FILTER
+
+                        condition += RECOVERY_FILTER
                 summary = "NULL"
                 if origin in {"generation", "compound"}:
                     field = "phase" if origin == "compound" else "table"
@@ -242,6 +271,12 @@ class ResearchReview:
                         "FROM lists WHERE id=json_extract(context_json,'$.owner_id')),"
                         "substr(json_extract(context_json,'$.owner_id'),1,100)) ELSE NULL END"
                     )
+                if origin in {"local_deck", "enrolled_deck"} and "papers" in tables:
+                    owner = "paper_id" if origin == "local_deck" else "local_id"
+                    summary = (
+                        "coalesce((SELECT substr(title,1,100) FROM papers WHERE "
+                        f"papers.id={table}.{owner}),substr({owner},1,100))"
+                    )
                 rows = conn.execute(
                     f'SELECT CAST("{column}" AS TEXT) AS identity,{summary} AS summary '
                     f'FROM "{table}" '
@@ -249,32 +284,48 @@ class ResearchReview:
                     (lower, limit + 1),
                 )
                 for row in rows:
-                    decision = None
-                    if "research_review_receipts" in tables:
-                        receipt = conn.execute(
-                            "SELECT decision FROM research_review_receipts WHERE origin=? "
-                            "AND origin_id=? ORDER BY rowid DESC LIMIT 1",
-                            (origin, row[0]),
-                        ).fetchone()
-                        decision = receipt[0] if receipt else None
                     items.append(
-                        {"origin": origin, "id": row[0], "decision": decision, "summary": row[1]}
+                        {"origin": origin, "id": row[0], "decision": None, "summary": row[1]}
                     )
-            self._check(conn)
-        for sidecar, kind in (("sidecar", "generation"), ("compound_sidecar", "compound")):
-            if after[0] > sidecar:
-                continue
+            from paper_daily.proposal_recovery_review import entries as recovered_proposals
+
             items.extend(
-                {"origin": sidecar, "id": identity, "decision": None}
-                for identity in self._sidecars(kind)
-                if (sidecar, identity) > after
+                row for row in recovered_proposals(self, conn) if (row["origin"], row["id"]) > after
             )
-        items.sort(key=lambda item: (item["origin"], item["id"]))
-        result = items[:limit]
-        cursor = [result[-1]["origin"], result[-1]["id"]] if len(items) > limit else None
+            from paper_daily.archived_review_drafts import entries as archived_drafts
+
+            items.extend(archived_drafts(conn, after, limit))
+            for sidecar, kind in (("sidecar", "generation"), ("compound_sidecar", "compound")):
+                if after[0] > sidecar:
+                    continue
+                items.extend(
+                    {"origin": sidecar, "id": identity, "decision": None}
+                    for identity in self._sidecars(kind)
+                    if (sidecar, identity) > after
+                )
+            items.sort(key=lambda item: (item["origin"], item["id"]))
+            result = items[:limit]
+            cursor = [result[-1]["origin"], result[-1]["id"]] if len(items) > limit else None
+            from paper_daily.review_decisions import latest_in
+
+            for row in result:
+                row["decision"] = latest_in(conn, row["origin"], row["id"])
+            self._check(conn)
         return {"items": result, "next": cursor}
 
     def _record(self, conn, origin, identity):
+        if origin == "highlight_resume":
+            from paper_daily.highlight_draft_resume import record
+
+            return record(self, conn, identity)
+        if origin == "claim_resume":
+            from paper_daily.claim_draft_resume import record
+
+            return record(self, conn, identity)
+        from paper_daily import proposal_recovery_review
+
+        if origin == "enrolled_deck" and proposal_recovery_review.virtual(identity):
+            return proposal_recovery_review.record(conn, identity)
         if origin in {"sidecar", "compound_sidecar"}:
             adapter = generation
             if origin == "compound_sidecar":
@@ -293,6 +344,10 @@ class ResearchReview:
             if context.data["db_path"] != str(self.path):
                 raise ValueError("Recovery record belongs to another research database")
             return record
+        if origin in {"archived_draft", "archived_resume", "archived_note_resume"}:
+            from paper_daily.archived_review_drafts import record
+
+            return record(conn, identity)
         if origin not in TABLES:
             raise ValueError("Unknown retained origin")
         table, column = TABLES[origin]
@@ -319,10 +374,15 @@ class ResearchReview:
         return record
 
     def preview(self, origin, identity):
+        if origin == "highlight_resume":
+            raise ValueError("Load the saved structured highlight draft with its displayed base")
+        if origin == "claim_resume":
+            raise ValueError("Load the saved structured claim draft with its displayed base")
         with closing(self._connect()) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            ensure_lifecycle(conn)
-            conn.commit()
+            if not self.recovery:
+                conn.execute("BEGIN IMMEDIATE")
+                ensure_lifecycle(conn)
+                conn.commit()
             conn.execute("BEGIN")
             record = self._record(conn, origin, str(identity))
             view = {
@@ -345,7 +405,11 @@ class ResearchReview:
                 "parent_row": None,
                 "resume_state": "ready",
             }
-            if origin in {"generation", "sidecar"}:
+            if origin == "archived_draft":
+                from paper_daily.archived_review_drafts import preview
+
+                view.update(preview(record))
+            elif origin in {"generation", "sidecar"}:
                 generation.validate_request_record(record)
                 context = generation.GenerationContext(record["context_json"])
                 original = context.data
@@ -360,16 +424,20 @@ class ResearchReview:
                     _source_aware_block(view)
                     self._check(conn)
                     serialized = encode(view)
-                    return Preview(serialized, hmac.new(
-                        self._seal_key, serialized.encode(), "sha256").hexdigest())
+                    return Preview(
+                        serialized,
+                        hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest(),
+                    )
                 from paper_daily import research_annotation_review
 
                 if research_annotation_review.handles(record):
                     view.update(research_annotation_review.preview(conn, record))
                     self._check(conn)
                     serialized = encode(view)
-                    return Preview(serialized, hmac.new(
-                        self._seal_key, serialized.encode(), "sha256").hexdigest())
+                    return Preview(
+                        serialized,
+                        hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest(),
+                    )
                 try:
                     displayed = generation.begin_generation(
                         conn, table=context.table, owner_id=context.owner_id, input_reader="target"
@@ -471,9 +539,8 @@ class ResearchReview:
                     and (state["state"] or {}).get("active", True)
                     and not (
                         incoming["entity_type"] == "research_content"
-                        and incoming["payload"].get("feature") in {
-                            "highlight_analysis", "ai_highlight"
-                        }
+                        and incoming["payload"].get("feature")
+                        in {"highlight_analysis", "ai_highlight"}
                     )
                 )
                 view.update(
@@ -488,8 +555,10 @@ class ResearchReview:
                 )
                 if _source_aware_required(view):
                     _source_aware_block(view)
-                if (incoming["entity_type"] == "research_content"
-                        and incoming["payload"].get("feature") == "highlight_analysis"):
+                if (
+                    incoming["entity_type"] == "research_content"
+                    and incoming["payload"].get("feature") == "highlight_analysis"
+                ):
                     from paper_daily import research_annotation_review
 
                     view.update(research_annotation_review.remote_preview(conn, state))
@@ -533,6 +602,59 @@ class ResearchReview:
                 view["reason"] = (
                     "Artifact application requires verified assets and explicit revision review"
                 )
+            elif origin == "enrolled_deck" and str(identity).startswith("recovered-deck:"):
+                from paper_daily import proposal_recovery_review
+
+                view.update(proposal_recovery_review.preview(self, conn, record))
+            elif origin == "enrolled_deck":
+                from paper_daily import enrolled_deck_proposals as catalog
+                from paper_daily.research_file_review import _storage
+                from paper_daily.sync_deck_publication import runtime
+
+                client, storage = runtime(database=self.path), _storage(conn)
+                if client is None or storage is None:
+                    raise ValueError("Original enrolled proposal binding or storage is unavailable")
+                retained = catalog.read(
+                    client,
+                    storage[0],
+                    identity,
+                    expected_native=self.identity,
+                    current=lambda: not self.closed,
+                )
+                if retained.record != record:
+                    raise ValueError("Retained enrolled proposal changed during preview")
+                science = retained.content
+                manifest = json.loads(record["manifest_json"])
+                view.update(
+                    retained=science["deck"],
+                    source_hash=science["source_document_hash"],
+                    scope={"kind": "paper", "id": record["local_id"]},
+                    retained_evidence=science["evidence"],
+                    image_manifest=manifest["images"],
+                    original_manifest=manifest["originals"],
+                    reason="Retained full presentation; verify before explicit Apply",
+                )
+            elif origin == "local_deck":
+                from paper_daily import local_deck_proposals
+
+                retained = local_deck_proposals.read(
+                    self.path,
+                    identity,
+                    expected_native=self.identity,
+                    current=lambda: not self.closed,
+                )
+                if retained.record != record:
+                    raise ValueError("Retained local proposal changed during preview")
+                science = retained.content
+                view.update(
+                    retained=science["deck"],
+                    source_hash=science["source_document_hash"],
+                    scope={"kind": "paper", "id": record["paper_id"]},
+                    retained_evidence=science["evidence"],
+                    image_manifest=json.loads(record["manifest_json"])["images"],
+                    original_manifest=json.loads(record["manifest_json"])["originals"],
+                    reason="Local retained presentation; verify it before explicit Apply",
+                )
             elif origin == "file_draft":
                 from paper_daily.presentations import deck_from_dict
 
@@ -553,12 +675,158 @@ class ResearchReview:
             seal = hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
             return Preview(serialized, seal)
 
+    def _resume_adapter(self, preview):
+        from paper_daily import review_draft_resumption as resumption
+
+        data = self._verify_preview(preview)
+        if data["origin"] == "archived_draft":
+            with closing(self._connect()) as conn:
+                return resumption.archived(self._record(conn, data["origin"], data["id"]))
+        return resumption.adapter(data["origin"])
+
+    def resume_targets(self, preview, *, after="", limit=30):
+        return self._resume_adapter(preview).targets(self, preview, after=after, limit=limit)
+
+    def resume_draft(self, preview, target_id):
+        return self._resume_adapter(preview).select(self, preview, target_id)
+
+    def verify_resumed_draft(self, preview):
+        return self._resume_adapter(preview).verify(self, preview)
+
+    def verify_highlight_draft(self, preview, body, *, cancelled=lambda: False):
+        from paper_daily.highlight_draft_verification import verify
+
+        return verify(self, preview, body, cancelled=cancelled)
+
+    def apply_highlight_draft(self, preview, body, **options):
+        from paper_daily.highlight_draft_apply import apply
+
+        return apply(self, preview, body, **options)
+
+    def highlight_draft_report(self, preview):
+        from paper_daily.highlight_draft_verification import report
+
+        return report(self, preview)
+
+    def prepare_verified_highlight_original(self, preview, *, cancelled=lambda: False):
+        from paper_daily.highlight_draft_verification import original
+
+        return original(self, preview, cancelled=cancelled)
+
+    def prepare_highlight_original(self, preview, *, reference=None, cancelled=lambda: False):
+        from paper_daily import highlight_draft_originals
+
+        data = self._verify_preview(preview)
+        return highlight_draft_originals.prepare(
+            self, preview, data["source_hash"], reference=reference, cancelled=cancelled
+        )
+
+    def highlight_draft_targets(self, preview, *, after="", limit=30):
+        from paper_daily.highlight_draft_resume import targets
+
+        return targets(self, preview, after=after, limit=limit)
+
+    def select_highlight_draft(self, preview, target_id, *, body=None):
+        from paper_daily.highlight_draft_resume import select
+
+        return select(self, preview, target_id, body=body)
+
+    def save_highlight_draft(self, preview, body, request_id, *, draft_id, revision=None):
+        from paper_daily.highlight_draft_resume import save
+
+        return save(self, preview, body, request_id, draft_id=draft_id, revision=revision)
+
+    def load_highlight_draft(self, identity, **options):
+        return self.load_draft("highlight_resume", identity, **options)
+
+    def claim_draft_targets(self, preview, *, after="", limit=30):
+        from paper_daily.claim_draft_resume import targets
+
+        return targets(self, preview, after=after, limit=limit)
+
+    def select_claim_draft(self, preview, target_id, *, body=None):
+        from paper_daily.claim_draft_resume import select
+
+        return select(self, preview, target_id, body=body)
+
+    def save_claim_draft(self, preview, body, request_id, *, draft_id, revision=None):
+        from paper_daily.claim_draft_resume import save
+
+        return save(self, preview, body, request_id, draft_id=draft_id, revision=revision)
+
+    def verify_claim_draft(self, preview, body, *, restore_deleted=False, cancelled=lambda: False):
+        from paper_daily.claim_draft_apply import verify
+
+        return verify(self, preview, body, restore_deleted=restore_deleted, cancelled=cancelled)
+
+    def claim_draft_report(self, preview):
+        from paper_daily.claim_draft_apply import report
+
+        return report(self, preview)
+
+    def apply_claim_draft(
+        self, preview, body, *, request_id, confirm_target=False, _operation_receipt=None
+    ):
+        from paper_daily.claim_draft_apply import apply
+
+        return apply(
+            self,
+            preview,
+            body,
+            request_id=request_id,
+            confirm_target=confirm_target,
+            _operation_receipt=_operation_receipt,
+        )
+
+    def load_claim_draft(self, identity, **options):
+        return self.load_draft("claim_resume", identity, **options)
+
+    def note_source_references(self, preview):
+        from paper_daily.note_source_refs import intents
+
+        if self.closed:
+            raise ValueError("Review workspace is closed")
+        return intents(self._verify_preview(preview))
+
+    def inspect_note_source_reference(self, preview, reference, *, cancelled=lambda: False):
+        from paper_daily.note_source_refs import inspect
+
+        return inspect(self, preview, reference, cancelled=cancelled)
+
+    def inspect_note_source(self, preview, selected, *, cancelled=lambda: False):
+        from paper_daily.note_source_mapping import inspect
+
+        return inspect(self, preview, selected, cancelled=cancelled)
+
+    def note_source_page(self, preview, inspected, page_index, *, cancelled=lambda: False):
+        from paper_daily.note_source_mapping import page
+
+        return page(self, preview, inspected, page_index, cancelled=cancelled)
+
+    def choose_note_source(self, preview, inspected, anchor, *, cancelled=lambda: False):
+        from paper_daily.note_source_mapping import choose
+
+        return choose(self, preview, inspected, anchor, cancelled=cancelled)
+
+    def clear_note_position(self, preview):
+        from paper_daily.note_source_mapping import clear
+
+        return clear(self, preview)
+
+    def require_draft_verification(self, preview):
+        from paper_daily.review_draft_sources import require_verification
+
+        return require_verification(self, preview)
+
     def targets(self, preview, *, after="", limit=30):
         data = self._verify_preview(preview)
+        if data["origin"] in {"archived_draft", "archived_resume", "archived_note_resume"}:
+            return self.resume_targets(preview, after=after, limit=limit)
         from paper_daily.research_annotation_review import remote_group
 
-        if (data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}
-                and not remote_group(data)):
+        if data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS} and not remote_group(
+            data
+        ):
             raise ValueError("Explicit target selection is not available for this origin")
         if type(limit) is not int or not 1 <= limit <= 100 or not isinstance(after, str):
             raise ValueError("Invalid target page")
@@ -571,7 +839,7 @@ class ResearchReview:
         with closing(self._connect()) as conn:
             if remote_group(data):
                 rows = conn.execute(
-                    'SELECT id,substr(title,1,200) AS title FROM papers WHERE id=? AND id>?',
+                    "SELECT id,substr(title,1,200) AS title FROM papers WHERE id=? AND id>?",
                     (data["scope"]["owner_id"], after),
                 ).fetchall()
             else:
@@ -590,15 +858,19 @@ class ResearchReview:
         displayed target row and its new local epoch are rechecked on application.
         """
         data = self._verify_preview(preview)
+        if data["origin"] in {"archived_resume", "archived_note_resume"}:
+            return self.resume_draft(preview, target_id)
         if _source_aware_required(data):
             _source_aware_block(data)
             serialized = encode(data)
-            return Preview(serialized, hmac.new(
-                self._seal_key, serialized.encode(), "sha256").hexdigest())
+            return Preview(
+                serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+            )
         from paper_daily.research_annotation_review import remote_group
 
-        if (data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS}
-                and not remote_group(data)):
+        if data["origin"] not in {"generation", "sidecar", *COMPOUND_ORIGINS} and not remote_group(
+            data
+        ):
             raise ValueError("Explicit target selection is not available for this origin")
         if not isinstance(target_id, str) or not target_id:
             raise ValueError("Select a research target")
@@ -611,13 +883,17 @@ class ResearchReview:
                 from paper_daily import research_annotation_review
 
                 state = conn._capture_client.conflict_observation_in(conn, int(data["id"]))
-                data.update(research_annotation_review.remote_preview(
-                    conn, state, owner=target_id, confirmed=True))
+                data.update(
+                    research_annotation_review.remote_preview(
+                        conn, state, owner=target_id, confirmed=True
+                    )
+                )
                 data["resume_state"] = "ready"
                 self._check(conn)
                 serialized = encode(data)
-                return Preview(serialized, hmac.new(
-                    self._seal_key, serialized.encode(), "sha256").hexdigest())
+                return Preview(
+                    serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+                )
             if data["origin"] in COMPOUND_ORIGINS:
                 from paper_daily import research_compound_review
 
@@ -639,13 +915,17 @@ class ResearchReview:
             from paper_daily import research_annotation_review
 
             if research_annotation_review.handles(record):
-                data.update(research_annotation_review.preview(
-                    conn, record, owner=target_id, confirmed=True))
+                data.update(
+                    research_annotation_review.preview(
+                        conn, record, owner=target_id, confirmed=True
+                    )
+                )
                 data["resume_state"] = "ready"
                 self._check(conn)
                 serialized = encode(data)
-                return Preview(serialized, hmac.new(
-                    self._seal_key, serialized.encode(), "sha256").hexdigest())
+                return Preview(
+                    serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+                )
             original = generation.GenerationContext(record["context_json"])
             table = original.table
             kind, column, _feature, _reader = generation.REGISTRY[table]
@@ -697,8 +977,188 @@ class ResearchReview:
             raise ValueError("Preview belongs to another review session")
         return data
 
-    def decide(self, preview, *, keep=False, body=None, request_id=None, confirm_target=False):
+    def prepare_file(self, preview):
+        """Explicitly verify a retained deck and display its current application base."""
+        from paper_daily import research_file_review
+
         data = self._verify_preview(preview)
+        if (
+            data["origin"] == "enrolled_deck"
+            and str(data["id"]).startswith("recovered-deck:")
+            and not self.recovery
+        ):
+            from paper_daily.proposal_recovery_review import verify
+
+            with self._file_apply_lock:
+                data = verify(self, data)
+            serialized = encode(data)
+            return Preview(
+                serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+            )
+        if data["origin"] in {"local_deck", "enrolled_deck"} and not self.recovery:
+            if data["origin"] == "local_deck":
+                from paper_daily import local_deck_review as proposal_review
+            else:
+                from paper_daily import enrolled_deck_review as proposal_review
+
+            with closing(self._connect()) as conn:
+                record = self._record(conn, data["origin"], data["id"])
+                if digest(record) != data["record_hash"]:
+                    raise ValueError("Retained slides changed; reload the preview")
+            data.update(proposal_review.prepare(self, record))
+            serialized = encode(data)
+            return Preview(
+                serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+            )
+        if data["origin"] not in {"file", "file_draft"} or self.recovery:
+            raise ValueError("Select retained slides in their original workspace")
+        with closing(self._connect()) as conn:
+            record = self._record(conn, data["origin"], data["id"])
+            if digest(record) != data["record_hash"]:
+                raise ValueError("Retained slides changed; reload the preview")
+            if data["origin"] == "file_draft":
+                from paper_daily import raw_deck_closure, raw_deck_receipts
+
+                # No schema/staging on catalog or read. This explicit action may
+                # repair only an actually owned, verified receipt before review.
+                if raw_deck_receipts.read_owned(conn, record, missing_ok=True) is not None:
+                    raw_deck_closure.repair(
+                        self.path,
+                        record,
+                        current=lambda: (
+                            not self.closed and generation._identity(self.path) == self.identity
+                        ),
+                    )
+            conn.execute("BEGIN")
+            self._check(conn)
+            record = self._record(conn, data["origin"], data["id"])
+            if digest(record) != data["record_hash"]:
+                raise ValueError("Retained slides changed during explicit preparation")
+            files = {}
+            if data["origin"] == "file_draft":
+                from paper_daily.raw_deck_closure import verify_in
+
+                record, files = verify_in(conn, record)
+            data.update(research_file_review.prepare_in(conn, record))
+            for path, identity in files.items():
+                if (
+                    path in data["expected"]["files"]
+                    and data["expected"]["files"][path] != identity
+                ):
+                    raise ValueError("Raw draft files changed during preparation")
+                data["expected"]["files"][path] = identity
+            self._check(conn)
+            serialized = encode(data)
+            return Preview(
+                serialized, hmac.new(self._seal_key, serialized.encode(), "sha256").hexdigest()
+            )
+
+    def _decide_file(self, data, fingerprint, request_id, body, confirm_target):
+        from paper_daily import research_file_review
+        from paper_daily.sync_artifacts import activate, materialize
+        from paper_daily.sync_journal import canonical_operation
+
+        if data.get("resume_state", "ready") != "ready":
+            raise ValueError("Saved draft needs refreshed review before application")
+        if not data["apply"]:
+            raise ValueError(data["reason"])
+        if body is not None:
+            raise ValueError("Retained slides are applied as a typed deck, not edited JSON")
+        if confirm_target is not True:
+            raise ValueError("Confirm the reviewed slide target before applying")
+
+        def previous(conn):
+            if "research_review_receipts" not in _tables(conn):
+                return None
+            row = conn.execute(
+                "SELECT fingerprint,result FROM research_review_receipts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            if row["fingerprint"] != fingerprint:
+                raise ValueError("Review retry changed its decision or draft")
+            return json.loads(row["result"])
+
+        def record_in(conn):
+            record = self._record(conn, data["origin"], data["id"])
+            if digest(record) != data["record_hash"]:
+                raise ValueError("Retained record changed; reload the preview")
+            if data["origin"] == "file_draft":
+                from paper_daily.raw_deck_closure import candidate_in
+
+                return candidate_in(conn, record)
+            return record
+
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN")
+            done = previous(conn)
+            if done:
+                return done
+            client, store, root, payload = research_file_review.check_in(
+                conn, record_in(conn), data
+            )
+            operation = client.new_graph_operation_in(
+                conn,
+                "research_file",
+                data["expected"]["observation"]["entity_id"],
+                payload,
+                operation_id=request_id,
+                restore=data["target"]["restoring"],
+            )
+            self._check(conn)
+        # Complete and verify immutable version files before acquiring the write lock.
+        directory = materialize(store, root, operation)
+        with closing(self._connect()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            done = previous(conn)
+            if done:
+                return done
+            client, _store, _root, payload = research_file_review.check_in(
+                conn, record_in(conn), data, allow_storage_creation=True
+            )
+            current = client.new_graph_operation_in(
+                conn,
+                "research_file",
+                operation["entity_id"],
+                payload,
+                operation_id=request_id,
+                restore=data["target"]["restoring"],
+            )
+            if canonical_operation(current) != canonical_operation(operation):
+                raise ValueError("Displayed synchronization base changed; review again")
+            with sync_capture.suppress_capture(conn):
+                client.journal.apply_in(conn, operation, client.writer)
+                if not activate(conn, operation, directory):
+                    raise ValueError("Reviewed slide target changed before activation")
+                _setup(conn)
+                result = {"decision": "applied", "operation_id": request_id}
+                self._receipt(conn, request_id, fingerprint, data, result)
+                self._check(conn)
+            conn.commit()
+            return result
+
+    def decide(
+        self,
+        preview,
+        *,
+        keep=False,
+        body=None,
+        request_id=None,
+        confirm_target=False,
+        _note_receipt=None,
+    ):
+        data = self._verify_preview(preview)
+        if data["origin"] == "highlight_resume":
+            raise ValueError("Use typed highlight verification and complete-group application")
+        if data["origin"] == "claim_resume":
+            raise ValueError("Use typed claim verification and application")
+        if _note_receipt is not None and (
+            data["origin"] != "archived_note_resume" or not callable(_note_receipt)
+        ):
+            raise ValueError("A local typed note receipt callback is required")
+        if data["origin"] == "archived_draft":
+            raise ValueError("Historical draft requires explicit current target/source review")
         request_id = request_id or str(uuid4())
         if not isinstance(request_id, str) or not 1 <= len(request_id) <= 128:
             raise ValueError("Invalid review request identity")
@@ -714,6 +1174,19 @@ class ResearchReview:
             raise ValueError(
                 "Draft belongs to an earlier workspace; select and review its target explicitly"
             )
+        if data["origin"] in {"local_deck", "enrolled_deck"} and not keep:
+            if data["origin"] == "local_deck":
+                from paper_daily import local_deck_review as proposal_review
+            else:
+                from paper_daily import enrolled_deck_review as proposal_review
+
+            with self._file_apply_lock:
+                return proposal_review.apply(
+                    self, data, fingerprint, request_id, body, confirm_target
+                )
+        if data["origin"] in {"file", "file_draft"} and not keep:
+            with self._file_apply_lock:
+                return self._decide_file(data, fingerprint, request_id, body, confirm_target)
         with closing(self._connect()) as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._check(conn)
@@ -732,6 +1205,8 @@ class ResearchReview:
             if keep:
                 result = {"decision": "kept", "operation_id": None}
                 self._receipt(conn, request_id, fingerprint, data, result)
+                if _note_receipt is not None:
+                    _note_receipt(conn, result)
                 self._check(conn)
                 conn.commit()
                 return result
@@ -743,6 +1218,21 @@ class ResearchReview:
                 raise ValueError(data["reason"])
             if data["requires_confirmation"] and confirm_target is not True:
                 raise ValueError("Confirm the explicitly selected target before applying")
+            if data["origin"] in {"archived_resume", "archived_note_resume"}:
+                from paper_daily.review_draft_resumption import adapter
+
+                apply_in = adapter(data["origin"]).apply_in
+                result = {"decision": "applied", "operation_id": None}
+
+                def complete():
+                    self._receipt(conn, request_id, fingerprint, data, result)
+                    if _note_receipt is not None:
+                        _note_receipt(conn, result)
+                    self._check(conn)
+                    conn.commit()
+
+                apply_in(self, conn, data, body, complete)
+                return result
             if data["origin"] in COMPOUND_ORIGINS:
                 from paper_daily import research_compound_review
 
@@ -844,7 +1334,8 @@ class ResearchReview:
                     return result
                 payload = json.loads(encode(data["retained"]))
                 if data["scope"]["kind"] == "research_content" and payload.get("feature") in {
-                    "highlight_analysis", "ai_highlight"
+                    "highlight_analysis",
+                    "ai_highlight",
                 }:
                     raise ValueError("Highlight conflicts require complete grouped source review")
                 if body is not None:
@@ -919,8 +1410,11 @@ class ResearchReview:
             "format": "paperfact.review-text.v1",
             "origin": data["origin"],
             "source_document_hash": data["source_hash"],
-            "content": (_claim_export(data["retained"]) if _source_aware_required(data)
-                        else _export_content(data["retained"])),
+            "content": (
+                _claim_export(data["retained"])
+                if _source_aware_required(data)
+                else _export_content(data["retained"])
+            ),
         }
         if body is not None:
             if not isinstance(body, str):
@@ -950,13 +1444,22 @@ def _claim_export(value):
         body = annotation_content.decode("claims", raw)
     except (ValueError, TypeError, KeyError):
         return {"unavailable": "Claim content could not be validated for readable export"}
-    return {"claims": [
-        {"text": claim["text"],
-         "judgment": {"status": claim["judgment"]["status"],
-                      "reason": claim["judgment"]["reason"]},
-         "passages": [{"quote": item["quote"], "location": item["location"]["state"]}
-                      for item in claim["passages"]]}
-        for claim in body["report"]["claims"]]}
+    return {
+        "claims": [
+            {
+                "text": claim["text"],
+                "judgment": {
+                    "status": claim["judgment"]["status"],
+                    "reason": claim["judgment"]["reason"],
+                },
+                "passages": [
+                    {"quote": item["quote"], "location": item["location"]["state"]}
+                    for item in claim["passages"]
+                ],
+            }
+            for claim in body["report"]["claims"]
+        ]
+    }
 
 
 def _export_content(value):
@@ -987,8 +1490,23 @@ def _export_content(value):
         "work_id",
     }
     result = {key: value[key] for key in keys & value.keys() if isinstance(value[key], str)}
-    for key in ("data", "payload", "slides", "new", "old", "row", "rows", "puts", "deletes",
-                "analysis", "marks", "unmatched", "body_json", "items", "links"):
+    for key in (
+        "data",
+        "payload",
+        "slides",
+        "new",
+        "old",
+        "row",
+        "rows",
+        "puts",
+        "deletes",
+        "analysis",
+        "marks",
+        "unmatched",
+        "body_json",
+        "items",
+        "links",
+    ):
         if key in value:
             nested = value[key]
             if key == "body_json" and isinstance(nested, str):

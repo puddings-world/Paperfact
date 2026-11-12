@@ -128,7 +128,31 @@ def test_item_editor_retains_original_owner_and_draft(driver, monkeypatch, kind,
 def test_child_process_has_explicit_original_workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "workspace" / "papers.db")
     seen = []
-    monkeypatch.setattr(cites_pane.subprocess, "Popen", lambda *args, **kwargs: seen.append(kwargs))
-    cites_pane._spawn("cites", "paper")
+    import subprocess
+    import sys
+
+    from paper_daily import llm, runtime
+    from paper_daily.ai_job_intent import FrozenRoutes
+    from paper_daily.ai_types import Settings
+
+    real_popen = subprocess.Popen
+    code = ("import sys,types; from paper_daily import integration_entry; "
+            "sys.modules['paper_daily.cli']=types.SimpleNamespace(main=lambda a:0); "
+            "raise SystemExit(integration_entry.main(sys.argv[1:]))")
+    monkeypatch.setattr(runtime, "cli_command", lambda *a: [sys.executable, "-c", code, *a])
+
+    def launch(args, **kwargs):
+        seen.append(kwargs)
+        assert args[3] == "_desktop-job-v1" and args[5:] == ["cites", "paper"]
+        return real_popen(args, **kwargs)
+
+    monkeypatch.setattr(cites_pane.subprocess, "Popen", launch)
+    with llm.connection_scope(FrozenRoutes(
+        Settings("none"), {"citations": Settings("none")}
+    )):
+        process = cites_pane._spawn("cites", "paper")
+    assert process.wait(timeout=10) == 0
+    # The actual bootstrap accepts only an exact matching private frame.
+    assert process._paperfact_ai_handoff.ready
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "other" / "papers.db")
     assert seen[0]["env"]["PAPERFACT_DATA"] == str((tmp_path / "workspace").resolve())

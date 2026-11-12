@@ -1,3 +1,4 @@
+import {editableTextNote} from './content.mjs';
 import { downloadArtifact, readArtifact } from './artifact-engine.mjs';
 import {preparePositionPush,reconcilePositionIntents} from './primary-source-retention.mjs';
 import {exportPositionRecovery} from './position-recovery.mjs';
@@ -96,17 +97,16 @@ export class Engine {
   async saveNote(id, paperId, body, options = {}) {
     const result = await this.store.update(state => {
       const current = optimistic(state).entities[keyOf('note', id)]?.operation;
-      if(current?.action === 'put') requireThat(Object.keys(current.payload).length === 2, 'rich_note_read_only');
+      if(current?.action === 'put') requireThat(editableTextNote(current.payload), 'rich_note_read_only');
       if(! options.resolutionOf && current?.action === 'put' && current.payload.body === body && current.payload.paper_id === paperId) {
         delete state.drafts[id];
         return current;
       }
       const observed = options.observed ?? own(state.draftBases ?? {}, id);
       if(current || observed) assertObserved(state, id, paperId, observed);
-      const op = buildOperation(state, 'note', id, {
-        paper_id: paperId,
-        body
-      }, options);
+      const payload = current?.action === 'put' ? {...copy(current.payload), body} : {paper_id:paperId, body};
+      requireThat(payload.paper_id === paperId, 'cannot_reparent');
+      const op = buildOperation(state, 'note', id, payload, options);
       enqueue(state, op);
       delete state.drafts[id];
       delete state.draftBases?.[id];

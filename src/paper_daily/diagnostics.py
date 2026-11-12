@@ -15,7 +15,7 @@ import traceback
 import zipfile
 from pathlib import Path
 
-from paper_daily import __version__, build_identity, executables, runtime
+from paper_daily import __version__, build_identity, executables, runtime, ui_stalls
 
 LIMIT = 256 * 1024
 MAX_EVENTS = 40
@@ -86,6 +86,24 @@ def _version(value):
     return match[0] if match else "unknown"
 
 
+PACKAGES = ("PySide6", "PySide6-Essentials", "PyMuPDF", "httpx")
+_packages: dict = {}
+
+
+def package_version(name):
+    """Installed packages do not change while the app runs, and reading their
+    metadata scans site-packages: the diagnostics dialog took half a second to open.
+    Keyed by the lookup too, so a test's stand-in is asked afresh."""
+    key = (importlib.metadata.version, name)
+    if key not in _packages:
+        try:
+            _packages[key] = _version(importlib.metadata.version(name))
+        except importlib.metadata.PackageNotFoundError:
+            # Bundled modules can exist without distribution metadata.
+            _packages[key] = "version-unavailable"
+    return _packages[key]
+
+
 def _event(value):
     """Reconstruct a closed report row; stored logs are not trusted input."""
     if (
@@ -148,6 +166,27 @@ def record_exception(kind, tb, *, phase="desktop", directory=None):
         return True
     except (OSError, ValueError, TypeError):
         return False  # Diagnostic storage must never break the user's operation.
+
+
+def _stall_context(line):
+    """Only the watchdog's fixed vocabulary and numbers survive into a report."""
+    found = re.fullmatch(
+        r"  context state=(\w+) open=(\d{1,6}(?:\.\d)?)h widgets=(\d{1,7}|\?) before=(\S+)",
+        line,
+    )
+    if not found:
+        return None
+    before = []
+    for token in found[4].split(",")[-8:]:
+        event = re.fullmatch(r"([a-z-]+)@-(\d{1,3}(?:\.\d)?)s", token)
+        if event and event[1] in ui_stalls.EVENTS:
+            before.append({"event": event[1], "seconds_before": float(event[2])})
+    return {
+        "state": found[1] if found[1] in ui_stalls.STATES else "unknown",
+        "open_hours": float(found[2]),
+        "widgets": None if found[3] == "?" else int(found[3]),
+        "before": before,
+    }
 
 
 def _tail(path):
@@ -235,6 +274,8 @@ def collect(directory=None):
                 if header:
                     current = {"duration_ms": min(int(header[1]), 3600000), "frames": []}
                     stalls.append(current)
+                elif current is not None and line.startswith("  context "):
+                    current["context"] = _stall_context(line)
                 elif current is not None:
                     frame = re.fullmatch(r"  ([\w.]+):[^:\n]*:(\d{1,6})", line)
                     if frame and frame[1] in MODULES and 0 < int(frame[2]) <= 100000:
@@ -242,13 +283,7 @@ def collect(directory=None):
                         current["frames"] = current["frames"][-8:]
         except OSError:
             sources[name] = "unreadable"
-    packages = {}
-    for name in ("PySide6", "PySide6-Essentials", "PyMuPDF", "httpx"):
-        try:
-            packages[name] = _version(importlib.metadata.version(name))
-        except importlib.metadata.PackageNotFoundError:
-            # Bundled modules can exist without distribution metadata.
-            packages[name] = "version-unavailable"
+    packages = {name: package_version(name) for name in PACKAGES}
     machine = platform.machine().lower()
     return {
         "schema_version": 1,

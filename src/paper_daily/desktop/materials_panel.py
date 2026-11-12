@@ -65,11 +65,17 @@ class _Tree(QTreeWidget):
 class MaterialsPanel(QWidget):
     chosen = Signal(dict)
     source_requested = Signal(dict)
+    source_selection_requested = Signal(object)
+    refresh_requested = Signal()
     analyze_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.paper_id = None
+        self._source_collection = None
+        self._collection_epoch = 0
+        self._material_hash = None
+        self._projected_items = {}
         self._preview_image = QImage()
         self._preview_error = ""
         self._detail_height = 220
@@ -90,6 +96,16 @@ class MaterialsPanel(QWidget):
         self.detail_toggle.setChecked(True)
         header.addWidget(self.detail_toggle)
         layout.addLayout(header)
+        source_row = QHBoxLayout()
+        self.source_status = QLabel("")
+        self.source_status.setWordWrap(True)
+        self.source_status.setMinimumWidth(0)
+        source_row.addWidget(self.source_status, 1)
+        self.refresh = QPushButton("重新整理")
+        self.refresh.setToolTip("依目前閱讀的原文重新整理素材；不會呼叫 AI。")
+        self.refresh.clicked.connect(self.refresh_requested.emit)
+        source_row.addWidget(self.refresh)
+        layout.addLayout(source_row)
         self.analyze = QPushButton("AI 挑選原文重點")
         self.analyze.clicked.connect(self.analyze_requested.emit)
         self.analyze.setToolTip("從原文判斷研究重要性與資訊量；首次分析與重新分析會使用 AI。")
@@ -148,6 +164,11 @@ class MaterialsPanel(QWidget):
     def clear(self) -> None:
         self._preview_timer.stop()
         self.paper_id = None
+        self._source_collection = None
+        self._collection_epoch += 1
+        self._material_hash = None
+        self._projected_items = {}
+        self.source_status.clear()
         self._preview_image = QImage()
         self._preview_error = ""
         self.tree.clear()
@@ -163,6 +184,18 @@ class MaterialsPanel(QWidget):
         if materials is None:
             return
         self.paper_id = materials.paper_id
+        self._source_collection = getattr(materials, "_source_collection", None)
+        self._material_hash = getattr(materials, "_material_hash", None)
+        projected = getattr(materials, "_material_items", ())
+        self._projected_items = {(i.group, i.index, i.variant): i for i in projected}
+        # Worker-projected payloads are immutable scientific input to this UI.
+        # Plain compatibility callers keep their existing scientific dictionaries.
+        exhibits = ([i.payload for i in projected if i.group == "exhibits" and i.variant == "main"]
+                    if projected else materials.exhibits)
+        headings = ([i.payload for i in projected if i.group == "headings"]
+                    if projected else materials.headings)
+        sentences = ([i.payload for i in projected if i.group == "sentences"]
+                     if projected else materials.sentences)
         if materials.highlights:
             coverage = materials.highlights.get("coverage", {})
             warning = " 部分頁面沒有文字，可能需要 OCR。" if coverage.get("empty_pages") else ""
@@ -176,7 +209,7 @@ class MaterialsPanel(QWidget):
             group.setFlags(Qt.ItemFlag.ItemIsEnabled)
             self.tree.addTopLevelItem(group)
             groups[key] = group
-        for item in materials.exhibits:
+        for item in exhibits:
             caption = item.get("caption", "")
             node = self._item(
                 "  ".join(
@@ -227,7 +260,7 @@ class MaterialsPanel(QWidget):
                         " | ".join(rows[0]),
                     )
                 )
-        for item in materials.headings:
+        for item in headings:
             indent = "　" * max(0, item.get("level", 1) - 1)
             groups["headings"].addChild(
                 self._item(
@@ -236,7 +269,7 @@ class MaterialsPanel(QWidget):
                     item["text"],
                 )
             )
-        for item in materials.sentences:
+        for item in sentences:
             page = f"p.{item['page']} · " if item.get("page") else ""
             groups["sentences"].addChild(
                 self._item(
@@ -264,9 +297,15 @@ class MaterialsPanel(QWidget):
                     "AI 選取理由：" + item.get("reason", "") + "\n\n原文：\n" + item["text"],
                 )
             )
+        for group_key, group in groups.items():
+            for index in range(group.childCount()):
+                node = group.child(index)
+                self._bind_item(node, group_key, index, "main")
+                for child in range(node.childCount()):
+                    self._bind_item(node.child(child), group_key, index, "table")
         for key, group in groups.items():
             group.setText(0, f"{group.text(0)}（{group.childCount()}）")
-            group.setExpanded(key == "sentences" or (key == "exhibits" and not materials.sentences))
+            group.setExpanded(key == "sentences" or (key == "exhibits" and not sentences))
         for key in ("exhibits", "sentences", "headings"):
             if groups[key].childCount():
                 groups[key].setExpanded(True)
@@ -274,9 +313,19 @@ class MaterialsPanel(QWidget):
                 break
         self.hint.setText(
             "雙擊素材、按「加入目前投影片」，或拖到任一簡報視角。加入後會選取新物件。"
-            if materials.exhibits or materials.headings or materials.sentences
+            if exhibits or headings or sentences
             else "這篇還沒有可用素材：需要原文 PDF 與抽取的圖表，表格資料來自逐節精讀。"
         )
+
+    def _bind_item(self, node, group, index, variant):
+        projected = self._projected_items.get((group, index, variant))
+        if projected is not None:
+            node.setData(0, Qt.ItemDataRole.UserRole, projected.payload)
+            node.setData(0, Qt.ItemDataRole.UserRole + 1, projected.key)
+
+    def set_loading(self, loading):
+        self.refresh.setEnabled(not loading)
+        self.refresh.setText("整理中…" if loading else "重新整理")
 
     def _toggle_detail(self, checked):
         sizes = self.details_split.sizes()
@@ -320,6 +369,16 @@ class MaterialsPanel(QWidget):
         payload = item.data(0, Qt.ItemDataRole.UserRole) if item else None
         if payload:
             self.source_requested.emit(payload)
+            key = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            if self._source_collection is not None and key:
+                from paper_daily import material_sources
+
+                try:
+                    selection = material_sources.select(self._source_collection, key, payload)
+                except (OSError, ValueError, TypeError):
+                    self.show_feedback("素材來源已改變，請重新整理後再核對。")
+                else:
+                    self.source_selection_requested.emit(selection)
 
     def _insert_selected(self):
         item = self.tree.currentItem()
