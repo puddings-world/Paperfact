@@ -3,6 +3,7 @@
 import threading
 import time
 from contextlib import closing
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -148,9 +149,11 @@ def test_queued_delivery_semantically_rechecks_rows_or_checkpoint_once(
     assert "reopen" not in view.ask_status.text()
 
 
-def test_continuous_interference_is_bounded_and_keeps_drafts(ready, monkeypatch):
+def test_continuous_unrelated_writes_still_show_the_conversation(ready, monkeypatch):
+    # The app writes reading positions and job progress into the same file while a
+    # paper is open; on macOS that left every conversation and explanation blank.
     app, _, view = ready
-    pending_turn()
+    request = pending_turn()
     original = preparation._prepare
     attempts = []
 
@@ -163,6 +166,26 @@ def test_continuous_interference_is_bounded_and_keeps_drafts(ready, monkeypatch)
         return publication
 
     monkeypatch.setattr(preparation, "_prepare", changed)
+    activate(view)
+    settle(app, lambda: not view.preparation.busy)
+    assert attempts == [0, 1]
+    assert request.request_id in view.chat_view._body
+    assert "reopen" not in view.ask_status.text()
+    assert view.ask_box.text() == "Question"
+
+
+def test_a_conversation_that_keeps_changing_is_bounded_and_keeps_drafts(ready, monkeypatch):
+    app, _, view = ready
+    pending_turn()
+    original = preparation._prepare
+    attempts = []
+
+    def changing(request, cancelled):
+        # Each read disagrees with the one before: the rows themselves keep moving.
+        attempts.append(request.attempt)
+        return replace(original(request, cancelled), recheck=True, settled=False)
+
+    monkeypatch.setattr(preparation, "_prepare", changing)
     activate(view)
     settle(app, lambda: not view.preparation.busy)
     assert attempts == [0, 1]

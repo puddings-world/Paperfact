@@ -70,6 +70,10 @@ class Publication:
     preview: object = None
     mark_view: object = None
     mark_words: object = None
+    # The rows were read again after the file moved and came back identical. The app
+    # writes to the same file all the time (reading positions, job progress), so a
+    # moved file alone must not blank an explanation or conversation that did not change.
+    settled: bool = False
 
 
 def _prepare(request, cancelled):
@@ -117,16 +121,18 @@ def _prepare(request, cancelled):
         page += '<p class="cache-notice">' + html.escape(preview.notice) + "</p>"
     current = saved.current(snapshot, document=request.document) and saved.preview_current(preview)
     after = _fence(Path(request.scope.database))
+    settled = request.attempt > 0 and current and not marks_changed
     return Publication(
         snapshot,
         rendered.chat_html,
         after,
-        not current or before != after or marks_changed,
+        not current or marks_changed or (before != after and not settled),
         page if "dive" in request.targets else None,
         rendered.highlights,
         preview,
         mark_view,
         mark_words,
+        settled,
     )
 
 
@@ -401,7 +407,7 @@ class ReaderPreparation(QObject):
             return (
                 self._published == request.token
                 and self._matches(request)
-                and (_fence(self.database) == publication.fence)
+                and (publication.settled or _fence(self.database) == publication.fence)
                 and (publication.preview is None or saved.preview_current(publication.preview))
             )
         except (OSError, ValueError):
@@ -423,7 +429,9 @@ class ReaderPreparation(QObject):
                     preview_changed = publication.preview is not None and not saved.preview_current(
                         publication.preview
                     )
-                    changed = publication.recheck or _fence(self.database) != publication.fence
+                    changed = publication.recheck or (
+                        not publication.settled and _fence(self.database) != publication.fence
+                    )
                 except (OSError, ValueError):
                     changed = True
             if worker.failed or publication is None:
