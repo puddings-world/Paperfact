@@ -254,3 +254,47 @@ def test_an_idle_download_tick_does_not_walk_the_list(listed, monkeypatch):
     manager.busy = True
     page._tick_pdfs()
     assert walked == [True, True]
+
+
+def test_coming_back_from_a_paper_does_not_read_an_unchanged_list_again(workspace, monkeypatch):
+    app, _root = workspace
+    seed()
+    window = MainWindow()
+    window.show()
+    try:
+        window._open_list("big")
+        page = window.queue_page
+        page.sort.setCurrentIndex(SORT_IDS.index("custom"))
+        app.processEvents()
+        real = window.data.queue
+        reads = []
+        monkeypatch.setattr(
+            window.data, "queue", lambda *a, **k: reads.append(True) or real(*a, **k))
+
+        window.open_paper("p2")
+        window._toggle_read()
+        window.go_back()
+        assert reads == []
+        opened = page._current_paper()
+        assert opened.id == "p2" and opened.read and window.progress.text() == "已讀 1 · 未讀 5"
+        with store.connect() as conn:
+            assert conn.execute(
+                "SELECT state FROM list_papers WHERE paper_id='p2'").fetchone()[0] == "read"
+
+        # Something else changed the list while the next paper was open: read it again.
+        window.open_paper("p3")
+        with store.connect() as conn:
+            conn.execute("UPDATE list_papers SET state='read' WHERE paper_id='p5'")
+        window.go_back()
+        assert reads == [True]
+        assert [p.read for _i, p in page.model._rows] == [False, False, True, False, False, True]
+        assert window.progress.text() == "已讀 2 · 未讀 4"
+
+        # And another list is never mistaken for the one in memory.
+        with store.connect() as conn:
+            conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('other','other','now')")
+        window._open_list("other")
+        assert reads == [True, True] and page.model.rowCount() == 0
+    finally:
+        window.close()
+        window.deleteLater()

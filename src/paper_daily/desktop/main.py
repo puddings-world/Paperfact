@@ -19,7 +19,7 @@ import re
 import sqlite3
 import subprocess
 import sys
-from contextlib import suppress
+from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -4407,10 +4407,30 @@ class MainWindow(QWidget):
             message += f"其中 {kept} 個檔案的標記被刪掉了，原檔沒動，新內容另存為 .new.md。"
         self.queue_page.analysis.setText(message)
 
+    def _revision_now(self):
+        """The workspace revision, read without a writing connection; None if unknown."""
+        try:
+            database = Path(store.DB_PATH).resolve()
+            with closing(sqlite3.connect(
+                    database.as_uri() + "?mode=ro", uri=True, timeout=0.25)) as conn:
+                row = conn.execute("SELECT revision FROM workspace_revision WHERE id=1").fetchone()
+            return (str(database), row[0]) if row else None
+        except (sqlite3.Error, OSError):
+            return None
+
+    def _list_is_loaded(self) -> bool:
+        """Are the papers in memory still this list as the database has it?"""
+        now = self._revision_now()
+        return now is not None and getattr(self, "_loaded", None) == (self.active_list, *now)
+
     def reload(self) -> None:
         self.export_bundle_action.setEnabled(bool(self.active_list))
         self.export_notes_action.setEnabled(bool(self.active_list))
         self.add_paper_action.setEnabled(bool(self.active_list))
+        # Taken before the read: a write that lands during it leaves this behind the
+        # database, and the list is then read again rather than trusted.
+        seen = self._revision_now()
+        self._loaded = (self.active_list, *seen) if seen is not None else None
         self.papers = self.data.queue(list_id=self.active_list) if self.active_list else []
         pinned = self.data.pins(self.active_list or "queue")
         for paper in self.papers:
@@ -4425,7 +4445,15 @@ class MainWindow(QWidget):
         self.back_btn.setText("← 清單總覽")
         self.back_btn.show()
         self.read_btn.hide()
-        self.reload()
+        if self._list_is_loaded():
+            # Nothing but this window touched the list while a paper was open, and
+            # what it changed is already on the papers. Reading several thousand of
+            # them again froze the window on every return from a paper.
+            self._show_progress()
+            self.queue_page.refresh()
+            self.queue_page.enqueue_pdfs()
+        else:
+            self.reload()
         # Back on the list, the highlight is the paper you came from.
         self.queue_page._select(self._last_paper)
         self.queue_page.view.setFocus()
@@ -4498,8 +4526,7 @@ class MainWindow(QWidget):
             return
         if not recorded:
             if paper.state == "pending":
-                self.data.set_state(paper.id, "delivered", list_id=self.active_list)
-                paper.state = "delivered"
+                self._save_state(paper, "delivered")
             paper.opened_at = now()
             ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
         self.reader_page.load(paper)
@@ -4581,8 +4608,13 @@ class MainWindow(QWidget):
 
     def _own_write(self, span) -> None:
         """A write this window made and already shows is not an outside change."""
-        if span is not None:
-            self.workspace_changes.absorb(*span[:2])
+        if span is None:
+            return
+        before, after = span[:2]
+        self.workspace_changes.absorb(before, after)
+        loaded = getattr(self, "_loaded", None)
+        if loaded is not None and loaded[2] == before and after is not None:
+            self._loaded = (*loaded[:2], after)
 
     def _pin_notice(self, message: str) -> None:
         self.progress.setText(message)
@@ -4699,11 +4731,9 @@ class MainWindow(QWidget):
         self.reload()
         return True
 
-    def set_read_many(self, paper_ids: list[str], read: bool) -> None:
-        """Mark rows read or unread; only those rows change on screen."""
-        span = self.data.set_states(
-            paper_ids, "read" if read else "pending", list_id=self.active_list
-        )
+    def _save_states(self, paper_ids, state: str) -> None:
+        """Save a reading state and show it on the loaded papers as it was saved."""
+        span = self.data.set_states(paper_ids, state, list_id=self.active_list)
         self._own_write(span)
         saved = span[2]
         for paper in self.papers:
@@ -4712,6 +4742,15 @@ class MainWindow(QWidget):
                 paper.state = state or "pending"
                 paper.touched_at = read_at or delivered_at
                 paper.read_at = read_at if state == "read" else None
+
+    def _save_state(self, paper, state: str) -> None:
+        self._save_states([paper.id], state)
+        # The reader may hold a paper the list has since read again as another object.
+        paper.state = state
+
+    def set_read_many(self, paper_ids: list[str], read: bool) -> None:
+        """Mark rows read or unread; only those rows change on screen."""
+        self._save_states(paper_ids, "read" if read else "pending")
         self._show_progress()
         self.queue_page.refresh(same_papers=True)
 
@@ -4769,12 +4808,9 @@ class MainWindow(QWidget):
         paper = self.reader_page.paper
         if not paper:
             return
-        new_state = "delivered" if paper.read else "read"
-        self.data.set_state(paper.id, new_state, list_id=self.active_list)
-        paper.state = new_state
+        self._save_state(paper, "delivered" if paper.read else "read")
         self.read_btn.setText("已讀 ✓" if paper.read else "標記已讀")
-        read = sum(1 for p in self.papers if p.read)
-        self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
+        self._show_progress()
         self.top_up_dives()
 
 
