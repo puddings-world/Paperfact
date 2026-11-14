@@ -32,6 +32,12 @@ service, archives old local ownership observations, and does not normalize a NUL
 list note to an empty string. Unknown legacy decks still block when no complete
 accepted publication history can represent them.
 
+The preview also shows **Completed agent imports (history only)** and
+**Reference previews (history only)** when present. They retain past CLI/MCP work
+without executing a preview or installing old retry receipts in the new workspace.
+Research lists, notes and explicitly verified PDFs remain live research; unknown
+receipt formats and ambiguous ordering remain blockers.
+
 ## Background, retry and closing
 
 Preparation is enabled only after supported coverage and explicit absolute output

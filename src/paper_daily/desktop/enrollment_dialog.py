@@ -167,6 +167,17 @@ COPY = {
 }
 
 
+
+COPY["en"].update(
+    agent_imports="Completed agent imports (history only)",
+    agent_previews="Reference previews (history only)",
+)
+COPY["zh-TW"].update(
+    agent_imports="\u5df2\u5b8c\u6210\u532f\u5165\u7d00\u9304\uff08\u50c5\u5c01\u5b58\uff09",
+    agent_previews="\u5019\u9078\u53c3\u8003\u6587\u737b\uff08\u50c5\u5c01\u5b58\uff09",
+)
+
+
 class SourceGuard:
     def __init__(self, database, current_path):
         self.path = _safe_path(database)
@@ -501,6 +512,8 @@ class EnrollmentDialog(QDialog):
             ("retained_decks", "research_common_deck_proposal_recovery"),
             ("qa_reviews", "research_chat_review_receipts"),
             ("review_decisions", "research_review_receipts"),
+            ("agent_imports", "integration_operations"),
+            ("agent_previews", "integration_previews"),
         ):
             count = archived.get(protocol, 0)
             if count:

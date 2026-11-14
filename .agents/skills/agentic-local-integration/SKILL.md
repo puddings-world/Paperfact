@@ -19,6 +19,10 @@ buttons serialize through a server just to share behavior.
   in the same transaction as the research data. Return the original result for
   identical retries; reject an operation ID reused for a different payload.
   An ordinary SQL transaction alone does not prevent duplicate retries.
+  When creating a distinct workspace, preserve validated old receipts/previews as
+  private history, not live retry authority or pending commands. Reuse pure input
+  validation without workspace/provider I/O; a copy is not permission to execute
+  an old request. See the validated-local import-enrollment evidence reference.
 - When extending local operations into replication, distinguish remote acceptance
   from local application. An acknowledged write not yet received in a contiguous
   event stream remains a causal predecessor; older pages must not replace its newer

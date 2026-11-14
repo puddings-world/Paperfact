@@ -146,6 +146,9 @@ RELEASE_JOURNEYS = {
     "Retained history before upload": (
         "tests/test_sync_history_frontier.py::test_frontier_is_checked_before_prepare_push_and_acknowledgment",
     ),
+    "Existing agent research enrollment": (
+        "tests/test_enrollment_integration_history.py::test_real_import_history_can_prepare_without_reactivating_receipts",
+    ),
     "Atomic receive, deletion and access revocation": (
         "tests/test_sync_client.py::test_remote_batch_rolls_back_cursor_and_content_if_writer_fails",
         "tests/test_sync_client.py::test_delete_against_offline_edit_keeps_edit_as_conflict",

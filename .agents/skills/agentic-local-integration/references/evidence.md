@@ -581,3 +581,19 @@ This is another local adapter, not cross-project reuse or installed-device proof
   in 129.2s total under the existing Windows CPU/time cap.
 - Limits: local synthetic SQLite fixtures; no global promotion, native Mac/Linux
   resource-governor proof, hosted deployment, paid accounts or owner research.
+
+
+### Import history in a fresh workspace, 2026-11-15 (validated-local)
+
+- Trigger: actual local agent imports blocked first enrollment on three control
+  tables; admitting them then exposed one-based versus native dense ordering.
+- Invariant: preserve research, PDFs, complete order and validated private history,
+  while the fresh workspace has no live source preview/idempotency authority.
+  Unknown records fail closed; archived IDs/URLs never confer execution/file rights.
+- Evidence: tests/test_enrollment_integration_history.py covers actual propose/
+  commit, two receipts and previews, sparse prior positions, candidate/backup/
+  detached restore, refusal, cancellation/source changes, retry and real Qt controls.
+  Old preview execution refuses in the candidate. Existing input/order/archive
+  rollback cases pass. Shared input class remains a pure legacy-compatible alias.
+- Limits: known imports only, one project and local fixtures; no global promotion,
+  provider calls, owner data, full in-place adoption or installed/hosted/device proof.

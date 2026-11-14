@@ -63,7 +63,8 @@ and exchange. Legacy unlinked rows remain unpaired, with unknown provenance.
 Live research is checked losslessly after projection. Only declared structured
 JSON columns normalize representation by canonical re-encoding: whitespace and
 object key order may change. Unicode codepoints, array order, numeric types and
-all prose/other cells remain exact; booleans never compare equal to integers.
+all prose/other cells remain exact, except the explicit membership-ordinal migration
+described below; booleans never compare equal to integers.
 Original historical strings keep their original representation in the archive.
 
 SQLite row/schema digests identify committed research changes. Main database
@@ -137,3 +138,45 @@ records/IDs/text remain exact, duplicate generic entries are suppressed, and
 no live old protocol or mutation authority is installed. The shared89-case
 selection passes on943 inputs. Fresh target/source edited application is still
 required. [Actual reader controls](testing/detached-draft-reader-scenarios.md).
+
+
+## Local agent import history
+
+Known `imports.propose`/`imports.commit` records can now prepare a sync workspace
+copy without reinstalling source request authority. `enrollment_integration_history`
+registers closed archive-only adapters for `integration_previews`,
+`integration_operations` and `integration_changes`. Completed six-field import
+results retain their original request ID, fingerprint, result JSON and timestamp;
+previews retain normalized paper references, target and expiration; change rows
+retain the old notification identity. These are private observations only.
+
+The prepared candidate has empty live import receipt/preview/change tables. Old
+requests are not treated as committed there, and old previews cannot execute.
+An independent backup preserves archive records; detached restoration places them
+in `recovery_records`, not active protocol tables. They confer no file access,
+source ownership, AI execution or network authority. Stored fingerprints are
+retained observations, not retroactive proof of an unavailable original request.
+
+A pure `local_import_schema.PaperInput` is shared with the live import boundary;
+`local_operations.PaperInput` remains the same public alias. Validation does not
+load an app workspace or provider runtime. Preview JSON is bounded to 3 MiB to
+allow defaults added to the original 2 MB request, at most 500 references; IDs,
+result counts, warning shapes, timezone-aware timestamps and duplicate-key-safe
+JSON are checked. Unsupported receipt formats, fields, embedded URL credentials,
+malformed references or unknown schema stop preparation rather than disappearing.
+Other operations sharing the generic receipt table still need explicit adapters.
+
+### Membership ordinals
+
+List membership positions are ordering storage, not queue/relevance scores. The
+source must have distinct nonnegative integer positions per list. Enrollment
+compares every membership field and the complete ordered set while mapping these
+positions to the native dense zero-based sequence. One-based and sparse source
+ordinals therefore retain exactly the same paper order; ties/invalid ordinals
+require explicit repair. The source database is never changed. All non-position
+cells remain subject to the existing exact/declared-JSON comparison.
+
+Future CLI/MCP imports start new lists at zero, matching the ordinary list writer;
+append retains the existing maximum and ordering. No old IDs or research content
+are rewritten in place. Preparation remains a reviewed local copy, not complete
+in-place runtime adoption, service issuance or upload.

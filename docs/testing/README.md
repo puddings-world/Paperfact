@@ -76,7 +76,7 @@ remains available for addressing changes and exhaustive diagnosis. The release
 selection does not grow by adding every variant of the new feature.
 
 Original-source retirement/restoration adds one complete native peer lifecycle
-representative to the release gate (36 Python selectors including retained-history continuity, not collected cases).
+representative to the release gate (37 Python selectors including retained-history continuity and agent-import enrollment, not collected cases).
 Its regular focused checks use a metadata-only fixture instead of downloading an
 unrelated original first. The source-lifetime transition is distinct from deck
 transfer or corpus-key validation; no historical assertion was removed to add it.
@@ -450,3 +450,19 @@ The matching mobile regression lives in the existing `engine.test.mjs` release
 selection and checks both refusal and unchanged offline state. Transport/shell
 checks retain auth/blob error separation and preserve research storage when v24
 static code replaces v23. These are scoped fixtures, not installed/cloud proof.
+
+
+### Prepare agent-created research without replaying its requests
+
+`tests/test_enrollment_integration_history.py` has four distinct requirements:
+actual imports/copy/backup/detached restore preserve exact private observations,
+PDF bytes, research and complete list order; unknown/malformed history never
+publishes output; cancellation or changed history preserves source and supports
+retry; actual desktop preview labels archive-only records and coalesces clicks.
+One representative joins the curated release map, adding no daily critical work.
+
+The fixture uses real `imports.propose`/`imports.commit`, including two receipts,
+multiple papers in chosen order and a legacy sparse ordering layout. It also
+checks that an old request cannot become committed or executable in the new copy.
+This is not server issuance, upload, arbitrary receipt migration or installed-device
+acceptance. The existing local operation/input/archive checks remain separate.

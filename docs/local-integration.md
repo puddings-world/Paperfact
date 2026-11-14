@@ -264,3 +264,15 @@ private and can enter the calling host's model context. It reports explicit sour
 uncertainty and coverage gaps; it does not certify scientific conclusions. See
 [the audit contract](analysis-audit.md). Existing stable releases do not expose this
 new operation until an updated build is installed.
+
+
+### Prepare imported research for synchronization
+
+A reviewed first-enrollment copy can retain known import previews/receipts as
+private history while preserving their resulting lists, papers, notes and verified
+PDFs. Old preview/request IDs are not installed as live retry authority in the new
+workspace. New list ordinals start at zero; existing list order remains unchanged
+when appending. See [the copy contract](workspace-enrollment.md) and
+[history/ordering migration](initial-enrollment-history.md#local-agent-import-history).
+Unknown receipt schemas still require an explicit adapter; no AI or network call
+is needed to validate/store reference input or prepare this local copy.

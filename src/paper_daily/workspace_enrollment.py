@@ -406,6 +406,10 @@ class EnrollmentService:
         history["records"].sort(key=lambda row: row["record_id"])
         history["idle_job_locks"] = enrollment_history.idle_lock_files(self.database)
         rows, counts, digest, excluded, blockers = _database(conn, ticket, history=history)
+        try:
+            enrollment_history.canonical_membership_rows(rows.get("list_papers", []))
+        except ValueError:
+            blockers.append("list membership needs unambiguous nonnegative ordering")
         from paper_daily import legacy_workflow
 
         try:
@@ -898,9 +902,12 @@ class EnrollmentService:
                                     for row in current
                                     if row["key"] in {item["key"] for item in expected}
                                 ]
-                            if enrollment_history.canonical_research_rows(current) != (
-                                enrollment_history.canonical_research_rows(expected)
-                            ):
+                            expected_rows = (
+                                enrollment_history.canonical_membership_rows(expected)
+                                if table == "list_papers"
+                                else enrollment_history.canonical_research_rows(expected)
+                            )
+                            if enrollment_history.canonical_research_rows(current) != expected_rows:
                                 raise EnrollmentBlocked(
                                     {
                                         **report,

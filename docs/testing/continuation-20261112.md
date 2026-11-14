@@ -5810,3 +5810,43 @@ additional worktree was introduced.
   categorical recovery guidance, and never repair a missing prefix by discarding
   local state. Keep this verified project evidence; no new global rule/skill,
   background service, credentials, cloud resources or extra worktree introduced.
+
+
+### 2026-11-15: first enrollment of actual CLI/MCP-created research
+
+- Real imports.propose/commit regression reproduced unsupported writer scopes for
+  integration_changes/operations/previews (1 failed in 1.95s / 4.9s total).
+  Added closed known-import archive adapters through existing private history;
+  retain exact original records, never install live previews/retry authority or
+  follow reference URLs. Unknown generic receipt schemas still block.
+- Initial copy exposed non-lossless list_papers: the import producer began at 1,
+  native order projects dense positions from 0. Future imports now match the
+  ordinary zero-based list writer. Explicit source membership comparison retains
+  all other fields and complete order while normalizing distinct nonnegative
+  ordinals; ambiguous ties/invalid values block before preparation. Source stays
+  unchanged. Queue ranks and prose are not normalized.
+- Shared PaperInput moved unchanged to a pure schema module; public ops.PaperInput
+  alias retained. Archive validation no longer imports the workspace/provider
+  operation runtime. Existing untrusted-field tests and alias identity pass.
+- Four new cases: exact archived records in candidate and detached recovery_records,
+  research/PDF/list-order preservation and inactive old requests; unknown/malformed
+  records and ordering refusal; cancel/changed-source retry; actual desktop preview,
+  archive-only counts, repeated activation and unchanged source workspace.
+  4 passed in 18.36s / 21.6s total. New test initially expected detached private
+  history in the active table; corrected to the existing recovery_records contract
+  and also assert all live import tables remain empty. No production restore rule
+  or existing assertion weakened.
+- Additional boundary/compatibility gate: 5 passed in 5.22s / 8.3s total (includes
+  one new case again); shared input/archive boundary gate 10 passed in 4.42s /
+  7.7s total (overlapping new case plus nine unchanged input cases). Counts overlap.
+  Pure validators reject embedded URL credentials without echoing them.
+- One representative added to curated release (37 selectors); critical remains 14.
+  No native package build, cloud action, login/model call or real-user data use.
+  Arbitrary receipt formats, full in-place adoption, hosting/issuance and actual
+  Windows/Mac/phone journeys remain separate gates.
+- Final post-extraction enrollment representative: 1 passed in 5.34s / 11.7s
+  total; critical 14 passed in 7.62s / 11.2s total; docs 58 passed in 2.11s /
+  5.2s total. Privacy/Ruff/whitespace green. Skill copies synchronized through
+  scripts/sync_skills.py --write without conflicts; no global installation.
+  Initial Ruff findings stopped before pytest and were fixed without weakening
+  behavior assertions. Release map now has 37 selectors, not a collected count.

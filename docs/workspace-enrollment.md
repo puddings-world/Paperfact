@@ -86,6 +86,12 @@ deck observations. These have separate source/ownership checks in
 active live revisions or authorize an old AI job. A deck's verified recovery
 record is distinct from live `sync_deck_files`/`sync_files` publication.
 
+Known local CLI/MCP import receipts, reference previews and change notifications
+are retained through [private archive-only adapters](initial-enrollment-history.md#local-agent-import-history).
+They are not installed in the new live import tables. Supported membership order
+is preserved while storage ordinals become native dense zero-based positions;
+ambiguous/negative ordering still blocks preparation.
+
 Custom tables, unrecognized schema writers/views, unsupported integration
 receipts/KV scopes, missing original bytes and any remaining unmapped research
 file still block. Unknown annotations, extracted text or sidecars are not silently

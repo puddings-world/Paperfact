@@ -7,6 +7,7 @@ import json
 from functools import lru_cache
 
 from paper_daily.enrollment_chat_history import FORMATS as CHAT_FORMATS
+from paper_daily.enrollment_integration_history import FORMATS as INTEGRATION_FORMATS
 from paper_daily.inbox_recovery import PROTOCOL as INBOX_FORMATS
 from paper_daily.sync_files import canonical_json, closed, digest, read_json
 
@@ -59,6 +60,7 @@ FORMATS = {
         "updated_at save_order fingerprint"
     ),
     **CHAT_FORMATS,
+    **INTEGRATION_FORMATS,
     **INBOX_FORMATS,
 }
 MAX_ROW = 8 * 1024**2
@@ -213,6 +215,10 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol in INTEGRATION_FORMATS:
+        from paper_daily.enrollment_integration_history import validate_record as validate_import
+
+        return validate_import(protocol, record)
     if protocol == "research_lineage_publications":
         from paper_daily.lineage_recovery import publication
 
@@ -459,7 +465,9 @@ def collect(conn, database, ticket):
             value = dict(zip(columns, raw, strict=True))
             wrapped = wrap(protocol, value)
             logical = (
-                (protocol, value["draft_id"])
+                (protocol, value["id"])
+                if protocol in INTEGRATION_FORMATS
+                else (protocol, value["draft_id"])
                 if protocol == "research_review_drafts"
                 else (protocol, value.get("request_id"))
                 if protocol not in {"research_parent_lifecycle", "research_chat_links"}
@@ -614,3 +622,21 @@ def canonical_research_rows(rows):
                 value[key] = _value(value[key])
         encoded.append(canonical_json(value))
     return sorted(encoded)
+
+
+def canonical_membership_rows(rows):
+    """Preserve complete list order and fields while adopting native dense ordinals."""
+    lists = {}
+    for item in rows:
+        row = dict(item)
+        if type(row.get("position")) is not int or row["position"] < 0:
+            raise ValueError("List positions need explicit ordering repair")
+        lists.setdefault(row["list_id"], []).append(row)
+    canonical = []
+    for members in lists.values():
+        if len({row["position"] for row in members}) != len(members):
+            raise ValueError("Ambiguous list positions need explicit ordering repair")
+        for position, row in enumerate(sorted(members, key=lambda row: row["position"])):
+            row["position"] = position
+            canonical.append(row)
+    return canonical_research_rows(canonical)
