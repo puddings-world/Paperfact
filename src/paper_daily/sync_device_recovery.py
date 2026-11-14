@@ -20,7 +20,11 @@ def _version(path):
     result = []
     for candidate in (path, path.with_name(path.name + "-wal")):
         backup._path(candidate)
-        result.append(file_change.version(candidate) if candidate.exists() else None)
+        observed = file_change.version(candidate) if candidate.exists() else None
+        # A read-only WAL open/close can create/remove a zero-byte sidecar. It has
+        # no header or transaction pages. Keep strict versions for the main file
+        # and every nonempty WAL; real commits/checkpoints still invalidate leases.
+        result.append(None if candidate != path and observed and observed[2] == 0 else observed)
     return tuple(result)
 
 

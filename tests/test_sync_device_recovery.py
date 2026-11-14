@@ -161,3 +161,32 @@ def test_cli_returns_safe_counts_and_bounded_error(prepared, capsys):
     assert sync_admin.main(args) == 2
     captured = capsys.readouterr()
     assert not captured.out and "Existing files were not overwritten" in captured.err
+
+
+@pytest.mark.parametrize("action", ["review", "candidates"])
+def test_first_read_of_wal_database_keeps_research_and_a_stable_source_lease(prepared, action):
+    from paper_daily import sync_recovery_candidates
+
+    device, _server, _token, snapshot = prepared
+    path = device.journal.path
+    with closing(sqlite3.connect(path)) as conn:
+        assert conn.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        baseline = list(conn.iterdump())
+    # The last writer closed: this is a real WAL header with no existing sidecar.
+    wal = path.with_name(path.name + "-wal")
+    assert not wal.exists()
+    if action == "review":
+        result = recovery.review(path, snapshot, "workspace")
+        assert result["journal_already_in_backup"] == 1
+    else:
+        observed = sync_recovery_candidates.prepare(path, snapshot, "workspace")
+        assert observed.page()["items"] == []
+        observed._check(lambda: None)
+    assert dump(path) == baseline
+    # Do not normalize away genuine writes after observation.
+    before = recovery._version(path)
+    edit(device, "A real later research change")
+    assert recovery._version(path) != before
+    if action == "candidates":
+        with pytest.raises(ValueError, match="Recovery inputs changed"):
+            observed.page()

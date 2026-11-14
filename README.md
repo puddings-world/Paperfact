@@ -265,7 +265,7 @@ The recovery review compares saved and current research before confirmation:
 
 - Keep or restore supported list/reading state and copy notes or manual highlights
   with their verified original, preserving existing selections and later edits.
-- Restore complete claim, highlight, explanation-link and editable-deck groups
+- Restore complete claim, highlight, explanation-link, lineage and editable-deck groups
   with exact inputs, originals and assets. Known historical native versions remain
   inspectable; missing old explanations require explicit confirmation before clearing
   their corresponding current content.

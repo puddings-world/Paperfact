@@ -450,5 +450,47 @@ inputs, mapped paper ownership and original publication. Repeated successful
 requests recognize the saved decision without overwriting later edits/deletions
 or requiring the source PDF again. A new decision must recheck the original and
 current destination. `saved_locally` does not assert remote acceptance, semantic
-support, complete recovery or installed-device acceptance. Lineage groups, source
+support, complete recovery or installed-device acceptance. Independent source
 deletion decisions and foreign/legacy source mappings remain separate gates.
+
+
+## Confirmed native Lineage report recovery
+
+Select a saved native Lineage put and choose **Use old complete lineage report**.
+The English/Traditional Chinese comparison shows selected papers/source hashes,
+research gaps and changes, proposed judgments, exact quotations and locations.
+Compare the complete old/current reports before confirming replacement. Quote
+location does not certify influence, citation identity or scientific support.
+
+`sync_recovery_lineage_group.prepare(observed, change_id, request_id, *,
+replace=False, seconds=60, cancelled=...)` returns a sealed `LineageGroup` with
+`comparison`, `already` and `apply(*, seconds=60, cancelled=...)`. It requires the
+actual native target observation. Existing different/retired reports need explicit
+`replace=True`. Uncaptured visible words refuse even replacement. Corpus identity,
+portable payload, selected paper ownership and generation metadata are preserved;
+no model is called and other research/primary PDFs are not replaced.
+
+Each available selected original must match the retained native source operation,
+its exact dependency lifetime, owned readable PDF, hash and page count. Every
+recorded located quotation is rechecked at its original position. The paper
+parents need the existing backup-prefix or explicit recovery-decision mapping.
+Verified bytes are staged off-lock; all original ownership/outbox entries, fresh
+native Lineage dependencies, report/history projection and the bounded
+`paperfact.recovery-lineage-group.v1` receipt commit together. Old source pins are
+not replayed into the fresh workspace. Failed/cancelled children roll back all
+owned research; harmless unowned staged bytes can remain.
+
+Successful retry validates retained operations and fingerprints, not current write
+eligibility, and does not replace later edits/deletions. A new request verifies
+current source bytes and destination. Missing/retired exact source ownership,
+unknown legacy records and foreign identity mapping still need separate decisions;
+this action does not silently restore a deleted original. Explicitly unavailable
+report sources remain unavailable and do not gain file grants. `saved_locally`
+does not assert remote acceptance or complete recovery.
+
+Read-only source review treats a nonexistent and zero-byte SQLite WAL sidecar as
+the same no-transaction-pages state. SQLite itself can create/remove that empty
+file on a read-only open/close. Main-database and every nonempty-WAL version remain
+strict, including native mutation tokens. Real later writes invalidate the sealed
+review; no long-lived connection, write-blocking lease or automatic retry hides
+a concurrent change. Hosted and installed-device acceptance remain separate.

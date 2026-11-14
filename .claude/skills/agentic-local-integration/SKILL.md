@@ -134,6 +134,12 @@ buttons serialize through a server just to share behavior.
 - For a local stdio adapter, let the host own the helper lifetime. Keep protocol
   stdout clean and avoid loading desktop/model modules. Verify the installed SDK
   rather than copying protocol messages or outdated SDK examples.
+- For SQLite version leases, distinguish real content changes from the empty WAL
+  sidecar that a read-only open/close can create/remove. Keep the main database
+  and every nonempty WAL strictly versioned; do not ignore later commits or use
+  a long read transaction that blocks rollback-journal writers. Verify first-read
+  paging and real later-write invalidation. This exception applies only to an
+  actually zero-byte WAL, not arbitrary file changes or unknown journal formats.
 - Notify a long-lived UI through a small committed revision signal. Preserve
   active selection, filters, scroll and unsaved editors; defer refresh around
   modal interactions. Never treat a refresh as permission to invoke a model.

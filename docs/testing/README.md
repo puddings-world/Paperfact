@@ -69,6 +69,12 @@ and one actual mobile-to-Python protocol program complete the curated automated
 baseline. Changed domains still require their relevant regressions; this baseline
 does not claim complete v0.5 feature/device acceptance.
 
+The Lineage release representative now exercises complete native recovery, three
+verified originals, an independent peer and the official source reader. It replaces
+the narrow corpus-key-only representative in this gate; that historical assertion
+remains available for addressing changes and exhaustive diagnosis. The release
+selection does not grow by adding every variant of the new feature.
+
 ### Cross-platform split
 
 The release workflow runs the common `release` selection once, on the Windows

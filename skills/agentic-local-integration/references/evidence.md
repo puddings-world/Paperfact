@@ -563,3 +563,21 @@ no new journal format or broad replay capability. Focused proof/retry checks:
 fixture's review-scoped ID, both real desktop cases passed in 15.2s total.
 Paper deletion remains unsupported and original-bound notes are not flattened.
 This is another local adapter, not cross-project reuse or installed-device proof.
+
+
+### Read-only SQLite source leases, 2026-11-14 (validated-local)
+
+- Trigger: first native Lineage review failed despite an unchanged source DB.
+  Native version observations proved that read-only opening created a zero-byte
+  WAL. Settling fixture garbage collection did not change it. A connection-pinning
+  attempt then broke the unchanged concurrent-write regression in rollback mode
+  and did not survive empty-WAL cleanup; that approach was removed.
+- Invariant: nonexistent and zero-byte WAL mean no transaction pages; main-file
+  and every nonempty-WAL version, including native mutation tokens, stay strict.
+  No long-lived connection, retry loop or DML/DDL is introduced by the version read.
+- Evidence: two real WAL first-read review/index cases preserve research/paging
+  and reject real later writes. All existing source-review/concurrent-write cases
+  remain unchanged. The 63-case source/Lineage/peer/Qt/docs/critical gate passed
+  in 129.2s total under the existing Windows CPU/time cap.
+- Limits: local synthetic SQLite fixtures; no global promotion, native Mac/Linux
+  resource-governor proof, hosted deployment, paid accounts or owner research.

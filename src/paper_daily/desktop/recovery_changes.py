@@ -27,6 +27,7 @@ from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_claim_group as claim_group
 from paper_daily import sync_recovery_deck_group as deck_group
 from paper_daily import sync_recovery_highlight_group as highlight_group
+from paper_daily import sync_recovery_lineage_group as lineage_group
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_reading_context as reading_context
 from paper_daily import sync_recovery_reading_group as reading_group
@@ -34,7 +35,7 @@ from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
 
-GROUP_ACTIONS = ("reading_group", "highlight_group", "deck_group", "claim_group")
+GROUP_ACTIONS = ("lineage_group", "reading_group", "highlight_group", "deck_group", "claim_group")
 
 TEXT = {
     "en": {
@@ -399,6 +400,66 @@ TEXT["zh-TW"].update({
         "確認一起使用舊版講解、重點分析、連結與原文？"
         "舊版缺少的講解會清除目前對應講解。"
         "手動與 PDF 畫線維持不變，不呼叫 AI。"
+    ),
+})
+
+
+TEXT["en"].update({
+    "lineage_group": (
+        "Use old complete lineage report"
+    ),
+    "group_lineage": (
+        "Research lineage and sources"
+    ),
+    "lineage_prior_gap": (
+        "Earlier research gap"
+    ),
+    "lineage_current_change": (
+        "Change introduced by this study"
+    ),
+    "lineage_later_development": (
+        "Later research development"
+    ),
+    "lineage_unlocated": (
+        "Source passage not located; scientific support remains unresolved."
+    ),
+    "ready_lineage_group": (
+        "Verified the exact originals and saved passage locations. Compare the complete"
+        " report, then confirm. Scientific influence and support are not certified."
+    ),
+    "confirm_lineage_group": (
+        "Use this complete saved lineage report and all its available exact originals? "
+        "This replaces the current report for the same corpus. Other research and activ"
+        "e PDFs stay unchanged. No AI will be called."
+    ),
+})
+TEXT["zh-TW"].update({
+    "lineage_group": (
+        "使用舊版整組研究脈絡"
+    ),
+    "group_lineage": (
+        "研究脈絡與來源"
+    ),
+    "lineage_prior_gap": (
+        "既有研究缺口"
+    ),
+    "lineage_current_change": (
+        "本篇帶來的改變"
+    ),
+    "lineage_later_development": (
+        "後續研究發展"
+    ),
+    "lineage_unlocated": (
+        "原文位置未確認；學術支持關係仍待核實。"
+    ),
+    "ready_lineage_group": (
+        "已核對各篇原文與已存引句位置。請比較整份報告後"
+        "確認；不代表已證明學術影響或支持關係。"
+    ),
+    "confirm_lineage_group": (
+        "確認一起使用這份舊版脈絡報告與各篇可用原文？同"
+        "一組論文的目前報告會被取代。其他研究與目前開啟"
+        "的 PDF 維持不變，不呼叫 AI。"
     ),
 })
 
@@ -770,6 +831,25 @@ class RecoveryChanges(QWidget):
             plans[action] = (plan, saved)
         if operation["entity_type"] == "research_content" and operation["payload"].get(
             "feature"
+        ) == "lineage":
+            request = str(uuid5(NAMESPACE_URL, "paperfact:lineage-group-ui:" + candidates._json([
+                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
+            ])))
+            try:
+                group = lineage_group.prepare(
+                    observed, selected, request, replace=True, cancelled=stopped,
+                )
+            except (OSError, ValueError) as error:
+                comparison["lineage_group_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans["lineage_group"] = (group, group.already)
+        if operation["entity_type"] == "research_content" and operation["payload"].get(
+            "feature"
         ) == "reading_links":
             request = str(uuid5(NAMESPACE_URL, "paperfact:reading-group-ui:" + candidates._json([
                 observed.binding, operation["operation_id"], candidates._fingerprint(operation),
@@ -905,6 +985,26 @@ class RecoveryChanges(QWidget):
                 parts.append(self.t["retired"] if side == "current" and member.get(
                     "state"
                 ) == "retired" else self.t["absent"])
+            elif feature == "lineage":
+                report = data["body_json"]["report"]
+                selected = {row["id"]: row for row in report["sources"]}
+                for source in report["sources"]:
+                    parts.extend([source["identity"]["title"], source["document_hash"][:12]
+                                  if source["availability"] == "available" else
+                                  self.t["lineage_unlocated"]])
+                for statement in report["statements"]:
+                    parts.extend([self.t["lineage_" + statement["stage"]], statement["text"],
+                                  self.t["group_judgment"] + ": " + statement["judgment"]["status"],
+                                  statement["judgment"]["reason"]])
+                    for passage in statement["passages"]:
+                        location = passage["location"]
+                        parts.extend([selected[passage["source_id"]]["identity"]["title"],
+                                      passage["quote"], "p. " + str(location["page"])
+                                      if location["state"] == "located" else
+                                      self.t["lineage_unlocated"]])
+                if side == "source":
+                    for original in member.get("originals", []):
+                        parts.append(original["title"] + " (" + original["sha256"][:12] + ")")
             elif feature == "highlight_analysis":
                 for item in data["body_json"]["items"]:
                     parts.extend([item["kind"] + " / p. " + str(item["page"]),
@@ -1173,6 +1273,9 @@ class RecoveryChanges(QWidget):
             anchor = payload["data"]["anchor"]
             return (self.t["manual_highlight"] + "\n\n" + payload["data"]["quote"]
                     + "\n\np. " + str(anchor["p0"] + 1) + " - " + str(anchor["p1"] + 1))
+        if (operation["entity_type"] == "research_content"
+                and payload.get("feature") == "lineage"):
+            return self._group_text([dict(feature="lineage", source=payload["data"])], "source")
         if (operation["entity_type"] == "research_content"
                 and payload.get("feature") == "reading_links"):
             links = payload["data"]["body_json"]["links"]

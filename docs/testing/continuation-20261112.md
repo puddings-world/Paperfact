@@ -4815,3 +4815,59 @@ additional worktree was introduced.
   access, cloud deployment, push or release. Lineage groups, independent source
   deletion, foreign/legacy mappings, audit continuation, hosted HTTPS/native vaults
   and installed Windows/Apple Silicon/physical-phone acceptance remain open.
+
+
+## 2026-11-14: multi-original native Lineage groups and read-only WAL leases
+
+- Added a sealed native Lineage group adapter and English/Traditional Chinese
+  comparison/confirmation in the existing old-device review. It verifies retained
+  source operations, all selected parent mappings, exact readable PDFs/page counts
+  and every recorded located quotation. Original ownership/outbox and a fresh
+  source-pinned scientific operation/history commit with one bounded receipt.
+  Report/selected identities and generation metadata stay exact; no source grant
+  is replayed and no model is called by recovery. Different/retired target reports
+  need explicit replacement; uncaptured words refuse. Existing source retirement
+  still requires its own explicit decision.
+- Preparation is read-only. Partial child exception/cancellation rolls back all
+  original ownership, report/schema, outbox and receipt; immutable unowned cache
+  bytes may remain. A saved retry checks retained native evidence and never
+  overwrites later edits/deletions. Original/primary PDFs and other research remain
+  independent. A source context or cached metadata alone grants no write authority.
+- Actual native FileTransfers and recovered authority deliver an unchanged
+  portable report to a fresh enrolled client; all three selected originals are
+  independently downloaded and verified without primary PDF activation. Bilingual
+  Qt actions show full statements/quotes/sources, explicitly retain semantic limits,
+  cancel without writes and save one decision despite repeated activation.
+- Found a first-read source-review false positive before group publication: main
+  native version stayed identical while a mode=ro open created a zero-byte WAL.
+  Fixture GC did not solve it. A read-transaction pin broke an unchanged concurrent
+  writer assertion; idle-reader initialization still failed after sidecar cleanup.
+  Both approaches were removed. Only nonexistent/zero-byte WAL are now equivalent;
+  main and every nonempty WAL keep full native versions. Existing concurrent-write
+  tests are unchanged; two new real first-read cases verify stable review/index
+  and invalidation after a real later write. No persistent connection or retry loop.
+- A new test helper initially built a space-separated SQL column list and failed;
+  fixed to the actual comma-separated schema list, with assertions unchanged.
+  Formatting errors were corrected before passing gates. Four backend group cases
+  passed in 27.31s pytest / 31.9s total. Final coherent affected-plus-critical gate:
+  63 passed in 124.49s pytest / 129.2s total; privacy/Ruff passed; no skips or
+  failures. Selections overlap and are not a summed completion percentage. Windows
+  budget: 300s, 25% CPU, at most two logical processors, one check at a time.
+- Recorded the validated-local SQLite lesson in the existing canonical integration
+  skill/evidence, not a new skill/global rule. No worktree, task board, real login,
+  paid call, owner research access, push, release or deployment. Separate gates:
+  source-deletion/foreign/legacy ownership and scientific-audit mapping, hosted
+  HTTPS/native vaults, installed Windows/Apple Silicon and physical phone use.
+
+- Post-documentation canonical skill/usage contracts plus critical journeys:
+  37 passed in 15.78s pytest / 22.7s total. The peer case was then extended through
+  the official Lineage original reader and GUI-delivery proof for all three sources;
+  that sole changed case passed in 21.75s pytest / 27.9s total. Product source was
+  unchanged; no full suite or repeated broad check.
+- Curated release selection keeps its size: the complete Lineage recovery/peer/
+  official-reader case replaces the narrow corpus-key-only representative. The
+  old test/assertions remain intact for domain changes and historical diagnosis.
+- Final changed runner/usage contracts after selecting the complete Lineage release
+  representative: 56 passed in 2.15s pytest / 7.3s total, privacy/Ruff passed.
+  The release baseline still has 33 Python selectors; selectors are not collected
+  case counts. Product source and earlier scoped evidence stayed unchanged.
