@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QLabel
 
-from paper_daily.desktop import ui_state
+from paper_daily.desktop import fonts, ui_state
 from paper_daily.store import connect
 
 HINT = "專注閱讀 · R 閱讀尺 · Esc 離開"
@@ -29,7 +29,7 @@ class FocusMode:
         self.hint.hide()
         self._hint_timer = QTimer(win, singleShot=True, interval=2500)
         self._hint_timer.timeout.connect(self.hint.hide)
-        toggle = QShortcut(QKeySequence(QKeySequence.StandardKey.FullScreen), win)
+        toggle = QShortcut(fonts.shortcut(QKeySequence.StandardKey.FullScreen), win)
         toggle.activated.connect(self.toggle)
         self.escape = QShortcut(QKeySequence(Qt.Key.Key_Escape), win)
         self.escape.setEnabled(False)

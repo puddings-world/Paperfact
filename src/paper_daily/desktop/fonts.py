@@ -56,11 +56,19 @@ def css(families=SANS) -> str:
     return ",".join(f"'{f}'" for f in families) + f",{generic}"
 
 
+def shortcut(sequence) -> QKeySequence:
+    """Resolve a native binding; fullscreen has an explicit working F11 fallback."""
+    if isinstance(sequence, QKeySequence.StandardKey):
+        bindings = QKeySequence.keyBindings(sequence)
+        sequence = bindings[0] if bindings else (
+            "F11" if sequence == QKeySequence.StandardKey.FullScreen else ""
+        )
+    return QKeySequence(sequence)
+
+
 def key(sequence) -> str:
     """A shortcut as this platform writes it: Ctrl+Z on Windows, ⌘Z on macOS."""
-    if isinstance(sequence, QKeySequence.StandardKey):
-        sequence = QKeySequence.keyBindings(sequence)[0]
-    return QKeySequence(sequence).toString(QKeySequence.SequenceFormat.NativeText)
+    return shortcut(sequence).toString(QKeySequence.SequenceFormat.NativeText)
 
 
 # The modifier Qt reads as ControlModifier: the Command key on macOS.

@@ -21,7 +21,9 @@ workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
 default) for all three platforms. Tags always build all platforms. The Mac job
 refuses a non-arm64 runner. Frozen Mac GUI checks use the native Cocoa backend;
 Linux source checks, screenshots, build smoke and frozen acceptance use Xvfb;
-Windows uses offscreen checks. Because of observed
+Windows uses offscreen checks. A theme without a fullscreen binding uses the
+reader's explicit F11 fallback; screenshot startup must not depend on a desktop
+window manager supplying every optional standard shortcut. Because of observed
 intermittent Mac startup crashes, the frozen verifier requires three consecutive
 reader launches of the same bundle/workspace, stopping on the first failure.
 This adds about ten seconds of smoke time, not another build or test matrix.

@@ -26,6 +26,11 @@ inherited through `STARTUPINFO` and would otherwise swallow the reader too.
 
 ### Using it
 
+In the v0.5 candidate, fullscreen reading uses the desktop's native shortcut, or
+F11 when none is provided. The displayed hint and actual shortcut use the same
+resolved binding. Esc restores the previous layout; missing optional bindings
+never prevent startup.
+
 Two screens.
 
 **The queue.** Every paper in reading order — all 5000, searchable, no cap — with

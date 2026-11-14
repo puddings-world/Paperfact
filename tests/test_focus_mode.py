@@ -22,7 +22,13 @@ def _shown(win):
     return {name for name, widget in _chrome(win).items() if widget.isVisibleTo(win)}
 
 
-def test_focus_hides_everything_but_the_page_and_restores_it(workspace):
+def test_focus_hides_everything_but_the_page_and_restores_it(workspace, monkeypatch):
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtTest import QTest
+
+    original = QKeySequence.keyBindings
+    monkeypatch.setattr(QKeySequence, "keyBindings", lambda value: [] if value ==
+                        QKeySequence.StandardKey.FullScreen else original(value))
     app, _ = workspace
     win = MainWindow()
     try:
@@ -41,6 +47,16 @@ def test_focus_hides_everything_but_the_page_and_restores_it(workspace):
         win.focus_mode.escape.activated.emit()
         assert not win.focus_mode.active and _shown(win) == before
         assert not win.windowState() & Qt.WindowState.WindowFullScreen
+        win.activateWindow()
+        win.setFocus()
+        app.processEvents()
+        assert "F11" in win.reader_page.focus_button.toolTip()
+        QTest.keyClick(win, Qt.Key.Key_F11)
+        app.processEvents()
+        assert win.focus_mode.active
+        QTest.keyClick(win, Qt.Key.Key_F11)
+        app.processEvents()
+        assert not win.focus_mode.active and _shown(win) == before
     finally:
         win.close()
         win.deleteLater()

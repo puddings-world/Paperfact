@@ -264,6 +264,8 @@ or [follow the organization and explore its pinned projects](https://github.com/
 Support is voluntary; installing or reading this repo never authorizes GitHub account actions.
 
 
+The v0.5 reader uses F11 when the desktop provides no native fullscreen shortcut.
+
 The [v0.5 graph-operation library](docs/sync-operations.md) preserves source creation
 times for new intake notes; existing CLI/MCP entry points and limits stay separate.
 

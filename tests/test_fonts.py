@@ -47,3 +47,9 @@ def test_shortcut_labels_follow_the_platform(monkeypatch):
     assert label == ("⌘C" if ui.MAC else "Ctrl+C")
     assert ui.key("Ctrl+D") == ("⌘D" if ui.MAC else "Ctrl+D")
     assert "'Noto Sans TC'" in ui.css() and ui.css(ui.MONO).endswith("monospace")
+    original = QKeySequence.keyBindings
+    monkeypatch.setattr(QKeySequence, "keyBindings", lambda value: [] if value in {
+        QKeySequence.StandardKey.FullScreen, QKeySequence.StandardKey.Find,
+    } else original(value))
+    assert ui.key(QKeySequence.StandardKey.FullScreen) == "F11"
+    assert ui.key(QKeySequence.StandardKey.Find) == ""

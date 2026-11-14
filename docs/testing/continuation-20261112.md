@@ -5527,3 +5527,19 @@ additional worktree was introduced.
 - Workflow contract: 1 passed in 0.35s / 3.4s total. Critical: 14 passed in
   7.71s / 11.0s total. Privacy/Ruff/whitespace green, bounded single local job.
   Initial assertion line-length failure corrected without changing assertions.
+- Native run 43638983559 Linux job 132582023201 passed critical checks but
+  failed screenshot startup: desktop/fonts.py keyBindings(FullScreen)[0] raised
+  IndexError because the theme supplied no binding. Windows/Mac jobs retained.
+- Existing label test reproduced the exact IndexError before the fix (0.53s
+  pytest / 3.7s total). Resolve actual shortcuts and labels through one helper: native
+  binding wins; fullscreen alone falls back to F11; other unavailable bindings
+  produce an empty sequence. Wire FocusMode through the same helper so F11
+  actually acts, not just appears in a tooltip. No new cases/selectors.
+- Actual fallback key, label and unchanged focus/ruler/layout behavior: 4 passed
+  in 2.90s / 6.3s total, privacy/Ruff green under bounded local resources.
+  No new cases or selectors. First run Mac native job passed; Windows build
+  still live. Do not relaunch overlapping builds or claim Linux packaged success.
+- Startup fix critical: 14 passed in 7.61s / 10.8s total, privacy/Ruff and
+  whitespace green. First run 43638983559 is terminal: Windows and Mac native
+  build/frozen acceptance succeeded for 7f62f5d; Linux failed before packaging.
+  Next run uses the fixed common source; no earlier job is left live/overlapped.
