@@ -174,7 +174,8 @@ def isolated_env(folder):
                APPDATA=str(home / 'roaming'), LOCALAPPDATA=str(home / 'local'),
                XDG_CONFIG_HOME=str(home / '.config'),
                PAPERFACT_DATA=str(folder / 'workspace'), PAPERFACT_SMOKE_SECONDS='5',
-               QT_QPA_PLATFORM=os.environ.get('QT_QPA_PLATFORM', 'offscreen'),
+               QT_QPA_PLATFORM=("cocoa" if sys.platform == "darwin" else
+                                os.environ.get('QT_QPA_PLATFORM', 'offscreen')),
                PYTHONUTF8='1', PYTHONIOENCODING='utf-8',
                HTTP_PROXY='http://127.0.0.1:9', HTTPS_PROXY='http://127.0.0.1:9')
     system = Path(os.environ.get('SYSTEMROOT', '/usr'))
@@ -340,7 +341,7 @@ def _verify(built, out, acceptance):
                 ),
             )
     if sys.platform == "darwin":
-        # Launch Services + Cocoa, separate from offscreen startup/data checks.
+        # Launch Services foreground activation, separate from direct reader startup.
         run(
             "mac-foreground",
             ["/usr/bin/swift", ROOT / "scripts/verify_mac_app.swift", built],

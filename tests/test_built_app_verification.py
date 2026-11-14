@@ -26,6 +26,16 @@ def test_verification_does_not_inherit_developer_accounts(tmp_path, monkeypatch)
     assert 'ANTHROPIC_API_KEY' not in env and 'CODEX_HOME' not in env
     assert Path(env['PAPERFACT_DATA']).is_relative_to(tmp_path)
     assert Path(env['HOME']).is_relative_to(tmp_path)
+    # Native Mac WebEngine reader acceptance must not inherit a CI offscreen backend.
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    monkeypatch.setattr(verify.sys, "platform", "darwin")
+    mac = verify.isolated_env(tmp_path / "mac")
+    assert mac["QT_QPA_PLATFORM"] == "cocoa"
+    assert "ANTHROPIC_API_KEY" not in mac and "CODEX_HOME" not in mac
+    assert Path(mac["PAPERFACT_DATA"]).is_relative_to(tmp_path / "mac")
+    monkeypatch.setattr(verify.sys, "platform", "linux")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "xcb")
+    assert verify.isolated_env(tmp_path / "linux")["QT_QPA_PLATFORM"] == "xcb"
 
 
 def test_frozen_roundtrip_checks_pdf_bytes_not_just_counts(tmp_path):

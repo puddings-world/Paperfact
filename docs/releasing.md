@@ -19,7 +19,8 @@ build without publishing. Run `scripts/verify_built_app.py` against the frozen a
 the workflow does this on each selected platform. In **Actions > Release > Run
 workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
 default) for all three platforms. Tags always build all platforms. The Mac job
-refuses a non-arm64 runner. Each job has a 30-minute total budget; manual builds
+refuses a non-arm64 runner. Frozen Mac GUI checks use the native Cocoa backend;
+Linux retains Xvfb and Windows uses offscreen checks. Each job has a 30-minute total budget; manual builds
 retain critical source checks and frozen acceptance, without creating a release.
 
 Download `build-macos` (DMG), `provenance-macos` (source identity and report), and

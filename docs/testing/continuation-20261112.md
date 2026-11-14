@@ -5364,3 +5364,13 @@ additional worktree was introduced.
   actual frozen report and installed Apple Silicon acceptance remain gates.
 - Required daily critical: 14 passed in 6.99s pytest / 10.1s total; privacy,
   Ruff and whitespace check passed. No exhaustive or release matrix repeated.
+
+- Actual GitHub run 43633002571 built the clean arm64 candidate f86a214.
+  Native source critical passed; frozen first-use/import/duplicate-import passed,
+  then reader exited -11 under QT offscreen. No installer was uploaded.
+  Report/logs preserved in ignored build/mac-candidate-43633002571.
+  Next experiment: native Cocoa for isolated Mac GUI checks, retaining every
+  data/reader/source/fidelity/foreground assertion and Linux Xvfb behavior.
+- Cocoa selection/privacy and verifier orchestration: 12 passed in 1.08s /
+  4.2s total. Daily critical: 14 passed in 7.34s / 10.6s total. Privacy/Ruff
+  and whitespace passed. Native result remains pending the next CI run.
