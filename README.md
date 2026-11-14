@@ -265,10 +265,10 @@ The recovery review compares saved and current research before confirmation:
 
 - Keep or restore supported list/reading state and copy notes or manual highlights
   with their verified original, preserving existing selections and later edits.
-- Restore complete claim, highlight and editable-deck groups with exact inputs,
-  originals and assets. Known historical native versions remain inspectable.
-- Compare historical explanation-link sections, ordered quotes and reasons;
-  grouped link restoration remains in development.
+- Restore complete claim, highlight, explanation-link and editable-deck groups
+  with exact inputs, originals and assets. Known historical native versions remain
+  inspectable; missing old explanations require explicit confirmation before clearing
+  their corresponding current content.
 
 See the [recovery workflow and API](docs/device-recovery-review.md),
 [deck provenance](docs/sync-files.md) and [saved-evidence audit](docs/deck-audit.md).

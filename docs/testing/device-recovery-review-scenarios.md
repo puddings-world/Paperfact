@@ -508,10 +508,30 @@ not completed group publication:
 | Wrong key/index | No guessed quotation, partial context or mutation |
 | Cancellation/search/output budget | Refuse cleanly; no silent truncation or fallback |
 | Accepted vs conflicting peer | Only a validated accepted native receipt can supply an otherwise missing input |
-| English/Traditional Chinese Qt | Full earlier sections, quotes and link explanation are readable; actual Chinese status is checked; both workspaces stay unchanged and group Apply remains disabled |
+| English/Traditional Chinese Qt | Full earlier sections, quotes and link explanation are readable; actual Chinese status is checked; both workspaces stay unchanged and only verified groups enable a separate confirmed Apply action |
 
 A shared source-only highlight reader replaces the previous target-observation
 wrapper without changing highlight recovery's target authentication/transaction.
 Native peer/highlight UI plus note/manual-review and all critical journeys provide
 adjacent regression evidence. This does not certify restored links, Lineage,
 scientific semantics, deployment or installed-device acceptance.
+
+
+## Confirmed explanation groups (2026-11-14)
+
+`tests/test_sync_recovery_reading_group.py` adds one representative per distinct
+boundary rather than a full input Cartesian matrix:
+
+| Scenario | Observable result |
+|---|---|
+| Complete save, independent peer and later edit | All four exact contents plus original reach a fresh native client; source unchanged; retry preserves later edits; explicit replacement preserves nonempty manual/AI mark layers |
+| Optional missing explanation | Default refuses to clear current words; reviewed replacement writes native absence; retry preserves a later restored explanation |
+| Child exception or cancellation | Earlier child writes, original ownership, outbox and receipt roll back; the same prepared request can retry |
+| Corrupt receipt or uncaptured private words | Refuse without changing research or restarting a saved decision |
+| Actual English/Traditional Chinese Qt buttons | Compare absence/current full text, display clearing warning, cancel without writes, confirm once despite repeated click, save complete group and one receipt |
+
+The source-only context cases above still guard historical selection, rejected
+foreign conflicts, exact quote/index binding and bounded read-only refusal. Their
+comparison assertions now allow the separately confirmed native action for a
+valid group, not automatic writes. No fixture result certifies real Mac/phone
+installation, hosted deployment or scientific semantic support.

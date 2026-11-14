@@ -222,7 +222,7 @@ def test_only_accepted_foreign_history_can_supply_a_missing_link_input(
 
 
 @pytest.mark.parametrize("language,bad_digest", [("en", False), ("zh-TW", False), ("en", True)])
-def test_native_review_shows_verified_link_context_without_enabling_group_publication(
+def test_native_review_compares_exact_context_and_only_enables_verified_group_choice(
     group,
     app,
     language,
@@ -266,8 +266,9 @@ def test_native_review_shows_verified_link_context_without_enabling_group_public
             if language == "zh-TW":
                 assert "\u5df2\u6838\u5c0d" in ui.notice.text()
             else:
-                assert "Comparison only" in ui.notice.text()
-        assert not ui.copy_button.isEnabled()
+                assert "Verified the saved explanations" in ui.notice.text()
+        assert ui.copy_button.isEnabled() == (not bad_digest)
+        assert ("reading_group" in ui.action_plans) == (not bad_digest)
         assert (dump(group["old"].journal.path), dump(group["path"])) == before
     finally:
         if owner.busy:

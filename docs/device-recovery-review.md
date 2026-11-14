@@ -400,8 +400,8 @@ cancelled=...)` accepts the actual prepared source review and returns
 `paperfact.recovery-reading-context.v1` with `state="resolved_read_only"` and
 `write_authority=False`. It does not modify either workspace or call AI. Its
 output is data, not a destination/publication capability. Grouped link publication
-still needs a separate confirmed native transaction and is not implemented by
-this comparison checkpoint.
+uses the separate confirmed native transaction below; the resolver itself remains
+a source-only inspection capability.
 
 The existing link key hashes full rendered section records, the highlight source
 hash and ordered complete items (including roles/reasons). Resolution first tries
@@ -417,5 +417,38 @@ cancellation guards. It fails explicitly rather than truncating or guessing.
 These digests bind visible sections/items, not unrecorded execution metadata or
 original timestamps; selected metadata comes from actual retained native records.
 Unknown legacy keys, unavailable originals and semantic support remain unresolved.
-Native English/Traditional Chinese UI labels this as comparison only and does not
-enable a group-apply action. Existing keep decisions remain separate.
+When a group cannot be prepared, English/Traditional Chinese UI keeps the verified
+context read-only. Existing keep decisions remain separate.
+
+
+## Confirmed explanation-link group recovery
+
+Select a native saved explanation-link change and choose **Use old complete
+explanation group**. Compare the earlier deep/close explanations, ordered
+highlight quotations/reasons and links against current research, then confirm.
+If an optional old explanation is absent, the comparison shows absence and the
+confirmation explicitly warns that its corresponding current explanation will
+be cleared. This is not permission to delete a paper or any other research.
+
+`sync_recovery_reading_group.prepare(observed, change_id, request_id, *,
+replace=False, seconds=60, cancelled=...)` requires the real target observation
+and resolves the exact native source context. It returns a sealed `ReadingGroup`
+with `comparison`, `already` and `apply(*, seconds=60, cancelled=...)`. Conflicting
+or retired target members require `replace=True`; uncaptured visible edits refuse
+even explicit replacement. A source context dictionary alone cannot authorize it.
+
+The owned exact original, dive, close reading, highlight analysis and explanation
+links publish in one native transaction with the outbox and a bounded
+`paperfact.recovery-reading-group.v1` receipt. Optional absence uses a native
+delete only when necessary. Manual/PDF marks, other annotations and the active
+primary PDF stay unchanged. Source workspaces are never rewritten and no model
+is invoked. Staged unowned bytes may remain after failure; content, ownership,
+outbox and receipt roll back together.
+
+Receipts verify retained source/native operations and fingerprints, exact link
+inputs, mapped paper ownership and original publication. Repeated successful
+requests recognize the saved decision without overwriting later edits/deletions
+or requiring the source PDF again. A new decision must recheck the original and
+current destination. `saved_locally` does not assert remote acceptance, semantic
+support, complete recovery or installed-device acceptance. Lineage groups, source
+deletion decisions and foreign/legacy source mappings remain separate gates.

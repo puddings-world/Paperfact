@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Read-only validation-plan preview verified; next confirmed atomic reading-link group writes (including optional absence), then Lineage/origin/audit and external gates |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Confirmed atomic reading-link groups verified locally; next Lineage/origin/audit recovery and durable private pairing/hosting, then external device gates |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

@@ -4773,3 +4773,45 @@ additional worktree was introduced.
   before this pass; no assertions were weakened.
 - This extends the existing runner rather than adding another test system. No new
   reusable architecture pattern was established; canonical skills are unchanged.
+
+
+## 2026-11-14: confirmed exact reading-link groups
+
+- Added `sync_recovery_reading_group.prepare`/`ReadingGroup.apply` using actual
+  target observations, the existing source resolver, mapped paper ownership and
+  exact quoted-original verification. Four native contents and owned original
+  share the transaction with outbox and a bounded fingerprinted decision receipt.
+  Optional source absence is explicit: differing current words require reviewed
+  replacement and a native delete; existing absence needs no write. Native paper
+  deletion remains unsupported. Manual/AI PDF layers and active PDF stay separate.
+- The English/Traditional Chinese native review now offers a confirmed complete
+  explanation group, readable source/current members and a clearing warning.
+  Cancellation has no writes, repeated activation saves once, and failed children
+  roll back content/original ownership/outbox/receipt. Unowned staged bytes may
+  remain. Corrupt receipts and uncaptured private words refuse safely.
+- Saved retries validate retained source/native operations and exact context, not
+  current availability or write eligibility. They preserve later edits/deletions
+  and can recognize success after old original bytes become unavailable. The UI
+  skips redundant context resolution when a sealed group/receipt is available.
+- Evidence: source-context plus initial backend scope, 18 passed in 158.94s pytest
+  / 162.6s total; new seven group cases plus all 14 critical cases, 21 passed in
+  103.78s pytest / 108.0s total; final affected bilingual Qt confirmation/reload,
+  source comparison and docs, 14 passed in 67.19s pytest / 75.2s total. These are
+  overlapping selections, not a summed count or full-suite claim. Windows bounds
+  were 300s, 25% CPU and at most two logical processors, one check at a time.
+- The complete-group case performs real FileTransfers and native synchronization
+  to an independent enrolled client, compares all four saved content tables and
+  exact original bytes, and preserves nonempty manual/AI mark layers. An added
+  source-file-unavailable retry passed in a stopped follow-up run (1 passed,
+  1 failed); its overall failure was the new UI test trying to reuse the intentionally
+  invalidated observation after save. The test now uses the actual reload flow;
+  both languages and adjacent comparisons pass in the final 14-case selection.
+  A fixture helper initially guessed a nonexistent table; corrected to the actual
+  annotation registry without weakening the behavior assertion. Ruff formatting
+  failures were corrected before passing checks. Existing readonly comparison
+  expectations were intentionally updated for the accepted confirmed group action.
+- Reuses the existing source-versus-target, atomic transaction and durable-receipt
+  pattern. No new global skill rule, worktree, task board, paid call, owner research
+  access, cloud deployment, push or release. Lineage groups, independent source
+  deletion, foreign/legacy mappings, audit continuation, hosted HTTPS/native vaults
+  and installed Windows/Apple Silicon/physical-phone acceptance remain open.

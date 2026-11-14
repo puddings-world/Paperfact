@@ -29,11 +29,12 @@ from paper_daily import sync_recovery_deck_group as deck_group
 from paper_daily import sync_recovery_highlight_group as highlight_group
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_reading_context as reading_context
+from paper_daily import sync_recovery_reading_group as reading_group
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
 
-GROUP_ACTIONS = ("highlight_group", "deck_group", "claim_group")
+GROUP_ACTIONS = ("reading_group", "highlight_group", "deck_group", "claim_group")
 
 TEXT = {
     "en": {
@@ -375,6 +376,33 @@ TEXT["zh-TW"].update({
     ),
 })
 
+TEXT["en"].update({
+    "reading_group": "Use old complete explanation group",
+    "ready_reading_group": (
+        "Verified the saved explanations, highlights, links and original. Compare all members, "
+        "then confirm. Missing old explanations will clear their corresponding current content."
+    ),
+    "confirm_reading_group": (
+        "Use these old explanations, highlight analysis, links and exact original together? "
+        "An absent old explanation clears the corresponding current explanation. Manual and "
+        "PDF marks stay unchanged. No AI will be called."
+    ),
+})
+TEXT["zh-TW"].update({
+    "reading_group": "\u4f7f\u7528\u820a\u7248\u6574\u7d44\u8b1b\u89e3",
+    "ready_reading_group": (
+        "已核對講解、重點、連結與原文。"
+        "請比較後確認；舊版缺少的講解會清除目前對應內容"
+        "。"
+    ),
+    "confirm_reading_group": (
+        "確認一起使用舊版講解、重點分析、連結與原文？"
+        "舊版缺少的講解會清除目前對應講解。"
+        "手動與 PDF 畫線維持不變，不呼叫 AI。"
+    ),
+})
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -687,7 +715,8 @@ class RecoveryChanges(QWidget):
                                 comparison["manual_copy_issue"] = str(error)[:240]
                             observed._check(backup._guard(30, stopped))
             plans = self._metadata_plans(observed, selected, comparison, stopped)
-            if operation["payload"].get("feature") == "reading_links":
+            if (operation["payload"].get("feature") == "reading_links"
+                    and "reading_group" not in plans):
                 try:
                     comparison["reading_context"] = reading_context.resolve(
                         observed.source, selected, cancelled=stopped,
@@ -739,6 +768,25 @@ class RecoveryChanges(QWidget):
                     raise
                 continue
             plans[action] = (plan, saved)
+        if operation["entity_type"] == "research_content" and operation["payload"].get(
+            "feature"
+        ) == "reading_links":
+            request = str(uuid5(NAMESPACE_URL, "paperfact:reading-group-ui:" + candidates._json([
+                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
+            ])))
+            try:
+                group = reading_group.prepare(
+                    observed, selected, request, replace=True, cancelled=stopped,
+                )
+            except (OSError, ValueError) as error:
+                comparison["reading_group_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans["reading_group"] = (group, group.already)
         if operation["entity_type"] == "research_content" and operation["payload"].get(
             "feature"
         ) == "claims":
@@ -864,6 +912,10 @@ class RecoveryChanges(QWidget):
             elif feature == "ai_highlight":
                 parts.extend([data["quote"], data["reason"],
                               self.t["group_hidden" if data["hidden"] else "group_shown"]])
+            elif feature == "reading_links":
+                for link in data["body_json"]["links"]:
+                    parts.extend([link["section"], "Quote " + str(link["quote"] + 1),
+                                  link["explanation"]])
             elif feature != "claims":
                 parts.append(data["body"])
             else:
@@ -1062,7 +1114,8 @@ class RecoveryChanges(QWidget):
                     key = ("already_manual" if already else "ready_manual_original"
                            if plan.with_original else "ready_manual")
                     self.notice.setText(self.t[key])
-                if comparison.get("reading_context"):
+                if (comparison.get("reading_context") and "reading_group" not in plans
+                        and not comparison.get("reading_group_issue")):
                     self.notice.setText(self.t["reading_context_ready"])
                 elif comparison.get("reading_context_issue"):
                     self.notice.setText(self.t["reading_context_issue"]
