@@ -1,12 +1,15 @@
 # v0.5 Apple Silicon acceptance
 
 Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43634104252](https://github.com/puddings-world/Paperfact/actions/runs/43634104252),
-clean commit `3b3b550008c262d740932c1e0328d7c4fc7cc8e0` (`0.5.0.dev`).
+available from [run 43635889503](https://github.com/puddings-world/Paperfact/actions/runs/43635889503),
+clean commit `e753ad3fdbcc8f6d947eaf43e2a239ce6a793acc` (`0.5.0.dev`).
 Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
 `provenance-macos` for source identity and the frozen acceptance report.
-CI passed reader/import/export, original audit and Launch Services activation/close.
-Two prior candidate runs crashed in reader startup (-11); their cause is unresolved.
+CI passed three consecutive reader launches, import/export, original audit and
+Launch Services activation/close. Earlier reader crashes (-11) were reproduced
+on the second launch. The remaining global Python file-open event filter was
+removed; OS file events now go directly through the application. Native three-launch
+acceptance passes after this fix; installed/longer-running stability remains untested.
 Treat this as an experimental test candidate, not a stable update or evidence that
 hosted synchronization is deployed. Keep the daily app and data unchanged.
 Use an exact candidate build shared with the Windows tester. A published 0.4.x

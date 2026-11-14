@@ -5428,3 +5428,22 @@ additional worktree was introduced.
   whitespace green. No direct app/application.installEventFilter calls remain
   in source. Native three-launch acceptance still pending; not a proof of
   installed stability or a full Qt/PDF threading audit.
+- Actual native run 43635889503: clean e753ad3fdbcc8f6d947eaf43e2a239ce6a793acc,
+  macOS arm64, 0.5.0.dev. Critical 14 passed in 4.55s. Job 20:08:39Z-20:13:46Z
+  (5m07s), 2026-11-14 UTC. Frozen report passed with exactly three reader
+  stages, reader_launches_verified=3, four PDFs preserved, three-original/
+  five-quote audit, 38 MCP tools and retry/restart, native foreground/close.
+- Native report downloaded and independently matched to actual job JSON output
+  in ignored build/mac-candidate-43635889503. Build artifact 14130193207,
+  fixture 14130168089, provenance 14129774220. GitHub build ZIP metadata:
+  279311695 bytes, sha256 76ec969799efcbea465c8b20b7ee85260d057767a09ced074232ac7a0f27ad99.
+  This is the artifact archive digest, not a locally checked DMG digest.
+- Goal/harvest checkpoint: verified removal of a documented global-filter
+  hazard with preserved actual OS file events; three native launches now pass.
+  Keep the lesson in project event-boundary/acceptance evidence. No new global
+  skill or universal claim about native crashes, thread safety or stability.
+  Physical Mac input/upgrade/long-running/corpus UI, Windows/phone and hosted
+  private HTTPS/device-identity gates remain explicitly unaccepted.
+- Evidence-only documentation validation: 58 passed in 4.81s / 13.7s total;
+  privacy/Ruff/whitespace passed. Reused unchanged native/critical evidence.
+  No new selector count, broad historical run, deployment or stable release.
