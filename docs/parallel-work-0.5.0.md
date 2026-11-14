@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Versioned allowlisted PWA artifact, HTTPS proxy handoff and throttle-safe retry; remaining recovery scope retained |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Exact-original note recovery verified locally; remaining compound recovery and installed-device/hosted acceptance |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

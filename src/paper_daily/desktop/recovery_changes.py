@@ -57,8 +57,9 @@ TEXT = {
             "uncaptured work and files are not certified."
         ),
         "unsupported": (
-            "This change remains pending. Notes tied to PDF locations need original "
-            "verification. Other content or older formats need a separate recovery action."
+            "This change remains pending. Copying needs verified parent mappings and, "
+            "for positioned notes, the exact original PDF. Other content or older "
+            "formats need a separate recovery action."
         ),
         "ready": (
             "Compare both versions, then copy as a distinct note. Existing "
@@ -103,7 +104,8 @@ TEXT = {
         "loaded": ("有 {count} 筆不在備份中的變更。選擇一筆比對；這不代表完整研究與附件稽核。"),
         "empty": ("未找到備份以外的已記錄變更；未儲存草稿、未捕捉操作與檔案仍未完整核對。"),
         "unsupported": (
-            "這筆變更仍保留待處理。目前可另存未綁原文位置的筆記；其他類型與原文核對需使用各自的復原操作。"
+            "這筆變更仍保留待處理。另存筆記需要核實父項對應；綁定 "
+            "PDF 位置的筆記也需核實原文。其他類型需使用各自的復原操作。"
         ),
         "ready": (
             "比對後可另存新筆記，既有內容保留。不呼叫 AI；目標工作區啟用同步時，新筆記會排入同步。"
@@ -417,8 +419,6 @@ class RecoveryChanges(QWidget):
                 operation["version"] == 2
                 and operation["entity_type"] == "note"
                 and operation["action"] == "put"
-                and operation["payload"].get("page") is None
-                and operation["payload"].get("anchor") is None
             )
             plan, already = None, False
             if supported:

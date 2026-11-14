@@ -96,7 +96,7 @@ Old workspace/history remains intact; old envelopes are not blindly replayed.
 |---|---|
 | `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.details(change_id, ...)` retain exact source identity |
 | `sync_recovery_target.observe(index, target_database, *, seconds=30, cancelled=...)` | Prove fresh target history/binding; `.compare(change_id, ...)` exposes source/current state without writing |
-| `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, seconds=30, cancelled=...)` | Explicit unanchored note copy with a new native identity; `.apply(...)` commits atomically |
+| `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, seconds=30, cancelled=...)` | Explicit note copy with a new native identity; positioned notes require exact owned PDF/selection verification; `.apply(...)` commits atomically |
 | `sync_recovery_choices.prepare(observation, change_id, choice, request_id, *, seconds=30, cancelled=...)` | Explicit keep/add/replace/restore for supported metadata, unanchored notes and order; `.apply(...)` is idempotent |
 
 Saved decisions are checked against the exact source operation/fingerprint,
@@ -105,7 +105,7 @@ corrupt receipt fails without writes, including keep-current (which emits no
 research operation). Native research, outbox and decision receipt commit together;
 interruption rolls them back. Cancel/stale bindings never authorize another target.
 
-Original-bound/scientific content, arbitrary deletion, unproved parent changes, complete editable recovery UX, cloud recovery and installed-device
+Legacy/hashless positions, absent original artifacts, compound scientific content, arbitrary deletion, unproved parent changes, complete editable recovery UX, cloud recovery and installed-device
 acceptance remain open. A successful subset does not mark recovery complete.
 
 
@@ -119,7 +119,7 @@ acceptance remain open. A successful subset does not mark recovery complete.
 3. Browse 20 recorded changes per page. Select a row and press Enter or choose
    **Compare selected change**. Resize the list and both read-only content panes
    with the splitters. The current pane includes the target's pending edits.
-4. For an eligible unanchored v2 note, **Copy as new note** adds one distinct note
+4. For an eligible v2 note, **Copy as new note** adds one distinct note
    to the target's native outbox. Existing notes and the old workspace stay intact.
    No AI call is made. An already-enabled target sync controller may send it.
 5. Refresh after saving. Reopening the same review recognizes the recorded copy;
@@ -149,7 +149,7 @@ choosing a replacement instead preserves the original note identity.
 | Add old content | Creates a supported entity only when its target is absent |
 | Use old version | Writes a new native version over the reviewed current entity; earlier history remains |
 | Restore old content | Explicitly restores a known deleted entity, without silently restoring its children |
-| Copy as new note | Creates a distinct unanchored note, preserving the original note |
+| Copy as new note | Creates a distinct note, preserving the original note and any verified PDF position |
 
 Use/restore shows a confirmation dialog defaulting to **No**. Repeated activation
 while confirming starts no job. Changing selection during the dialog cancels the
@@ -204,3 +204,13 @@ Notes carrying page/anchor references stay pending for exact-original verificati
 no anchor is silently removed to make a copy succeed. A blocked copy still permits
 read-only side-by-side review. Corrupt receipts for an already recorded copy fail
 closed rather than being presented as a new unsupported action.
+
+
+Positioned note copies use the same `sync_recovery_note_copy.prepare(...)` API.
+The target must own the exact hash through an immutable original artifact or
+its desired primary PDF. Geometry and recorded selected words are verified;
+private commentary is not compared as a quotation. Verification repeats inside
+the write transaction and byte changes before commit roll back the whole copy.
+Only a successful committed receipt can skip later source availability checks.
+This extends copying, not metadata keep/replace/restore for anchored notes.
+[Requirements and evidence](testing/device-recovery-review-scenarios.md#exact-original-positioned-note-recovery-2026-11-14).

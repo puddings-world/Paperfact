@@ -317,3 +317,19 @@ selectors, the actual clipboard/pair/join journey and actual MainWindow startup
 consent. The earlier 29-case affected selection remains scoped evidence; these
 overlapping counts must not be added as distinct coverage. No conflicts occurred
 and no native credential store, private research or cloud service was accessed.
+
+
+### Recover a note tied to a PDF position
+
+In the old-device change review, select the separately restored workspace and
+compare the note. Copy becomes available when its parent mapping and exact
+original PDF can be verified there. Download the paper's offline files in that
+workspace first if its original is missing. The same copy button preserves page,
+selected passage and source hash; it does not move or replace existing notes.
+Confirmation verifies again, writes locally and queues destination sync. It makes
+no AI call. A repeated confirmation cannot create another copy.
+
+Page-only legacy notes with no recorded original hash stay pending for explicit
+source mapping; the current PDF is not guessed as a historical source. Missing
+original artifacts and compound scientific groups need separate recovery.
+See [behavior evidence and limits](testing/device-recovery-review-scenarios.md#exact-original-positioned-note-recovery-2026-11-14).

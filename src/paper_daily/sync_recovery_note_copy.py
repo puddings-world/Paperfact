@@ -1,7 +1,7 @@
 """Explicit copy-as-new note recovery through the native target transaction.
 
 Old operation envelopes are immutable review input, never re-keyed for replay.
-Other domains and original-bound notes remain pending for typed recovery actions.
+Positioned notes require owned exact-original bytes; compound recovery remains separate.
 """
 
 from __future__ import annotations
@@ -63,6 +63,72 @@ def _binding_in(conn, observed):
         raise ValueError("Recovery target native binding changed")
 
 
+def _original(conn, operation, check):
+    """Verify this note's exact owned PDF without activating or projecting it."""
+    payload = operation["payload"]
+    if payload.get("page") is None and payload.get("anchor") is None:
+        return None
+    anchor = payload.get("anchor")
+    if not anchor or not anchor.get("document_hash"):
+        raise ValueError("Original-bound notes require exact original verification before recovery")
+    from paper_daily import note_positions, sync_source_files
+    from paper_daily.sync_documents import (
+        _paper_current,
+        desired_document,
+        verify_document,
+    )
+    from paper_daily.workspace_service import _ReadOnlyStore
+
+    check()
+    paper, digest = payload["paper_id"], anchor["document_hash"]
+    # Immutable retained originals may differ from the currently active PDF.
+    source = sync_source_files.inspectable(conn, paper, digest)
+    if source is None:
+        document = desired_document(conn, paper)
+        if document is None or document["sha256"] != digest or not _paper_current(conn, document):
+            raise ValueError("The note's exact original is not owned by the recovery target")
+        row = conn.execute(
+            "SELECT workspace,blob_root FROM document_reader_paths WHERE id=1"
+        ).fetchone() if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='document_reader_paths'"
+        ).fetchone() else None
+        if row is None or row[0] != operation["workspace_id"]:
+            raise ValueError("The note's original has no matching native storage registration")
+        verified = verify_document(_ReadOnlyStore(row[1]), document)
+        source = verified._path
+    from paper_daily.sync_documents import _identity
+
+    version = _identity(source)
+    import hashlib
+
+    from paper_daily.sync_documents import MAX_PDF_BYTES
+
+    if not 0 < source.stat().st_size <= MAX_PDF_BYTES:
+        raise ValueError("The note's original exceeds its byte budget")
+    with source.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
+            raise ValueError("The note's original differs from its recorded hash")
+    import pymupdf
+
+    check()
+    with pymupdf.open(source) as pdf:
+        if pdf.needs_pass or pdf.page_count < 1:
+            raise ValueError("The note's original is not a readable PDF")
+        note_positions.verify(pdf, anchor)
+    check()
+    if _identity(source) != version:
+        raise ValueError("The note's original changed during verification")
+    return source, version
+
+
+def _original_current(proof):
+    if proof is not None:
+        from paper_daily.sync_documents import _identity
+
+        if _identity(proof[0]) != proof[1]:
+            raise ValueError("The note's original changed before recovery committed")
+
+
 @dataclass(frozen=True)
 class NoteCopy:
     observed: object = field(repr=False)
@@ -103,7 +169,9 @@ class NoteCopy:
                 if previous is None:
                     # Hold the SQLite writer lock before the final preview fence.
                     self.observed._check(check)
+                proof = _original(conn, operation, check) if previous is None else None
                 receipt = client.journal.apply_in(conn, operation, client.writer)
+                _original_current(proof)
                 self.observed.source._check(check)
                 _binding_in(conn, self.observed)
                 if tuple(generation._identity(path)) != self.observed.identity:
@@ -137,12 +205,11 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
     source = comparison["source"]["operation"]
     if source["version"] != 2 or source["entity_type"] != "note" or source["action"] != "put":
         raise ValueError("This action copies version-2 note puts only; keep other changes pending")
-    if source["payload"].get("page") is not None or source["payload"].get("anchor") is not None:
-        raise ValueError("Original-bound notes require exact original verification before recovery")
     blocked = set(comparison["blocking_reasons"]) - {
         "target_restore_requires_confirmation",
         "target_entity_lifetime_changed",
         "target_parent_lifetime_changed",
+        "note_original_verification_required",
     }
     if blocked:
         raise ValueError(
@@ -210,5 +277,6 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
             if operation["base_revision"] or operation["depends_on"] is not None:
                 raise ValueError("Recovery copy identity already exists")
             encoded = canonical_operation(operation)
+            _original(conn, operation, check)
     observed._check(check)
     return NoteCopy(observed, change_id, encoded, _sign(observed, change_id, encoded))

@@ -195,3 +195,53 @@ skill checks passed **41 cases in 95.29s**, **99.2s total** including privacy/Ru
 The Windows job was capped at two logical processors and 25% CPU; no historical
 full suite was run. Earlier peer/UI selections overlap this evidence. Native
 Mac/phone prompts and a deployed recovery authority remain unverified.
+
+
+## Exact-original positioned-note recovery (2026-11-14)
+
+The existing copy action now preserves a v2 rich note's body, kind, timestamp,
+page and complete anchor/selection. Preparation verifies native parent mapping,
+current target ownership, exact PDF SHA-256, geometry and recorded selected words.
+It reads either an immutable retained original or the desired primary PDF without
+creating reader projections or changing the active PDF. Private note commentary
+is never treated as a source quotation. Verification runs on the existing worker.
+
+Confirmation verifies the source inside the native transaction, then checks file
+mutation identity before committing research, receipt and outbox. A committed
+retry returns the original receipt, including after later PDF removal; it never
+re-creates or overwrites the copied note. Existing lifecycle guards are reused.
+
+`tests/test_sync_recovery_positioned_note.py` contains six behavior cases:
+
+| Requirement | Observable assertion |
+|---|---|
+| Exact passage and independent peer | Full payload reaches a separately joined native peer and its downloaded original; old source unchanged; retry creates one copy |
+| Changed/missing bytes and repair | Refuse without writes, repair exact bytes and retry once; already-committed retry needs no PDF |
+| Invented quotation | Mismatched selected words refuse without changing research |
+| Real desktop controls | Compare enables the positioned-note copy; rapid repeated clicks save one operation |
+| Primary PDF route | Copy works without a retained-original manifest and creates no reader projection |
+| Mutation during write | Research written inside the transaction rolls back with outbox/receipt when source bytes change |
+
+The initial six cases plus 17 existing note-copy cases passed: **23 in 121.82s
+pytest / 125.0s including privacy and Ruff**, Windows 25% CPU/two-core governor.
+The changed/missing case was subsequently extended with explicit pre-commit
+missing-file refusal; its follow-up result is recorded with the integration gate.
+No old assertion was deleted or weakened. Initial fixture failures reused an
+enrolled device name and attempted to mutate unencoded PDF text; corrected to
+actual independent enrollment and changed bytes.
+
+Limits: page-only/hashless legacy notes still require explicit source mapping;
+missing/unowned originals stay pending until available. This action does not
+recover an absent original artifact, silently switch a primary PDF, replay old
+operations or recover compound scientific groups. Physical devices, installed
+applications, hosted deployment and release acceptance remain separate gates.
+
+
+Final integration selection passed **26 cases in 19.15s pytest / 22.4s including
+privacy and Ruff**: all 14 curated critical journeys, explicit missing-original
+refusal/repair/retry, actual positioned-note desktop copy, the existing plain-note
+copy UI journey and nine usage-document cases. Same 25% CPU/two-core/300-second
+budget. Counts overlap the earlier 23-case selection and must not be summed.
+No exhaustive historical, release or physical-device pass is claimed. The change
+reuses the existing exact-source and native-transaction skill boundaries; no new
+global rule or duplicate skill was introduced.
