@@ -5381,3 +5381,22 @@ additional worktree was introduced.
   retaining every verifier step and withholding failed installers.
 - Diagnostic artifact contract: 1 passed / 19.8s total; critical 14 passed /
   13.5s total, privacy/Ruff green under the same bounded single-job runner.
+
+- Run 43634104252 succeeded on clean 3b3b550, macOS arm64, 0.5.0.dev:
+  2026-11-14T19:48:48Z to 19:53:07Z (4m19s). Source critical and all frozen
+  stages passed: reader, duplicate import, exact four-PDF export, three-original/
+  five-quotation audit, CLI/MCP retries and native Launch Services foreground/close.
+  Synthetic app-fault.log is empty. DMG artifact 14129980205; fixture 14129267960.
+- Two preceding -11 reader crashes remain unexplained. This passing run changes
+  the evidence to intermittent, not fixed. Do not promote Cocoa as a proven crash
+  remedy or release a stable update from one pass. Existing diagnostics/harvest
+  patterns cover the boundary; no new global skill is justified. Installed Mac
+  input/upgrade/corpus UI, Windows/phone and private HTTPS/device gates stay open.
+- GitHub build-macos archive: 278993197 bytes, archive SHA-256
+  8f6f79dee001c5e78955e3cee8be70f46d12589d3f882732875adfc419bdcd1a.
+  This is GitHub artifact metadata, not a locally verified DMG digest. Local
+  transfer remained incomplete and was stopped to bound this delivery cycle;
+  no app/test process or remote artifact was stopped/deleted. Use the run artifacts.
+- Evidence-only docs gate: 58 passed in 2.09s / 5.1s total, privacy/Ruff and
+  whitespace passed. Reused unchanged critical/native evidence; no new test
+  selectors, worktrees, deployment or stable release.

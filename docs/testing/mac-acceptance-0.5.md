@@ -1,6 +1,14 @@
 # v0.5 Apple Silicon acceptance
 
-Status: procedure prepared, physical Mac execution not yet recorded.
+Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
+available from [run 43634104252](https://github.com/puddings-world/Paperfact/actions/runs/43634104252),
+clean commit `3b3b550008c262d740932c1e0328d7c4fc7cc8e0` (`0.5.0.dev`).
+Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
+`provenance-macos` for source identity and the frozen acceptance report.
+CI passed reader/import/export, original audit and Launch Services activation/close.
+Two prior candidate runs crashed in reader startup (-11); their cause is unresolved.
+Treat this as an experimental test candidate, not a stable update or evidence that
+hosted synchronization is deployed. Keep the daily app and data unchanged.
 Use an exact candidate build shared with the Windows tester. A published 0.4.x
 app cannot validate unshipped 0.5 synchronization. `0.5.0.dev` alone is not a
 unique build identity: record the commit and candidate artifact SHA-256.

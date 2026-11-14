@@ -87,7 +87,11 @@ The release workflow runs the common `release` selection once, on the Windows
 tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
 Manual candidate builds use `critical`, not the larger release selection. All
 build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
-This wiring is not evidence that Actions or installed Mac/Linux acceptance passed.
+Apple Silicon candidate [run 43634104252](https://github.com/puddings-world/Paperfact/actions/runs/43634104252)
+passed critical and frozen acceptance for clean `3b3b550`, including native
+foreground/close (4m19s total). Two earlier candidates exited -11 opening the
+reader; the cause is unresolved, so this single pass is not stability acceptance.
+Installed Mac/Linux, upgrade and physical two-device/phone checks remain open.
 
 | Platform boundary | Additional observation required |
 |---|---|
