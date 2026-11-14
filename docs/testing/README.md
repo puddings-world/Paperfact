@@ -87,13 +87,16 @@ The release workflow runs the common `release` selection once, on the Windows
 tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
 Manual candidate builds use `critical`, not the larger release selection. All
 build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
-Apple Silicon candidate [run 43635889503](https://github.com/puddings-world/Paperfact/actions/runs/43635889503)
-passed critical and frozen acceptance for clean `e753ad3`, including three consecutive
-reader launches and native foreground/close (5m07s total). This follows an actual
-second-launch -11 reproduction and removal of the remaining global file-open
-filter. OS file events are verified in a fresh Qt process; WebEngine internal
-receivers are no longer exposed to that filter. No extra test selectors were added.
-Installed/long-running Mac/Linux, upgrade and two-device/phone checks remain open.
+Common candidate [run 43640792668](https://github.com/puddings-world/Paperfact/actions/runs/43640792668)
+passed critical and frozen acceptance on Windows/Mac/Linux for clean `4594626`:
+14 critical cases per OS; four PDFs preserved; three-original/five-quote audit;
+CLI/MCP retry/restart. Mac also passed three reader starts and native foreground/close;
+Linux passed AppImage CLI/MCP. Native jobs took 5m38s / 3m46s / 2m00s respectively.
+Windows mobile-artifact tests passed 5/5 with zero failures under fail-fast Bash.
+Earlier Linux missing-key startup and Windows hidden-test failures are preserved
+in the dated ledger, alongside the observed fixes. No cases/selectors were added.
+Installed upgrades, long-running use, own-provider login, hosted sync and physical
+phone/two-device journeys remain open; this is not a public release pass.
 
 | Platform boundary | Additional observation required |
 |---|---|

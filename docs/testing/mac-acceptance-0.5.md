@@ -1,8 +1,9 @@
 # v0.5 Apple Silicon acceptance
 
 Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43635889503](https://github.com/puddings-world/Paperfact/actions/runs/43635889503),
-clean commit `e753ad3fdbcc8f6d947eaf43e2a239ce6a793acc` (`0.5.0.dev`).
+available from [run 43640792668](https://github.com/puddings-world/Paperfact/actions/runs/43640792668),
+clean commit `4594626421a925c8c8e2fec1ba8d89239fea9ee8` (`0.5.0.dev`).
+The same run includes matching Windows/Linux installers and verified mobile web assets.
 Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
 `provenance-macos` for source identity and the frozen acceptance report.
 CI passed three consecutive reader launches, import/export, original audit and

@@ -5568,3 +5568,29 @@ additional worktree was introduced.
   upgrade/phone/hosted gates remain open; .dev candidates do not auto-update.
 - Documentation gate: 58 passed in 1.92s / 5.1s total, privacy/Ruff and
   whitespace green. No new test cases/selectors or owner database/account use.
+- Final run 43640792668, clean 4594626421a925c8c8e2fec1ba8d89239fea9ee8,
+  0.5.0.dev: actual Windows/Linux/Mac frozen JSON all passed. Windows critical
+  14 in 5.36s; Linux 14 in 2.72s; Mac 14 in 3.23s (5 warnings). Not 42 unique
+  journeys. Windows Node explicitly tests=5/pass=5/fail=0, after the fail-fast
+  repair; no accepting a green shell/job without reading its earlier outcomes.
+- UTC 2026-11-14 native jobs: Windows 21:04:00-21:09:38 (5m38s), Mac
+  21:04:00-21:07:46 (3m46s), Linux 21:03:58-21:05:58 (2m00s). Each preserves
+  four PDFs and audits three originals/five quotations; 38 MCP tools plus
+  restart/retry. Mac: three reader launches and native foreground/close. Linux:
+  actual AppImage CLI/MCP retry/restart. Reports/index retained under ignored
+  build/candidate-43640792668; no large installer download/recheck ritual.
+- Artifacts: build-windows 14131664054 (184190567 bytes), build-macos
+  14131758096 (278933034), build-linux 14131847288 (282127022); fixture-macos
+  14131892595; mobile-web 14131782507. GitHub artifact ZIP SHA-256 respectively:
+  6ab20aff758247909e95f899d24cdd09bffd0d1ec2b95f08b9cad44f916611b6,
+  deaffa77f2fe07df4b72a620b097a273f7f9b0712cdd51a4c82df4f66a46253d,
+  3221f6f7dcb4610dcfe907715e880ad857f8b755daac6f065822cefdf44ab308.
+  These are archive metadata digests, not locally verified installer payload hashes.
+- Verified checkpoint/harvest: actual native stages, exact test counts and
+  artifact identities beat aggregate green status. Keep the shell/Windows-path
+  evidence and limits in existing project docs; no new global skill or hooks.
+  Curated release selection, installed upgrade/real-provider/physical-device/
+  private-hosted gates remain open. No tag, release, cloud cost or owner-data use.
+- Final evidence-only documentation gate: 58 passed in 1.87s / 5.6s total;
+  privacy/Ruff/whitespace green. Reuse exact native/critical evidence for
+  candidate 4594626; no further native rebuild after documentation-only edits.

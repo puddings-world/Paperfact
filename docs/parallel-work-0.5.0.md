@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Current-source Windows/Mac/Linux candidate delivery; Linux startup/display repairs verified; Windows mobile-artifact failure propagation and canonical TEMP fixture repair. Preserve native reports and failed-run evidence; remaining recovery/mapping, hosted identity and physical-device gates stay in current status. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Common candidate `4594626` passed actual native Windows/Mac/Linux reports and Windows mobile artifact 5/5 in run 43640792668. Startup/display and hidden-failure repairs verified; matching installers/provenance/synthetic material available. Remaining recovery/mapping, hosted identity and physical-device gates stay in current status. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task
