@@ -597,3 +597,19 @@ This is another local adapter, not cross-project reuse or installed-device proof
   rollback cases pass. Shared input class remains a pure legacy-compatible alias.
 - Limits: known imports only, one project and local fixtures; no global promotion,
   provider calls, owner data, full in-place adoption or installed/hosted/device proof.
+
+
+## 2026-11-15: acknowledged history after an interrupted pull
+
+Status: validated-local in Paperfact; not hosted or multi-project evidence.
+A received-only pre-upload guard missed accepted pushes when the following pull
+failed. The local cursor could remain zero while its journal already knew a
+remote sequence. A regression first failed with no SyncHistoryUnavailable raised.
+Desktop now verifies both received frontier and a newer acknowledged operation;
+mobile compares its complete retained acknowledgment. Missing/changed history
+preserves exact local state and suppresses preparation/push on repeated attempts;
+matching history resumes normally. Python's existing receipt stores only sequence
+and operation, not the old outcome/head: no stronger proof is claimed.
+The existing regression selector covers three checkpoint states and three remote
+outcomes, with mobile engine/shell checks. No authority generation negotiation,
+hosted rollback or physical-device guarantee follows from these fixtures.

@@ -5892,3 +5892,41 @@ additional worktree was introduced.
 - Documentation checkpoint: bounded docs 58 passed in 1.87s / 5.0s total;
   default critical 14 passed in 8.06s / 11.3s total. Privacy/Ruff and
   CRLF-aware whitespace checks passed. No exhaustive rerun or native rebuild.
+
+
+## 2026-11-15: check acknowledged history before outbound work
+
+- Previous turn made progress: common candidate artifacts verified, existing Mac
+  acceptance/readiness/status updated, checkpoint 48e3a98 integrated and pushed.
+- Found a remaining received-only history gap: successful push followed by failed
+  pull retains server_revision even at cursor zero. A following pass could send
+  new work without checking that known remote history. Actual regression failed
+  before the implementation (`DID NOT RAISE SyncHistoryUnavailable`). An initial
+  fixture edit did not apply because of mixed line endings; inspected source and
+  corrected the fixture before accepting its failure as evidence.
+- Desktop now probes received cursor and a newer highest acknowledgment, closing
+  its read-only transaction before requests. Bounded saved operation comparison
+  is explicit: older journals do not retain full acknowledgment outcome/head.
+  Mobile checks both full retained observations, before outbox or position work.
+  No cursor reset, discarded work, automatic replay or new transport/schema.
+- Expanded the existing test selector to received / acknowledged-only / both,
+  each with missing/different/matching service history. Eleven Python cases
+  (including HTTP and desktop pause) passed in 3.67s / 9.1s total. Engine plus
+  cache upgrade: 13 passed, zero failed/skipped, 0.515s governed execution.
+  Earlier normal acknowledgment failed because validate_event returns canonical
+  JSON, not a dict; corrected the implementation without loosening assertions.
+- Static shell v25 replaces v24 while retaining research stores. Existing daily
+  critical remains 14 and curated release remains 37 selectors. No exhaustive
+  run, paid calls, owner research, native rebuild, publishing or deployment.
+  Common installed-test packages remain b4ec451 and predate this refinement.
+- Full authority-generation negotiation/reset-during-pass protection, hosted
+  recovery, complete mapping and physical device gates remain open.
+- Compatibility: three existing causal-parent/older-page/lost-response tests
+  passed in 0.65s / 3.7s total. Actual JS-to-Python HTTP service journey passed
+  in 1.828s. v25 local static build and verify passed: 50 files, 3,913,134 bytes,
+  artifact ID `18c82faea1ac51f4d76179eb02f6808357b5e6a58127a2234ae107dfcc09aae2`.
+  This is an ignored local artifact, not a hosted deployment.
+- Docs 58 passed in 2.28s / 5.7s total; default critical 14 passed in 4.72s /
+  8.1s total. Privacy/Ruff/CRLF-aware whitespace passed; skill copies synchronized
+  without conflict. Existing mobile probe-order assertions remain exact, extended
+  to the two-proof case rather than weakened to mere handler invocation.

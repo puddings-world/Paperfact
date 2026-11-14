@@ -12,6 +12,12 @@ retained-history guards and known agent-import preparation. Follow the
 isolated test workspace. Installed old-release upgrade, physical input/two-device,
 real-provider, hosted service and phone acceptance remain open.
 
+Source now also checks acknowledged writes newer than the received cursor before
+upload, covering a successful push followed by an interrupted pull. Python/mobile
+fixture checks pass; the b4ec451 native packages above predate this refinement.
+The v25 static shell is not a deployed PWA. Full authority-generation negotiation
+and protection against a service reset during a pass remain open.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

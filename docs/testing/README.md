@@ -444,12 +444,13 @@ missing/different last-received events prevent attachment preparation, upload an
 acknowledgment, while matching history permits normal sync. It also checks the
 closed authenticated HTTP error and automatic desktop pause without private error
 text or repeated background requests. The release map adds one selector for the
-three short history cases; daily critical stays unchanged.
+nine short history combinations (received, acknowledged with cursor zero, or both;
+missing, different or matching); daily critical stays unchanged.
 
 The matching mobile regression lives in the existing `engine.test.mjs` release
 selection and checks both refusal and unchanged offline state. Transport/shell
-checks retain auth/blob error separation and preserve research storage when v24
-static code replaces v23. These are scoped fixtures, not installed/cloud proof.
+checks retain auth/blob error separation and preserve research storage when v25
+static code replaces v24. These are scoped fixtures, not installed/cloud proof.
 
 
 ### Prepare agent-created research without replaying its requests

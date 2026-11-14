@@ -308,20 +308,35 @@ async function deleteCurrent(engine, id, options = {}) {
 }
 
 test('retained history is verified before mobile upload and preserves offline work on failure',async()=>{
-  for(const mode of ['missing','different','matching']) {
+  for(const checkpoint of ['received','acknowledged']) for(const mode of ['missing','different','matching']) {
     const transport=await demoTransport(),store=new MemoryStore('demo-workspace','demo-phone');
     const engine=new Engine(store,{transport});
     await engine.connect('fixture-token');await engine.sync();
+    if(checkpoint==='acknowledged') {
+      await saveCurrent(engine,'acknowledged-note',PAPER,'Accepted before disconnection');
+      const cursor=(await store.read()).cursor,pull=transport.pull.bind(transport);
+      transport.pull=async(...args)=>{
+        if(args[1]===cursor)throw new Error('Disconnected after acknowledgment');
+        return pull(...args);
+      };
+      await assert.rejects(engine.sync(),/Disconnected after acknowledgment/);
+      transport.pull=pull;
+      assert.equal((await store.read()).cursor,cursor);
+      assert((await store.read()).outbox.some(item=>item.acknowledged));
+    }
     await engine.saveNote('offline-note',PAPER,'Keep my offline research',{
       observed:await engine.observeNote('offline-note',PAPER),
     });
     const before=await store.read(),pull=transport.pull.bind(transport),checks=[];
+    const sequence=Math.max(before.cursor,...before.outbox.map(item=>item.acknowledged?.sequence??0));
+    const probes=before.cursor?[[before.cursor-1,1]]:[];
+    if(sequence>before.cursor)probes.push([sequence-1,1]);
     transport.calls.length=0;
     transport.pull=async(...args)=>{
       checks.push([args[1],args[2]]);
       const events=await pull(...args);
       if(mode==='missing')return [];
-      if(mode==='different' && args[1]===before.cursor-1){
+      if(mode==='different' && args[1]===sequence-1){
         events[0].operation.device_id='different-author';
         if(events[0].outcome==='accepted')events[0].head.operation=structuredClone(events[0].operation);
       }
@@ -330,7 +345,7 @@ test('retained history is verified before mobile upload and preserves offline wo
     if(mode==='matching') {
       await engine.sync();
       assert.equal((await store.read()).outbox.length,0);
-      assert.deepEqual(checks[0],[before.cursor-1,1]);
+      assert.deepEqual(checks.slice(0,probes.length),probes);
       assert.equal(transport.calls[0][0],'pull');
     } else {
       for(let repeat=0;repeat<2;repeat++) {
@@ -338,7 +353,8 @@ test('retained history is verified before mobile upload and preserves offline wo
         assert.deepEqual(await store.read(),before);
       }
       assert(!transport.calls.some(call=>call[0]==='push'));
-      assert.deepEqual(checks,[[before.cursor-1,1],[before.cursor-1,1]]);
+      const expected=mode==='missing'?probes.slice(0,1):probes;
+      assert.deepEqual(checks,[...expected,...expected]);
     }
   }
 });

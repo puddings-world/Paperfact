@@ -1662,7 +1662,7 @@ class SyncClient:
         return applied + self._materialize_orders(conn, cursor)
 
     def verify_frontier(self, transport, token):
-        """Read-only proof of the last retained event, before sending work or bytes."""
+        """Prove received and newer acknowledged history before sending work."""
         with closing(self.journal._connect()) as conn:
             conn.execute("BEGIN")
             self.journal._binding(conn)
@@ -1671,22 +1671,41 @@ class SyncClient:
                 "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
                 "FROM paperfact_sync_inbox WHERE sequence=?", (2 * MAX_BYTES + 4096, cursor),
             ).fetchone() if cursor else None
-        if not cursor:
-            return
+            acknowledgments = conn.execute(
+                "SELECT server_revision,CASE WHEN length(CAST(envelope AS BLOB))<=? "
+                "THEN envelope END FROM paperfact_sync_operations "
+                "WHERE server_revision IS NOT NULL ORDER BY server_revision DESC LIMIT 2",
+                (MAX_BYTES,),
+            ).fetchall()
         message = "Shared sync history could not be verified; preserve this workspace for recovery"
-        if row is None or row[0] is None:
-            raise SyncHistoryUnavailable(message)
-        events = transport.pull(token, after=cursor - 1, limit=1)
-        try:
-            matches = (isinstance(events, list) and len(events) == 1
-                and events[0].get("sequence") == cursor
-                and validate_event(events[0], self.journal.workspace_id) == validate_event(
-                    json.loads(row[0]), self.journal.workspace_id,
-                ))
-        except (ValueError, TypeError, AttributeError):
-            matches = False
-        if not matches:
-            raise SyncHistoryUnavailable(message)
+        proofs = []
+        if cursor:
+            if row is None or row[0] is None:
+                raise SyncHistoryUnavailable(message)
+            proofs.append((cursor, row[0], False))
+        if acknowledgments:
+            revision, envelope = acknowledgments[0]
+            if (type(revision) is not int or revision < 1 or envelope is None
+                or len(acknowledgments) > 1 and acknowledgments[1][0] == revision):
+                raise SyncHistoryUnavailable(message)
+            if revision > cursor:
+                proofs.append((revision, envelope, True))
+        for sequence, saved, operation_only in proofs:
+            events = transport.pull(token, after=sequence - 1, limit=1)
+            try:
+                matches = (isinstance(events, list) and len(events) == 1
+                    and events[0].get("sequence") == sequence)
+                if matches:
+                    event = validate_event(events[0], self.journal.workspace_id)
+                    matches = (canonical_operation(events[0]["operation"]) == canonical_operation(
+                        json.loads(saved),
+                    ) if operation_only else event == validate_event(
+                        json.loads(saved), self.journal.workspace_id,
+                    ))
+            except (ValueError, TypeError, AttributeError):
+                matches = False
+            if not matches:
+                raise SyncHistoryUnavailable(message)
 
     def sync_once(self, transport, token, *, limit=100, prepare_push=None):
         """One bounded pass, with no timer, hidden retries, login or network policy."""

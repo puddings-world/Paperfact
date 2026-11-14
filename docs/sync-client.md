@@ -304,8 +304,16 @@ For a nonzero cursor, `verify_frontier(transport, token)` requests exactly the l
 received event (`pull(after=cursor-1, limit=1)`) and compares its complete canonical
 event with the bounded retained local inbox record. It opens a read-only local
 transaction and closes it before the request. `sync_once` performs this before
-`prepare_push`, attachment bytes, operations or acknowledgments. Cursor zero needs
-no historical probe, so initial bootstrap retains its existing behavior.
+`prepare_push`, attachment bytes, operations or acknowledgments. It also checks the
+highest locally acknowledged sequence when that exceeds the received cursor:
+a successful push followed by a failed pull is still known remote history.
+The desktop journal retains the operation and sequence, so this additional probe
+validates the complete remote event and compares its operation with the bounded
+saved envelope. It cannot retrospectively prove the original acknowledgment's
+outcome/head, which older journals did not retain. Mobile retains and compares
+the full acknowledged event. Both received and newer acknowledged proofs must
+pass before upload. Cursor zero skips probing only when no acknowledgment exists;
+first bootstrap retains its existing behavior.
 
 Missing, replaced or unprovable frontier history raises
 `sync_journal.SyncHistoryUnavailable` (a `ValueError` subclass). Nothing is dropped,
@@ -315,7 +323,7 @@ operator. Repeated retries cannot bypass the check. The desktop pauses automatic
 sync and displays preservation guidance; mobile applies the same event check
 before outbox upload or reading-position reconciliation.
 
-This proves one retained frontier at the observation time, not a cryptographic
+This proves the selected received/acknowledged observations at request time, not a cryptographic
 commitment to all history or protection against a server reset during the pass.
 Complete authority-generation negotiation/rollback acceptance remains a release
 gate. Use the reviewed authority recovery/new-device flow; never reset the cursor,

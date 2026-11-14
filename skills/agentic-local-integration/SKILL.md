@@ -26,7 +26,11 @@ buttons serialize through a server just to share behavior.
 - When extending local operations into replication, distinguish remote acceptance
   from local application. An acknowledged write not yet received in a contiguous
   event stream remains a causal predecessor; older pages must not replace its newer
-  local content. Commit received research, history and cursor together. This is a
+  local content. Before new uploads, verify newer acknowledgments as well as the
+  received cursor: a successful push followed by a failed pull is retained knowledge
+  of remote history even at cursor zero. Match only the evidence actually retained;
+  operation/sequence receipts cannot prove an unrecorded outcome or full server
+  history. This does not close service-reset races during a pass. Commit received research, history and cursor together. This is a
   replication boundary, not an extra protocol required for ordinary local CLI calls.
 - A compound operation needs one transaction owner. Pass its existing connection
   through typed writes, outbox capture and action receipts; an independently committed

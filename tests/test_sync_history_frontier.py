@@ -25,14 +25,35 @@ def snapshot(path):
         return list(conn.iterdump())
 
 
+@pytest.mark.parametrize("checkpoint", ["received", "acknowledged", "received-and-acknowledged"])
 @pytest.mark.parametrize("mode", ["missing", "different", "matching"])
-def test_frontier_is_checked_before_prepare_push_and_acknowledgment(pair, mode):
+def test_frontier_is_checked_before_prepare_push_and_acknowledgment(pair, mode, checkpoint):
     service, client, _, token, _ = pair
     edit(client, "Accepted history")
-    client.sync_once(service, token)
+    if checkpoint == "received-and-acknowledged":
+        client.sync_once(service, token)
+        edit(client, "Acknowledged newer history", identity="newer-accepted")
+    received_cursor = client.status()["cursor"]
+    if checkpoint != "received":
+        class InterruptedPull:
+            push = service.push
+
+            def pull(self, token, after=0, limit=100):
+                if after == received_cursor:
+                    raise ConnectionError("Disconnected after acknowledgment")
+                return service.pull(token, after, limit)
+
+        with pytest.raises(ConnectionError):
+            client.sync_once(InterruptedPull(), token)
+        assert client.status()["cursor"] == received_cursor
+    else:
+        client.sync_once(service, token)
     edit(client, "Offline reading note", identity="pending-note")
     before = snapshot(client.journal.path)
-    cursor, calls = client.status()["cursor"], []
+    cursor, calls = len(service.pull(token)), []
+    probes = [("pull", value - 1, 1) for value in dict.fromkeys(
+        value for value in (client.status()["cursor"], cursor) if value
+    )]
 
     class Transport:
         def pull(self, token, after=0, limit=100):
@@ -56,13 +77,13 @@ def test_frontier_is_checked_before_prepare_push_and_acknowledgment(pair, mode):
 
     if mode == "matching":
         assert client.sync_once(Transport(), token, prepare_push=prepare)["pending"] == 0
-        assert calls[:3] == [("pull", cursor - 1, 1), ("prepare",), ("push",)]
+        assert calls[:len(probes) + 2] == probes + [("prepare",), ("push",)]
     else:
         for _ in range(2):
             with pytest.raises(SyncHistoryUnavailable):
                 client.sync_once(Transport(), token, prepare_push=prepare)
             assert snapshot(client.journal.path) == before
-        assert all(call == ("pull", cursor - 1, 1) for call in calls)
+        assert calls == (probes[:1] if mode == "missing" else probes) * 2
         assert len(service.pull(token)) == cursor
 
 
