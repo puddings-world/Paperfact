@@ -80,11 +80,36 @@ def _alias_counts(conn, names):
     counts = dict.fromkeys(names, 0)
     for identity in _matching(conn, "SELECT id FROM papers WHERE id IN ({})", counts):
         counts[identity] += 1
-    for (identity,) in conn.execute("SELECT id FROM papers WHERE id GLOB '*[^A-Za-z0-9._-]*'"):
-        name = _safe_name(identity)
+    for name in _renamed(conn):
         if name in counts:
             counts[name] += 1
     return counts
+
+
+def _renamed(conn):
+    """The PDF file name of every paper whose id is not already one.
+
+    In a workspace built from conference rosters that is every paper: tens of
+    thousands of ids, read on each showing of a long list. Fetched a row at a time
+    and mapped one by one this was most of a second; SQLite hands them over as one
+    string and one substitution maps them all.
+    """
+    total, joined = conn.execute(
+        "SELECT count(id), group_concat(id, char(10)) FROM papers"
+    ).fetchone()
+    if not total:
+        return []
+    identities = joined.split("\n")
+    if len(identities) != total:
+        # An id holding a line break cannot be told apart in the joined string.
+        return [
+            _safe_name(identity)
+            for (identity,) in conn.execute(
+                "SELECT id FROM papers WHERE id GLOB '*[^A-Za-z0-9._-]*'"
+            )
+        ]
+    names = re.sub(r"[^A-Za-z0-9._\n-]", "_", joined).split("\n")
+    return [name for identity, name in zip(identities, names, strict=True) if name != identity]
 
 
 def _tables(conn):

@@ -386,6 +386,30 @@ def test_file_name_collisions_are_counted_without_a_table_scan_per_paper():
     assert len(statements) <= len(names) // 500 + 2
 
 
+@pytest.mark.parametrize("odd", [[], ["line\nbreak:1", "line_break_1"], ["caf\u00e9:1", "tab\t:2"]])
+def test_every_renamed_id_is_found_whatever_characters_the_ids_hold(odd):
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
+    ids = ["a_b", "a:b", "a/b", "plain", "x:y", *odd]
+    ids += [f"ICML:2020:s{n}" for n in range(60)]
+    conn.executemany("INSERT INTO papers VALUES (?)", [(i,) for i in ids])
+    expected = sorted(
+        reader_module._safe_name(i) for i in ids if reader_module._safe_name(i) != i
+    )
+    assert sorted(reader_module._renamed(conn)) == expected
+    names = {reader_module._safe_name(i) for i in ids}
+    assert len(names) > reader_module.FEW_NAMES
+    assert reader_module._alias_counts(conn, names) == {
+        name: sum(reader_module._safe_name(i) == name for i in ids) for name in names
+    }
+
+
+def test_no_papers_at_all_rename_nothing():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
+    assert reader_module._renamed(conn) == []
+
+
 def test_a_few_names_are_counted_the_same_way_one_by_one():
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE papers (id TEXT PRIMARY KEY)")
