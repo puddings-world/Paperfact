@@ -32,7 +32,9 @@ per-check progress and categorical failure/timeout/interruption, not just succes
 Only `status: passed`, `passed: true` and exit code 0 accept that local workflow;
 `running`, failed, interrupted or missing reports do not. Each retry uses a new
 output directory. The existing always-uploaded provenance artifact includes this
-content-minimized report; raw fixture logs stay a separate artifact. See
+content-minimized report; raw fixture logs stay a separate artifact. The fixed
+synthetic recipient's `app-fault.log` is included there for native crash diagnosis;
+no whole workspace or account home is uploaded. See
 [Mac acceptance](testing/mac-acceptance-0.5.md) for the schema and sharing limits.
 Mark any eventual beta release
 **pre-release** so existing installations do not treat it as stable.

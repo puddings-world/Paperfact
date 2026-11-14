@@ -134,7 +134,10 @@ jobs:
         if: always()
         with:
           name: acceptance-${{ matrix.name }}
-          path: build/frozen-acceptance/*.log
+          # Fixed synthetic recipient only; never upload an entire workspace.
+          path: |
+            build/frozen-acceptance/*.log
+            build/frozen-acceptance/recipient/workspace/app-fault.log
 
       - uses: actions/upload-artifact@v4
         if: always()

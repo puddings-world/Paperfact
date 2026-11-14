@@ -5374,3 +5374,10 @@ additional worktree was introduced.
 - Cocoa selection/privacy and verifier orchestration: 12 passed in 1.08s /
   4.2s total. Daily critical: 14 passed in 7.34s / 10.6s total. Privacy/Ruff
   and whitespace passed. Native result remains pending the next CI run.
+- Run 43633506467 (d6d05f2) also failed at reader with -11 under Cocoa;
+  backend selection alone is ruled out. Do not claim a native fix. Existing
+  faulthandler writes to the synthetic recipient workspace, outside the previous
+  artifact glob. Include only that fixed app-fault.log in raw fixture evidence,
+  retaining every verifier step and withholding failed installers.
+- Diagnostic artifact contract: 1 passed / 19.8s total; critical 14 passed /
+  13.5s total, privacy/Ruff green under the same bounded single-job runner.

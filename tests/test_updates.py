@@ -204,3 +204,5 @@ def test_the_build_names_match_what_the_release_workflow_uploads():
     )[0]
     assert "path: build/frozen-acceptance/original.zip" in fixture
     assert "if-no-files-found: error" in fixture
+    assert "build/frozen-acceptance/recipient/workspace/app-fault.log" in workflow
+    assert "path: build/frozen-acceptance/recipient/workspace/" not in workflow
