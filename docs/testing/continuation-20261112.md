@@ -5850,3 +5850,45 @@ additional worktree was introduced.
   scripts/sync_skills.py --write without conflicts; no global installation.
   Initial Ruff findings stopped before pytest and were fixed without weakening
   behavior assertions. Release map now has 37 selectors, not a collected count.
+
+
+## 2026-11-15: common native candidate b4ec451
+
+- Previous continuation was a verified wait: run 43652950917 was confirmed live.
+  Observed that same run to completion; no duplicate dispatch or local broad test.
+- [Run 43652950917](https://github.com/puddings-world/Paperfact/actions/runs/43652950917)
+  built clean `b4ec451505c6117837969600469962d89dac9d8b`, `0.5.0.dev` on all three
+  desktop platforms. Windows 6m19s, Mac arm64 4m33s, Linux x86-64 2m00s.
+  The tag-only draft job was skipped as designed; no release or deployment.
+- Inspected actual packaged-acceptance.v1 JSON, not just green job conclusions.
+  Each reports passed, clean source identity, four preserved research files,
+  import/repeated import, reader, export, original audit, credential isolation
+  and CLI/MCP (38 tools, retry and restart recovery).
+- Critical: Windows 14 passed in 3.85s; Mac 14 passed with five warnings in
+  4.96s; Linux 14 passed in 2.00s. These are the same 14 journeys on each OS,
+  not 42 distinct requirements. Privacy/Ruff passed. Windows actual mobile
+  artifact TAP: tests 5, pass 5, fail 0. Historical exhaustive and curated
+  release selections were not run for this manual candidate.
+- Windows exact installer acceptance: installed/reinstalled/uninstalled and
+  research_preserved all true; installed reader/CLI/MCP passed. Setup payload
+  SHA-256 `63a5ea17c004618f6e4e5e7f94dd3702891e0dff27e4195adb7db28b819f67eb`.
+  Acceptance mode is isolated; older-release upgrade and registry/shortcuts not
+  checked. Mac three consecutive reader launches and Launch Services foreground
+  passed. Linux AppImage CLI/MCP/retry/restart passed.
+- GitHub artifact archive identities (not contained payload hashes):
+  Windows 14137201591, SHA-256 `fd90aa1c3c5843be2bd6feb874adca13e638912b4d5c3ff4eb6f97dbc3bbbf65`;
+  Mac 14137420312, `55c77273fa5670a5bf6a202617e9af137509ab94b73f6f9a93d178eac2ab1481`;
+  Linux 14136339737, `7f907f17670df327998bffda0b4f549141206209b10c7a9346baf1fa04f4d954`.
+  Mac synthetic fixture 14136663999; mobile static artifact 14136916281.
+  Exact reports/index retained in ignored `build/candidate-43652950917/`.
+- Updated existing status/readiness/board/Mac acceptance entry only. Candidate
+  source is still b4ec451; this documentation checkpoint does not require another
+  native build. No new reusable pattern beyond existing support/evidence rules;
+  no skill copy or global rule change.
+- Physical M01-M21, real provider login, complete writer/recovery mapping,
+  authority generation/rollback protocol, live HTTPS issuance, hosted backup
+  recovery and physical-phone durability remain open. Native packaging does not
+  prove them. Deployment inputs remain unconfirmed; no cloud resources created.
+- Documentation checkpoint: bounded docs 58 passed in 1.87s / 5.0s total;
+  default critical 14 passed in 8.06s / 11.3s total. Privacy/Ruff and
+  CRLF-aware whitespace checks passed. No exhaustive rerun or native rebuild.
