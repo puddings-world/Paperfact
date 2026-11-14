@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from paper_daily import (
     ai_choices,
+    audit_lineage,
     lineage_history_originals,
     lineage_lifecycle,
     lineage_sets,
@@ -130,6 +131,33 @@ TEXT["en"].update(
 TEXT["zh-TW"].update(
     open_source="\u67e5\u770b\u5c0d\u61c9\u539f\u6587",
     source_unavailable="\u6b64\u88dd\u7f6e\u5c1a\u7121\u9019\u500b\u539f\u6587\u7248\u672c\uff0c\u8acb\u4e0b\u8f09\u5f8c\u91cd\u8a66\u3002",
+)
+
+TEXT["en"].update(
+    audit="Check all originals",
+    audit_work="Checking originals: {done} / {total}",
+    audit_ready=("Checked snapshot: originals {checked}/{total}; "
+                 "quotes located {located}/{quotes}. "
+                 "Text location only; scientific support is not checked."),
+    audit_failed="Could not check this corpus. Research is unchanged; refresh or retry.",
+    audit_unavailable="Original unavailable; this quotation was not checked.",
+    audit_review="Quotation needs inspection in its recorded original.",
+    audit_help="Check this saved corpus offline. No AI, downloads, edits or original activation.",
+)
+TEXT["zh-TW"].update(
+    audit="\u6838\u5c0d\u6240\u6709\u539f\u6587",
+    audit_work="\u6838\u5c0d\u539f\u6587\uff1a{done} / {total}",
+    audit_ready=("\u672c\u6b21\u6838\u5c0d\uff1a\u539f\u6587 {checked}/{total}\uff1b"
+                 "\u627e\u5230\u5f15\u7528 {located}/{quotes}\u3002"
+                 "\u50c5\u6838\u5c0d\u6587\u5b57\u4f4d\u7f6e\uff0c"
+                 "\u4e0d\u4ee3\u8868\u8ad6\u9ede\u5df2\u7372\u5f97\u652f\u6301\u3002"),
+    audit_failed="\u7121\u6cd5\u6838\u5c0d\u6b64\u7814\u7a76\u8108\u7d61\u3002"
+                 "\u5167\u5bb9\u672a\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u8b80\u53d6\u6216\u91cd\u8a66\u3002",
+    audit_unavailable="\u539f\u6587\u4e0d\u53ef\u7528\uff0c\u6b64\u5f15\u7528\u5c1a\u672a\u6838\u5c0d\u3002",
+    audit_review="\u6b64\u5f15\u7528\u9700\u5728\u8a18\u9304\u7684\u539f\u6587\u4e2d\u6aa2\u67e5\u3002",
+    audit_help="\u96e2\u7dda\u6838\u5c0d\u6b64\u7814\u7a76\u8108\u7d61\uff0c"
+               "\u4e0d\u547c\u53eb AI\u3001\u4e0b\u8f09\u3001\u6539\u5beb"
+               "\u6216\u5207\u63db\u539f\u6587\u3002",
 )
 
 TEXT["en"]["completed"] = (
@@ -307,6 +335,9 @@ class LineageDialog(QDialog):
         self._original_viewer = None
         self._source_expected = None
         self._source_origin = None
+        self._audit_pending = self._audit_result = None
+        self._audit_summary_label = None
+        self.audit_labels = []
         style_settings(self)
         self.setFont(fonts.font(pixels=14))
         self.setWindowTitle(self.t["title"])
@@ -381,6 +412,11 @@ class LineageDialog(QDialog):
             button.setAutoDefault(False)
         lifecycle_bar.addWidget(self.remove_button)
         lifecycle_bar.addWidget(self.restore_button)
+        self.audit_button = QPushButton(self.t["audit"])
+        self.audit_button.setAutoDefault(False)
+        self.audit_button.setToolTip(self.t["audit_help"])
+        self.audit_button.clicked.connect(self.audit_sources)
+        lifecycle_bar.addWidget(self.audit_button)
         lifecycle_bar.addStretch()
         results.addLayout(lifecycle_bar)
         from paper_daily.desktop.lineage_adoption_action import LineageAdoptionAction
@@ -468,6 +504,17 @@ class LineageDialog(QDialog):
         entry = self._entries[index] if 0 <= index < len(self._entries) else None
         current = entry is not None and entry["current"] and not self._needs_refresh
         self.adoption.controls(enabled and not self._needs_refresh, entry)
+        self.audit_button.setEnabled(
+            enabled and self.owner is not None and current and self.mode.currentIndex() == 0
+        )
+        if self._invalid or self._closing or self._audit_result is not None and (
+            not current or self._audit_result[1] != self.saved[index]
+        ):
+            self._audit_result = None
+            for label in self.audit_labels:
+                label.hide()
+            if self._audit_summary_label is not None:
+                self._audit_summary_label.hide()
         self.remove_button.setEnabled(enabled and self.owner is not None and current)
         self.restore_button.setEnabled(
             enabled
@@ -501,6 +548,7 @@ class LineageDialog(QDialog):
     def _start(self, kind, call):
         if self.busy or self._closing or not self._check():
             return False
+        self.progress.setRange(0, 0)
         worker = Worker(call, self)
         worker.kind = kind
         self._worker = worker
@@ -511,7 +559,14 @@ class LineageDialog(QDialog):
         return True
 
     def _stage(self, stage):
-        if stage.startswith("history_reindex:"):
+        if stage.startswith("lineage_audit:"):
+            done, total = (int(v) for v in stage.split(":")[1:])
+            text = self.t["audit_work"].format(done=done, total=total)
+            if self._check() and not self._closing:
+                self.progress.setRange(0, total)
+                self.progress.setValue(done)
+                self._handle.update(dict(stage=text, completed=done, total=total))
+        elif stage.startswith("history_reindex:"):
             from paper_daily.desktop.history_index_text import progress_text
 
             through, target, restored = (int(v) for v in stage.split(":")[1:])
@@ -845,6 +900,13 @@ class LineageDialog(QDialog):
         worker = self._worker
         self._worker = None
         same = self._check()
+        if worker.kind == "audit":
+            self._finish_audit(worker, same)
+            worker.deleteLater()
+            self._controls()
+            if self._closing:
+                self.close()
+            return
         if worker.kind in {"adopt_prepare", "adopt_apply"}:
             self.adoption.finish(worker, same)
             worker.deleteLater()
@@ -974,10 +1036,100 @@ class LineageDialog(QDialog):
         if self._closing:
             self.close()
 
+    def _audit_selection(self):
+        index = self.results.currentIndex()
+        if (self.mode.currentIndex() != 0 or self._needs_refresh
+                or not 0 <= index < len(self._entries)
+                or not self._entries[index]["current"]):
+            return None
+        return self.saved[index]
+
+    def audit_sources(self):
+        if self.busy or self._closing or self.owner is None or not self._check():
+            return False
+        row = self._audit_selection()
+        if row is None:
+            return False
+        owner = self.owner
+        self._audit_result = None
+        self.render()
+        self._audit_pending = owner, row
+
+        def check(stop, emit):
+            return audit_lineage.prepare(
+                owner, row, cancelled=stop,
+                progress=lambda done, total: emit(f"lineage_audit:{done}:{total}"),
+            )
+
+        self._handle = activity.begin(
+            self, self.t["audit"], task="lineage",
+            key=f"lineage-audit:{self.path}:{self.paper_id}:{row['corpus_key']}",
+            paper_id=self.paper_id, cancel=self.cancel,
+        )
+        if not self._handle.accepted:
+            self._audit_pending = None
+            return False
+        total = len(lineage_sets.decode(row["body_json"])["report"]["sources"])
+        self.status.setText(self.t["audit_work"].format(done=0, total=total))
+        if not self._start("audit", check):
+            self._audit_pending = None
+            self._handle.finish(False, self.t["stopped"], cancelled=True)
+            return False
+        return True
+
+    def _audit_report(self, row):
+        if self._audit_result is None:
+            return None
+        owner, expected, result = self._audit_result
+        try:
+            if row != expected or self._audit_selection() != expected:
+                raise ValueError("Selected Lineage changed")
+            return result.for_delivery(owner if owner is self.owner else None, row)
+        except (OSError, ValueError):
+            self._audit_result = None
+            return None
+
+    def _audit_summary(self, report):
+        checks = [check for source in report["sources"] if source["report"] is not None
+                  for check in source["report"]["checks"] if check["rule"] == "quote_location"]
+        return self.t["audit_ready"].format(
+            checked=report["originals_checked"], total=report["originals_total"],
+            located=sum(check["state"] == "located" for check in checks),
+            quotes=sum(len(indices) for source in report["sources"]
+                       for indices in source["passage_indices"].values()),
+        )
+
+    def _finish_audit(self, worker, same):
+        pending, self._audit_pending = self._audit_pending, None
+        ok = False
+        if same and not self._closing:
+            if worker.cancelled.is_set():
+                self.status.setText(self.t["stopped"])
+            else:
+                try:
+                    if worker.error or worker.result is None or pending is None:
+                        raise ValueError("No complete corpus audit")
+                    owner, row = pending
+                    if owner is not self.owner or row != self._audit_selection():
+                        raise ValueError("Selected Lineage changed")
+                    report = worker.result.for_delivery(owner, row)
+                    self._audit_result = owner, row, worker.result
+                    self.render()
+                    if self._audit_result is None:
+                        raise ValueError("Audit changed during rendering")
+                    self.status.setText(self._audit_summary(report))
+                    ok = True
+                except (OSError, ValueError):
+                    self._audit_result = None
+                    self.status.setText(self.t["audit_failed"])
+        self._handle.finish(ok, self.status.text(), cancelled=worker.cancelled.is_set())
+
     def render(self):
         if self._original_viewer is not None and not self._original_viewer.disposed:
             self._original_viewer.close()
         self.source_buttons = []
+        self.audit_labels = []
+        self._audit_summary_label = None
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
             if item.widget() is not None:
@@ -1005,6 +1157,19 @@ class LineageDialog(QDialog):
             self.cards_layout.addWidget(historical)
         sources = {source["id"]: source for source in body["report"]["sources"]}
         row = self.saved[index]
+        audited = self._audit_report(row)
+        audit_checks = {}
+        if audited is not None:
+            summary = _label(self._audit_summary(audited))
+            summary.setObjectName("lineageAuditSummary")
+            self._audit_summary_label = summary
+            self.cards_layout.addWidget(summary)
+            for source in audited["sources"]:
+                if source["report"] is not None:
+                    for check in source["report"]["checks"]:
+                        if check["rule"] == "quote_location":
+                            audit_checks[(source["source_id"], check["item_id"],
+                                          check["original_passage"])] = check
         for stage in ("prior_gap", "current_change", "later_development"):
             section = ClaimSection(self.t[stage], expanded=True)
             for statement in body["report"]["statements"]:
@@ -1021,7 +1186,7 @@ class LineageDialog(QDialog):
                             )
                         )
                     )
-                    for passage in statement["passages"]:
+                    for passage_index, passage in enumerate(statement["passages"]):
                         page = passage["location"]["page"]
                         section.content.addWidget(
                             _label(
@@ -1031,6 +1196,22 @@ class LineageDialog(QDialog):
                                 + (" / p. " + str(page) if page else "")
                             )
                         )
+                        if audited is not None:
+                            from paper_daily.desktop.research_audit import TEXT as AUDIT_TEXT
+
+                            item_id = "lineage:" + row["corpus_key"] + ":" + statement["id"]
+                            check = audit_checks.get((passage["source_id"], item_id, passage_index))
+                            state = check["state"] if check else None
+                            label = _label(
+                                AUDIT_TEXT.get(self.language, AUDIT_TEXT["en"]).get(
+                                    state, self.t["audit_review"]
+                                ) if check else self.t["audit_unavailable"]
+                            )
+                            label.setObjectName("lineageAuditQuote")
+                            self.audit_labels.append(label)
+                            section.content.addWidget(label)
+                            if check and state == "located" and check["location"].get("anchor"):
+                                page = check["location"]["anchor"]["p0"] + 1
                         source = sources[passage["source_id"]]
                         title = source["identity"]["title"]
                         button = QPushButton(self.t["open_source"])
@@ -1108,6 +1289,7 @@ class LineageDialog(QDialog):
     def closeEvent(self, event):
         if self._original_viewer is not None and not self._original_viewer.disposed:
             self._original_viewer.close()
+        self._audit_result = None
         self._live.clear()
         if self.busy:
             self._closing = True

@@ -179,9 +179,26 @@ Callbacks default to no cancellation and no progress reporting. Call preparation
 on a background worker; delivery rechecks provenance without parsing PDF bytes.
 
 `analysis.audit(paper_id, corpus_key=CORPUS_UUID)` checks exactly one current saved
-Lineage. Omit `corpus_key` for the original single-PDF behavior. The desktop
-whole-corpus button is not connected yet; its existing saved-evidence action
+Lineage. Omit `corpus_key` for the original single-PDF behavior. In the desktop
+**Research lineage** dialog, select a current saved analysis and choose
+**Check all originals**. The existing separate **Check saved evidence** action
 continues to check the loaded original only.
+
+The corpus action uses the existing background worker and app activity area.
+It disables repeated activation and shows actual originals completed/total;
+these are work counts, not an elapsed-time estimate or scientific confidence.
+The selected analysis displays a checked-snapshot summary and a finding below
+each quotation. Unavailable originals leave explicit unchecked quotations.
+**View exact original** still verifies that source independently and opens a
+separate reader, without changing the main PDF or the user's drafts.
+
+Cancel returns no new findings. A changed selection, loaded paper, owner or
+source cannot receive a late result. Closing waits for the existing worker to
+drain. Failure leaves research unchanged and permits an explicit retry.
+Changing the loaded context hides the completed snapshot's findings. History
+entries cannot start a current-corpus audit; restore/review their source context
+separately. Findings describe the checked snapshot, not continuous monitoring;
+use the same button to check again after changes.
 
 ```powershell
 '{"paper_id":"PAPER_ID","corpus_key":"SAVED_CORPUS_UUID"}' | paperfact integration analysis.audit --workspace C:\Research\Paperfact
@@ -224,7 +241,7 @@ navigation remain explicit limits. The remaining file/corpus boundaries are:
 |---|---|---|
 | Editable deck JSON and source/figure catalog (`sync_deck_files`, `sync_deck_publication`) | Read the actual selected retained deck version through typed deck/file ownership, validate bounded source IDs and figure assets, bind each source to its exact owned PDF | Deck `source_hash` is an input digest; a slide/source/figure may reference a different or unknown PDF. Do not use global presentation/cache paths, fabricate file ownership, or assign the focal original to every slide. |
 | `list_surveys` and retained list generation inputs | Explicitly select and capture the actual list, membership/incarnations and bounded per-paper source corpus before reading its summary | A list-wide prose summary and captured analysis rows are not per-assertion PDF citations. A single-focal `AuditCapture` cannot certify the list's corpus or assign one loaded PDF to it. |
-| Grounded lineage reports/sets and legacy `lineage_team` output | The default typed-row adapter checks the loaded original. Explicit `corpus_key` independently checks a current saved corpus through its actual generated/imported/bound original readers | Desktop whole-corpus UI, historical/legacy team migration and scholarly evaluation remain open. A title/hash never grants corpus/file authority, global path lookup, citation influence or another paper's ownership. |
+| Grounded lineage reports/sets and legacy `lineage_team` output | The default typed-row adapter checks the loaded original. Explicit `corpus_key` independently checks a current saved corpus through its actual generated/imported/bound original readers | Installed desktop acceptance, historical/legacy team migration and scholarly evaluation remain open. A title/hash never grants corpus/file authority, global path lookup, citation influence or another paper's ownership. |
 
 A future file/corpus slice must explicitly select and retain the proper source
 scope, keep malformed/unavailable sources visible and preserve the same no-model
