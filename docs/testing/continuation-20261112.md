@@ -5607,7 +5607,7 @@ additional worktree was introduced.
 - Install and same-version reinstall use acceptance mode, explicit destination,
   no restart/close/reboot, fixed per-stage logs, source identity and payload hash.
   Installed version, reader and CLI/MCP are checked before reinstall/uninstall;
-  bounded generated recipient files must remain byte-identical at every action.
+  bounded generated research files must remain byte-identical at every action.
   Refused/stale paths, wrong version, data mutation and incomplete uninstall stop
   with the exact active stage and retain failed evidence. No broad cleanup.
 - Focused bounded command: scripts/check_bounded.py --profile focused --python
@@ -5647,3 +5647,23 @@ additional worktree was introduced.
   No assertion was weakened, local installer executed, user data changed, public
   release created or production sync deployed. Next collect the exact denied path
   through one Windows-only candidate before choosing a fix.
+
+- Enrollment documentation reconciled against current source: queue/reading logs,
+  paper-scoped queue pins and desktop preview/prepare/open are implemented, not
+  blanket pending work. Unknown files/schema and complete installed/hosted adoption
+  remain gates. Representative unchanged fixtures: 3 passed in 10.58s / 13.7s total
+  (lossless legacy copy plus two restore/adopt cycles; actual desktop PDF candidate
+  preview/prepare/open; no-side-effect queue-pin coverage). No new test cases.
+
+- Windows-only diagnostic run 43644980935 (e5e0ece) reached windows-install and
+  failed before subprocess execution: ready -> _data_hash -> _file_hash ->
+  stream.read -> PermissionError. The former snapshot included HOME/browser
+  caches alongside research; the exception lacks the filename, so no exact cache
+  path is claimed. The research-preservation boundary is now the exact generated
+  PAPERFACT_DATA workspace, excluding non-research HOME caches. Existing success
+  coverage injects an unreadable HOME cache while retaining whole-fixture final
+  equality; mutation inside research still fails the existing case. No exception
+  is ignored inside the protected research tree.
+- Snapshot-boundary fix: focused 18 passed in 1.66s / 4.7s total; critical 14
+  passed in 7.46s / 10.7s total. Documentation gate before this fix: 58 passed
+  in 2.28s / 5.4s total; only the protected-tree wording changed afterward.

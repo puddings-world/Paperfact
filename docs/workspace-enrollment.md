@@ -68,25 +68,29 @@ inferred from these limits.
 ## Explicit blockers and remaining work
 
 Per-list pins with an actual current membership and timezone-aware timestamp are
-covered by the [list-pin domain](list-pins.md). Legacy queue pins, orphan pins,
-invalid timestamps and a changed cleanup trigger block preparation.
+covered by the [list-pin domain](list-pins.md). Paper-scoped legacy queue pins
+are also supported; orphan pins, invalid timestamps and an unrecognized cleanup
+trigger block preparation.
 
-Nonempty `queue` and `reading_log` are not serialized by
-`capture_existing` and therefore block this slice. Nonempty integration receipts,
-custom tables, additional schema writers/views and unknown research KV scopes also
-block. Editable presentation JSON/figures, source-position maps, extracted text,
-annotation sidecars, research-question files and any unmapped source file block;
-they are never dropped. Empty unsupported tables do not invent portable edits.
-A typical existing research workspace will need further migration adapters.
+Queue entries and reading logs are no longer blanket blockers: the current
+`legacy_workflow` adapter and `capture_existing` retain their declared fields,
+portable identities and timestamps. Declared Markdown briefs are inventoried and
+materialized through `legacy_briefs`; missing bytes or unsupported legacy
+semantics block rather than being guessed. This preserves legacy research; it
+does not make the optional ML daily workflow mandatory.
 
-Reuse `sync_legacy_sources` for exact retained source identity and
-`sync_slide_recovery` / `recovery_decks` for validated archive-only deck closure.
-Those recovery records are not active live file revisions. Live adoption should
-use `sync_deck_files.encode_deck`, existing `sync_files` research-file operations,
-`sync_artifacts.materialize/activate` and verified source-version provenance;
-do not promote recovery records by renaming tables or invent another manifest.
-Observed producer enrollment and the annotation/derived-file writer adapters still
-need coverage. This service creates no replacement protocol or upload path.
+Current enrollment also inventories verified source provenance, reading positions,
+Lineage source dependencies, retained chat/review history and supported manual
+deck observations. These have separate source/ownership checks in
+`workspace_enrollment.py`; archived observations do not automatically become
+active live revisions or authorize an old AI job. A deck's verified recovery
+record is distinct from live `sync_deck_files`/`sync_files` publication.
+
+Custom tables, unrecognized schema writers/views, unsupported integration
+receipts/KV scopes, missing original bytes and any remaining unmapped research
+file still block. Unknown annotations, extracted text or sidecars are not silently
+dropped. The inventory and returned `plan["blockers"]` are authoritative for the
+particular workspace; this is not a claim of arbitrary legacy-directory coverage.
 
 ## Consistency, backup and adoption
 
@@ -134,7 +138,10 @@ blocking, private-data exclusion, source changes/replacement, cancellation,
 retry, repeated activation, corruption and publication failures. No production
 research, remote authority or model account is used.
 
-Desktop integration remains separate: present `plan`, let the user review blockers
-and choose explicit new directory/backup paths, run `prepare` on a worker, then
-show the candidate and backup for inspection. No automatic adoption button is
-safe until the maintenance-lock and remaining writer/file coverage gates pass.
+The desktop enrollment dialog already previews the plan, displays blockers,
+selects explicit new candidate/backup paths, runs preparation on a worker and
+opens a prepared candidate through the existing workspace flow. Its tests cover
+actual preview/prepare/open, unsupported coverage, repeated activation,
+cancellation and source/workspace changes. This is not an in-place adoption of
+the owner's source or automatic upload. Complete maintenance locking, supported
+writer/file coverage and installed-device acceptance remain separate gates.

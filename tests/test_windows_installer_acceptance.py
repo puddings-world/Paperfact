@@ -61,7 +61,7 @@ def test_preflight_refuses_unowned_builds_and_existing_destination(ci_build, mon
 
 
 @pytest.mark.parametrize("fault", [None, "research", "version", "uninstall"])
-def test_installer_preserves_data_and_records_exact_failure(ci_build, fault):
+def test_installer_preserves_data_and_records_exact_failure(ci_build, fault, monkeypatch):
     built, out, installer = ci_build
     plan = verify._installer_input(built, out, installer)
     recipient = verify.isolated_env(out / "recipient")
@@ -69,6 +69,8 @@ def test_installer_preserves_data_and_records_exact_failure(ci_build, fault):
     research.mkdir(parents=True, exist_ok=True)
     paper = research / "original.pdf"
     paper.write_bytes(b"synthetic original")
+    busy_cache = Path(recipient["HOME"]) / "browser-cache.pma"
+    busy_cache.write_bytes(b"non-research cache")
     before = verify._data_hash(out / "recipient")
     acceptance = verify.Acceptance(built, out)
     acceptance.report["build"]["version"] = __version__
@@ -126,7 +128,16 @@ def test_installer_preserves_data_and_records_exact_failure(ci_build, fault):
             assert "windows-uninstall" not in [label for label, _ in seen]
         assert installed.exists()  # Failed evidence is retained, never auto-cleaned.
         return
-    result = perform()
+    original_hash = verify._file_hash
+
+    def hash_without_cache_lock(path, limit):
+        if path == busy_cache:
+            raise PermissionError("Synthetic browser cache lock")
+        return original_hash(path, limit)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(verify, "_file_hash", hash_without_cache_lock)
+        result = perform()
     assert result["installed"] and result["reinstalled"] and result["uninstalled"]
     assert result["research_preserved"] and result["integration"]["restart_recovery"]
     assert result["installer_sha256"] == hashlib.sha256(installer.read_bytes()).hexdigest()

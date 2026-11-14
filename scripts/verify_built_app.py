@@ -277,10 +277,10 @@ def _installer_input(built, out, installer):
 
 def _windows_install(plan, out, recipient, empty, run, acceptance, integration_check):
     installed, installer = plan["installed"], plan["installer"]
-    data = Path(recipient["HOME"]).parent
+    data = Path(recipient["PAPERFACT_DATA"])
     if acceptance.report["build"]["version"] != plan["version"]:
         raise ValueError("Frozen version differs from the CI source version")
-    if data != out / "recipient":
+    if data != out / "recipient/workspace" or Path(recipient["HOME"]) != out / "recipient/home":
         raise ValueError("Installer data must be the exact generated recipient")
 
     def owned(*, may_be_removed=False):

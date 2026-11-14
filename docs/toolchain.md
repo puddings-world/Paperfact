@@ -72,7 +72,7 @@ unexpected paths and existing install destinations. It creates only
 `build/<new-output>/installed-app`, uses the setup acceptance mode (no shortcuts,
 registration or automatic launch), then checks installed CLI/reader/MCP behavior,
 same-version reinstall and uninstall. Each installer action checks that the
-bounded synthetic recipient tree is unchanged; the report records the setup
+bounded synthetic research tree is unchanged; the report records the setup
 payload SHA-256 and exact failure stage. Links/reparse points and changed owned
 paths are refused. No reboot, application closing or application restart is
 requested. Do not use this flag for an owner's installed app. It does not test
