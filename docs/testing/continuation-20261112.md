@@ -5252,3 +5252,15 @@ additional worktree was introduced.
 
 - Final daily critical: 14 passed in 5.40s pytest / 8.7s total, privacy/Ruff
   green. No repeat of unchanged corpus, desktop, mobile or historical matrices.
+
+- Concurrent integration advanced to c7a9c60 with the other reader session's
+  4c8fa36 (changed-block typesetting), e17c35c (one-pass file-name mapping) and
+  c23e336 (stall screen/tab context). Preserved them by merging develop/0.5
+  into the existing stabilization branch (14d37bb), after checkpointing this
+  material as 805ef53. No reset, copied source or new worktree.
+- Revalidated the actual merged tree only where it changed: the same acceptance
+  modules plus three name-collision/index boundaries, 19 passed in 10.05s pytest /
+  13.3s total; merged daily critical, 14 passed in 5.70s / 9.1s total. Privacy/Ruff
+  green. These overlap earlier counts. Incoming rich-view/stall changes were
+  preserved, not independently certified as a full native UI acceptance by this
+  package checkpoint. Existing board remains the shared handoff.
