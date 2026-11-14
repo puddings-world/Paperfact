@@ -1,6 +1,8 @@
 """New versions from GitHub Releases: which one counts, how often to ask, and how
 each platform's build replaces itself."""
 
+import json
+import re
 from datetime import date
 from pathlib import Path, PurePosixPath
 
@@ -181,3 +183,24 @@ def test_the_build_names_match_what_the_release_workflow_uploads():
     workflow = (runtime.bundle_root() / ".github/workflows/release.yml").read_text(encoding="utf-8")
     for suffix in updates.ASSET_SUFFIX.values():
         assert suffix in workflow
+    # One maintained workflow: only manual Mac builds reduce the platform matrix.
+    assert "options: [all, macos]" in workflow and "default: all" in workflow
+    assert "github.event_name == 'workflow_dispatch' && inputs.platform == 'macos'" in workflow
+    matrices = [json.loads(value) for value in re.findall(r"'(\[\{.*?\])'", workflow)]
+    assert matrices == [
+        [{"os": "macos-latest", "name": "macos"}],
+        [
+            {"os": "windows-latest", "name": "windows"},
+            {"os": "macos-latest", "name": "macos"},
+            {"os": "ubuntu-22.04", "name": "linux"},
+        ],
+    ]
+    assert 'run: test "$(uname -m)" = arm64' in workflow
+    assert "timeout-minutes: 30" in workflow
+    assert "scripts/check.py --profile" in workflow
+    assert workflow.index("scripts/verify_built_app.py") < workflow.index("name: build-${{")
+    fixture = workflow.split("name: research-fixture-${{ matrix.name }}", 1)[1].split(
+        "- uses:", 1,
+    )[0]
+    assert "path: build/frozen-acceptance/original.zip" in fixture
+    assert "if-no-files-found: error" in fixture

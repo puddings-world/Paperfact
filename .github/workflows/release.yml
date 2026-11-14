@@ -5,8 +5,8 @@
 # banner shows, so they are rewritten for readers before the draft is published;
 # nothing reaches users until then. See docs/releasing.md.
 #
-# Run by hand (Actions > Release > Run workflow) it builds and photographs all three
-# without releasing anything: the way to see a layout change on every platform.
+# Run by hand (Actions > Release > Run workflow), choose all platforms or just Mac.
+# Both paths retain source/frozen acceptance without releasing anything.
 #
 # Build names (must match updates.ASSET_SUFFIX):
 #   Paperfact-X.Y.Z-windows-x64-setup.exe
@@ -18,6 +18,12 @@ on:
   push:
     tags: ["v*.*.*"]
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Candidate build platforms (tags always build all)
+        type: choice
+        options: [all, macos]
+        default: all
 
 permissions:
   contents: write
@@ -27,15 +33,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            name: windows
-          - os: macos-latest
-            name: macos
-          # The oldest supported runner: an AppImage runs on systems at least as new
-          # as the one it was built on.
-          - os: ubuntu-22.04
-            name: linux
+        # Tags always cover all platforms; a manual Mac candidate uses the same steps.
+        # Linux retains the oldest supported runner for AppImage compatibility.
+        include: >-
+          ${{ fromJSON(
+            github.event_name == 'workflow_dispatch' && inputs.platform == 'macos'
+            && '[{"os":"macos-latest","name":"macos"}]'
+            || '[{"os":"windows-latest","name":"windows"},{"os":"macos-latest","name":"macos"},{"os":"ubuntu-22.04","name":"linux"}]'
+          ) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -77,6 +82,11 @@ jobs:
               -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
             choco install innosetup -y --no-progress
           }
+
+      - name: Require Apple Silicon runner
+        if: runner.os == 'macOS'
+        shell: bash
+        run: test "$(uname -m)" = arm64
 
       - name: Environment
         run: uv sync --extra app --extra dev --extra build
@@ -141,6 +151,12 @@ jobs:
           path: |
             shots/*.png
             shots/report.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-fixture-${{ matrix.name }}
+          path: build/frozen-acceptance/original.zip
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:

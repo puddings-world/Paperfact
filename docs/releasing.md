@@ -16,7 +16,17 @@ feature branch that develops it.
 
 For the first public beta, use a candidate branch and **workflow_dispatch** to
 build without publishing. Run `scripts/verify_built_app.py` against the frozen app;
-the workflow does this on all three platforms. Its `report.json` now records
+the workflow does this on each selected platform. In **Actions > Release > Run
+workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
+default) for all three platforms. Tags always build all platforms. The Mac job
+refuses a non-arm64 runner. Each job has a 30-minute total budget; manual builds
+retain critical source checks and frozen acceptance, without creating a release.
+
+Download `build-macos` (DMG), `provenance-macos` (source identity and report), and
+`research-fixture-macos` (only the generated synthetic `original.zip`) from that
+run. Test against a separate data folder using the [Mac guide](testing/mac-acceptance-0.5.md).
+CI success does not establish installed-device acceptance or working cloud sync.
+Its `report.json` now records
 per-check progress and categorical failure/timeout/interruption, not just success.
 Only `status: passed`, `passed: true` and exit code 0 accept that local workflow;
 `running`, failed, interrupted or missing reports do not. Each retry uses a new

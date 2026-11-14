@@ -245,6 +245,8 @@ retain their own terms; see [notices](THIRD_PARTY_NOTICES.md).
 Having trouble on another computer? [Create a reviewed diagnostic report](SUPPORT.md)
 and [open a bug report](https://github.com/puddings-world/Paperfact/issues/new?template=bug_report.yml).
 Older releases have a separate troubleshooting path; no diagnostic data is uploaded automatically.
+For an Apple Silicon candidate, select `platform=macos` in **Actions > Release > Run workflow**;
+see [candidate downloads](docs/releasing.md#cutting-a-release). This builds without publishing.
 For candidate installers, [packaged acceptance](docs/testing/mac-acceptance-0.5.md#automated-packaged-app-checks-maintainer)
 records which check passed or failed, even when the app cannot start.
 Its synthetic research package includes a three-paper lineage and exact originals;

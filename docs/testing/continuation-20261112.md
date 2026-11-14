@@ -5349,3 +5349,18 @@ additional worktree was introduced.
 
 - Final daily critical: 14 passed in 7.59s pytest / 11.2s total, privacy/Ruff
   green. No unchanged whole recovery/corpus/mobile matrix or historical run.
+
+## 2026-11-15: one-platform native candidate delivery
+
+- Extend the maintained Release workflow with manual `platform=macos` or default
+  `all`. Tag events retain all three platforms. Both paths retain critical source
+  acceptance, frozen research verification, provenance and the 30-minute job cap.
+- Mac refuses a non-arm64 runner. Upload only the generated synthetic
+  `original.zip` separately; account/workspace folders are not artifacts.
+- Extend the existing update asset contract rather than adding test selectors.
+  Affected update/Mac packaging checks: 28 passed in 1.10s pytest / 4.3s total;
+  privacy/Ruff green under the two-core/25%-CPU/300s governor.
+- No claim of native success from these Windows fixture checks. Live CI run,
+  actual frozen report and installed Apple Silicon acceptance remain gates.
+- Required daily critical: 14 passed in 6.99s pytest / 10.1s total; privacy,
+  Ruff and whitespace check passed. No exhaustive or release matrix repeated.
