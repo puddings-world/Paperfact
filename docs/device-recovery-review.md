@@ -191,5 +191,16 @@ the newer parent name while recovering its children.
 Local reference-service and second-native-client fixtures verify accepted list,
 membership, reading time and order delivery. This is not installed-device/hosted
 acceptance. Arbitrary parent migration, PDF/scientific ownership and compound
-file recovery remain open. Copy-as-new still requires the original paper lifetime;
-use a supported typed note add/restore when its parent was explicitly mapped.
+file recovery remain open. Copy-as-new also accepts a supported recorded paper
+mapping: recover a missing post-backup paper through an explicit **Add old
+content** decision, refresh the comparison, then copy its unanchored notes.
+Both the old source operation and the native parent receipt must verify; matching
+IDs or even reusing an old incarnation without a receipt cannot authorize copying.
+Later paper metadata edits remain intact when retrying the same note-copy request.
+
+The current protocol deliberately prohibits paper deletion. This flow recovers
+missing papers; it does not weaken that retention rule or invent paper resurrection.
+Notes carrying page/anchor references stay pending for exact-original verification;
+no anchor is silently removed to make a copy succeed. A blocked copy still permits
+read-only side-by-side review. Corrupt receipts for an already recorded copy fail
+closed rather than being presented as a new unsupported action.

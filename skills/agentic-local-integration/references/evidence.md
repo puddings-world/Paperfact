@@ -550,3 +550,16 @@ source ownership, research revisions and authentication remain separate checks.
   installed upgrades and physical Mac/phone journey unverified. Not cross-project
   reuse, not global installation, and not authorization to deploy or upload research.
 - Privacy: synthetic records only; no owner identifiers, tokens or research captured.
+
+
+### Recovered-paper note copy, 2026-11-14 (validated-local)
+
+The recorded-parent resolver is also used by note copy after explicit recovery of
+a post-backup paper. An equality-only parent check wrongly refused valid mapped
+lifetimes and could treat guessed old incarnations as sufficient authority.
+The same source/native receipt proof now gates both metadata and copied notes;
+no new journal format or broad replay capability. Focused proof/retry checks:
+3 passed, 22.8s total. Both native peer variants passed; after correcting the new
+fixture's review-scoped ID, both real desktop cases passed in 15.2s total.
+Paper deletion remains unsupported and original-bound notes are not flattened.
+This is another local adapter, not cross-project reuse or installed-device proof.

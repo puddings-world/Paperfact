@@ -249,7 +249,7 @@ See [development checks](docs/development.md#development) for scope and limits.
 Internal per-change recovery APIs are documented in the
 [recovery guide](docs/device-recovery-review.md#per-change-recovery-core).
 Desktop comparison offers explicit keep/add/replace/restore for supported
-content, plus unanchored-note copy. Original-bound/compound recovery and
+content, plus unanchored-note copy after a recorded paper recovery. Original-bound/compound recovery and
 hosted/device acceptance remain separate gates.
 
 Recorded recovery decisions can preserve supported list/member/reading/order

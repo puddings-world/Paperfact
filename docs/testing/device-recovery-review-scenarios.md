@@ -159,3 +159,39 @@ Final saved peer-order, receipt-budget, skill-synchronization and usage checks
 passed 25 cases in 17.54s, 23.3s total. The peer stores the exact three-list order
 and new root incarnation. An over-budget receipt fails without writes. These
 are overlapping focused checks, not a rerun of the expanded release profile.
+
+
+## Notes on papers missing from the backup
+
+The paper-deletion protocol remains intentionally unavailable. The real recovery
+journey is a new paper and note saved after the authority backup: explicitly add
+that paper in the fresh workspace, then copy its unanchored note.
+
+| Requirement | Existing/new selector and observable result |
+|---|---|
+| Recovered paper proof | `test_note_copy_uses_proven_recovered_paper_and_retry_preserves_later_metadata`: the copied note uses the recorded new paper lifetime; retry leaves a later paper title and both source/history unchanged |
+| No guessed parent authority | `test_same_paper_identity_without_recovery_proof_cannot_authorize_a_note_copy`: even deliberately reused old IDs/incarnations cannot authorize a copy |
+| Desktop can still compare | `test_new_paper_note_review_requires_proven_parent_and_keeps_comparison_visible`: proven parent enables one copy; missing proof keeps both panes readable and produces no write |
+| Actual peer delivery | `test_copy_syncs_through_recovered_authority_to_another_native_client[True]`: accepted new paper and note reach a fresh native client with the exact mapped parents/payload, and retry creates no extra operation |
+
+The valid mapped-parent case initially failed with `target_parent_lifetime_changed`.
+Note copying now uses the same bounded native/source receipt resolver as metadata;
+parent equality alone is insufficient. Three focused copy/proof/retry cases passed
+in 22.8s including checks. Both native peer variants passed in the next selection;
+that selection then exposed a new UI fixture using a nonce-scoped change ID from
+another review. The fixture now locates the current change by immutable operation
+identity and checks the existing explicit absent-content label. Both UI cases
+passed in 15.2s including checks. No existing behavior assertion was weakened.
+
+The curated release selection replaces the old copy-retry representative with
+this actual recovered-paper peer journey (which also asserts retry). Historical
+retry, cancellation, stale-source and rollback cases remain available and are
+selected when affected; the release case count is not expanded by this change.
+Exact-original, compound file ownership and physical installed-device/cloud gates
+remain open. Fixtures never access native credentials, owner research or paid AI.
+
+Final critical/affected lifecycle, real UI, documentation, release-selection and
+skill checks passed **41 cases in 95.29s**, **99.2s total** including privacy/Ruff.
+The Windows job was capped at two logical processors and 25% CPU; no historical
+full suite was run. Earlier peer/UI selections overlap this evidence. Native
+Mac/phone prompts and a deployed recovery authority remain unverified.

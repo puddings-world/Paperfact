@@ -142,6 +142,7 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
     blocked = set(comparison["blocking_reasons"]) - {
         "target_restore_requires_confirmation",
         "target_entity_lifetime_changed",
+        "target_parent_lifetime_changed",
     }
     if blocked:
         raise ValueError(
@@ -161,8 +162,15 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
     )
     entity_id = str(uuid5(NAMESPACE_URL, "paperfact:recovery-note-copy:" + address))
     with closing(_readonly_connection(observed.database)) as conn:
+        conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
         conn.execute("BEGIN")
         _binding_in(conn, observed)
+        # Reuse the metadata adapter's bounded source/receipt proof. Matching an
+        # ID or incarnation alone is not authority to attach a recovered note.
+        from paper_daily.sync_recovery_choices import _parent_mapper
+
+        mapped = _parent_mapper(conn, observed, source, check)
+        parents = [mapped(parent) for parent in source["parents"]]
         previous = conn.execute(
             "SELECT CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END,"
             "fingerprint FROM paperfact_sync_operations WHERE operation_id=?",
@@ -183,7 +191,7 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
                 or operation["operation_id"] != request_id
                 or operation["action"] != "put"
                 or operation["payload"] != source["payload"]
-                or operation["parents"] != source["parents"]
+                or operation["parents"] != parents
                 or operation["incarnation"] != request_id
                 or operation["base_revision"] != 0
                 or operation["depends_on"] is not None
@@ -197,8 +205,8 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
                 source["payload"],
                 operation_id=request_id,
             )
-            if operation["parents"] != source["parents"]:
-                raise ValueError("Note's exact original paper lifetime must be preserved")
+            if operation["parents"] != parents:
+                raise ValueError("Note parent differs from its verified recovery mapping")
             if operation["base_revision"] or operation["depends_on"] is not None:
                 raise ValueError("Recovery copy identity already exists")
             encoded = canonical_operation(operation)

@@ -413,17 +413,12 @@ class RecoveryChanges(QWidget):
 
             comparison = observed.compare(selected, cancelled=stopped)
             operation = comparison["source"]["operation"]
-            blockers = set(comparison["blocking_reasons"]) - {
-                "target_restore_requires_confirmation",
-                "target_entity_lifetime_changed",
-            }
             supported = (
                 operation["version"] == 2
                 and operation["entity_type"] == "note"
                 and operation["action"] == "put"
                 and operation["payload"].get("page") is None
                 and operation["payload"].get("anchor") is None
-                and not blockers
             )
             plan, already = None, False
             if supported:
@@ -442,7 +437,6 @@ class RecoveryChanges(QWidget):
                         ),
                     )
                 )
-                plan = note_copy.prepare(observed, selected, request_id, cancelled=stopped)
                 with closing(_readonly_connection(observed.database)) as conn:
                     already = (
                         conn.execute(
@@ -451,6 +445,14 @@ class RecoveryChanges(QWidget):
                         ).fetchone()
                         is not None
                     )
+                try:
+                    plan = note_copy.prepare(observed, selected, request_id, cancelled=stopped)
+                except ValueError:
+                    # Missing parent proof disables copying, not read-only review.
+                    # A previously saved request must still validate its receipt.
+                    observed._check(backup._guard(30, stopped))
+                    if already:
+                        raise
             plans = self._metadata_plans(observed, selected, comparison, stopped)
             return observed, selected, comparison, plan, already, plans
 

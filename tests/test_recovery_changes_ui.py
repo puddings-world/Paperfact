@@ -658,3 +658,49 @@ def test_desktop_recovers_new_list_and_membership_then_restores_changed_parent(
             ).fetchone()[0]
             == 1
         )
+
+
+@pytest.mark.parametrize("recorded", [True, False])
+def test_new_paper_note_review_requires_proven_parent_and_keeps_comparison_visible(
+    view, app, prepared, recorded
+):
+    from PySide6.QtCore import Qt
+    from test_sync_recovery_note_copy import recovered_paper
+
+    data = recovered_paper(prepared, recorded=recorded)
+    old, source, change, path, source_op = data
+    before_source = dump(old.journal.path)
+    before_target = dump(path)
+    ui = view.device_review.changes
+    assert view.device_review.inspect(source.snapshot)
+    wait(app, lambda: not view.busy)
+    assert ui.load(path.parent)
+    wait(app, lambda: not view.busy)
+    # Review change IDs are sealed to that exact index, not portable across reloads.
+    change = next(row["change_id"] for row in ui.page["items"]
+                  if row["operation_id"] == source_op["operation_id"])
+    selected = next(i for i in range(ui.rows.count())
+                    if ui.rows.item(i).data(Qt.ItemDataRole.UserRole) == change)
+    ui.rows.setCurrentRow(selected)
+    assert ui.compare() and not ui.compare()
+    wait(app, lambda: not view.busy)
+    assert ui.old.toPlainText() == source_op["payload"]["body"]
+    assert ui.splitter.isVisible() and ui.current.toPlainText() == ui.t["absent"]
+    assert ui.copy_button.isEnabled() is recorded
+    if recorded:
+        assert ui.action_select.currentData() == "copy"
+        assert ui.copy() and not ui.copy()
+        wait(app, lambda: not view.busy)
+        with closing(_readonly_connection(path)) as conn:
+            saved = conn.execute(
+                "SELECT r.sync_id,n.body FROM notes n JOIN research_paper_identity r "
+                "ON r.local_id=n.paper_id WHERE n.body=?", (source_op["payload"]["body"],)
+            ).fetchall()
+        assert [tuple(row) for row in saved] == [
+            (source_op["payload"]["paper_id"], source_op["payload"]["body"])
+        ]
+        assert not ui.copy_button.isEnabled()
+    else:
+        assert ui.action_select.findData("copy") == -1
+        assert dump(path) == before_target
+    assert dump(old.journal.path) == before_source
