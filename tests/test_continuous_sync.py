@@ -378,3 +378,133 @@ def test_new_committed_change_shows_waiting_not_a_stale_synced_state(control, se
     controller.local_changed()
     assert controller.state == "waiting"
     assert controller.summary()["result"] == previous
+
+
+@pytest.fixture
+def startup_saved(service, tmp_path):
+    from test_connection_vault import FakeVault
+
+    from paper_daily.connection_vault import ConnectionVault
+
+    backend = FakeVault()
+    vault = ConnectionVault(service[0].workspace, backend=lambda: backend,
+                            startup_dir=tmp_path / "device-settings")
+    connect(service)
+    vault.set_startup(service[0], True)
+    service[0].disconnect()
+    return vault, backend
+
+
+def test_startup_explicit_consent_reauthenticates_then_delivers_saved_research(
+    control, service, startup_saved
+):
+    app, parent, controller, _ = control
+    vault, backend = startup_saved
+    from paper_daily.desktop.continuous_sync import resume_on_open
+
+    parent._workspace_sync_session = service[0]
+    parent._continuous_sync = controller
+    assert resume_on_open(parent, service[0].workspace.path,
+                          current_path=lambda: service[0].workspace.path.parent / "inactive.db",
+                          vault_factory=lambda _: vault) is None
+    assert not controller.enabled and not controller.busy
+    assert resume_on_open(parent, service[0].workspace.path,
+                          current_path=lambda: service[0].workspace.path,
+                          vault_factory=lambda _: vault) is controller
+    assert not controller.resume_saved(vault)
+    run(control)
+    assert controller.enabled and not controller.busy
+    assert service[3] == ["session_info", "session_info"]
+    run(control)
+    assert service[1].pull(service[2])
+    assert controller.summary()["result"]["pending"] == 0
+    assert service[2] not in repr(controller.summary())
+    controller.stop()
+    vault.set_startup(service[0], False)
+    backend.calls.clear()
+    assert resume_on_open(parent, service[0].workspace.path,
+                          current_path=lambda: service[0].workspace.path,
+                          vault_factory=lambda _: vault) is None
+    assert not backend.calls and not controller.enabled
+
+
+def test_startup_offline_auth_backoff_then_recovery(control, service, startup_saved, monkeypatch):
+    _, _, controller, clock = control
+    vault, _ = startup_saved
+    original = service[1].session_info
+    monkeypatch.setattr(
+        service[1], "session_info", lambda *_: (_ for _ in ()).throw(ConnectionError())
+    )
+    assert controller.resume_saved(vault)
+    run(control)
+    assert controller.state == "offline" and not controller.enabled
+    previous = len(service[3])
+    for _ in range(20):
+        controller.tick()
+    assert len(service[3]) == previous
+    monkeypatch.setattr(service[1], "session_info", original)
+    clock[0] += 10
+    run(control)
+    assert controller.enabled
+
+
+@pytest.mark.parametrize("action", ["close", "permission", "binding"])
+def test_startup_queued_handshake_cannot_sync_after_context_or_permission_changes(
+    control, service, startup_saved, action
+):
+    import sqlite3
+    from contextlib import closing
+
+    app, parent, controller, _ = control
+    vault, _ = startup_saved
+    assert controller.resume_saved(vault)
+    controller.tick()
+    worker = controller.worker
+    assert worker.wait(5000) and worker.result is not None
+    if action == "close":
+        assert not parent.close()
+    elif action == "permission":
+        vault.set_startup(service[0], False)
+    else:
+        with closing(sqlite3.connect(service[0].workspace.path)) as conn:
+            conn.execute("UPDATE paperfact_sync_identity SET device='changed-device'")
+            conn.commit()
+    wait(app, lambda: not controller.busy)
+    assert not controller.enabled and not service[0].summary()["authenticated"]
+    assert service[3] == ["session_info", "session_info"]
+
+
+def test_actual_main_window_resumes_only_the_opted_in_device(service, startup_saved, monkeypatch):
+    from paper_daily import connection_vault, llm, store, updates, workspace_sync
+    from paper_daily.desktop import main
+    from paper_daily.desktop.account_status import AccountStatus
+    from paper_daily.desktop.ai_dialog import AIStatusButton
+
+    app = QApplication.instance() or QApplication([])
+    vault, _ = startup_saved
+    monkeypatch.setattr(store, "DB_PATH", service[0].workspace.path)
+    monkeypatch.setattr(llm, "SETTINGS_PATH", service[0].workspace.path.parent / "models.json")
+    monkeypatch.setattr(llm, "settings", lambda *a, **k: llm.Settings("none"))
+    monkeypatch.setattr(llm, "task_routes", lambda: {})
+    monkeypatch.setattr(AccountStatus, "check", lambda *a, **k: None)
+    monkeypatch.setattr(AIStatusButton, "refresh", lambda button: button.setText("AI fixture"))
+    monkeypatch.setattr(main.ReaderPage, "_check_resources", lambda *_: None)
+    monkeypatch.setattr(main.ReaderPage, "_prepare_reading_highlights", lambda *_: None)
+    monkeypatch.setattr(updates, "check", lambda *a, **k: None)
+    monkeypatch.setattr(connection_vault, "ConnectionVault", lambda _: vault)
+    monkeypatch.setattr(workspace_sync, "SyncSession", lambda *a, **k: service[0])
+    window = main.MainWindow()
+    try:
+        window.show()
+        controller = window._continuous_sync
+        wait(app, lambda: controller.summary()["result"] is not None)
+        assert controller.enabled and window._workspace_sync_session is service[0]
+        assert service[1].pull(service[2])
+        assert service[2] not in window.sync_status_btn.toolTip()
+    finally:
+        controller = getattr(window, "_continuous_sync", None)
+        if controller is not None:
+            controller.stop()
+            wait(app, lambda: not controller.busy)
+        window.close()
+        app.processEvents()

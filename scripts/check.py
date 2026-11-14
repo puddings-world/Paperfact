@@ -153,6 +153,7 @@ RELEASE_JOURNEYS = {
     "Private diagnostics and fresh-install identity": (
         "tests/test_diagnostics.py::test_export_contains_only_reviewed_allowlisted_data",
         "tests/test_distribution.py::test_fresh_install_can_sign_in_using_bundled_application_identity",
+        "tests/test_continuous_sync.py::test_actual_main_window_resumes_only_the_opted_in_device",
     ),
     "Reading goals and source-bound research": (
         "tests/test_reading_goals.py::test_edit_reload_clear_preserves_description_notes_and_other_research",
@@ -162,9 +163,10 @@ RELEASE_JOURNEYS = {
     ),
     "Recovery provenance and durable confirmation": (
         "tests/test_sync_recovery_choices.py::test_corrupt_saved_provenance_cannot_be_reused_as_a_recovery_decision",
-        "tests/test_sync_recovery_note_copy.py::test_repeated_apply_and_restart_preparation_do_not_duplicate_or_overwrite",
+        "tests/test_sync_recovery_note_copy.py::test_copy_syncs_through_recovered_authority_to_another_native_client[True]",
         "tests/test_recovery_changes_ui.py::test_visible_native_review_copy_and_refresh_preserve_old_and_existing_notes",
         "tests/test_recovery_changes_ui.py::test_metadata_choice_is_explicit_saved_once_and_recognized_after_reload",
+        "tests/test_sync_recovery_choices.py::test_receipt_proven_new_list_preserves_membership_reading_and_both_orders",
     ),
 }
 RELEASE_MOBILE = (

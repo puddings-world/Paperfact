@@ -52,6 +52,23 @@ def _fingerprint(observed, source, choice):
     return hashlib.sha256(candidates._json(document).encode("utf-8")).hexdigest()
 
 
+def _context(observed, source, choice, request_id):
+    return dict(
+        format=FORMAT,
+        state="kept_current" if choice == "keep" else "saved_locally",
+        request_id=request_id,
+        choice=choice,
+        source_workspace_id=source["workspace_id"],
+        source_device_id=source["device_id"],
+        source_operation_id=source["operation_id"],
+        source_fingerprint=candidates._fingerprint(source),
+        workspace_id=observed.binding["workspace_id"],
+        device_id=observed.binding["device_id"],
+        entity_type=source["entity_type"],
+        entity_id=source["entity_id"],
+    )
+
+
 def _seal(observed, change_id, request_id, fingerprint, operation):
     data = candidates._json([observed._seal, change_id, request_id, fingerprint, operation])
     return hmac.new(_KEY, data.encode("utf-8"), "sha256").hexdigest()
@@ -246,13 +263,180 @@ class Decision:
         return _result(receipt, applied=self.operation_json is not None, reused=False)
 
 
-def _build(conn, observed, comparison, choice, request_id):
+def _parent_mapper(conn, observed, source, check):
+    """Resolve only lifetimes proved by the old source and actual native receipts."""
+    graph = {(kind, identity): state for kind, identity, state in json.loads(observed.graph_json)}
+    index = {
+        row["operation_id"]: row["change_id"] for row in json.loads(observed.source._rows_json)
+    }
+    receipts, cache, visiting = None, {}, set()
+
+    def recorded():
+        nonlocal receipts
+        if receipts is None:
+            where = " WHERE result LIKE ? AND instr(result,?)>0"
+            args = ('{"choice":%', '"format":"' + FORMAT + '"')
+            count, size = conn.execute(
+                "SELECT count(*),COALESCE(sum(length(CAST(result AS BLOB))),0)"
+                " FROM integration_operations" + where,
+                args,
+            ).fetchone()
+            if count > candidates.review.MAX_RECORDS or size > candidates.MAX_INDEX_BYTES:
+                raise ValueError("Recovery parent proof exceeds its receipt budget")
+            receipts = []
+            for (raw,) in conn.execute("SELECT result FROM integration_operations" + where, args):
+                check()
+                if len(raw.encode("utf-8")) > MAX_RECEIPT:
+                    raise ValueError("Recovery parent receipt exceeds its input budget")
+                receipt = backup._decode(raw)
+                if isinstance(receipt, dict) and receipt.get("format") == FORMAT:
+                    receipts.append(receipt)
+        return receipts
+
+    def proven(reference, translated):
+        check()
+        key = (reference["kind"], reference["id"])
+        if (translated["kind"], translated["id"]) != key:
+            raise ValueError("Recovery parent identity changed")
+        # Only a retained backup-prefix lifetime may rely on unchanged identity.
+        # A post-backup creation still needs a decision, even if its ID was reused.
+        proof_key = (*key, reference["incarnation"], translated["incarnation"])
+        if proof_key in cache:
+            return cache[proof_key]
+        if reference == translated and reference["incarnation"] not in index:
+            with closing(backup._connect(observed.source.snapshot / "authority.sqlite")) as saved:
+                saved.set_progress_handler(lambda: (check(), 0)[1], 1000)
+                row = saved.execute(
+                    "SELECT CASE WHEN length(CAST(metadata AS BLOB))<=? THEN metadata END "
+                    "FROM sync_graph WHERE workspace=? AND entity_type=? AND entity_id=?",
+                    (MAX_BYTES, observed.source.workspace, *key),
+                ).fetchone()
+            state = backup._decode(row[0]) if row is not None and row[0] is not None else None
+            if not isinstance(state, dict) or state.get("incarnation") != reference["incarnation"]:
+                raise ValueError("Unchanged parent is not proved by the selected backup")
+            cache[proof_key] = None
+            return None
+        if proof_key in visiting:
+            raise ValueError("Recovery parent proofs cannot contain a cycle")
+        visiting.add(proof_key)
+        try:
+            for receipt in recorded():
+                if any(
+                    receipt.get(field) != value
+                    for field, value in (
+                        ("entity_type", key[0]),
+                        ("entity_id", key[1]),
+                        ("source_workspace_id", source["workspace_id"]),
+                    )
+                ):
+                    continue
+                choice, operation_id = receipt.get("choice"), receipt.get("source_operation_id")
+                if (
+                    not isinstance(choice, str)
+                    or choice not in {"add", "replace", "restore"}
+                    or not isinstance(operation_id, str)
+                    or operation_id not in index
+                ):
+                    continue
+                original = observed.source.details(
+                    index[operation_id], cancelled=lambda: (check(), False)[1]
+                )["operation"]
+                if (
+                    original["version"] != 2
+                    or original["action"] != "put"
+                    or (original["entity_type"], original["entity_id"]) != key
+                    or original["incarnation"] != reference["incarnation"]
+                ):
+                    continue
+                request_id = receipt.get("request_id")
+                _identifier(request_id)
+                previous = _prior(
+                    conn,
+                    request_id,
+                    _fingerprint(observed, original, choice),
+                    _context(observed, original, choice, request_id),
+                )
+                if previous is None or previous[1] is None:
+                    continue
+                native = backup._decode(previous[1])
+                if native["incarnation"] != translated["incarnation"]:
+                    continue
+                if (
+                    native["version"] != 2
+                    or native["action"] != "put"
+                    or len(native["parents"]) != len(original["parents"])
+                ):
+                    raise ValueError("Recovery parent receipt does not prove the chosen source")
+                for old_parent, new_parent in zip(
+                    original["parents"], native["parents"], strict=True
+                ):
+                    proven(old_parent, new_parent)
+                if key[0] in ORDERS:
+                    from paper_daily.sync_ordering import observed_set
+
+                    old_items, new_items = original["payload"]["items"], native["payload"]["items"]
+                    kind = "membership" if key[0] == "list_order" else "list"
+                    if (
+                        len(old_items) != len(new_items)
+                        or original["payload"].get("list_id") != native["payload"].get("list_id")
+                        or native["payload"]["observed_set"] != observed_set(native, new_items)
+                    ):
+                        raise ValueError("Recovery order proof changed its scope or complete set")
+                    for old_item, new_item in zip(old_items, new_items, strict=True):
+                        proven(dict(kind=kind, **old_item), dict(kind=kind, **new_item))
+                elif native["payload"] != original["payload"]:
+                    raise ValueError("Recovery parent receipt does not prove the chosen source")
+                cache[proof_key] = native
+                return native
+        finally:
+            visiting.remove(proof_key)
+        raise ValueError("Resolve exact parent/source requirements before this recovery choice")
+
+    def mapped(reference, *, require_active=True):
+        check()
+        current = graph.get((reference["kind"], reference["id"]))
+        from paper_daily.sync_graph import _parents_active
+
+        if (
+            current is None
+            or require_active
+            and (
+                not current["active"]
+                or not _parents_active(
+                    lambda kind, identity: graph.get((kind, identity)), current["parents"]
+                )
+            )
+        ):
+            raise ValueError("Recovery parent must already exist in the target")
+        result = dict(reference, incarnation=current["incarnation"])
+        receipt = proven(reference, result)
+        if receipt is not None and receipt["parents"] != current["parents"]:
+            raise ValueError("Recovery parent graph differs from its native proof")
+        return result
+
+    return mapped
+
+
+def _build(conn, observed, comparison, choice, request_id, check):
     source = comparison["source"]["operation"]
     if choice == "keep":
         return None
     if source["version"] != 2 or source["entity_type"] not in KINDS or source["action"] != "put":
         raise ValueError("This content requires its own typed recovery action; retain it pending")
+    mapped = _parent_mapper(conn, observed, source, check)
+    parents = [mapped(parent) for parent in source["parents"]]
     blockers = set(comparison["blocking_reasons"])
+    blockers.discard("target_parent_lifetime_changed")
+    if "target_entity_lifetime_changed" in blockers:
+        mapped(
+            dict(
+                kind=source["entity_type"],
+                id=source["entity_id"],
+                incarnation=source["incarnation"],
+            ),
+            require_active=False,
+        )
+        blockers.discard("target_entity_lifetime_changed")
     if choice == "restore":
         blockers.discard("target_restore_requires_confirmation")
     if blockers:
@@ -260,10 +444,11 @@ def _build(conn, observed, comparison, choice, request_id):
     current = comparison["target"]["entity_state"]
     if choice == "add" and current is not None:
         raise ValueError("Add requires an absent target; inspect replace or restore explicitly")
-    if choice == "replace" and (current is None or not current["active"]):
+    parent_changed = current is not None and current["parents"] != parents
+    if choice == "replace" and (current is None or not current["active"] or parent_changed):
         raise ValueError("Replace requires an active target; inspect add or restore explicitly")
-    if choice == "restore" and (current is None or current["active"]):
-        raise ValueError("Restore requires a known deleted target")
+    if choice == "restore" and (current is None or current["active"] and not parent_changed):
+        raise ValueError("Restore requires a known deleted or reparented target")
     client = conn._capture_client
     if source["entity_type"] in ORDERS:
         operation = client.new_order_operation_in(
@@ -274,7 +459,17 @@ def _build(conn, observed, comparison, choice, request_id):
             operation_id=request_id,
             restore=choice == "restore",
         )
-        if operation["payload"]["items"] != source["payload"]["items"]:
+        kind = "membership" if source["entity_type"] == "list_order" else "list"
+        items = [
+            dict(
+                id=item["id"],
+                incarnation=mapped(dict(kind=kind, id=item["id"], incarnation=item["incarnation"]))[
+                    "incarnation"
+                ],
+            )
+            for item in source["payload"]["items"]
+        ]
+        if operation["payload"]["items"] != items:
             raise ValueError("Ordering member lifetimes changed; review a new complete order")
     else:
         operation = client.new_graph_operation_in(
@@ -285,7 +480,7 @@ def _build(conn, observed, comparison, choice, request_id):
             operation_id=request_id,
             restore=choice == "restore",
         )
-    if operation["parents"] != source["parents"]:
+    if operation["parents"] != parents:
         raise ValueError("Recovery must preserve the exact observed parent lifetimes")
     return canonical_operation(operation)
 
@@ -300,21 +495,9 @@ def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=la
     comparison = observed.compare(change_id, seconds=seconds, cancelled=cancelled)
     source = comparison["source"]["operation"]
     fingerprint = _fingerprint(observed, source, choice)
-    context = dict(
-        format=FORMAT,
-        state="kept_current" if choice == "keep" else "saved_locally",
-        request_id=request_id,
-        choice=choice,
-        source_workspace_id=source["workspace_id"],
-        source_device_id=source["device_id"],
-        source_operation_id=source["operation_id"],
-        source_fingerprint=candidates._fingerprint(source),
-        workspace_id=observed.binding["workspace_id"],
-        device_id=observed.binding["device_id"],
-        entity_type=source["entity_type"],
-        entity_id=source["entity_id"],
-    )
+    context = _context(observed, source, choice, request_id)
     with closing(_readonly_connection(observed.database)) as conn:
+        conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
         conn.execute("BEGIN")
         native._binding_in(conn, observed)
         previous = _prior(conn, request_id, fingerprint, context)
@@ -323,7 +506,7 @@ def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=la
         else:
             if _operation(conn, request_id) is not None:
                 raise ValueError("Recovery request collides with another native operation")
-            encoded = _build(conn, observed, comparison, choice, request_id)
+            encoded = _build(conn, observed, comparison, choice, request_id, check)
             operation = json.loads(encoded) if encoded is not None else None
             receipt = dict(
                 context,

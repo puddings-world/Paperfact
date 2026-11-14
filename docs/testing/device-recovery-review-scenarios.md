@@ -125,3 +125,73 @@ Final portable note-identity, stale-target and usage-contract checks passed 11
 cases in 9.81s, 13.6s total. Invalidated observations also disable the action
 button, even if an old prepared choice remains in memory. These overlap earlier
 checks and do not claim another complete release-profile run.
+
+
+## Recorded parent lifetimes (2026-11-14)
+
+| Requirement | Test / result boundary |
+|---|---|
+| New list retains membership, reading time and both order scopes | `test_receipt_proven_new_list_preserves_membership_reading_and_both_orders`: five new native operations; old source unchanged; reference authority accepts them; a fresh native peer retains saved content |
+| IDs do not grant recovery | `test_parent_mapping_requires_valid_receipt_and_current_exact_lifetime`: unrecorded matching entity, corrupt receipt and unapproved recreation refuse without writes |
+| Old incarnation cannot be reused as an implicit grant | `test_reusing_old_incarnation_without_a_recovery_receipt_does_not_prove_parent` |
+| Explicit parent and child restore | `test_explicit_root_restore_preserves_historical_proofs_for_child_restore`: list/member/reading/order restore in sequence; prior native history remains usable |
+| Later parent edits survive | `test_parent_proof_is_rechecked_at_apply_and_refresh_preserves_later_root_edit`: stale apply refuses; refreshed child recovery retains the newer parent name |
+| Actual desktop actions | `test_desktop_recovers_new_list_and_membership_then_restores_changed_parent`: add then restore via the contextual selector and native worker |
+
+Two regressions initially failed: guessed lifetime reuse was accepted, and valid
+child restore was refused by conflating historical proofs with current parents.
+The resolver now checks historical native/source relationships separately from
+current active lifetimes. The eligibility guard follows the native client's
+explicit restore contract for changed parents, even when the child's own active
+flag remains true. Prefix lifetimes are checked against the actual backup graph.
+Ordering proof includes historical item links and a recomputed complete-set digest.
+Receipt bytes/counts and SQL work are bounded; a changed target invalidates apply.
+
+Initial affected checks passed 9 cases in 45.19s (48.9s total). Refined proof checks
+passed 7 in 34.74s (38.1s total). Critical, desktop and affected regressions passed
+32 in 61.66s (65.4s total). The expanded authority/peer journey plus the unchanged
+note-copy peer journey passed 2 in 13.96s (18.0s total). Counts overlap; this is not
+a historical full-suite, installed-device, cloud, phone or semantic-original pass.
+The two peer journeys now share their existing fixture-service capture helper.
+No owner research, real credentials or paid calls were used.
+
+Final saved peer-order, receipt-budget, skill-synchronization and usage checks
+passed 25 cases in 17.54s, 23.3s total. The peer stores the exact three-list order
+and new root incarnation. An over-budget receipt fails without writes. These
+are overlapping focused checks, not a rerun of the expanded release profile.
+
+
+## Notes on papers missing from the backup
+
+The paper-deletion protocol remains intentionally unavailable. The real recovery
+journey is a new paper and note saved after the authority backup: explicitly add
+that paper in the fresh workspace, then copy its unanchored note.
+
+| Requirement | Existing/new selector and observable result |
+|---|---|
+| Recovered paper proof | `test_note_copy_uses_proven_recovered_paper_and_retry_preserves_later_metadata`: the copied note uses the recorded new paper lifetime; retry leaves a later paper title and both source/history unchanged |
+| No guessed parent authority | `test_same_paper_identity_without_recovery_proof_cannot_authorize_a_note_copy`: even deliberately reused old IDs/incarnations cannot authorize a copy |
+| Desktop can still compare | `test_new_paper_note_review_requires_proven_parent_and_keeps_comparison_visible`: proven parent enables one copy; missing proof keeps both panes readable and produces no write |
+| Actual peer delivery | `test_copy_syncs_through_recovered_authority_to_another_native_client[True]`: accepted new paper and note reach a fresh native client with the exact mapped parents/payload, and retry creates no extra operation |
+
+The valid mapped-parent case initially failed with `target_parent_lifetime_changed`.
+Note copying now uses the same bounded native/source receipt resolver as metadata;
+parent equality alone is insufficient. Three focused copy/proof/retry cases passed
+in 22.8s including checks. Both native peer variants passed in the next selection;
+that selection then exposed a new UI fixture using a nonce-scoped change ID from
+another review. The fixture now locates the current change by immutable operation
+identity and checks the existing explicit absent-content label. Both UI cases
+passed in 15.2s including checks. No existing behavior assertion was weakened.
+
+The curated release selection replaces the old copy-retry representative with
+this actual recovered-paper peer journey (which also asserts retry). Historical
+retry, cancellation, stale-source and rollback cases remain available and are
+selected when affected; the release case count is not expanded by this change.
+Exact-original, compound file ownership and physical installed-device/cloud gates
+remain open. Fixtures never access native credentials, owner research or paid AI.
+
+Final critical/affected lifecycle, real UI, documentation, release-selection and
+skill checks passed **41 cases in 95.29s**, **99.2s total** including privacy/Ruff.
+The Windows job was capped at two logical processors and 25% CPU; no historical
+full suite was run. Earlier peer/UI selections overlap this evidence. Native
+Mac/phone prompts and a deployed recovery authority remain unverified.

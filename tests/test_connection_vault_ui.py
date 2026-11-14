@@ -172,9 +172,7 @@ def test_finished_saved_load_cannot_fill_after_binding_changes_before_gui_delive
     assert service[3] == ["session_info"]
 
 
-def test_binding_change_after_saved_details_load_stops_explicit_connect(
-    dialog, service
-):
+def test_binding_change_after_saved_details_load_stops_explicit_connect(dialog, service):
     app, view = dialog
     verify(dialog, service, remember=True)
     view.disconnect()
@@ -187,3 +185,172 @@ def test_binding_change_after_saved_details_load_stops_explicit_connect(
     assert not view.credential.text()
     assert not service[0].summary()["authenticated"]
     assert service[3] == ["session_info"]
+
+
+def test_explicit_reconnect_verifies_in_background_without_painting_saved_credential(
+    dialog, service, saved
+):
+    app, view = dialog
+    verify(dialog, service, remember=True)
+    view.disconnect()
+    observed = []
+    view.credential.textChanged.connect(observed.append)
+    view.reconnect_saved_button.click()
+    worker = view._worker
+    assert worker is not None and not view.reconnect_saved()
+    wait(app, lambda: not view.busy)
+    assert service[0].summary()["authenticated"]
+    assert service[3] == ["session_info", "session_info"]
+    assert not view.credential.text() and all(not value for value in observed)
+    assert service[2] not in str(worker.result) and service[2] not in view.status.text()
+    assert view.sync_button.isEnabled()
+    assert "no research has been sent" in view.status.text()
+    assert not view.load_saved_button.isVisible()
+
+
+@pytest.mark.parametrize("problem", ["missing", "rejected"])
+def test_reconnect_missing_or_rejected_record_preserves_manual_retry(
+    dialog, service, saved, problem
+):
+    from dataclasses import replace
+
+    from paper_daily.connection_vault import SERVICE
+
+    app, view = dialog
+    verify(dialog, service, remember=True)
+    view.disconnect()
+    key = (SERVICE, saved[0].account)
+    original = saved[1].rows[key]
+    if problem == "missing":
+        saved[1].rows.clear()
+    else:
+        token = service[2][:-1] + ("A" if service[2][-1] != "A" else "B")
+        saved[1].rows[key] = replace(saved[2], token=token).encoded()
+    assert view.reconnect_saved()
+    wait(app, lambda: not view.busy)
+    assert not service[0].summary()["authenticated"]
+    assert view.connect_button.isEnabled() and view.reconnect_saved_button.isEnabled()
+    assert not view.credential.text() and service[2] not in view.status.text()
+    assert service[3] == ["session_info"] * (1 if problem == "missing" else 2)
+    saved[1].rows[key] = original
+    assert view.reconnect_saved()
+    wait(app, lambda: not view.busy)
+    assert service[0].summary()["authenticated"]
+
+
+@pytest.mark.parametrize("action", ["cancel", "close", "workspace"])
+def test_held_vault_reconnect_cannot_authenticate_after_cancellation_or_context_change(
+    dialog, service, saved, monkeypatch, tmp_path, action
+):
+    from threading import Event
+
+    app, view = dialog
+    verify(dialog, service, remember=True)
+    view.disconnect()
+    entered, release = Event(), Event()
+    original = saved[1].get_password
+
+    def held(*args):
+        entered.set()
+        assert release.wait(8)
+        return original(*args)
+
+    monkeypatch.setattr(saved[1], "get_password", held)
+    try:
+        assert view.reconnect_saved()
+        wait(app, entered.is_set)
+        assert not view.reconnect_saved()
+        if action == "close":
+            assert not view.close()
+        elif action == "workspace":
+            service[0].workspace.current_path = lambda: tmp_path / "other.db"
+            view._check_workspace()
+        else:
+            view.cancel()
+    finally:
+        release.set()
+    wait(app, lambda: not view.busy)
+    assert service[3] == ["session_info"]
+    assert not service[0].summary()["authenticated"] and not view.credential.text()
+
+
+@pytest.mark.parametrize("language", ["en", "zh-TW"])
+def test_saved_reconnect_bilingual_screen_has_no_secret_and_keeps_details_advanced(
+    service, saved, language
+):
+    from pathlib import Path
+
+    from PySide6.QtGui import QRawFont
+
+    from paper_daily.desktop import fonts, settings_style
+    from paper_daily.workspace_service import Ticket
+
+    app = QApplication.instance() or QApplication([])
+    session = service[0]
+    connection = saved[2]
+    session.connect(
+        connection.endpoint,
+        connection.workspace_id,
+        connection.device_id,
+        connection.token,
+        Ticket(),
+    )
+    saved[0].remember(session, connection)
+    session.disconnect()
+    previous = app.font()
+    fonts.load()
+    app.setFont(fonts.font(pixels=14))
+    face = QRawFont.fromFont(app.font())
+    assert face.isValid() and all(face.glyphIndexesForString("Paperfact " + chr(36899)))
+    from paper_daily.desktop.continuous_sync import ContinuousSync
+
+    automatic = ContinuousSync(session)
+    automatic.timer.stop()
+    view = SyncConnectionDialog(session, language=language, vault=saved[0], automatic=automatic)
+    settings_style.apply(view)
+    try:
+        view.resize(700, 760)
+        view.show()
+        wait(app, lambda: view.binding is not None and not view.busy)
+        assert view.reconnect_saved()
+        wait(app, lambda: not view.busy)
+        assert view.reconnect_saved_button.isVisible() and not view.load_saved_button.isVisible()
+        assert not view.credential.text() and not view.setup_panel.isVisible()
+        artifact = Path.cwd() / "build" / f"saved-reconnect-{language}.png"
+        assert view.grab().save(str(artifact))
+    finally:
+        automatic.stop()
+        automatic.timer.stop()
+        view.close()
+        app.setFont(previous)
+
+
+def test_explicit_startup_checkbox_saves_verified_connection_and_can_be_disabled(service, saved):
+    from paper_daily.desktop.continuous_sync import ContinuousSync
+
+    app = QApplication.instance() or QApplication([])
+    automatic = ContinuousSync(service[0])
+    automatic.timer.stop()
+    view = SyncConnectionDialog(service[0], language="en", vault=saved[0], automatic=automatic)
+    try:
+        view.show()
+        wait(app, lambda: view.binding is not None and not view.busy)
+        assert view.startup_box.isVisible() and not view.startup_box.isEnabled()
+        verify((app, view), service)
+        assert view.startup_box.isEnabled() and not view.startup_box.isChecked()
+        view.startup_box.click()
+        assert not view.startup_box.isEnabled()
+        wait(app, lambda: not view.busy)
+        automatic.timer.stop()
+        assert view.startup_box.isChecked() and automatic.enabled
+        assert saved[0].startup_record() and not view.credential.text()
+        view.startup_box.click()
+        wait(app, lambda: not view.busy)
+        assert not view.startup_box.isChecked() and not automatic.enabled
+        assert saved[0].startup_record() is None
+        assert saved[0].load() == saved[2]  # Disable does not delete the credential.
+    finally:
+        automatic.stop()
+        wait(app, lambda: not automatic.busy)
+        automatic.timer.stop()
+        view.close()

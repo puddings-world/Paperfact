@@ -222,17 +222,9 @@ def test_rapid_parallel_confirmation_creates_exactly_one_note(prepared):
     assert bodies(path) == ["Backed up note", "Old device's unsent revision"]
 
 
-def test_copy_syncs_through_recovered_authority_to_another_native_client(
-    request,
-    monkeypatch,
-    tmp_path_factory,
-):
+def capture_recovered_authority(monkeypatch):
+    """Capture only the synthetic recovered service and fixture device credential."""
     import test_sync_recovery_target as fixtures
-    from test_workspace_sync import Native
-
-    from paper_daily import sync_bootstrap
-    from paper_daily.workspace_service import Ticket
-    from paper_daily.workspace_sync import SyncSession
 
     publish = fixtures.publish
     hosted = {}
@@ -251,7 +243,26 @@ def test_copy_syncs_through_recovered_authority_to_another_native_client(
         return service
 
     monkeypatch.setattr(fixtures, "publish", capture)
+    return hosted
+
+
+@pytest.mark.parametrize("recovered", [False, True])
+def test_copy_syncs_through_recovered_authority_to_another_native_client(
+    request,
+    monkeypatch,
+    tmp_path_factory,
+    recovered,
+):
+    from test_workspace_sync import Native
+
+    from paper_daily import sync_bootstrap
+    from paper_daily.workspace_service import Ticket
+    from paper_daily.workspace_sync import SyncSession
+
+    hosted = capture_recovered_authority(monkeypatch)
     prepared = request.getfixturevalue("prepared")
+    if recovered:
+        prepared = recovered_paper(prepared)
     old, source, _change, path, source_op = prepared
     before = dump(old.journal.path)
 
@@ -283,15 +294,86 @@ def test_copy_syncs_through_recovered_authority_to_another_native_client(
         joining.disconnect()
     check_source("join peer")
     peer = destination / "papers.db"
-    assert bodies(peer) == ["Backed up note", "Old device's unsent revision"]
+    assert bodies(peer) == [
+        "Backed up note", "New paper's unsent note" if recovered else "Old device's unsent revision"
+    ]
     with closing(_readonly_connection(peer)) as conn:
         row = conn.execute(
             "SELECT operation FROM paperfact_sync_heads WHERE entity_type=? AND entity_id=?",
             ("note", saved["entity_id"]),
         ).fetchone()
     assert row is not None
+    import json
+
+    delivered = json.loads(row[0])
+    assert delivered["payload"] == source_op["payload"]
+    assert delivered["parents"] == json.loads(copied.operation_json)["parents"]
+    if recovered:
+        assert delivered["parents"] != source_op["parents"]
     assert source_op["entity_id"] != saved["entity_id"]
     check_source("before retry")
     assert not copied.apply()["applied"]
     assert client.journal.pending() == [] and dump(old.journal.path) == before
     assert source.details(prepared[2])["operation"] == source_op
+
+
+def recovered_paper(prepared, *, recorded=True):
+    """Recover a post-backup paper using an actual explicit native add decision."""
+    from test_sync_files import paper_payload
+
+    from paper_daily import sync_recovery_choices as choices
+
+    old, previous, _change, path, _note = prepared
+    paper = str(uuid4())
+    root = old.new_graph_operation("paper", paper, paper_payload())
+    old.save(root)
+    note = old.new_graph_operation(
+        "note", str(uuid4()), dict(paper_id=paper, body="New paper's unsent note")
+    )
+    old.save(note)
+    source = candidates.prepare(old.journal.path, previous.snapshot, previous.workspace)
+    changes = {row["operation_id"]: row["change_id"] for row in source.page()["items"]}
+    if recorded:
+        choices.prepare(
+            target.observe(source, path), changes[root["operation_id"]], "add", str(uuid4())
+        ).apply()
+    else:
+        client = attached(path)
+        client.save(client.new_graph_operation(
+            "paper", paper, root["payload"], operation_id=root["incarnation"]
+        ))
+    return old, source, changes[note["operation_id"]], path, note
+
+
+def test_note_copy_uses_proven_recovered_paper_and_retry_preserves_later_metadata(prepared):
+    data = recovered_paper(prepared)
+    old, source, change, path, source_note = data
+    old_before = dump(old.journal.path)
+    request = str(uuid4())
+    plan = decision(data, request)
+    result = plan.apply()
+    assert result["applied"]
+    pending = attached(path).journal.pending()
+    copied = next(op for op in pending if op["operation_id"] == request)
+    assert copied["parents"] != source_note["parents"]
+    assert copied["parents"] == [{"kind": "paper", "id": source_note["payload"]["paper_id"],
+                                   "incarnation": pending[-2]["incarnation"]}]
+    assert copied["payload"] == source_note["payload"]
+    assert bodies(path) == ["Backed up note", "New paper's unsent note"]
+    client = attached(path)
+    client.save(client.new_graph_operation(
+        "paper", source_note["payload"]["paper_id"],
+        dict(pending[-2]["payload"], title="Later target metadata"),
+    ))
+    before = dump(path)
+    again = copy.prepare(target.observe(source, path), change, request).apply()
+    assert not again["applied"] and again["entity_id"] == result["entity_id"]
+    assert dump(path) == before and dump(old.journal.path) == old_before
+
+
+def test_same_paper_identity_without_recovery_proof_cannot_authorize_a_note_copy(prepared):
+    data = recovered_paper(prepared, recorded=False)
+    before = dump(data[3]), dump(data[0].journal.path)
+    with pytest.raises(ValueError):
+        decision(data)
+    assert before == (dump(data[3]), dump(data[0].journal.path))

@@ -1,11 +1,13 @@
-"""Explicit, process-local continuous sync; never remembers credentials or consent."""
+"""Continuous sync with optional, explicitly authorized device-local startup."""
 
+import sqlite3
 import time
 
 from PySide6.QtCore import QEvent, QObject, QTimer, Signal, Slot
 
 COPY = {
     "en": {
+        "connecting": "Connecting saved device",
         "off": "Automatic sync off", "waiting": "Waiting to sync",
         "working": "Syncing", "idle": "Automatic sync on",
         "files_pending": "Files pending",
@@ -14,6 +16,7 @@ COPY = {
         "changed": "Connection changed; enable sync again", "closing": "Stopping sync",
     },
     "zh-TW": {
+        "connecting": "正在核對已儲存裝置連線",
         "off": "自動同步已關閉", "waiting": "等待同步", "working": "同步中",
         "idle": "自動同步已開啟", "offline": "離線；本機變更已保留",
         "paused": "同步已暫停；請重新連線或重試", "changed": "連線已變更；請重新開啟同步",
@@ -61,6 +64,8 @@ class ContinuousSync(QObject):
         self._failures = 0
         self._dirty = False
         self._closing = False
+        self._startup_vault = self._startup_stamp = None
+        self._starting = False
         self._result = None
         self.timer = QTimer(self)
         self.timer.setInterval(500)
@@ -75,7 +80,8 @@ class ContinuousSync(QObject):
 
     def summary(self):
         return {"enabled": self.enabled, "state": self.state, "busy": self.busy,
-                "retry_in": max(0, int(self._next - self.clock())) if self.enabled else None,
+                "retry_in": (max(0, int(self._next - self.clock()))
+                             if self.enabled or self._startup_vault is not None else None),
                 "result": {**self._result, "attachments": dict(self._result["attachments"]),
                            **({"lineage_history": dict(self._result["lineage_history"])}
                               if "lineage_history" in self._result else {})}
@@ -86,13 +92,14 @@ class ContinuousSync(QObject):
         self.changed.emit(self.summary())
 
     def enable(self):
-        """Called only for the user's explicit toggle, after connection verification."""
+        """Enable after explicit consent and successful connection verification."""
         if self._closing or not self.session.summary()["authenticated"]:
             return False
         if self.enabled:
             return True
         if self.busy:
             return False
+        self._startup_vault = self._startup_stamp = None
         self.enabled, self._epoch = True, self.session.generation
         self._result = None
         self.timer.start()
@@ -101,11 +108,68 @@ class ContinuousSync(QObject):
         return True
 
     def stop(self):
+        self._startup_vault = self._startup_stamp = None
         self.enabled = False
         self._epoch = None
         if self.worker is not None:
             self.worker.ticket.cancel()
         self._report("off")
+
+    def resume_saved(self, vault):
+        """Called on startup; the local marker must exist before any vault access."""
+        if self._closing or self.busy or self.enabled or self._startup_vault is not None:
+            return False
+        stamp = vault.startup_record()
+        if stamp is None:
+            return False
+        self._startup_vault, self._startup_stamp = vault, stamp
+        self._next, self._failures = self.clock(), 0
+        self._report("waiting")
+        return True
+
+    def _start_saved(self):
+        if (self.busy or self.session.busy or self.clock() < self._next or self.blocked()):
+            return
+        from paper_daily.desktop.sync_connection_dialog import SyncWorker
+
+        vault, stamp = self._startup_vault, self._startup_stamp
+        if vault.startup_record() != stamp:
+            self.stop()
+            self._report("changed")
+            return
+        self._starting = True
+        self.worker = SyncWorker(
+            lambda ticket, _progress: vault.reconnect_startup(self.session, stamp, ticket), self
+        )
+        self.worker.finished.connect(self._finished)
+        self._report("connecting")
+        self.worker.start()
+
+    def _saved_finished(self, worker):
+        self._starting = False
+        vault, stamp = self._startup_vault, self._startup_stamp
+        current = (not self._closing and not worker.ticket.cancelled and vault is not None
+                   and vault.current() and vault.startup_record() == stamp)
+        if current and worker.error == "offline":
+            self._failures += 1
+            self._next = self.clock() + min(300, 10 * 2 ** min(self._failures - 1, 5))
+            self._report("offline")
+        elif (current and not worker.error and worker.result is not None
+              and self.session.generation == worker.result["generation"]
+              and self.session.summary()["authenticated"]):
+            self._startup_vault = self._startup_stamp = None
+            self.enable()
+        else:
+            if (worker.result is not None
+                    and self.session.generation == worker.result["generation"]):
+                self.session.disconnect()
+            self.stop()
+            if current:
+                self._report("paused")
+        worker.deleteLater()
+        self.settled.emit()
+        if self._closing and self.parent() is not None:
+            QTimer.singleShot(0, self.parent().close)
 
     @Slot()
     def local_changed(self):
@@ -120,6 +184,9 @@ class ContinuousSync(QObject):
 
     @Slot()
     def tick(self):
+        if self._startup_vault is not None and not self._closing:
+            self._start_saved()
+            return
         if not self.enabled or self._closing:
             return
         if (self.session.generation != self._epoch
@@ -141,6 +208,9 @@ class ContinuousSync(QObject):
     def _finished(self):
         worker, self.worker = self.worker, None
         if worker is None:
+            return
+        if self._starting:
+            self._saved_finished(worker)
             return
         current = (self.enabled and self._epoch == self.session.generation
                    and self.session.summary()["authenticated"] and not worker.ticket.cancelled)
@@ -238,3 +308,32 @@ def controller_for(owner, session, *, blocked=lambda: False):
         controller.changed.connect(display)
         display(controller.summary())
     return controller
+
+
+def resume_on_open(owner, database, *, current_path, vault_factory=None):
+    """Wire the normal owner session without reading a native vault absent opt-in."""
+    from pathlib import Path
+
+    from paper_daily.connection_vault import ConnectionVault
+    from paper_daily.desktop.sync_connection_dialog import _background_busy
+    from paper_daily.workspace_sync import SyncSession
+
+    try:
+        session = getattr(owner, "_workspace_sync_session", None)
+        path = Path(database).resolve(strict=True)
+        if Path(current_path()).resolve() != path:
+            return None
+        info = path.stat()
+        if (session is None or session.workspace.path != path
+                or session.workspace.identity != (info.st_dev, info.st_ino)):
+            session = SyncSession(path, current_path=current_path)
+        vault = (vault_factory or ConnectionVault)(session.workspace)
+        if vault.startup_record() is None:
+            return None
+        owner._workspace_sync_session = session
+        controller = controller_for(owner, session, blocked=lambda: _background_busy(owner))
+        controller.resume_saved(vault)
+        return controller
+    except (OSError, ValueError, sqlite3.Error):
+        # Inaccessible or replaced research must remain local and manually recoverable.
+        return None

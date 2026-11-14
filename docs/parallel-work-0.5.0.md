@@ -1,14 +1,14 @@
 # v0.5 execution board
 
 The integration line is `develop/0.5` in `Paperfact-develop`. Preserve its existing
-uncommitted work before integrating checkpoints. No additional feature expansion
-or worktree creation is part of stabilization.
+uncommitted work before integrating checkpoints. Continue the agreed v0.5 scope in the existing worktree; do not add unrelated
+features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Desktop typed recovery choices; guarded confirmation, durable decisions and focused Qt checks |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Post-backup paper/note recovery; shared parent proof, preserved later edits and native peer delivery |
 
-Next: checkpoint existing v0.5 work, integrate reviewed changes, then complete the
+Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task
 boards or duplicate plans. Existing identity and fast-test branches require review
 before integration; clean Git status alone does not authorize deleting them.

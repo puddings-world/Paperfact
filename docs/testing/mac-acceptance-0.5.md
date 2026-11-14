@@ -63,6 +63,17 @@ import/export tests do not establish live synchronization. No hosted service is
 provisioned by this document. Stop a journey on data loss and retain its test
 workspace privately for diagnosis; do not delete/reinitialize to hide a failure.
 
+## Saved startup connection (not run on a physical Mac)
+
+After M09, explicitly enable **Reconnect and sync when this workspace opens on
+this device**. Confirm the Keychain prompt identifies Paperfact, close the app,
+then reopen the same test workspace. It must authenticate the same device and
+sync without re-entering credentials. Repeat offline: local edits must remain
+usable and reconnect must back off rather than repeatedly prompting. Clear the
+option, close/reopen, and verify there is no automatic connection or upload.
+Import or restore into another test database: that database must not inherit the
+preference. Record actual Keychain denial and retry separately from fixture tests.
+
 ## Shared-service and recovery prerequisites
 
 For M09-M14 and M16-M20, use a disposable workspace and a mutually reachable

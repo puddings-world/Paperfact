@@ -3181,6 +3181,9 @@ class MainWindow(QWidget):
             lambda: self._poll_external_lists(background=True)
         )
         self._external_lists_changed()
+        from paper_daily.desktop.continuous_sync import resume_on_open
+
+        resume_on_open(self, store.DB_PATH, current_path=lambda: store.DB_PATH)
         if open_next:
             self.open_next_unread()
         elif not self.papers and self.list_picker.count() == 0:

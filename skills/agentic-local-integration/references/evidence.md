@@ -510,3 +510,56 @@ source ownership, research revisions and authentication remain separate checks.
   application gate remains unproven. No release claim follows from these tests.
 - Privacy review: no credentials, identifying paths, raw user prompts or research
   content included. No telemetry upload, global installation or rule promotion.
+
+
+### Recorded parent recovery, 2026-11-14 (validated-local)
+
+- Trigger: new recovery roots broke old child/order lifetimes; guessed old IDs
+  were accepted, while legitimate child restore failed after parent restoration.
+- Invariant: verify immutable source/native receipt chains, then independently
+  check the current writable parent. Never replay the old envelope or infer a
+  recovery grant from ID equality. Recompute order scope/set digests natively.
+- Evidence: `sync_recovery_choices.py`; native chain/refusal/restore cases in
+  `test_sync_recovery_choices.py`; actual Qt sequence in `test_recovery_changes_ui.py`.
+  Focused proof 7 passed/38.1s total; affected critical/desktop 32 passed/65.4s;
+  actual reference-authority and native peer journeys 2 passed/18.0s total.
+- Limits: synthetic isolated local fixtures, supported v2 typed content only;
+  original/file/compound ownership, arbitrary parent migration, installed devices
+  and hosted acceptance remain open. Not a rule for ordinary single-DB CRUD.
+- Privacy: synthetic content only, no account tokens, owner paths or raw research.
+  No new global installation or cross-project reuse claim.
+
+- Regression selector: `python scripts/check_bounded.py --profile focused --python tests/test_sync_recovery_choices.py::test_explicit_root_restore_preserves_historical_proofs_for_child_restore`. This selector passed in the recorded 7-case gate. Final peer-order/budget/skill/docs gate: 25 passed, 23.3s total.
+
+
+### Device-local startup consent, 2026-11-14 (validated-local)
+
+- Trigger: process-local continuous sync required reconnection after every restart;
+  merely remembering a token did not authorize future background research uploads.
+- Invariant: opt-in stays outside research and is scoped to a physical local DB,
+  binding and exact credential fingerprint. Read the native store only after that
+  marker exists; verify the server, then recheck context/permission at GUI delivery.
+- Implementation: existing `connection_vault.py`, `desktop/continuous_sync.py`,
+  sync dialog and MainWindow startup; no new service, plaintext token store or
+  automatic enrollment. Native-store failure pauses; offline authentication backs off.
+- Evidence: 10 focused boundary/UI/fixture-delivery cases passed in 20.2s total;
+  actual MainWindow delivery plus bilingual rendering passed 3 cases in 15.2s.
+  Tests include copied DB, changed credential, cancelled save, failed forget,
+  queued handshake after permission/binding change, owner close and offline retry.
+- Limits: injected native store and isolated reference authority; native prompts,
+  installed upgrades and physical Mac/phone journey unverified. Not cross-project
+  reuse, not global installation, and not authorization to deploy or upload research.
+- Privacy: synthetic records only; no owner identifiers, tokens or research captured.
+
+
+### Recovered-paper note copy, 2026-11-14 (validated-local)
+
+The recorded-parent resolver is also used by note copy after explicit recovery of
+a post-backup paper. An equality-only parent check wrongly refused valid mapped
+lifetimes and could treat guessed old incarnations as sufficient authority.
+The same source/native receipt proof now gates both metadata and copied notes;
+no new journal format or broad replay capability. Focused proof/retry checks:
+3 passed, 22.8s total. Both native peer variants passed; after correcting the new
+fixture's review-scoped ID, both real desktop cases passed in 15.2s total.
+Paper deletion remains unsupported and original-bound notes are not flattened.
+This is another local adapter, not cross-project reuse or installed-device proof.
