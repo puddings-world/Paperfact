@@ -82,6 +82,8 @@ class RichView(QWidget):
         layout.addWidget(self.view)
         self.setFocusProxy(self.view)
         self._body = ""
+        # What the web page was last asked to show; None until something is.
+        self._shown = None
 
     def markdown(self, text: str) -> str:
         return rich_html.markdown(text) if self.rich else md.to_html(text, self.palette_)
@@ -100,6 +102,15 @@ class RichView(QWidget):
             elif keep_scroll:
                 bar.setValue(kept)
             return
+        if body == self._shown:
+            # The explanation is handed over again each time an answer arrives.
+            # Loading the same page again typesets every formula and diagram once
+            # more and throws the reader back to the top of what they were reading.
+            if at_end:
+                self.view.page().runJavaScript(
+                    "window.scrollTo(0, document.body.scrollHeight)")
+            return
+        self._shown = body
         if keep_scroll:
             self.view.page().runJavaScript(
                 "window.scrollY", 0,
@@ -111,6 +122,8 @@ class RichView(QWidget):
     def _load(self, body: str, at_end: bool, at: int, *,
               current: Callable[[], bool] | None = None) -> None:
         if current is not None and not current():
+            # Asked for, then overtaken before the page answered: nothing was shown.
+            self._shown = None
             return
         page = rich_html.page(body, self.palette_, at_end=at_end, at=at)
         self.view.setHtml(page, QUrl.fromLocalFile(str(WEB_DIR) + "/"))

@@ -97,9 +97,14 @@ BOX = 15
 def _when(paper) -> tuple[int, int]:
     """(year, month). The month comes from the arXiv id ("2508.10215" is August
     2025) when it is the same year, so papers within one year are in order too."""
-    m = re.match(r"(\d{2})(\d{2})\.", paper.arxiv_id or "")
-    month = int(m[2]) if m and 2000 + int(m[1]) == (paper.year or 0) else 0
-    return (paper.year or 0, month)
+    return _year_month(paper.arxiv_id, paper.year)
+
+
+@lru_cache(maxsize=65536)
+def _year_month(arxiv_id, year) -> tuple[int, int]:
+    m = re.match(r"(\d{2})(\d{2})\.", arxiv_id or "")
+    month = int(m[2]) if m and 2000 + int(m[1]) == (year or 0) else 0
+    return (year or 0, month)
 
 
 TYPE_ORDER = ("method", "system", "benchmark", "application", "principle")
@@ -235,6 +240,50 @@ class PaperListModel(QAbstractListModel):
         self.downloads = {}
 
     def set_rows(self, rows: list[tuple[int, object]]) -> None:
+        """Show `rows`, telling the view only what actually moved.
+
+        A reset makes the view forget its selection and scroll position and lay
+        every row out again, so it is kept for a genuinely different list. The
+        same papers in the same order, one paper gone, one added or one moved are
+        the changes a single key makes, and each is announced as exactly that.
+        """
+        # By id, not by object: a list read again from the database is new objects
+        # for the same papers, and that is the commonest "nothing moved" there is.
+        new, old, parent = [p.id for _i, p in rows], [p.id for _i, p in self._rows], QModelIndex()
+        first = next(
+            (i for i, (a, b) in enumerate(zip(new, old, strict=False)) if a != b),
+            min(len(new), len(old)),
+        )
+        if len(new) == len(old):
+            if first == len(new):
+                self._rows = rows
+            else:
+                last = next(i for i in range(len(new) - 1, -1, -1) if new[i] != old[i])
+                up = new[first] == old[last] and new[first + 1:last + 1] == old[first:last]
+                down = new[last] == old[first] and new[first:last] == old[first + 1:last + 1]
+                if not (up or down):
+                    return self._reset(rows)
+                source, target = (last, first) if up else (first, last + 1)
+                self.beginMoveRows(parent, source, source, parent, target)
+                self._rows = rows
+                self.endMoveRows()
+        elif len(new) == len(old) - 1 and new[first:] == old[first + 1:]:
+            self.beginRemoveRows(parent, first, first)
+            self._rows = rows
+            self.endRemoveRows()
+        elif len(new) == len(old) + 1 and new[first + 1:] == old[first:]:
+            self.beginInsertRows(parent, first, first)
+            self._rows = rows
+            self.endInsertRows()
+        else:
+            return self._reset(rows)
+        # Row order is part of a drag's identity (see mimeData).
+        self._epoch = uuid4().hex
+        if rows:
+            self.dataChanged.emit(self.index(0), self.index(len(rows) - 1))
+        return None
+
+    def _reset(self, rows) -> None:
         self.beginResetModel()
         self._rows = rows
         self._epoch = uuid4().hex
@@ -691,7 +740,7 @@ class QueuePage(QWidget):
         self.download_bar.hide()
         self._pdf_poll = QTimer(self)
         self._pdf_poll.setInterval(250)
-        self._pdf_poll.timeout.connect(self._poll_pdfs)
+        self._pdf_poll.timeout.connect(self._tick_pdfs)
         self._job: QProcess | None = None
         self._then = None
         self._job_line = ""
@@ -947,36 +996,50 @@ class QueuePage(QWidget):
             self._untick_all()
 
     def _matches(self, paper) -> bool:
-        if self.f_history.isChecked() and not paper.read:
-            return False
-        if self.f_unread.isChecked() and paper.read:
-            return False
-        if self.f_award.isChecked() and not paper.award:
-            return False
-        if self.f_principle.isChecked() and paper.paper_type != "principle":
-            return False
-        if self.f_pdf.isChecked() and not paper.has_pdf:
-            return False
-        if self.f_roots.isChecked() and paper.dependents < 3:
-            return False
-        if self.f_todo.isChecked() and _analysed(paper) == 3:
-            return False
-        if self.f_nopdf.isChecked() and paper.has_pdf:
-            return False
-        q = self.search.text().strip().lower()
-        if not q:
-            return True
-        # The venue as shown, so "miccai" or "預印本" filters the way the row reads.
-        where = venues.label(paper.venue, paper.year).lower()
-        # The note too, so typing a #tag lists the papers given it.
-        return (
-            q in paper.title.lower()
-            or q in " ".join(paper.authors).lower()
-            or q in where
-            or q in (paper.reason or "").lower()
-        )
+        return QueuePage._matcher(self)(paper)
 
-    def refresh(self) -> None:
+    def _matcher(self):
+        """The filters as they stand now, read from the controls once for a whole list."""
+        history, unread = self.f_history.isChecked(), self.f_unread.isChecked()
+        award, principle = self.f_award.isChecked(), self.f_principle.isChecked()
+        pdf, roots = self.f_pdf.isChecked(), self.f_roots.isChecked()
+        todo, nopdf = self.f_todo.isChecked(), self.f_nopdf.isChecked()
+        q = self.search.text().strip().lower()
+
+        def matches(paper) -> bool:
+            if history and not paper.read:
+                return False
+            if unread and paper.read:
+                return False
+            if award and not paper.award:
+                return False
+            if principle and paper.paper_type != "principle":
+                return False
+            if pdf and not paper.has_pdf:
+                return False
+            if roots and paper.dependents < 3:
+                return False
+            if todo and _analysed(paper) == 3:
+                return False
+            if nopdf and paper.has_pdf:
+                return False
+            if not q:
+                return True
+            # The venue as shown, so "miccai" or "預印本" filters the way the row reads.
+            where = venues.label(paper.venue, paper.year).lower()
+            # The note too, so typing a #tag lists the papers given it.
+            return (
+                q in paper.title.lower()
+                or q in " ".join(paper.authors).lower()
+                or q in where
+                or q in (paper.reason or "").lower()
+            )
+
+        return matches
+
+    def refresh(self, *, same_papers: bool = False) -> None:
+        """Show the window's papers. `same_papers`: only their read or pinned state
+        changed, so what was counted and read from disk for them still holds."""
         self.export_bundle_button.setEnabled(bool(self.win.active_list))
         name = self.win.list_picker.currentText().rsplit(" (", 1)[0]
         self.export_bundle_button.setToolTip(
@@ -1009,15 +1072,16 @@ class QueuePage(QWidget):
                 box.blockSignals(True)
                 box.setChecked(False)
                 box.blockSignals(False)
-        self._say_analysis()
+        if not same_papers:
+            self._say_analysis()
         scroll = self.view.verticalScrollBar().value()
         QTimer.singleShot(0, self.view, lambda: self.view.verticalScrollBar().setValue(scroll))
-        rows = [
-            (i, p) for i, p in enumerate(self.win.papers, 1) if self._matches(p)
-        ]
+        matches = self._matcher()
+        rows = [(i, p) for i, p in enumerate(self.win.papers, 1) if matches(p)]
         sort_id, label, key, _reverse = SORTS[self.sort.currentIndex()]
         # Every sort but 自訂順序 breaks ties on when papers were opened.
-        self._load_opened()
+        if not same_papers:
+            self._load_opened()
         if key is not None:
             # The blurb above just claimed the default order. Say what is actually on
             # screen instead.
@@ -1078,8 +1142,16 @@ class QueuePage(QWidget):
                 " 置頂的論文可以拖曳排列；其餘要拖曳排序，請選「自訂順序」、清除搜尋與篩選，"
                 "並取消置頂。" if self.model.can_reorder_pins else
                 " 要拖曳排序，請選「自訂順序」、清除搜尋與篩選，並取消置頂。"))
+        before = self.view.currentIndex().row()
         self.model.set_rows(rows)
-        self._select(current.id if current is not None else getattr(self.win, "_last_paper", None))
+        # Rows that only changed in place keep their highlight; choosing it again
+        # would scroll a long list for nothing.
+        now = self._current_paper()
+        if current is None or now is None or now.id != current.id:
+            self._select(
+                current.id if current is not None else getattr(self.win, "_last_paper", None))
+        elif self.view.currentIndex().row() != before:
+            self.view.scrollTo(self.view.currentIndex())
         self._say_count(rows)
 
     def _pin_order_key(self):
@@ -1179,6 +1251,14 @@ class QueuePage(QWidget):
         if self.downloads is not None:
             self.downloads.cancel([p.id for p in self.win.papers])
             self._poll_pdfs()
+
+    def _tick_pdfs(self):
+        # Four ticks a second for as long as the window is open: with nothing
+        # downloading and nothing new to show, a tick must not walk a long list.
+        if (self.downloads is not None and not self.downloads.busy
+                and self.downloads.snapshot() == self.model.downloads):
+            return
+        self._poll_pdfs()
 
     def _poll_pdfs(self):
         if self.downloads is None:

@@ -700,11 +700,23 @@ class JobPanel(QFrame):
             self.refresh()
 
     def refresh(self):
+        jobs = list(reversed(list(self.hub.jobs.values())))
+        shape = [(job.token, job.state, [(label, on) for label, _act, on in self._buttons(job)])
+                 for job in jobs]
+        if jobs and shape == getattr(self, "_shape", None):
+            # The hub says "changed" four times a second while a job runs, and most of
+            # the time only the clock moved. Rebuilding the rows each time also took
+            # a button away from under the pointer between press and release.
+            for (row, text), job in zip(self._lines, jobs, strict=True):
+                if text.text() != describe(job):
+                    text.setText(describe(job))
+                    row.setAccessibleName(describe(job))
+            return
         while self.rows.count():
             item = self.rows.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        jobs = list(reversed(list(self.hub.jobs.values())))
+        self._shape, self._lines = shape, []
         if not jobs:
             empty = QLabel("這次開啟後還沒有背景工作。")
             empty.setStyleSheet(f"color:{self.pal['muted']};")
@@ -724,6 +736,16 @@ class JobPanel(QFrame):
                  else self.pal["muted"])
         text.setStyleSheet(f"color:{color};font-size:12px;")
         line.addWidget(text, 1)
+        for label, act, enabled in self._buttons(job):
+            button = QPushButton(label)
+            button.setEnabled(enabled)
+            button.clicked.connect(act)
+            line.addWidget(button)
+        row.setAccessibleName(describe(job))
+        self._lines.append((row, text))
+        return row
+
+    def _buttons(self, job):
         buttons = []
         if job.state in ACTIVE and (job.paper_id or job.list_id):
             buttons.append(("前往", lambda: self._visit(job.token), True))
@@ -735,13 +757,7 @@ class JobPanel(QFrame):
             buttons.append((step[0], step[1], True))
         if job.state in ("done", "partial", "cancelled"):
             buttons.append(("查看結果", lambda: self._open(job.token), True))
-        for label, act, enabled in buttons:
-            button = QPushButton(label)
-            button.setEnabled(enabled)
-            button.clicked.connect(act)
-            line.addWidget(button)
-        row.setAccessibleName(describe(job))
-        return row
+        return buttons
 
     def _visit(self, token):
         self.hide()

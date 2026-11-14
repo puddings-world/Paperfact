@@ -263,9 +263,25 @@ class WorkspaceChanges(QObject):
         if not self._current():
             return
         base = revision[:3]
+        known = self.revision
+        if (known is not None and base[0] == known[0] and base[2] == known[2]
+                and base[1] < known[1]):
+            # A poll that started before this window's own write: older than what is shown.
+            return
         if base != self.revision:
             self.revision = base
             self.changed.emit()
+
+    def absorb(self, before, after):
+        """Take a write this window made, and already shows, as seen.
+
+        Only when nothing else moved the revision first: an outside change that
+        is still unseen keeps the next poll announcing it.
+        """
+        known = self.revision
+        if (known is not None and before is not None and after is not None
+                and known[1] == before and self._current()):
+            self.revision = (known[0], after, known[2])
 
     def poll(self):
         lifetime = self._lifetime
