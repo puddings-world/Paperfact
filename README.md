@@ -272,7 +272,9 @@ The recovery review compares saved and current research before confirmation:
 - Restore complete claim, highlight, explanation-link, lineage and editable-deck groups
   with exact inputs, originals and assets. Known historical native versions remain
   inspectable; missing old explanations require explicit confirmation before clearing
-  their corresponding current content.
+  their corresponding current content. Recorded lineage deletions also need
+  confirmation; they synchronize report retirement while retaining originals,
+  independent notes and report history.
 
 See the [recovery workflow and API](docs/device-recovery-review.md),
 [deck provenance](docs/sync-files.md) and [saved-evidence audit](docs/deck-audit.md).

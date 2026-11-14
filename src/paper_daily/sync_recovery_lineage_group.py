@@ -76,6 +76,8 @@ def review_request(observed, operation):
         graph = conn._capture_client._optimistic_graph(conn)[0]
         keys = [("paper", p["id"]) for p in operation["parents"]]
         keys.extend(("research_file", p["file_id"]) for p in operation["source_dependencies"])
+        if operation["action"] == "delete":
+            keys.append(("research_content", operation["entity_id"]))
         inputs = [
             [
                 kind,
@@ -105,8 +107,6 @@ def review_request(observed, operation):
 def _root(observed, change, cancelled):
     operation = observed.source.details(change, cancelled=cancelled)["operation"]
     lineage_dependencies.canonical_operation(operation)
-    if operation["action"] != "put":
-        raise ValueError("Select a complete native Lineage put")
     return operation
 
 
@@ -203,12 +203,12 @@ def _sources(observed, root, check):
 
 
 def _visible(conn, root):
-    local = _local_scope(conn, root["payload"]["scope"], required=True)
+    local = _local_scope(conn, dict(kind="paper", id=root["parents"][0]["id"]), required=True)
     if not conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (lineage_sets.TABLE,)
     ).fetchone():
         return None
-    return lineage_projection._current(conn, local, root["payload"]["key"])
+    return lineage_projection._current(conn, local, root["content_address"]["key"])
 
 
 def _checked_visible(conn, client, root, current):
@@ -225,8 +225,8 @@ def _checked_visible(conn, client, root, current):
         return None
     if marker is None or marked != current or bool(marker["active"]) != (visible is not None):
         raise ValueError("Visible Lineage differs from native history; preserve it first")
-    local = _local_scope(conn, root["payload"]["scope"], required=True)
-    if marker["paper_id"] != local or marker["corpus_key"] != root["payload"]["key"]:
+    local = _local_scope(conn, dict(kind="paper", id=root["parents"][0]["id"]), required=True)
+    if marker["paper_id"] != local or marker["corpus_key"] != root["content_address"]["key"]:
         raise ValueError("Lineage projection owners differ from native history")
     if visible is not None:
         from paper_daily.claim_content import hashed
@@ -285,15 +285,28 @@ def _prior(conn, observed, root, request, replace, check):
         or len(receipt["originals"]) != len(root["source_dependencies"])
     ):
         raise ValueError("The Lineage-group request or saved receipt changed")
-    scientific = references._retained(conn, receipt["native"], check)
-    lineage_dependencies.canonical_operation(scientific)
-    if (
-        scientific["action"] != "put"
-        or scientific["payload"] != root["payload"]
-        or scientific["entity_id"] != root["entity_id"]
-        or scientific["workspace_id"] != context["workspace_id"]
-    ):
-        raise ValueError("Saved Lineage differs from its exact native report")
+    scientific = (
+        references._retained(conn, receipt["native"], check)
+        if receipt["native"] is not None
+        else None
+    )
+    if scientific is None:
+        if root["action"] != "delete":
+            raise ValueError("Saved Lineage lost its native report")
+    else:
+        lineage_dependencies.canonical_operation(scientific)
+        if (
+            scientific["action"] != root["action"]
+            or scientific["payload"] != root["payload"]
+            or scientific["entity_id"] != root["entity_id"]
+            or scientific["workspace_id"] != context["workspace_id"]
+            or scientific["content_address"] != root["content_address"]
+            or [(p["kind"], p["id"]) for p in scientific["parents"]]
+            != [(p["kind"], p["id"]) for p in root["parents"]]
+        ):
+            raise ValueError("Saved Lineage differs from its exact native report")
+    if root["action"] == "delete":
+        return receipt
     with closing(_readonly_connection(observed.source.database)) as old:
         old.execute("BEGIN")
         for old_pin, pin, item in zip(
@@ -392,6 +405,8 @@ class LineageGroup:
         if self.already:
             raise ValueError("The saved Lineage decision disappeared; compare again")
         self.observed._check(check)
+        if root["action"] == "delete":
+            return _apply_retirement(self, metadata, check)
         originals, proofs = _sources(self.observed, root, check)
         if originals != metadata["originals"]:
             raise ValueError("Lineage source ownership changed after comparison")
@@ -513,13 +528,15 @@ class LineageGroup:
 
 
 def prepare(observed, change_id, request_id, *, replace=False, seconds=60, cancelled=lambda: False):
-    """Prepare the complete native report and all available exact source originals."""
+    """Review a complete native report/original group or its explicit typed retirement."""
     _identifier(request_id)
     if type(replace) is not bool:
         raise ValueError("Choose explicitly whether to replace the Lineage report")
     check = backup._guard(seconds, cancelled)
     native._auth(observed, check)
     root = _root(observed, change_id, cancelled)
+    if root["action"] == "delete":
+        return _prepare_retirement(observed, change_id, request_id, root, replace, check)
     with closing(_readonly_connection(observed.database)) as conn:
         conn.execute("BEGIN")
         native._binding_in(conn, observed)
@@ -575,3 +592,109 @@ def prepare(observed, change_id, request_id, *, replace=False, seconds=60, cance
         prior is not None,
         _sign(observed, request_id, encoded, compared, replace),
     )
+
+
+def _prepare_retirement(observed, change, request, root, replace, check):
+    with closing(_readonly_connection(observed.database)) as conn:
+        conn.execute("BEGIN")
+        native._binding_in(conn, observed)
+        prior = _prior(conn, observed, root, request, replace, check)
+        metadata, comparison = dict(root=root), []
+        if prior is None:
+            _unused(conn, request, root)
+            mapper = choices._parent_mapper(conn, observed, root, check)
+            parents = [mapper(parent) for parent in root["parents"]]
+            client = conn._capture_client
+            current = history._head(conn, root["entity_id"])
+            visible = _checked_visible(conn, client, root, current)
+            state = client._optimistic_graph(conn)[0].get(("research_content", root["entity_id"]))
+            operation, write = current, False
+            if state is not None and current is None:
+                raise ValueError("Lineage retirement has no matching native target history")
+            if state and state["active"]:
+                if not replace:
+                    raise ValueError("Review the current Lineage before confirming retirement")
+                if current["parents"] != parents:
+                    raise ValueError("Lineage retirement requires its exact mapped paper lifetimes")
+                operation = client.new_graph_operation_in(
+                    conn,
+                    "research_content",
+                    root["entity_id"],
+                    {},
+                    action="delete",
+                    operation_id=_request(request, "report"),
+                )
+                write = True
+            elif current is not None and current["action"] != "delete":
+                raise ValueError("Lineage retirement target differs from its native lifecycle")
+            metadata.update(retirement=dict(operation=operation, write=write), originals=[])
+            comparison = [
+                dict(
+                    feature="lineage",
+                    source=None,
+                    current=current["payload"]["data"]
+                    if current and current["action"] == "put"
+                    else None,
+                    source_action="delete",
+                    state="absent"
+                    if state is None
+                    else "active"
+                    if visible is not None
+                    else "retired",
+                    originals=[],
+                )
+            ]
+    observed._check(check)
+    encoded, compared = candidates._json(metadata), candidates._json(comparison)
+    return LineageGroup(
+        observed,
+        change,
+        request,
+        encoded,
+        compared,
+        replace,
+        prior is not None,
+        _sign(observed, request, encoded, compared, replace),
+    )
+
+
+def _apply_retirement(plan, metadata, check):
+    root, planned = metadata["root"], metadata["retirement"]
+    with closing(
+        sqlite3.connect(
+            plan.observed.database.as_uri() + "?mode=rw",
+            uri=True,
+            timeout=0.1,
+            factory=CaptureConnection,
+        )
+    ) as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            native._binding_in(conn, plan.observed)
+            prior = _prior(conn, plan.observed, root, plan.request_id, plan.replace, check)
+            if prior is not None:
+                return _result(prior, False)
+            plan.observed._check(check)
+            _unused(conn, plan.request_id, root)
+            operation, client = planned["operation"], conn._capture_client
+            if planned["write"]:
+                check()
+                with suppress_capture(conn):
+                    lineage_projection.initialize_receive_in(conn, client, operation)
+                client.journal.apply_in(conn, operation, client.writer)
+            receipt = dict(
+                _context(plan.observed, root, plan.request_id, plan.replace),
+                native=references._reference(operation),
+                originals=[],
+            )
+            choices._write_receipt(conn, plan.request_id, _hash(receipt), receipt)
+            plan.observed.source._check(check)
+            native._binding_in(conn, plan.observed)
+            if tuple(generation._identity(plan.observed.database)) != plan.observed.identity:
+                raise ValueError("Lineage destination was replaced")
+            check()
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+    return _result(receipt, planned["write"])

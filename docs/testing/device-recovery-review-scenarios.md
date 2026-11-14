@@ -544,9 +544,11 @@ installation, hosted deployment or scientific semantic support.
 | Scenario | Observable result |
 |---|---|
 | Three selected originals and complete report | Read-only preparation; atomic native publication and independent peer delivery; retire/restore one original and keep the old report hidden until explicit quote-checked rebinding; old reader proofs remain invalid; old decision retries preserve later edits and source lifetimes |
+| Recorded report retirement and later restore | Fresh native deletion reaches the enrolled peer; originals, nonempty independent notes and report history remain; retry cannot retire the restored report |
+| Retirement absence, failure/cancellation, stale comparison and corrupt receipt | Absence records a no-op decision; write/receipt/outbox rollback; newer research forces a fresh comparison; corrupt receipt refuses without writes |
 | Exception/cancellation after second original | All source ownership, report/schema, outbox and receipt roll back, then the same request retries |
 | False quotation, corrupt receipt and private deletion | Schema-valid invented quotation is refused against actual original bytes; tampered receipt cannot restart a decision; uncaptured row deletion refuses replacement; destination unchanged |
-| English/Traditional Chinese native buttons | Readable statement/source/original comparison, semantic limits displayed, cancel preserves data, confirm saves complete report and exactly one receipt despite repeated click |
+| English/Traditional Chinese native buttons | Readable restore/retirement comparison and specific confirmation; cancel preserves data; repeated confirmation saves one receipt per decision; retirement retains the three originals |
 
 Two cases in `test_sync_device_recovery.py` reproduce a WAL-mode database whose
 last writer closed before the first review/index. Opening SQLite read-only can

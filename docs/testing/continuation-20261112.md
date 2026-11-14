@@ -4970,3 +4970,37 @@ additional worktree was introduced.
 - Existing canonical local-integration skill already requires explicit SQLite
   handle closure, separate retained proof/current eligibility and caller-owned
   atomic receipts. This checkpoint adds project evidence, not a duplicate skill.
+
+
+## 2026-11-15: Confirmed native Lineage retirement
+
+- Reused the existing sealed LineageGroup API, native tombstone codec, projection
+  and recovery UI. Selected typed deletes now offer a distinct en/zh-TW action
+  and confirmation. Active reports require explicit replacement; current report
+  words are visible before the choice. No arbitrary empty payload is promoted
+  into a scientific deletion and no old envelope is replayed.
+- Source/target observations, mapped paper lifetimes, native report/marker checks
+  and caller-owned transaction protect a fresh native deletion, history/outbox
+  and receipt. Absent/already-retired reports record a no-op decision. No original
+  bytes, model call or download is needed. Cancellation/late failure rolls back;
+  stale comparisons and corrupt receipts refuse; successful saved retries cannot
+  delete later restored reports. Desktop request identity includes the target
+  report lifetime, permitting a new explicit decision after a later restoration.
+- Extended the existing independent peer journey with report retirement, exact
+  retained native report history, three unchanged original manifests, nonempty
+  independent notes, later restored report and safe old retirement retry. Existing
+  bilingual UI journeys now confirm/cancel/flood both restore and retirement.
+  Added only two failure variants for retirement rollback, absent decision, stale
+  target and corrupted receipt; no historical assertion was removed or weakened.
+- Eight affected cases passed in 94.75s pytest / 98.1s total. Then critical +
+  usage-doc contracts: 23 passed in 8.55s pytest / 11.9s total. The final added
+  exact-history assertion reran only its one overlapping peer journey: 1 passed
+  in 23.31s pytest / 27.2s total. Privacy/Ruff green; sequential bounded runs,
+  300-second deadline, at most two logical CPUs and 25% job CPU cap. Do not sum
+  overlapping cases. The existing release representative covers this expanded
+  lifecycle without adding another release selector or historical suite run.
+- Existing typed-operation/atomic-receipt skill guidance already covers this
+  extension; no new global rule/skill, worktree, daemon or task board. Other
+  scientific/manual-mark deletion choices, foreign/legacy mappings, broader audit
+  integration, hosted identity/HTTPS/native vaults and installed Windows/Apple
+  Silicon/physical-phone acceptance remain open. No release or deployment.

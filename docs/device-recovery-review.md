@@ -465,12 +465,15 @@ location does not certify influence, citation identity or scientific support.
 `sync_recovery_lineage_group.prepare(observed, change_id, request_id, *,
 replace=False, seconds=60, cancelled=...)` returns a sealed `LineageGroup` with
 `comparison`, `already` and `apply(*, seconds=60, cancelled=...)`. It requires the
-actual native target observation. Existing different/retired reports need explicit
-`replace=True`. Uncaptured visible words refuse even replacement. Corpus identity,
+actual native target observation. A selected native put restores the report; a
+selected typed native delete prepares its retirement. Existing different/retired
+reports and retirement of an active report need explicit `replace=True`.
+Uncaptured visible words refuse even replacement. Corpus identity,
 portable payload, selected paper ownership and generation metadata are preserved;
 no model is called and other research/primary PDFs are not replaced.
 The desktop uses `review_request(observed, operation)` to keep repeated comparisons
-idempotent for the same target input lifetimes. A later original restoration gets
+idempotent for the same target input lifetimes (and the report lifetime when
+retiring). A later original or report restoration gets
 a new decision identity; a prior successful receipt cannot suppress that recheck.
 The current comparison includes retained hidden report content, not a false empty
 report. The helper only derives retry identity; preparation/application retain all
@@ -504,6 +507,25 @@ strict, including native mutation tokens. Real later writes invalidate the seale
 review; no long-lived connection, write-blocking lease or automatic retry hides
 a concurrent change. Hosted and installed-device acceptance remain separate.
 
+
+
+### Confirm a recorded Lineage retirement
+
+Select a typed native Lineage delete and choose **Apply recorded lineage
+retirement**. The comparison displays the current report and the selected
+retirement; confirmation explains that retirement synchronizes while history,
+originals and notes remain. Arbitrary empty content is not a typed deletion.
+
+The same `prepare`/`LineageGroup.apply` API handles this action. It resolves actual
+native target history/projection and exact mapped paper lifetimes, requires
+explicit replacement for an active report, and writes a fresh native deletion,
+history/projection, outbox and decision receipt in one caller-owned transaction.
+An absent/already-retired report records the decision without inventing another
+delete. No original file is read, downloaded, retired or deleted; no AI is called.
+A privately edited/deleted row, changed comparison or corrupt receipt refuses.
+Failure/cancellation rolls back all owned writes. A successful saved retry returns
+its historical decision and cannot retire a later restored report. The result is
+`saved_locally`, not proof of hosted acceptance or completed recovery.
 
 ## Explicit original-source use and retirement
 

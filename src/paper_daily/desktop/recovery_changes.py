@@ -37,7 +37,7 @@ from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
 
 GROUP_ACTIONS = (
-    "use_original", "retire_original", "lineage_group", "reading_group",
+    "use_original", "retire_original", "lineage_group", "retire_lineage", "reading_group",
     "highlight_group", "deck_group", "claim_group",
 )
 
@@ -464,6 +464,27 @@ TEXT["zh-TW"].update({
         "確認一起使用這份舊版脈絡報告與各篇可用原文？同"
         "一組論文的目前報告會被取代。其他研究與目前開啟"
         "的 PDF 維持不變，不呼叫 AI。"
+    ),
+})
+
+
+TEXT["en"].update({
+    "retire_lineage": "Apply recorded lineage retirement",
+    "ready_retire_lineage": (
+        "Review the current report before confirming retirement. History, originals and notes stay."
+    ),
+    "confirm_retire_lineage": (
+        "Retire the current report for this corpus using the selected recorded deletion? "
+        "The retirement will synchronize; report history, originals and notes stay. "
+        "No AI will be called."
+    ),
+})
+TEXT["zh-TW"].update({
+    "retire_lineage": "套用已記錄的脈絡停用",
+    "ready_retire_lineage": "先檢視目前報告再確認停用；歷史、原文與筆記均保留。",
+    "confirm_retire_lineage": (
+        "依選取的刪除記錄，停用這個論文組的目前脈絡報告？"
+        "停用會同步到其他裝置；報告歷史、原文與筆記均保留，不會呼叫 AI。"
     ),
 })
 
@@ -917,23 +938,24 @@ class RecoveryChanges(QWidget):
                 observed._check(backup._guard(60, stopped))
             else:
                 plans[action] = (plan, plan.already)
-        if operation["entity_type"] == "research_content" and operation["payload"].get(
-            "feature"
-        ) == "lineage":
+        if operation["entity_type"] == "research_content" and operation.get(
+            "content_address", {}
+        ).get("feature") == "lineage":
+            action = "retire_lineage" if operation["action"] == "delete" else "lineage_group"
             request = lineage_group.review_request(observed, operation)
             try:
                 group = lineage_group.prepare(
                     observed, selected, request, replace=True, cancelled=stopped,
                 )
             except (OSError, ValueError) as error:
-                comparison["lineage_group_issue"] = str(error)[:240]
+                comparison[action + "_issue"] = str(error)[:240]
                 with closing(_readonly_connection(observed.database)) as conn:
                     if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
                                     (request,)).fetchone():
                         raise
                 observed._check(backup._guard(60, stopped))
             else:
-                plans["lineage_group"] = (group, group.already)
+                plans[action] = (group, group.already)
         if operation["entity_type"] == "research_content" and operation["payload"].get(
             "feature"
         ) == "reading_links":
@@ -1068,9 +1090,10 @@ class RecoveryChanges(QWidget):
             feature, data = member["feature"], member[side]
             parts.append(self.t["group_" + feature])
             if data is None:
-                parts.append(self.t["retired"] if side == "current" and member.get(
-                    "state"
-                ) == "retired" else self.t["absent"])
+                parts.append(self.t["retired"] if (
+                    side == "source" and member.get("source_action") == "delete"
+                    or side == "current" and member.get("state") == "retired"
+                ) else self.t["absent"])
             elif feature == "original_source":
                 parts.extend([member["title"], data["source_document_hash"],
                               str(data["assets"][0]["size"]) + " bytes"])

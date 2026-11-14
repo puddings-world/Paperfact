@@ -89,6 +89,7 @@ def portable(path):
 def test_group_rebinds_all_three_originals_and_retry_preserves_later_versions(
     group,
     tmp_path_factory,
+    monkeypatch,
 ):
     from test_lineage_live_conflicts import edit
 
@@ -296,6 +297,59 @@ def test_group_rebinds_all_three_originals_and_retry_preserves_later_versions(
     with closing(_readonly_connection(path)) as conn:
         assert conn.execute("SELECT count(*) FROM " + lineage_projection.HISTORY).fetchone()[0] >= 3
 
+    # A recorded scientific deletion is its own explicit decision, not a PDF delete.
+    client.save(
+        client.new_graph_operation(
+            "note",
+            str(uuid4()),
+            dict(
+                paper_id=root["parents"][0]["id"],
+                body="Keep this independent research note",
+            ),
+        )
+    )
+    sync_owner()
+    with closing(_readonly_connection(path)) as conn:
+        retained_report = recovery.history._head(conn, root["entity_id"])
+        retained_files = [tuple(r) for r in conn.execute("SELECT * FROM research_file_desired")]
+        retained_notes = [tuple(r) for r in conn.execute("SELECT * FROM notes")]
+    deletion = old.new_graph_operation("research_content", root["entity_id"], {}, action="delete")
+    old.save(deletion)
+    group["source"], group["change"] = refresh(deletion)
+    before_delete = dump(old.journal.path), dump(path)
+    with pytest.raises(ValueError, match="confirming retirement"):
+        prepare(group)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            recovery, "_sources", lambda *_a: pytest.fail("Retirement must not read PDFs")
+        )
+        retirement = prepare(group, replace=True)
+        assert (dump(old.journal.path), dump(path)) == before_delete
+        assert retirement.comparison[0]["current"] == root["payload"]["data"]
+        assert retirement.apply()["applied"]
+        assert not retirement.apply()["applied"]
+    sync_owner()
+    with closing(_readonly_connection(other)) as conn:
+        assert lineage_projection._current(conn, local, root["content_address"]["key"]) is None
+        assert lineage_projection._marker(conn, root["entity_id"])[1]["action"] == "delete"
+        saved = conn.execute(
+            "SELECT operation_json FROM " + lineage_projection.HISTORY + " WHERE operation_id=?",
+            (retained_report["operation_id"],),
+        ).fetchone()
+        assert saved and recovery.backup._decode(saved[0]) == retained_report
+    with closing(_readonly_connection(path)) as conn:
+        assert [
+            tuple(r) for r in conn.execute("SELECT * FROM research_file_desired")
+        ] == retained_files
+        assert [tuple(r) for r in conn.execute("SELECT * FROM notes")] == retained_notes
+    group["source"], group["change"] = refresh(root)
+    assert prepare(group, replace=True).apply()["applied"]
+    sync_owner()
+    changed = dump(path)
+    assert not retirement.apply()["applied"] and dump(path) == changed
+    assert portable(other) == root["payload"]
+    assert dump(old.journal.path) == before_delete[0]
+
 
 @pytest.mark.parametrize("failure", ["exception", "cancel"])
 def test_child_failure_rolls_back_all_originals_report_schema_outbox_and_receipt(
@@ -326,6 +380,80 @@ def test_child_failure_rolls_back_all_originals_report_schema_outbox_and_receipt
     assert dump(path) == before and attached(path).journal.pending() == []
     monkeypatch.setattr(CaptureConnection, "_activate", activate)
     assert plan.apply()["applied"] and portable(path) == group["root"]["payload"]
+
+
+@pytest.mark.parametrize("failure", ["exception", "cancel"])
+def test_retirement_absence_rollback_retry_stale_target_and_corrupt_receipt(
+    group, monkeypatch, failure
+):
+    old, path, root = group["old"], group["path"], group["root"]
+    deletion = old.new_graph_operation("research_content", root["entity_id"], {}, action="delete")
+    old.save(deletion)
+    index = candidates.prepare(old.journal.path, group["source"].snapshot, "workspace")
+    group["source"], group["change"] = (
+        index,
+        next(
+            item["change_id"]
+            for item in index.page(limit=50)["items"]
+            if item["operation_id"] == deletion["operation_id"]
+        ),
+    )
+    # Absent reports need only a local decision receipt, never a fabricated delete.
+    absent = prepare(group)
+    assert not absent.apply()["applied"] and attached(path).journal.pending() == []
+    root_change = next(
+        item["change_id"]
+        for item in index.page(limit=50)["items"]
+        if item["operation_id"] == root["operation_id"]
+    )
+    assert recovery.prepare(target.observe(index, path), root_change, str(uuid4())).apply()[
+        "applied"
+    ]
+    assert not absent.apply()["applied"] and portable(path) == root["payload"]
+    plan = prepare(group, replace=True)
+    activate, written = CaptureConnection._activate, []
+
+    def failing(conn):
+        activate(conn)
+
+        def write(c, operation):
+            research_writer(c, operation)
+            written.append(operation["action"])
+            if failure == "exception":
+                raise RuntimeError("simulated retirement failure")
+
+        conn._capture_client.writer = write
+
+    monkeypatch.setattr(CaptureConnection, "_activate", failing)
+    before = dump(path)
+    with pytest.raises(RuntimeError if failure == "exception" else BackupCancelled):
+        plan.apply(cancelled=lambda: failure == "cancel" and bool(written))
+    assert written == ["delete"] and dump(path) == before
+    monkeypatch.setattr(CaptureConnection, "_activate", activate)
+    # A newer unrelated save invalidates the observed comparison, not the research.
+    client = attached(path)
+    client.save(
+        client.new_graph_operation(
+            "note",
+            str(uuid4()),
+            dict(
+                paper_id=root["parents"][0]["id"],
+                body="Newer local draft",
+            ),
+        )
+    )
+    changed = dump(path)
+    with pytest.raises(ValueError, match="target changed"):
+        plan.apply()
+    assert dump(path) == changed
+    plan = prepare(group, replace=True)
+    assert plan.apply()["applied"]
+    with closing(sqlite3.connect(path)) as conn, conn:
+        conn.execute("UPDATE integration_operations SET result='{}' WHERE id=?", (plan.request_id,))
+    changed = dump(path)
+    with pytest.raises(ValueError, match="receipt changed"):
+        plan.apply()
+    assert dump(path) == changed
 
 
 def test_schema_valid_false_passage_and_corrupt_receipt_refuse_without_writes(group):
@@ -428,6 +556,59 @@ def test_native_lineage_comparison_cancel_confirm_and_repeated_click_save_once(
                     (recovery.FORMAT,),
                 ).fetchone()[0]
                 == 1
+            )
+        deletion = old.new_graph_operation(
+            "research_content", group["root"]["entity_id"], {}, action="delete"
+        )
+        old.save(deletion)
+        assert owner.device_review.inspect(group["source"].snapshot)
+        wait(app, lambda: not owner.busy)
+        assert ui.load(path.parent)
+        wait(app, lambda: not owner.busy)
+        deleted_change = next(
+            row["change_id"]
+            for row in ui.page["items"]
+            if row["operation_id"] == deletion["operation_id"]
+        )
+        for index in range(ui.rows.count()):
+            ui.rows.setCurrentRow(index)
+            if ui.selected() == deleted_change:
+                break
+        before = dump(path)
+        assert ui.compare()
+        wait(app, lambda: not owner.busy)
+        assert ui.action_select.currentData() == "retire_lineage", owner.status.text()
+        assert ui.t["retired"] in ui.old.toPlainText()
+        assert "The focal study supplies a concrete change." in ui.current.toPlainText()
+        confirmations = []
+
+        def answer(*args, **kwargs):
+            confirmations.append(args[2])
+            return QMessageBox.No
+
+        monkeypatch.setattr(QMessageBox, "question", answer)
+        ui.copy_button.click()
+        assert confirmations == [ui.t["confirm_retire_lineage"]]
+        assert dump(path) == before and not owner.busy
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+        ui.copy_button.click()
+        ui.copy_button.click()
+        wait(app, lambda: not owner.busy)
+        with closing(_readonly_connection(path)) as conn:
+            assert conn.execute("SELECT count(*) FROM " + lineage_sets.TABLE).fetchone()[0] == 0
+            assert (
+                conn.execute(
+                    "SELECT count(*) FROM research_file_desired WHERE active=1"
+                ).fetchone()[0]
+                == 3
+            )
+            assert (
+                conn.execute(
+                    "SELECT count(*) FROM integration_operations WHERE "
+                    "json_extract(result,'$.format')=?",
+                    (recovery.FORMAT,),
+                ).fetchone()[0]
+                == 2
             )
     finally:
         if owner.busy:
