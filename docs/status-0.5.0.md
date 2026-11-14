@@ -12,7 +12,7 @@ candidates remain preserved separately, not silently promoted or released.
 |---|---|---|
 | Offline sync, history/conflicts and attachments | Implementations and scoped local fixture evidence in the preserved development work | Coherent source checkpoint, critical journeys, affected regressions and installed-device journey |
 | Mobile PWA | Offline/domain/service and browser fixture evidence recorded in development ledgers | Durable pairing, hosted service and physical phone acceptance |
-| Scientific audit and recovery UI | Focused source/Qt/transport candidates, including verified prepared-file hashes | Reviewed integration; remaining original-bound and typed decisions |
+| Scientific audit and recovery UI | Desktop comparison/unanchored-note copy integrated; 13 focused Qt cases passed in 30.1s total; other audit candidates remain preserved | Metadata decision controls, original-bound recovery and audit integration |
 | Metadata recovery | Source-bound receipt reuse now rejects corrupted provenance for keep/replace; critical plus recovery integration passed 21 cases in 39.2s total | Guided desktop choices, original-bound recovery and new parent mappings |
 | Tests and resource use | Curated release: 33 Python + 24 frontend + 87 mobile cases and one actual HTTP program passed in 34.3s; runner regressions 59 passed | CI/device execution; historical deduplication; native resource cap on Mac/Linux |
 | Release | No new release, cloud deployment or installed Mac acceptance from this checkpoint | Identifiable artifacts, upgrade/reporting checks, Windows/Apple Silicon/phone journey |

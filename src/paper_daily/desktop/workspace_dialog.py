@@ -1,5 +1,6 @@
 "Workspace location, bounded local status and independent recovery actions."
 
+import sqlite3
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
@@ -375,6 +376,10 @@ class WorkspaceDialog(QDialog):
             and self._worker
             and not self._worker.ticket.cancelled
         ):
+            if stage.startswith("device_changes:"):
+                if self.sender() is self._worker:
+                    self.device_review.changes.stage(stage)
+                return
             self.status.setText(
                 self.t.get("restore_phase" if stage == "restore" else stage, self.t["loading"])
             )
@@ -387,7 +392,15 @@ class WorkspaceDialog(QDialog):
             return
         self._worker = None
         self._check_workspace()
-        if not self._invalid and not self._closing:
+        if kind == "device_review" and not self._invalid and not self._closing:
+            try:
+                self.service.check()
+            except (OSError, ValueError, sqlite3.Error):
+                self._invalid = True
+                self.status.setText(self.t["changed"])
+        if kind.startswith("device_changes_"):
+            self.device_review.changes.finish(worker, kind)
+        elif not self._invalid and not self._closing:
             if worker.error:
                 self.status.setText(self.t[worker.error])
                 if worker.error == "changed":

@@ -1,6 +1,7 @@
 # Review old-device work before authority recovery
 
-Status: local v0.5 read-only implementation, not automatic post-disaster merging.
+Status: local v0.5 backup comparison and explicit note-copy review; not automatic
+post-disaster merging or complete recovery.
 Use this when recovering an authority from an older backup while a device may
 contain more recent work. Keep the old device workspace intact.
 
@@ -42,7 +43,8 @@ backup. Join the [fresh recovered authority](sync-authority-restore.md) into a
 separate new local directory with newly issued device credentials. Review supported
 research-package imports there; this comparison does not prepare/apply them.
 Do not rewrite an old identity/cursor, discard an outbox or blindly replay an old
-operation into the new authority. Guided per-change reconciliation remains pending.
+operation into the new authority. Guided comparison and unanchored-note copy are available below. Other typed
+reconciliation remains pending.
 
 ## Operator CLI and API
 
@@ -86,7 +88,8 @@ checks and the unresolved full, hosted and installed-device gates.
 ## Per-change recovery core
 
 The internal APIs below are integrated into the checkpoint source, with isolated
-native-fixture coverage. They are not yet exposed as guided desktop decisions.
+native-fixture coverage. Guided desktop comparison and unanchored-note copy use
+these APIs; metadata keep/add/replace/restore still needs its desktop controls.
 Old workspace/history remains intact; old envelopes are not blindly replayed.
 
 | Entry | Contract |
@@ -105,3 +108,30 @@ interruption rolls them back. Cancel/stale bindings never authorize another targ
 Original-bound/scientific content, arbitrary deletion, new parent-lifetime
 mapping, complete editable recovery UX, cloud recovery and installed-device
 acceptance remain open. A successful subset does not mark recovery complete.
+
+
+## Review and copy a recorded note
+
+1. In **Workspace and recovery**, open **Recovery**, expand the existing service
+   backup comparison, and choose the verified backup containing `manifest.json`.
+2. Select **Review changes in a restored workspace** and choose the separate,
+   already joined target folder containing `papers.db`. The app stays in the old
+   reading workspace; this action does not initialize or switch a workspace.
+3. Browse 20 recorded changes per page. Select a row and press Enter or choose
+   **Compare selected change**. Resize the list and both read-only content panes
+   with the splitters. The current pane includes the target's pending edits.
+4. For an eligible unanchored v2 note, **Copy as new note** adds one distinct note
+   to the target's native outbox. Existing notes and the old workspace stay intact.
+   No AI call is made. An already-enabled target sync controller may send it.
+5. Refresh after saving. Reopening the same review recognizes the recorded copy;
+   repeated clicks, retry and reopening cannot create another copy. Later edits
+   or deletion of the copy are retained.
+
+![Synthetic old-device and restored-workspace comparison](images/recovery-changes.png)
+
+Cancellation/close drains active work. Changing the workspace, source binding or
+queued target observation blocks stale application. A save that already committed
+is reported as saved even if cancellation or a target change occurs afterwards.
+PDF-bound notes, other content and deletion remain visible but pending; there is
+no generic flatten/replay action. Metadata recovery controls, exact-original
+verification and complete recovery/device acceptance remain outstanding.

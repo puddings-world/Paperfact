@@ -6,7 +6,7 @@ or worktree creation is part of stabilization.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Checkpoint existing v0.5 work; integrate recovery core and provenance regression |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Desktop recovery review integration; worker, cancellation, source/target guards and focused Qt checks |
 
 Next: checkpoint existing v0.5 work, integrate reviewed changes, then complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

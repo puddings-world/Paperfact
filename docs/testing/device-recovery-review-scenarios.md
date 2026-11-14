@@ -47,3 +47,43 @@ capture: one passed in 1.26s; viewed with an explicit installed font and generic
 displayed location. It is not installed-app visual acceptance. Seven exact
 source/test hashes are recorded in `build/device-recovery-review-integration-20261114.json`.
 The old failed full report is retained; no full gate or release is claimed.
+
+
+## Guided comparison and note-copy integration (2026-11-14)
+
+The existing candidate is now in normal desktop source paths. This extends the
+read-only count review; it does not claim all-domain recovery.
+
+| Requirement | Selected test / observed outcome |
+|---|---|
+| Compare and copy explicitly | `test_visible_native_review_copy_and_refresh_preserve_old_and_existing_notes`: visible old/current bodies, one native write, existing/source notes unchanged |
+| Cancel, close, switch, rebind | `test_held_apply_refuses_after_cancel_close_workspace_or_binding_change`: each held action drains without a wrong-target write |
+| Queued stale target | `test_changed_target_at_queued_comparison_delivery_cannot_enable_copy`: no stale capability becomes usable |
+| Failed source review | `test_failed_backup_review_still_rechecks_binding_before_gui_delivery`: delivery checks binding even after worker failure |
+| Durable repeated review | `test_reopening_review_cannot_copy_same_recorded_change_twice`: one target note/outbox operation across refresh/reopen |
+| Unsupported content | `test_unsupported_change_has_clear_pending_state_without_enabling_copy`: list and PDF-positioned note remain readable/pending |
+| Bilingual compact controls | `test_bilingual_compact_review_renders_and_enter_compares`: English/Traditional Chinese row labels, Enter navigation, source/current panes; glyph precondition prevents tofu screenshots |
+| Stable fixture identity | `test_fixture_initialization_connection_is_closed_before_observation`: garbage collection cannot close a forgotten SQLite connection after a version lease |
+
+The unsupported-content test supersedes the draft's non-note-only test ID; its
+list behavior is retained and the exact-original note boundary is added. Existing
+fixtures now close SQLite handles explicitly; no assertion was weakened.
+
+Selected integration passed 13 cases in 26.70 seconds, 30.1 seconds including
+privacy/Ruff. Initial screenshots had missing glyphs because this worktree lacked
+the configured ignored font assets. Existing pinned assets were SHA-256 verified
+and copied locally; the visual check now asserts actual Latin/CJK glyphs before
+rendering. Local fixture results are not installed Windows/Mac/phone acceptance,
+real cloud recovery or complete semantic/original-file verification.
+
+
+Final critical/documentation/release-selection checks passed 26 cases in 12.45s,
+17.0s including privacy/Ruff. The two bilingual captures were re-rendered with
+actual glyph assertions and a synthetic display location; both were inspected.
+The English capture is retained in `docs/images/recovery-changes.png`. These
+counts overlap earlier selected checks and must not be summed as unique coverage.
+
+Failure/retry and post-commit cancellation checks additionally passed 2 cases in
+6.19s (7.25s bounded invocation). The retry reused the prepared payload and saved
+one note; cancellation after commit kept the truthful saved status. No real
+account, cloud endpoint or research workspace was used.

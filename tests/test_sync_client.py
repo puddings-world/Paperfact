@@ -2,6 +2,7 @@ import copy
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 
 import pytest
 
@@ -25,7 +26,7 @@ def writer(conn, operation):
 
 
 def client(path, device):
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS research (kind TEXT,id TEXT,body TEXT,PRIMARY KEY(kind,id))"
         )
@@ -35,7 +36,7 @@ def client(path, device):
 def saved(client, kind="note", identity="note-1"):
     import json
 
-    with sqlite3.connect(client.journal.path) as conn:
+    with closing(sqlite3.connect(client.journal.path)) as conn, conn:
         row = conn.execute(
             "SELECT body FROM research WHERE kind=? AND id=?", (kind, identity)
         ).fetchone()

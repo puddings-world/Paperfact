@@ -1,4 +1,4 @@
-"""Progressive, read-only device versus authority-backup review."""
+"""Progressive backup comparison and explicit per-change recovery."""
 
 import weakref
 
@@ -34,6 +34,9 @@ class DeviceRecoveryReview(QWidget):
         content = QVBoxLayout(self.content)
         content.addWidget(self.button)
         content.addWidget(self.label)
+        from paper_daily.desktop.recovery_changes import RecoveryChanges
+        self.changes = RecoveryChanges(self)
+        content.addWidget(self.changes)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.disclosure)
@@ -54,6 +57,7 @@ class DeviceRecoveryReview(QWidget):
         )
 
     def set_active(self, active):
+        self.changes.controls(bool(active and self.enrolled))
         self.button.setEnabled(bool(active and self.enrolled))
         self.button.setToolTip(
             "僅適用於已建立同步佇列的裝置。"
@@ -74,6 +78,7 @@ class DeviceRecoveryReview(QWidget):
         if not selected or not self.button.isEnabled() or not owner._adoption_context_current():
             return False
         self.reset()
+        self.changes.reset_source(selected)
         service = owner.service
 
         def run(ticket, _progress):
