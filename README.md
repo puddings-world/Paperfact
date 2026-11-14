@@ -281,3 +281,7 @@ ownership across workspaces. See [deck provenance](docs/sync-files.md) and
 [saved evidence](docs/deck-audit.md); the old-device recovery review can restore a complete native deck with its verified
 recorded paper originals and editable assets. Different source-workspace and unknown
 legacy mappings remain in development.
+
+The same recovery review can restore source-verified highlight analysis and PDF
+marks together while preserving manual marks and hidden choices. See
+[recovery actions and limits](docs/device-recovery-review.md).

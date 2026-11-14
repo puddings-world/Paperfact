@@ -4638,3 +4638,43 @@ mapping after recovery, unknown legacy provenance, highlight/link/Lineage groups
 hosted HTTPS and installed Apple Silicon/phone acceptance. No release or push.
 The existing skill already covers exact ownership, explicit parent lifetimes and
 atomic receipt retry; no redundant global rule or new worktree was introduced.
+
+
+## Exact-original highlight analysis and mark recovery (2026-11-14)
+
+Added the typed `sync_recovery_highlight_group` service and the existing native
+recovery review action. It verifies owned PDF bytes, normalized original-text
+identity and every complete quote, then retains selected roles/reasons/coverage
+with freshly verified mark geometry. Current hidden choices take precedence;
+manual and unrelated marks stay unchanged. Source quote identity and uncaptured
+source/target words are checked before publication. No model is invoked.
+
+Original ownership, analysis, marks, outbox and receipt share one transaction.
+Child failure/cancellation rolls the group back. Successful retry recognizes the
+original decision after later deletion or lost source bytes; corrupted receipts,
+changed targets and altered prepared plans cannot restart writes. An old native
+source need not have a current capture writer: its journal/head and visible rows
+are verified read-only. Target native capture remains required.
+
+Evidence: 12 focused cases passed in 94.47s pytest / 97.9s total. Final native peer
+(no AI calls), adjacent claim/note review, repaired Traditional Chinese deck label
+and all 14 critical cases: 18 passed in 40.31s pytest / 43.7s total. These overlap.
+Privacy/Ruff/configured whitespace passed under 25% CPU, two logical processors
+and a 300-second budget. No historical suite, hosted service, paid call or owner
+research was used. Native English/Traditional Chinese confirmation, cancellation
+and repeated activation were exercised in actual Qt widgets.
+
+The new UI fixture initially reused an observation-scoped review ID. It now
+locates the stable operation in the newly prepared page, preserving the existing
+HMAC observation guard. A real source lacking a capture writer exposed an invalid
+read-side dependency, corrected without initializing/writing the source. New
+Traditional Chinese strings (including earlier deck additions) had been converted
+to question marks by the shell-to-Python input encoding. UTF-8 text is repaired;
+actual Chinese action labels are asserted in both affected native flows.
+
+Remaining: independent manual-mark and reading-link/Lineage recovery, explicit
+source-deletion decisions, foreign-workspace/legacy ownership and portable audit
+mapping, hosted HTTPS and installed Apple Silicon/phone acceptance. Exact quote
+location does not certify semantic support or change the active primary PDF.
+Existing ownership/transaction skills cover this reused method; no duplicate
+skill, extra worktree, release, deployment or push was introduced.

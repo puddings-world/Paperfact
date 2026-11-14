@@ -251,7 +251,7 @@ original decision, preserving later edits/deletions without requiring the PDF ag
 Results say `state="saved_locally"`, `remote_acceptance_checked=False`,
 `semantic_validation="not_performed"` and `recovery_complete=False`.
 No old operation replay, AI/model call, remote acceptance claim or account transfer.
-Highlight/link/Lineage groups, foreign-workspace deck mapping, unknown legacy/source-lifetime
+Independent manual marks and reading-link/Lineage groups, foreign-workspace deck mapping, unknown legacy/source-lifetime
 migration, full audit, hosted deployment and installed/device acceptance remain
 open. [Behavior evidence](testing/device-recovery-review-scenarios.md#complete-portable-claim-group-2026-11-14).
 
@@ -317,3 +317,39 @@ source assets disappear, without recreating the retired original. References in
 a different source workspace and unknown legacy ownership still need explicit
 mapping. Scientific support, installed-device acceptance and full highlight/Lineage
 recovery are not certified by this operation.
+
+
+## Highlight analysis and PDF marks
+
+Select a recorded `highlight_analysis` change in the existing recovery review,
+compare quotes/roles/reasons, then choose **Use old complete highlights**.
+Confirmation is required; cancellation and repeated clicks follow the same worker
+and durable-decision path as deck/claim recovery. No model is called.
+
+`sync_recovery_highlight_group.prepare(observed, change_id, request_id, *,
+replace=False, seconds=60, cancelled=...)` returns a sealed `HighlightGroup` with
+`comparison` and `apply(*, seconds=60, cancelled=...)`. It checks the owned PDF
+hash, normalized original-text hash and every complete quote. New anchors come
+from exact source placement, not current PDF B or guessed page positions. Quotes
+that cannot be located refuse the group without partial research writes.
+
+The selected analysis retains all quotes, roles, reasons and coverage. Native PDF
+marks retain its quote/reason and use freshly verified geometry. Current target
+hidden choices take priority; otherwise verified source mark choices are used.
+Source mark IDs must still refer to the selected quote. Manual and unrelated
+target marks stay untouched. Uncaptured source/target words refuse overwrite.
+Analysis or mark replacement/restoration needs explicit `replace=True`.
+
+Original ownership, analysis, marks, outbox and one bounded receipt commit together.
+A failed child or cancellation rolls everything back; unowned staged bytes may
+remain. A recorded successful retry preserves later edits/deletions without
+requiring source bytes again. A corrupted receipt cannot restart publication.
+Old sources need retained native history but do not need a current capture writer;
+inspection remains read-only. The destination still needs actual native capture.
+
+This does not recover independent manual marks or reading links as part of the
+AI group. Deleted source marks need a separate explicit decision; missing/legacy
+source ownership remains pending. Quote location is not semantic support, and
+installed Mac/phone and hosted-service acceptance remain separate gates.
+
+Restored original ownership does not switch the active primary PDF.

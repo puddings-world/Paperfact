@@ -229,6 +229,8 @@ def test_native_review_compares_complete_deck_and_requires_one_confirmed_action(
         assert ui.compare()
         wait(app, lambda: not owner.busy)
         assert ui.action_select.currentData() == 'deck_group', owner.status.text()
+        if language == 'zh-TW':
+            assert '\u7c21\u5831' in ui.action_select.currentText()
         assert 'Speaker explanation' in ui.old.toPlainText()
         assert 'Editable' in ui.old.toPlainText()
         assert 'Reference' in ui.old.toPlainText()

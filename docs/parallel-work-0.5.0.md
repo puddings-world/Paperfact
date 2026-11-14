@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Related-paper deck recovery verified locally; remaining scientific groups, foreign-workspace/audit mappings and external acceptance |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | AI highlight group recovery and UTF-8 native labels verified; remaining manual/link/Lineage recovery, origin/audit mappings and external acceptance |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

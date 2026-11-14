@@ -449,3 +449,26 @@ remain in this same selected module. References whose recorded input workspace
 is not the old native workspace still require an explicit historical mapping.
 These tests do not certify semantic support, portable scientific-audit mappings,
 hosted HTTPS or installed Mac/phone acceptance.
+
+
+## Exact-original highlight group (2026-11-14)
+
+`tests/test_sync_recovery_highlight_group.py` protects these requirements:
+
+| Scenario | Observable result |
+|---|---|
+| Complete group and native peer | Verified original, full analysis roles/reasons and both marks transfer together; source database, manual marks, unrelated marks and target hidden choices remain intact |
+| Write failure / cancellation after first mark | Original ownership, analysis, all marks, outbox and receipt roll back; retry creates one group |
+| Missing quotation / wrong original-text hash / changed source quote identity | No partial research and no inherited hidden choice from another quote |
+| Later deletion and lost original bytes | Old successful request stays idempotent; a new explicit replacement is required to restore deleted target marks |
+| Uncaptured old/target private words | Compare refuses instead of overwriting private content absent from native history |
+| English / Traditional Chinese Qt | Full reasons and roles are readable; actual Chinese action text is checked; cancel writes nothing and repeated confirmation creates one group |
+| Changed target / forged prepared plan / corrupt receipt | A new comparison is required; altered authority or damaged decisions cannot restart a write |
+
+The review ID is process-observation-scoped. UI fixtures locate the stable source
+operation in the newly prepared page; they do not reuse an earlier comparison ID.
+The source fixture deliberately lacks a current capture writer, proving that old
+native-history inspection neither initializes one nor writes the old database.
+No historical suite, actual provider login or owner research data is involved.
+Independent manual-mark recovery, reading links, semantic validation, hosted TLS
+and installed Mac/phone remain separate acceptance boundaries.

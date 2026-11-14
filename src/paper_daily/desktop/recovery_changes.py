@@ -26,10 +26,13 @@ from paper_daily import sync_recovery_candidates as candidates
 from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_claim_group as claim_group
 from paper_daily import sync_recovery_deck_group as deck_group
+from paper_daily import sync_recovery_highlight_group as highlight_group
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
+
+GROUP_ACTIONS = ("highlight_group", "deck_group", "claim_group")
 
 TEXT = {
     "en": {
@@ -215,6 +218,15 @@ TEXT["zh-TW"].update({
 
 
 TEXT["en"].update({
+    "highlight_group": "Use old complete highlights",
+    "ready_highlight_group": "Compare quotes, roles and reasons before confirming. "
+                             "Quotes match the exact PDF; manual and hidden choices stay.",
+    "confirm_highlight_group": "Save this analysis, verified original and all located highlights? "
+                               "Existing manual/unrelated marks and current hidden choices remain. "
+                               "This replaces or restores AI content; older history remains. "
+                               "Scientific support is not certified and no AI call is made.",
+    "group_highlight_analysis": "Selected research highlights",
+    "group_ai_highlight": "PDF highlight", "group_hidden": "Hidden", "group_shown": "Shown",
     "deck_group": "Use old complete deck",
     "deck_originals": "Recorded originals",
     "ready_deck_group": "Compare slides, speaker notes and sources before confirming. "
@@ -224,11 +236,32 @@ TEXT["en"].update({
                           "Open editors keep their drafts. Scientific support is not certified.",
 })
 TEXT["zh-TW"].update({
-    "deck_group": "????????",
-    "deck_originals": "?????",
-    "ready_deck_group": "?????????????????????????????? PDF ??????? AI?",
-    "confirm_deck_group": "?????????????????????????????????????"
-                          "???????????????????????????",
+    "highlight_group": "使用舊版完整重點與標註",
+    "ready_highlight_group": (
+        "先比較重點句、角色與理由。每句都會核對到原始 P"
+        "DF；手動畫線與隱藏選擇會保留。"
+    ),
+    "confirm_highlight_group": (
+        "要一起儲存這份重點分析、原文與完整定位標註嗎？手"
+        "動與其他標註，以及目前的隱藏選擇會保留。將取代或"
+        "還原 AI 內容，舊紀錄仍保留。這不代表已驗證科"
+        "學論述，也不會呼叫 AI。"
+    ),
+    "group_highlight_analysis": "所選研究重點",
+    "group_ai_highlight": "PDF 重點標註",
+    "group_hidden": "隱藏",
+    "group_shown": "顯示",
+    "deck_group": "使用舊版完整簡報",
+    "deck_originals": "已記錄原文",
+    "ready_deck_group": (
+        "先比較投影片、講稿與來源，再確認套用完整簡報。會"
+        "一併保留原始 PDF 與圖片，不呼叫 AI。"
+    ),
+    "confirm_deck_group": (
+        "要儲存這份完整舊簡報及核對過的原文嗎？將取代或還"
+        "原所選簡報，舊紀錄仍保留。已開啟編輯器的草稿不會"
+        "被丟棄；這不代表已驗證科學論述。"
+    ),
 })
 
 
@@ -370,7 +403,7 @@ class RecoveryChanges(QWidget):
             )
             if action == "copy" and not already and getattr(plan, "with_original", False):
                 key = "ready_original"
-            if action in {"claim_group", "deck_group"} and not already:
+            if action in GROUP_ACTIONS and not already:
                 key = "ready_" + action
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
@@ -615,6 +648,25 @@ class RecoveryChanges(QWidget):
                 observed._check(backup._guard(60, stopped))
             else:
                 plans["deck_group"] = (group, group.already)
+        if operation["entity_type"] == "research_content" and operation["payload"].get(
+            "feature"
+        ) == "highlight_analysis":
+            request = str(uuid5(NAMESPACE_URL, "paperfact:highlight-group-ui:" + candidates._json([
+                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
+            ])))
+            try:
+                group = highlight_group.prepare(
+                    observed, selected, request, replace=True, cancelled=stopped,
+                )
+            except (OSError, ValueError) as error:
+                comparison["highlight_group_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans["highlight_group"] = (group, group.already)
         return plans
 
     def _deck_text(self, comparison, side):
@@ -650,6 +702,13 @@ class RecoveryChanges(QWidget):
                 parts.append(self.t["retired"] if side == "current" and member.get(
                     "state"
                 ) == "retired" else self.t["absent"])
+            elif feature == "highlight_analysis":
+                for item in data["body_json"]["items"]:
+                    parts.extend([item["kind"] + " / p. " + str(item["page"]),
+                                  item["text"], item["reason"]])
+            elif feature == "ai_highlight":
+                parts.extend([data["quote"], data["reason"],
+                              self.t["group_hidden" if data["hidden"] else "group_shown"]])
             elif feature != "claims":
                 parts.append(data["body"])
             else:
@@ -671,13 +730,13 @@ class RecoveryChanges(QWidget):
             return False
         plan, action = self.plan, self.action_select.currentData()
         include_original = action == "copy" and getattr(plan, "with_original", False)
-        if action in {"replace", "restore", "claim_group", "deck_group"} or include_original:
+        if action in {"replace", "restore"} or action in GROUP_ACTIONS or include_original:
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_" + action] if action in {"claim_group", "deck_group"} else
+                    self.t["confirm_" + action] if action in GROUP_ACTIONS else
                     self.t["confirm_original"] if include_original else
                     self.t["confirm_body"].format(action=self.t[action]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -800,7 +859,8 @@ class RecoveryChanges(QWidget):
                 self.action_plans = dict(plans)
                 if plan is not None:
                     self.action_plans["copy"] = (plan, already)
-                group_action = "deck_group" if "deck_group" in self.action_plans else "claim_group"
+                group_action = next((key for key in GROUP_ACTIONS
+                                     if key in self.action_plans), "claim_group")
                 group = self.action_plans.get(group_action, (None, False))[0]
                 if group is not None and group.comparison:
                     render = self._deck_text if group_action == "deck_group" else self._group_text
@@ -828,7 +888,8 @@ class RecoveryChanges(QWidget):
                            "already_action" if group is not None else
                            "ready_action" if len(plans) > 1 else "unsupported"]
                 )
-                issue = comparison.get("claim_group_issue") or comparison.get("deck_group_issue")
+                issue = next((comparison[key + "_issue"] for key in GROUP_ACTIONS
+                              if comparison.get(key + "_issue")), None)
                 if issue:
                     self.notice.setText(self.t["group_blocked"] + issue)
                 self.old.setFocus()
