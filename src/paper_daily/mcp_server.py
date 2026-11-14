@@ -84,15 +84,21 @@ def create_server():
         )
 
     @server.tool(name="analysis.audit", annotations=read, structured_output=True)
-    def analysis_audit(paper_id: str) -> dict[str, Any]:
+    def analysis_audit(paper_id: str, corpus_key: str | None = None) -> dict[str, Any]:
         """Check saved quotations, versions, quantities and reference metadata offline.
 
-        Requires a locally available owned PDF. Does not call AI, edit research,
+        Omit corpus_key to check the loaded original; supply a saved Lineage
+        corpus UUID to independently check all its owned selected originals.
+        Requires locally available owned PDFs. Does not call AI, edit research,
         resolve references online or certify semantic support. Returned saved text
         and source quotations may be private and can enter this host's context.
         The report explicitly lists unimplemented checks and unsupported outputs.
         """
-        return invoke("analysis.audit", dict(paper_id=paper_id))
+        # Omission preserves the existing single-original operation and envelope.
+        params = dict(paper_id=paper_id)
+        if corpus_key is not None:
+            params["corpus_key"] = corpus_key
+        return invoke("analysis.audit", params)
 
     @server.tool(
         name="imports.propose",

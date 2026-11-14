@@ -411,7 +411,7 @@ def commit(
         return result
 
 
-def audit_paper(paper_id: str) -> dict:
+def audit_paper(paper_id: str, *, corpus_key: str | None = None) -> dict:
     """Read-only deterministic checks of saved analysis, using the owned local PDF."""
     if not isinstance(paper_id, str) or not paper_id.strip() or len(paper_id) > 512:
         raise OperationError("invalid_input", "paper_id must identify a saved paper")
@@ -423,6 +423,24 @@ def audit_paper(paper_id: str) -> dict:
 
     try:
         database = Path(store.DB_PATH).resolve(strict=True)
+        if corpus_key is not None:
+            if (not isinstance(corpus_key, str) or len(corpus_key) != 36
+                    or str(uuid.UUID(corpus_key)) != corpus_key):
+                raise ValueError("Select an exact saved corpus UUID")
+            from concurrent.futures import ThreadPoolExecutor
+
+            from paper_daily import audit_lineage, lineage_sets, research_generation
+            from paper_daily.manual_highlight_ops import observe_owner
+
+            rows = lineage_sets.saved(database, paper_id, corpus_id=corpus_key)
+            if len(rows) != 1:
+                raise ValueError("Select one current saved Lineage corpus")
+            owner = observe_owner(
+                database, paper_id, expected_native=research_generation._identity(database)
+            )
+            with ThreadPoolExecutor(max_workers=1) as worker:
+                prepared = worker.submit(audit_lineage.prepare, owner, rows[0]).result()
+            return prepared.for_delivery(owner, rows[0])
         document = from_workspace(database, legacy_root=PDF_DIR).resolve(paper_id)
         return audit_inputs.AuditCapture.capture(database, paper_id, document=document).run()
     except (OSError, ValueError) as error:

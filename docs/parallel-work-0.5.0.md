@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Equal-byte owner attribution fixed and verified across audit/model/fact/UI boundaries; daily critical stays 14, release adds one representative. Cloud target inputs requested; remaining recovery/mapping/corpus audit and hosted/device gates stay open |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit current-corpus audit shared by CLI/MCP; independent generated/imported/bound original readers verified. Daily critical stays 14; no release selectors added. Desktop whole-corpus action now implemented with actual Qt outcomes; remaining recovery/mapping/list-survey audit and hosted/device gates stay open; cloud inputs requested |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

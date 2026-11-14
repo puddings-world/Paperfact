@@ -62,6 +62,15 @@ def test_actual_focal_and_peer_originals_read_without_database_write_or_ai(loade
     )
     assert originals.for_delivery(snapshot, owner, row, selected["id"]) == expected
     assert incoming[0].read_bytes() == before
+    if index == 0:
+        from paper_daily import audit_lineage
+
+        audit = work(audit_lineage.prepare, owner, row)
+        report = audit.for_delivery(owner, row)
+        assert report["originals_checked"] == report["originals_total"] == 3
+        assert all(source["state"] == "available" for source in report["sources"])
+        assert incoming[0].read_bytes() == before
+
 
 
 def test_current_primary_pdf_is_never_substituted_for_saved_imported_original(loaded):
