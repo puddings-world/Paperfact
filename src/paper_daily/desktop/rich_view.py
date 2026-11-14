@@ -84,6 +84,8 @@ class RichView(QWidget):
         self._body = ""
         # What the web page was last asked to show; None until something is.
         self._shown = None
+        # Which loaded document that was: a change sent to any other is refused there.
+        self._page_id = 0
 
     def markdown(self, text: str) -> str:
         return rich_html.markdown(text) if self.rich else md.to_html(text, self.palette_)
@@ -110,7 +112,23 @@ class RichView(QWidget):
                 self.view.page().runJavaScript(
                     "window.scrollTo(0, document.body.scrollHeight)")
             return
+        # Only a page that was actually loaded can take a change; one still waiting
+        # to hear its scroll position has nothing on screen to change.
+        in_place = bool(body) and self._shown is not None and self._page_id > 0
         self._shown = body
+        if in_place:
+            # Loading a page again fetches and starts every script and typesets every
+            # formula in it. The page already there takes the new body and redoes only
+            # the blocks after the first one that differs. It answers true, or its
+            # scroll position when it could not (still loading, or not block-shaped).
+            self.view.page().runJavaScript(
+                f"window.PAGE_ID === {self._page_id} && typeof patchMain === 'function'"
+                f" ? patchMain({json.dumps(body)}, {json.dumps(at_end)},"
+                f" {json.dumps(not keep_scroll)}) : window.scrollY",
+                0,
+                lambda done: self._patched(done, body, at_end, keep_scroll, current),
+            )
+            return
         if keep_scroll:
             self.view.page().runJavaScript(
                 "window.scrollY", 0,
@@ -119,13 +137,22 @@ class RichView(QWidget):
         else:
             self._load(body, at_end, 0, current=current)
 
+    def _patched(self, done, body: str, at_end: bool, keep_scroll: bool,
+                 current: Callable[[], bool] | None) -> None:
+        if done is True or body != self._shown:
+            # Shown in place, or a later body has been asked for and answers for itself.
+            return
+        at = int(done or 0) if keep_scroll and not isinstance(done, bool) else 0
+        self._load(body, at_end, at, current=current)
+
     def _load(self, body: str, at_end: bool, at: int, *,
               current: Callable[[], bool] | None = None) -> None:
         if current is not None and not current():
             # Asked for, then overtaken before the page answered: nothing was shown.
             self._shown = None
             return
-        page = rich_html.page(body, self.palette_, at_end=at_end, at=at)
+        self._page_id += 1
+        page = rich_html.page(body, self.palette_, at_end=at_end, at=at, ident=self._page_id)
         self.view.setHtml(page, QUrl.fromLocalFile(str(WEB_DIR) + "/"))
 
     def find(self, text: str) -> bool:

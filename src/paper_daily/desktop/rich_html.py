@@ -236,9 +236,16 @@ article.qa footer a.quiet {{ color:{p["faint"]}; }}
 
 
 _SCRIPT = """
-function renderAll() {
+var DIAGRAMS = 0;
+function within(root, selector) {
+  var found = Array.prototype.slice.call(root.querySelectorAll(selector));
+  if (root.matches && root.matches(selector)) found.unshift(root);
+  return found;
+}
+function renderAll(root) {
+  root = root || document;
   if (window.katex) {
-    document.querySelectorAll('.math').forEach(function (el) {
+    within(root, '.math').forEach(function (el) {
       try {
         katex.render(el.textContent, el, {
           displayMode: el.classList.contains('block') || el.tagName === 'DIV',
@@ -248,7 +255,7 @@ function renderAll() {
     });
   }
   if (window.hljs) {
-    document.querySelectorAll('pre.code code').forEach(function (el) {
+    within(root, 'pre.code code').forEach(function (el) {
       var lang = (el.className.match(/language-(\\S+)/) || [])[1];
       if (lang && hljs.getLanguage(lang)) hljs.highlightElement(el);
     });
@@ -259,8 +266,8 @@ function renderAll() {
       // At its own size and scrolled sideways, not shrunk until the labels are dots.
       flowchart: { useMaxWidth: false }, sequence: { useMaxWidth: false } });
     // A diagram the model got wrong shows its source, not an error banner.
-    document.querySelectorAll('pre.mermaid').forEach(function (el, i) {
-      var source = el.textContent;
+    within(root, 'pre.mermaid').forEach(function (el) {
+      var source = el.textContent, i = DIAGRAMS++;
       mermaid.render('diagram' + i, source).then(function (out) {
         el.innerHTML = out.svg;
         el.classList.add('drawn');
@@ -283,7 +290,38 @@ function findHeading(text) {
   }
   return false;
 }
+function blocks(parent) {
+  return Array.prototype.filter.call(parent.childNodes, function (n) { return n.nodeType === 1; });
+}
+function onlyBlocks(parent) {
+  return Array.prototype.every.call(parent.childNodes, function (n) {
+    return n.nodeType === 1 || !n.textContent.trim();
+  });
+}
+// Show `html` by replacing only what follows the leading blocks it shares with the
+// page: a conversation that gained an answer typesets that answer, not all of it.
+// Returns true when done; otherwise the scroll position, and the page is loaded anew.
+function patchMain(html, atEnd, toTop) {
+  var main = document.querySelector('main'), holder = document.createElement('template');
+  if (!main) return window.scrollY;
+  holder.innerHTML = html;
+  if (!onlyBlocks(main) || !onlyBlocks(holder.content)) return window.scrollY;
+  var old = blocks(main), fresh = blocks(holder.content), keep = 0, i;
+  while (keep < old.length && keep < fresh.length
+         && old[keep].__source === fresh[keep].outerHTML) keep++;
+  for (i = old.length - 1; i >= keep; i--) old[i].remove();
+  for (i = keep; i < fresh.length; i++) {
+    fresh[i].__source = fresh[i].outerHTML;
+    main.appendChild(fresh[i]);
+    renderAll(fresh[i]);
+  }
+  if (atEnd) window.scrollTo(0, document.body.scrollHeight);
+  else if (toTop) window.scrollTo(0, 0);
+  return true;
+}
 document.addEventListener('DOMContentLoaded', function () {
+  // As written, before typesetting rewrites them: what a later body is compared to.
+  blocks(document.querySelector('main')).forEach(function (el) { el.__source = el.outerHTML; });
   renderAll();
   if (window.START_AT_END) window.scrollTo(0, document.body.scrollHeight);
   else if (window.START_AT) window.scrollTo(0, window.START_AT);
@@ -291,7 +329,8 @@ document.addEventListener('DOMContentLoaded', function () {
 """
 
 
-def page(body: str, palette: dict[str, str], *, at_end: bool = False, at: int = 0) -> str:
+def page(body: str, palette: dict[str, str], *, at_end: bool = False, at: int = 0,
+         ident: int = 0) -> str:
     """A whole document around `body`, with its assets referenced relative to
     `vendor/web` (the view's base URL)."""
     dark = _dark(palette)
@@ -306,6 +345,7 @@ def page(body: str, palette: dict[str, str], *, at_end: bool = False, at: int = 
         '<script src="highlight.min.js"></script>'
         '<script src="mermaid.min.js"></script>'
         f"<script>var MERMAID_THEME = '{'dark' if dark else 'neutral'}';{start}"
+        f"window.PAGE_ID = {int(ident)};"
         f"{_SCRIPT}</script>"
         f"</head><body><main>{body}</main></body></html>"
     )
