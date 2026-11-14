@@ -493,3 +493,25 @@ actual old/destination ownership, paper lifetimes and the exact original hash.
 
 Existing note-copy assertions and normal manual-add/remove tests remain intact.
 A full historical suite and installed Mac/phone acceptance are not implied.
+
+
+## Historical reading-link context comparison (2026-11-14)
+
+`tests/test_sync_recovery_reading_context.py` tests the source-only prerequisite,
+not completed group publication:
+
+| Scenario | Observable result |
+|---|---|
+| Current context | Actual native explanation/highlight inputs match the saved key and exact PDF; no AI capture/call or source/target changes |
+| Older context | Later explanation edits and highlight deletion still resolve retained matching versions, never newest text by section ID |
+| Optional missing dive | Absence stays explicit and the close-only section retains `close:0` |
+| Wrong key/index | No guessed quotation, partial context or mutation |
+| Cancellation/search/output budget | Refuse cleanly; no silent truncation or fallback |
+| Accepted vs conflicting peer | Only a validated accepted native receipt can supply an otherwise missing input |
+| English/Traditional Chinese Qt | Full earlier sections, quotes and link explanation are readable; actual Chinese status is checked; both workspaces stay unchanged and group Apply remains disabled |
+
+A shared source-only highlight reader replaces the previous target-observation
+wrapper without changing highlight recovery's target authentication/transaction.
+Native peer/highlight UI plus note/manual-review and all critical journeys provide
+adjacent regression evidence. This does not certify restored links, Lineage,
+scientific semantics, deployment or installed-device acceptance.

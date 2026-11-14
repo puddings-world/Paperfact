@@ -385,3 +385,37 @@ successful request preserves later deletion and no longer requires original byte
 a new request may use an independently owned target original. Original ownership
 does not switch the active PDF. Source envelopes/files stay unchanged. AI marks,
 analysis groups, reading links and Lineage still use their own actions/gates.
+
+
+## Exact reading-link context: comparison prerequisite
+
+The old-device comparison now resolves saved explanation links against their exact
+section text and ordered highlight items. It displays the earlier deep/close
+explanations, selected quotes/reasons and each link's explanation as readable
+text. A missing optional explanation stays absent, so section IDs are not shifted.
+Current unrelated explanations are never substituted merely by section number.
+
+`sync_recovery_reading_context.resolve(source, change_id, *, seconds=30,
+cancelled=...)` accepts the actual prepared source review and returns
+`paperfact.recovery-reading-context.v1` with `state="resolved_read_only"` and
+`write_authority=False`. It does not modify either workspace or call AI. Its
+output is data, not a destination/publication capability. Grouped link publication
+still needs a separate confirmed native transaction and is not implemented by
+this comparison checkpoint.
+
+The existing link key hashes full rendered section records, the highlight source
+hash and ordered complete items (including roles/reasons). Resolution first tries
+verified native heads, then bounded own-journal and accepted-inbox history. A
+foreign conflict/cache alone cannot supply an input. Every resolved operation
+must match the original workspace, paper epoch and source constraints. Exact
+original bytes and quote placement are checked through the shared highlight
+source reader, without fabricating a target or copying its write authority.
+
+Search retains at most 32 semantic versions per feature, tries at most 512
+combinations and bounds the returned context to 2 MiB, with byte/record/time and
+cancellation guards. It fails explicitly rather than truncating or guessing.
+These digests bind visible sections/items, not unrecorded execution metadata or
+original timestamps; selected metadata comes from actual retained native records.
+Unknown legacy keys, unavailable originals and semantic support remain unresolved.
+Native English/Traditional Chinese UI labels this as comparison only and does not
+enable a group-apply action. Existing keep decisions remain separate.

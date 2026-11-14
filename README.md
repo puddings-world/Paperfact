@@ -258,33 +258,16 @@ checks remain opt-in through `--profile full`. On Windows,
 `python scripts/check_bounded.py` adds a five-minute, low-CPU budget.
 See [development checks](docs/development.md#development) for scope and limits.
 
-Internal per-change recovery APIs are documented in the
-[recovery guide](docs/device-recovery-review.md#per-change-recovery-core).
-Desktop comparison offers explicit keep/add/replace/restore for supported
-content and copy-as-new notes. Positioned notes keep their page, passage and
-source hash after exact-original verification. If its PDF is missing there,
-explicitly copy the note and the old device's verified original atomically;
-[see the recovery workflow](docs/sync-device-management.md#recover-a-note-tied-to-a-pdf-position).
-Complete portable claim sets can also recover with their exact deep/close analysis
-inputs and original PDF in one confirmed transaction; [review the whole group](docs/sync-device-management.md#recover-a-complete-claim-group).
-Exact input pins can resolve older native journal or accepted peer versions, even
-after a source-side analysis edit/deletion. Legacy/source-lifetime mapping,
-unavailable originals, other scientific groups
-and hosted/device acceptance remain separate gates.
+The recovery review compares saved and current research before confirmation:
 
-Recorded recovery decisions can preserve supported list/member/reading/order
-links across restored lifetimes; see the [recovery workflow](docs/device-recovery-review.md#recover-related-lists-without-losing-their-links).
+- Keep or restore supported list/reading state and copy notes or manual highlights
+  with their verified original, preserving existing selections and later edits.
+- Restore complete claim, highlight and editable-deck groups with exact inputs,
+  originals and assets. Known historical native versions remain inspectable.
+- Compare historical explanation-link sections, ordered quotes and reasons;
+  grouped link restoration remains in development.
 
-Editable deck sync retains the workspace of newly observed research inputs,
-including offline mobile reopen. Saved-evidence checks refuse to infer source
-ownership across workspaces. See [deck provenance](docs/sync-files.md) and
-[saved evidence](docs/deck-audit.md); the old-device recovery review can restore a complete native deck with its verified
-recorded paper originals and editable assets. Different source-workspace and unknown
-legacy mappings remain in development.
-
-The same recovery review can restore source-verified highlight analysis and PDF
-marks together while preserving manual marks and hidden choices. See
-[recovery actions and limits](docs/device-recovery-review.md).
-
-Independent manual highlights can also be copied with their verified original.
-Existing selections are preserved; an occupied position is shown for review.
+See the [recovery workflow and API](docs/device-recovery-review.md),
+[deck provenance](docs/sync-files.md) and [saved-evidence audit](docs/deck-audit.md).
+Foreign-workspace/legacy mappings, remaining research groups, hosted HTTPS and
+installed-device acceptance remain explicit v0.5 gates.

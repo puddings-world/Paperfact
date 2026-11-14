@@ -4716,3 +4716,40 @@ Remaining: reading-link/Lineage groups, explicit source-deletion decisions,
 foreign-workspace/legacy and portable-audit mappings, hosted HTTPS and installed
 Apple Silicon/phone acceptance. Existing copy/ownership/receipt skills cover this
 reuse; no duplicate skill, extra worktree or protocol feature was introduced.
+
+
+## Read-only exact explanation-link context (2026-11-14)
+
+Added `sync_recovery_reading_context.resolve` and native readable comparison.
+The actual source review resolves the saved key against full rendered sections,
+ordered highlight items and exact PDF. It tries verified current native values,
+then bounded own-journal/accepted-inbox versions. Optional absence stays explicit;
+section IDs are not shifted by borrowing a newer explanation. Foreign conflicts
+cannot supply accepted dependencies. No model, source/target write or replay grant.
+
+The output binds visible sections/items, not unrecorded execution metadata.
+Actual retained metadata is preserved without inventing old timestamps. Search
+and result budgets fail explicitly; no truncation or approximate quote match.
+A source-only highlight verification helper now takes the real source observation,
+while the existing highlight recovery keeps its target authentication and writes.
+Native English/Traditional Chinese view shows actual old explanation/quote/link
+text and explicitly says comparison only. Group Apply is not enabled yet.
+
+Evidence: 13 source/optional/history/foreign/budget/actual Qt cases passed in
+102.13s pytest / 106.7s total. Shared highlight source/native peer, adjacent
+highlight/note/manual UI and all 14 critical journeys: 18 in 67.80s pytest / 71.9s
+total. Scopes overlap. Privacy/Ruff/configured whitespace passed under Windows
+25% CPU/two logical processors/300-second budgets. No historical suite, owner
+research, actual accounts, paid AI, deployment, push or release was used.
+README recovery prose is consolidated around tasks and one guide instead of
+appending another implementation-history paragraph.
+
+Next: compose confirmed link-group publication through the real target observation.
+Re-resolve source inputs, compare every destination member, and explicitly review
+optional absence before clearing a newer target explanation. Stage originals
+off-lock; original ownership, all grouped content, journal/outbox and decision
+receipt need one transaction and rollback tests. Successful retries must preserve
+later edits without requiring lost originals. The read-only output is not write
+authority. Lineage/origin/audit mapping and hosted/installed-device gates remain.
+Existing ownership/history skills cover this reuse; no duplicate/global skill or
+additional worktree was introduced.

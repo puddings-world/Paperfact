@@ -83,8 +83,12 @@ def _root(observed, change):
 
 
 def _located(observed, root, check):
+    return _locate_source(observed.source, root, check)
+
+
+def _locate_source(source, root, check):
     payload = root["payload"]
-    with closing(_readonly_connection(observed.source.database)) as conn:
+    with closing(_readonly_connection(source.database)) as conn:
         conn.execute("BEGIN")
         proof = native.inspect_original(
             conn, payload["scope"]["id"], root["parents"][0], payload["source_document_hash"], check
@@ -121,7 +125,7 @@ def _located(observed, root, check):
                 ),
             )
         )
-    observed.source._check(check)
+    source._check(check)
     return proof, result
 
 

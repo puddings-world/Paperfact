@@ -28,6 +28,7 @@ from paper_daily import sync_recovery_claim_group as claim_group
 from paper_daily import sync_recovery_deck_group as deck_group
 from paper_daily import sync_recovery_highlight_group as highlight_group
 from paper_daily import sync_recovery_note_copy as note_copy
+from paper_daily import sync_recovery_reading_context as reading_context
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
@@ -343,6 +344,37 @@ TEXT["zh-TW"].update({
     ),
 })
 
+TEXT["en"].update({
+    "reading_context_ready": (
+        "Verified the saved explanations and original. Comparison only; applyin"
+        "g this group is not available yet."
+    ),
+    "reading_context_issue": (
+        "Saved link context could not be verified: "
+    ),
+    "group_reading_links": (
+        "Explanation links"
+    ),
+    "reading_no_links": (
+        "No saved explanation links."
+    ),
+})
+TEXT["zh-TW"].update({
+    "reading_context_ready": (
+        "已核對舊版講解與原文；目前可比較，尚未提供這組內"
+        "容的套用動作。"
+    ),
+    "reading_context_issue": (
+        "無法核對舊版解說連結來源："
+    ),
+    "group_reading_links": (
+        "解說連結"
+    ),
+    "reading_no_links": (
+        "沒有已儲存的解說連結。"
+    ),
+})
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -655,6 +687,14 @@ class RecoveryChanges(QWidget):
                                 comparison["manual_copy_issue"] = str(error)[:240]
                             observed._check(backup._guard(30, stopped))
             plans = self._metadata_plans(observed, selected, comparison, stopped)
+            if operation["payload"].get("feature") == "reading_links":
+                try:
+                    comparison["reading_context"] = reading_context.resolve(
+                        observed.source, selected, cancelled=stopped,
+                    )
+                except (OSError, ValueError) as error:
+                    comparison["reading_context_issue"] = str(error)[:240]
+                observed._check(backup._guard(30, stopped))
             return observed, selected, comparison, plan, already, plans
 
         return self._start("compare", run)
@@ -757,6 +797,32 @@ class RecoveryChanges(QWidget):
             else:
                 plans["highlight_group"] = (group, group.already)
         return plans
+
+    def _reading_context_text(self, context):
+        from paper_daily import reading_links
+        from paper_daily.answer_content import reading_text
+
+        members = context["members"]
+        displays = []
+        bodies = []
+        for member in members[:3]:
+            data = member["data"]
+            if member["feature"] in {"dive", "close_reading"}:
+                body = data["body"] if data else None
+                bodies.append(body)
+                if data:
+                    data = dict(data, body=reading_text(
+                        body, legacy_dive=member["feature"] == "dive") or body)
+            displays.append(dict(feature=member["feature"], source=data, current=None))
+        parts = [self._group_text(displays, "source"), self.t["group_reading_links"]]
+        sections = {row["id"]: row for row in reading_links.sections(*bodies)}
+        quotes = members[2]["data"]["body_json"]["items"]
+        for link in members[3]["data"]["body_json"]["links"]:
+            parts.extend([quotes[link["quote"]]["text"], sections[link["section"]]["title"],
+                          link["explanation"]])
+        if not members[3]["data"]["body_json"]["links"]:
+            parts.append(self.t["reading_no_links"])
+        return "\n\n".join(parts)
 
     def _deck_text(self, comparison, side):
         value = comparison[side]
@@ -950,6 +1016,8 @@ class RecoveryChanges(QWidget):
                 effective = comparison["target"]["effective_operation"]
                 self.old.setPlainText(self._content(source))
                 self.current.setPlainText(self._content(effective))
+                if comparison.get("reading_context"):
+                    self.old.setPlainText(self._reading_context_text(comparison["reading_context"]))
                 self.action_plans = dict(plans)
                 if plan is not None:
                     self.action_plans["copy"] = (plan, already)
@@ -994,6 +1062,11 @@ class RecoveryChanges(QWidget):
                     key = ("already_manual" if already else "ready_manual_original"
                            if plan.with_original else "ready_manual")
                     self.notice.setText(self.t[key])
+                if comparison.get("reading_context"):
+                    self.notice.setText(self.t["reading_context_ready"])
+                elif comparison.get("reading_context_issue"):
+                    self.notice.setText(self.t["reading_context_issue"]
+                                        + comparison["reading_context_issue"])
                 self.old.setFocus()
             owner.status.setText(self.notice.text())
         except (OSError, ValueError, TypeError):
@@ -1047,6 +1120,11 @@ class RecoveryChanges(QWidget):
             anchor = payload["data"]["anchor"]
             return (self.t["manual_highlight"] + "\n\n" + payload["data"]["quote"]
                     + "\n\np. " + str(anchor["p0"] + 1) + " - " + str(anchor["p1"] + 1))
+        if (operation["entity_type"] == "research_content"
+                and payload.get("feature") == "reading_links"):
+            links = payload["data"]["body_json"]["links"]
+            return "\n\n".join(link["section"] + "\n" + link["explanation"]
+                                 for link in links) or self.t["reading_no_links"]
         import json
 
         return json.dumps(payload, ensure_ascii=False, indent=2)
