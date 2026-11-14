@@ -2,10 +2,13 @@
 
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
-The next Windows candidate will add CI-only install/same-version reinstall/
-uninstall verification against generated research, with explicit owned paths and
-payload hashing. Local simulated checks pass; native execution of this new phase
-is pending. Existing candidate 4594626 does not prove installed acceptance.
+CI-only Windows install/same-version reinstall/uninstall verification is added.
+Native runs 43644279988 and 43644980935 failed before setup execution while
+fingerprinting fixture files; run 43645524973 confirms the failure also occurs
+within the research directory. No exact denied file is established yet. Private
+diagnostic path notes are now available for the next scoped run; installation
+acceptance remains open. Mac/Linux native reports passed for source 84ec689;
+4594626 remains the last common three-platform delivered candidate.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

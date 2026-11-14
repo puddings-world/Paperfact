@@ -51,6 +51,26 @@ def test_preflight_refuses_unowned_builds_and_existing_destination(ci_build, mon
         assert not (out / "installed-app").exists()
     with pytest.raises(ValueError, match="expected CI artifact paths"):
         verify._installer_input(built, out, installer.with_name("other.exe"))
+    original_open = Path.open
+
+    class LockedStream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size):
+            raise PermissionError("Synthetic denied read without a filename")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", lambda path, *args, **kwargs: (
+            LockedStream() if path == installer else original_open(path, *args, **kwargs)
+        ))
+        with pytest.raises(PermissionError) as denied:
+            verify._file_hash(installer, 1024)
+        assert denied.value.__notes__ == ["Acceptance file read: " + str(installer)]
+    assert not (out / "installed-app").exists()
     destination = out / "installed-app"
     destination.mkdir()
     sentinel = destination / "preserve.txt"

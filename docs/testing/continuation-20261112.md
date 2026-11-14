@@ -5667,3 +5667,16 @@ additional worktree was introduced.
 - Snapshot-boundary fix: focused 18 passed in 1.66s / 4.7s total; critical 14
   passed in 7.46s / 10.7s total. Documentation gate before this fix: 58 passed
   in 2.28s / 5.4s total; only the protected-tree wording changed afterward.
+
+- Native follow-up 43645524973 (19baf71) still fails before setup execution in
+  research _file_hash stream.read. The HOME-only hypothesis did not fix it; no
+  specific file or lock owner is established. Do not ignore inaccessible research
+  files. Added a private exception note identifying the exact bounded path for
+  the next native run, including a simulated filename-less PermissionError.
+  This is diagnostic instrumentation, not a claimed installer fix. Stop candidate
+  rebuilds in this turn; preserve the failure and resume the specific check next.
+- Final diagnostic instrumentation: focused 17 passed in 1.55s / 5.2s total;
+  critical 14 passed in 4.87s / 8.1s total, privacy/Ruff green. Existing test
+  assertions retained; no additional collected cases. Working native gates remain
+  explicitly open; source-qualified prior Mac/Linux evidence is not a common
+  three-platform pass for the current diagnostic commit.

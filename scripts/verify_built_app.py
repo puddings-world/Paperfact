@@ -212,12 +212,17 @@ def _file_hash(path, limit):
         raise ValueError("Installer acceptance file exceeds its budget")
     digest = hashlib.sha256()
     used = 0
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            used += len(chunk)
-            if used > limit:
-                raise ValueError("Installer acceptance file grew beyond its budget")
-            digest.update(chunk)
+    try:
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                used += len(chunk)
+                if used > limit:
+                    raise ValueError("Installer acceptance file grew beyond its budget")
+                digest.update(chunk)
+    except OSError as error:
+        # Only the separate private traceback includes this diagnostic path.
+        error.add_note("Acceptance file read: " + str(path)[:2048])
+        raise
     if before != _safe_stamp(path):
         raise ValueError("Installer acceptance file changed while checking")
     return digest.hexdigest()
