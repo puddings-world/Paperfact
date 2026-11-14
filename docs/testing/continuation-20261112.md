@@ -5512,3 +5512,18 @@ additional worktree was introduced.
 - Daily critical: 14 passed in 7.25s / 10.4s total, privacy/Ruff/whitespace
   passed. Reused existing source-clock/payload-bound-receipt pattern, recorded
   in project evidence; no new global skill or publication/hosting claim.
+
+## 2026-11-15: current-source three-platform candidate acceptance
+
+- Previous turn made progress: new graph-intake notes preserve source clocks,
+  native peer/retry/rollback checks passed and source was integrated/pushed.
+- Next gate is actual native Windows/Mac/Linux packaging of current source,
+  not another historical test run. Review found Linux QT_QPA_PLATFORM=xcb
+  while the critical source step omitted the existing DISPLAY_WRAPPER used
+  by screenshots/build/frozen checks. Reuse that wrapper for source checks;
+  keep all assertions, profiles and the 30-minute per-job budget unchanged.
+- Extend the existing workflow asset contract, no new cases/selectors. This
+  static contract does not prove Linux execution; live CI reports remain needed.
+- Workflow contract: 1 passed in 0.35s / 3.4s total. Critical: 14 passed in
+  7.71s / 11.0s total. Privacy/Ruff/whitespace green, bounded single local job.
+  Initial assertion line-length failure corrected without changing assertions.

@@ -198,6 +198,12 @@ def test_the_build_names_match_what_the_release_workflow_uploads():
     assert 'run: test "$(uname -m)" = arm64' in workflow
     assert "timeout-minutes: 30" in workflow
     assert "scripts/check.py --profile" in workflow
+    source_check = workflow.split("name: Curated source acceptance", 1)[1].split(
+        "- name:", 1,
+    )[0]
+    assert (
+        "run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile" in source_check
+    )
     assert workflow.index("scripts/verify_built_app.py") < workflow.index("name: build-${{")
     fixture = workflow.split("name: research-fixture-${{ matrix.name }}", 1)[1].split(
         "- uses:", 1,

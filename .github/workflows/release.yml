@@ -99,7 +99,7 @@ jobs:
       # Common release risks run once; every OS retains critical native journeys.
       - name: Curated source acceptance
         timeout-minutes: 10
-        run: uv run python scripts/check.py --profile ${{ matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'critical' }}
+        run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile ${{ matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'critical' }}
 
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact
