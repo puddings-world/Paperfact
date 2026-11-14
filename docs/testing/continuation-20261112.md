@@ -4610,3 +4610,31 @@ installed Mac/phone acceptance remain open. No release, deployment or push.
 Existing transaction/receipt/provenance skills already cover this reused method;
 no duplicate skill was introduced. No controllable Claude session was available;
 the existing execution board remains the handoff.
+
+
+## Recorded related-paper deck originals (2026-11-14)
+
+Extended the same native deck recovery operation to related originals whose
+recorded paper/document epochs and hash match retained source operations.
+Existing explicit metadata recovery decisions prove destination parent epochs;
+missing parents are named for review. Native comparison displays original paper
+titles/hashes. Equal bytes under different recorded owners are not merged.
+All original ownership, editable deck/applied slot, outbox and decision remain
+atomic. Existing root-only receipt shapes stay readable. A successful retry
+preserves later source retirement even after old source assets are lost.
+
+The selected module passed 17 cases in 148.54s pytest / 152.1s total. Final
+parent-prompt/related-native-peer/UI scope plus all 14 critical cases passed:
+16 in 33.40s pytest / 37.0s total. These overlap. Privacy and Ruff passed under
+25% CPU / two-logical-processor / 300-second Windows limits. No historical suite,
+real accounts, paid AI, deployment or owner research was used. The new fixture's
+initial unsupported paper-deletion attempt was corrected to the supported source
+retirement contract; production deletion policy and old assertions were retained.
+A contradictory-owner test also prompted validating all declared ownership before
+reading PDFs, so the actual ambiguity is reported before an unrelated missing file.
+
+Remaining: different input-origin workspace mapping, portable saved-evidence
+mapping after recovery, unknown legacy provenance, highlight/link/Lineage groups,
+hosted HTTPS and installed Apple Silicon/phone acceptance. No release or push.
+The existing skill already covers exact ownership, explicit parent lifetimes and
+atomic receipt retry; no redundant global rule or new worktree was introduced.

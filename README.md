@@ -278,5 +278,6 @@ links across restored lifetimes; see the [recovery workflow](docs/device-recover
 Editable deck sync retains the workspace of newly observed research inputs,
 including offline mobile reopen. Saved-evidence checks refuse to infer source
 ownership across workspaces. See [deck provenance](docs/sync-files.md) and
-[saved evidence](docs/deck-audit.md); the old-device recovery review can restore a complete native deck with its root-paper
-originals and editable assets. Related-paper source mapping remains in development.
+[saved evidence](docs/deck-audit.md); the old-device recovery review can restore a complete native deck with its verified
+recorded paper originals and editable assets. Different source-workspace and unknown
+legacy mappings remain in development.

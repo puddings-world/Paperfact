@@ -251,7 +251,7 @@ original decision, preserving later edits/deletions without requiring the PDF ag
 Results say `state="saved_locally"`, `remote_acceptance_checked=False`,
 `semantic_validation="not_performed"` and `recovery_complete=False`.
 No old operation replay, AI/model call, remote acceptance claim or account transfer.
-Highlight/link/Lineage groups, related-paper deck mapping, unknown legacy/source-lifetime
+Highlight/link/Lineage groups, foreign-workspace deck mapping, unknown legacy/source-lifetime
 migration, full audit, hosted deployment and installed/device acceptance remain
 open. [Behavior evidence](testing/device-recovery-review-scenarios.md#complete-portable-claim-group-2026-11-14).
 
@@ -302,6 +302,18 @@ A different/deleted target needs explicit `replace=True`; its old history stays.
 Target changes, late private legacy decks, damaged current managed files, missing
 originals and corrupted assets refuse publication. A successful receipt retry
 preserves later edits/deletions and does not require lost source files again.
-Root-paper originals are supported; related/foreign original owners still require
-explicit mapping. Scientific support, installed-device acceptance and full
-highlight/Lineage recovery are not certified by this operation.
+Root and related-paper originals are supported when recorded document references
+match retained native operations in the source workspace: exact paper, operation,
+document incarnation, parent lifetime and hash. Related parents use the existing
+explicit metadata recovery decisions. If a related paper was created after the
+backup, review and restore that paper first, then compare the deck again. The
+comparison lists recorded original titles and hashes. Equal PDF hashes do not
+merge distinct paper owners; ambiguous ownership refuses publication.
+
+New receipts retain source/target original parents; existing root-only receipts
+remain retry-safe. Retiring an original does not authorize restoration through a
+new deck request. A previously committed decision can still be recognized after
+source assets disappear, without recreating the retired original. References in
+a different source workspace and unknown legacy ownership still need explicit
+mapping. Scientific support, installed-device acceptance and full highlight/Lineage
+recovery are not certified by this operation.

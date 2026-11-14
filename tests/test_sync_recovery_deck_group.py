@@ -196,14 +196,18 @@ def test_incomplete_or_changed_file_inputs_never_publish_a_partial_deck(group, p
     assert dump(path) == before and not attached(path).journal.pending()
 
 
-@pytest.mark.parametrize('language', ['en', 'zh-TW'])
+@pytest.mark.parametrize('language,with_related', [('en', False), ('zh-TW', False), ('en', True)])
 def test_native_review_compares_complete_deck_and_requires_one_confirmed_action(
-    group, app, monkeypatch, language,
+    group, app, monkeypatch, language, with_related, request,
 ):
     from PySide6.QtWidgets import QMessageBox
 
     from paper_daily.desktop.workspace_dialog import WorkspaceDialog
 
+    if with_related:
+        related = request.getfixturevalue('related')
+        group = related['group']
+        assert add_related(related)['applied']
     old, source, _, path, root, *_ = group
     owner = WorkspaceDialog(old.journal.path, language=language)
     owner.show()
@@ -231,6 +235,8 @@ def test_native_review_compares_complete_deck_and_requires_one_confirmed_action(
         assert 'Cell evidence | 50' in ui.old.toPlainText()
         assert 'Caption one' in ui.old.toPlainText()
         assert 'https://example.org/paper' in ui.old.toPlainText()
+        if with_related:
+            assert 'Related controlled comparison' in ui.old.toPlainText()
         before = dump(path)
         monkeypatch.setattr(QMessageBox, 'question', lambda *a, **k: QMessageBox.No)
         ui.copy_button.click()
@@ -239,7 +245,8 @@ def test_native_review_compares_complete_deck_and_requires_one_confirmed_action(
         ui.copy_button.click()
         ui.copy_button.click()
         wait(app, lambda: not owner.busy)
-        assert len(attached(path).journal.pending()) == 2, owner.status.text()
+        expected = 4 if with_related else 2
+        assert len(attached(path).journal.pending()) == expected, owner.status.text()
         assert saved(path, root)[1]['deck']['slides'][0]['speaker_notes'] == 'Speaker explanation'
         assert not ui.copy_button.isEnabled()
     finally:
@@ -266,3 +273,224 @@ def test_installed_file_change_after_activation_rolls_back_the_whole_decision(gr
     with pytest.raises(ValueError, match='files changed before recovery committed'):
         prepared.apply()
     assert dump(path) == before and not attached(path).journal.pending()
+
+@pytest.fixture
+def related(group, pair, tmp_path):
+    import hashlib
+
+    import pymupdf
+    from test_sync_files import paper_payload
+
+    from paper_daily.sync_blobs import BlobManifest
+    from paper_daily.sync_documents import desired_document
+    from paper_daily.sync_files import canonical_json, descriptor, read_json
+    from paper_daily.sync_source_files import publish
+
+    old, previous, _, path, previous_root, service, sha, data, token = group
+    other = '22222222-2222-4222-8222-222222222222'
+    parent = old.new_graph_operation('paper', other, {
+        **paper_payload(), 'title': 'Related controlled comparison',
+    })
+    old.save(parent)
+    with pymupdf.open() as pdf:
+        pdf.new_page().insert_text((40, 60), 'Related experiment observed 75 participants')
+        content = pdf.tobytes()
+    digest = hashlib.sha256(content).hexdigest()
+    original = tmp_path / 'related-original.pdf'
+    original.write_bytes(content)
+    document = old.new_graph_operation('paper_document', other, dict(
+        paper_id=other, sha256=digest, size=len(content), media_type='application/pdf',
+    ))
+    old.save(document)
+    publish(old, other, original, document_hash=digest,
+        parent_incarnation=parent['incarnation'], store=pair[3].store,
+        version_root=pair[3].root, request_id='related-original')
+    with old.journal.transaction() as conn:
+        document = desired_document(conn, other)
+    payload = deepcopy(previous_root['payload'])
+    payload['input_versions'].update(schema_version=2, workspace_id='workspace')
+    payload['input_versions']['documents'] = [{key: document[key] for key in (
+        'paper_id', 'operation_id', 'incarnation', 'parent_incarnation', 'sha256',
+    )}]
+    body = read_json(pair[3].store._path(BlobManifest(
+        payload['body']['sha256'], payload['body']['size'],
+    )).read_bytes())
+    body['deck']['sources'].append(dict(id='related:1', label='Related experiment',
+        kind='original', page=1, document_hash=digest,
+        text='Related experiment observed 75 participants'))
+    body['deck']['slides'][0]['sources'].append('related:1')
+    raw = canonical_json(body)
+    payload['body'] = descriptor(raw, 'application/json')
+    stage_bytes(pair[3].store, {payload['body']['sha256']: raw})
+    root = old.new_graph_operation('research_file', previous_root['entity_id'], payload)
+    old.save(root)
+    source = candidates.prepare(old.journal.path, previous.snapshot, previous.workspace)
+    rows = source.page()['items']
+    change = next(r['change_id'] for r in rows if r['operation_id'] == root['operation_id'])
+    parent_change = next(r['change_id'] for r in rows
+                         if r['operation_id'] == parent['operation_id'])
+    return dict(group=(old, source, change, path, root, service, sha, data, token),
+                parent=parent, parent_change=parent_change, document=document,
+                sha=digest, data=content, original=original)
+
+
+def add_related(related):
+    from paper_daily import sync_recovery_choices
+
+    _, source, _, path, *_ = related['group']
+    return sync_recovery_choices.prepare(target.observe(source, path), related['parent_change'],
+                                        'add', str(uuid4())).apply()
+
+
+def test_related_original_uses_its_proven_paper_and_reaches_an_independent_native_peer(
+    related, tmp_path_factory, pair,
+):
+    from test_workspace_sync import Native
+
+    from paper_daily.workspace_service import Ticket
+    from paper_daily.workspace_sync import SyncSession
+
+    group = related['group']
+    old, source, change, path, root, service, _, _, token = group
+    before = dump(path)
+    with pytest.raises(ValueError, match='parent must already exist') as blocked:
+        plan(group)
+    assert 'Related controlled comparison' in str(blocked.value)
+    assert dump(path) == before and not attached(path).journal.pending()
+    assert add_related(related)['applied']
+    request = str(uuid4())
+    prepared = plan(group, request)
+    owner = next(r for r in prepared.comparison['original_owners']
+                 if r['sha256'] == related['sha'])
+    assert owner['source_parent'] == dict(kind='paper', id=related['parent']['entity_id'],
+                                         incarnation=related['parent']['incarnation'])
+    assert owner['target_parent']['incarnation'] != owner['source_parent']['incarnation']
+    old_bytes = dump(old.journal.path)
+    assert prepared.apply()['applied']
+    assert dump(old.journal.path) == old_bytes
+    client = attached(path)
+    pending = client.journal.pending()
+    assert [o['entity_type'] for o in pending] == ['paper'] + ['research_file'] * 3
+    original = next(o for o in pending if o['payload'].get('slot') == related['sha'])
+    assert original['payload']['paper_id'] == related['parent']['entity_id']
+    assert original['parents'] == [owner['target_parent']]
+    with closing(_readonly_connection(path)) as conn:
+        store, version_root = _inspection_paths(conn)
+    transfer = FileTransfers(client, BlobStore(store.root), service,
+        origin='https://recovery.fixture.invalid', token=token, version_root=version_root)
+    try:
+        for item in pending:
+            if item['entity_type'] == 'research_file':
+                drain(lambda item=item: transfer.upload(item), 'uploaded')
+        result = client.sync_once(service, token, prepare_push=transfer.ready_to_push)
+        assert result['pending'] == result['conflicts'] == 0
+    finally:
+        transfer.close()
+    tokens, enroll = {}, service.enroll
+
+    def capture(workspace, device):
+        tokens[device] = enroll(workspace, device)
+        return tokens[device]
+
+    service.enroll = capture
+    try:
+        other = peer(path, service, tmp_path_factory)
+    finally:
+        service.enroll = enroll
+    travel = SyncSession(other, transport_factory=lambda url: Native(url, service, []))
+    travel.connect('https://recovery.fixture.invalid', 'fresh-research', 'original-group-peer',
+                   tokens['original-group-peer'], Ticket())
+    try:
+        result = travel.prepare_offline(['sync:' + related['parent']['entity_id']], Ticket())
+        assert result['attachments']['failed'] == 0
+    finally:
+        travel.disconnect()
+    from test_sync_recovery_positioned_note import source_file
+
+    assert source_file(other, related['sha'], len(related['data'])).read_bytes() == related['data']
+    assert saved(other, root)[1] == saved(path, root)[1]
+    client.save(client.new_graph_operation('research_file', original['entity_id'], {},
+                                          action='delete'))
+    later = dump(path)
+    assert not plan(group, request).apply()['applied'] and dump(path) == later
+    with pytest.raises(ValueError, match='source restoration'):
+        plan(group, replace=True).apply()
+    assert dump(path) == later
+    from paper_daily.sync_blobs import BlobManifest
+
+    pair[3].store._path(BlobManifest(related['sha'], len(related['data']))).unlink()
+    assert not plan(group, request).apply()['applied'] and dump(path) == later
+
+
+@pytest.mark.parametrize('damage', ['wrong_epoch', 'foreign_workspace', 'ambiguous_hash'])
+def test_unproved_related_input_never_relabels_or_publishes_originals(related, damage):
+    old, previous, _, path, root, service, sha, data, token = related['group']
+    payload = deepcopy(root['payload'])
+    ref = payload['input_versions']['documents'][0]
+    if damage == 'wrong_epoch':
+        ref['incarnation'] = 'wrong-document-epoch'
+    elif damage == 'foreign_workspace':
+        payload['input_versions']['workspace_id'] = 'another-workspace'
+    else:
+        operation = old.new_graph_operation('paper_document', ref['paper_id'], dict(
+            paper_id=ref['paper_id'], sha256=sha, size=len(data), media_type='application/pdf',
+        ))
+        old.save(operation)
+        ref.update(operation_id=operation['operation_id'], incarnation=operation['incarnation'],
+                   sha256=sha)
+    operation = old.new_graph_operation('research_file', root['entity_id'], payload)
+    old.save(operation)
+    source = candidates.prepare(old.journal.path, previous.snapshot, previous.workspace)
+    change = next(r['change_id'] for r in source.page()['items']
+                  if r['operation_id'] == operation['operation_id'])
+    group = old, source, change, path, operation, service, sha, data, token
+    before = dump(path)
+    with pytest.raises(ValueError, match={
+        'wrong_epoch': 'retained native operation', 'foreign_workspace': 'workspace mapping',
+        'ambiguous_hash': 'ambiguous recorded paper owners',
+    }[damage]):
+        plan(group)
+    assert dump(path) == before and not attached(path).journal.pending()
+
+
+def test_root_only_legacy_receipt_retries_after_bytes_are_lost_but_rejects_wrong_native_type(
+    group, pair,
+):
+    import hashlib
+    import json
+    import sqlite3
+
+    from paper_daily.sync_blobs import BlobManifest
+
+    _, _, _, path, root, *_ = group
+    request = str(uuid4())
+    assert plan(group, request).apply()['applied']
+
+    def rewrite(change):
+        with closing(sqlite3.connect(path)) as conn, conn:
+            value = json.loads(conn.execute('SELECT result FROM integration_operations WHERE id=?',
+                                           (request,)).fetchone()[0])
+            change(value)
+            raw = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+            conn.execute('UPDATE integration_operations SET result=?,fingerprint=? WHERE id=?',
+                         (raw, hashlib.sha256(raw.encode()).hexdigest(), request))
+
+    def old_shape(value):
+        for ref in value['originals']:
+            ref.pop('source_parent')
+            ref.pop('target_parent')
+
+    rewrite(old_shape)
+    asset = root['payload']['assets'][0]
+    pair[3].store._path(BlobManifest(asset['sha256'], asset['size'])).unlink()
+    before = dump(path)
+    assert not plan(group, request).apply()['applied'] and dump(path) == before
+
+    def wrong_type(value):
+        value['originals'][0] = dict(value['native'])
+
+    rewrite(wrong_type)
+    before = dump(path)
+    with pytest.raises(ValueError, match='another native content type'):
+        plan(group, request)
+    assert dump(path) == before

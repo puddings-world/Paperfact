@@ -62,6 +62,64 @@ def _payload(source):
     return payload
 
 
+def _recorded_owner(conn, source, reference, check):
+    operation = history._old(conn, reference["operation_id"], check)
+    parent = dict(kind="paper", id=reference["paper_id"],
+                  incarnation=reference["parent_incarnation"])
+    if (operation["version"] != 2 or operation["action"] != "put"
+            or operation["workspace_id"] != source["workspace_id"]
+            or operation["entity_type"] != "paper_document"
+            or operation["entity_id"] != reference["paper_id"]
+            or operation["incarnation"] != reference["incarnation"]
+            or operation["parents"] != [parent]
+            or operation["payload"]["sha256"] != reference["sha256"]):
+        raise ValueError("Recorded deck document differs from its retained native operation")
+    return parent
+
+
+def _originals(conn, source, hashes, check):
+    payload = source["payload"]
+    refs = payload["input_versions"]["documents"]
+    if refs and payload["input_versions"].get(
+        "workspace_id", source["workspace_id"],
+    ) != source["workspace_id"]:
+        raise ValueError("Foreign-scope original owners need explicit workspace mapping")
+    owners = {}
+    for reference in refs:
+        parent = _recorded_owner(conn, source, reference, check)
+        owners.setdefault(reference["sha256"], []).append(parent)
+    if any(len(value) > 1 for value in owners.values()) or (
+        payload["source_document_hash"] in owners
+        and owners[payload["source_document_hash"]] != [source["parents"][0]]
+    ):
+        raise ValueError("A deck original has ambiguous recorded paper owners")
+    result = {}
+    for sha in sorted(hashes):
+        matches = owners.get(sha, [])
+        parent = matches[0] if matches else source["parents"][0]
+        title = conn.execute(
+            "SELECT p.title FROM papers p JOIN research_paper_identity i ON i.local_id=p.id "
+            "WHERE i.sync_id=?", (parent["id"],),
+        ).fetchone()
+        result[sha] = dict(parent=parent, title=title[0] if title else parent["id"],
+                           proof=native.inspect_original(conn, parent["id"], parent, sha, check))
+    return result
+
+
+def _mapped_originals(mapper, originals):
+    result = []
+    for sha, value in originals.items():
+        try:
+            translated = mapper(value["parent"])
+        except ValueError as error:
+            raise ValueError(
+                "Review this paper's recorded change first: " + value["title"] + ". " + str(error)
+            ) from error
+        result.append(dict(sha256=sha, title=value["title"], source_parent=value["parent"],
+                           target_parent=translated))
+    return result
+
+
 def _closure(observed, source, check):
     with closing(_readonly_connection(observed.source.database)) as conn:
         conn.execute("BEGIN")
@@ -86,13 +144,7 @@ def _closure(observed, source, check):
         hashes.update(row["sha256"] for row in refs)
         if len(hashes) > 16:
             raise ValueError("Deck originals exceed the recovery budget")
-        if refs and (any(r["paper_id"] != payload["paper_id"] for r in refs)
-                     or payload["input_versions"].get(
-                         "workspace_id", source["workspace_id"]) != source["workspace_id"]):
-            raise ValueError("Related or foreign-scope original owners need explicit mapping")
-        originals = {sha: native.inspect_original(
-            conn, payload["paper_id"], source["parents"][0], sha, check,
-        ) for sha in sorted(hashes)}
+        originals = _originals(conn, source, hashes, check)
     check()
     observed.source._check(check)
     if not closure.matches(source):
@@ -125,18 +177,39 @@ def _prior(conn, observed, source, request, replace, check):
         raise ValueError("Deck recovery receipt differs from native history")
     seen = set()
     for reference in receipt["originals"]:
-        if not isinstance(reference, dict) or set(reference) != {"id", "fingerprint"}:
+        if not isinstance(reference, dict) or set(reference) not in (
+            {"id", "fingerprint"}, {"id", "fingerprint", "source_parent", "target_parent"},
+        ):
             raise ValueError("Invalid original recovery receipt")
+        source_parent = reference.get("source_parent", source["parents"][0])
+        target_parent = reference.get("target_parent", operation["parents"][0])
+        for parent in (source_parent, target_parent):
+            if (not isinstance(parent, dict) or set(parent) != {"kind", "id", "incarnation"}
+                    or parent["kind"] != "paper"):
+                raise ValueError("Invalid original owner recovery receipt")
+            for value in parent.values():
+                _identifier(value)
         original = history._old(conn, reference["id"], check)
-        if (candidates._fingerprint(original) != reference["fingerprint"]
+        if (original["entity_type"] != "research_file" or original["action"] != "put"
+                or original["payload"].get("feature") != "original_source"):
+            raise ValueError("Deck original receipt names another native content type")
+        sha = original["payload"]["slot"]
+        permitted = source_parent == source["parents"][0] or any(
+            row["paper_id"] == source_parent["id"]
+            and row["parent_incarnation"] == source_parent["incarnation"] and row["sha256"] == sha
+            for row in source["payload"]["input_versions"]["documents"]
+        )
+        if (not permitted or candidates._fingerprint(original) != reference["fingerprint"]
                 or original["workspace_id"] != operation["workspace_id"]
                 or original["entity_type"] != "research_file" or original["action"] != "put"
                 or original["payload"]["feature"] != "original_source"
-                or original["payload"]["paper_id"] != source["payload"]["paper_id"]
-                or original["parents"] != operation["parents"]
-                or original["payload"]["slot"] in seen):
+                or original["payload"]["paper_id"] != source_parent["id"]
+                or target_parent["id"] != source_parent["id"]
+                or original["parents"] != [target_parent] or sha in seen):
             raise ValueError("Deck original receipt differs from native history")
-        seen.add(original["payload"]["slot"])
+        if source_parent == source["parents"][0] and target_parent != operation["parents"][0]:
+            raise ValueError("Deck root original differs from its native parent mapping")
+        seen.add(sha)
     return receipt
 
 
@@ -202,19 +275,24 @@ class DeckGroup:
             native._binding_in(conn, self.observed)
             paths, client = _inspection_paths(conn), conn._capture_client
             current = artifacts.applied_file(conn, source["entity_id"])
+            mapper = choices._parent_mapper(conn, self.observed, source, check)
+            owners = _mapped_originals(mapper, originals)
+            if owners != self.comparison["original_owners"]:
+                raise ValueError("Deck original owner mapping changed after comparison")
         if paths is None:
             raise ValueError("The restored workspace needs registered artifact storage")
         store, root = BlobStore(paths[0].root), paths[1]
         # Detect modified existing managed files rather than hiding private edits.
         current_version = artifacts.materialize(store, root, current) if current else None
         staged = [prepare_source(
-            client, source["payload"]["paper_id"], proof[0], document_hash=sha,
-            parent_incarnation=operation["parents"][0]["incarnation"], store=store,
+            client, owner["source_parent"]["id"], originals[owner["sha256"]]["proof"][0],
+            document_hash=owner["sha256"],
+            parent_incarnation=owner["target_parent"]["incarnation"], store=store,
             version_root=root,
             request_id=str(uuid5(
-                NAMESPACE_URL, "paperfact:deck-original:" + self.request_id + sha,
+                NAMESPACE_URL, "paperfact:deck-original:" + self.request_id + owner["sha256"],
             )),
-        ) for sha, proof in originals.items()]
+        ) for owner in owners]
         artifacts.stage_bytes(store, blobs)
         directory = artifacts.materialize(store, root, operation)
         check()
@@ -241,13 +319,15 @@ class DeckGroup:
                 receipt = dict(_context(self.observed, source, self.request_id, self.replace),
                     native=dict(id=operation["operation_id"],
                                 fingerprint=candidates._fingerprint(operation)),
-                    originals=[dict(id=o["operation_id"], fingerprint=candidates._fingerprint(o))
-                               for o in published])
+                    originals=[dict(id=o["operation_id"], fingerprint=candidates._fingerprint(o),
+                                    source_parent=owner["source_parent"],
+                                    target_parent=owner["target_parent"])
+                               for o, owner in zip(published, owners, strict=True)])
                 choices._write_receipt(conn, self.request_id, _hash(receipt), receipt)
                 if not closure.matches(source):
                     raise ValueError("Old deck assets changed before recovery committed")
-                for proof in originals.values():
-                    native._original_current(proof)
+                for value in originals.values():
+                    native._original_current(value["proof"])
                 self.observed.source._check(check)
                 native._binding_in(conn, self.observed)
                 if tuple(generation._identity(self.observed.database)) != self.observed.identity:
@@ -304,6 +384,7 @@ def prepare(observed, change_id, request_id, *, replace=False, seconds=60,
                     raise ValueError("Current deck storage is unregistered")
                 _proof, current_body, _bytes = artifacts.verify_closure(paths[0], current)
             comparison = dict(source=body, current=current_body, original_hashes=sorted(originals),
+                              original_owners=_mapped_originals(mapper, originals),
                               state="absent" if state is None else
                               "active" if state["active"] else "retired")
             operation_json = canonical_operation(operation)

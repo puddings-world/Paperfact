@@ -426,3 +426,26 @@ related-paper ownership mapping, real native vaults or installed Mac/phone and
 hosted HTTPS journeys. Historical full-suite status is unaffected. Existing
 claim/note review and held-worker cancellation/context cases run as adjacent
 regressions, not a new exhaustive matrix.
+
+
+## Related-paper deck originals and old receipts (2026-11-14)
+
+The same deck recovery service now resolves explicitly recorded related-paper
+originals. It verifies each document operation against retained native history
+before using its exact paper/parent/hash; root PDF identity cannot be reassigned.
+The existing recovery parent mapper proves prior paper decisions. Missing papers
+are named in the refusal, and comparison lists original titles plus hashes.
+
+| Requirement | Existing test selector / observation |
+|---|---|
+| Restore related paper first, then preserve its original owner | `test_related_original_uses_its_proven_paper_and_reaches_an_independent_native_peer`: no writes before the paper decision; explicit add proves the new parent epoch; all originals and deck reach an independent native peer |
+| Preserve later source retirement and recognize an old decision without bytes | The same journey retires the target original, refuses a new implicit restoration, removes old source bytes and recognizes the earlier decision without resurrecting it |
+| Refuse contradictory provenance | `test_unproved_related_input_never_relabels_or_publishes_originals`: wrong document epoch, different source workspace and contradictory equal-hash paper ownership all leave research/outbox unchanged |
+| Explain source owners in the actual native UI | Existing Qt review test adds one related-paper case; the original title is visible and confirmation/duplicate activation commits one group |
+| Keep pre-extension receipts usable | `test_root_only_legacy_receipt_retries_after_bytes_are_lost_but_rejects_wrong_native_type`: the prior root-only receipt shape remains usable after assets disappear; a receipt pointing to a deck as if it were an original refuses |
+
+The earlier atomicity, stale-context, cancellation and installed-file guards
+remain in this same selected module. References whose recorded input workspace
+is not the old native workspace still require an explicit historical mapping.
+These tests do not certify semantic support, portable scientific-audit mappings,
+hosted HTTPS or installed Mac/phone acceptance.

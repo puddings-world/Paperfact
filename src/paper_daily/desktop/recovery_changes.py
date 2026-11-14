@@ -216,6 +216,7 @@ TEXT["zh-TW"].update({
 
 TEXT["en"].update({
     "deck_group": "Use old complete deck",
+    "deck_originals": "Recorded originals",
     "ready_deck_group": "Compare slides, speaker notes and sources before confirming. "
                         "Exact originals and image assets are included. No AI call is made.",
     "confirm_deck_group": "Save this complete old deck and its verified originals? "
@@ -224,6 +225,7 @@ TEXT["en"].update({
 })
 TEXT["zh-TW"].update({
     "deck_group": "????????",
+    "deck_originals": "?????",
     "ready_deck_group": "?????????????????????????????? PDF ??????? AI?",
     "confirm_deck_group": "?????????????????????????????????????"
                           "???????????????????????????",
@@ -633,6 +635,10 @@ class RecoveryChanges(QWidget):
             parts.extend(value for value in (row["label"], row.get("text"), row.get("url"))
                          if value)
         parts.extend(row.get("caption") or row["label"] for row in deck["figures"])
+        if side == "source" and comparison.get("original_owners"):
+            parts.append(self.t["deck_originals"])
+            parts.extend(row["title"] + " (" + row["sha256"][:12] + ")"
+                         for row in comparison["original_owners"])
         return "\n\n".join(parts)
 
     def _group_text(self, members, side):
