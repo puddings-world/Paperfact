@@ -629,9 +629,10 @@ def test_actual_window_failure_reports_safe_status_without_changing_visible_sele
         assert widget.queue_page.view.currentIndex().data(PAPER_ROLE).id == selected
         assert widget.progress.isVisible()
         monkeypatch.setattr(widget.data, "set_pins", real_set_pins)
+        # Pins are shown on the papers already loaded, so that is the step that fails here.
         monkeypatch.setattr(
             widget,
-            "reload",
+            "_show_pins",
             lambda: (_ for _ in ()).throw(sqlite3.OperationalError("private/refresh secret-token")),
         )
         assert widget.set_pinned(["a-source"], True) is True

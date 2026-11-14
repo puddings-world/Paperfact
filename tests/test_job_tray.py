@@ -495,3 +495,32 @@ def test_a_failure_offers_a_way_back_to_where_it_was_asked(surface):
     assert not board.result.isVisible() and board.go.isVisible()
     board.go.click()
     assert shown == [1]
+
+
+def test_the_open_job_list_keeps_its_rows_while_only_the_clock_moves(surface):
+    window, hub, board, _ = surface
+    stops = []
+    handle = begin(window, "Analyse", key="steady", cancel=lambda: stops.append(1))
+    panel = JobPanel(hub, window.pal, board)
+    panel.refresh()
+    row = panel.rows.itemAt(0).widget()
+    stop = next(b for b in row.findChildren(type(board.go)) if b.text() == "停止")
+
+    hub.jobs[handle.token].started -= 75
+    hub.changed.emit()
+    panel.refresh()
+    # The same row and the same button, so a press begun before the tick still lands.
+    assert panel.rows.itemAt(0).widget() is row and "1:15" in row.accessibleName()
+    stop.click()
+    assert stops == [1]
+
+    # What a row offers did change: it is rebuilt, and says so.
+    panel.refresh()
+    rebuilt = panel.rows.itemAt(panel.rows.count() - 1).widget()
+    assert rebuilt is not row
+    buttons = rebuilt.findChildren(type(board.go))
+    assert not next(b for b in buttons if b.text() == "停止").isEnabled()
+    handle.finish(cancelled=True)
+    panel.refresh()
+    last = panel.rows.itemAt(panel.rows.count() - 1).widget()
+    assert "停止" not in [b.text() for b in last.findChildren(type(board.go))]

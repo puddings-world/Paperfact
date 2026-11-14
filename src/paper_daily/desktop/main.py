@@ -15,6 +15,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -203,9 +204,7 @@ class Paper:
             # A managed paper never resolves through a sanitized legacy alias.
             key = hashlib.sha256(self.id.encode()).hexdigest()
             return PDF_DIR / ".managed-unavailable" / f"{key}.pdf"
-        import re
-
-        return PDF_DIR / (re.sub(r"[^A-Za-z0-9._-]", "_", self.id) + ".pdf")
+        return PDF_DIR / _legacy_pdf_name(self.id)
 
     @property
     def has_pdf(self) -> bool:
@@ -216,6 +215,10 @@ class Paper:
                 bool(self._document_status.available) if managed(self) else self.pdf_path.exists()
             )
         return self._has_pdf
+
+
+def _legacy_pdf_name(paper_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]", "_", paper_id) + ".pdf"
 
 
 def _pdf_names() -> set[str]:
@@ -317,7 +320,8 @@ class Data:
         on_disk = _pdf_names()
         for paper in papers:
             if not managed(paper):
-                paper._has_pdf = paper.pdf_path.name in on_disk
+                # The name alone: building a Path per paper was a third of this read.
+                paper._has_pdf = _legacy_pdf_name(paper.id) in on_disk
         return papers
 
     def pins(self, scope: str) -> set[str]:
@@ -336,10 +340,13 @@ class Data:
         if any(not isinstance(paper_id, str) or not paper_id for paper_id in paper_ids):
             raise ValueError("Select valid paper identities")
         if not paper_ids:
-            return
+            return None
         with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            before = self._revision(conn)
             for paper_id in dict.fromkeys(paper_ids):
                 set_pinned(conn, scope, paper_id, on)
+            return before, self._revision(conn)
 
     def dive(self, paper_id: str) -> str | None:
         with connect() as conn:
@@ -543,6 +550,44 @@ class Data:
         if path.exists():
             return path.read_text(encoding="utf-8")
         return None
+
+    @staticmethod
+    def _revision(conn):
+        row = conn.execute("SELECT revision FROM workspace_revision WHERE id=1").fetchone()
+        return row[0] if row else None
+
+    def set_states(self, paper_ids, state: str, list_id: str | None = None):
+        """Mark papers in one transaction and say exactly what it left behind.
+
+        Returns the workspace revision before and after, and each paper's saved
+        (state, read_at, delivered_at), so the window can show the change without
+        reading the list again and can tell its own write from someone else's.
+        """
+        column = {"delivered": "delivered_at", "read": "read_at"}.get(state)
+        ids = list(dict.fromkeys(paper_ids))
+        marks = ",".join("?" for _ in ids)
+        with connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            before = self._revision(conn)
+            for paper_id in ids:
+                if list_id:
+                    conn.execute(
+                        f"UPDATE list_papers SET state=?{', ' + column + '=?' if column else ''} "
+                        "WHERE list_id=? AND paper_id=?",
+                        (state, now(), list_id, paper_id) if column
+                        else (state, list_id, paper_id),
+                    )
+                else:
+                    qmod.mark(conn, paper_id, state)
+            saved = conn.execute(
+                f"SELECT paper_id,state,read_at,delivered_at FROM list_papers "
+                f"WHERE list_id=? AND paper_id IN ({marks})" if list_id else
+                f"SELECT paper_id,state,read_at,delivered_at FROM queue "
+                f"WHERE paper_id IN ({marks})",
+                (list_id, *ids) if list_id else ids,
+            ).fetchall()
+            after = self._revision(conn)
+        return before, after, {row[0]: tuple(row[1:]) for row in saved}
 
     def set_state(self, paper_id: str, state: str, list_id: str | None = None) -> None:
         if not list_id:
@@ -4370,8 +4415,7 @@ class MainWindow(QWidget):
         pinned = self.data.pins(self.active_list or "queue")
         for paper in self.papers:
             paper.pinned = paper.id in pinned
-        read = sum(1 for p in self.papers if p.read)
-        self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
+        self._show_progress()
         self.queue_page.refresh()
         if self.stack.currentWidget() is self.queue_page:
             self.queue_page.enqueue_pdfs()
@@ -4518,17 +4562,27 @@ class MainWindow(QWidget):
 
     def set_pinned(self, paper_ids: list[str], on: bool) -> bool:
         try:
-            self.data.set_pins(self.active_list or "queue", paper_ids, on)
+            self._own_write(self.data.set_pins(self.active_list or "queue", paper_ids, on))
         except (ValueError, sqlite3.Error, OSError, RuntimeError):
             self._pin_notice("未能更新釘選；清單可能已變更或暫時無法寫入。請重新整理後重試。")
             return False
-        previous = self.papers
         try:
-            self.reload()
+            self._show_pins()
         except (ValueError, sqlite3.Error, OSError, RuntimeError):
-            self.papers = previous
             self._pin_notice("釘選已儲存，但畫面暫時無法更新；請重新整理。")
         return True
+
+    def _show_pins(self) -> None:
+        """Show the saved pins on the papers already loaded; the list is not read again."""
+        pinned = self.data.pins(self.active_list or "queue")
+        for paper in self.papers:
+            paper.pinned = paper.id in pinned
+        self.queue_page.refresh(same_papers=True)
+
+    def _own_write(self, span) -> None:
+        """A write this window made and already shows is not an outside change."""
+        if span is not None:
+            self.workspace_changes.absorb(*span[:2])
 
     def _pin_notice(self, message: str) -> None:
         self.progress.setText(message)
@@ -4646,18 +4700,28 @@ class MainWindow(QWidget):
         return True
 
     def set_read_many(self, paper_ids: list[str], read: bool) -> None:
-        for paper_id in paper_ids:
-            self.data.set_state(
-                paper_id, "read" if read else "pending", list_id=self.active_list
-            )
-        self.reload()
+        """Mark rows read or unread; only those rows change on screen."""
+        span = self.data.set_states(
+            paper_ids, "read" if read else "pending", list_id=self.active_list
+        )
+        self._own_write(span)
+        saved = span[2]
+        for paper in self.papers:
+            if paper.id in saved:
+                state, read_at, delivered_at = saved[paper.id]
+                paper.state = state or "pending"
+                paper.touched_at = read_at or delivered_at
+                paper.read_at = read_at if state == "read" else None
+        self._show_progress()
+        self.queue_page.refresh(same_papers=True)
 
     def set_read(self, paper_id: str, read: bool) -> None:
         """Mark a row read or unread without opening it."""
-        self.data.set_state(
-            paper_id, "read" if read else "pending", list_id=self.active_list
-        )
-        self.reload()
+        self.set_read_many([paper_id], read)
+
+    def _show_progress(self) -> None:
+        read = sum(1 for p in self.papers if p.read)
+        self.progress.setText(f"已讀 {read} · 未讀 {len(self.papers) - read}")
 
     def _add_paper(self) -> None:
         if run_add(self):

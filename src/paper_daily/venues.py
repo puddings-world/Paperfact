@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.parse
+from functools import lru_cache
 
 from paper_daily.http import fetch_text
 from paper_daily.sources import crossref, openalex
@@ -57,6 +58,9 @@ TIERS = (
 )
 
 
+# Sorting a long list asks these three for every paper on every pass, and a list has
+# few distinct venues; the answers depend on nothing but the arguments.
+@lru_cache(maxsize=4096)
 def group_key(venue: str | None, year: int | None) -> tuple:
     """Sort key that groups papers by venue: the tiers above in order, any other
     venue after them alphabetically, preprints last; newest first within a venue."""
@@ -65,11 +69,13 @@ def group_key(venue: str | None, year: int | None) -> tuple:
     return (is_preprint(venue), rank, name.lower(), -(year or 0))
 
 
+@lru_cache(maxsize=4096)
 def is_preprint(venue: str | None) -> bool:
     low = (venue or "").lower()
     return not low or any(host in low for host in PREPRINT_HOSTS)
 
 
+@lru_cache(maxsize=4096)
 def short(venue: str | None) -> str:
     if is_preprint(venue):
         return "arXiv" if "arxiv" in (venue or "").lower() else (venue or "未發表")
