@@ -308,3 +308,10 @@ effect, followed by verified-save-before-pending-cleanup and exact destination
 binding. Evidence is limited to this native flow and fake storage; it does not
 establish browser persistence, transactional OS vaults or a general OAuth design.
 Keep this evidence here rather than promoting an unverified global skill rule.
+
+After merging the current `develop/0.5` UI-performance changes, the merged source
+passed **16 cases in 16.85s**, **20.3s including checks**: all 14 critical
+selectors, the actual clipboard/pair/join journey and actual MainWindow startup
+consent. The earlier 29-case affected selection remains scoped evidence; these
+overlapping counts must not be added as distinct coverage. No conflicts occurred
+and no native credential store, private research or cloud service was accessed.
