@@ -18,9 +18,9 @@ Windows frozen acceptance also runs the setup artifact in its explicit CI-only
 acceptance mode: install into a new owned folder, verify the installed app,
 reinstall the same version, then uninstall while preserving generated research.
 See [the verifier contract](toolchain.md). This is separate from real upgrade,
-shortcut/registration and device checks. The new installer phase has local
-simulation coverage only until a subsequent Windows candidate job runs it;
-run 43640792668 predates this phase. Automatic resource helpers may briefly outlive
+shortcut/registration and device checks. Windows source 7704504 passed the actual
+installer phase in [run 43647271358](https://github.com/puddings-world/Paperfact/actions/runs/43647271358).
+Run 43640792668 predates this phase. Automatic resource helpers may briefly outlive
 the reader; installer verification waits for recognized fixture producers before
 hashing every research file. A 30-second drain timeout is a failure, not a retry
 of the AI or resource operation. Do not relabel that earlier candidate as

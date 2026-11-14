@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Common candidate `4594626` passed actual native Windows/Mac/Linux reports and Windows mobile artifact 5/5 in run 43640792668. Startup/display and hidden-failure repairs verified; matching installers/provenance/synthetic material available. CI-only installer lifecycle verification added; Windows native runs stop before setup while reading fixture files, with private exact-path diagnostics prepared. Mac/Linux source 84ec689 passed; common delivered candidate remains 4594626. No further native rebuild in this iteration. Remaining recovery/mapping, hosted identity and physical-device gates stay in current status. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Common candidate `4594626` passed actual native Windows/Mac/Linux reports and Windows mobile artifact 5/5 in run 43640792668. Startup/display and hidden-failure repairs verified; matching installers/provenance/synthetic material available. Windows installer lifecycle passed on 7704504/run 43647271358 after bounded producer drain, including installed reader/CLI/MCP, reinstall/uninstall and research byte preservation. Mac/Linux 84ec689 passed; common delivered candidate remains 4594626. Old-release upgrade, hosted sync and physical devices remain open. Remaining recovery/mapping, hosted identity and physical-device gates stay in current status. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

@@ -5710,3 +5710,29 @@ additional worktree was introduced.
   diagnostic. Critical 14 passed in 5.26s / 11.2s total; docs 58 passed in 1.80s /
   5.4s total. First affected check stopped on one Ruff line-length finding
   before pytest (4.9s); fixed without changing assertions.
+
+- Native Windows verification now passed: source
+  7704504a64fe413cfa4b9ede5a4360d596448dde, clean 0.5.0.dev,
+  run 43647271358 / job 132607754373, 22:17:12-22:23:43 UTC (6m31s).
+  Actual report: installed/reinstalled/uninstalled/research_preserved all true;
+  installed reader and installed CLI/MCP 38-tool retry/restart passed. Frozen
+  roundtrip preserved 4 PDFs, exact original/quote audit passed. Critical 14 in
+  4.60s; actual mobile artifact 5 tests/5 pass/0 fail. Not only aggregate job green.
+- Setup payload SHA-256 (computed inside the native verifier):
+  3c99fb85c35780fa3ce40274f1402e231bbbee5e759bd04942aa793c10687d06.
+  build-windows artifact 14134856199, 184107709 bytes; GitHub archive digest:
+  1e683f333243777f64b866e6069e45667de11f012319ec5d03eeb7b59000e351.
+  Report/index retained under ignored build/candidate-43647271358. No large
+  installer download, local execution or public release was required.
+- Mac/Linux source 84ec689 reports in run 43644279988 remain separate qualified
+  evidence, not native acceptance of current Windows source 7704504. Common
+  three-platform delivered candidate remains 4594626. Old-release upgrade,
+  registry/shortcuts, real-provider, hosted sync, actual Mac/phone and complete
+  curated-release gates remain open. No owner research or production resources.
+- Verified checkpoint review: reproduce a failing native fixture locally before
+  another packaging cycle; wait for known producer quiescence rather than skip a
+  locked research file. Reuse existing typed idle-lock validation and retain
+  failure artifacts. This is project evidence, not a new global skill/hook/rule.
+- Final evidence-only documentation check: 58 passed in 1.87s / 4.9s total,
+  privacy/Ruff/whitespace green. Reuse native and critical evidence for unchanged
+  source 7704504; no packaging rebuild for these documentation updates.
