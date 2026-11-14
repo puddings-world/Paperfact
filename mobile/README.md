@@ -67,7 +67,10 @@ gap, not the still-gated authority publication/enrollment path. See the
 
 The [same-origin browser-session adapter](../docs/sync-http.md#same-origin-browser-adapter-development)
 and `CookieTransport` now provide a local HttpOnly-cookie protocol foundation.
-They are not yet wired into the Connection form or operator CLI. The static
-preview above therefore remains synthetic/manual-bearer use; it does not create
-an authenticated hosted service. Actual browser persistence and phone acceptance
-remain open. The shell cache revision changes to v20 for the new transport.
+The Connection form now offers Pair and remember, Reconnect and confirmed Forget;
+manual bearer setup is under Advanced. Browser persistence and offline reload are
+verified in isolated Chromium. Operator signing-key setup, HTTPS deployment and
+physical phones remain open. The static preview above does not provision a service.
+Shell v21 includes the pairing view; research caches are retained.
+
+[User flow, API, browser-test command and exact limits](../docs/mobile-0.5.md#browser-pairing-and-offline-reconnection).

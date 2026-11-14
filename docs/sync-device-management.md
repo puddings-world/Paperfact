@@ -135,8 +135,9 @@ already trusted device can explicitly authorize another device through pairing.
 ## One-time device pairing core
 
 Status: local authority, Python SDK, desktop pairing screens and native receiver
-retry storage implemented. Mobile pairing screens and durable browser credentials
-remain pending.
+retry storage implemented. Mobile pairing/reconnect/forget and HttpOnly browser
+credential persistence are exercised in isolated Chromium; operator key loading
+and same-origin HTTPS hosting remain pending.
 No service was deployed and no real device was enrolled. The first trusted device
 still requires operator-issued credentials. AI/Google Slides login is separate.
 
@@ -290,9 +291,9 @@ a separate slot scoped to the exact source database. See
 
 These use synthetic research, fake native storage and local authority transports.
 Rendering fixtures do not prove platform focus, native prompts or installed apps.
-Mobile persistent authentication still needs a separately reviewed browser/session
-boundary; no token is put in IndexedDB or localStorage. Revise the PWA shell cache
-when its pairing screens are connected. Initial issuance, hosted identity and
+The [same-origin browser boundary and pairing screen](mobile-0.5.md#browser-pairing-and-offline-reconnection)
+now use HttpOnly cookies; no token is put in IndexedDB or localStorage. Shell v21
+includes the mobile pairing view. Initial issuance, hosted identity and
 physical Windows/Apple Silicon/phone acceptance remain open.
 
 Local desktop checkpoint: **29 affected cases passed in 44.56s**, **47.7s

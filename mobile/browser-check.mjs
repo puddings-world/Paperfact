@@ -27,10 +27,12 @@ import {
 import {createInterface} from 'node:readline';
 const executable = process.argv[2] ?? process.env.PAPERFACT_TEST_BROWSER;
 const testPage=process.env.PAPERFACT_TEST_PAGE??'browser-test.html';
-if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html','workspace-startup-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
+if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html','workspace-startup-browser-test.html','browser-pairing-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
 if(! executable) throw new Error('Pass an explicit Chromium/Edge executable path.');
 const root = fileURLToPath(new URL('.', import.meta.url)), profile = await mkdtemp(join(tmpdir(), 'paperfact-mobile-fixture-'));
 const plainNoteMode=!!process.env.PAPERFACT_NOTE_SERVICE_PYTHON;
+const pairingMode=testPage==='browser-pairing-browser-test.html';
+if(pairingMode&&!process.env.PAPERFACT_PAIRING_SERVICE_PYTHON)throw Error('Pairing fixture needs an explicit Python interpreter.');
 const fixtureResearchRequests=[];
 let positionService,positionReady,positionErrors='';
 const serviceLines=[],serviceWaiting=[];
@@ -63,6 +65,10 @@ if(['position-browser-test.html','position-ui-browser-test.html'].includes(testP
   if(origin.protocol!=='http:' || origin.hostname!=='127.0.0.1' || origin.pathname!=='/')throw Error('Invalid fixture origin.');
 }
 const server = createServer(async(request, response) => {
+  if(pairingMode && request.url==='/__position_requests') {
+    response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    response.end(JSON.stringify(fixtureResearchRequests));return;
+  }
   if(positionReady && request.url==='/__position_fixture') {
     response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
     response.end(JSON.stringify(positionReady));return;
@@ -76,13 +82,16 @@ const server = createServer(async(request, response) => {
       const result=await serviceMessage(command);
       response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end(JSON.stringify(result));return;
     }
-    if(!['/v1/session/info','/v1/pull','/v1/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit'].includes(request.url) || request.method!=='POST') {
+    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull']:['/v1/session/info','/v1/pull','/v1/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
       response.writeHead(404);response.end();return;
     }
-    if(plainNoteMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
+    if(plainNoteMode||pairingMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
     const upstream=await fetch(positionReady.url+request.url,{method:'POST',body,
-      headers:{'Content-Type':'application/json',Authorization:request.headers.authorization??''},redirect:'error'});
-    response.writeHead(upstream.status,{'Content-Type':'application/json','Cache-Control':'no-store'});
+      headers:pairingMode?Object.fromEntries(Object.entries(request.headers).filter(([name])=>
+        ['content-type','origin','cookie','x-paperfact-browser','x-paperfact-workspace','x-paperfact-device','sec-fetch-site'].includes(name)))
+        :{'Content-Type':'application/json',Authorization:request.headers.authorization??''},redirect:'error'});
+    response.writeHead(upstream.status,{'Content-Type':'application/json','Cache-Control':'no-store',
+      ...(pairingMode&&upstream.headers.has('set-cookie')?{'Set-Cookie':upstream.headers.get('set-cookie')}:{})});
     response.end(new Uint8Array(await upstream.arrayBuffer()));return;
   }
   const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname),
@@ -114,6 +123,14 @@ const server = createServer(async(request, response) => {
   }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+if(pairingMode) {
+  positionService=spawn(process.env.PAPERFACT_PAIRING_SERVICE_PYTHON,
+    [join(root,'browser-pairing-service-fixture.py'),resolve(root,'..'),`http://127.0.0.1:${server.address().port}`],
+    {stdio:['pipe','pipe','pipe'],windowsHide:true});
+  positionService.stderr.on('data',chunk=>positionErrors+=chunk);
+  createInterface({input:positionService.stdout}).on('line',line=>{const next=serviceWaiting.shift();if(next)next(line);else serviceLines.push(line);});
+  positionReady=await serviceMessage();
+}
 const browser = spawn(
 executable,
 ['--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
@@ -392,19 +409,19 @@ try {
   await send('Page.navigate', {
     url: `http://127.0.0.1:${server.address().port}/${testPage}`
   });
-  let finished = false, offlineStarted=false;
+  let finished = false, offlineStarted=false, onlineStarted=false;
   const metricSeen=new Set(),keySeen=new Set(),captureSeen=new Set();
   for(let tick = 0; tick < 160; tick++) {
     await new Promise(resolve => setTimeout(resolve, 250));
     const result = await send(
     'Runtime.evaluate',
     {
-      expression: 'JSON.stringify({done:document.body?.dataset.result,offlineReady:document.body?.dataset.offlineReady,metrics:document.body?.dataset.metrics,keyboard:document.body?.dataset.keyboard,capture:document.body?.dataset.capture,text:document.querySelector("#result")?.textContent})',
+      expression: 'JSON.stringify({done:document.body?.dataset.result,offlineReady:document.body?.dataset.offlineReady,metrics:document.body?.dataset.metrics,onlineReady:document.body?.dataset.onlineReady,keyboard:document.body?.dataset.keyboard,capture:document.body?.dataset.capture,text:document.querySelector("#result")?.textContent})',
       returnByValue: true
     }
     );
     const value = JSON.parse(result.result.value ?? '{}');
-    if(testPage==='position-ui-browser-test.html') {
+    if(['position-ui-browser-test.html','browser-pairing-browser-test.html'].includes(testPage)) {
       if(value.metrics&&!metricSeen.has(value.metrics)) {
         const sizes={'phone-en':[390,844,true],'phone-zh':[360,780,true],'laptop-en':[1280,900,false]},size=sizes[value.metrics];
         if(!size)throw Error('Unknown fixture viewport');metricSeen.add(value.metrics);
@@ -421,12 +438,22 @@ try {
         await send('Runtime.evaluate',{expression:'document.body.dataset.captureReady='+JSON.stringify(value.capture)});
       }
       if(value.keyboard&&!keySeen.has(value.keyboard)) {
-        const keys={'remember-zh':['Enter','Enter',13],'dirty-escape-en':['Escape','Escape',27]},key=keys[value.keyboard];
+        const keys={'pair-en':['Enter','Enter',13],'remember-zh':['Enter','Enter',13],'dirty-escape-en':['Escape','Escape',27]},key=keys[value.keyboard];
         if(!key)throw Error('Unknown fixture key');keySeen.add(value.keyboard);
         await send('Input.dispatchKeyEvent',{type:'keyDown',key:key[0],code:key[1],windowsVirtualKeyCode:key[2],
           ...(key[0]==='Enter'?{text:'\r',unmodifiedText:'\r'}:{})});
         await send('Input.dispatchKeyEvent',{type:'keyUp',key:key[0],code:key[1],windowsVirtualKeyCode:key[2]});
       }
+    }
+    if(pairingMode&&value.offlineReady&&!offlineStarted) {
+      offlineStarted=true;await send('Network.enable');
+      await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+      await send('Runtime.evaluate',{expression:'document.body.dataset.offlineActive="true"'});
+    }
+    if(pairingMode&&value.onlineReady&&!onlineStarted) {
+      onlineStarted=true;
+      await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+      await send('Runtime.evaluate',{expression:'document.body.dataset.onlineActive="true"'});
     }
     if(['position-browser-test.html','position-ui-browser-test.html'].includes(testPage) && value.offlineReady && !offlineStarted) {
       offlineStarted=true;

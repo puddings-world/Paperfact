@@ -5,6 +5,89 @@ a public release or completed cross-device acceptance. The separately maintained
 0.4.x line remains for daily use. See [current status](status-0.5.0.md) for exact
 evidence and remaining gates.
 
+## Browser pairing and offline reconnection
+
+The Connection page now presents three main actions, with manual IDs/credentials
+under **Advanced: manual connection** and local import/export/language controls
+under **Local data and language**. This remains private v0.5 development, requiring
+the [same-origin service adapter](sync-http.md#same-origin-browser-adapter-development).
+The plain static preview does not enable it, and operator signing-key loading and
+HTTPS deployment are still pending.
+
+1. On a connected desktop choose **Devices > Pair another device > Copy pairing
+   details**. Open the PWA on that service's same origin, paste the details and
+   choose **Pair and remember this browser** (Enter also works outside IME input).
+2. Paperfact creates a separate browser device and opens its scoped local research
+   cache. The pre-existing local workspace is preserved; dirty note drafts must
+   flush before adoption. If that flush fails, the original workspace stays open.
+3. After reopening, cached research/drafts/outbox are available offline. No
+   automatic authentication or upload occurs. Choose **Reconnect saved connection**
+   to verify the saved cookie and continue synchronization with the same identity.
+4. **Forget browser connection** defaults to Keep in its inline confirmation.
+   Confirming clears the browser cookie and current cookie session; cached
+   research remains. This does not revoke an already enrolled device. Use a
+   trusted desktop's device catalog for revocation.
+
+![English phone-width connection dialog, synthetic fixture](images/mobile-pairing-en.png)
+
+Repeated actions share one job; actual request phases are announced without fake
+percentages. Close or Stop cancels delivery; a request already admitted remotely
+can be checked with Reconnect. Changed workspace/engine contexts cannot adopt a
+late response. Old dialog-close events cannot move focus from a newer dialog.
+Manual and local-data actions are disabled during pairing. The dialog scrolls at
+phone widths, retains 44px controls and focuses the pairing input. A confirmed
+forget leaves Pair available for a new connection.
+
+`browserPairingPanel(el, {language, transport, current, blocked, onConnected,
+onForgotten, onPending})` in `mobile/browser-pairing.mjs` owns presentation and
+single-flight cancellation only. `onConnected(identity, transport)` is a synchronous
+handoff; the app closes the dialog and calls the existing guarded `openWorkspace`
+path with the non-secret `COOKIE_SESSION` handle. The panel never stores secrets
+or research. Its returned view exposes `controls` plus `run`, `askForget`, `keepConnection`,
+`cancel`, `dispose`, `refresh`, `pending` and `disposed` for the thin app shell.
+
+### Focused browser acceptance
+
+Use the existing runner, an explicit browser executable and an isolated profile;
+no personal browser, account or research database is used. From the repo root:
+
+```powershell
+$env:PAPERFACT_TEST_PAGE = 'browser-pairing-browser-test.html'
+$env:PAPERFACT_PAIRING_SERVICE_PYTHON = (Resolve-Path .venv/Scripts/python.exe).Path
+$env:PAPERFACT_TEST_SCREENSHOTS = "$PWD/build/pairing-mobile"
+node mobile/browser-check.mjs 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+```
+
+```sh
+PAPERFACT_TEST_PAGE=browser-pairing-browser-test.html \
+PAPERFACT_PAIRING_SERVICE_PYTHON="$PWD/.venv/bin/python" \
+PAPERFACT_TEST_SCREENSHOTS="$PWD/build/pairing-mobile" \
+node mobile/browser-check.mjs /path/to/chromium
+```
+
+Successful output is four `PASS` journeys. The fixture starts a temporary Python
+authority behind the existing same-origin loopback proxy, forwards actual cookies,
+uses real IndexedDB/service-worker storage, dispatches native Enter and actually
+switches the browser offline/online. It verifies exactly one enrollment, durable
+outbox -> received note, reload without background authentication, identity-preserving
+reconnect and cancellation/confirmation of Forget. New view tests separately hold
+requests to check close/stop/workspace-switch delivery and errors in both languages.
+The shell-upgrade scenario evicts old shell code without touching research caches.
+
+Local evidence: the final six affected mobile files passed **45 Node cases in
+3.89s under the governor**; all critical selectors plus usage docs passed
+**23 Python cases in 10.9s including checks**. **Four actual app journeys passed
+in 5.16s**, also at 25% CPU/two logical cores. The first fixtures assumed English and
+read canonical notes before acknowledgment; the corrected fixtures use the selected
+UI language, open-dialog/readiness state and the durable outbox. Timeouts and user
+requirements were retained. Phone-width English/Traditional Chinese screenshots
+were inspected. These timings are scoped, not a complete release result.
+
+Real cookies were tested over literal-loopback HTTP (the development exception).
+Production HTTPS flags/origin refusal have protocol tests, not live TLS acceptance.
+Safari/iOS/Android, installed PWA eviction behavior, installed Mac upgrades,
+operator key loading, same-origin hosting and external deployment remain gates.
+
 ## Current saved-Lineage read path
 
 Portable schema-v2 snapshots now retain complete Lineage reports and require an
@@ -144,14 +227,14 @@ need a dedicated reader integration. No source-anchor migration is performed.
 
 Deck/file projection is still unsupported by the baseline DTO, so the Slides tab
 states that limitation. It does not fabricate synchronized slide previews. Public
-PWA login, device pairing, hosted HTTPS/CORS policy, account recovery, install
-packaging, storage eviction/pinning and cross-device reading-position resume are
-still integration gates. The connection form is a developer seam, not shipped
-browser authentication. The app starts in a clearly labeled synthetic workspace.
+identity/signup, hosted HTTPS policy, account recovery, physical install/eviction
+and storage pinning remain integration gates. Browser pairing is now implemented
+and locally exercised above, not publicly hosted authentication. The app starts in a clearly labeled synthetic workspace.
 
 ## Verification and parent handback
 
-Required parent full-check entry point (Node 22+ and the project's Python):
+Historical whole-mobile entry point for explicit deep diagnosis (Node 22+ and
+the project's Python); use focused selections during normal development:
 
 ```sh
 node mobile/check.mjs --python <project-python>

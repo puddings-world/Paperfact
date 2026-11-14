@@ -1,3 +1,4 @@
+import {browserPairingPanel} from './browser-pairing.mjs';
 import {readWorkspaceHint,rememberWorkspace,forgetWorkspaceHint} from './workspace-startup.mjs';
 import { pinBadge } from './list-pins.mjs';
 import {parsePositionJSON} from './position-json.mjs';
@@ -30,7 +31,7 @@ import {
   statusFor
 } from './domain.mjs';
 import {
-  browserTransport
+  browserTransport, CookieTransport, COOKIE_SESSION
 } from './transport.mjs';
 import {
   demoTransport,
@@ -49,7 +50,7 @@ import { renderAnnotations } from './annotations.mjs';
 const app = document.querySelector('#app');
 let deckURLs = [];
 function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
-let switchingWorkspace = false;
+let switchingWorkspace = false, connectionDialog = null;
 let language = navigator.language.toLowerCase().startsWith('zh') ? 'zh-TW': 'en', t = translator(language);
 let engine, store, state, view = new ReaderView(), notice = 'demoHelp', busy = false, isError = false,
 demo = true, connected = false, pdfURL = null, pdfHash = null, renderSerial = 0, draftTimer;
@@ -229,7 +230,7 @@ function render() {
   button(activityLabel(language), showResearchActivity, {class:'quiet',disabled:busy?'':null}),
   button(inboxLabel(language), showResearchInbox, {class:'quiet',disabled:busy?'':null}),
   button(t('settings'), showConnection, {
-    class: 'quiet'
+    id: 'connection-trigger', class: 'quiet', disabled: busy || switchingWorkspace ? '': null
   })
   )
   );
@@ -935,146 +936,72 @@ function showResearchActivity() {
   void activityDialog.refresh();
 }
 function showConnection() {
-  const workspace = el('input', {
-    value: state.workspace,
-    autocomplete: 'off'
-  }),
-  device = el('input', {
-    value: state.device,
-    autocomplete: 'off'
-  }),
-  origin = el('input', {
-    value: engine?.transport?.origin ?? '',
-    placeholder: 'https://sync.example.org',
-    autocomplete: 'off'
-  }),
-  token = el('input', {
-    type: 'password',
-    autocomplete: 'off'
+  if(connectionDialog?.open)return;
+  if(busy||switchingWorkspace)return;
+  const owner=store,ownerEngine=engine,zh=language==='zh-TW';
+  let generation=engine.generation;
+  const workspace=el('input',{value:state.workspace,autocomplete:'off'}),
+    device=el('input',{value:state.device,autocomplete:'off'}),
+    origin=el('input',{value:engine?.transport?.origin??'',placeholder:'https://sync.example.org',autocomplete:'off'}),
+    token=el('input',{type:'password',autocomplete:'off'});
+  const dialog=el('dialog',{class:'connection-dialog'},el('h2',{},t('connectionTitle')));
+  connectionDialog=dialog;
+  const current=()=>connectionDialog===dialog&&dialog.open&&store===owner&&engine===ownerEngine&&
+    engine.generation===generation&&!switchingWorkspace;
+  const openVerified=(identity,transport)=>{
+    if(!current())return;
+    dialog.close();
+    void attempt(()=>openWorkspace(identity.workspace_id,identity.device_id,transport,{token:COOKIE_SESSION}),{working:true});
+  };
+  const disconnect=button(t('disconnect'),()=>{
+    if(!current())return;ownerEngine.disconnect();connected=false;clearPdf();token.value='';dialog.close();render();
   });
-  const dialog = el(
-  'dialog',
-  {},
-  el('h2', {}, t('connectionTitle')),
-  text('connectionHelp'),
-  el(
-  'div',
-  {
-    class: 'fields'
-  },
-  [[t('workspace'), workspace], [t('device'), device], [t('origin'), origin], [t('token'), token]].map(([label,
-  input]) => el('label', {}, label, input))
-  ),
-  el(
-  'div',
-  {
-    class: 'toolbar'
-  },
-  button(
-  t('connect'),
-  () => {
-    const credential = token.value;
-    token.value = '';
-    dialog.close();
-    void attempt(
-    () => openWorkspace(workspace.value, device.value, browserTransport(origin.value), {
-      token: credential
-    }),
-    {
-      working: true
-    }
-    );
-  },
-  {
-    class: 'primary'
-  }
-  ),
-  button(
-  t('disconnect'),
-  () => {
-    engine.disconnect();
-    connected = false;
-    clearPdf();
-    token.value = '';
-    dialog.close();
-    render();
-  }
-  ),
-  button(t('close'), () => dialog.close())
-  ),
-  el('div', {
-    class: 'divider'
-  }),
-  text('foreground'),
-  button(t('useDemo'), () => {
-    dialog.close();
-    void attempt(startDemo, {
-      working: true
-    });
-  }),
-  el(
-  'div',
-  {
-    class: 'fields'
-  },
-  el(
-  'label',
-  {},
-  t('language'),
-  el(
-  'select',
-  {
-    onchange: event => {
-      language = event.target.value;
-      t = translator(language);
-      dialog.close();
-      render();
-    }
-  },
-  ['en', 'zh-TW'].map(value => el('option', {
-    value,
-    selected: value === language ? '': null
-  }, value === 'en' ? 'English': '繁體中文'))
-  )
-  )
-  ),
-  button(
-  t('export'),
-  () => attempt(async() => {
-    const recovery = await engine.exportLocal({drafts:view.drafts});
-    downloadJSON(recovery, 'Paperfact-unsent-work.json');
-  })
-  ),
-  text('exportHelp'),
-  el(
-  'label',
-  {},
-  t('import'),
-  el(
-  'input',
-  {
-    type: 'file',
-    accept: '.json,application/json',
-    onchange: event => {
-      const file = event.target.files[0];
-      if(! file) return;
-      void attempt(async() => {
-        if(file.size > 8 * 1024 * 1024) throw new Error('projection_too_large');
-        await engine.importProjection(parsePositionJSON(await file.text()));
-        dialog.close();
+  const close=button(t('close'),()=>dialog.close());
+  const manual=el('fieldset',{class:'connection-fields'},text('connectionHelp'),
+    el('div',{class:'fields'},[[t('workspace'),workspace],[t('device'),device],[t('origin'),origin],[t('token'),token]]
+      .map(([label,input])=>el('label',{},label,input))),
+    button(t('connect'),()=>{
+      if(!current())return;
+      const credential=token.value;token.value='';dialog.close();
+      void attempt(()=>openWorkspace(workspace.value,device.value,browserTransport(origin.value),
+        {token:credential}),{working:true});
+    },{class:'primary'}));
+  const local=el('fieldset',{class:'connection-fields'},text('foreground'),
+    button(t('useDemo'),()=>{if(!current())return;dialog.close();void attempt(startDemo,{working:true});}),
+    el('div',{class:'fields'},el('label',{},t('language'),el('select',{
+      onchange:event=>{if(!current())return;language=event.target.value;t=translator(language);dialog.close();render();}
+    },['en','zh-TW'].map(value=>el('option',{value,selected:value===language?'':null},
+      value==='en'?'English':'\u7e41\u9ad4\u4e2d\u6587'))))),
+    button(t('export'),()=>{if(!current())return;void attempt(async()=>{
+      const recovery=await ownerEngine.exportLocal({drafts:view.drafts});
+      downloadJSON(recovery,'Paperfact-unsent-work.json');
+    });}),text('exportHelp'),
+    el('label',{},t('import'),el('input',{type:'file',accept:'.json,application/json',onchange:event=>{
+      const file=event.target.files[0];if(!file||!current())return;
+      void attempt(async()=>{
+        if(file.size>8*1024*1024)throw Error('projection_too_large');
+        await ownerEngine.importProjection(parsePositionJSON(await file.text()));dialog.close();
       });
+    }})),text('importHelp'));
+  const pairing=browserPairingPanel(el,{language,current,blocked:()=>busy||switchingWorkspace,
+    onPending:value=>{manual.disabled=value;local.disabled=value;disconnect.disabled=value;},
+    onConnected:openVerified,onForgotten:()=>{
+      if(engine===ownerEngine&&ownerEngine.transport instanceof CookieTransport){
+        ownerEngine.disconnect();generation=ownerEngine.generation;connected=false;clearPdf();render();
+      }
+    }});
+  dialog.append(pairing.element,el('div',{class:'toolbar'},disconnect,close),
+    el('details',{class:'connection-advanced'},
+      el('summary',{},zh?'\u9032\u968e\uff1a\u624b\u52d5\u9023\u7dda':'Advanced: manual connection'),manual),
+    el('details',{class:'connection-advanced'},
+      el('summary',{},zh?'\u672c\u6a5f\u8cc7\u6599\u8207\u8a9e\u8a00':'Local data and language'),local));
+  dialog.addEventListener('close',()=>{
+    pairing.dispose();token.value='';dialog.remove();
+    if(connectionDialog===dialog){
+      connectionDialog=null;document.querySelector('#connection-trigger')?.focus();
     }
-  }
-  )
-  ),
-  text('importHelp')
-  );
-  dialog.addEventListener('close', () => {
-    token.value = '';
-    dialog.remove();
   });
-  document.body.append(dialog);
-  dialog.showModal();
+  document.body.append(dialog);dialog.showModal();pairing.refresh();pairing.controls.packet.focus();
 }
 function downloadJSON(value, name) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], {

@@ -202,10 +202,11 @@ only the non-secret `COOKIE_SESSION` handle and send no Authorization header;
 fetch uses `credentials: same-origin`, no redirects and no response caching.
 Legacy `HttpTransport` and `browserTransport` retain bearer-only, omit-cookie use.
 
-This is a local adapter/transport checkpoint, not end-user browser login. Remaining:
-pairing/reconnect/forget screens, guarded mobile workspace adoption, private key
-loading/operator configuration, same-origin HTTPS hosting, actual browser cookie
-persistence tests and physical iOS/Android acceptance. Opening existing cached
+The [mobile pairing/reconnect/forget screen](mobile-0.5.md#browser-pairing-and-offline-reconnection)
+now uses this adapter through the existing guarded workspace adoption path. Actual
+Chromium cookies, IndexedDB and offline reload pass locally. Remaining: private
+key loading/operator configuration, same-origin HTTPS hosting and physical
+iOS/Android acceptance. Opening existing cached
 research still sends no request or cookie automatically. A broad security/hosting
 review remains required; these fixtures do not certify resistance to XSS or theft
 by another process using the browser profile.
