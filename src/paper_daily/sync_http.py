@@ -22,7 +22,12 @@ import httpx
 from paper_daily import sync_device_protocol as devices
 from paper_daily.sync_blob_service import BlobDisabledError, BlobUnavailableError
 from paper_daily.sync_blobs import BlobManifest, BlobQuotaError
-from paper_daily.sync_device_management import UnknownDeviceError, _device_id, device_label
+from paper_daily.sync_device_management import (
+    PairingUnavailableError,
+    UnknownDeviceError,
+    _device_id,
+    device_label,
+)
 from paper_daily.sync_journal import ID, canonical_operation
 
 BLOB_CHUNK_BYTES = 256 * 1024
@@ -422,6 +427,9 @@ class HttpTransport:
                     raise BlobDisabledError("Sync attachment transport is unavailable")
                 if response.status_code == 413 and path in _BLOB_ROUTES:
                     raise BlobQuotaError("Sync attachment quota or transfer limit exceeded")
+                if (response.status_code == 404
+                        and path in {devices.PAIR_CREATE, devices.PAIR_REDEEM}):
+                    raise PairingUnavailableError("Pairing is unavailable on this service")
                 if response.status_code != 200:
                     raise RuntimeError(f"Sync service returned HTTP {response.status_code}")
                 if response.headers.get("content-encoding", "identity").lower() != "identity":

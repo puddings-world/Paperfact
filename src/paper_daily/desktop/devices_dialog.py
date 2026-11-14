@@ -1,7 +1,12 @@
 """Bounded device controls for the current verified connection; no vault or AI."""
 
+import secrets
+import time
+from datetime import UTC, datetime
+
 from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -13,7 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from paper_daily.sync_device_management import device_label
+from paper_daily.sync_device_management import PairingUnavailableError, device_label
 from paper_daily.workspace_devices import DeviceClient, DeviceContextChanged
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped
@@ -80,6 +85,27 @@ COPY = {
 }
 
 
+COPY["en"].update({
+    "pair_unavailable": (
+        "This service does not support pairing. "
+        "Update it or use manual connection details."
+    ),
+    "pair": "Pair another device", "pair_copy": "Copy pairing details",
+    "pair_help": "Paste these details only on your own device; they grant workspace access.",
+    "pair_ready": "Pairing details ready. Expires {expiry}. Copy them to your other device.",
+    "pair_again": "Create another invitation? Existing details stay valid until they expire.",
+    "pair_copied": "Pairing details copied. Paste them into Paperfact on your other device.",
+})
+COPY["zh-TW"].update({
+    "pair_unavailable": "此服務尚不支援配對，請更新服務或使用進階手動連線資料。",
+    "pair": "配對另一台裝置", "pair_copy": "複製配對資料",
+    "pair_help": "請只貼到自己的另一台裝置；這會允許存取此工作區。",
+    "pair_ready": "配對資料已準備好，於 {expiry} 失效。請複製到另一台裝置。",
+    "pair_again": "要再建立一組配對資料嗎？原本的資料在到期前仍有效。",
+    "pair_copied": "已複製配對資料，請貼到另一台裝置的 Paperfact。",
+})
+
+
 class DeviceWorker(QThread):
     def __init__(self, task, parent):
         super().__init__(parent)
@@ -91,7 +117,9 @@ class DeviceWorker(QThread):
             self.result = self.task(self.ticket)
         except Exception as error:
             self.error = (
-                "authorization"
+                "pair_unavailable"
+                if isinstance(error, PairingUnavailableError)
+                else "authorization"
                 if isinstance(error, PermissionError)
                 else "changed"
                 if isinstance(error, (DeviceContextChanged, EnrollmentRequired))
@@ -111,6 +139,9 @@ class DevicesDialog(QDialog):
         self._worker = None
         self.disposed = self._closing = self._invalid = False
         self.next_cursor = None
+        self._pair_code = self._invitation = None
+        self._pair_started = 0
+        self._pair_confirming = False
         self.setWindowTitle(self.t["title"])
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.resize(660, 440)
@@ -158,6 +189,17 @@ class DevicesDialog(QDialog):
         actions.addWidget(self.rename_button)
         actions.addWidget(self.revoke_button)
         outer.addLayout(actions)
+        pairing = QHBoxLayout()
+        self.pair_button = QPushButton(self.t["pair"])
+        self.pair_copy_button = QPushButton(self.t["pair_copy"])
+        self.pair_button.clicked.connect(self.create_pairing)
+        self.pair_copy_button.clicked.connect(self.copy_pairing)
+        pairing.addWidget(self.pair_button)
+        pairing.addWidget(self.pair_copy_button)
+        outer.addLayout(pairing)
+        self.pair_help = QLabel(self.t["pair_help"])
+        self.pair_help.setWordWrap(True)
+        outer.addWidget(self.pair_help)
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
@@ -195,6 +237,7 @@ class DevicesDialog(QDialog):
     def _buttons(self):
         available = (
             not self.busy
+            and not self._pair_confirming
             and not self.disposed
             and not self._closing
             and not self._invalid
@@ -204,6 +247,10 @@ class DevicesDialog(QDialog):
         row = self._row()
         self.devices.setEnabled(available)
         self.refresh_button.setEnabled(available)
+        self.pair_button.setEnabled(available)
+        self.pair_copy_button.setEnabled(
+            available and self._invitation is not None and self._invitation.expires_at > time.time()
+        )
         self.next_button.setEnabled(available and self.next_cursor is not None)
         self.label.setEnabled(available and row is not None)
         self.rename_button.setEnabled(available and row is not None)
@@ -226,6 +273,7 @@ class DevicesDialog(QDialog):
     def _start(self, kind, task, target=None):
         if (
             self.busy
+            or self._pair_confirming
             or self.disposed
             or self._closing
             or self._invalid
@@ -247,6 +295,53 @@ class DevicesDialog(QDialog):
             self.status.setText(self.t["failed"])
             self._buttons()
             return False
+        return True
+
+    def _pair_current(self):
+        if self.client.delivery_current():
+            return True
+        self._invalid = True
+        self._pair_code = self._invitation = None
+        self.status.setText(self.t["changed"])
+        self._buttons()
+        return False
+
+    def create_pairing(self):
+        from paper_daily.sync_device_management import PAIRING_SECONDS
+
+        if (self.busy or self.disposed or self._closing or self._invalid
+                or self._pair_confirming or not self._pair_current()):
+            return False
+        if self._invitation is not None and self._invitation.expires_at > time.time():
+            self._pair_confirming = True
+            self._buttons()
+            try:
+                answer = QMessageBox.question(
+                    self, self.t["pair"], self.t["pair_again"],
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+            finally:
+                self._pair_confirming = False
+                self._buttons()
+            if answer != QMessageBox.StandardButton.Yes or not self._pair_current():
+                return False
+            self._pair_code = self._invitation = None
+        if self._pair_code is None or time.monotonic() - self._pair_started >= PAIRING_SECONDS:
+            self._pair_code = secrets.token_urlsafe(32)
+            self._pair_started = time.monotonic()
+            self._invitation = None
+        code = self._pair_code
+        return self._start("pair", lambda ticket: self.client.create_pairing(code, ticket))
+
+    def copy_pairing(self):
+        if (self.busy or self.disposed or self._closing or self._invalid
+                or self._pair_confirming or self._invitation is None
+                or self._invitation.expires_at <= time.time()
+                or not self._pair_current()):
+            return False
+        QApplication.clipboard().setText(self._invitation.encoded())
+        self.status.setText(self.t["pair_copied"])
         return True
 
     def refresh(self):
@@ -326,6 +421,23 @@ class DevicesDialog(QDialog):
             self.status.setText(self.t["cancelled"])
         elif worker.error:
             self.status.setText(self.t[worker.error])
+        elif worker.kind == "pair":
+            from paper_daily.sync_pairing import Invitation
+
+            if not self.client.delivery_current():
+                self._invalid = True
+                self.status.setText(self.t["changed"])
+            else:
+                self._invitation = Invitation(
+                    self.client.session.endpoint, code=self._pair_code, **worker.result
+                )
+                try:
+                    expiry = datetime.fromtimestamp(
+                        self._invitation.expires_at, UTC
+                    ).strftime("%H:%M UTC")
+                except (ValueError, OverflowError, OSError):
+                    expiry = str(self._invitation.expires_at) + " UTC epoch"
+                self.status.setText(self.t["pair_ready"].format(expiry=expiry))
         elif worker.kind == "list":
             self.devices.clear()
             for row in worker.result["devices"]:
@@ -361,6 +473,7 @@ class DevicesDialog(QDialog):
             event.ignore()
             return
         self.disposed = True
+        self._pair_code = self._invitation = None
         self._poll.stop()
         self.done(QDialog.DialogCode.Rejected)
         event.accept()

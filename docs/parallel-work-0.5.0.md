@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Trusted-device pairing; authority/HTTP/desktop-client/mobile-transport core. Next: receiver lifecycle and pairing screens |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Desktop trusted-device pairing and native retry checkpoint; next: mobile pairing/authentication boundary and remaining recovery scope |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

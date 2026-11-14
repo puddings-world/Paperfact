@@ -1,5 +1,6 @@
 """One authenticated workspace/device catalog action, with late-session guards."""
 
+import sqlite3
 from pathlib import Path
 
 from paper_daily import sync_device_protocol as protocol
@@ -97,3 +98,14 @@ class DeviceClient:
             "create_pairing", ticket,
             lambda value: protocol.pairing_created(value, self.identity), code,
         )
+
+
+    def delivery_current(self):
+        """Recheck bounded SQL metadata at explicit delivery/copy, not in the poll."""
+        if not self.current():
+            return False
+        try:
+            self.session._live(self.generation)
+            return local_binding(self.session.workspace.path, require_capture=True) == self.identity
+        except (OSError, ValueError, sqlite3.Error, SyncStopped):
+            return False

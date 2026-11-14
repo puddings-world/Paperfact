@@ -21,6 +21,10 @@ MAX_BYTES = 2400  # Also fits Windows' 2560-byte UTF-16 credential blob limit.
 _LOCK = threading.RLock()
 
 
+class PendingPairingExists(ValueError):
+    """A saved attempt must be resumed or explicitly forgotten before replacement."""
+
+
 class VaultUnavailable(RuntimeError):
     """No usable native vault; the manual in-memory connection still works."""
 
@@ -318,9 +322,86 @@ class ConnectionVault:
             self.startup_path.unlink(missing_ok=True)
             try:
                 backend = self._backend()
+                if backend.get_password(SERVICE, self.account + ".pairing") is not None:
+                    backend.delete_password(SERVICE, self.account + ".pairing")
                 if backend.get_password(SERVICE, self.account) is not None:
                     backend.delete_password(SERVICE, self.account)
             except Exception:
                 raise VaultUnavailable("Native credential storage is unavailable") from None
+            self._check()
+            ticket.check()
+
+
+    def load_pairing(self, ticket=None):
+        from paper_daily.sync_pairing import Attempt
+
+        ticket = ticket or Ticket()
+        with _LOCK:
+            self._check()
+            ticket.check()
+            try:
+                body = self._backend().get_password(SERVICE, self.account + ".pairing")
+            except Exception:
+                raise VaultUnavailable("Native credential storage is unavailable") from None
+            self._check()
+            ticket.check()
+            return None if body is None else Attempt.decoded(body)
+
+    def prepare_pairing(self, invitation, ticket=None):
+        """Explicit native opt-in before enrollment; never silently replace a pending key."""
+        from paper_daily.sync_pairing import Attempt, Invitation
+
+        invitation = Invitation.decoded(invitation.encoded())
+        ticket = ticket or Ticket()
+        with _LOCK:
+            self._check()
+            ticket.check()
+            existing = self.load_pairing(ticket)
+            if existing is not None:
+                if existing.invitation != invitation:
+                    raise PendingPairingExists("Resume or forget the saved pairing first")
+                return existing
+            attempt = Attempt.start(invitation)
+            body = attempt.encoded()
+            try:
+                backend = self._backend()
+                backend.set_password(SERVICE, self.account + ".pairing", body)
+            except Exception:
+                raise VaultUnavailable("Native credential storage is unavailable") from None
+            try:
+                self._check()
+                ticket.check()
+            except BaseException:
+                try:
+                    if backend.get_password(SERVICE, self.account + ".pairing") == body:
+                        backend.delete_password(SERVICE, self.account + ".pairing")
+                except Exception:
+                    raise VaultUnavailable(
+                        "Review the saved pairing in the credential store"
+                    ) from None
+                raise
+            return attempt
+
+    def complete_pairing(self, session, attempt, ticket=None):
+        """Save verified login before removing its durable retry state."""
+        ticket = ticket or Ticket()
+        with _LOCK:
+            self._check()
+            ticket.check()
+            pending = self.load_pairing(ticket)
+            if pending is None and self.load(ticket) == attempt.connection:
+                self.remember(session, attempt.connection, ticket)
+                return
+            if pending != attempt:
+                raise PendingPairingExists("The saved pairing changed")
+            self.remember(session, attempt.connection, ticket)
+            self._check()
+            ticket.check()
+            try:
+                self._backend().delete_password(SERVICE, self.account + ".pairing")
+            except Exception:
+                raise VaultUnavailable(
+                    "Verified connection saved; pending cleanup needs retry"
+                ) from None
             self._check()
             ticket.check()

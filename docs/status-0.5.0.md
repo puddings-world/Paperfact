@@ -11,12 +11,12 @@ candidates remain preserved separately, not silently promoted or released.
 | Area | Current evidence | Remaining gate |
 |---|---|---|
 | Offline sync, history/conflicts and attachments | Implementations and scoped local fixture evidence in the preserved development work | Coherent source checkpoint, critical journeys, affected regressions and installed-device journey |
-| Saved desktop connection | Explicit reconnection and device-local startup opt-in; exact-credential/workspace fences, offline backoff and real MainWindow fixture delivery | Native vault prompts, installed restart/upgrade and hosted device pairing |
-| Device pairing | Expiring, single-use trusted-device grants; exact retry, independent credentials, atomic enrollment and old/new backup refusal verified locally | Desktop/mobile pairing UI, restart-safe receiver storage, first-device issuance and hosted acceptance |
+| Saved desktop connection | Explicit reconnection and device-local startup opt-in; exact-credential/workspace fences, offline backoff and real MainWindow fixture delivery | Native vault prompts, installed restart/upgrade and hosted first-device issuance |
+| Device pairing | Desktop create/copy/pair/join controls, native pending retry before enrollment, independent keys and verified destination storage; local fixtures pass | Real native vaults, mobile pairing/persistence, first-device issuance and hosted acceptance |
 | Mobile PWA | Offline/domain/service evidence plus actual JS/Python pairing, verification and revocation | Pairing screens, durable credentials, hosted service and physical phone acceptance |
 | Scientific audit and recovery UI | Typed choices, recorded parent mapping and explicit child restore verified locally; reference authority and a second native client preserve links/order | Original-bound/compound recovery, new parent mappings and audit integration |
 | Metadata recovery | Recorded parent decisions preserve metadata, reading/order and note copies under recovered papers; explicit child restore and native peer delivery verified | Original-bound/compound recovery and unproved parent migrations |
-| Tests and resource use | Pairing core/context/restore: 12 passed in 6.6s; compatibility/core/docs: 32 passed in 29.2s; mobile transport: 9 passed in 3.5s plus real HTTP program in 1.8s. Selections overlap; release profile awaits execution | CI/device execution; historical deduplication; native resource cap on Mac/Linux |
+| Tests and resource use | Desktop pairing/receiver plus affected vault/dialog/docs: 29 passed in 44.56s, 47.7s including checks. Existing mobile transport/protocol evidence remains; complete release profile not run | CI/device execution; historical deduplication; native resource cap on Mac/Linux |
 | Release | No new release, cloud deployment or installed Mac acceptance from this checkpoint | Identifiable artifacts, upgrade/reporting checks, Windows/Apple Silicon/phone journey |
 
 The preserved checkpoint is integrated locally. Immediate priority is completing recovery

@@ -21,7 +21,13 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily import sync_bootstrap
-from paper_daily.connection_vault import Connection, ConnectionVault, VaultUnavailable
+from paper_daily.connection_vault import (
+    Connection,
+    ConnectionVault,
+    PendingPairingExists,
+    VaultUnavailable,
+)
+from paper_daily.sync_device_management import PairingUnavailableError
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped, local_binding
 
@@ -189,6 +195,53 @@ COPY = {
 }
 
 
+COPY["en"].update({
+    "pair_unavailable": (
+        "This service does not support pairing. "
+        "Update it or use manual connection details."
+    ),
+    "pair": "Pair and save on this device",
+    "pair_hint": "Paste pairing details from your other device",
+    "pair_help": (
+        "Pairing and retry data are saved in the system credential store. No "
+        "research is uploaded."
+    ),
+    "pair_saving": "Saving the pairing securely on this device...",
+    "pair_claiming": "Creating this device's independent connection...",
+    "pair_verifying": "Verifying this device's connection...",
+    "pair_done": (
+        "Device paired and remembered. Join the workspace below; existing local "
+        "research stays here."
+    ),
+    "pair_bad": "Could not use pairing details. Copy fresh details from your other device.",
+    "pair_denied": (
+        "Pairing was rejected or expired. Reconnect a saved attempt, or request "
+        "fresh details."
+    ),
+    "pairing_pending": (
+        "Another pairing is saved. Reconnect it or forget the saved connection "
+        "before replacing it."
+    ),
+    "join_save_failed": (
+        "Workspace created, but saving its connection was not confirmed. Retry "
+        "this destination before closing this window."
+    ),
+})
+COPY["zh-TW"].update({
+    "pair_unavailable": "此服務尚不支援配對，請更新服務或使用進階手動連線資料。",
+    "pair": "配對並儲存在此裝置", "pair_hint": "貼上另一台裝置的配對資料",
+    "pair_help": "配對與重試資料會存在系統憑證庫，不會上傳研究內容。",
+    "pair_saving": "正在安全儲存此裝置的配對資料…",
+    "pair_claiming": "正在建立此裝置的獨立連線…",
+    "pair_verifying": "正在核對此裝置的連線…",
+    "pair_done": "已配對並儲存連線。可在下方加入工作區，原本的本機研究會保留。",
+    "pair_bad": "無法使用配對資料，請從另一台裝置重新複製。",
+    "pair_denied": "配對被拒絕或已過期，請重連已儲存的配對，或索取新資料。",
+    "pairing_pending": "已有其他未完成配對，請先重新連線，或移除已存連線後再更換。",
+    "join_save_failed": "工作區已建立，但連線儲存尚未確認。關閉此視窗前請重試相同目標資料夾。",
+})
+
+
 class SyncWorker(QThread):
     progress = Signal(object)
 
@@ -202,7 +255,11 @@ class SyncWorker(QThread):
             self.result = self.task(self.ticket, self.progress.emit)
         except Exception as error:
             self.error = (
-                "vault"
+                "pair_unavailable"
+                if isinstance(error, PairingUnavailableError)
+                else "pairing_pending"
+                if isinstance(error, PendingPairingExists)
+                else "vault"
                 if isinstance(error, VaultUnavailable)
                 else "cancelled"
                 if isinstance(error, (Cancelled, SyncStopped))
@@ -244,6 +301,8 @@ class SyncConnectionDialog(QDialog):
         self.automatic = automatic
         self._vault = vault
         self._startup_enabled = False
+        self._remember_joined = False
+        self._probed = False
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
         self.v = VAULT_COPY.get(language, VAULT_COPY["en"])
@@ -286,10 +345,16 @@ class SyncConnectionDialog(QDialog):
         )
         self.details_button = QPushButton("帶入連線資料" if self.zh else "Use connection details")
         self.details_button.clicked.connect(self.load_connection_details)
-        self.connection_details.returnPressed.connect(self.load_connection_details)
+        self.connection_details.returnPressed.connect(self.use_pasted_details)
         details_row.addWidget(self.connection_details, 1)
-        details_row.addWidget(self.details_button)
         layout.addLayout(details_row)
+        self.pair_button = QPushButton(self.t["pair"])
+        self.pair_button.setProperty("role", "primary")
+        self.pair_button.clicked.connect(self.pair_device)
+        layout.addWidget(self.pair_button)
+        self.pair_help = QLabel(self.t["pair_help"])
+        self.pair_help.setWordWrap(True)
+        layout.addWidget(self.pair_help)
         self.setup_button = QPushButton(
             "設定新連線／修改連線" if self.zh else "Set up or edit a connection"
         )
@@ -302,6 +367,7 @@ class SyncConnectionDialog(QDialog):
         setup_intro = QLabel(self.t["intro"])
         setup_intro.setWordWrap(True)
         setup_layout.addWidget(setup_intro)
+        setup_layout.addWidget(self.details_button)
         form = QFormLayout()
         self.endpoint, self.workspace_id, self.device_id, self.credential = (
             QLineEdit() for _ in range(4)
@@ -398,9 +464,9 @@ class SyncConnectionDialog(QDialog):
         if self.automatic is not None:
             self.automatic.changed.connect(self._automatic_changed)
         self.advanced_button = QPushButton(
-            "進階：加入其他工作區與連線說明"
+            "進階：手動連線資料"
             if self.zh
-            else "Advanced: join another workspace and connection details"
+            else "Advanced: manual connection details"
         )
         self.advanced_button.setCheckable(True)
         layout.addWidget(self.advanced_button)
@@ -416,16 +482,16 @@ class SyncConnectionDialog(QDialog):
         self.advanced_button.toggled.connect(self.advanced_panel.setVisible)
         self.join_button = QPushButton(self.t["join"])
         self.join_button.clicked.connect(self.choose_join)
-        advanced_layout.addWidget(self.join_button)
+        layout.addWidget(self.join_button)
         self.open_created_button = QPushButton(
             "開啟新工作區視窗" if self.zh else "Open created workspace"
         )
         self.open_created_button.clicked.connect(self.open_created)
-        advanced_layout.addWidget(self.open_created_button)
+        layout.addWidget(self.open_created_button)
         self.destination_label = QLabel()
         self.destination_label.setWordWrap(True)
         self.destination_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        advanced_layout.addWidget(self.destination_label)
+        layout.addWidget(self.destination_label)
         gates = QLabel(self.t["gates"])
         gates.setWordWrap(True)
         advanced_layout.addWidget(gates)
@@ -547,6 +613,7 @@ class SyncConnectionDialog(QDialog):
 
     def _edited(self):
         if not self._setting:
+            self._remember_joined = False
             if self.automatic is not None:
                 self.automatic.stop()
             self.session.disconnect()
@@ -578,6 +645,13 @@ class SyncConnectionDialog(QDialog):
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
         self.connection_details.setEnabled(available)
+        can_pair = self.binding is None and not live
+        self.pair_button.setVisible(can_pair)
+        self.pair_help.setVisible(can_pair)
+        self.pair_button.setEnabled(available and can_pair and self._probed)
+        self.connection_details.setVisible(not live or self.setup_button.isChecked())
+        if can_pair:
+            self.connection_details.setPlaceholderText(self.t["pair_hint"])
         self.details_button.setEnabled(available)
         self.connect_button.setEnabled(available)
         self.remember_box.setEnabled(available)
@@ -592,6 +666,9 @@ class SyncConnectionDialog(QDialog):
             available and live and self.eligible and self.binding == summary["identity"]
         )
         self.join_button.setEnabled(available and live and self.binding != summary["identity"])
+        self.join_button.setVisible(live and self.binding != summary["identity"])
+        self.open_created_button.setVisible(self.created_destination is not None)
+        self.destination_label.setVisible(self.join_destination is not None)
         self.open_created_button.setEnabled(
             available and self.created_destination is not None and not self._opened
         )
@@ -711,6 +788,50 @@ class SyncConnectionDialog(QDialog):
             self._vault = ConnectionVault(self.session.workspace)
         return self._vault
 
+    def use_pasted_details(self):
+        from paper_daily.sync_pairing import Invitation
+
+        try:
+            Invitation.decoded(self.connection_details.text())
+        except ValueError:
+            return self.load_connection_details()
+        return self.pair_device()
+
+    def pair_device(self):
+        if (self.busy or self.disposed or self._invalid or self.binding is not None
+                or (self.automatic is not None and self.automatic.busy)
+                or not self._connection_scope_current()):
+            return False
+        body = self.connection_details.text()
+        if not body.strip():
+            return False
+        if self.automatic is not None:
+            self.automatic.stop()
+
+        def run(ticket, progress):
+            from paper_daily.sync_pairing import Invitation
+
+            invitation = Invitation.decoded(body)
+            vault = self._connection_vault()
+            progress({"stage": "pairing", "phase": "saving"})
+            record = vault.load(ticket)
+            if (record is not None and record.endpoint == invitation.endpoint
+                    and record.workspace_id == invitation.workspace_id):
+                try:
+                    result = self.session.connect(
+                        record.endpoint, record.workspace_id, record.device_id, record.token, ticket
+                    )
+                except PermissionError:
+                    pass
+                else:
+                    return dict(result, generation=self.session.generation)
+            attempt = vault.prepare_pairing(invitation, ticket)
+            result = attempt.connect(self.session, ticket, progress)
+            vault.complete_pairing(self.session, attempt, ticket)
+            return result
+
+        return self._start("pair", run)
+
     def load_connection_details(self):
         if (
             self.busy
@@ -747,9 +868,14 @@ class SyncConnectionDialog(QDialog):
         if self.automatic is not None:
             self.automatic.stop()
 
-        def run(ticket, _progress):
+        def run(ticket, progress):
             vault = self._connection_vault()
             try:
+                attempt = vault.load_pairing(ticket)
+                if attempt is not None:
+                    result = attempt.connect(self.session, ticket, progress)
+                    vault.complete_pairing(self.session, attempt, ticket)
+                    return result
                 record = vault.load(ticket)
             except ValueError as error:
                 from paper_daily.workspace_service import WorkspaceChanged
@@ -760,9 +886,10 @@ class SyncConnectionDialog(QDialog):
             if record is None:
                 return None
             ticket.check()
-            return self.session.connect(
+            result = self.session.connect(
                 record.endpoint, record.workspace_id, record.device_id, record.token, ticket
             )
+            return dict(result, generation=self.session.generation)
 
         return self._start("reconnect_saved", run)
 
@@ -834,15 +961,33 @@ class SyncConnectionDialog(QDialog):
         destination = Path(destination)
         self.join_destination = destination
         self.destination_label.setText(str(self.join_destination))
-        return self._start(
-            "join",
-            lambda ticket, progress: sync_bootstrap.join(
-                self.session, destination, ticket, progress
-            ),
-        )
+        remember = self._remember_joined
+
+        def run(ticket, progress):
+            result = sync_bootstrap.join(self.session, destination, ticket, progress)
+            if remember and result["state"] == "metadata_ready":
+                from paper_daily.sync_pairing import remember_joined
+
+                try:
+                    remember_joined(
+                        self.session, destination, ticket,
+                        vault_factory=lambda workspace: ConnectionVault(
+                            workspace, backend=self._connection_vault()._backend,
+                        ),
+                    )
+                except VaultUnavailable:
+                    result["connection_remembered"] = False
+                else:
+                    result["connection_remembered"] = True
+            return result
+
+        return self._start("join", run)
 
     def _progress(self, value):
         if self._closing or self._invalid or not self._worker or self._worker.ticket.cancelled:
+            return
+        if value.get("stage") == "pairing":
+            self.status.setText(self.t["pair_" + value["phase"]])
             return
         if value.get("stage") == "history_reindex":
             from paper_daily.desktop.history_index_text import progress_text
@@ -880,13 +1025,25 @@ class SyncConnectionDialog(QDialog):
             and not self._closing
             and kind
             in {"load_saved", "forget_saved", "connect", "connection_details", "reconnect_saved",
-                "startup_enable", "startup_disable"}
+                "startup_enable", "startup_disable", "pair"}
         ):
             self._connection_scope_current()
+        if (kind in {"pair", "reconnect_saved"} and worker.result is not None
+                and not worker.ticket.cancelled and isinstance(worker.result, dict)
+                and "generation" in worker.result
+                and (worker.result["generation"] != self.session.generation
+                     or not self.session.summary()["authenticated"]
+                     or worker.result["identity"] != self.session.summary()["identity"])):
+            self._invalid = True
+            self.status.setText(self.t["changed"])
         if not self._invalid and not self._closing:
             if kind in {"startup_enable", "startup_disable", "forget_saved"}:
                 self._startup_enabled = bool(self._connection_vault().startup_record())
-            if worker.error:
+            if (worker.error and kind == "pair"
+                    and worker.error in {"incompatible", "authorization"}):
+                key = "pair_bad" if worker.error == "incompatible" else "pair_denied"
+                self.status.setText(self.t[key])
+            elif worker.error:
                 self.status.setText(
                     (
                         "連線資料無法讀取；請確認來源及格式。"
@@ -901,6 +1058,7 @@ class SyncConnectionDialog(QDialog):
             elif worker.ticket.cancelled:
                 self.status.setText(self.t["cancelled"])
             elif kind == "probe":
+                self._probed = True
                 self._startup_enabled = worker.result["startup"]
                 self.binding, self.eligible = worker.result["binding"], worker.result["eligible"]
                 if self.binding and not self.workspace_id.text() and not self.device_id.text():
@@ -920,6 +1078,7 @@ class SyncConnectionDialog(QDialog):
                      else "Automatic reconnect and sync on future opens is off.")
                 )
             elif kind == "connect":
+                self._remember_joined = bool(worker.result.get("remembered"))
                 self._setting = True
                 self.credential.clear()
                 self._setting = False
@@ -929,20 +1088,23 @@ class SyncConnectionDialog(QDialog):
                     if remembered is False
                     else self.t["connected"] + ("\n" + self.v["stored"] if remembered else "")
                 )
-            elif kind == "reconnect_saved":
+            elif kind in {"pair", "reconnect_saved"}:
                 result = worker.result
                 if result is None:
                     self.status.setText(self.v["missing"])
                 else:
+                    self._remember_joined = True
                     self._setting = True
                     try:
+                        self.connection_details.clear()
                         self.endpoint.setText(result["endpoint"])
                         self.workspace_id.setText(result["identity"]["workspace_id"])
                         self.device_id.setText(result["identity"]["device_id"])
                         self.credential.clear()
                     finally:
                         self._setting = False
-                    self.status.setText(self.t["connected"])
+                    key = "pair_done" if kind == "pair" else "connected"
+                    self.status.setText(self.t[key])
             elif kind in {"load_saved", "connection_details"}:
                 record, worker.result = worker.result, None
                 if record is None:
@@ -1035,6 +1197,8 @@ class SyncConnectionDialog(QDialog):
                             "ontinue in a separate window."
                         )
                     )
+                if result.get("connection_remembered") is False:
+                    text += "\n" + self.t["join_save_failed"]
                 self.status.setText(text + "\n" + result["path"])
                 if result["state"] == "metadata_ready":
                     from paper_daily.workspace_open import WorkspaceDestination

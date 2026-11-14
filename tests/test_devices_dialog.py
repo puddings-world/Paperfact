@@ -303,7 +303,8 @@ def test_paginated_dialog_retains_one_bounded_page(view, service):
 def test_connection_devices_entry_is_current_bound_singleton_and_closes_active_child(service):
     app = QApplication.instance() or QApplication([])
     parent = SyncConnectionDialog(
-        service[0], language="en", vault=SimpleNamespace(current=lambda: True)
+        service[0], language="en",
+        vault=SimpleNamespace(current=lambda: True, startup_record=lambda: None),
     )
     parent.show()
     wait(app, lambda: parent.binding is not None and not parent.busy)
@@ -326,7 +327,8 @@ def test_parent_close_waits_for_device_worker_and_late_result_is_not_applied(ser
     app = QApplication.instance() or QApplication([])
     connect(service)
     parent = SyncConnectionDialog(
-        service[0], language="en", vault=SimpleNamespace(current=lambda: True)
+        service[0], language="en",
+        vault=SimpleNamespace(current=lambda: True, startup_record=lambda: None),
     )
     parent.show()
     wait(app, lambda: parent.binding is not None and not parent.busy)

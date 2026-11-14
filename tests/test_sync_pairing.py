@@ -161,3 +161,19 @@ def test_actual_http_pairing_retries_and_revocation_keep_credentials_private(end
         transport.revoke_peer(owner, "mac")
         with pytest.raises(PermissionError):
             transport.session_info(credential)
+
+
+def test_pairing_unsupported_route_is_actionable_without_changing_legacy_requests():
+    import httpx
+
+    from paper_daily.sync_device_management import PairingUnavailableError
+
+    with HttpTransport("https://example.invalid") as transport:
+        transport._client.close()
+        transport._client = httpx.Client(transport=httpx.MockTransport(
+            lambda _request: httpx.Response(404, json={"error": "not_found"})
+        ))
+        with pytest.raises(PairingUnavailableError):
+            transport.create_pairing("synthetic-owner", secrets.token_urlsafe(32))
+        with pytest.raises(RuntimeError, match="HTTP 404"):
+            transport.session_info("synthetic-owner")

@@ -39,6 +39,10 @@ _BIDI_CONTROLS = frozenset(
 )
 
 
+class PairingUnavailableError(RuntimeError):
+    """This service does not implement the explicit pairing routes."""
+
+
 class UnknownDeviceError(ValueError):
     """Missing and other-workspace devices are deliberately indistinguishable."""
 

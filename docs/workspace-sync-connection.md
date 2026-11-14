@@ -4,7 +4,11 @@ The workspace dialog now opens a separate **Sync connection** page. Opening the
 page reads local status only. Connecting authenticates the administrator-issued
 workspace ID, device ID and credential through `session_info`; it sends no
 research. The credential is held in session memory and cleared on disconnect.
-Restart requires reconnecting. This is reference/self-hosted sync, not AI login
+Restart requires reconnecting, or a separate explicit device-local startup opt-in.
+An already trusted desktop can now issue [pairing details](sync-device-management.md#desktop-pairing-and-retry);
+the receiver saves its independent credential in the native store before admission.
+Join and Open created workspace are on the main path after verification; Advanced
+contains manual connection details. This is reference/self-hosted sync, not AI login
 or a public signup flow.
 
 ## Available actions
@@ -69,9 +73,9 @@ journey. The following remain required development work:
 
 - Complete first enrollment of existing research, with the full writer/file
   inventory, consistent baseline capture and independent recovery prerequisites.
-- Secure remembered credentials and device issuance/revocation UX. Current device
-  issuance remains the service's trusted administrator API; there is no public
-  enrollment endpoint or invented third-party OAuth.
+- Native-store and installed-device acceptance for remembered credentials and
+  desktop pairing/revocation. First-device issuance remains the trusted
+  administrator API; there is no public signup or third-party OAuth.
 - Compatibility/version negotiation, authority rollback/generation protection,
   retention policy and production service deployment/security review.
 - Live packaged Windows/macOS/Linux launch and authenticated deployment checks.
@@ -81,7 +85,7 @@ journey. The following remain required development work:
 Newer annotation contracts must be present in the receiving build. Unknown kinds
 or feature payloads are rejected, never skipped to make the cursor appear current.
 
-## One-paste connection setup (development candidate)
+## Advanced manual connection setup (development candidate)
 
 Paste a credential-bearing connection record into **Paste connection details
 from your service**, then choose **Use connection details**. The record is parsed

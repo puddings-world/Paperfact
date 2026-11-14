@@ -4,7 +4,7 @@
 local `ReferenceService` authority a bounded, single-owner device catalog,
 owner-entered labels and peer revocation. The reference HTTP transport and bounded
 desktop Devices dialog expose those existing authenticated actions. Production
-account identity and end-user pairing screens remain separate gates. The local
+account identity and mobile pairing screens remain separate gates. The local
 one-time pairing core is described below; administrative enrollment/revocation
 remain private seams.
 
@@ -115,26 +115,28 @@ preserved; pre-existing devices have `label = NULL`.
 
 - No mobile device-management UI.
 - No multi-owner roles, per-device permissions, audit log or rate limiting.
-- No production identity, account, pairing or recovery flow; `enroll` remains a
-  trusted admin seam.
+- No production account login or lost-access recovery flow; initial `enroll`
+  remains a trusted admin seam. Desktop pairing requires an already trusted device.
 - No device activity, last-seen or network metadata, by design.
 
 Tests: `tests/test_sync_device_management.py`, `tests/test_sync_devices_http.py`,
 `tests/test_workspace_devices.py` and `tests/test_devices_dialog.py`. These use
 synthetic authorities/workspaces, actual loopback HTTP and simulated credentials.
 They do not prove hosted deployment, real accounts, native vault access or
-physical-device acceptance. The combined candidate still requires the full gate.
+physical-device acceptance. Integration uses critical journeys plus affected
+regressions; release/device gates remain separate.
 
 The production pairing gap is unchanged: a trusted operator must issue the initial
 workspace/device credential outside the public reference HTTP adapter. Listing
-or revoking peers does not implement account login, prove who should receive a new
-device credential, recover an owner's lost access or authorize remote enrollment.
+or revoking peers does not implement account login or recover lost access. An
+already trusted device can explicitly authorize another device through pairing.
 
 
 ## One-time device pairing core
 
-Status: local authority, Python SDK and mobile transport implemented; **desktop
-and mobile pairing screens and durable receiver credential storage are pending**.
+Status: local authority, Python SDK, desktop pairing screens and native receiver
+retry storage implemented. Mobile pairing screens and durable browser credentials
+remain pending.
 No service was deployed and no real device was enrolled. The first trusted device
 still requires operator-issued credentials. AI/Google Slides login is separate.
 
@@ -171,7 +173,9 @@ They must be distinct. An invitation may never become a device credential; the
 service rejects collision with any invitation hash or existing device credential.
 Use a fresh device identifier and preserve the same pending credential/label for
 an exact retry. Lost-response retry is supported during the invitation lifetime;
-restart-safe receiver storage and cancellation-after-send UX remain pending.
+desktop restart-safe receiver storage and cancellation-after-send behavior are
+described below. After successful admission, the receiver can retry its independent
+credential even when the invitation has expired.
 
 The existing authenticated framing exposes:
 
@@ -235,8 +239,72 @@ matrix or live login was used. The final core/compatibility/docs selection passe
 **32 cases in 25.85s**, **29.2s including checks**. Selections overlap earlier
 results; neither the historical full suite nor the complete release profile ran.
 
-Next integration: explicit create/copy and receive/verify screens, a retained
-receiver attempt for lost-response retry, and native-vault opt-in bound to the
-joined destination. Mobile persistent authentication needs a separately reviewed
-browser/session boundary; this transport does not put credentials in IndexedDB or
-localStorage. Revise the PWA shell cache when those UI modules are connected.
+### Desktop pairing and retry
+
+1. On an already connected and enrolled desktop, open **Devices**, choose
+   **Pair another device**, then **Copy pairing details**. Copying is explicit;
+   the old device credential is never copied. Share privately with your own device.
+2. In the other desktop's unbound local workspace, open **Sync connection**, paste
+   the details and choose **Pair and save on this device**. This explicitly uses
+   the system credential store before contacting the authority. A new device ID
+   and independent credential are retained for retry; no research is uploaded.
+3. Choose **Join in new folder**, then **Open created workspace**. The metadata
+   workspace is created separately and its verified connection is remembered for
+   that exact database. Attachment availability remains a separate sync step.
+   The original workspace and research remain unchanged.
+4. In the joined workspace, choose **Reconnect saved connection**. Enable
+   **Reconnect and sync when this workspace opens on this device** only if you
+   want automatic research transfer on later opens. Pairing does not enable it.
+
+If a reply is lost or the dialog closes after admission, **Reconnect saved
+connection** resumes the same native attempt, not a second device. The receiver
+first verifies its independent key; an already admitted device can recover after
+invitation expiry. An unused expired invitation still requires fresh details.
+A different packet cannot silently replace an unfinished attempt: resume or
+explicitly forget it first. Forgetting locally does not revoke a device already
+admitted remotely; use the originating device's catalog to revoke it.
+
+Creating another invitation while one is active requires confirmation, defaulting
+to No. A confirmed replacement does not revoke the earlier grant: it remains
+valid until consumed, expired or its issuer is revoked. Copy is blocked when the
+local binding/connection changes. Repeated clicks share one worker. Close cancels
+and drains the worker; remote commits cannot be retracted by closing.
+
+Unsupported old pairing endpoints report an actionable update/manual-setup
+message. Native-store failure prevents first enrollment through this flow;
+manual session-only setup remains available under Advanced. A joined workspace
+whose native save fails is preserved and reports the need to retry that same
+destination, rather than pretending creation rolled back.
+
+The packet is closed JSON `paperfact.device-pairing.v1` (endpoint, workspace,
+issuer, expiry, one-time code). Treat it as private access material. Pending
+`paperfact.device-pairing-attempt.v1` records stay only in the native store under
+a separate slot scoped to the exact source database. See
+[remembered connections](remembered-sync-connection.md) for storage limits.
+
+| Behavior tests | Requirement |
+|---|---|
+| `tests/test_sync_pairing_flow.py` (6 cases) | Exact lost-response/restart retry; independent keys; conflicting packets; copied-database isolation; cancellation/store failure before enrollment; refusing an enrolled identity replacement; joined-database save and file-replacement fences |
+| `tests/test_pairing_dialog.py` (6 cases) | Actual create/copy/pair/join/open controls; duplicate prevention; saved retry; close after remote commit; stale binding blocks clipboard; English/Traditional Chinese rendering |
+| `test_pairing_unsupported_route_is_actionable_without_changing_legacy_requests` | Pairing-only 404 becomes an update/manual-setup message; legacy request behavior remains unchanged |
+
+These use synthetic research, fake native storage and local authority transports.
+Rendering fixtures do not prove platform focus, native prompts or installed apps.
+Mobile persistent authentication still needs a separately reviewed browser/session
+boundary; no token is put in IndexedDB or localStorage. Revise the PWA shell cache
+when its pairing screens are connected. Initial issuance, hosted identity and
+physical Windows/Apple Silicon/phone acceptance remain open.
+
+Local desktop checkpoint: **29 affected cases passed in 44.56s**, **47.7s
+including privacy/Ruff** under the 25% CPU/two-core/300-second governor. This
+selection includes the 13 new receiver/UI/unsupported-endpoint cases and existing
+vault, join, Devices lifecycle and usage-document regressions. The first combined
+run found an older Devices fixture missing the existing `startup_record()` seam;
+its two stubs now return no startup preference. Assertions/timeouts are unchanged.
+No historical/full or release profile was run for this checkpoint.
+
+The reusable local observation is durable receiver intent before a remote side
+effect, followed by verified-save-before-pending-cleanup and exact destination
+binding. Evidence is limited to this native flow and fake storage; it does not
+establish browser persistence, transactional OS vaults or a general OAuth design.
+Keep this evidence here rather than promoting an unverified global skill rule.

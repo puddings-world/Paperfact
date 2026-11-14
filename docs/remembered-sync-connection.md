@@ -11,7 +11,11 @@ issuance and production hosted login.
   the verified connection on this device**, then **Verify and connect**.
 - A successful handshake can store exactly that connection. A vault failure leaves
   the verified in-memory session usable and reports that saving was not confirmed.
-- On another app session choose **Reconnect saved connection**. Paperfact reads
+- To pair a second desktop, follow [desktop pairing](sync-device-management.md#desktop-pairing-and-retry).
+  Pairing explicitly saves a pending independent key before enrollment, then a
+  verified connection. It does not grant startup upload consent.
+- On another app session choose **Reconnect saved connection**. Paperfact first
+  resumes any unfinished native pairing attempt; otherwise it reads
   the system credential store and verifies device identity in the background.
   The saved credential is never filled into a widget. Success enables **Sync now**;
   it does not upload research or enable continuous sync.
@@ -25,7 +29,9 @@ issuance and production hosted login.
 - For manual inspection, open **Advanced** and choose **Load saved details without
   connecting**, inspect the service/IDs, then **Verify and connect**. Loading alone
   sends no network request and grants no background-upload consent.
-- **Forget saved connection** removes the device's saved record. An already
+- **Forget saved connection** removes the verified record and any unfinished
+  pairing attempt for this local database. It does not revoke a remotely admitted
+  device; revoke that peer from another trusted device when needed. An already
   connected in-memory session remains usable; Disconnect ends that session.
 
 Opening the app or connection dialog does not access the credential store or
@@ -35,7 +41,7 @@ reads its native credential record in a background worker, reauthenticates the
 device, then enables the existing sync controller. Offline authentication backs
 off from 10 seconds to a five-minute maximum; unavailable vaults, rejected tokens,
 changed bindings and changed credentials pause instead of silently switching
-accounts. Hosted self-service device pairing remains unimplemented.
+accounts. Hosted self-service signup and first-device issuance remain unimplemented.
 
 All vault access runs in the existing guarded worker. Repeated clicks do not
 create another job. Closing or changing workspace rejects late loads, clears
@@ -50,6 +56,13 @@ chained, plaintext and unknown backends remain unavailable; manual session-only
 connection continues to work. Windows persistence is local-machine, not enterprise
 roaming. Keyring package metadata and the native backend are included by packaging.
 No actual system vault is queried by construction, preview, tests or packaging.
+
+Pending pairing and verified login occupy separate native slots. Complete the
+verified save before deleting the pending attempt so a lost response or interrupted
+cleanup remains retryable. Joining remembers the same independent device key for
+the exact new database only after a fresh handshake and physical-file checks.
+The startup preference is not copied. OS-store failures remain unconfirmed, not
+transactional; an already created destination is retained for explicit retry.
 
 The vault account key hashes the exact local path, database file identity and
 binding. A copied/restored database does not inherit the prior connection. These
