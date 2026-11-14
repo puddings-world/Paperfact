@@ -66,6 +66,7 @@ export class HttpTransport {
         403: 'session_denied',
         404: 'unsupported_service',
         409: 'file_unavailable',
+        429: 'rate_limited',
         413: 'quota_exceeded',
         503: 'unsupported_service'
       })[response.status] ?? 'request_rejected');

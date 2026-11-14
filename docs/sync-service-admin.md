@@ -106,6 +106,109 @@ an open file is refused by the OS. POSIX mode/rename and Windows ACL acceptance
 remain platform-specific observations; simulated ownership checks are not a live
 Linux/macOS result. Existing browser, bearer and mount regressions remain selected.
 
+## Build and verify the public PWA artifact
+
+Build once on a source/CI machine with the existing Node 22+ tooling. The service
+host needs the resulting files, not Node or the Git checkout:
+
+```sh
+node scripts/build_mobile.mjs --output build/mobile-web
+node scripts/build_mobile.mjs --verify build/mobile-web --expect TRUSTED_ARTIFACT_SHA256
+```
+
+Use the first command's actual `artifact_id` from a trusted build receipt for
+`--expect`; the placeholder is deliberately unusable. Success is a JSON
+`state=verified` receipt with version, content ID, file/byte counts and directory.
+`--help` makes no changes. `--output` and `--verify` are mutually exclusive;
+`--expect` is optional for local integrity inspection and requires `--verify`.
+Without a trusted pin, verification checks integrity, not publisher authenticity.
+
+```text
+mobile-web/
+  artifact.json             version, shell revision, hashes and content ID
+  nginx-static-map.conf     generated approved static paths; default deny
+  public/                   only runtime/service-worker assets and vendor license
+```
+
+The source of truth is the existing service-worker `SHELL` plus `sw.mjs`, not a
+recursive directory copy. Test pages, test/service fixtures, Python, environment
+files, research databases, issued credentials and signing keys are not copied.
+The runtime `fixture.mjs` contains the intentional synthetic demo only. Known
+private JSON record formats are refused even if substituted into a declared public
+JSON asset. Symlinks/junctions, hardlinked files, path traversal, case-colliding or
+nonportable names and oversized assets are refused. This is a bounded allowlist,
+not a claim to detect every secret encoded in reviewed source code.
+
+The output must be a new nonoverlapping directory; existing paths are never
+replaced or cleaned up. Assets/maps are flushed before a completion manifest is
+written. Source asset edits during staging leave an incomplete directory with no
+manifest; retry at a new path. Verification is read-only, checks the content pin,
+exact file inventory, file bytes and generated-map hash, and rejects extra files
+or corruption without deleting/repairing them. Keep deployed release directories
+read-only and retain the previous verified artifact for rollback. No command
+switches a running host or migrates browser research.
+
+Library APIs: `buildMobile({output, sourceRoot, version, onProgress})` and
+`verifyMobile(directory, {expectedId})`, exported by `scripts/build_mobile.mjs`.
+Defaults use the repo's mobile root and `__version__`; progress reports a staged
+file count without file contents. Format `paperfact.mobile-artifact.v1` has limits
+of 256 files, 16 MiB per asset and 64 MiB total. Builds over identical input bytes
+are deterministic; different checkout line endings can legitimately change IDs.
+
+The Release workflow runs the five focused artifact cases and builds/verifies
+this shared artifact once (Windows job,
+two-minute step budget) and uploads `mobile-web-<commit>`. It does not deploy it or
+attach it implicitly to the native installer release. Download/unzip, independently
+verify the expected content ID, then stage the unchanged directory through the
+approved operator process. Workflow execution has not been observed here.
+
+Five focused cases in `tests/test_mobile_artifact.mjs` protect reproducibility and
+private-file exclusion, no-overwrite/excess-file refusal, interrupted build/new-path
+retry, corrupt bytes/maps/wrong pins, and linked/private-JSON source refusal.
+The existing browser acceptance harness can use an exported artifact instead of
+source assets by setting `PAPERFACT_TEST_ARTIFACT` and `PAPERFACT_TEST_ARTIFACT_ID`
+in addition to the [pairing fixture variables](mobile-0.5.md#focused-browser-acceptance).
+Only the harness's two explicit test-entry files stay outside the artifact; the
+actual app, worker/cache and runtime modules load from `public/`.
+
+## Same-origin HTTPS proxy handoff
+
+The [review-only Nginx template](../deploy/gcp/paperfact-nginx.conf.example) is an
+`http {}`-context include. Adapt its approved domain, certificate paths and release
+root; include the matching artifact's generated map. Serve only `public/`, never
+research, the authority directory, signing keys, the repo or mobile test fixtures.
+The Python service stays on loopback with the matching `--browser-origin`.
+
+The template maps `/v1/` to the bounded authenticated adapter, preserves original
+Origin/Cookie/Authorization/expected-device headers, allows static GET/HEAD and
+API POST, and rejects undeclared static paths. It sets MIME types for ES modules,
+no-store API responses, revalidated static shell, CSP/referrer/nosniff headers,
+bounded headers/bodies/timeouts and provisional 20 requests/s, burst 40, eight
+active API connections per IP. These are pilot starting limits, not measured
+capacity; verify large bootstrap, shared-NAT devices and interrupted file transfers
+before deployment. API throttles return 429: desktop treats it as a retryable
+connection error; mobile keeps local work and reports a busy service, including
+bilingual pairing feedback. No hidden retry loop or arbitrary progress estimate
+is introduced.
+
+Response disk buffering/cache and access logs are disabled. Error logs can still
+contain operational IP/path data; choose their private retention separately. Static
+and API cache headers are set at server scope so child add_header declarations do
+not accidentally drop the security headers. No certificate issuance, firewall,
+public DNS, Nginx installation, service reload or GCP permission change is performed.
+
+**Unperformed deployment gates:** Linux `nginx -t` with the actual certificates and
+artifact; HTTPS header/MIME and cookie persistence; native desktop plus browser
+large-file/429/restart traffic; service-account permissions; external mobile and
+Apple Silicon acceptance. Nginx is not available on this session's PATH. Template
+source review and loopback/browser fixtures do not fill those results.
+
+Directive references checked 2026-11-14: [map](https://nginx.org/en/docs/http/ngx_http_map_module.html),
+[proxy buffering](https://nginx.org/en/docs/http/ngx_http_proxy_module.html),
+[header inheritance](https://nginx.org/en/docs/http/ngx_http_headers_module.html),
+[request limits](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html) and
+[connection limits](https://nginx.org/en/docs/http/ngx_http_limit_conn_module.html).
+
 ## Command reference
 
 | Command | Required options | Optional options | Outcome |
@@ -260,3 +363,26 @@ The validated-local evidence is explicit stable key loading before authority
 startup, separate backup scope and format-aware non-echoing commit scanning.
 This extends the project's existing private-output safeguards; no new global
 skill or automatic provisioning rule was introduced.
+
+Local static-artifact checkpoint (2026-11-14): **32 Python cases passed in 8.48s**,
+**11.6s including privacy/Ruff** (all 14 critical selectors plus browser/throttle/docs).
+Five affected artifact/mobile files passed **23 Node cases in 6.55s under the
+governor**, including the five artifact scenarios. The actual exported public
+assets passed **four Chromium pairing/offline/reconnect/forget journeys in 4.75s**;
+the content pin verified separately in 0.23s. All used Windows 25% CPU/two logical
+cores; no full historical suite or complete release profile ran. The new 429 test
+initially supplied a consumed mock body; its fresh-stream fixture correction did
+not change production stream checks or weaken assertions.
+
+The inspected candidate has 50 public files, 3,911,049 bytes, version `0.5.0.dev`,
+and content ID `5a6f81dc23460775653bdf2c864eaed1a85103e3c1a6b2569f2cd73290c3b470`.
+That is a dated local content pin, not a published/signed release or a guarantee
+about later builds. The CI step is source-reviewed but unexecuted; no YAML parser
+or Nginx binary was available in this session. Live Linux config/TLS/permissions,
+capacity/large-file traffic and installed/physical device acceptance remain open.
+
+A final source/output containment review also covered child names beginning with
+`..` that are not parent traversal. The five artifact scenarios passed again in
+3.55s after that guard correction; unaffected mobile/browser evidence was reused.
+TEMP cleanup is limited to each exact test-owned allocation after real-path and
+file-identity checks, with no prefix enumeration or deletion of other sessions.

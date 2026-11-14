@@ -53,17 +53,19 @@ test('close, stop and changed workspace refuse late identity delivery',async()=>
  }
 });
 
-test('forget is explicit, cancelable, single-flight and bilingual; unsupported service stays actionable',async()=>{
+test('forget is explicit, cancelable, single-flight and bilingual; a busy service stays retryable',async()=>{
  assert.deepEqual(Object.keys(PAIRING_COPY.en).sort(),Object.keys(PAIRING_COPY['zh-TW']).sort());
  for(const language of ['en','zh-TW']){
-  let forgotten=0,cleared=0,active=false;const waiting=gate();
+  let forgotten=0,cleared=0,active=false,response='unsupported_service';const waiting=gate();
   const view=browserPairingPanel(el,{language,current:()=>active,onForgotten:()=>cleared++,transport:{
    forgetSession:async()=>{forgotten++;await waiting.promise;return {forgotten:true};},
-   completePairing:async()=>{throw Error('unsupported_service');}}});
+   completePairing:async()=>{throw Error(response);}}});
   assert(view.controls.pair.disabled);active=true;view.refresh();assert(!view.controls.pair.disabled);
   assert.equal(await view.run('forget'),false);assert(view.askForget());assert(view.controls.keep.focused);
   view.keepConnection();assert.equal(forgotten,0);assert(view.controls.question.hidden);
   assert.equal(await view.run('resume'),false);assert.equal(view.controls.status.text,PAIRING_COPY[language].unsupported);
+  response='rate_limited';assert.equal(await view.run('resume'),false);
+  assert.equal(view.controls.status.text,PAIRING_COPY[language].throttled);
   view.askForget();const pending=view.run('forget');assert.equal(await view.run('forget'),false);
   waiting.resolve();assert.equal(await pending,true);assert.equal(forgotten,1);assert.equal(cleared,1);
   assert.equal(view.controls.status.text,PAIRING_COPY[language].forgotten);

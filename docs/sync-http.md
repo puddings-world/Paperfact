@@ -243,3 +243,10 @@ The locally validated lesson is request-time workspace/device binding when
 cookies are shared across tabs. Existing bearer isolation alone did not establish
 that boundary. Keep this evidence scoped here: browser and hosted acceptance are
 pending, and no global skill/authentication policy was promoted from it.
+
+A proxy HTTP 429 is now a temporary/retry condition: Python raises a sanitized
+ConnectionError and the mobile transport reports `rate_limited`, preserving
+existing outboxes and exact pairing identity. Neither client echoes an upstream
+body or starts a hidden retry loop. The [review-only HTTPS handoff](sync-service-admin.md#same-origin-https-proxy-handoff)
+uses that status for provisional rate/connection limits; live proxy acceptance is
+still required.

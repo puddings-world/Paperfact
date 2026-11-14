@@ -144,7 +144,9 @@ Bucket policy references:
 3. Keep the existing HTTP listener on loopback. Add a reviewed TLS proxy with
    bounded request/header sizes, connection limits and rate limits tested against
    real bootstrap/resumable-transfer traffic. Never remove client URL validation.
-4. Serve the exact versioned static PWA and /v1 paths from one HTTPS origin.
+4. Build/verify the [allowlisted versioned PWA artifact](sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
+   and review the [same-origin Nginx template](../deploy/gcp/paperfact-nginx.conf.example).
+   Serve only the artifact public directory and /v1 paths from one HTTPS origin.
    Verify service-worker updates, response framing, caching and browser origin
    behavior end to end. The reference Python HTTP adapter is not certified for
    direct internet exposure.

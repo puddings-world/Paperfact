@@ -12,6 +12,7 @@ export const PAIRING_COPY={
   forgotten:'Browser connection forgotten. Local research is unchanged.',cancelled:'Stopped. A sent pairing may have completed; reconnect to check.',
   failed:'Connection did not finish. Your local research is unchanged; reconnect to retry.',
   denied:'Connection was rejected or expired. Reconnect a pending attempt, or forget it before using fresh pairing details.',
+  throttled:'The service is busy. Wait a moment, then reconnect. Local research is unchanged.',
   unsupported:'This service has not enabled browser pairing. Check the service setup or use Advanced manual connection.',
   wrongOrigin:'Open this reader on the same website as your sync service.',invalid:'Pairing details could not be read. Copy them again from your desktop.',
   empty:'Paste pairing details first.',stop:'Stop'},
@@ -25,6 +26,7 @@ export const PAIRING_COPY={
   forgotten:'已移除瀏覽器連線，本機研究未變更。',cancelled:'已停止。已送出的配對可能已完成，可重新連線確認。',
   failed:'連線未完成，本機研究未變更。可按重新連線重試。',
   denied:'連線被拒絕或已過期。可重試未完成配對，或先移除已存連線再使用新資料。',
+  throttled:'服務暫時忙碌，請稍後重新連線。本機研究未變更。',
   unsupported:'此服務尚未啟用瀏覽器配對，請確認服務設定，或使用進階手動連線。',
   wrongOrigin:'請從同步服務的相同網站開啟此閱讀器。',invalid:'無法讀取配對資料，請從桌面版重新複製。',
   empty:'請先貼上配對資料。',stop:'停止'}
@@ -63,6 +65,7 @@ export function browserPairingPanel(el,{language='en',transport=null,current=()=
   if(controller?.signal.aborted||error.message==='cancelled')return 'cancelled';
   if(error.message==='session_denied')return 'denied';
   if(error.message==='unsupported_service')return 'unsupported';
+  if(error.message==='rate_limited')return 'throttled';
   if(error.message==='browser_same_origin_required')return 'wrongOrigin';
   if(['invalid_pairing','invalid_request','request_rejected'].includes(error.message))return 'invalid';
   return 'failed';

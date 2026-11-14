@@ -375,3 +375,6 @@ Object.assign(messages['zh-TW'], {
 
 messages.en.ipv6_same_origin_required = "For IPv6 local testing, open the app on the same service origin, or use 127.0.0.1.";
 messages['zh-TW'].ipv6_same_origin_required = "\u4f7f\u7528 IPv6 \u672c\u6a5f\u6e2c\u8a66\u6642\uff0c\u8acb\u5f9e\u76f8\u540c\u7684\u670d\u52d9\u7db2\u5740\u958b\u555f App\uff0c\u6216\u6539\u7528 127.0.0.1\u3002";
+
+messages.en.rate_limited = 'The service is busy. Local work is kept; retry synchronization later.';
+messages['zh-TW'].rate_limited = '服務暫時忙碌，本機工作已保留，請稍後重試同步。';

@@ -235,3 +235,14 @@ reproduced a stale background preference write committing after a newer flush.
 0.4.6 serializes snapshot/commit operations while keeping UI saves and reads
 nonblocking. Do not dismiss repeated cross-platform failures as runner noise;
 preserve the failure evidence and pin the actual interleaving in a small test.
+
+## PWA operator artifact (v0.5 development)
+
+The existing Release workflow builds the shared static PWA once on Windows after
+source acceptance. It verifies and uploads `mobile-web-<commit>` independently of
+the three native installers. This is a downloadable operator artifact, not an
+automatic cloud deployment or native auto-update. [Build/verify, format, pinning,
+rollback and HTTPS gates](sync-service-admin.md#build-and-verify-the-public-pwa-artifact).
+The step has a two-minute deadline within the existing 30-minute build job.
+GitHub Actions, signed publishing and external host/device validation remain
+unobserved for this checkpoint.

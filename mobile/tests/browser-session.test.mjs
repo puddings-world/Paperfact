@@ -63,3 +63,15 @@ test('legacy bearer transport still omits cookies and cancellation stays sanitiz
   }});
   await legacy.session_info('synthetic');assert(called);
 });
+
+
+test('proxy throttling remains retryable without a new pairing or secret diagnostics',async()=>{
+ let calls=0;
+ const transport=new CookieTransport(origin,{pageOrigin:origin,fetch:async()=>{
+  calls++;return calls===1?new Response('synthetic private server details',{status:429}):
+   json({workspace_id:'research',device_id:'phone'});
+ }});
+ await assert.rejects(transport.completePairing(),/^Error: rate_limited$/);
+ assert.deepEqual(await transport.completePairing(),{workspace_id:'research',device_id:'phone'});
+ assert.equal(calls,2);
+});

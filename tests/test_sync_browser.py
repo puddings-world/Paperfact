@@ -196,3 +196,22 @@ def test_shared_cookie_cannot_change_another_tabs_research_or_pending_identity(b
         "X-Paperfact-Workspace": second.json()["workspace_id"],
         "X-Paperfact-Device": second.json()["device_id"],
     }).json() == second.json()
+
+
+def test_proxy_throttle_is_retryable_and_never_echoes_response_or_credentials():
+    seen = []
+    def reply(request):
+        seen.append(request)
+        if len(seen) == 1:
+            return httpx.Response(429, text="synthetic private upstream details")
+        return httpx.Response(200, stream=httpx.ByteStream(
+            json.dumps({"workspace_id": "workspace", "device_id": "phone"}).encode()),
+            headers={"content-type": "application/json"})
+    with HttpTransport("https://sync.example.org") as transport:
+        transport._client.close()
+        transport._client = httpx.Client(transport=httpx.MockTransport(reply))
+        with pytest.raises(ConnectionError, match="busy; retry later") as failure:
+            transport.session_info("synthetic-private-device-key")
+        assert "synthetic" not in str(failure.value)
+        assert transport.session_info("synthetic-private-device-key")["device_id"] == "phone"
+    assert len(seen) == 2

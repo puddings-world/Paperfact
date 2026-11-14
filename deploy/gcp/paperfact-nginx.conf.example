@@ -1,0 +1,70 @@
+# Review-only: include in nginx's http {} context after adapting domain, TLS and paths.
+# No certificate is issued and no host/service is configured by this file.
+include /srv/paperfact/mobile/current/nginx-static-map.conf;
+map $uri $paperfact_cache_control {
+    default "no-cache";
+    ~^/v1/ "no-store";
+}
+limit_req_zone $binary_remote_addr zone=paperfact_sync:10m rate=20r/s;
+limit_conn_zone $binary_remote_addr zone=paperfact_connections:10m;
+server {
+    listen 443 ssl;
+    server_name sync.example.org;
+    ssl_certificate /etc/paperfact/tls/fullchain.pem;
+    ssl_certificate_key /etc/paperfact/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /srv/paperfact/mobile/current/public;
+    index index.html;
+    server_tokens off;
+    access_log off;
+    error_log stderr warn;
+    large_client_header_buffers 2 16k;
+    client_header_timeout 10s;
+    client_body_timeout 10s;
+    client_max_body_size 512k;
+    client_body_buffer_size 512k;
+    keepalive_timeout 15s;
+    send_timeout 15s;
+    # Keep these at server level; child add_header directives can hide inheritance.
+    add_header Cache-Control $paperfact_cache_control always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; object-src blob:; frame-src blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+    location ^~ /v1/ {
+        if ($request_method != POST) { return 405; }
+        limit_req zone=paperfact_sync burst=40 nodelay;
+        limit_req_status 429;
+        limit_conn paperfact_connections 8;
+        limit_conn_status 429;
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Origin $http_origin;
+        proxy_set_header Connection "";
+        # Cookie, Authorization, Fetch Metadata and expected workspace/device
+        # headers pass through unchanged. Never log them or rewrite Origin.
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 15s;
+        proxy_read_timeout 15s;
+        proxy_request_buffering on;
+        proxy_buffering off;
+        proxy_max_temp_file_size 0;
+        proxy_cache off;
+        proxy_hide_header Cache-Control;
+        proxy_intercept_errors off;
+    }
+    location / {
+        if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+        if ($paperfact_static_allowed = 0) { return 404; }
+        types {
+            text/html html;
+            text/css css;
+            text/javascript mjs;
+            application/json json;
+            application/manifest+json webmanifest;
+            image/svg+xml svg;
+        }
+        default_type application/octet-stream;
+        try_files $uri =404;
+    }
+}

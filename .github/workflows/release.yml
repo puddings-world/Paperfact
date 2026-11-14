@@ -91,6 +91,22 @@ jobs:
         timeout-minutes: 10
         run: uv run python scripts/check.py --profile ${{ matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'critical' }}
 
+      # One shared static artifact; this never deploys or changes a running host.
+      - name: Build verified mobile web artifact
+        if: matrix.name == 'windows'
+        timeout-minutes: 2
+        run: |
+          node --test --test-concurrency=1 tests/test_mobile_artifact.mjs
+          node scripts/build_mobile.mjs --output build/mobile-web
+          node scripts/build_mobile.mjs --verify build/mobile-web
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.name == 'windows'
+        with:
+          name: mobile-web-${{ github.sha }}
+          path: build/mobile-web/
+          if-no-files-found: error
+
       - name: Screenshots
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/screenshots.py shots --demo
 

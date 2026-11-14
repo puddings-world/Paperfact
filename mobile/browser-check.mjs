@@ -25,11 +25,17 @@ import {
   createServer
 } from 'node:http';
 import {createInterface} from 'node:readline';
+import {verifyMobile} from '../scripts/build_mobile.mjs';
 const executable = process.argv[2] ?? process.env.PAPERFACT_TEST_BROWSER;
 const testPage=process.env.PAPERFACT_TEST_PAGE??'browser-test.html';
 if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html','workspace-startup-browser-test.html','browser-pairing-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
 if(! executable) throw new Error('Pass an explicit Chromium/Edge executable path.');
 const root = fileURLToPath(new URL('.', import.meta.url)), profile = await mkdtemp(join(tmpdir(), 'paperfact-mobile-fixture-'));
+let assetRoot=root;
+if(process.env.PAPERFACT_TEST_ARTIFACT){
+  await verifyMobile(process.env.PAPERFACT_TEST_ARTIFACT,{expectedId:process.env.PAPERFACT_TEST_ARTIFACT_ID??null});
+  assetRoot=join(resolve(process.env.PAPERFACT_TEST_ARTIFACT),'public');
+}
 const plainNoteMode=!!process.env.PAPERFACT_NOTE_SERVICE_PYTHON;
 const pairingMode=testPage==='browser-pairing-browser-test.html';
 if(pairingMode&&!process.env.PAPERFACT_PAIRING_SERVICE_PYTHON)throw Error('Pairing fixture needs an explicit Python interpreter.');
@@ -95,8 +101,9 @@ const server = createServer(async(request, response) => {
     response.end(new Uint8Array(await upstream.arrayBuffer()));return;
   }
   const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname),
-  path = resolve(root, '.' +(name === '/' ? '/index.html': name));
-  const local = relative(root, path);
+  selectedRoot=pairingMode&&['/browser-pairing-browser-test.html','/browser-pairing-browser-test.mjs'].includes(name)?root:assetRoot,
+  path = resolve(selectedRoot, '.' +(name === '/' ? '/index.html': name));
+  const local = relative(selectedRoot, path);
   if(local.startsWith('..') || isAbsolute(local)) {
     response.writeHead(404);
     response.end();

@@ -205,3 +205,16 @@ Omit both to keep browser routes disabled. Missing/unsafe key files and invalid
 configuration refuse startup rather than generating a new key. These commands do
 not provision TLS, static hosting or cloud resources. See [full operator commands,
 privacy/permissions, backup and recovery](sync-service-admin.md).
+
+## Build a PWA operator artifact
+
+```sh
+node scripts/build_mobile.mjs --output build/mobile-web
+node scripts/build_mobile.mjs --verify build/mobile-web --expect TRUSTED_SHA256
+```
+
+Node 22+ is needed only on the build machine. `--output NEW_DIRECTORY` builds,
+`--verify DIRECTORY` inspects read-only, `--expect SHA256` optionally pins a
+verification, and `--help` prints usage. Success prints a `verified` JSON receipt;
+invalid options/files/pins return 2. Existing output is never overwritten.
+[Format/API, limits, private-file boundary and deployment gates](sync-service-admin.md#build-and-verify-the-public-pwa-artifact).

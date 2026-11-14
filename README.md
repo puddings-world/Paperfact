@@ -220,6 +220,9 @@ Operators can now [create a private signing key and explicitly enable browser pa
 with `paperfact sync-admin create-browser-key --output FILE` and
 `paperfact sync-admin serve --state DIR --browser-origin URL --browser-key-file FILE`. HTTPS/static hosting and
 installed-device acceptance remain open.
+The [PWA deployment artifact](docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
+is built with `node scripts/build_mobile.mjs --output DIR`; verify using
+`node scripts/build_mobile.mjs --verify DIR --expect SHA256` (`--help` lists options).
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
 [Implementation plan](docs/implementation-0.5.0.md) |

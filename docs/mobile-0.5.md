@@ -12,7 +12,8 @@ under **Advanced: manual connection** and local import/export/language controls
 under **Local data and language**. This remains private v0.5 development, requiring
 the [same-origin service adapter](sync-http.md#same-origin-browser-adapter-development).
 The plain static preview does not enable it. [Operator signing-key loading](sync-service-admin.md#enable-browser-pairing-explicitly)
-is now implemented; same-origin HTTPS/static deployment remains pending.
+is now implemented. The [versioned static artifact and HTTPS template](sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
+are prepared; actual same-origin deployment remains pending.
 
 1. On a connected desktop choose **Devices > Pair another device > Copy pairing
    details**. Open the PWA on that service's same origin, paste the details and

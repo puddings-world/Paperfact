@@ -187,3 +187,14 @@ not ordinary client requirements. Setup only installs/shows offline help; it doe
 not discover ADC or create service/cloud state. [Publication/API and limits](gcp-backup-publication.md).
 The desktop build configuration excludes cloud operator namespaces; real installer and Linux
 operator acceptance remain separate from static/fixture checks.
+
+## Static PWA deployment artifact
+
+`scripts/build_mobile.mjs` uses the existing Node 22+ runtime and built-in modules
+only: no bundler or npm dependencies. CI supplies Node through setup-node. Build
+with `node scripts/build_mobile.mjs --output build/mobile-web`, then verify against
+the trusted content ID using `--verify build/mobile-web --expect SHA256`. The
+output contains only the runtime allowlist, manifest and generated Nginx static
+map; the host does not need Node. [Flags/API/limits and operator handoff](sync-service-admin.md#build-and-verify-the-public-pwa-artifact).
+The Nginx example is a review artifact; Nginx/certificate provisioning and Linux
+validation are external operator gates, not part of ordinary desktop setup.

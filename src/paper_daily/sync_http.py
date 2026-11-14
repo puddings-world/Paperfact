@@ -454,6 +454,8 @@ class HttpTransport:
             ) as response:
                 if response.status_code in (401, 403):
                     raise PermissionError("Sync authorization was rejected")
+                if response.status_code == 429:
+                    raise ConnectionError("Sync service is busy; retry later")
                 if response.status_code == 409:
                     raise BlobUnavailableError("Sync attachment bytes are unavailable; retry later")
                 if response.status_code == 503 or (

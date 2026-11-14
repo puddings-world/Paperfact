@@ -75,3 +75,9 @@ HTTPS/static deployment, platform permissions and physical phones remain open. T
 Shell v21 includes the pairing view; research caches are retained.
 
 [User flow, API, browser-test command and exact limits](../docs/mobile-0.5.md#browser-pairing-and-offline-reconnection).
+
+For hosting, use the [verified static artifact](../docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact),
+not a recursive copy of this development directory. CI prepares one shared artifact;
+it does not configure a host. The actual app pairing/offline checks can load
+`public/` from that artifact using `PAPERFACT_TEST_ARTIFACT` and its trusted
+`PAPERFACT_TEST_ARTIFACT_ID`. Shell v22 also makes HTTP 429 a busy/retry state.
