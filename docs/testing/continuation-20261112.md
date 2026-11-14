@@ -5413,3 +5413,18 @@ additional worktree was introduced.
 - Existing verifier cases: 12 passed in 1.30s / 4.3s total. Daily critical:
   14 passed in 7.97s / 11.1s total. Privacy/Ruff/whitespace passed under the
   two-core/25%-CPU/300s budget; no new selectors or exhaustive run.
+- Run 43635055205 reproduced reader -11 on the second launch, after one
+  successful reader stage. Captured Python native-fault stack: Qt app.exec,
+  no active Python PDF worker. It does not prove a MuPDF crash.
+- Source review found an application-wide _FileOpens filter still installed
+  in main.run, despite window_events.py documenting the same PySide/WebEngine
+  receiver-wrapping crash class. Move FileOpen handling to QApplication.event,
+  whose receiver is only the application. Keep the existing PDF dispatcher and
+  do not intercept unrelated native objects. Verify actual fresh-Qt file events,
+  non-PDF fallback, early/closed handler and unchanged open-with behavior.
+  Root-cause attribution remains provisional until native verification.
+- Actual fresh-Qt application events and existing PDF open-with: 2 passed in
+  3.71s / 7.3s total. Critical 14 passed in 7.24s / 10.4s total; privacy/Ruff/
+  whitespace green. No direct app/application.installEventFilter calls remain
+  in source. Native three-launch acceptance still pending; not a proof of
+  installed stability or a full Qt/PDF threading audit.

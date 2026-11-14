@@ -23,7 +23,9 @@ refuses a non-arm64 runner. Frozen Mac GUI checks use the native Cocoa backend;
 Linux retains Xvfb and Windows uses offscreen checks. Because of observed
 intermittent Mac startup crashes, the frozen verifier requires three consecutive
 reader launches of the same bundle/workspace, stopping on the first failure.
-This adds about ten seconds of smoke time, not another build or test matrix. Each job has a 30-minute total budget; manual builds
+This adds about ten seconds of smoke time, not another build or test matrix.
+PDF open-with events are handled by the application itself, without a global
+Python event filter over WebEngine internal objects. Each job has a 30-minute total budget; manual builds
 retain critical source checks and frozen acceptance, without creating a release.
 
 Download `build-macos` (DMG), `provenance-macos` (source identity and report), and

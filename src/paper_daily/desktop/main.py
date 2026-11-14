@@ -4944,7 +4944,9 @@ def run(
     from paper_daily.ai_profiles import recheck_claude
 
     recheck_claude()
-    app = QApplication.instance() or QApplication(sys.argv)
+    from paper_daily.desktop.application import DesktopApplication
+
+    app = QApplication.instance() or DesktopApplication(sys.argv)
     style(app)
     fonts.load()
     # Without it the Dock (macOS) and the taskbar show the Python interpreter's icon.
@@ -5000,7 +5002,7 @@ def run(
         QTimer.singleShot(0, lambda: window.open_pdfs([Path(pdf)]))
     # macOS hands "open with" files to a running app as an event, not as arguments.
     window.file_opens = _FileOpens(window)
-    app.installEventFilter(window.file_opens)
+    app.file_opens = window.file_opens
     window.update_banner.check_in_background()
 
     # A crashed previous run can leave the socket name taken on Windows; removing it

@@ -3,6 +3,9 @@ application: on Linux an application-wide Python filter crashed the app as soon 
 a window showing a web view was resized."""
 
 import os
+import subprocess
+import sys
+import textwrap
 
 import pytest
 from PySide6.QtCore import QObject, Qt
@@ -36,6 +39,37 @@ def test_the_main_window_installs_no_application_wide_filter(tmp_path, monkeypat
     widget.activateWindow()
     app.processEvents()
     assert on_app == []
+    # Use a fresh Qt process: pytest already owns a plain QApplication singleton.
+    program = textwrap.dedent("""
+        from pathlib import Path
+        from PySide6.QtCore import QCoreApplication, QEvent, QObject
+        from PySide6.QtGui import QFileOpenEvent
+        from paper_daily.desktop.application import DesktopApplication
+        app = DesktopApplication([])
+        calls = []
+        class Opens(QObject):
+            def eventFilter(self, watched, event):
+                calls.append(event.file())
+                return event.file().lower().endswith('.pdf')
+        assert not app.event(QFileOpenEvent('before-window.txt'))
+        handler = Opens()
+        app.file_opens = handler
+        assert QCoreApplication.sendEvent(app, QFileOpenEvent('paper.pdf'))
+        assert not QCoreApplication.sendEvent(app, QFileOpenEvent('notes.txt'))
+        internal = QObject()
+        QCoreApplication.sendEvent(internal, QEvent(QEvent.Type.User))
+        assert calls == ['paper.pdf', 'notes.txt']
+        import shiboken6
+        shiboken6.delete(handler)
+        assert not QCoreApplication.sendEvent(app, QFileOpenEvent('after-close.txt'))
+        print('Application-only PDF events preserved; internal objects unfiltered')
+    """)
+    child = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, timeout=30,
+        env={**os.environ, "PAPERFACT_DATA": str(tmp_path / "event-child")},
+    )
+    assert child.returncode == 0, child.stderr.decode(errors="replace")
+    assert b"Application-only PDF events preserved" in child.stdout
     widget.close()
     widget.deleteLater()
     app.processEvents()
