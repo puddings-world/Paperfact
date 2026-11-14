@@ -1,8 +1,39 @@
-"""Closed, bounded device-management wire shapes; no credential or activity fields."""
+"""Closed device actions and one-time pairing; responses contain no credentials."""
 
-from paper_daily.sync_device_management import MAX_CATALOG_PAGE, _device_id, device_label
+from paper_daily.sync_device_management import (
+    MAX_CATALOG_PAGE,
+    _device_id,
+    device_label,
+    pairing_secret,
+)
 
 ROUTES = {"/v1/devices/" + name for name in ("list", "rename", "revoke")}
+PAIR_CREATE = "/v1/devices/pairing/create"
+PAIR_REDEEM = "/v1/devices/pairing/redeem"
+ROUTES |= {PAIR_CREATE, PAIR_REDEEM}
+
+
+def pairing_created(value, identity=None):
+    closed(value, {"workspace_id", "issuer_device_id", "expires_at"})
+    _device_id(value["workspace_id"])
+    _device_id(value["issuer_device_id"])
+    if type(value["expires_at"]) is not int or not 0 < value["expires_at"] < 2**63:
+        raise ValueError("Invalid pairing expiry")
+    if identity is not None and (value["workspace_id"], value["issuer_device_id"]) != (
+        identity["workspace_id"], identity["device_id"]
+    ):
+        raise ValueError("Pairing belongs to another authenticated device")
+    return value
+
+
+def pairing_claimed(value, workspace_id, device_id):
+    closed(value, {"workspace_id", "device_id"})
+    if value != {"workspace_id": workspace_id, "device_id": device_id}:
+        raise ValueError("Pairing response belongs to another device")
+    _device_id(workspace_id)
+    _device_id(device_id)
+    return value
+
 
 
 def closed(value, fields):
@@ -77,7 +108,15 @@ def revoked(value, device_id):
 def request(service, path, token, value):
     # Authenticate before validating target/shape. Every core method authenticates
     # again within its own read/write transaction; this is no mutation authority.
+    if path == PAIR_REDEEM:
+        closed(value, {"workspace_id", "device_id", "credential", "label"})
+        result = service.redeem_pairing(token, **value)
+        return pairing_claimed(result, value["workspace_id"], value["device_id"])
     identity = service.session_info(token)
+    if path == PAIR_CREATE:
+        closed(value, {"code"})
+        result = service.create_pairing(token, pairing_secret(value["code"]))
+        return pairing_created(result, identity)
     if path.endswith("/list"):
         closed(value, {"after", "limit"})
         bounds = catalog_bounds(**value)

@@ -15,9 +15,10 @@ be exposed as the production sync service.
 | `POST /v1/pull` | `{"after": 0, "limit": 100}` | A contiguous array of events after the cursor |
 
 Both require `Authorization: Bearer <device token>`, an explicit content length
-and JSON media type. Enrollment and revocation remain trusted administrative
-Python calls; there are no HTTP endpoints for them. Workspace/device authorization
-is enforced by `ReferenceService` for every operation.
+and JSON media type. Administrative enrollment/revocation remain private Python
+calls. Authenticated device controls and explicit one-time invitation routes are
+specified in [device management](sync-device-management.md#one-time-device-pairing-core).
+Workspace/device authorization is enforced by `ReferenceService` for every operation.
 
 - Requests are bounded to 512 KiB; responses to 2 MiB. Pull materializes at most
   four events per request, then returns the largest contiguous prefix within the

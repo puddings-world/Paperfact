@@ -1,3 +1,4 @@
+import {randomBytes} from 'node:crypto';
 import { fileId } from './artifacts.mjs';
 /** Full-stack fixture: JavaScript client → actual Python HTTP/reference service. */
 import {
@@ -81,6 +82,26 @@ try {
     assert.equal(response.status, 200, await response.clone().text());
     return response.json();
   };
+  // This grants a fresh device; it never replaces an existing device token.
+  const pairCode = randomBytes(32).toString('base64url');
+  const pairedCredential = randomBytes(32).toString('base64url');
+  const created = await transport.create_pairing(ready.desktop_token, pairCode);
+  assert.equal(created.workspace_id, 'demo-workspace');
+  assert.equal(created.issuer_device_id, 'demo-desktop');
+  assert.deepEqual(await transport.create_pairing(ready.desktop_token, pairCode), created);
+  const pairedIdentity = await transport.redeem_pairing(
+    pairCode, 'demo-workspace', 'paired-mobile', pairedCredential, 'Fixture phone',
+  );
+  assert.deepEqual(await transport.session_info(pairedCredential), pairedIdentity);
+  assert.deepEqual(await transport.redeem_pairing(
+    pairCode, 'demo-workspace', 'paired-mobile', pairedCredential, 'Fixture phone',
+  ), pairedIdentity);
+  await assert.rejects(transport.redeem_pairing(
+    pairCode, 'demo-workspace', 'duplicate-mobile', randomBytes(32).toString('base64url'),
+  ), error => error.code === 'session_denied');
+  await post('/v1/devices/revoke', {device_id: 'paired-mobile'}, ready.desktop_token);
+  await assert.rejects(transport.session_info(pairedCredential),
+    error => error.code === 'session_denied');
   const target = fixture.events.at(- 1).operation.payload,
   bytes = fixture.blobs.get(target.sha256);
   const upload = await post('/v1/blobs/begin', {

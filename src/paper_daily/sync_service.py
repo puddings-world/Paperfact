@@ -1,6 +1,6 @@
 """Local reference sync authority for isolated tests and transport integration.
 
-Enrollment/revocation are trusted administrative seams, not public endpoints.
+Administrative enrollment/revocation remain trusted seams. Device pairing is explicit.
 Attachment storage is optional and explicit; no HTTP, identity provider or AI calls.
 """
 

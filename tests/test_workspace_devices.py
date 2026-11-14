@@ -142,3 +142,20 @@ def test_cancel_after_remote_commit_keeps_exact_result_for_refresh_retry(service
     assert authority.device_catalog(token)["devices"][1]["label"] == "Phone"
     monkeypatch.setattr(authority, "rename_device", original)
     assert not client.rename("peer", "Phone", Ticket())["changed"]
+
+
+def test_pairing_uses_the_guarded_device_context_without_changing_local_research(service, enrolled):
+    import secrets
+
+    session, authority, _token, _calls = service
+    connect(service)
+    client, code = DeviceClient(session), secrets.token_urlsafe(32)
+    before, pending = enrolled[0].read_bytes(), enrolled[1].journal.pending()
+    created = client.create_pairing(code, Ticket())
+    assert created["workspace_id"] == "workspace" and created["issuer_device_id"] == "origin-device"
+    assert client.create_pairing(code, Ticket()) == created
+    session.disconnect()
+    with pytest.raises(SyncStopped):
+        client.create_pairing(secrets.token_urlsafe(32), Ticket())
+    assert enrolled[0].read_bytes() == before and enrolled[1].journal.pending() == pending
+    assert authority.device_catalog(service[2])["devices"][0]["device_id"] == "origin-device"

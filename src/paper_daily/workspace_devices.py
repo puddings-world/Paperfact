@@ -88,3 +88,12 @@ class DeviceClient:
         return self._call(
             "revoke_peer", ticket, lambda value: protocol.revoked(value, target), target
         )
+
+
+    def create_pairing(self, code, ticket):
+        """Grant access only through this exact verified, enrolled device context."""
+        protocol.pairing_secret(code)
+        return self._call(
+            "create_pairing", ticket,
+            lambda value: protocol.pairing_created(value, self.identity), code,
+        )
