@@ -699,3 +699,26 @@ a known retired/reparented source until the user separately restores it. Restore
 Lineage dependencies still require their separate explicit recheck. No AI or
 network call is introduced, no old operation is replayed, and the source database
 is unchanged. Foreign-workspace/legacy owner mapping remains a separate gate.
+
+
+## Confirm a recorded claim-analysis removal
+
+A native v2 deletion of the fixed claims/main report can be reviewed through
+`sync_recovery_choices.prepare(observation, change_id, "remove", request_id, ...)`.
+The desktop action is **Remove current claim analysis**, with a claim-specific
+confirmation defaulting to **No**. Compare the visible report before confirming;
+this never deletes the deep explanation, section reading, original PDF or notes.
+
+The source must retain the exact native creation operation and parent lifetime.
+The target needs a proven mapped paper, active native report/head and matching
+content projection, document hash and bounded visible row. Untracked edits, missing
+proofs, absent/retired targets and changed observations refuse a new removal.
+This is not a generic scientific deletion grant and requires no new PDF access,
+source activation, model call or network request.
+
+The deletion, outbox operation and durable decision receipt commit atomically.
+Cancellation or failure rolls them all back. Reusing a successful request returns
+the recorded result without removing a later restored or edited report; a fresh
+removal needs a fresh review. The old device remains unchanged. Native fixture
+peer delivery is verified; installed/hosted acceptance and other unsupported
+scientific deletions remain separate gates.

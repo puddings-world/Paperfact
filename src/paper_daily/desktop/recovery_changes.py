@@ -665,6 +665,31 @@ TEXT["zh-TW"].update(
 )
 
 
+
+TEXT["en"].update(
+    remove_claims="Remove current claim analysis",
+    ready_remove_claims=(
+        "Review this claim analysis before removal. Its original, deep explanation, "
+        "section reading and history remain available."
+    ),
+    confirm_remove_claims=(
+        "Apply the recorded deletion to the current claim analysis? Only this report is "
+        "removed; its original, explanation, section reading and history are preserved."
+    ),
+)
+TEXT["zh-TW"].update(
+    remove_claims="\u79fb\u9664\u76ee\u524d\u4e3b\u5f35\u5206\u6790",
+    ready_remove_claims=(
+        "\u78ba\u8a8d\u5f8c\u79fb\u9664\u76ee\u524d\u4e3b\u5f35\u5206\u6790\uff1b"
+        "\u4fdd\u7559\u539f\u6587\u3001\u8b1b\u89e3\u8207\u6b77\u53f2\u3002"
+    ),
+    confirm_remove_claims=(
+        "\u79fb\u9664\u76ee\u524d\u4e3b\u5f35\u5206\u6790\uff1f"
+        "\u539f\u6587\u3001\u8b1b\u89e3\u8207\u6b77\u53f2\u5747\u4fdd\u7559\u3002"
+    ),
+)
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -815,6 +840,8 @@ class RecoveryChanges(QWidget):
                 key = "ready_restore_manual"
             if action == "remove" and not already and getattr(plan, "note_removal", False):
                 key = "ready_remove_note"
+            if action == "remove" and not already and getattr(plan, "claim_removal", False):
+                key = "ready_remove_claims"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -1299,7 +1326,8 @@ class RecoveryChanges(QWidget):
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_remove_note" if getattr(plan, "note_removal", False)
+                    self.t["confirm_remove_claims" if getattr(plan, "claim_removal", False)
+                           else "confirm_remove_note" if getattr(plan, "note_removal", False)
                            else "confirm_remove"] if action == "remove" else
                     self.t["confirm_restore_manual"] if action == "restore" and getattr(
                         plan, "manual_restore", False
@@ -1454,6 +1482,10 @@ class RecoveryChanges(QWidget):
                         self.action_plans[action][0], "note_removal", False
                     ):
                         label = "remove_note"
+                    if action == "remove" and getattr(
+                        self.action_plans[action][0], "claim_removal", False
+                    ):
+                        label = "remove_claims"
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))

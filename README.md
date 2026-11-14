@@ -287,6 +287,8 @@ The recovery review compares saved and current research before confirmation:
 
 - Keep or restore supported list/reading state and copy notes or manual highlights
   with their verified original, preserving existing selections and later edits.
+- Confirm a recorded claim-analysis deletion while preserving its original,
+  deep explanation, section reading and history; retries retain later restores.
 - Confirm a recorded note deletion after comparing its current text and position;
   native history and PDFs stay, and retry preserves later restores.
 - Confirm a recorded manual-highlight deletion after comparing the current mark;

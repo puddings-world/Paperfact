@@ -5736,3 +5736,31 @@ additional worktree was introduced.
 - Final evidence-only documentation check: 58 passed in 1.87s / 4.9s total,
   privacy/Ruff/whitespace green. Reuse native and critical evidence for unchanged
   source 7704504; no packaging rebuild for these documentation updates.
+
+
+### 2026-11-15: confirmed claim-analysis retirement
+
+- Added explicit typed removal for a recorded v2 claims/main deletion through
+  existing choices/decision/native transaction. Require exact retained creation,
+  mapped paper lifetime, current native head/projection and bounded visible row.
+  Preserve deep/section analyses, PDFs, notes, original ownership and history;
+  no model, file-access grant, envelope replay or implicit source restoration.
+- Initial behavior test exposed that claims use deterministic v2 entity identity,
+  not Lineage-only content_address; replaced that assumption with the fixed slot
+  plus retained creation proof. First behavior attempt: one failed in 6.57s;
+  corrected without weakening expectations. Formatting/callback binding findings
+  were fixed before tests, not interpreted as feature failures.
+- Backend 3 passed in 19.45s / 22.7s total: actual independent native peer after
+  transfer; later restore/retry; receipt failure/cancel rollback; stale target and
+  untracked visible content. Actual claim-specific zh-TW confirmation plus prior
+  note confirmation: 2 passed in 9.02s / 12.5s total (one overlapping existing case).
+  Four new collected cases; no blanket stress matrix, critical/release selectors
+  unchanged. Whole suites and installed/hosted/physical-device checks not run.
+- Compatibility selection: 3 passed in 14.46s / 18.3s total (arbitrary-note
+  removal refusal, active/duplicate/unavailable manual restore refusal, keep-only
+  decision). One initial selector name did not exist, so that attempt ran zero
+  tests; corrected to the actual named case, no test removed or skipped.
+- Critical 14 passed in 4.69s / 7.9s total; docs 58 passed in 1.91s / 5.0s total;
+  privacy/Ruff/whitespace green. Checkpoint review reuses the existing confirmed
+  note/manual/Lineage decision pattern; no new universal skill or duplicate
+  protocol is warranted. No native package rebuild or release in this turn.

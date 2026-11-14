@@ -658,3 +658,21 @@ No new source or file authority is inferred from a cache or hash, and no model
 call is needed. Shared metadata/removal/cancellation/receipt cases remain intact.
 Physical-device/native-vault/hosted acceptance and legacy/source mapping remain
 separate gates; the verified-original flag describes the committed decision.
+
+
+## Confirmed claim report retirement (2026-11-15)
+
+`tests/test_sync_recovery_claim_removal.py` adds four distinct behavior cases:
+
+| Case | Observable requirement |
+|---|---|
+| Native peer and retry | Retire only claims/main; preserve PDF bytes, deep/section analyses, notes and old device; deliver through real local authority and independent native peer; retry preserves a later restore |
+| Failure/cancel/stale target | Receipt failure or cancellation rolls back report/outbox/receipt together; a post-review native edit prevents application |
+| Untracked visible content | A visible claim row differing from native history cannot be removed by a new decision |
+| Desktop confirmation | Actual Chinese action/notice, default-No cancellation, successful confirmation and repeated clicks create one deletion |
+
+The fixtures publish a real claim group and owned original, rather than replacing
+the handler with a mock. No model/account calls or owner database are used.
+Confirmed removal is one native operation, not an input-group deletion or proof of
+semantic validity. Installed Windows/Mac, hosted sync and phone acceptance remain
+open. Existing note/manual-highlight protections are checked separately.
