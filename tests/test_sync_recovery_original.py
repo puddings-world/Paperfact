@@ -446,3 +446,69 @@ def test_native_original_confirmation_cancels_then_saves_one_decision(
             wait(app, lambda: not owner.busy)
         owner.close()
         app.processEvents()
+
+
+def test_retained_inspection_is_explicit_and_rejects_unowned_cache_history_and_wrong_parent(group):
+    group = remove_source(group)
+    old, root = group["old"], group["root"]
+    put = recovery.retained_original
+    from paper_daily import sync_recovery_note_copy as native
+
+    parent, sha = root["parents"][0], group["sha"]
+    before = dump(old.journal.path)
+    with closing(recovery._readonly_connection(old.journal.path)) as conn:
+        conn.execute("BEGIN")
+        with pytest.raises(ValueError, match="not owned"):
+            native.inspect_original(conn, parent["id"], parent, sha, lambda: None)
+        proof = native.inspect_original(
+            conn, parent["id"], parent, sha, lambda: None, allow_retained=True
+        )
+        assert proof[0].read_bytes() == group["data"]
+        with pytest.raises(ValueError, match="explicitly"):
+            native.inspect_original(
+                conn, parent["id"], parent, sha, lambda: None, allow_retained="yes"
+            )
+        actual = put(conn, root, lambda: None)
+    assert dump(old.journal.path) == before
+    # Bytes alone cannot replace native history/ownership, even with explicit inspection.
+    with closing(sqlite3.connect(old.journal.path)) as conn, conn:
+        conn.execute(
+            "UPDATE paperfact_sync_operations SET fingerprint=? WHERE operation_id=?",
+            ("0" * 64, actual["operation_id"]),
+        )
+    changed = dump(old.journal.path)
+    with (
+        closing(recovery._readonly_connection(old.journal.path)) as conn,
+        pytest.raises(ValueError, match="journal changed"),
+    ):
+        native.inspect_original(conn, parent["id"], parent, sha, lambda: None, allow_retained=True)
+    assert dump(old.journal.path) == changed and proof[0].read_bytes() == group["data"]
+    with closing(sqlite3.connect(old.journal.path)) as conn, conn:
+        conn.execute(
+            "UPDATE paperfact_sync_operations SET fingerprint=? WHERE operation_id=?",
+            (candidates._fingerprint(actual), actual["operation_id"]),
+        )
+        owned = conn.execute(
+            "SELECT * FROM research_file_versions WHERE operation_id=?", (actual["operation_id"],)
+        ).fetchone()
+        conn.execute(
+            "DELETE FROM research_file_versions WHERE operation_id=?", (actual["operation_id"],)
+        )
+    with (
+        closing(recovery._readonly_connection(old.journal.path)) as conn,
+        pytest.raises(ValueError, match="not owned"),
+    ):
+        native.inspect_original(conn, parent["id"], parent, sha, lambda: None, allow_retained=True)
+    assert proof[0].read_bytes() == group["data"]
+    with closing(sqlite3.connect(old.journal.path)) as conn, conn:
+        conn.execute("INSERT INTO research_file_versions VALUES(?,?,?)", owned)
+    unmatched = dict(parent, incarnation=str(uuid4()))
+    changed = dump(old.journal.path)
+    with (
+        closing(recovery._readonly_connection(old.journal.path)) as conn,
+        pytest.raises(ValueError, match="another paper lifetime"),
+    ):
+        native.inspect_original(
+            conn, parent["id"], unmatched, sha, lambda: None, allow_retained=True
+        )
+    assert dump(old.journal.path) == changed

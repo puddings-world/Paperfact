@@ -577,3 +577,37 @@ not mistaken for native hiding. Old delivered-original proofs stay invalid.
 Unknown legacy/foreign mappings, broader audit integration and other scientific or
 manual-mark deletion decisions remain pending. Neither `saved_locally` nor fixture
 peer delivery certifies hosted or installed Windows/Mac/phone acceptance.
+
+
+## Historical originals in content recovery
+
+Old-device recovery of positioned notes, claims, highlight groups, explanation
+links and decks now explicitly permits checking a retained original after its
+source association was retired. It still requires the correct current source
+**paper lifetime**, exact document hash, a bounded actual native file-version
+record with matching journal/accepted history, canonical owned artifact closure
+and readable PDF. A same-hash cache path, edited metadata or guessed owner is
+insufficient. Existing anchor, page-count, quote and input-generation checks remain.
+
+`sync_recovery_note_copy.inspect_original(conn, paper, parent, digest, check, *,
+anchor=None, quote=None, allow_retained=False)` retains its existing default
+active desired-original/primary-document behavior. Only old-source recovery
+inspection opts in with the strict boolean `allow_retained=True`; normal target
+inspection and the live original reader are unchanged. It returns the existing
+path/native-file-version proof, never a file grant or a source activation.
+
+The shared `sync_recovery_original.inspect_retained(conn, paper, parent,
+document_hash, check)` verifies actual retained original ownership on the caller's
+read transaction, using the same proof as explicit original restoration. No match
+returns `None`; callers may still use the existing independently verified primary
+document path. Invalid/corrupt matching ownership refuses rather than treating
+cached bytes as authority. Source/target observations still fence every delayed
+read and apply; changed paper lifetimes and unavailable bytes remain blockers.
+
+These groups pin the source document and paper lifetime, not a retrospectively
+invented exact original-file epoch. Native Lineage keeps its stricter recorded
+`source_dependencies` incarnation checks. Actual target publication still refuses
+a known retired/reparented source until the user separately restores it. Restored
+Lineage dependencies still require their separate explicit recheck. No AI or
+network call is introduced, no old operation is replayed, and the source database
+is unchanged. Foreign-workspace/legacy owner mapping remains a separate gate.

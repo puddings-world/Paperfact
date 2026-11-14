@@ -276,7 +276,10 @@ The recovery review compares saved and current research before confirmation:
   inspectable; missing old explanations require explicit confirmation before clearing
   their corresponding current content. Recorded lineage deletions also need
   confirmation; they synchronize report retirement while retaining originals,
-  independent notes and report history.
+  independent notes and report history. Recovery can also verify a retired old
+  source for notes, claims, highlights, explanations and decks when its native
+  ownership and exact PDF remain intact; this never silently restores a retired
+  source association in the receiving workspace.
 
 See the [recovery workflow and API](docs/device-recovery-review.md),
 [deck provenance](docs/sync-files.md) and [saved-evidence audit](docs/deck-audit.md).

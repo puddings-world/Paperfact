@@ -591,3 +591,24 @@ that evidence is reused rather than rerunning the entire selection.
 Release adds just the complete original-source peer lifecycle representative,
 not every fixture or button variant. This protects a distinct source-lifetime
 transition; historical tests remain opt-in and physical-device gates stay separate.
+
+
+## Explicit retained-original inspection (2026-11-15)
+
+Five existing complete peer journeys now retire the old original-source
+association before their source comparison: positioned note + original, claims,
+highlight analysis/marks, explanation-link group and editable deck. The original
+assertions still require complete saved content, exact transferred bytes,
+independent native peer delivery, unchanged source research and safe saved retry.
+No new per-button or cross-product matrix was added.
+
+One lean original fixture checks that default inspection refuses when there is
+no active owned source/primary document, while explicit historical inspection
+reads the exact retained PDF without writes. Removing the ownership record or
+tampering with native journal evidence refuses despite cached bytes; an unmatched
+paper incarnation and a nonboolean opt-in also refuse. This does not enable
+whole-paper deletion: that wire operation remains explicitly unsupported.
+
+Existing target retirement/refusal, rollback/cancellation and UI regressions
+remain unchanged. Explicit historical source inspection is not target source
+restoration, foreign mapping, semantic support or physical-device acceptance.

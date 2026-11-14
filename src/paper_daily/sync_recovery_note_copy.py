@@ -83,16 +83,17 @@ def _position(operation):
     return payload["paper_id"], anchor["document_hash"], anchor, None
 
 
-def _original(conn, operation, check):
+def _original(conn, operation, check, *, allow_retained=False):
     position = _position(operation)
     if position is None:
         return None
     paper, digest, anchor, quote = position
     return inspect_original(conn, paper, operation["parents"][0], digest, check,
-                            anchor=anchor, quote=quote)
+                            anchor=anchor, quote=quote, allow_retained=allow_retained)
 
 
-def inspect_original(conn, paper, parent, digest, check, *, anchor=None, quote=None):
+def inspect_original(conn, paper, parent, digest, check, *, anchor=None, quote=None,
+                     allow_retained=False):
     """Read exact native-owned original bytes; no activation or write authority."""
     from paper_daily import note_positions, sync_source_files
     from paper_daily.sync_documents import (
@@ -103,12 +104,19 @@ def inspect_original(conn, paper, parent, digest, check, *, anchor=None, quote=N
     from paper_daily.workspace_service import _ReadOnlyStore
 
     check()
+    if type(allow_retained) is not bool:
+        raise ValueError("Choose historical original inspection explicitly")
     if (parent["kind"] != "paper" or parent["id"] != paper or not _paper_current(
         conn, dict(paper_id=paper, parent_incarnation=parent["incarnation"])
     )):
         raise ValueError("The original belongs to another paper lifetime")
     # Immutable retained originals may differ from the currently active PDF.
     source = sync_source_files.inspectable(conn, paper, digest)
+    if source is None and allow_retained:
+        from paper_daily.sync_recovery_original import inspect_retained
+
+        retained = inspect_retained(conn, paper, parent, digest, check)
+        source = retained[0] if retained is not None else None
     if source is None:
         document = desired_document(conn, paper)
         if document is None or document["sha256"] != digest or not _paper_current(conn, document):
@@ -190,7 +198,7 @@ def _source_input(observed, source, operation, check):
 
     with closing(_readonly_connection(observed.source.database)) as old:
         old.execute("BEGIN")
-        proof = _original(old, source, check)
+        proof = _original(old, source, check, allow_retained=True)
         if proof is None:
             raise ValueError("Only positioned notes can include an original")
     # Inspection may take time; fence destination replacement before staging bytes.

@@ -102,7 +102,8 @@ def _originals(conn, source, hashes, check):
             "WHERE i.sync_id=?", (parent["id"],),
         ).fetchone()
         result[sha] = dict(parent=parent, title=title[0] if title else parent["id"],
-                           proof=native.inspect_original(conn, parent["id"], parent, sha, check))
+                           proof=native.inspect_original(conn, parent["id"], parent, sha, check,
+                                                         allow_retained=True))
     return result
 
 

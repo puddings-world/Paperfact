@@ -91,7 +91,9 @@ def _locate_source(source, root, check):
     with closing(_readonly_connection(source.database)) as conn:
         conn.execute("BEGIN")
         proof = native.inspect_original(
-            conn, payload["scope"]["id"], root["parents"][0], payload["source_document_hash"], check
+            conn, payload["scope"]["id"], root["parents"][0],
+            payload["source_document_hash"], check,
+            allow_retained=True,
         )
     from paper_daily.sync_documents import MAX_PDF_BYTES
 

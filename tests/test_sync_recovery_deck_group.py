@@ -9,7 +9,7 @@ import pytest
 from test_sync_device_recovery import dump
 from test_sync_files import PAPER, drain
 from test_sync_recovery_note_original_group import group as _original_group
-from test_sync_recovery_note_original_group import peer
+from test_sync_recovery_note_original_group import peer, retire_source_before_review
 from test_sync_recovery_positioned_note import positioned as positioned
 from test_sync_recovery_target import attached
 from test_sync_recovery_target import codec as codec
@@ -74,6 +74,8 @@ def test_editable_deck_original_and_receipt_commit_once_and_reach_another_native
     group, tmp_path_factory,
 ):
     old, source, change, path, root, service, sha, _, token = group
+    source, change = retire_source_before_review(old, source, root, sha)
+    group = (old, source, change, *group[3:])
     before = dump(old.journal.path), dump(path)
     request = str(uuid4())
     prepared = plan(group, request)

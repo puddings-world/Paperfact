@@ -9,7 +9,7 @@ import pytest
 from test_sync_device_recovery import dump
 from test_sync_files import PAPER
 from test_sync_recovery_note_original_group import group as _original_group
-from test_sync_recovery_note_original_group import peer
+from test_sync_recovery_note_original_group import peer, retire_source_before_review
 from test_sync_recovery_positioned_note import notes, source_file
 from test_sync_recovery_positioned_note import positioned as positioned
 from test_sync_recovery_target import attached
@@ -112,6 +112,8 @@ def test_group_and_original_commit_once_and_reach_an_independent_native_peer(
     from test_sync_files import drain
 
     old, source, change, path, root, service, sha, data, token = group
+    source, change = retire_source_before_review(old, source, root, sha)
+    group = (old, source, change, *group[3:])
     before, original_notes = dump(old.journal.path), notes(path)
     request = str(uuid4())
     plan = prepare(group, request)

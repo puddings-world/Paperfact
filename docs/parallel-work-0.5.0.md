@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Packaged acceptance failure/identity reporting verified with bounded focused checks; next remaining recovery/origin/audit and hosted/private-pairing/device gates. No packaging or full-suite run during iteration |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit retained-original source inspection verified across five existing peer recovery journeys plus one ownership-safety case (6 passed, 144s); target defaults unchanged. Next remaining deletion/origin/audit and hosted/private-pairing/device gates |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

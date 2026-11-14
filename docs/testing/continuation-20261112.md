@@ -5047,3 +5047,40 @@ additional worktree was introduced.
   open alongside the remaining research recovery/mapping/audit requirements.
 - Final updated usage-doc contracts: 9 passed in 1.42s pytest / 9.7s total;
   no repeated product/core or packaging run after documentation-only edits.
+
+
+## 2026-11-15: Shared explicit historical original inspection
+
+- Factored bounded retained-native ownership and exact PDF closure into the
+  existing original-decision module. inspect_retained verifies the actual file
+  slot/version, source workspace/paper epoch, journal/accepted history, canonical
+  owned closure and readable bytes. The shared note inspect_original helper opts
+  in only with strict allow_retained=True. Source-side note/claim/highlight/
+  explanation/deck recovery uses it; normal target/live original access does not.
+- A document-pinned report is not retroactive original-file epoch authority.
+  Native Lineage retains its exact source_dependencies checks. Target publication
+  still refuses known retired/reparented files unless explicitly restored. No
+  model/network, automatic activation, old-operation replay or source DB write.
+  Legacy/foreign mappings and missing ownership/bytes remain explicit blockers.
+- Extended five existing native peer journeys by retiring their old source first.
+  All pre-existing payload, exact-file transfer, source-preservation, independently
+  enrolled peer, curated-layer and saved-retry assertions remain. Added one lean
+  case for default refusal, explicit read-only access, strict boolean, tampered
+  journal, missing ownership despite cached bytes and unmatched paper lifetime.
+- First bounded selection: 19 passed (14 critical + 5 original decisions), then
+  the new case stopped at an invalid fixture setup: it tried whole-paper deletion,
+  which the wire contract explicitly refuses. Product refusal was correct. Fixed
+  only that new case to supply a genuinely unmatched paper incarnation; no product
+  source changed between selections and no pre-existing assertion was weakened.
+- Remaining affected selection: 6 passed in 111.67s pytest / 144.0s total. The
+  privacy scan itself took 30.7s; its underlying scheduling/storage cause is not
+  established. Reused the same-source passing critical/original-decision evidence
+  instead of restarting those cases. Privacy/Ruff green; sequential 300-second
+  bounded checks, at most two logical CPUs and 25% job CPU cap. No exhaustive,
+  release or packaging run, real account, paid model or owner database involved.
+- Existing local-integration patterns already distinguish retained evidence from
+  current activation/ownership and require typed caller transactions. Reused
+  those rules rather than creating another skill or global instruction. Remaining
+  other deletion choices, foreign/legacy mappings, audit integration, hosted
+  identity/HTTPS/native vaults and installed Windows/Apple Silicon/physical-phone
+  acceptance remain open. No deployment, release or research migration.

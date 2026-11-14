@@ -8,7 +8,7 @@ import pytest
 from test_sync_device_recovery import dump
 from test_sync_files import PAPER, drain
 from test_sync_recovery_note_original_group import group as _original_group
-from test_sync_recovery_note_original_group import peer
+from test_sync_recovery_note_original_group import peer, retire_source_before_review
 from test_sync_recovery_positioned_note import positioned as positioned
 from test_sync_recovery_target import attached
 from test_sync_recovery_target import codec as codec
@@ -158,6 +158,9 @@ def test_complete_group_keeps_manual_hidden_and_unrelated_marks_and_reaches_nati
     monkeypatch.setattr(llm, "complete_result", lambda *a, **k: pytest.fail("Recovery called AI"))
     monkeypatch.setattr(llm, "capture_connections", lambda: pytest.fail("Recovery captured AI"))
 
+    group["source"], group["change"] = retire_source_before_review(
+        group["old"], group["source"], group["root"], group["sha"],
+    )
     path, client = group["path"], attached(group["path"])
     manual = dict(
         scope=dict(kind="paper", id=PAPER),

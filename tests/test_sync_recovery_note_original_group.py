@@ -89,10 +89,22 @@ def peer(path, service, tmp_path_factory):
     return database
 
 
+def retire_source_before_review(old, previous, root, sha):
+    """Real source retirement, refreshed by stable research operation identity."""
+    identity = file_id(root["parents"][0]["id"], FEATURE, sha)
+    old.save(old.new_graph_operation("research_file", identity, {}, action="delete"))
+    source = candidates.prepare(old.journal.path, previous.snapshot, previous.workspace)
+    change = next(row["change_id"] for row in source.page(limit=50)["items"]
+                  if row["operation_id"] == root["operation_id"])
+    return source, change
+
+
 def test_missing_backup_original_and_note_publish_together_and_reach_native_peer(
     group, tmp_path_factory,
 ):
     old, source, change, path, operation, service, sha, data, token = group
+    source, change = retire_source_before_review(old, source, operation, sha)
+    group = (old, source, change, *group[3:])
     identity = file_id(PAPER, FEATURE, sha)
     before = dump(old.journal.path)
     with closing(_readonly_connection(path)) as conn:

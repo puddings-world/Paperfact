@@ -270,7 +270,7 @@ def _proof(observed, root, check):
         conn.execute("BEGIN")
         value = native.inspect_original(
             conn, root["payload"]["scope"]["id"], root["parents"][0],
-            root["payload"]["source_document_hash"], check,
+            root["payload"]["source_document_hash"], check, allow_retained=True,
         )
     if value[0].stat().st_size > research_evidence.MAX_PDF_BYTES:
         raise ValueError("Claim original exceeds the evidence byte budget")

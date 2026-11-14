@@ -78,14 +78,13 @@ def _matches(put, root):
     )
 
 
-def retained_original(conn, root, check):
-    """Locate actual retained file ownership, never a same-hash cache or guessed parent."""
+def _retained_versions(conn, identity, check):
     total = 0
     for number, (raw,) in enumerate(
         conn.execute(
             "SELECT CASE WHEN length(CAST(operation AS BLOB))<=? THEN operation END "
             "FROM research_file_versions WHERE entity_id=? ORDER BY rowid DESC",
-            (MAX_BYTES, root["entity_id"]),
+            (MAX_BYTES, identity),
         ),
         1,
     ):
@@ -96,11 +95,46 @@ def retained_original(conn, root, check):
         if total > candidates.MAX_INDEX_BYTES:
             raise ValueError("Retained original exceeds its history byte budget")
         put = backup._decode(raw)
+        canonical_operation(put)
+        if put["entity_id"] != identity:
+            raise ValueError("Retained original history belongs to another file slot")
+        yield put
+
+
+def retained_original(conn, root, check):
+    """Locate actual retained file ownership, never a same-hash cache or guessed parent."""
+    for put in _retained_versions(conn, root["entity_id"], check):
         if _matches(put, root):
             if history._old(conn, put["operation_id"], check) != put:
                 raise ValueError("Retained original differs from native history")
             return put
     raise ValueError("No retained native original matches this selected source lifetime")
+
+
+def inspect_retained(conn, paper, parent, document_hash, check):
+    """Inspect document-pinned historical research; grants no current file lifetime."""
+    from paper_daily.sync_files import file_id
+
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_file_versions'"
+    ).fetchone():
+        return None
+    binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
+    if binding is None:
+        raise ValueError("Retained original has no native workspace binding")
+    identity = file_id(paper, FEATURE, document_hash)
+    for put in _retained_versions(conn, identity, check):
+        if (
+            put["workspace_id"] == binding[0]
+            and put["entity_type"] == "research_file"
+            and put["action"] == "put"
+            and put["parents"] == [parent]
+            and put["payload"]["feature"] == FEATURE
+            and put["payload"]["paper_id"] == paper
+            and put["payload"]["source_document_hash"] == document_hash
+        ):
+            return _proof_in(conn, put, check)
+    return None
 
 
 def _selection(observed, change, action, cancelled, check):
@@ -128,39 +162,43 @@ def _selection(observed, change, action, cancelled, check):
     return dict(root=root, original=put)
 
 
+def _proof_in(conn, put, check):
+    owned = conn.execute(
+        "SELECT CASE WHEN length(CAST(operation AS BLOB))<=? THEN operation END "
+        "FROM research_file_versions WHERE operation_id=?",
+        (MAX_BYTES, put["operation_id"]),
+    ).fetchone()
+    if not owned or owned[0] is None or backup._decode(owned[0]) != put:
+        raise ValueError("The original has no exact retained ownership record")
+    if history._old(conn, put["operation_id"], check) != put or not _paper_current(
+        conn,
+        dict(
+            paper_id=put["payload"]["paper_id"], parent_incarnation=put["parents"][0]["incarnation"]
+        ),
+    ):
+        raise ValueError("Retained original paper lifetime changed; review its parent first")
+    paths = _inspection_paths(conn)
+    if paths is None:
+        raise ValueError("Retained original has no registered native storage")
+    closure, _body, _blobs = artifacts.verify_closure(paths[0], put)
+    asset = put["payload"]["assets"][0]
+    path = paths[0].verified_path(BlobManifest(asset["sha256"], asset["size"]))
+    proof = path, _identity(path)
+    import pymupdf
+
+    with pymupdf.open(path) as pdf:
+        if pdf.needs_pass or pdf.page_count < 1:
+            raise ValueError("The retained original is not a readable PDF")
+    if not closure.matches(put):
+        raise ValueError("The retained original changed during verification")
+    native._original_current(proof)
+    return proof
+
+
 def _proof(observed, selected, check):
-    put = selected["original"]
     with closing(_readonly_connection(observed.source.database)) as conn:
         conn.execute("BEGIN")
-        owned = conn.execute(
-            "SELECT CASE WHEN length(CAST(operation AS BLOB))<=? THEN operation END "
-            "FROM research_file_versions WHERE operation_id=?",
-            (MAX_BYTES, put["operation_id"]),
-        ).fetchone()
-        if not owned or owned[0] is None or backup._decode(owned[0]) != put:
-            raise ValueError("The original has no exact retained ownership record")
-        if history._old(conn, put["operation_id"], check) != put or not _paper_current(
-            conn,
-            dict(
-                paper_id=put["payload"]["paper_id"],
-                parent_incarnation=put["parents"][0]["incarnation"],
-            ),
-        ):
-            raise ValueError("Retained original paper lifetime changed; review its parent first")
-        paths = _inspection_paths(conn)
-        if paths is None:
-            raise ValueError("Retained original has no registered native storage")
-        closure, _body, _blobs = artifacts.verify_closure(paths[0], put)
-        asset = put["payload"]["assets"][0]
-        path = paths[0].verified_path(BlobManifest(asset["sha256"], asset["size"]))
-        proof = path, _identity(path)
-        import pymupdf
-
-        with pymupdf.open(path) as pdf:
-            if pdf.needs_pass or pdf.page_count < 1:
-                raise ValueError("The retained original is not a readable PDF")
-        if not closure.matches(put):
-            raise ValueError("The retained original changed during verification")
+        proof = _proof_in(conn, selected["original"], check)
     observed.source._check(check)
     native._original_current(proof)
     return proof

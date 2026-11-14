@@ -9,6 +9,7 @@ import pytest
 from test_sync_device_recovery import dump
 from test_sync_recovery_highlight_group import original_group as original_group
 from test_sync_recovery_highlight_group import positioned as positioned
+from test_sync_recovery_note_original_group import retire_source_before_review
 from test_sync_recovery_reading_context import group as group
 from test_sync_recovery_reading_context import highlights as highlights
 from test_sync_recovery_reading_context import linked
@@ -53,6 +54,9 @@ def test_complete_group_preserves_original_inputs_and_retry_never_overwrites_lat
     tmp_path_factory,
 ):
     old, path = group["old"], group["path"]
+    group["source"], group["change"] = retire_source_before_review(
+        old, group["source"], group["root"], group["sha"],
+    )
     source_before = dump(old.journal.path)
     plan = prepare(group)
     assert [m["feature"] for m in plan.comparison] == list(recovery.FEATURES)
