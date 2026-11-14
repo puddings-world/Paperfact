@@ -168,6 +168,10 @@ RELEASE_JOURNEYS = {
          "test_group_rebinds_all_three_originals_and_retry_preserves_later_versions"),
         "tests/test_highlight_draft_application.py::test_confirmed_group_keeps_manual_hidden_and_private_content_with_one_retry",
     ),
+    "Original source retirement and restoration": (
+        ("tests/test_sync_recovery_original.py::"
+         "test_retained_source_restores_with_fresh_lifetime_and_old_retirement_retry_is_safe"),
+    ),
     "Recovery provenance and durable confirmation": (
         "tests/test_sync_recovery_choices.py::test_corrupt_saved_provenance_cannot_be_reused_as_a_recovery_decision",
         "tests/test_sync_recovery_note_copy.py::test_copy_syncs_through_recovered_authority_to_another_native_client[True]",

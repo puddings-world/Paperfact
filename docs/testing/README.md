@@ -75,6 +75,12 @@ the narrow corpus-key-only representative in this gate; that historical assertio
 remains available for addressing changes and exhaustive diagnosis. The release
 selection does not grow by adding every variant of the new feature.
 
+Original-source retirement/restoration adds one complete native peer lifecycle
+representative to the release gate (34 Python selectors, not collected cases).
+Its regular focused checks use a metadata-only fixture instead of downloading an
+unrelated original first. The source-lifetime transition is distinct from deck
+transfer or corpus-key validation; no historical assertion was removed to add it.
+
 ### Cross-platform split
 
 The release workflow runs the common `release` selection once, on the Windows

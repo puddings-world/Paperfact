@@ -558,3 +558,32 @@ remain unchanged. No test uses real accounts, paid models or owner research.
 Unknown/retired source lifetimes and foreign mappings remain explicitly refused.
 These fixtures do not certify hosted deployment, native vaults, scientific support,
 installed Mac/Windows upgrades or physical phones.
+
+
+## Original-source decisions and lean fixture (2026-11-14)
+
+`tests/test_sync_recovery_original.py` keeps five cases around distinct outcomes:
+
+| Scenario | Observable result |
+|---|---|
+| Use, retire, restore across native peer | Exact PDF and source state converge; new restored incarnation; old retirement retry preserves it; cached bytes and both plain/anchored notes survive |
+| Invalid body / missing bytes / default publisher | Reject noncanonical artifact JSON without changing target, repair/retry; offline retirement works but missing-byte restoration refuses; implicit restoration and reused retired publication request refuse |
+| Write failure and cancellation | Original ownership, outbox and receipt roll back; same prepared request retries |
+| Stale target or corrupt receipt | Refuse without overwriting newer words or restarting a saved decision |
+| English restore / Traditional Chinese retire buttons | Human-readable comparison, explicit cancel has no writes, confirm and rapid repeated activation save one decision |
+
+The fixture uses a real native authority backup/restore, metadata-only join, one
+synthetic PDF and two saved notes (free-form and actual PDF-positioned). It no
+longer inherits the unrelated pre-backup PDF/positioned-note/offline-download
+fixture chain. Only the dedicated peer lifecycle performs the actual transfers.
+Existing historical positioned-note/source tests and assertions are unchanged.
+
+After this setup reduction, the five cases passed in 48.55s pytest / 55.2s total;
+fixture setups were 5.67-7.06s. The earlier 72.17s SQLite-open outlier is evidence
+of a slow setup, not proof that its underlying storage/scheduling cause is fixed.
+Product source was unchanged from the earlier 41-case critical/affected pass;
+that evidence is reused rather than rerunning the entire selection.
+
+Release adds just the complete original-source peer lifecycle representative,
+not every fixture or button variant. This protects a distinct source-lifetime
+transition; historical tests remain opt-in and physical-device gates stay separate.

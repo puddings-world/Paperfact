@@ -540,7 +540,7 @@ def check_prepared_source_in(conn, client, prepared):
     return payload
 
 
-def publish_source_in(conn, client, prepared):
+def publish_source_in(conn, client, prepared, *, restore=False):
     """Caller-owned transaction; no file I/O beyond native proof freshness checks.
 
     Research file/outbox ownership rolls back with the caller. Byte staging may
@@ -549,18 +549,23 @@ def publish_source_in(conn, client, prepared):
     from paper_daily import sync_capture
     from paper_daily.sync_artifacts import desired_file, register_paths
 
+    if type(restore) is not bool:
+        raise ValueError("Choose explicitly whether to restore the original source")
     payload = check_prepared_source_in(conn, client, prepared)
     identity = file_id(payload["paper_id"], FEATURE, payload["slot"])
     parent = [{"kind": "paper", "id": payload["paper_id"], "incarnation": prepared.parent}]
     # A past publication receipt is not permission to use a now-retired source.
     graph = client._optimistic_graph(conn)[0].get(("research_file", identity))
-    if graph and (not graph["active"] or graph["parents"] != parent):
+    restoring = bool(graph and (not graph["active"] or graph["parents"] != parent))
+    if restoring and not restore:
         raise ValueError("Deleted or retired original requires explicit source restoration")
     prior = conn.execute(
         "SELECT operation FROM research_file_versions WHERE operation_id=?", (prepared.request,)
     ).fetchone()
     existing = desired_file(conn, identity)
     if prior:
+        if restoring:
+            raise ValueError("A retired original needs a new explicit restoration request")
         operation = json.loads(prior[0])
         if (
             operation["payload"] != payload
@@ -572,7 +577,7 @@ def publish_source_in(conn, client, prepared):
     if existing and existing["payload"] == payload and existing["parents"] == parent:
         return existing
     operation = client.new_graph_operation_in(
-        conn, "research_file", identity, payload, operation_id=prepared.request
+        conn, "research_file", identity, payload, operation_id=prepared.request, restore=restoring,
     )
     with sync_capture.suppress_capture(conn):
         register_paths(conn, prepared.workspace, prepared.store, prepared.root)

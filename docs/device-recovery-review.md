@@ -494,3 +494,50 @@ file on a read-only open/close. Main-database and every nonempty-WAL version rem
 strict, including native mutation tokens. Real later writes invalidate the sealed
 review; no long-lived connection, write-blocking lease or automatic retry hides
 a concurrent change. Hosted and installed-device acceptance remain separate.
+
+
+## Explicit original-source use and retirement
+
+Select a native retained-original put and choose **Restore retained original
+source**, or select its recorded delete and choose **Retire retained original
+source**. Compare the paper, exact PDF hash/size and current active/retired/absent
+state, then confirm. These actions affect an immutable original-source association,
+not a paper, list, primary PDF, notes or physical cache deletion. English/Traditional
+Chinese UI uses the existing cancellable background worker and confirmation flow.
+
+`sync_recovery_original.prepare(observed, change_id, request_id, *, action,
+seconds=60, cancelled=...)` accepts `action="use_original"` or
+`action="retire_original"` and returns a sealed `OriginalDecision` with
+`comparison`, `already`, and `apply(*, seconds=60, cancelled=...)`. The actual
+source review and fresh target observation are required; data dictionaries or a
+same-hash cache alone do not authorize a write.
+
+Use verifies the exact retained native file-version record and its journal/inbox
+history, current source paper lifetime, complete owned blob closure, hash and
+readable PDF. Even a now-retired source can supply its actual retained original;
+missing bytes refuse restoration. The selected paper needs the existing proven
+backup-prefix or explicit parent-recovery mapping. Stage bytes off-lock and commit
+new native ownership/outbox plus one bounded
+`paperfact.recovery-original-decision.v1` receipt atomically. No model is called.
+
+Retirement resolves the exact original preceding the selected source lifetime,
+then requires matching actual current target ownership/manifest and mapped
+parents. It creates a fresh target delete rather than replaying an old envelope.
+Source bytes may be offline because retirement removes no bytes and grants no
+access. An absent/already-retired target records the decision without another
+delete. Both actions preserve unrelated research and native history; failure or
+cancellation rolls back ownership, outbox and receipt. Staged unowned cache bytes
+may remain. Repeated successful requests preserve later restoration or deletion.
+
+The shared `publish_source_in(conn, client, prepared, *, restore=False)` retains
+its default refusal of a retired/reparented source. Only an explicit restoration
+caller may opt in; it requires a fresh request and still checks prepared bytes,
+physical database/binding and active parent. The review adapter owns its observed
+state and durable decision receipt. A successful retry is evidence of the past
+decision, not permission to reinstate an obsolete file lifetime.
+
+Restored originals receive new native incarnations. Old Lineage dependency pins
+do not reactivate automatically; retired-input scientific report rebinding/audit
+remains a separate gate. Unknown legacy/foreign mappings and other scientific or
+manual-mark deletion decisions remain pending. Neither `saved_locally` nor fixture
+peer delivery certifies hosted or installed Windows/Mac/phone acceptance.

@@ -136,3 +136,15 @@ enrollment, physical-phone test, Google Slides publication or paid AI invocation
 is implied by these fixtures. Populated-workspace backup/migration, other file
 producers and a user-facing retained-work review UI remain separate acceptance
 work; this slice does not claim they are complete.
+
+
+### Reviewed original-source restoration
+
+`sync_source_files.publish_source_in(conn, client, prepared, *, restore=False)`
+continues to refuse implicit restoration. An explicitly observed caller may use
+`restore=True` with a fresh request to create a new file incarnation after
+retirement/reparenting; the caller still owns the transaction, current-parent
+proof and retry receipt. Existing analysis/publication callers keep the default.
+The [native recovery review](device-recovery-review.md#explicit-original-source-use-and-retirement)
+provides the concrete use/retire confirmation adapter. Restoration retains exact
+bytes and never switches the active primary PDF or revives old scientific pins.

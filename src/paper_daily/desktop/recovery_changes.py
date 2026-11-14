@@ -29,13 +29,17 @@ from paper_daily import sync_recovery_deck_group as deck_group
 from paper_daily import sync_recovery_highlight_group as highlight_group
 from paper_daily import sync_recovery_lineage_group as lineage_group
 from paper_daily import sync_recovery_note_copy as note_copy
+from paper_daily import sync_recovery_original as original_choice
 from paper_daily import sync_recovery_reading_context as reading_context
 from paper_daily import sync_recovery_reading_group as reading_group
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.workspace_service import Cancelled, SnapshotChanged
 
-GROUP_ACTIONS = ("lineage_group", "reading_group", "highlight_group", "deck_group", "claim_group")
+GROUP_ACTIONS = (
+    "use_original", "retire_original", "lineage_group", "reading_group",
+    "highlight_group", "deck_group", "claim_group",
+)
 
 TEXT = {
     "en": {
@@ -464,6 +468,69 @@ TEXT["zh-TW"].update({
 })
 
 
+TEXT["en"].update({
+    "use_original": (
+        "Restore retained original source"
+    ),
+    "retire_original": (
+        "Retire retained original source"
+    ),
+    "group_original_source": (
+        "Retained original version"
+    ),
+    "ready_use_original": (
+        "Verified the exact retained PDF. Compare the source and current state, then co"
+        "nfirm restoration. Research and active PDFs stay unchanged."
+    ),
+    "ready_retire_original": (
+        "Review this exact current original version before confirming retirement. Cache"
+        "d bytes and research history stay; dependent source checks may become unavaila"
+        "ble."
+    ),
+    "confirm_use_original": (
+        "Restore this exact retained PDF source association? A retired source receives "
+        "a new native version. Other research and active PDFs stay unchanged. No AI wil"
+        "l be called."
+    ),
+    "confirm_retire_original": (
+        "Retire the displayed current original-source association? Cached bytes, notes "
+        "and history stay. Research depending on this source version may require source"
+        " review. The active PDF is not deleted or closed. No AI will be called."
+    ),
+})
+TEXT["zh-TW"].update({
+    "use_original": (
+        "恢復這個原文版本"
+    ),
+    "retire_original": (
+        "停用這個原文來源"
+    ),
+    "group_original_source": (
+        "保留的原文版本"
+    ),
+    "ready_use_original": (
+        "已核對保留的正確 PDF。請比較原文與目前狀態"
+        "後確認恢復；研究內容與開啟中的 PDF 維持不"
+        "變。"
+    ),
+    "ready_retire_original": (
+        "請核對目前這份原文版本後確認停用。原文快取與研"
+        "究歷史保留；依賴此版本的來源核對可能暫時無法使"
+        "用。"
+    ),
+    "confirm_use_original": (
+        "確認恢復這份保留 PDF 的來源關聯？已停用來"
+        "源會建立新版本。其他研究與開啟中的 PDF 維"
+        "持不變，不呼叫 AI。"
+    ),
+    "confirm_retire_original": (
+        "確認停用目前顯示的原文來源關聯？原文快取、筆記"
+        "與歷史保留。依賴此版本的研究可能需要重新核對來"
+        "源。不刪除或關閉目前 PDF，不呼叫 AI。"
+    ),
+})
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -829,6 +896,27 @@ class RecoveryChanges(QWidget):
                     raise
                 continue
             plans[action] = (plan, saved)
+        if operation["entity_type"] == "research_file" and (
+            operation["action"] == "delete"
+            or operation["payload"].get("feature") == "original_source"
+        ):
+            action = "use_original" if operation["action"] == "put" else "retire_original"
+            request = str(uuid5(NAMESPACE_URL, "paperfact:original-choice-ui:" + candidates._json([
+                observed.binding, operation["operation_id"],
+                candidates._fingerprint(operation), action,
+            ])))
+            try:
+                plan = original_choice.prepare(observed, selected, request, action=action,
+                                               cancelled=stopped)
+            except (OSError, ValueError) as error:
+                comparison[action + "_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans[action] = (plan, plan.already)
         if operation["entity_type"] == "research_content" and operation["payload"].get(
             "feature"
         ) == "lineage":
@@ -985,6 +1073,12 @@ class RecoveryChanges(QWidget):
                 parts.append(self.t["retired"] if side == "current" and member.get(
                     "state"
                 ) == "retired" else self.t["absent"])
+            elif feature == "original_source":
+                parts.extend([member["title"], data["source_document_hash"],
+                              str(data["assets"][0]["size"]) + " bytes"])
+                if side == "source":
+                    parts.append(self.t["use_original" if member["source_action"] == "put"
+                                        else "retire_original"])
             elif feature == "lineage":
                 report = data["body_json"]["report"]
                 selected = {row["id"]: row for row in report["sources"]}

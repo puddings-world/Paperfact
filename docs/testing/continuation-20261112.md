@@ -4871,3 +4871,66 @@ additional worktree was introduced.
   representative: 56 passed in 2.15s pytest / 7.3s total, privacy/Ruff passed.
   The release baseline still has 33 Python selectors; selectors are not collected
   case counts. Product source and earlier scoped evidence stayed unchanged.
+
+
+## 2026-11-14: owner interruption about validation latency
+
+- Original-source use/retirement is an uncommitted candidate in the existing
+  stabilization worktree, not integrated, pushed or released. The source publisher
+  still refuses implicit restoration; explicit reviewed use creates a fresh file
+  lifetime. Candidate tests cover cache/note preservation, rollback/cancellation,
+  stale target/corrupt receipt, actual en/zh confirmation and an independent peer
+  through use/retire/use. Bad noncanonical artifact JSON is rejected, not normalized.
+- Latest bounded affected-plus-critical run finished with 41 passed in 234.60s
+  pytest / 266.3s runner (266.985s governor). It was not the historical full suite.
+  Slowest fixture setup was 72.17s. The live faulthandler stack pointed to
+  `sync_service.py:83` opening the synthetic authority with `sqlite3.connect`,
+  during positioned-note fixture bootstrap/offline download, before the new
+  source-decision behavior ran. Lock contention, storage delay and scheduling
+  remain hypotheses; the stack alone does not prove the cause.
+- The owner correctly noted the accumulated delay: multiple earlier focused
+  iterations also ran. Do not quote just the last gate duration as total waiting.
+  No further test was launched after the concern. The known runner completed,
+  all tool handles were observed terminal, and the governor reports a hard cap
+  of two logical processors, 25% job CPU, below-normal priority, 300s deadline.
+  A short live CPU sample after completion is not historical peak utilization.
+- Next: simplify the new source-decision fixture, which currently inherits a full
+  positioned-note recovery/download setup it does not need. Preserve one actual
+  peer lifecycle and the meaningful failure/confirmation boundaries; no bulk test
+  deletion, raised budgets or parallel runners. Reuse passing evidence for
+  unchanged product code. Finish docs/checkpoint only after the coherent candidate
+  and any changed fixture are verified. A speculative active-prior-publication
+  guard patch failed its precondition and did not land; do not report it implemented.
+
+
+## 2026-11-14: reduce new original-decision setup before more validation
+
+- Replaced only the new file's inherited positioned-note/original/offline-download
+  fixture with one native backup/recovery, metadata-only join, one real synthetic
+  PDF and both plain/positioned saved notes. Actual authority enrollment, native
+  writes, parent mapping and blob ownership remain real. The dedicated peer case
+  still uploads/downloads and verifies use/retire/use convergence, exact bytes,
+  fresh restored incarnation and preservation of notes/cache/later decisions.
+  No historical test, assertion, scope guard or time/resource budget was weakened.
+- Product source is unchanged from the prior 41-case critical/affected pass.
+  Only five changed fixture cases ran: 5 passed in 48.55s pytest / 55.2s total,
+  privacy/Ruff green. Setup durations 5.67-7.06s; the prior 72.17s SQLite-open
+  outlier is not claimed causally fixed. No parallel runner, real login, model
+  call, owner database, process kill or background diagnostic was introduced.
+- Completed API/workflow/scenario documentation for the existing candidate. The
+  publisher defaults to refusing retirement/reparent restoration; the explicit
+  original decision stages owned verified bytes and publishes a fresh lifetime
+  with a bounded local receipt. Retirement grants no bytes and can work offline.
+  Bad canonical JSON/missing source bytes, orphaned native request, stale target,
+  cancellation/write failure and corrupt receipts refuse safely. Unknown
+  foreign/legacy mappings, retired-input scientific rebinding/audit, other deletion
+  choices, hosted/native-vault and installed/physical-device gates remain open.
+- Added only one release representative for the distinct original-source
+  use/retire/use peer journey. The curated baseline now has 34 Python selectors,
+  not 34 collected cases; focused validation never runs all those by habit.
+- Final changed runner/usage contracts passed: 56 cases, 5.17s pytest / 12.6s
+  total, privacy/Ruff green. No repeated 41-case product run. Existing critical
+  evidence covers unchanged product code; the changed fixture itself has the
+  fresh five-case pass. Existing typed-transaction/source-lifetime skill patterns
+  cover the implementation; fixture simplification is recorded locally rather than
+  manufacturing a new reusable skill. No hosted/device completion claim.
