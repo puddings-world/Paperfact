@@ -52,6 +52,10 @@ not allow third-party tools to use Antigravity's subscription login.
 
 Installers include Python and Qt. Builds are unsigned previews; see
 [installation details and platform limits](docs/install.md).
+Candidate validation separates frozen startup from isolated Windows
+install/reinstall/uninstall and actual device upgrades; see the
+[release checks and remaining gates](docs/releasing.md).
+
 
 **Run the current source:** choose your terminal below. Git and internet access
 are required; setup prepares Python, dependencies, fonts and rendering assets.

@@ -207,6 +207,11 @@ def test_the_build_names_match_what_the_release_workflow_uploads():
     for name in ("Fonts and web assets", "Build verified mobile web artifact"):
         commands = workflow.split("name: " + name, 1)[1].split("- name:", 1)[0]
         assert "shell: bash" in commands  # An early native failure cannot become green.
+    frozen = workflow.split("name: Verify frozen research workflow", 1)[1].split("- name:", 1)[0]
+    assert "shell: bash" in frozen
+    assert 'extra=(--installer "${installers[0]}")' in frozen
+    assert '"${extra[@]}"' in frozen
+    assert '"${#installers[@]}" -ne 1' in frozen
     assert workflow.index("scripts/verify_built_app.py") < workflow.index("name: build-${{")
     fixture = workflow.split("name: research-fixture-${{ matrix.name }}", 1)[1].split(
         "- uses:", 1,

@@ -5594,3 +5594,36 @@ additional worktree was introduced.
 - Final evidence-only documentation gate: 58 passed in 1.87s / 5.6s total;
   privacy/Ruff/whitespace green. Reuse exact native/critical evidence for
   candidate 4594626; no further native rebuild after documentation-only edits.
+
+
+### 2026-11-15: isolated Windows installer acceptance (native run pending)
+
+- Remote master fetched and inspected: 1b44466a2aaf5a3ea17a3eba16f27777f0507a36
+  is already an ancestor of integration checkpoint dbea334; left/right count
+  151/0. No maintenance-line merge or ancestry-only test rerun was needed.
+- Existing frozen verifier now accepts an optional exact Windows setup artifact
+  only in matching clean repository CI, with a fresh owned destination. No local
+  installer was executed and no native workflow was dispatched in this turn.
+- Install and same-version reinstall use acceptance mode, explicit destination,
+  no restart/close/reboot, fixed per-stage logs, source identity and payload hash.
+  Installed version, reader and CLI/MCP are checked before reinstall/uninstall;
+  bounded generated recipient files must remain byte-identical at every action.
+  Refused/stale paths, wrong version, data mutation and incomplete uninstall stop
+  with the exact active stage and retain failed evidence. No broad cleanup.
+- Focused bounded command: scripts/check_bounded.py --profile focused --python
+  tests/test_windows_installer_acceptance.py tests/test_built_app_verification.py
+  tests/test_updates.py::test_the_build_names_match_what_the_release_workflow_uploads.
+  Result: 18 passed in 2.09s; 5.7s total including privacy/Ruff. First attempt
+  stopped on two Ruff findings before pytest (16.8s); fixed, no assertions weakened.
+  Five new collected cases cover the distinct installer contract; critical remains
+  14 and curated release remains 35 selectors. No historical suite expansion.
+- New installer phase is simulated locally, not native acceptance. Previous
+  three-platform candidate 4594626/run 43640792668 remains the delivered package.
+  Real Windows CI execution, old-release upgrade, registry/shortcut integration,
+  Mac installed upgrade, hosted sync and phone/device acceptance remain open.
+- Checkpoint review: owned destinations, categorical reports and synthetic data
+  reuse the existing support/acceptance pattern. No new global skill, hook or
+  background service is warranted from this single unexecuted native phase.
+
+- Default bounded critical: 14 passed in 6.32s / 9.6s total, privacy/Ruff green.
+- Documentation gate: 58 passed in 1.94s / 5.0s total; whitespace check clean.

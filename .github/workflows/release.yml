@@ -130,7 +130,16 @@ jobs:
         run: |
           built=dist/Paperfact
           if [ "${{ runner.os }}" = "macOS" ]; then built=dist/Paperfact.app; fi
-          ${{ env.DISPLAY_WRAPPER }} uv run python scripts/verify_built_app.py "$built" build/frozen-acceptance
+          extra=()
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            installers=(dist/Paperfact-*-windows-x64-setup.exe)
+            if [ "${#installers[@]}" -ne 1 ] || [ ! -f "${installers[0]}" ]; then
+              echo "Expected exactly one Windows setup artifact"
+              exit 1
+            fi
+            extra=(--installer "${installers[0]}")
+          fi
+          ${{ env.DISPLAY_WRAPPER }} uv run python scripts/verify_built_app.py "$built" build/frozen-acceptance "${extra[@]}"
 
       - uses: actions/upload-artifact@v4
         if: always()

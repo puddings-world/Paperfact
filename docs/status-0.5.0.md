@@ -2,6 +2,11 @@
 
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
+The next Windows candidate will add CI-only install/same-version reinstall/
+uninstall verification against generated research, with explicit owned paths and
+payload hashing. Local simulated checks pass; native execution of this new phase
+is pending. Existing candidate 4594626 does not prove installed acceptance.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

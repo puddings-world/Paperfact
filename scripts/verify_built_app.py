@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import subprocess
 import sys
 import sysconfig
@@ -38,6 +39,13 @@ STAGES = {
     "local-integration",
     "appimage-integration",
     "mac-foreground",
+    "windows-installer-preflight",
+    "windows-install",
+    "windows-installed-version",
+    "windows-installed-reader",
+    "windows-installed-integration",
+    "windows-reinstall",
+    "windows-uninstall",
 }
 
 
@@ -184,6 +192,155 @@ def isolated_env(folder):
     return env
 
 
+def _safe_stamp(path):
+    """Reject links/reparse points before executing anything that can remove files."""
+    path = Path(path).absolute()
+    for item in (path, *path.parents):
+        info = item.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise ValueError("Installer acceptance refuses linked paths")
+    info = path.stat()
+    if not info.st_ino:
+        raise ValueError("Installer acceptance requires stable filesystem identities")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
+def _file_hash(path, limit):
+    before = _safe_stamp(path)
+    if not path.is_file() or before[2] > limit:
+        raise ValueError("Installer acceptance file exceeds its budget")
+    digest = hashlib.sha256()
+    used = 0
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            used += len(chunk)
+            if used > limit:
+                raise ValueError("Installer acceptance file grew beyond its budget")
+            digest.update(chunk)
+    if before != _safe_stamp(path):
+        raise ValueError("Installer acceptance file changed while checking")
+    return digest.hexdigest()
+
+
+def _data_hash(root):
+    """Exact bounded fixture content; no traversal of a linked directory."""
+    identity = _safe_stamp(root)[:2]
+    pending, entries, used = [root], [], 0
+    while pending:
+        for path in pending.pop().iterdir():
+            if len(entries) >= 4096:
+                raise ValueError("Installer fixture exceeds its file budget")
+            token = _safe_stamp(path)
+            if path.is_dir():
+                pending.append(path)
+                entries.append((path.relative_to(root).as_posix(), None))
+            elif path.is_file():
+                used += token[2]
+                if used > 64 * 1024**2:
+                    raise ValueError("Installer fixture exceeds its byte budget")
+                entries.append((path.relative_to(root).as_posix(), _file_hash(path, 64 * 1024**2)))
+            else:
+                raise ValueError("Installer fixture contains a special file")
+    if identity != _safe_stamp(root)[:2]:
+        raise ValueError("Installer fixture directory changed")
+    return hashlib.sha256(json.dumps(sorted(entries)).encode("utf-8")).hexdigest()
+
+
+def _installer_input(built, out, installer):
+    """Only this repository's fresh CI build, never a maintainer's daily install."""
+    from paper_daily import __version__
+
+    root = ROOT.resolve()
+    info = packaged_identity(built)
+    if (sys.platform != "win32" or os.environ.get("GITHUB_ACTIONS") != "true"
+            or os.environ.get("GITHUB_REPOSITORY", "").casefold() != "puddings-world/paperfact"
+            or Path(os.environ.get("GITHUB_WORKSPACE", "")).resolve() != root
+            or info["dirty"] is not False or not info["commit"]
+            or info["commit"] != os.environ.get("GITHUB_SHA")):
+        raise ValueError("Installer acceptance requires a matching clean Windows CI build")
+    installer = Path(installer).absolute()
+    if (built != root / "dist/Paperfact" or out.parent != root / "build"
+            or installer != root / "dist" / f"Paperfact-{__version__}-windows-x64-setup.exe"):
+        raise ValueError("Installer acceptance requires the expected CI artifact paths")
+    identity = _safe_stamp(out)[:2]
+    token = _safe_stamp(installer)
+    if not token[2]:
+        raise ValueError("Installer acceptance requires a nonempty executable")
+    digest = _file_hash(installer, 512 * 1024**2)
+    installed = out / "installed-app"
+    installed.mkdir(exist_ok=False)
+    return dict(installer=installer, token=token, sha256=digest, installed=installed,
+                install_identity=_safe_stamp(installed)[:2], output_identity=identity,
+                source_identity=info, version=__version__)
+
+
+def _windows_install(plan, out, recipient, empty, run, acceptance, integration_check):
+    installed, installer = plan["installed"], plan["installer"]
+    data = Path(recipient["HOME"]).parent
+    if acceptance.report["build"]["version"] != plan["version"]:
+        raise ValueError("Frozen version differs from the CI source version")
+    if data != out / "recipient":
+        raise ValueError("Installer data must be the exact generated recipient")
+
+    def owned(*, may_be_removed=False):
+        if _safe_stamp(out)[:2] != plan["output_identity"]:
+            raise ValueError("Installer output directory changed")
+        if (not may_be_removed or installed.exists()) and (
+            _safe_stamp(installed)[:2] != plan["install_identity"]
+        ):
+            raise ValueError("Installer destination directory changed")
+        if _safe_stamp(installer) != plan["token"]:
+            raise ValueError("Installer bytes changed since preflight")
+
+    def mutate(label, command, *, uninstall=False):
+        snapshot = []
+
+        def ready():
+            owned()
+            if uninstall:
+                _safe_stamp(command[0])
+            snapshot.append(_data_hash(data))
+
+        def retained(stdout):
+            owned(may_be_removed=uninstall)
+            if snapshot[0] != _data_hash(data):
+                raise ValueError("Installer changed the research fixture")
+            if uninstall and any(
+                (installed / name).exists() for name in ("Paperfact.exe", "paperfact-cli.exe")
+            ):
+                raise ValueError("Uninstall left executable payloads behind")
+            if not uninstall and packaged_identity(installed) != plan["source_identity"]:
+                raise ValueError("Installed source identity differs from the frozen bundle")
+
+        run(label, [*command, "/LOG=" + str(out / (label + "-inno.log"))],
+            recipient, before=ready, after=retained)
+
+    flags = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
+    setup = [installer, *flags, "/SP-", "/LANG=en", "/NOCLOSEAPPLICATIONS",
+             "/NORESTARTAPPLICATIONS", "/ACCEPTANCETEST=1", "/DIR=" + str(installed)]
+    mutate("windows-install", setup)
+    def version_matches(stdout):
+        if stdout.strip() != ("paperfact " + plan["version"]).encode("ascii"):
+            raise ValueError("Installed executable reports a different version")
+
+    run("windows-installed-version", [installed / "paperfact-cli.exe", "--version"],
+        recipient, after=version_matches)
+    run("windows-installed-reader", [installed / "Paperfact.exe", "--paper", "demo:paperfact"],
+        recipient)
+    integration = acceptance.call(
+        "windows-installed-integration",
+        lambda: integration_check([installed / "paperfact-cli.exe"],
+                                  out / "installed-integration", empty),
+    )
+    mutate("windows-reinstall", setup)
+    uninstaller = installed / "unins000.exe"
+    mutate("windows-uninstall", [uninstaller, *flags], uninstall=True)
+    return dict(installed=True, reinstalled=True, uninstalled=True, research_preserved=True,
+                installer_sha256=plan["sha256"], integration=integration,
+                acceptance_mode=True, older_release_upgrade_checked=False,
+                registry_shortcuts_checked=False)
+
+
 def compare_files(first, second):
     with zipfile.ZipFile(first) as a, zipfile.ZipFile(second) as b:
         files = {name: a.read(name) for name in a.namelist() if name.startswith('files/')}
@@ -202,13 +359,18 @@ def check_process(result, label):
         )
 
 
-def _verify(built, out, acceptance):
+def _verify(built, out, acceptance, *, installer=None):
+    installation = acceptance.call(
+        "windows-installer-preflight", lambda: _installer_input(built, out, installer),
+    ) if installer is not None else None
     folder = built / "Contents/MacOS" if sys.platform == "darwin" else built
     ext = ".exe" if os.name == "nt" else ""
     cli, gui = folder / ("paperfact-cli" + ext), folder / ("Paperfact" + ext)
 
-    def run(label, command, env):
+    def run(label, command, env, *, before=None, after=None):
         def execute():
+            if before is not None:
+                before()
             try:
                 result = subprocess.run(
                     list(map(str, command)), cwd=ROOT, env=env, capture_output=True, timeout=90
@@ -229,6 +391,8 @@ def _verify(built, out, acceptance):
             log = Path(env["PAPERFACT_DATA"]) / "app.log"
             if log.exists() and "Traceback" in log.read_text(encoding="utf-8", errors="replace"):
                 raise CheckFailure(label, "app_traceback")
+            if after is not None:
+                after(result.stdout)
             return result.stdout
 
         return acceptance.call(label, execute)
@@ -378,10 +542,19 @@ def _verify(built, out, acceptance):
     }
     if sys.platform == "darwin":
         result["checks"].append("mac-launch-services-foreground")
+    if installation is not None:
+        result["windows_installer"] = _windows_install(
+            installation, out, recipient, empty, run, acceptance, integration_check,
+        )
+        result["checks"].append("windows-install-reinstall-uninstall")
+        result["limitations"] += (
+            " Isolated CI install and same-version reinstall only; no older-release upgrade "
+            "or registry/shortcut audit."
+        )
     return result
 
 
-def verify(built, out):
+def verify(built, out, *, installer=None):
     # A reused output directory must never overwrite an earlier acceptance run.
     try:
         out.mkdir(parents=True, exist_ok=False)
@@ -389,7 +562,7 @@ def verify(built, out):
         raise OutputExists("Choose a new acceptance output directory") from None
     acceptance = Acceptance(built, out)
     try:
-        result = _verify(built, out, acceptance)
+        result = _verify(built, out, acceptance, installer=installer)
     except BaseException as error:
         acceptance.failed(error)
         raise
@@ -402,9 +575,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("built", type=Path)
     parser.add_argument("out", type=Path)
+    parser.add_argument("--installer", type=Path,
+                        help="Windows CI only: verify isolated install/reinstall/uninstall")
     args = parser.parse_args(argv)
     try:
-        verify(args.built.resolve(), args.out.resolve())
+        verify(args.built.resolve(), args.out.resolve(),
+               installer=args.installer.absolute() if args.installer else None)
     except KeyboardInterrupt:
         print(
             "Acceptance interrupted; inspect the chosen output folder/report.json.", file=sys.stderr

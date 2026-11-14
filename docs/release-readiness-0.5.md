@@ -58,7 +58,7 @@ The curated `release` selection has not been run for this manual candidate.
 
 | Target | Required v0.5.0 evidence | Current claim |
 |---|---|---|
-| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI 4594626: critical 14 and frozen reader/import/export/audit/CLI/MCP passed; setup install/reinstall/upgrade/uninstall and physical sync not run |
+| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI 4594626: critical 14 and frozen reader/import/export/audit/CLI/MCP passed; CI-only install/same-version reinstall/uninstall verifier added with local simulation coverage; native execution pending; old-release upgrade and physical sync not run |
 | macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `4594626`: critical 14, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
 | Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `4594626`: critical 14, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
 | iPhone/Safari installed PWA | Offline launch, PDF/readability, note reload, foreground reconnect, storage/error recovery, touch/accessibility | Pending; simulation does not replace physical-device results |

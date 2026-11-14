@@ -65,6 +65,19 @@ research and isolated account/data homes. It checks local startup, package
 roundtrip and CLI/MCP boundaries, plus Launch Services foreground behavior on
 macOS (requires Apple Swift). It does not deploy sync or log into a real account.
 
+The Windows GitHub job additionally passes
+`--installer dist/Paperfact-<version>-windows-x64-setup.exe`. This option refuses
+non-Windows/nonmatching CI checkouts, dirty or mismatched build identities,
+unexpected paths and existing install destinations. It creates only
+`build/<new-output>/installed-app`, uses the setup acceptance mode (no shortcuts,
+registration or automatic launch), then checks installed CLI/reader/MCP behavior,
+same-version reinstall and uninstall. Each installer action checks that the
+bounded synthetic recipient tree is unchanged; the report records the setup
+payload SHA-256 and exact failure stage. Links/reparse points and changed owned
+paths are refused. No reboot, application closing or application restart is
+requested. Do not use this flag for an owner's installed app. It does not test
+0.4-to-0.5 upgrade, registry/shortcut integration or physical-device acceptance.
+
 `report.json` records the active/completed checks, frozen build identity when
 available and categorical failure. It is written during the run, not only on
 success; only `status: passed`, `passed: true` and exit code 0 accept the checked

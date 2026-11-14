@@ -14,6 +14,16 @@ feature branch that develops it.
 
 ## Cutting a release
 
+Windows frozen acceptance also runs the setup artifact in its explicit CI-only
+acceptance mode: install into a new owned folder, verify the installed app,
+reinstall the same version, then uninstall while preserving generated research.
+See [the verifier contract](toolchain.md). This is separate from real upgrade,
+shortcut/registration and device checks. The new installer phase has local
+simulation coverage only until a subsequent Windows candidate job runs it;
+run 43640792668 predates this phase. Do not relabel that earlier candidate as
+installed acceptance or dispatch a rebuild for documentation-only changes.
+
+
 For the first public beta, use a candidate branch and **workflow_dispatch** to
 build without publishing. Run `scripts/verify_built_app.py` against the frozen app;
 the workflow does this on each selected platform. In **Actions > Release > Run
