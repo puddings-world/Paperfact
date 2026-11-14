@@ -83,6 +83,8 @@ available and categorical failure. It is written during the run, not only on
 success; only `status: passed`, `passed: true` and exit code 0 accept the checked
 local journey. A hard kill may leave an incomplete `running` record. Failed
 checks exit 1; Ctrl+C exits 130. Every retry needs a new output directory.
+Failed runs also keep a bounded `failure-detail.log` with private exception
+context for local diagnosis; it is not part of the categorical report.
 Review the report before sharing; raw `.log` files are separate local diagnostic
 material. See [release checks](releasing.md) and [Mac acceptance](testing/mac-acceptance-0.5.md).
 

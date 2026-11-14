@@ -100,6 +100,8 @@ def test_failed_acceptance_reports_exact_stage_without_private_text(tmp_path, mo
     assert report["format"] == verify.FORMAT and report["passed"] is False
     assert report["status"] == ("interrupted" if failure == "interrupt" else "failed")
     assert report["active_check"] == "doctor"
+    detail = (out / "failure-detail.log").read_text(encoding="utf-8")
+    assert "Traceback" in detail and len(detail) <= 16384
     assert report["completed_checks"] == ["isolation", "version"]
     assert report["build"] == dict(commit="b" * 40, dirty=False, version="0.4.8")
     assert report["host"]["architecture"] == "other"

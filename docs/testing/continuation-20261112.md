@@ -5627,3 +5627,23 @@ additional worktree was introduced.
 
 - Default bounded critical: 14 passed in 6.32s / 9.6s total, privacy/Ruff green.
 - Documentation gate: 58 passed in 1.94s / 5.0s total; whitespace check clean.
+
+
+### 2026-11-15: native installer diagnostic follow-up
+
+- Candidate 84ec689, run 43644279988: Linux and Mac completed successfully;
+  Windows critical 14 and mobile artifact 5/5 passed, frozen import/reader/
+  export/audit/CLI/MCP passed, then windows-install failed permission_denied.
+  The report does not locate the denied operation. No installer conclusion or
+  permission/environment attribution is justified yet. Reports/logs retained in
+  ignored build/candidate-43644279988; the prior common candidate stays available.
+- Added bounded private failure-detail.log separately from categorical report;
+  existing failure tests check traceback presence/bounds while sensitive values
+  remain excluded from report.json. No new collected cases.
+- Existing Release workflow now supports a Windows-only manual candidate for
+  platform-specific diagnosis; all remains default and tags still build all OSes.
+  Existing matrix assertions retain every original platform and add this choice.
+- Focused 18 passed in 2.10s / 5.3s total; critical 14 in 5.03s / 8.4s total.
+  No assertion was weakened, local installer executed, user data changed, public
+  release created or production sync deployed. Next collect the exact denied path
+  through one Windows-only candidate before choosing a fix.

@@ -5,7 +5,7 @@
 # banner shows, so they are rewritten for readers before the draft is published;
 # nothing reaches users until then. See docs/releasing.md.
 #
-# Run by hand (Actions > Release > Run workflow), choose all platforms or just Mac.
+# Run by hand (Actions > Release > Run workflow), choose all platforms, Mac, or Windows.
 # Both paths retain source/frozen acceptance without releasing anything.
 #
 # Build names (must match updates.ASSET_SUFFIX):
@@ -22,7 +22,7 @@ on:
       platform:
         description: Candidate build platforms (tags always build all)
         type: choice
-        options: [all, macos]
+        options: [all, macos, windows]
         default: all
 
 permissions:
@@ -39,6 +39,8 @@ jobs:
           ${{ fromJSON(
             github.event_name == 'workflow_dispatch' && inputs.platform == 'macos'
             && '[{"os":"macos-latest","name":"macos"}]'
+            || github.event_name == 'workflow_dispatch' && inputs.platform == 'windows'
+            && '[{"os":"windows-latest","name":"windows"}]'
             || '[{"os":"windows-latest","name":"windows"},{"os":"macos-latest","name":"macos"},{"os":"ubuntu-22.04","name":"linux"}]'
           ) }}
     runs-on: ${{ matrix.os }}

@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import sysconfig
+import traceback
 import zipfile
 from pathlib import Path
 
@@ -565,6 +566,12 @@ def verify(built, out, *, installer=None):
         result = _verify(built, out, acceptance, installer=installer)
     except BaseException as error:
         acceptance.failed(error)
+        # Private diagnostics stay separate from the categorical shareable report.
+        try:
+            detail = "".join(traceback.format_exception(error, limit=12))
+            (out / "failure-detail.log").write_text(detail[:16384], encoding="utf-8")
+        except (OSError, UnicodeError):
+            pass  # Diagnostics must not hide the original failure.
         raise
     result = acceptance.finish(result)
     print(json.dumps(result))

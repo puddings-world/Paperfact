@@ -28,7 +28,10 @@ For the first public beta, use a candidate branch and **workflow_dispatch** to
 build without publishing. Run `scripts/verify_built_app.py` against the frozen app;
 the workflow does this on each selected platform. In **Actions > Release > Run
 workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
-default) for all three platforms. Tags always build all platforms. The Mac job
+default) for all three platforms. Choose `platform=windows` when diagnosing a
+Windows-only packaging failure; it runs the same checks without rebuilding Mac
+or Linux. Tags continue to build all three.
+ Tags always build all platforms. The Mac job
 refuses a non-arm64 runner. Frozen Mac GUI checks use the native Cocoa backend;
 Linux source checks, screenshots, build smoke and frozen acceptance use Xvfb;
 Windows uses offscreen checks. A theme without a fullscreen binding uses the

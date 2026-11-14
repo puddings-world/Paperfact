@@ -183,12 +183,14 @@ def test_the_build_names_match_what_the_release_workflow_uploads():
     workflow = (runtime.bundle_root() / ".github/workflows/release.yml").read_text(encoding="utf-8")
     for suffix in updates.ASSET_SUFFIX.values():
         assert suffix in workflow
-    # One maintained workflow: only manual Mac builds reduce the platform matrix.
-    assert "options: [all, macos]" in workflow and "default: all" in workflow
+    # One maintained workflow: manual platform candidates retain the same acceptance steps.
+    assert "options: [all, macos, windows]" in workflow and "default: all" in workflow
     assert "github.event_name == 'workflow_dispatch' && inputs.platform == 'macos'" in workflow
+    assert "github.event_name == 'workflow_dispatch' && inputs.platform == 'windows'" in workflow
     matrices = [json.loads(value) for value in re.findall(r"'(\[\{.*?\])'", workflow)]
     assert matrices == [
         [{"os": "macos-latest", "name": "macos"}],
+        [{"os": "windows-latest", "name": "windows"}],
         [
             {"os": "windows-latest", "name": "windows"},
             {"os": "macos-latest", "name": "macos"},
