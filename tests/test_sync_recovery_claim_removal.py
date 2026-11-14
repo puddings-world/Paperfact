@@ -1,5 +1,6 @@
-"""Claim retirement preserves evidence, related research and later choices."""
+"""Typed report retirement preserves evidence, related research and later choices."""
 
+import json
 import sqlite3
 from contextlib import closing
 from copy import deepcopy
@@ -29,10 +30,17 @@ from paper_daily.sync_capture import CaptureConnection, suppress_capture
 from paper_daily.sync_file_transfers import FileTransfers
 from paper_daily.sync_source_files import _inspection_paths
 
+REPORTS = {"claims": "paper_claim_sets", "dive": "dives", "close_reading": "close_readings"}
 
-def removal_case(group):
+
+def removal_case(group, feature="claims"):
     prepare(group).apply()
     old, _, _, path, root, *_ = group
+    if feature != "claims":
+        with closing(_readonly_connection(old.journal.path)) as conn:
+            root = next(json.loads(row[0]) for row in conn.execute(
+                "SELECT envelope FROM paperfact_sync_operations"
+            ) if json.loads(row[0]).get("payload", {}).get("feature") == feature)
     deletion = old.new_graph_operation("research_content", root["entity_id"], {}, action="delete")
     old.save(deletion)
     return refresh(group, deletion)
@@ -43,22 +51,25 @@ def removal(group, request=None):
     return choices.prepare(target.observe(source, path), change, "remove", request or str(uuid4()))
 
 
+@pytest.mark.parametrize("feature", REPORTS)
 def test_claim_removal_delivers_to_peer_and_retry_preserves_later_restore(
-    group, monkeypatch, tmp_path_factory,
+    group, monkeypatch, tmp_path_factory, feature,
 ):
-    g = removal_case(group)
+    g = removal_case(group, feature)
     old, _, _, path, root, service, sha, data, token = g
     client = attached(path)
     current = target.observe(g[1], path).compare(g[2])["target"]["effective_operation"]
     preserved, old_notes, original = content(path), notes(path), dump(old.journal.path)
     monkeypatch.setattr(native, "_original", lambda *_a, **_k: pytest.fail("No original grant"))
     decision = removal(g)
-    assert decision.claim_removal and not decision.note_removal and not decision.manual_restore
+    assert decision.claim_removal == (feature == "claims")
+    assert decision.reading_removal == (feature != "claims")
+    assert not decision.note_removal and not decision.manual_restore
     result = decision.apply()
     assert result["applied"] and result["choice"] == "remove" and not result["originals_verified"]
-    assert content(path)["paper_claim_sets"] == []
-    assert content(path)["dives"] == preserved["dives"]
-    assert content(path)["close_readings"] == preserved["close_readings"]
+    assert content(path)[REPORTS[feature]] == []
+    assert all(content(path)[table] == rows for table, rows in preserved.items()
+               if table != REPORTS[feature])
     assert notes(path) == old_notes and dump(old.journal.path) == original
     assert source_file(path, sha, len(data)).read_bytes() == data
     pending = client.journal.pending()
@@ -82,7 +93,7 @@ def test_claim_removal_delivers_to_peer_and_retry_preserves_later_restore(
     later = dump(path)
     assert not decision.apply()["applied"]
     assert not removal(g, decision.request_id).apply()["applied"]
-    assert dump(path) == later and content(path)["paper_claim_sets"]
+    assert dump(path) == later and content(path)[REPORTS[feature]]
 
 
 def test_claim_removal_failure_cancel_and_stale_target_preserve_everything(group, monkeypatch):
@@ -117,25 +128,34 @@ def test_claim_removal_failure_cancel_and_stale_target_preserve_everything(group
     assert dump(path) == before
 
 
-def test_claim_removal_refuses_untracked_visible_analysis(group):
-    g = removal_case(group)
+@pytest.mark.parametrize("feature", REPORTS)
+def test_claim_removal_refuses_untracked_visible_analysis(group, feature):
+    g = removal_case(group, feature)
     path = g[3]
     with (closing(sqlite3.connect(path, factory=CaptureConnection)) as conn,
           conn, suppress_capture(conn)):
-        conn.execute("UPDATE paper_claim_sets SET written_at='2026-11-16T00:00:00+00:00'")
+        if feature == "claims":
+            conn.execute("UPDATE paper_claim_sets SET written_at='2026-11-16T00:00:00+00:00'")
+        else:
+            # Oversized untracked specs must be refused without reading their full content.
+            conn.execute("UPDATE " + REPORTS[feature] + " SET spec=?", ("x" * (256 * 1024 + 1),))
     before = dump(path)
-    with pytest.raises(ValueError, match="Visible claim analysis differs"):
+    label = "claim analysis" if feature == "claims" else "saved reading"
+    with pytest.raises(ValueError, match=f"Visible {label} differs"):
         removal(g)
     assert dump(path) == before
 
 
-def test_desktop_claim_removal_is_explicit_cancelable_and_single_flight(group, app, monkeypatch):
+@pytest.mark.parametrize("feature", REPORTS)
+def test_desktop_claim_removal_is_explicit_cancelable_and_single_flight(
+    group, app, monkeypatch, feature,
+):
     from PySide6.QtWidgets import QMessageBox
     from test_workspace_dialog import wait
 
     from paper_daily.desktop.workspace_dialog import WorkspaceDialog
 
-    g = removal_case(group)
+    g = removal_case(group, feature)
     owner = WorkspaceDialog(g[0].journal.path, language="zh-TW")
     owner.show()
     try:
@@ -156,8 +176,9 @@ def test_desktop_claim_removal_is_explicit_cancelable_and_single_flight(group, a
         index = ui.action_select.findData("remove")
         assert index >= 0, ui.notice.text()
         ui.action_select.setCurrentIndex(index)
-        assert ui.action_select.currentText() == "\u79fb\u9664\u76ee\u524d\u4e3b\u5f35\u5206\u6790"
-        assert ui.notice.text() == ui.t["ready_remove_claims"]
+        key = "remove_claims" if feature == "claims" else "remove_reading"
+        assert ui.action_select.currentText() == ui.t[key]
+        assert ui.notice.text() == ui.t["ready_" + key]
         before, prompts = dump(g[3]), []
 
         def answer(*args):
@@ -167,12 +188,12 @@ def test_desktop_claim_removal_is_explicit_cancelable_and_single_flight(group, a
         monkeypatch.setattr(QMessageBox, "question", answer)
         ui.copy_button.click()
         assert not owner.busy and dump(g[3]) == before
-        assert prompts[0][2] == ui.t["confirm_remove_claims"]
+        assert prompts[0][2] == ui.t["confirm_" + key]
         assert prompts[0][-1] == QMessageBox.No
         ui.copy_button.click()
         ui.copy_button.click()
         wait(app, lambda: not owner.busy)
-        assert content(g[3])["paper_claim_sets"] == []
+        assert content(g[3])[REPORTS[feature]] == []
         assert sum(op["action"] == "delete" for op in attached(g[3]).journal.pending()) == 1
     finally:
         if owner.busy:

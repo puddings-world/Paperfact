@@ -208,15 +208,21 @@ def _result(receipt, *, applied, reused):
     )
 
 
-def _claim_slot(operation):
+def _report_feature(operation):
     from paper_daily.sync_content import content_id
 
     parents = operation.get("parents", [])
-    return (operation["version"] == 2 and operation["entity_type"] == "research_content"
-            and len(parents) == 1 and parents[0]["kind"] == "paper"
-            and operation["entity_id"] == content_id(
-                dict(kind="paper", id=parents[0]["id"]), "claims", "main",
-            ))
+    if (operation["version"] == 2 and operation["entity_type"] == "research_content"
+            and len(parents) == 1 and parents[0]["kind"] == "paper"):
+        scope = dict(kind="paper", id=parents[0]["id"])
+        for feature in ("claims", "dive", "close_reading"):
+            if operation["entity_id"] == content_id(scope, feature, "main"):
+                return feature
+    return None
+
+
+def _claim_slot(operation):
+    return _report_feature(operation) == "claims"
 
 
 @dataclass(frozen=True)
@@ -241,6 +247,14 @@ class Decision:
             return False
         operation = backup._decode(self.operation_json)
         return operation["action"] == "delete" and _claim_slot(operation)
+
+    @property
+    def reading_removal(self):
+        if self.operation_json is None:
+            return False
+        operation = backup._decode(self.operation_json)
+        return (operation["action"] == "delete"
+                and _report_feature(operation) in {"dive", "close_reading"})
 
     @property
     def manual_restore(self):
@@ -533,68 +547,84 @@ def _note_removal(conn, observed, comparison, request_id, check):
     return canonical_operation(operation)
 
 
-def _claim_removal(conn, observed, comparison, request_id, check):
-    """Retire one native claim report; never delete its inputs, original or history."""
+def _report_removal(conn, observed, comparison, request_id, check):
+    """Retire one native saved report; never delete its inputs, original or history."""
     from paper_daily import sync_recovery_claim_group as history
-    from paper_daily.sync_content import _local_scope, content_id, content_payload
+    from paper_daily.sync_content import FEATURES, _local_scope, content_id, content_payload
 
     root = comparison["source"]["operation"]
+    feature = _report_feature(root)
+    label = "claim analysis" if feature == "claims" else "saved reading"
     if (root["version"] != 2 or root["entity_type"] != "research_content"
             or root["action"] != "delete"
-            or not _claim_slot(root)):
-        raise ValueError("Select a recorded native claim-analysis deletion")
+            or feature is None):
+        raise ValueError("Select a recorded native reading/claim deletion")
     with closing(_readonly_connection(observed.source.database)) as old:
         old.execute("BEGIN")
         created = history._old(old, root["incarnation"], check)
     if (created["version"] != 2 or created["action"] != "put"
             or created["operation_id"] != root["incarnation"]
-            or created["payload"].get("feature") != "claims"
+            or created["payload"].get("feature") != feature
             or any(created[key] != root[key] for key in (
                 "workspace_id", "entity_type", "entity_id", "incarnation", "parents",
             ))):
-        raise ValueError("Claim deletion has no exact native creation proof")
+        raise ValueError("Report deletion has no exact native creation proof")
     payload = created["payload"]
     if (payload["key"] != "main"
-            or content_id(payload["scope"], "claims", "main") != root["entity_id"]):
-        raise ValueError("Claim deletion differs from its typed report identity")
+            or content_id(payload["scope"], feature, "main") != root["entity_id"]):
+        raise ValueError("Report deletion differs from its typed report identity")
     mapper = _parent_mapper(conn, observed, root, check)
     parents = [mapper(parent) for parent in root["parents"]]
     if len(parents) != 1 or parents[0]["kind"] != "paper":
-        raise ValueError("Claim removal needs one exact mapped paper lifetime")
+        raise ValueError("Report removal needs one exact mapped paper lifetime")
     current = history._head(conn, root["entity_id"])
     state = comparison["target"]["entity_state"]
     if (state is None or not state["active"] or current is None
             or current["version"] != 2 or current["action"] != "put"
             or current != comparison["target"]["effective_operation"]
             or current["incarnation"] != state["incarnation"] or current["parents"] != parents
-            or current["payload"].get("feature") != "claims"):
-        raise ValueError("Compare an active native claim analysis before removing it")
+            or current["payload"].get("feature") != feature):
+        raise ValueError("Compare an active native saved report before removing it")
     value = current["payload"]
     if (value["scope"] != dict(kind="paper", id=parents[0]["id"])
             or value["scope"] != payload["scope"] or value["key"] != "main"):
-        raise ValueError("Current claim analysis differs from its exact mapped paper")
+        raise ValueError("Current saved report differs from its exact mapped paper")
     marker = conn.execute(
         "SELECT feature,scope_kind,scope_id,item_key,incarnation,parent_incarnation,source_hash "
         "FROM research_content_projection WHERE entity_id=?", (root["entity_id"],),
     ).fetchone()
-    expected = ("claims", "paper", value["scope"]["id"], "main", current["incarnation"],
+    expected = (feature, "paper", value["scope"]["id"], "main", current["incarnation"],
                 parents[0]["incarnation"], value["source_document_hash"])
     if marker is None or tuple(marker) != expected:
-        raise ValueError("Claim projection differs from its native history")
+        raise ValueError("Report projection differs from its native history")
     local = _local_scope(conn, value["scope"], required=True)
-    row = conn.execute(
-        "SELECT paper_id,CASE WHEN length(CAST(body_json AS BLOB))<=? THEN body_json END "
-        "AS body_json,source_hash,document_hash,written_at FROM paper_claim_sets WHERE paper_id=?",
-        (MAX_BYTES, local),
-    ).fetchone()
-    if (row is None or row["body_json"] is None
-            or content_payload(conn, "paper_claim_sets", dict(row)) != value):
-        raise ValueError("Visible claim analysis differs from its native history")
+    table = FEATURES[feature][0]
+    if feature == "claims":
+        row = conn.execute(
+            "SELECT paper_id,CASE WHEN length(CAST(body_json AS BLOB))<=? THEN body_json END "
+            "AS body_json,source_hash,document_hash,written_at "
+            "FROM paper_claim_sets WHERE paper_id=?",
+            (MAX_BYTES, local),
+        ).fetchone()
+        body_key = "body_json"
+    else:
+        row = conn.execute(
+            "SELECT paper_id,CASE WHEN length(CAST(body AS BLOB))<=? "
+            "AND coalesce(length(CAST(spec AS BLOB)),0)<=? "
+            "AND length(CAST(written_at AS BLOB))<=? THEN body END AS body,"
+            "CASE WHEN coalesce(length(CAST(spec AS BLOB)),0)<=? THEN spec END AS spec,"
+            "CASE WHEN length(CAST(written_at AS BLOB))<=? THEN written_at END AS written_at "
+            "FROM " + table + " WHERE paper_id=?", (*([MAX_BYTES] * 5), local),
+        ).fetchone()
+        body_key = "body"
+    if (row is None or row[body_key] is None
+            or content_payload(conn, table, dict(row)) != value):
+        raise ValueError(f"Visible {label} differs from its native history")
     operation = conn._capture_client.new_graph_operation_in(
         conn, "research_content", root["entity_id"], {}, action="delete", operation_id=request_id,
     )
     if operation["parents"] != parents:
-        raise ValueError("Claim removal differs from its exact mapped paper lifetime")
+        raise ValueError("Report removal differs from its exact mapped paper lifetime")
     return canonical_operation(operation)
 
 
@@ -732,8 +762,8 @@ def _build(conn, observed, comparison, choice, request_id, check):
     if choice == "remove":
         if source["entity_type"] == "note":
             return _note_removal(conn, observed, comparison, request_id, check)
-        if _claim_slot(source):
-            return _claim_removal(conn, observed, comparison, request_id, check)
+        if _report_feature(source) is not None:
+            return _report_removal(conn, observed, comparison, request_id, check)
         return _manual_removal(conn, observed, comparison, request_id, check)
     if source["version"] != 2 or source["entity_type"] not in KINDS or source["action"] != "put":
         raise ValueError("This content requires its own typed recovery action; retain it pending")

@@ -690,6 +690,31 @@ TEXT["zh-TW"].update(
 )
 
 
+TEXT["en"].update(
+    remove_reading="Remove selected saved reading",
+    ready_remove_reading=(
+        "Review this saved explanation or section reading before removal. "
+        "Its original, notes, other analyses and history remain available."
+    ),
+    confirm_remove_reading=(
+        "Apply the recorded deletion to this saved reading only? Its original, notes, "
+        "other analyses and history are preserved. Existing claim reports are not rewritten."
+    ),
+)
+TEXT["zh-TW"].update(
+    remove_reading="\u79fb\u9664\u9078\u5b9a\u7684\u8b1b\u89e3\u6216\u7cbe\u8b80",
+    ready_remove_reading=(
+        "\u78ba\u8a8d\u5f8c\u79fb\u9664\u9078\u5b9a\u8b1b\u89e3\u6216\u7cbe\u8b80\uff1b"
+        "\u4fdd\u7559\u539f\u6587\u3001\u7b46\u8a18\u3001\u5176\u4ed6\u5206\u6790\u8207\u6b77\u53f2\u3002"
+    ),
+    confirm_remove_reading=(
+        "\u50c5\u79fb\u9664\u9078\u5b9a\u7684\u8b1b\u89e3\u6216\u7cbe\u8b80\uff1f"
+        "\u4fdd\u7559\u539f\u6587\u3001\u7b46\u8a18\u3001\u5176\u4ed6\u5206\u6790\u8207\u6b77\u53f2\u3002"
+        "\u4e0d\u6703\u91cd\u5beb\u65e2\u6709\u4e3b\u5f35\u5206\u6790\u3002"
+    ),
+)
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -842,6 +867,8 @@ class RecoveryChanges(QWidget):
                 key = "ready_remove_note"
             if action == "remove" and not already and getattr(plan, "claim_removal", False):
                 key = "ready_remove_claims"
+            if action == "remove" and not already and getattr(plan, "reading_removal", False):
+                key = "ready_remove_reading"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -1326,7 +1353,8 @@ class RecoveryChanges(QWidget):
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_remove_claims" if getattr(plan, "claim_removal", False)
+                    self.t["confirm_remove_reading" if getattr(plan, "reading_removal", False)
+                           else "confirm_remove_claims" if getattr(plan, "claim_removal", False)
                            else "confirm_remove_note" if getattr(plan, "note_removal", False)
                            else "confirm_remove"] if action == "remove" else
                     self.t["confirm_restore_manual"] if action == "restore" and getattr(
@@ -1486,6 +1514,10 @@ class RecoveryChanges(QWidget):
                         self.action_plans[action][0], "claim_removal", False
                     ):
                         label = "remove_claims"
+                    if action == "remove" and getattr(
+                        self.action_plans[action][0], "reading_removal", False
+                    ):
+                        label = "remove_reading"
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))

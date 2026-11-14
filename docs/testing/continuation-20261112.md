@@ -5930,3 +5930,40 @@ additional worktree was introduced.
   8.1s total. Privacy/Ruff/CRLF-aware whitespace passed; skill copies synchronized
   without conflict. Existing mobile probe-order assertions remain exact, extended
   to the two-proof case rather than weakened to mere handler invocation.
+
+
+## 2026-11-15: recorded deep/section reading retirement
+
+- Previous turn made progress: acknowledged-history safety fix 0718d49 integrated
+  and pushed, with source/mobile evidence and exact remaining gates recorded.
+- Reproduced a missing typed action: a retained native dive deletion incorrectly
+  fell through to manual-highlight validation and failed with no exact manual
+  creation proof. New reading test failed before implementation in 9.17s.
+  Initial formatting failures stopped before pytest and were fixed first.
+- The existing claim-removal path is now a closed three-report adapter: claims,
+  dive and close_reading, each only its deterministic paper/main slot. It still
+  requires exact source creation, mapped paper lifetime, active current head,
+  projection and bounded matching visible content. Removal uses one fresh native
+  operation and one atomic receipt; no old operation replay or PDF/source grant.
+- Existing desktop review offers a separate saved-reading label/notice and
+  default-No confirmation. Original, notes, other report rows and source history
+  remain unchanged. Claim inputs are not silently regenerated or rewritten when
+  a deep/section reading is retired. A later restore survives old decision retry.
+- Expanded three of four existing behavior requirements by typed report slot;
+  shared receipt failure/cancel/stale logic runs once. Ten selected cases passed
+  in 95.82s / 99.1s total, including actual Chinese Qt confirmation/repeated click,
+  independent native peer and exact PDF/content preservation. No new test file
+  or daily/release selector. Most time is isolated PDF/native fixture setup.
+- Tightened bounded reads for reading body/spec/timestamp, then checked oversized
+  untracked specs for both reading types plus successful dive peer delivery:
+  three passed in 33.71s / 37.1s total (overlapping coverage, not extra unique
+  requirements). No historical suite, concurrent check or owner data was used.
+- Existing native-history/mapped-parent/atomic-receipt patterns already describe
+  this extension; no new portable skill rule or copied skill update is needed.
+  Common packaged candidate remains b4ec451, predating this extension and 0718d49.
+  Complete legacy/source mapping, other scientific deletions, authority generation,
+  hosted recovery and physical Windows/Mac/phone acceptance remain open.
+- Final documentation gate: 58 passed in 1.81s / 5.1s total. Default critical:
+  14 passed in 7.94s / 11.1s total. Privacy/Ruff and CRLF-aware whitespace passed.
+  Source errors remain categorical; each visible-row test expects its own exact
+  report label. These are scoped source/Qt-fixture results, not packaged evidence.

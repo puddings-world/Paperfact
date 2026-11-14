@@ -18,6 +18,11 @@ fixture checks pass; the b4ec451 native packages above predate this refinement.
 The v25 static shell is not a deployed PWA. Full authority-generation negotiation
 and protection against a service reset during a pass remain open.
 
+Source also extends explicit recorded-deletion recovery to deep explanations and
+section readings through the existing guarded report-removal path. Other saved
+reports, originals, notes and history remain; later restores survive retries.
+Native package and physical-device acceptance of this extension remain pending.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

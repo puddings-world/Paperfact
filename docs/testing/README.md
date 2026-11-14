@@ -467,3 +467,17 @@ multiple papers in chosen order and a legacy sparse ordering layout. It also
 checks that an old request cannot become committed or executable in the new copy.
 This is not server issuance, upload, arbitrary receipt migration or installed-device
 acceptance. The existing local operation/input/archive checks remain separate.
+
+
+### Retire a saved explanation or section reading
+
+The existing `test_sync_recovery_claim_removal.py` now covers three typed report
+slots (`claims/main`, `dive/main`, `close_reading/main`) through one guarded
+removal implementation. Native peer/retry, untracked-visible-content refusal and
+actual Chinese confirmation are checked per slot; shared receipt-failure,
+cancellation and stale-target logic is checked once. This gives ten selected
+cases, not a full stress cross-product. Other reports, notes, PDFs and historical
+records must remain byte/content-identical. See the existing
+[report retirement scenarios](device-recovery-review-scenarios.md#confirmed-claim-report-retirement-2026-11-15).
+Daily critical and curated release selectors are unchanged. Physical packaged
+acceptance remains separate.
