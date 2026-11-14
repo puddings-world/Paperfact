@@ -257,6 +257,9 @@ use `--profile focused --python tests/test_name.py` for a scoped change and
 checks remain opt-in through `--profile full`. On Windows,
 `python scripts/check_bounded.py` adds a five-minute, low-CPU budget.
 See [development checks](docs/development.md#development) for scope and limits.
+Preview the named requirements and exact selection without running tests:
+`python scripts/check.py --profile release --plan`. The preview leaves result reports unchanged.
+
 
 The recovery review compares saved and current research before confirmation:
 

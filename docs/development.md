@@ -160,6 +160,12 @@ and conflicts, and backup/restore. The exact selectors live in
 This is a curated regression gate, not exhaustive coverage or installed-device
 acceptance. Missing selected tests fail rather than silently reducing coverage.
 
+Preview a profile before starting work: `python scripts/check.py --profile release --plan`.
+`--plan` also accepts focused selectors. It lists the selected requirements, files
+and stages without importing/collecting tests, checking runtimes, running checks
+or writing reports. Existing selection/path validation still applies. It is not
+a passing result, case count, runtime estimate or installed-device acceptance.
+
 For an edit, run only the affected behavior and its failure boundaries:
 
 ```powershell

@@ -388,3 +388,49 @@ def test_release_gate_is_curated_and_preserves_frontend_mobile_protocol_checks(
     (tmp_path / "mobile/tests/domain.test.mjs").unlink()
     assert CHECK["run_checks"](tmp_path, files=[], profile="release") == 1
     assert not report_at(tmp_path)["full_check_passed"]
+
+
+@pytest.mark.parametrize("profile", ["critical", "release"])
+def test_plan_lists_real_journeys_without_execution_runtime_or_report_changes(
+    tmp_path, monkeypatch, capsys, profile
+):
+    journeys = CHECK["RELEASE_JOURNEYS" if profile == "release" else "CRITICAL_JOURNEYS"]
+    for tests in journeys.values():
+        for test in tests:
+            fixture_test(tmp_path, test.partition("::")[0])
+    if profile == "release":
+        for name in ("gemini_usage", "pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
+            fixture_test(tmp_path, "tests/test_" + name + ".mjs")
+        for name in CHECK["RELEASE_MOBILE"]:
+            path = tmp_path / ("mobile/tests/" + name + ".test.mjs")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("// fixture", encoding="utf-8")
+    report = tmp_path / "build/check-latest.json"
+    report.parent.mkdir()
+    report.write_bytes(b'{"status":"earlier-result"}')
+    before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    monkeypatch.setattr(CHECK["subprocess"], "run", lambda *a, **k: pytest.fail("executed"))
+    monkeypatch.setattr(CHECK["shutil"], "which", lambda *a: pytest.fail("runtime discovery"))
+    assert CHECK["main"](tmp_path, ["--profile", profile, "--plan"]) == 0
+    output = capsys.readouterr().out
+    for name, tests in journeys.items():
+        assert "Protecting: " + name in output
+        assert all(test in output for test in tests)
+    assert "preview only" in output and "not a collected case count" in output
+    if profile == "release":
+        assert "mobile/tests/domain.test.mjs" in output
+        assert "Protocol selection: mobile/service-check.mjs" in output
+    after = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert after == before
+
+
+def test_focused_plan_uses_exact_selector_and_rejects_invalid_scope_without_writes(
+    tmp_path, capsys
+):
+    name = fixture_test(tmp_path, "tests/test_example.py") + "::test_saved_content"
+    assert CHECK["main"](tmp_path, ["--plan", "--profile", "focused", "--python", name]) == 0
+    assert "Python selection: " + name in capsys.readouterr().out
+    assert not (tmp_path / "build").exists()
+    assert CHECK["main"](tmp_path, ["--plan", "--profile", "focused"]) == 1
+    assert "Focused checks require" in capsys.readouterr().out
+    assert not (tmp_path / "build").exists()

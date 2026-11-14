@@ -30,6 +30,11 @@ backup/restore. A focused change adds only its relevant regressions. The old
 suite remains available through explicit `--profile full`; it is not silently
 deleted, skipped or reclassified as passing.
 
+Preview the current curated map with `python scripts/check.py --profile release --plan`
+(or `--profile critical --plan`). This reads the same selection as the runner,
+without starting checks or replacing the last result. File selectors can expand
+to multiple cases; the preview deliberately does not invent a case count.
+
 ### What is actually documented?
 
 - This page is the human entry point; scenario maps below explain selected flows.

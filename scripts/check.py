@@ -203,7 +203,7 @@ def selected_tests(root, values, suffix):
     return selected
 
 
-def check_plan(root, profile, python_tests, frontend_tests, mobile):
+def check_plan(root, profile, python_tests, frontend_tests, mobile, *, resolve_runtime=True):
     if profile not in {"full", "critical", "release", "focused", "docs"}:
         raise ValueError("Unknown check profile.")
     if profile != "focused" and (python_tests or frontend_tests or mobile):
@@ -229,7 +229,7 @@ def check_plan(root, profile, python_tests, frontend_tests, mobile):
         frontend_tests = [p.relative_to(root).as_posix()
                           for p in sorted((root / "tests").glob("test_*.mjs"))]
     needs_node = profile == "full" or bool(frontend_tests) or mobile
-    node = shutil.which("node") if needs_node else None
+    node = (shutil.which("node") if resolve_runtime else "node") if needs_node else None
     if needs_node and not node:
         raise ValueError("Node.js is required for the frontend tests; no checks were skipped.")
     checks = [("Ruff", [sys.executable, "-m", "ruff", "check", "."])]
@@ -345,6 +345,40 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
     return code
 
 
+def preview_plan(root, *, profile, python_tests=(), frontend_tests=(), mobile=False):
+    """Describe the actual selection without executing checks or writing reports."""
+    try:
+        checks, selection = check_plan(
+            root, profile, python_tests, frontend_tests, mobile, resolve_runtime=False,
+        )
+    except ValueError as error:
+        print(f"Invalid check plan: {error}")
+        return 1
+    print(f"Validation plan: {profile} (preview only; nothing executed)")
+    print("No test collection, dependency verification, or result report was performed.")
+    journeys = (RELEASE_JOURNEYS if profile == "release" else
+                CRITICAL_JOURNEYS if profile == "critical" else {})
+    for name, tests in journeys.items():
+        print(f"Protecting: {name}")
+        for test in tests:
+            print(f"  {test}")
+    if not journeys:
+        for test in selection["python"]:
+            print(f"Python selection: {test}")
+    for test in selection["frontend"]:
+        print(f"Frontend selection: {test}")
+    if profile == "release":
+        for name in RELEASE_MOBILE:
+            print(f"Mobile selection: mobile/tests/{name}.test.mjs")
+        print("Protocol selection: mobile/service-check.mjs")
+    elif selection["mobile"]:
+        print("Mobile selection: mobile/check.mjs (all mobile domain and service checks)")
+    print("Stages: " + " -> ".join(["Privacy scan", *(name for name, _ in checks)]))
+    print("Selectors may include files or parametrized cases; this is not a collected case count.")
+    print("Installed-device, live-provider and hosted-service acceptance remain separate.")
+    return 0
+
+
 def main(root, argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -353,7 +387,13 @@ def main(root, argv=None):
     parser.add_argument("--python", nargs="+", default=[], dest="python_tests")
     parser.add_argument("--frontend", nargs="+", default=[], dest="frontend_tests")
     parser.add_argument("--mobile", action="store_true")
-    return run_checks(root, **vars(parser.parse_args(argv)))
+    parser.add_argument(
+        "--plan", action="store_true",
+        help="Preview selected journeys and stages without running checks or writing reports.",
+    )
+    options = vars(parser.parse_args(argv))
+    preview = options.pop("plan")
+    return (preview_plan if preview else run_checks)(root, **options)
 
 
 if __name__ == "__main__":

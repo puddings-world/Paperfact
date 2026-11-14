@@ -4753,3 +4753,23 @@ later edits without requiring lost originals. The read-only output is not write
 authority. Lineage/origin/audit mapping and hosted/installed-device gates remain.
 Existing ownership/history skills cover this reuse; no duplicate/global skill or
 additional worktree was introduced.
+
+
+## 2026-11-14: inspect validation scope without running it
+
+- Added `scripts/check.py --plan` for the existing critical/release/focused/docs/full
+  profiles. It reuses the runner selection and lists named journeys, exact Python
+  selectors, frontend/mobile files and stages without collection, subprocesses,
+  runtime discovery, privacy scanning or report writes. Invalid selections fail.
+- The preview explicitly distinguishes file selectors from collected case counts
+  and automated scope from installed-device/live-provider/hosted acceptance. It
+  does not prune historical tests or claim release acceptance.
+- One bounded affected-plus-critical check passed: 70 cases, pytest 11.29s, total
+  14.8s; privacy and Ruff passed. Windows job cap: 25% CPU, at most two logical
+  processors, 300s deadline. New behavioral cases cover both curated profiles,
+  unchanged existing reports, no runtime/command execution, focused scope and
+  invalid-selection refusal. No historical full suite, release/device execution,
+  paid calls or owner research access. Initial Ruff line-length failure was fixed
+  before this pass; no assertions were weakened.
+- This extends the existing runner rather than adding another test system. No new
+  reusable architecture pattern was established; canonical skills are unchanged.
