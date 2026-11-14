@@ -264,9 +264,10 @@ class SyncConnectionDialog(QDialog):
         outer.addWidget(scroll)
         for text in (
             (
-                "先載入已儲存連線，或展開新連線設定。驗證成功後再選擇同步。"
+                "重新連線或設定自己的同步服務。只有在你明確啟用後才開始同步。"
                 if self.zh
-                else "Load a saved connection or set up a new one. Verify it before syncing."
+                else "Reconnect a saved connection or set up your private service. "
+                "Sync starts only when you choose."
             ),
         ):
             label = QLabel(text)
@@ -278,7 +279,8 @@ class SyncConnectionDialog(QDialog):
         self.connection_details.setEchoMode(QLineEdit.EchoMode.Password)
         self.connection_details.setMaxLength(8192)
         self.connection_details.setPlaceholderText(
-            "貼上同步服務提供的連線資料" if self.zh
+            "貼上同步服務提供的連線資料"
+            if self.zh
             else "Paste connection details from your service"
         )
         self.details_button = QPushButton("帶入連線資料" if self.zh else "Use connection details")
@@ -337,7 +339,18 @@ class SyncConnectionDialog(QDialog):
         self.forget_saved_button = QPushButton(self.v["forget"])
         self.load_saved_button.clicked.connect(self.load_saved)
         self.forget_saved_button.clicked.connect(self.forget_saved)
-        saved_row.addWidget(self.load_saved_button)
+        self.reconnect_saved_button = QPushButton(
+            "重新連線" if self.zh else "Reconnect saved connection"
+        )
+        self.reconnect_saved_button.setProperty("role", "primary")
+        self.reconnect_saved_button.setToolTip(
+            "背景讀取系統憑證庫並重新核對裝置身分，不會自動開始同步。"
+            if self.zh
+            else "Read the system credential store and verify device identity; "
+            "does not start syncing."
+        )
+        self.reconnect_saved_button.clicked.connect(self.reconnect_saved)
+        saved_row.addWidget(self.reconnect_saved_button)
         saved_row.addWidget(self.forget_saved_button)
         layout.insertLayout(1, saved_row)
         connection_row = QHBoxLayout()
@@ -381,6 +394,10 @@ class SyncConnectionDialog(QDialog):
         self.advanced_panel = QWidget()
         advanced_layout = QVBoxLayout(self.advanced_panel)
         advanced_layout.setContentsMargins(0, 0, 0, 0)
+        self.load_saved_button.setText(
+            "只載入已存設定（不連線）" if self.zh else "Load saved details without connecting"
+        )
+        advanced_layout.addWidget(self.load_saved_button)
         layout.addWidget(self.advanced_panel)
         self.advanced_panel.hide()
         self.advanced_button.toggled.connect(self.advanced_panel.setVisible)
@@ -527,6 +544,7 @@ class SyncConnectionDialog(QDialog):
         self.connect_button.setEnabled(available)
         self.remember_box.setEnabled(available)
         self.load_saved_button.setEnabled(available)
+        self.reconnect_saved_button.setEnabled(available)
         self.forget_saved_button.setEnabled(available)
         self.disconnect_button.setEnabled(live and not self.disposed)
         self.sync_button.setEnabled(
@@ -655,8 +673,12 @@ class SyncConnectionDialog(QDialog):
         return self._vault
 
     def load_connection_details(self):
-        if (self.busy or self.disposed or self._invalid
-                or (self.automatic is not None and self.automatic.busy)):
+        if (
+            self.busy
+            or self.disposed
+            or self._invalid
+            or (self.automatic is not None and self.automatic.busy)
+        ):
             return False
         body = self.connection_details.text()
         if not body.strip():
@@ -672,6 +694,38 @@ class SyncConnectionDialog(QDialog):
         if started:
             self.connection_details.clear()
         return started
+
+    def reconnect_saved(self):
+        """Explicit background verification; never expose a stored token in widgets."""
+        if (
+            self.busy
+            or self.disposed
+            or self._invalid
+            or (self.automatic is not None and self.automatic.busy)
+            or not self._connection_scope_current()
+        ):
+            return False
+        if self.automatic is not None:
+            self.automatic.stop()
+
+        def run(ticket, _progress):
+            vault = self._connection_vault()
+            try:
+                record = vault.load(ticket)
+            except ValueError as error:
+                from paper_daily.workspace_service import WorkspaceChanged
+
+                if isinstance(error, WorkspaceChanged):
+                    raise
+                raise VaultUnavailable("Stored connection needs review") from None
+            if record is None:
+                return None
+            ticket.check()
+            return self.session.connect(
+                record.endpoint, record.workspace_id, record.device_id, record.token, ticket
+            )
+
+        return self._start("reconnect_saved", run)
 
     def load_saved(self):
         def run(ticket, _progress):
@@ -785,16 +839,22 @@ class SyncConnectionDialog(QDialog):
         if (
             not self._invalid
             and not self._closing
-            and kind in {"load_saved", "forget_saved", "connect", "connection_details"}
+            and kind
+            in {"load_saved", "forget_saved", "connect", "connection_details", "reconnect_saved"}
         ):
             self._connection_scope_current()
         if not self._invalid and not self._closing:
             if worker.error:
                 self.status.setText(
-                    ("連線資料無法讀取；請確認來源及格式。" if self.zh
-                     else "Could not read connection details; check their source and format.")
-                    if kind == "connection_details" else
-                    self.v["unavailable"] if worker.error == "vault" else self.t[worker.error]
+                    (
+                        "連線資料無法讀取；請確認來源及格式。"
+                        if self.zh
+                        else "Could not read connection details; check their source and format."
+                    )
+                    if kind == "connection_details"
+                    else self.v["unavailable"]
+                    if worker.error == "vault"
+                    else self.t[worker.error]
                 )
             elif worker.ticket.cancelled:
                 self.status.setText(self.t["cancelled"])
@@ -816,6 +876,20 @@ class SyncConnectionDialog(QDialog):
                     if remembered is False
                     else self.t["connected"] + ("\n" + self.v["stored"] if remembered else "")
                 )
+            elif kind == "reconnect_saved":
+                result = worker.result
+                if result is None:
+                    self.status.setText(self.v["missing"])
+                else:
+                    self._setting = True
+                    try:
+                        self.endpoint.setText(result["endpoint"])
+                        self.workspace_id.setText(result["identity"]["workspace_id"])
+                        self.device_id.setText(result["identity"]["device_id"])
+                        self.credential.clear()
+                    finally:
+                        self._setting = False
+                    self.status.setText(self.t["connected"])
             elif kind in {"load_saved", "connection_details"}:
                 record, worker.result = worker.result, None
                 if record is None:
@@ -835,9 +909,13 @@ class SyncConnectionDialog(QDialog):
                     finally:
                         self._setting = False
                     self.status.setText(
-                        ("已帶入連線資料；請核對後按驗證並連線。" if self.zh
-                         else "Connection details loaded; review them, then verify and connect.")
-                        if kind == "connection_details" else self.v["loaded"]
+                        (
+                            "已帶入連線資料；請核對後按驗證並連線。"
+                            if self.zh
+                            else "Connection details loaded; review them, then verify and connect."
+                        )
+                        if kind == "connection_details"
+                        else self.v["loaded"]
                     )
                     self.setup_button.setChecked(True)
             elif kind == "forget_saved":
