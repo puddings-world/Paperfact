@@ -23,7 +23,10 @@ evidence. Inspect stage durations and slow-test output before optimizing or
 parallelizing. Freeze a coherent candidate for the full gate rather than restarting
 it after every small edit; record concurrent changes and revalidate affected inputs.
 
-Run the full check before declaring a change complete, committing, or pushing:
+Sessions work in their own worktree and branch; see
+[working in parallel](docs/collaboration.md). A focused check that passes is enough
+to commit on your own branch. Run the full check on the merged result before a
+merge into `develop/0.5` is pushed, and before declaring a release candidate:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/check.py
