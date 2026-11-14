@@ -18,12 +18,12 @@ from uuid import NAMESPACE_URL, uuid5
 from paper_daily import lineage_dependencies, lineage_projection, lineage_sets, lineage_wire
 from paper_daily import research_evidence as evidence
 from paper_daily import research_generation as generation
-from paper_daily import sync_artifacts as artifacts
 from paper_daily import sync_authority_backup as backup
 from paper_daily import sync_recovery_candidates as candidates
 from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_claim_group as history
 from paper_daily import sync_recovery_note_copy as native
+from paper_daily import sync_recovery_original as original_choice
 from paper_daily import sync_recovery_reading_group as references
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.sync_blobs import BlobStore
@@ -65,6 +65,43 @@ def _request(request, source_id):
     return str(uuid5(NAMESPACE_URL, "paperfact:lineage-recovery:" + request + ":" + source_id))
 
 
+def review_request(observed, operation):
+    """Stable UI retry per target input lifetime, not a perpetual source decision."""
+    check = backup._guard(60, lambda: False)
+    native._auth(observed, check)
+    lineage_dependencies.canonical_operation(operation)
+    with closing(_readonly_connection(observed.database)) as conn:
+        conn.execute("BEGIN")
+        native._binding_in(conn, observed)
+        graph = conn._capture_client._optimistic_graph(conn)[0]
+        keys = [("paper", p["id"]) for p in operation["parents"]]
+        keys.extend(("research_file", p["file_id"]) for p in operation["source_dependencies"])
+        inputs = [
+            [
+                kind,
+                key,
+                {k: state[k] for k in ("incarnation", "active", "parents")} if state else None,
+            ]
+            for kind, key in keys
+            for state in [graph.get((kind, key))]
+        ]
+    observed._check(check)
+    return str(
+        uuid5(
+            NAMESPACE_URL,
+            "paperfact:lineage-group-ui:"
+            + candidates._json(
+                [
+                    observed.binding,
+                    operation["operation_id"],
+                    candidates._fingerprint(operation),
+                    inputs,
+                ]
+            ),
+        )
+    )
+
+
 def _root(observed, change, cancelled):
     operation = observed.source.details(change, cancelled=cancelled)["operation"]
     lineage_dependencies.canonical_operation(operation)
@@ -99,17 +136,18 @@ def _sources(observed, root, check):
         for pin in root["source_dependencies"]:
             check()
             source, parent = by_id[pin["source_id"]], parents[pin["paper_id"]]
-            original = artifacts.desired_file(conn, pin["file_id"])
-            if original is None:
-                raise ValueError(
-                    "The exact Lineage original is unavailable; review its source first"
-                )
-            _original(original, root, pin, parent)
-            if history._old(conn, original["operation_id"], check) != original:
-                raise ValueError("Lineage original differs from retained native history")
-            proof = native.inspect_original(
-                conn, pin["paper_id"], parent, source["document_hash"], check
+            original = original_choice.retained_original(
+                conn,
+                dict(
+                    workspace_id=root["workspace_id"],
+                    entity_id=pin["file_id"],
+                    incarnation=pin["incarnation"],
+                    parents=[parent],
+                ),
+                check,
             )
+            _original(original, root, pin, parent)
+            proof = original_choice._proof(observed, dict(original=original), check)
             if proof[0].stat().st_size > evidence.MAX_PDF_BYTES:
                 raise ValueError("Lineage original exceeds its evidence byte budget")
             with proof[0].open("rb") as stream:
@@ -171,6 +209,48 @@ def _visible(conn, root):
     ).fetchone():
         return None
     return lineage_projection._current(conn, local, root["payload"]["key"])
+
+
+def _checked_visible(conn, client, root, current):
+    """Accept native hiding, never an uncaptured row deletion or forged marker."""
+    visible = _visible(conn, root)
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (lineage_projection.TABLE,),
+    ).fetchone()
+    marker, marked = lineage_projection._marker(conn, root["entity_id"]) if exists else (None, None)
+    if current is None:
+        if visible is not None or marker is not None:
+            raise ValueError("Visible Lineage differs from native history; preserve it first")
+        return None
+    if marker is None or marked != current or bool(marker["active"]) != (visible is not None):
+        raise ValueError("Visible Lineage differs from native history; preserve it first")
+    local = _local_scope(conn, root["payload"]["scope"], required=True)
+    if marker["paper_id"] != local or marker["corpus_key"] != root["payload"]["key"]:
+        raise ValueError("Lineage projection owners differ from native history")
+    if visible is not None:
+        from paper_daily.claim_content import hashed
+
+        if (
+            current["action"] != "put"
+            or visible != lineage_wire.decode_row(conn, current["payload"])
+            or hashed(visible) != marker["fingerprint"]
+        ):
+            raise ValueError("Visible Lineage differs from native history; preserve it first")
+    elif current["action"] == "put":
+        reason = lineage_dependencies.projection_reason_in(conn, client, current)
+        if reason not in {
+            "parent_missing",
+            "parent_deleted",
+            "parent_incarnation",
+            "source_missing",
+            "source_deleted",
+            "source_incarnation",
+        }:
+            raise ValueError(
+                "Hidden Lineage has no native retired-input evidence; preserve it first"
+            )
+    return visible
 
 
 def _context(observed, root, request, replace):
@@ -455,19 +535,15 @@ def prepare(observed, change_id, request_id, *, replace=False, seconds=60, cance
             state = conn._capture_client._optimistic_graph(conn)[0].get(
                 ("research_content", root["entity_id"])
             )
-            visible = _visible(conn, root)
-            expected = (
-                lineage_wire.decode_row(conn, current["payload"])
-                if (current and current["action"] == "put" and state and state["active"])
-                else None
-            )
-            if visible != expected:
-                raise ValueError("Visible Lineage differs from native history; preserve it first")
+            visible = _checked_visible(conn, conn._capture_client, root, current)
+            graph = conn._capture_client._optimistic_graph(conn)[0]
             same = (
                 current
                 and current["action"] == "put"
                 and state
                 and state["active"]
+                and visible is not None
+                and lineage_dependencies.active(lambda kind, key: graph.get((kind, key)), current)
                 and current["payload"] == root["payload"]
                 and current["parents"] == parents
             )
@@ -478,7 +554,9 @@ def prepare(observed, change_id, request_id, *, replace=False, seconds=60, cance
                 dict(
                     feature="lineage",
                     source=root["payload"]["data"],
-                    current=current["payload"]["data"] if visible else None,
+                    current=current["payload"]["data"]
+                    if current and current["action"] == "put"
+                    else None,
                     originals=[
                         dict(source_id=i["source_id"], title=i["title"], sha256=i["sha256"])
                         for i in originals

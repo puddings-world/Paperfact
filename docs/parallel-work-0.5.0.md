@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Original-source use/retire and lean fixture verified; next retired-input/origin/audit recovery and hosting/device gates. Keep focused validation small and reuse current critical evidence |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit retired-original Lineage rebinding and fixture-handle fix verified (22 critical/affected cases, 112.8s); next other deletion/origin/audit recovery and hosting/device gates. Keep focused validation small |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

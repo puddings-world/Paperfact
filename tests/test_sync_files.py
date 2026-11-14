@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from uuid import uuid4
 
 import pytest
@@ -178,7 +179,7 @@ def test_closure_fails_closed(codec, mutation):
 
 def side(tmp_path, name):
     path = tmp_path / (name + ".sqlite")
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(store.SCHEMA)
     prepare(path, workspace_id="workspace", device_id=name)
     return SyncClient(Journal(path, workspace_id="workspace", device_id=name), research_writer)

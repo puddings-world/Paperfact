@@ -920,9 +920,7 @@ class RecoveryChanges(QWidget):
         if operation["entity_type"] == "research_content" and operation["payload"].get(
             "feature"
         ) == "lineage":
-            request = str(uuid5(NAMESPACE_URL, "paperfact:lineage-group-ui:" + candidates._json([
-                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
-            ])))
+            request = lineage_group.review_request(observed, operation)
             try:
                 group = lineage_group.prepare(
                     observed, selected, request, replace=True, cancelled=stopped,

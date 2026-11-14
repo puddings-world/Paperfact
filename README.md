@@ -267,6 +267,8 @@ The recovery review compares saved and current research before confirmation:
   with their verified original, preserving existing selections and later edits.
 - Restore or retire a retained original's source association with confirmation;
   cached PDFs, notes and history stay intact, and restored sources get fresh versions.
+  Restoring a PDF alone does not revive old lineage claims: explicitly recheck the
+  retained report and its quotations before linking it to the new source versions.
 - Restore complete claim, highlight, explanation-link, lineage and editable-deck groups
   with exact inputs, originals and assets. Known historical native versions remain
   inspectable; missing old explanations require explicit confirmation before clearing

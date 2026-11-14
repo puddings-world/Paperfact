@@ -469,6 +469,12 @@ actual native target observation. Existing different/retired reports need explic
 `replace=True`. Uncaptured visible words refuse even replacement. Corpus identity,
 portable payload, selected paper ownership and generation metadata are preserved;
 no model is called and other research/primary PDFs are not replaced.
+The desktop uses `review_request(observed, operation)` to keep repeated comparisons
+idempotent for the same target input lifetimes. A later original restoration gets
+a new decision identity; a prior successful receipt cannot suppress that recheck.
+The current comparison includes retained hidden report content, not a false empty
+report. The helper only derives retry identity; preparation/application retain all
+source, observation, ownership and transaction checks.
 
 Each available selected original must match the retained native source operation,
 its exact dependency lifetime, owned readable PDF, hash and page count. Every
@@ -482,8 +488,11 @@ owned research; harmless unowned staged bytes can remain.
 
 Successful retry validates retained operations and fingerprints, not current write
 eligibility, and does not replace later edits/deletions. A new request verifies
-current source bytes and destination. Missing/retired exact source ownership,
-unknown legacy records and foreign identity mapping still need separate decisions;
+current source bytes and destination. Retained historical source ownership can
+verify the selected original even after retirement; its actual native journal,
+owned canonical artifact, current paper lifetime and readable PDF must still match.
+Missing exact ownership, unknown legacy records and foreign identity mapping need
+separate decisions;
 this action does not silently restore a deleted original. Explicitly unavailable
 report sources remain unavailable and do not gain file grants. `saved_locally`
 does not assert remote acceptance or complete recovery.
@@ -537,7 +546,12 @@ state and durable decision receipt. A successful retry is evidence of the past
 decision, not permission to reinstate an obsolete file lifetime.
 
 Restored originals receive new native incarnations. Old Lineage dependency pins
-do not reactivate automatically; retired-input scientific report rebinding/audit
-remains a separate gate. Unknown legacy/foreign mappings and other scientific or
+do not reactivate automatically. After explicit original restoration, select the
+retained complete Lineage report and confirm replacement to recheck every located
+quotation and publish fresh target dependencies. Native source retirement hides
+the old report while keeping its history; same-byte restoration alone leaves it
+hidden. A privately deleted/edited report row or changed provenance is refused,
+not mistaken for native hiding. Old delivered-original proofs stay invalid.
+Unknown legacy/foreign mappings, broader audit integration and other scientific or
 manual-mark deletion decisions remain pending. Neither `saved_locally` nor fixture
 peer delivery certifies hosted or installed Windows/Mac/phone acceptance.

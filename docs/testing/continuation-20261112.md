@@ -4934,3 +4934,39 @@ additional worktree was introduced.
   fresh five-case pass. Existing typed-transaction/source-lifetime skill patterns
   cover the implementation; fixture simplification is recorded locally rather than
   manufacturing a new reusable skill. No hosted/device completion claim.
+
+
+## 2026-11-15: Explicit restored-original Lineage rebinding
+
+- Extended the existing three-original native peer journey rather than adding a
+  Cartesian scenario matrix. Native retirement hides the report but retains its
+  put/history; same-byte restoration gives the source a fresh incarnation and
+  does not revive old scientific pins. Explicit reviewed replacement verifies
+  retained native source ownership, canonical artifact closure, readable PDFs,
+  page counts and every located quote, then atomically publishes fresh target
+  dependencies/report/history/receipt. No model, primary PDF or owner data used.
+- Hidden current reports remain inspectable in the comparison. Native projection
+  marker/history/policy distinguish real retired-input hiding from an uncaptured
+  deletion or edit. Missing ownership/bytes, changed paper lifetimes and unknown
+  legacy/foreign mappings still refuse. Desktop retry IDs include actual target
+  input lifetimes so an old receipt cannot suppress a later restoration decision.
+- The native journey checks independent peer delivery, old reader-proof refusal,
+  newly verified reader delivery, stale review refusal, fresh-observation saved
+  retry and preservation of later edits/source restorations. Existing exception,
+  cancellation, false-quote, corrupt-receipt and en/zh-TW UI cases remain.
+- Diagnosed initial review failures instead of weakening file guards. The shared
+  test_sync_files.side fixture used a SQLite transaction context without close.
+  A disposable single-file reproduction showed gc.collect closing that writer
+  changed its Windows USN while stat/ChangeTime stayed unchanged; explicit close
+  made collection stable. Added contextlib.closing at that actual fixture seam.
+  This is separate from the earlier unexplained 72.17s SQLite-open setup outlier.
+- Before the UI retry-key extension, six affected cases passed in 76.43s pytest /
+  82.0s total. Final source: curated critical journeys + six affected Lineage
+  cases + one original lifecycle + one editable-deck transfer representative:
+  22 passed in 106.51s pytest / 112.8s total, privacy and Ruff green. One bounded
+  runner, 300-second deadline, at most two logical CPUs and 25% job CPU cap.
+  No historical exhaustive/release run, paid provider, production deployment or
+  installed Windows/Apple Silicon/phone acceptance is claimed.
+- Existing canonical local-integration skill already requires explicit SQLite
+  handle closure, separate retained proof/current eligibility and caller-owned
+  atomic receipts. This checkpoint adds project evidence, not a duplicate skill.

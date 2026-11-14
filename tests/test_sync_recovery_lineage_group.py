@@ -26,6 +26,7 @@ from paper_daily import (
 )
 from paper_daily import sync_recovery_candidates as candidates
 from paper_daily import sync_recovery_lineage_group as recovery
+from paper_daily import sync_recovery_original as original_choice
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.sync_authority_backup import BackupCancelled
@@ -96,6 +97,8 @@ def test_group_rebinds_all_three_originals_and_retry_preserves_later_versions(
     plan = prepare(group)
     assert len(plan.comparison[0]["originals"]) == 3
     assert (dump(old.journal.path), dump(path)) == before
+    ui_request = recovery.review_request(plan.observed, root)
+    assert ui_request == recovery.review_request(plan.observed, root)
     result = plan.apply()
     assert result["applied"] and result["choice"] == "lineage_group"
     assert not result["recovery_complete"] and not result["remote_acceptance_checked"]
@@ -188,7 +191,101 @@ def test_group_rebinds_all_three_originals_and_retry_preserves_later_versions(
     for source in lineage_sets.decode(row["body_json"])["report"]["sources"]:
         verified = work(lineage_bound_originals.prepare, owner, row, source["id"])
         assert lineage_bound_originals.for_delivery(verified, owner, row, source["id"])
-    later = edit(client, pending[-1], "2026-11-14T03:00:00+00:00")
+
+    # Retiring/restoring the same bytes cannot silently revive old scientific pins.
+    def refresh(operation):
+        index = candidates.prepare(old.journal.path, group["source"].snapshot, "workspace")
+        change = next(
+            item["change_id"]
+            for item in index.page(limit=50)["items"]
+            if item["operation_id"] == operation["operation_id"]
+        )
+        return index, change
+
+    def original_decision(operation, action):
+        index, change = refresh(operation)
+        return original_choice.prepare(
+            target.observe(index, path), change, str(uuid4()), action=action
+        )
+
+    def sync_owner():
+        with closing(_readonly_connection(path)) as conn:
+            own_store, own_versions = _inspection_paths(conn)
+        transport = FileTransfers(
+            client,
+            BlobStore(own_store.root),
+            service,
+            origin="https://recovery.fixture.invalid",
+            token=group["token"],
+            version_root=own_versions,
+        )
+        try:
+            for operation in client.journal.pending():
+                if operation["entity_type"] == "research_file" and operation["action"] == "put":
+                    drain(lambda op=operation: transport.upload(op), "uploaded")
+            for _ in range(4):
+                result = client.sync_once(
+                    service, group["token"], prepare_push=transport.ready_to_push
+                )
+                if not result["pending"]:
+                    break
+            assert result["pending"] == result["conflicts"] == 0
+        finally:
+            transport.close()
+        result = peer.sync_once(service, token)
+        assert result["pending"] == result["conflicts"] == 0
+
+    with closing(_readonly_connection(old.journal.path)) as conn:
+        from paper_daily.sync_artifacts import desired_file
+
+        original = desired_file(conn, root["source_dependencies"][0]["file_id"])
+    deletion = old.new_graph_operation("research_file", original["entity_id"], {}, action="delete")
+    old.save(deletion)
+    retired = original_decision(deletion, "retire_original")
+    assert retired.apply()["applied"]
+    sync_owner()
+    with closing(_readonly_connection(other)) as conn:
+        assert lineage_projection._current(conn, local, root["payload"]["key"]) is None
+        assert lineage_projection._marker(conn, root["entity_id"])[1]["action"] == "put"
+    assert not lineage_bound_originals.metadata_current(verified)
+    assert original_decision(original, "use_original").apply()["applied"]
+    sync_owner()
+    with closing(_readonly_connection(other)) as conn:
+        assert lineage_projection._current(conn, local, root["payload"]["key"]) is None
+    assert not lineage_bound_originals.metadata_current(verified)
+    group["source"], group["change"] = refresh(root)
+    with pytest.raises(ValueError, match="before replacement"):
+        prepare(group)
+    observed = target.observe(group["source"], path)
+    renewed_request = recovery.review_request(observed, root)
+    assert renewed_request != ui_request
+    assert renewed_request == recovery.review_request(observed, root)
+    rebound = recovery.prepare(observed, group["change"], renewed_request, replace=True)
+    assert rebound.comparison[0]["current"] == root["payload"]["data"]
+    assert rebound.apply()["applied"]
+    with closing(_readonly_connection(path)) as conn:
+        current = recovery.history._head(conn, root["entity_id"])
+    assert (
+        current["source_dependencies"][0]["incarnation"]
+        != pending[-1]["source_dependencies"][0]["incarnation"]
+    )
+    sync_owner()
+    assert portable(other) == root["payload"]
+    with closing(_readonly_connection(other)) as conn:
+        renewed_row = lineage_projection._current(conn, local, root["payload"]["key"])
+    assert not lineage_bound_originals.metadata_current(verified)
+    with pytest.raises(ValueError, match="changed before original delivery"):
+        lineage_bound_originals.for_delivery(verified, owner, row, source["id"])
+    for source in lineage_sets.decode(renewed_row["body_json"])["report"]["sources"]:
+        renewed = work(lineage_bound_originals.prepare, owner, renewed_row, source["id"])
+        assert lineage_bound_originals.for_delivery(renewed, owner, renewed_row, source["id"])
+    changed = dump(path)
+    with pytest.raises(ValueError, match="Recovery inputs changed"):
+        plan.apply()
+    assert not retired.apply()["applied"]
+    assert not prepare(group, plan.request_id).apply()["applied"]
+    assert dump(path) == changed
+    later = edit(client, current, "2026-11-15T03:00:00+00:00")
     changed = dump(path)
     assert not prepare(group, plan.request_id).apply()["applied"] and dump(path) == changed
     with pytest.raises(ValueError, match="before replacement"):
@@ -240,6 +337,12 @@ def test_schema_valid_false_passage_and_corrupt_receipt_refuse_without_writes(gr
     with pytest.raises(ValueError, match="receipt changed"):
         plan.apply()
     assert dump(group["path"]) == before
+    with closing(sqlite3.connect(group["path"])) as conn, conn:
+        conn.execute("DELETE FROM " + lineage_sets.TABLE)
+    changed = dump(group["path"])
+    with pytest.raises(ValueError, match="Visible Lineage differs"):
+        prepare(group, replace=True)
+    assert dump(group["path"]) == changed
     root = group["root"]
     payload = deepcopy(root["payload"])
     report = payload["data"]["body_json"]["report"]
@@ -262,7 +365,7 @@ def test_schema_valid_false_passage_and_corrupt_receipt_refuse_without_writes(gr
     )
     with pytest.raises(ValueError, match="passage no longer matches"):
         recovery.prepare(target.observe(index, group["path"]), change, str(uuid4()), replace=True)
-    assert dump(group["path"]) == before
+    assert dump(group["path"]) == changed
 
 
 @pytest.mark.parametrize("language", ["en", "zh-TW"])

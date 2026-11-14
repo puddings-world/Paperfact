@@ -543,9 +543,9 @@ installation, hosted deployment or scientific semantic support.
 
 | Scenario | Observable result |
 |---|---|
-| Three selected originals and complete report | Read-only preparation; atomic native publication with fresh source dependencies; exact portable report and owned originals reach an independent enrolled native client; retry preserves later edits and explicit replacement restores the selected version |
+| Three selected originals and complete report | Read-only preparation; atomic native publication and independent peer delivery; retire/restore one original and keep the old report hidden until explicit quote-checked rebinding; old reader proofs remain invalid; old decision retries preserve later edits and source lifetimes |
 | Exception/cancellation after second original | All source ownership, report/schema, outbox and receipt roll back, then the same request retries |
-| False quotation and corrupt receipt | Schema-valid invented quotation is refused against actual original bytes; tampered saved receipt cannot restart a decision; destination unchanged |
+| False quotation, corrupt receipt and private deletion | Schema-valid invented quotation is refused against actual original bytes; tampered receipt cannot restart a decision; uncaptured row deletion refuses replacement; destination unchanged |
 | English/Traditional Chinese native buttons | Readable statement/source/original comparison, semantic limits displayed, cancel preserves data, confirm saves complete report and exactly one receipt despite repeated click |
 
 Two cases in `test_sync_device_recovery.py` reproduce a WAL-mode database whose
@@ -555,7 +555,9 @@ stable; a real later write still changes the version and invalidates the index.
 Existing concurrent-write, damaged-prefix, cancellation and candidate-budget cases
 remain unchanged. No test uses real accounts, paid models or owner research.
 
-Unknown/retired source lifetimes and foreign mappings remain explicitly refused.
+Unknown source lifetimes and foreign mappings remain explicitly refused. A known
+retired source with exact retained native ownership and bytes can be verified;
+restoring its target lifetime and rebinding the report are separate decisions.
 These fixtures do not certify hosted deployment, native vaults, scientific support,
 installed Mac/Windows upgrades or physical phones.
 
