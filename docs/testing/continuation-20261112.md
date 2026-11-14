@@ -5400,3 +5400,16 @@ additional worktree was introduced.
 - Evidence-only docs gate: 58 passed in 2.09s / 5.1s total, privacy/Ruff and
   whitespace passed. Reused unchanged critical/native evidence; no new test
   selectors, worktrees, deployment or stable release.
+
+## 2026-11-15: isolate intermittent native reader failure
+
+- Previous turn made progress: native candidate artifacts and actual acceptance
+  evidence exist, but two reader -11 failures remain unresolved.
+- Require three sequential launches of the same Mac bundle and synthetic
+  recipient. Stop on first failure (never retry-until-green); each completed
+  reader stage remains in the report, final success records launch count.
+  Other OS checks stay unchanged. Extend existing orchestration regression
+  with second-launch failure, preserved fault evidence and no downstream export.
+- Existing verifier cases: 12 passed in 1.30s / 4.3s total. Daily critical:
+  14 passed in 7.97s / 11.1s total. Privacy/Ruff/whitespace passed under the
+  two-core/25%-CPU/300s budget; no new selectors or exhaustive run.

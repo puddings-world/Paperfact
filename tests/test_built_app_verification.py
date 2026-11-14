@@ -121,6 +121,8 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     """Script orchestration only; fake child apps are not native package acceptance."""
     out, seen = tmp_path / "acceptance", []
     incomplete = [False]
+    fail_reader = [False]
+    reader_launches = [0]
 
     def fake(command, **kwargs):
         env = kwargs["env"]
@@ -129,6 +131,13 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         seen.append(progress["active_check"])
         assert not progress["passed"] and progress["status"] == "running"
         stdout = b""
+        if progress["active_check"] == "reader":
+            reader_launches[0] += 1
+            if fail_reader[0] and reader_launches[0] == 2:
+                (Path(env["PAPERFACT_DATA"]) / "app-fault.log").write_text(
+                    "synthetic native fault stack", encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(command, -11, b"", b"native crash")
         if "--version" in command:
             stdout = b"paperfact 0.5.0.dev\n"
         elif "-c" in command and "demo_workspace" in command[2]:
@@ -198,6 +207,24 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     failed = json.loads((tmp_path / "incomplete" / "report.json").read_text(encoding="utf-8"))
     assert failed["status"] == "failed" and not failed["passed"]
     assert failed["active_check"] == "lineage-audit-result"
+    incomplete[0] = False
+    monkeypatch.setattr(verify.sys, "platform", "darwin")
+    reader_launches[0] = 0
+    mac = verify.verify(tmp_path / "built", tmp_path / "mac")
+    assert mac["reader_launches_verified"] == reader_launches[0] == 3
+    assert mac["completed_checks"].count("reader") == 3
+    assert "mac-foreground" in mac["completed_checks"]
+    fail_reader[0], reader_launches[0] = True, 0
+    with pytest.raises(verify.CheckFailure):
+        verify.verify(tmp_path / "built", tmp_path / "mac-intermittent")
+    failed = json.loads((tmp_path / "mac-intermittent/report.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "failed" and not failed["passed"]
+    assert failed["active_check"] == "reader" and failed["failure"]["returncode"] == -11
+    assert reader_launches[0] == 2  # Failure is not retried or replaced by a third success.
+    assert "export" not in failed["completed_checks"]
+    assert (tmp_path / "mac-intermittent/recipient/workspace/app-fault.log").read_text(
+        encoding="utf-8",
+    ) == "synthetic native fault stack"
 
 
 def test_main_returns_failure_without_printing_exception_or_old_success(

@@ -20,7 +20,10 @@ the workflow does this on each selected platform. In **Actions > Release > Run
 workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
 default) for all three platforms. Tags always build all platforms. The Mac job
 refuses a non-arm64 runner. Frozen Mac GUI checks use the native Cocoa backend;
-Linux retains Xvfb and Windows uses offscreen checks. Each job has a 30-minute total budget; manual builds
+Linux retains Xvfb and Windows uses offscreen checks. Because of observed
+intermittent Mac startup crashes, the frozen verifier requires three consecutive
+reader launches of the same bundle/workspace, stopping on the first failure.
+This adds about ten seconds of smoke time, not another build or test matrix. Each job has a 30-minute total budget; manual builds
 retain critical source checks and frozen acceptance, without creating a release.
 
 Download `build-macos` (DMG), `provenance-macos` (source identity and report), and

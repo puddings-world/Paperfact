@@ -279,7 +279,11 @@ def _verify(built, out, acceptance):
         ],
         recipient,
     )
-    run("reader", [gui, "--paper", "demo:paperfact"], recipient)
+    # Two native Mac candidates crashed here while a later one passed. Require
+    # three consecutive launches of the same bundle/workspace; never retry a failure.
+    reader_launches = 3 if sys.platform == "darwin" else 1
+    for _ in range(reader_launches):
+        run("reader", [gui, "--paper", "demo:paperfact"], recipient)
     run("export", [cli, "list-export", "demo", "-o", returned], recipient)
     files = acceptance.call("file-fidelity", lambda: compare_files(original, returned))
     workspace = Path(recipient["PAPERFACT_DATA"])
@@ -350,6 +354,7 @@ def _verify(built, out, acceptance):
     result = {
         "passed": True,
         "research_files_preserved": files,
+        "reader_launches_verified": reader_launches,
         "integration": integration,
         "checks": [
             "version",
