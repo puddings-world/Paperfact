@@ -244,6 +244,6 @@ See [development checks](docs/development.md#development) for scope and limits.
 
 Internal per-change recovery APIs are documented in the
 [recovery guide](docs/device-recovery-review.md#per-change-recovery-core).
-Desktop comparison and explicit unanchored-note copy are available. Metadata
-recovery controls, original-bound recovery and hosted/device acceptance remain
-separate gates.
+Desktop comparison offers explicit keep/add/replace/restore for supported
+content, plus unanchored-note copy. Original-bound/compound recovery and
+hosted/device acceptance remain separate gates.

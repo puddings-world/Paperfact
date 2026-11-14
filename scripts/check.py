@@ -164,6 +164,7 @@ RELEASE_JOURNEYS = {
         "tests/test_sync_recovery_choices.py::test_corrupt_saved_provenance_cannot_be_reused_as_a_recovery_decision",
         "tests/test_sync_recovery_note_copy.py::test_repeated_apply_and_restart_preparation_do_not_duplicate_or_overwrite",
         "tests/test_recovery_changes_ui.py::test_visible_native_review_copy_and_refresh_preserve_old_and_existing_notes",
+        "tests/test_recovery_changes_ui.py::test_metadata_choice_is_explicit_saved_once_and_recognized_after_reload",
     ),
 }
 RELEASE_MOBILE = (

@@ -409,6 +409,175 @@ def test_bilingual_compact_review_renders_and_enter_compares(app, prepared, lang
         ui.location.setText("Restored test workspace")
         artifact = Path.cwd() / "build" / f"recovery-changes-{language}.png"
         assert ui.grab().save(str(artifact))
+        ui, _identity = metadata_review(dialog, app, prepared, "replace")
+        ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
+        assert ui.copy_button.isEnabled()
+        ui.location.setText("Restored test workspace")
+        artifact = Path.cwd() / "build" / f"recovery-metadata-{language}.png"
+        assert ui.grab().save(str(artifact))
     finally:
         dialog.close()
         app.setFont(previous_font)
+
+
+
+def metadata_review(view, app, prepared, action):
+    old, source, _change, path, _operation = prepared
+    identity = "added-list" if action == "add" else "backed-list"
+    old.save(old.new_graph_operation("list", identity, dict(name="Chosen old name", note=None)))
+    if action == "restore":
+        client = attached(path)
+        client.save(client.new_graph_operation("list", identity, {}, action="delete"))
+    ui = view.device_review.changes
+    ui.reset_source(source.snapshot)
+    assert ui.load(path.parent)
+    wait(app, lambda: not view.busy)
+    ui.rows.setCurrentRow(ui.rows.count() - 1)
+    assert ui.compare()
+    wait(app, lambda: not view.busy)
+    assert "Chosen old name" in ui.old.toPlainText()
+    assert not ui.copy_button.isEnabled()
+    assert ui.action_select.findData(action) >= 0
+    return ui, identity
+
+
+@pytest.mark.parametrize("action", ["add", "replace", "restore"])
+def test_metadata_choice_is_explicit_saved_once_and_recognized_after_reload(
+    view, app, prepared, monkeypatch, action
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    ui, identity = metadata_review(view, app, prepared, action)
+    path = prepared[3]
+    previous = len(attached(path).journal.pending())
+    confirmations = []
+    def confirm(*args):
+        confirmations.append(args)
+        assert not ui.copy()
+        return QMessageBox.StandardButton.Yes
+    monkeypatch.setattr(QMessageBox, "question", confirm)
+    ui.action_select.setCurrentIndex(ui.action_select.findData(action))
+    assert ui.copy_button.isEnabled() and ui.copy()
+    assert not ui.copy()
+    wait(app, lambda: not view.busy)
+    assert len(confirmations) == (0 if action == "add" else 1)
+    assert len(attached(path).journal.pending()) == previous + 1
+    with closing(_readonly_connection(path)) as conn:
+        assert conn.execute("SELECT name FROM lists WHERE id=?", (identity,)).fetchone()[0] == (
+            "Chosen old name"
+        )
+    assert ui.notice.text() == ui.t["decision_saved"]
+    assert ui.reload()
+    wait(app, lambda: not view.busy)
+    ui.rows.setCurrentRow(ui.rows.count() - 1)
+    assert ui.compare()
+    wait(app, lambda: not view.busy)
+    ui.action_select.setCurrentIndex(ui.action_select.findData(action))
+    assert not ui.copy_button.isEnabled() and not ui.copy()
+    assert ui.notice.text() == ui.t["already_action"]
+    assert len(attached(path).journal.pending()) == previous + 1
+
+
+def test_keep_current_records_only_a_decision_and_confirm_cancel_writes_nothing(
+    view, app, prepared, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    ui, _identity = metadata_review(view, app, prepared, "replace")
+    path = prepared[3]
+    before = dump(path)
+    calls = []
+    def cancel(*args):
+        calls.append(args)
+        assert args[-1] == QMessageBox.StandardButton.No
+        assert not ui.copy()
+        return QMessageBox.StandardButton.No
+    monkeypatch.setattr(QMessageBox, "question", cancel)
+    ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
+    assert not ui.copy() and not view.busy
+    assert len(calls) == 1 and dump(path) == before
+    from paper_daily import sync_recovery_choices as choices
+
+    original = choices.Decision.apply
+    attempts = []
+    def transient(plan, **kwargs):
+        attempts.append(plan.request_id)
+        if len(attempts) == 1:
+            raise RuntimeError("simulated decision delivery failure")
+        return original(plan, **kwargs)
+    monkeypatch.setattr(choices.Decision, "apply", transient)
+    ui.action_select.setCurrentIndex(ui.action_select.findData("keep"))
+    assert ui.copy()
+    wait(app, lambda: not view.busy)
+    assert ui.copy_button.isEnabled() and dump(path) == before
+    assert ui.copy()
+    wait(app, lambda: not view.busy)
+    assert len(calls) == 1 and attached(path).journal.pending() == []
+    assert ui.notice.text() == ui.t["kept"]
+    with closing(_readonly_connection(path)) as conn:
+        assert conn.execute("SELECT name FROM lists WHERE id='backed-list'").fetchone()[0] == (
+            "Backed list"
+        )
+        assert conn.execute("SELECT count(*) FROM integration_operations").fetchone()[0] == 1
+    assert attempts[0] == attempts[1]
+    assert ui.reload()
+    wait(app, lambda: not view.busy)
+    ui.rows.setCurrentRow(ui.rows.count() - 1)
+    assert ui.compare()
+    wait(app, lambda: not view.busy)
+    ui.action_select.setCurrentIndex(ui.action_select.findData("keep"))
+    assert not ui.copy_button.isEnabled() and ui.notice.text() == ui.t["already_action"]
+
+
+@pytest.mark.parametrize("change", ["selection", "target"])
+def test_confirmation_cannot_apply_after_selection_changed(
+    view, app, prepared, monkeypatch, change
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    ui, _identity = metadata_review(view, app, prepared, "replace")
+    path = prepared[3]
+    retained = []
+    ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
+    def during_confirmation(*args):
+        if change == "selection":
+            ui.rows.setCurrentRow(0)
+        else:
+            client = attached(path)
+            client.save(client.new_graph_operation(
+                "list", "backed-list", dict(name="Later target edit", note=None)
+            ))
+        retained.append(dump(path))
+        return QMessageBox.StandardButton.Yes
+    monkeypatch.setattr(QMessageBox, "question", during_confirmation)
+    assert ui.copy() == (change == "target")
+    wait(app, lambda: not view.busy)
+    assert dump(path) == retained[0]
+    if change == "target":
+        assert ui.notice.text() == ui.t["stale"]
+
+
+
+def test_note_replacement_requires_explicit_choice_and_preserves_note_identity(
+    view, app, prepared, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    ui = compared(view, app, prepared)
+    assert ui.action_select.currentData() == "copy"
+    assert ui.action_select.findData("replace") >= 0
+    with closing(_readonly_connection(prepared[3])) as conn:
+        before = conn.execute("SELECT id,body FROM notes ORDER BY id").fetchall()
+    assert before[0][1] == "Backed up note"
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes
+    )
+    ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
+    assert ui.copy()
+    wait(app, lambda: not view.busy)
+    with closing(_readonly_connection(prepared[3])) as conn:
+        after = [tuple(row) for row in conn.execute("SELECT id,body FROM notes ORDER BY id")]
+    assert after == [(before[0][0], "Old device's unsent revision")]
+    pending = attached(prepared[3]).journal.pending()
+    assert len(pending) == 1 and pending[0]["entity_id"] == prepared[4]["entity_id"]
+    assert ui.notice.text() == ui.t["decision_saved"]

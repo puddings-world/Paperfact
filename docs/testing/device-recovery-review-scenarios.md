@@ -87,3 +87,41 @@ Failure/retry and post-commit cancellation checks additionally passed 2 cases in
 6.19s (7.25s bounded invocation). The retry reused the prepared payload and saved
 one note; cancellation after commit kept the truthful saved status. No real
 account, cloud endpoint or research workspace was used.
+
+
+## Contextual typed decisions (2026-11-14)
+
+The same desktop panel now exposes keep/add/replace/restore and note copy through
+one contextual selector. The source-bound native core decides admissibility;
+unsupported originals never acquire a generic write action.
+
+| Requirement | Behavior test |
+|---|---|
+| Add/replace/restore are explicit and durable | `test_metadata_choice_is_explicit_saved_once_and_recognized_after_reload` (three lifecycle states): one new native operation; completed choice retained after reload |
+| Cancel and keep-current | `test_keep_current_records_only_a_decision_and_confirm_cancel_writes_nothing`: confirmation defaults No; reentrant click starts no job; transient keep failure retries the same request; one local receipt and no research/outbox write |
+| Stale modal result | `test_confirmation_cannot_apply_after_selection_changed` (selection/target): Yes cannot apply to another selection or overwrite the newer target edit |
+| Replace rather than duplicate a note | `test_note_replacement_requires_explicit_choice_and_preserves_note_identity`: explicit selection/confirmation; same note ID, exact chosen body and one pending operation |
+| Existing note flow/original boundary | Existing copy, failure/retry, close and PDF-positioned-note refusal remain covered |
+| Bilingual visual check | Actual action selector and primary labels rendered with glyph assertions; both metadata screenshots inspected |
+
+The first add/reload regression failed because the UI computed only currently
+admissible actions and dropped the completed add. The UI now retains independently
+validated saved receipts as well. No existing content or historical assertion was
+weakened. A new note assertion initially compared SQLite Row objects with tuples;
+normalizing row representation preserved the exact identity/content expectation.
+
+The 10-case contextual/affected cohort passed in 70.98s, 75.9s total with
+privacy/Ruff. Critical, modal-change, retry and visual/docs checks passed 28 cases
+in 29.52s, 33.3s total. Final note/old-copy/original/refined-release-selection
+checks passed 4 cases in 9.41s, 12.6s total. Counts overlap; no full suite or
+installed-device/CI/hosted acceptance is claimed. New metadata cases join the
+curated release profile; that entire expanded profile was not rerun this iteration.
+
+The existing background-job and source-bound idempotency patterns were applied:
+worker-owned I/O, source/target leases, explicit publication, no double jobs and
+honest post-commit status. This adds no new global skill or owner-approval queue.
+
+Final portable note-identity, stale-target and usage-contract checks passed 11
+cases in 9.81s, 13.6s total. Invalidated observations also disable the action
+button, even if an old prepared choice remains in memory. These overlap earlier
+checks and do not claim another complete release-profile run.

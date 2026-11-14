@@ -6,11 +6,13 @@ from uuid import NAMESPACE_URL, uuid5
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 from paper_daily import research_generation as generation
 from paper_daily import sync_authority_backup as backup
 from paper_daily import sync_recovery_candidates as candidates
+from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
@@ -73,7 +76,7 @@ TEXT = {
         ),
         "failed": (
             "Could not finish this step. Existing research is preserved. "
-            "Retry the same copy, or refresh after changes."
+            "Retry the same action, or refresh after changes."
         ),
         "stale": "The review changed. Refresh before comparing or copying.",
         "stopped": "Stopped. Refresh the review when ready; no workspace was switched.",
@@ -107,7 +110,7 @@ TEXT = {
         ),
         "saved": ("已另存到選定的還原工作區。請重新檢查再處理其他變更；尚未查詢遠端接收狀態。"),
         "saved_changed": ("新筆記已存入選定工作區，但檢查內容已改變；請重新開啟審閱。"),
-        "failed": ("這一步未完成，既有研究保留。可重試同一次另存；資料改變時請重新檢查。"),
+        "failed": ("這一步未完成，既有研究保留。可重試同一次操作；資料改變時請重新檢查。"),
         "stale": "審閱內容已改變，請重新檢查後再比對或另存。",
         "stopped": "已停止；可稍後重新檢查，工作區未切換。",
         "retired": "此工作區已刪除",
@@ -120,13 +123,57 @@ TEXT = {
 }
 
 
+TEXT["en"].update({
+    "action": "Action", "review": "Compare only", "keep": "Keep current content",
+    "add": "Add old content", "replace": "Use old version", "restore": "Restore old content",
+    "apply": "Apply selected action", "retry_action": "Retry selected action",
+    "ready_action": "This change remains pending. Select an action after comparing both versions.",
+    "already_action": "This action was already recorded. Later edits remain unchanged.",
+    "decision_saved": (
+        "Decision saved locally. Refresh to insp"
+        "ect it; remote acceptance is unchecked."
+    ),
+    "kept": "Kept current content. Decision recorded locally; no research operation was created.",
+    "decision_changed": (
+        "Decision recorded, but the review cha"
+        "nged. Reopen it to inspect the result."
+    ),
+    "confirm_title": "Apply the reviewed version?",
+    "confirm_body": "{action}? This writes a new version in the selected restored workspace. "
+                    "Earlier history is retained. Check both content panes before continuing.",
+})
+TEXT["zh-TW"].update({
+    "action": "處理方式", "review": "只比較",
+    "keep": "保留目前內容", "add": "新增舊內容",
+    "replace": "使用舊版本", "restore": "還原舊內容",
+    "apply": "套用所選方式", "retry_action": "重試所選操作",
+    "ready_action": "此項變更仍待處理。比較兩版內容後，再選擇處理方式。",
+    "already_action": "此操作已記錄，後續編輯保持不變。",
+    "decision_saved": (
+        "決定已存在本機，請重新檢查"
+        "結果；尚未確認遠端接受狀態。"
+    ),
+    "kept": "已保留目前內容並記錄決定，沒有建立研究資料變更。",
+    "decision_changed": (
+        "決定已記錄，但檢查內容已"
+        "變動；請重新開啟查看結果。"
+    ),
+    "confirm_title": "確定套用比較後的版本？",
+    "confirm_body": (
+        "{action}？這會在所選還原工作區寫入"
+        "新版本，先前歷史仍會保留。請先核對兩側內容。"
+    ),
+})
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
         self.panel = panel
         self.t = TEXT["zh-TW" if self.owner.zh else "en"]
         self.snapshot = self.destination = self.observed = self.page = self.plan = None
-        self.failed_copy = False
+        self.failed_copy = self._confirming = False
+        self.action_plans = {}
         self.offset = 0
         self.previous_button = QPushButton(self.t["previous"])
         self.choose_button = QPushButton(self.t["choose"])
@@ -135,6 +182,9 @@ class RecoveryChanges(QWidget):
         self.compare_button = QPushButton(self.t["compare"])
         self.copy_button = QPushButton(self.t["copy"])
         self.copy_button.setProperty("role", "primary")
+        self.action_select = QComboBox()
+        self.action_select.setAccessibleName(self.t["action"])
+        self.action_select.currentIndexChanged.connect(self.action_changed)
         for button in self.buttons:
             button.setAutoDefault(False)
         self.choose_button.clicked.connect(self.choose)
@@ -175,7 +225,12 @@ class RecoveryChanges(QWidget):
         actions.addWidget(self.next_button)
         actions.addStretch()
         actions.addWidget(self.compare_button)
-        actions.addWidget(self.copy_button)
+        self.action_row = QWidget()
+        action_layout = QHBoxLayout(self.action_row)
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.addWidget(QLabel(self.t["action"]))
+        action_layout.addWidget(self.action_select, 1)
+        action_layout.addWidget(self.copy_button)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 12, 0, 0)
         layout.setSpacing(8)
@@ -184,6 +239,7 @@ class RecoveryChanges(QWidget):
         layout.addWidget(self.notice)
         layout.addWidget(self.splitter)
         layout.addLayout(actions)
+        layout.addWidget(self.action_row)
         self.splitter.hide()
         self.controls(False)
 
@@ -212,7 +268,10 @@ class RecoveryChanges(QWidget):
         self.notice.setText(self.t["initial"])
 
     def controls(self, active):
-        active = bool(active and self.snapshot and self.owner._adoption_context_current())
+        active = bool(
+            active and not self._confirming and self.snapshot
+            and self.owner._adoption_context_current()
+        )
         self.choose_button.setEnabled(active)
         self.refresh_button.setEnabled(bool(active and self.destination))
         self.next_button.setEnabled(
@@ -221,14 +280,31 @@ class RecoveryChanges(QWidget):
         self.previous_button.setEnabled(bool(active and self.observed and self.offset))
         self.rows.setEnabled(bool(active and self.observed))
         self.compare_button.setEnabled(bool(active and self.observed and self.selected()))
-        self.copy_button.setEnabled(bool(active and self.plan))
-        self.copy_button.setText(self.t["retry" if self.failed_copy else "copy"])
+        self.copy_button.setEnabled(bool(active and self.observed and self.plan))
+        action = self.action_select.currentData()
+        key = "retry" if action == "copy" else "retry_action"
+        self.copy_button.setText(self.t[key if self.failed_copy else action or "apply"])
+        self.action_select.setEnabled(bool(active and self.observed and self.action_plans))
+        self.action_row.setVisible(bool(self.observed and self.action_plans))
 
     def selected(self):
         item = self.rows.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
 
+    def action_changed(self, _index):
+        action = self.action_select.currentData()
+        plan, already = self.action_plans.get(action, (None, False))
+        self.plan, self.failed_copy = (None if already else plan), False
+        if action:
+            key = ("already" if action == "copy" else "already_action") if already else (
+                "ready" if action == "copy" else "ready_action"
+            )
+            self.notice.setText(self.t[key])
+        self.controls(not self.owner.busy and not self.owner._invalid)
+
     def selection_changed(self, _row):
+        self.action_plans = {}
+        self.action_select.clear()
         self.plan, self.failed_copy = None, False
         self.old.clear()
         self.current.clear()
@@ -375,14 +451,80 @@ class RecoveryChanges(QWidget):
                         ).fetchone()
                         is not None
                     )
-            return observed, selected, comparison, plan, already
+            plans = self._metadata_plans(observed, selected, comparison, stopped)
+            return observed, selected, comparison, plan, already, plans
 
         return self._start("compare", run)
 
+    def _metadata_plans(self, observed, selected, comparison, stopped):
+        operation = comparison["source"]["operation"]
+        options, current_action = ["keep"], None
+        if (
+            operation["version"] == 2 and operation["entity_type"] in choices.KINDS
+            and operation["action"] == "put"
+        ):
+            current = comparison["target"]["entity_state"]
+            current_action = (
+                "add" if current is None else "replace" if current["active"] else "restore"
+            )
+            options.extend(("add", "replace", "restore"))
+        plans = {}
+        for action in options:
+            request_id = str(uuid5(NAMESPACE_URL, "paperfact:recovery-choice-ui:v1:" +
+                candidates._json([
+                    observed.binding, operation["workspace_id"], operation["device_id"],
+                    operation["operation_id"], candidates._fingerprint(operation), action,
+                ])))
+            with closing(_readonly_connection(observed.database)) as conn:
+                saved = conn.execute(
+                    "SELECT 1 FROM integration_operations WHERE id=?", (request_id,)
+                ).fetchone() is not None
+                native = conn.execute(
+                    "SELECT 1 FROM paperfact_sync_operations WHERE operation_id=?", (request_id,)
+                ).fetchone() is not None
+            if action != "keep" and action != current_action and not (saved or native):
+                continue
+            try:
+                plan = choices.prepare(observed, selected, action, request_id, cancelled=stopped)
+            except ValueError:
+                if saved or native:
+                    raise
+                continue
+            plans[action] = (plan, saved)
+        return plans
+
+    def _completion(self, receipt, changed=False):
+        if "choice" not in receipt:
+            return self.t["saved_changed" if changed else "saved"]
+        return self.t["decision_changed" if changed else
+                      "kept" if receipt["choice"] == "keep" else "decision_saved"]
+
     def copy(self):
-        if not self.copy_button.isEnabled():
+        if self._confirming or not self.copy_button.isEnabled():
             return False
-        plan = self.plan
+        plan, action = self.plan, self.action_select.currentData()
+        if action in {"replace", "restore"}:
+            self._confirming = True
+            self.controls(False)
+            try:
+                answer = QMessageBox.question(
+                    self, self.t["confirm_title"],
+                    self.t["confirm_body"].format(action=self.t[action]),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+            finally:
+                self._confirming = False
+            if self.owner.disposed or self.owner._closing:
+                return False
+            self.controls(not self.owner.busy and not self.owner._invalid)
+            if answer != QMessageBox.StandardButton.Yes:
+                return False
+        if (
+            plan is not self.plan or self.owner.busy
+            or not self.owner._adoption_context_current()
+        ):
+            return False
 
         def run(ticket, progress):
             progress("device_changes:write")
@@ -421,7 +563,9 @@ class RecoveryChanges(QWidget):
             self.observed = self.page = self.plan = None
             self.rows.clear()
             self.splitter.hide()
-            owner.status.setText(self.t["saved_changed"] if copied else self.t["stale"])
+            owner.status.setText(
+                self._completion(worker.result[0], True) if copied else self.t["stale"]
+            )
             return
         if copied:
             try:
@@ -437,7 +581,7 @@ class RecoveryChanges(QWidget):
                 stable = False
             self.observed = self.page = self.plan = None
             self.failed_copy = False
-            message = self.t["saved" if stable else "saved_changed"]
+            message = self._completion(worker.result[0], not stable)
             self.notice.setText(message)
             owner.status.setText(message)
             self.old.clear()
@@ -476,16 +620,28 @@ class RecoveryChanges(QWidget):
                 if self.rows.count():
                     self.rows.setFocus()
             else:
-                _observed, selected, comparison, plan, already = worker.result
+                _observed, selected, comparison, plan, already, plans = worker.result
                 if observed is not self.observed or selected != self.selected():
                     raise ValueError("Selected recovery change changed")
                 source = comparison["source"]["operation"]
                 effective = comparison["target"]["effective_operation"]
                 self.old.setPlainText(self._content(source))
                 self.current.setPlainText(self._content(effective))
-                self.plan = None if already else plan
+                self.action_plans = dict(plans)
+                if plan is not None:
+                    self.action_plans["copy"] = (plan, already)
+                self.action_select.blockSignals(True)
+                self.action_select.clear()
+                self.action_select.addItem(self.t["review"], "")
+                for action in self.action_plans:
+                    self.action_select.addItem(self.t[action], action)
+                if plan is not None:
+                    self.action_select.setCurrentIndex(self.action_select.findData("copy"))
+                self.action_select.blockSignals(False)
+                self.action_changed(self.action_select.currentIndex())
                 self.notice.setText(
-                    self.t["already" if already else "ready" if plan is not None else "unsupported"]
+                    self.t["already" if already else "ready" if plan is not None else
+                           "ready_action" if len(plans) > 1 else "unsupported"]
                 )
                 self.old.setFocus()
             owner.status.setText(self.notice.text())

@@ -1,6 +1,6 @@
 # Review old-device work before authority recovery
 
-Status: local v0.5 backup comparison and explicit note-copy review; not automatic
+Status: local v0.5 comparison and explicit typed recovery choices; not automatic
 post-disaster merging or complete recovery.
 Use this when recovering an authority from an older backup while a device may
 contain more recent work. Keep the old device workspace intact.
@@ -43,8 +43,8 @@ backup. Join the [fresh recovered authority](sync-authority-restore.md) into a
 separate new local directory with newly issued device credentials. Review supported
 research-package imports there; this comparison does not prepare/apply them.
 Do not rewrite an old identity/cursor, discard an outbox or blindly replay an old
-operation into the new authority. Guided comparison and unanchored-note copy are available below. Other typed
-reconciliation remains pending.
+operation into the new authority. Guided comparison and supported keep/add/replace/restore or note-copy choices
+are available below. Exact-original and compound reconciliation remain pending.
 
 ## Operator CLI and API
 
@@ -88,8 +88,8 @@ checks and the unresolved full, hosted and installed-device gates.
 ## Per-change recovery core
 
 The internal APIs below are integrated into the checkpoint source, with isolated
-native-fixture coverage. Guided desktop comparison and unanchored-note copy use
-these APIs; metadata keep/add/replace/restore still needs its desktop controls.
+native-fixture coverage. Guided desktop comparison, note copy and supported
+metadata/note keep/add/replace/restore use these APIs.
 Old workspace/history remains intact; old envelopes are not blindly replayed.
 
 | Entry | Contract |
@@ -132,6 +132,38 @@ acceptance remain open. A successful subset does not mark recovery complete.
 Cancellation/close drains active work. Changing the workspace, source binding or
 queued target observation blocks stale application. A save that already committed
 is reported as saved even if cancellation or a target change occurs afterwards.
-PDF-bound notes, other content and deletion remain visible but pending; there is
-no generic flatten/replay action. Metadata recovery controls, exact-original
-verification and complete recovery/device acceptance remain outstanding.
+PDF-bound notes, unsupported scientific/file content and deletion remain visible
+but pending; there is no generic flatten/replay action. Exact-original verification, new parent-lifetime mapping, compound recovery and
+complete recovery/device acceptance remain outstanding.
+
+
+## Choose how to recover supported content
+
+After comparing a row, the **Action** selector lists only currently admissible
+choices plus previously recorded choices. Lists and other metadata default to
+**Compare only**. Unanchored notes retain **Copy as new note** as the default;
+choosing a replacement instead preserves the original note identity.
+
+| Choice | What it does |
+|---|---|
+| Keep current content | Records a local decision; writes no research operation or outbox item |
+| Add old content | Creates a supported entity only when its target is absent |
+| Use old version | Writes a new native version over the reviewed current entity; earlier history remains |
+| Restore old content | Explicitly restores a known deleted entity, without silently restoring its children |
+| Copy as new note | Creates a distinct unanchored note, preserving the original note |
+
+Use/restore shows a confirmation dialog defaulting to **No**. Repeated activation
+while confirming starts no job. Changing selection during the dialog cancels the
+old choice; a later target edit is rechecked in the native transaction and cannot
+be overwritten by the stale decision. Failure/retry reuses the prepared request.
+
+Refreshing retains a completed add/replace/restore/keep decision even when its
+success changed what is currently admissible. Selecting that already-recorded
+action cannot apply it again or overwrite subsequent edits. Another explicit,
+currently eligible choice requires a new review-bound decision.
+
+The controls cover supported lists, paper metadata, membership, reading state,
+order and unanchored notes, subject to exact parent-lifetime checks. Keep is a
+local preservation decision, not proof of original ownership or complete recovery.
+PDF-positioned notes and unsupported scientific/file operations cannot obtain a
+generic write capability; new parent mapping and original verification remain open.
