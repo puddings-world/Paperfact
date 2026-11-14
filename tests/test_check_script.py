@@ -273,3 +273,87 @@ def test_cli_help_explains_profiles_without_running_checks(tmp_path, capsys):
     assert stopped.value.code == 0
     assert "focused" in capsys.readouterr().out
     assert not (tmp_path / "build").exists()
+
+
+@pytest.mark.parametrize("name", ["new-device.json", "unexpected-config.txt"])
+def test_device_connection_record_stops_checks_without_echoing_credential(
+    tmp_path, monkeypatch, capsys, name
+):
+    monkeypatch.setattr(CHECK["shutil"], "which", lambda _name: "node")
+    token = "device-runtime-" + "x" * 43
+    packet = tmp_path / name
+    packet.write_text(json.dumps({
+        "format": 1, "endpoint": "https://sync.example.org",
+        "workspace_id": "workspace", "device_id": "mac", "token": token,
+    }), encoding="utf-8")
+    called = []
+
+    def execute(*args, **kwargs):
+        called.append(args)
+        return SimpleNamespace(returncode=0)
+
+    assert CHECK["run_checks"](tmp_path, execute, files=[packet]) == 1
+    report = capsys.readouterr().out
+    assert not called and token not in report
+    assert f"{name}:1: Paperfact device credential" in report
+
+
+@pytest.mark.parametrize("record", [
+    {"format": 1, "endpoint": "https://sync.example.org", "workspace_id": "workspace",
+     "device_id": "example", "token": "REPLACE_WITH_NEW_DEVICE_TOKEN"},
+    {"format": 1, "endpoint": "https://sync.example.org", "workspace_id": "workspace",
+     "device_id": "example", "token": ""},
+    {"format": 1, "token": "unrelated application metadata"},
+])
+def test_connection_placeholders_and_unrelated_json_remain_committable(tmp_path, record):
+    packet = tmp_path / "example.json"
+    packet.write_text(json.dumps(record), encoding="utf-8")
+    assert CHECK["scan_privacy"](tmp_path, [packet], []) == []
+
+
+def test_private_sync_outputs_are_absent_from_a_real_git_file_inventory(tmp_path):
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True, capture_output=True)
+    (tmp_path / ".gitignore").write_bytes((root / ".gitignore").read_bytes())
+    for name in ("desktop-connection.json", "nested/mac-connection.json",
+                 "sync-service/authority.sqlite", ".paperfact-sync/service/authority.sqlite"):
+        item = tmp_path / name
+        item.parent.mkdir(parents=True, exist_ok=True)
+        item.write_text("synthetic private fixture", encoding="utf-8")
+    (tmp_path / "source.py").write_text("# committable fixture\n", encoding="utf-8")
+    result = CHECK["committable_files"](tmp_path)
+    assert {item.relative_to(tmp_path).as_posix() for item in result} == {
+        ".gitignore", "source.py"
+    }
+
+
+def test_critical_profile_runs_named_journeys_without_claiming_exhaustive_pass(tmp_path):
+    expected = [test for group in CHECK["CRITICAL_JOURNEYS"].values() for test in group]
+    for test in expected:
+        fixture_test(tmp_path, test.partition("::")[0])
+    observed = []
+    def execute(command, **kwargs):
+        observed.append(command)
+        return SimpleNamespace(returncode=0)
+    assert CHECK["run_checks"](tmp_path, execute, files=[], profile="critical") == 0
+    report = report_at(tmp_path)
+    assert report["selection"]["python"] == expected
+    assert report["journeys"] == {
+        key: list(value) for key, value in CHECK["CRITICAL_JOURNEYS"].items()
+    }
+    assert report["status"] == "passed" and not report["full_check_passed"]
+    assert observed[1][5:5 + len(expected)] == expected
+
+
+def test_cli_defaults_to_critical_journeys():
+    calls = []
+    main = CHECK["main"]
+    original = main.__globals__["run_checks"]
+    try:
+        main.__globals__["run_checks"] = lambda root, **options: calls.append(options) or 0
+        assert main(Path("."), []) == 0
+    finally:
+        main.__globals__["run_checks"] = original
+    assert calls[0]["profile"] == "critical"

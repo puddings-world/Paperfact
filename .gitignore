@@ -55,3 +55,8 @@ desktop.ini
 
 # Generated icon (rebuilt by scripts/make_icon.py)
 /assets/paper-daily.ico
+
+# Private sync authority and issued device records; store outside the checkout.
+/sync-service/
+/.paperfact-sync/
+*-connection.json

@@ -25,19 +25,23 @@ it after every small edit; record concurrent changes and revalidate affected inp
 
 Sessions work in their own worktree and branch; see
 [working in parallel](docs/collaboration.md). A focused check that passes is enough
-to commit on your own branch. Run the full check on the merged result before a
-merge into `develop/0.5` is pushed, and before declaring a release candidate:
+to commit on your own branch. The owner approved curated critical checks on
+2026-11-14: integration requires the default critical gate plus affected tests,
+not an exhaustive run after every edit.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/check.py
 ```
 
-Use `.venv/bin/python scripts/check.py` on macOS/Linux. This first scans every
-committable file for credentials and for the maintainer's own identifiers
-(`PAPERFACT_PRIVATE_TERMS` in the ignored `.env`), then runs Ruff, all Python
-tests (including desktop stress scenarios), and all frontend tests. Do not skip,
-delete, or weaken an existing test to pass a change without user-approved behavior
-changes. Report exact test counts and any live-only checks not performed.
+Use `.venv/bin/python scripts/check.py` on macOS/Linux. The default `critical`
+profile scans committable files for secrets, runs Ruff, and tests the named key
+journeys. On Windows, `scripts/check_bounded.py` applies a 300-second wall budget
+and limited CPU to that same check. Its native governor is Windows-only.
+Use `--profile focused` for changed behavior (3-5 minutes), and `--profile full`
+explicitly for broad release validation when justified. Beta validation and
+packaging share a 20-30 minute budget. Keep historical assertions; never disguise
+a timeout or a partial pass as exhaustive validation. Report exact counts and
+unperformed installed-device/provider checks. See [development](docs/development.md).
 
 Use isolated fixture workspaces and simulated provider responses for stress tests.
 Never repeatedly invoke real account login, paid model calls, publishing, or the

@@ -1,4 +1,4 @@
-"""Explicit iteration checks; the default remains the complete release gate."""
+"""Critical user journeys by default; exhaustive checks remain explicitly available."""
 
 import argparse
 import json
@@ -76,6 +76,19 @@ def scan_privacy(root, files, terms):
         if b"\0" in data[:8192]:
             continue
         text = data.decode("utf-8", errors="replace")
+        if text.lstrip().startswith("{"):
+            try:
+                record = json.loads(text)
+            except (ValueError, RecursionError):
+                record = None
+            if (
+                isinstance(record, dict)
+                and set(record) == {"format", "endpoint", "workspace_id", "device_id", "token"}
+                and type(record["format"]) is int and record["format"] == 1
+                and isinstance(record["token"], str)
+                and record["token"] not in ("", "REPLACE_WITH_NEW_DEVICE_TOKEN")
+            ):
+                found.append(f"{path.relative_to(root).as_posix()}:1: Paperfact device credential")
         for number, line in enumerate(text.splitlines(), 1):
             found += [
                 f"{path.relative_to(root).as_posix()}:{number}: {name}"
@@ -90,6 +103,35 @@ DOC_TESTS = (
     "tests/test_distribution.py",
     "tests/test_check_script.py",
 )
+
+
+# Existing behavior tests, grouped by the user outcome they protect.
+CRITICAL_JOURNEYS = {
+    "Startup": ("tests/test_smoke_onboarding.py",),
+    "List package and PDF preservation": (
+        "tests/test_bundle.py::test_a_bundle_carries_the_analyses_and_files_but_not_history",
+        "tests/test_bundle.py::test_the_receivers_own_work_wins_unless_asked",
+        "tests/test_bundle.py::test_the_lists_pinned_papers_and_order_travel_with_it",
+    ),
+    "Notes and durable Q&A": (
+        "tests/test_list_notes.py::test_a_note_is_rewritten_cleared_and_bounded",
+        "tests/test_research_chat.py::test_question_is_durable_before_answer_and_exact_answer_retry_is_idempotent",
+        "tests/test_research_chat.py::test_workspace_switch_writes_only_original_database",
+    ),
+    "AI configuration isolation": (
+        "tests/test_ai_profiles.py::test_backend_switch_drops_previous_credentials_endpoint_and_model",
+        "tests/test_ai_profiles.py::test_task_routes_do_not_change_default_and_can_follow_it_again",
+    ),
+    "Offline synchronization": (
+        "tests/test_sync_client.py::test_list_and_note_converge_after_restart_and_duplicate_transfer",
+        "tests/test_sync_client.py::test_offline_concurrent_note_edits_preserve_both_versions",
+        "tests/test_sync_client.py::test_timeout_after_remote_commit_retries_once",
+    ),
+    "Backup and restore": (
+        "tests/test_workspace_dialog.py::test_actual_backup_preview_restore_buttons_preserve_research",
+        "tests/test_workspace_dialog.py::test_cancelled_file_choosers_do_not_create_jobs",
+    ),
+}
 
 
 def selected_tests(root, values, suffix):
@@ -116,14 +158,18 @@ def selected_tests(root, values, suffix):
 
 
 def check_plan(root, profile, python_tests, frontend_tests, mobile):
-    if profile not in {"full", "focused", "docs"}:
+    if profile not in {"full", "critical", "focused", "docs"}:
         raise ValueError("Unknown check profile.")
     if profile != "focused" and (python_tests or frontend_tests or mobile):
-        raise ValueError("Selections require --profile focused; full/docs cannot be narrowed.")
+        raise ValueError("Selections require --profile focused; fixed profiles cannot be narrowed.")
     if profile == "focused" and not (python_tests or frontend_tests or mobile):
         raise ValueError("Focused checks require --python, --frontend or --mobile.")
     python_tests = selected_tests(root, python_tests, ".py")
     frontend_tests = selected_tests(root, frontend_tests, ".mjs")
+    if profile == "critical":
+        python_tests = selected_tests(root, [
+            test for group in CRITICAL_JOURNEYS.values() for test in group
+        ], ".py")
     if profile == "docs":
         python_tests = selected_tests(root, DOC_TESTS, ".py")
     if profile == "full":
@@ -158,7 +204,10 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
     started = clock()
     report = {"profile": profile, "status": "running", "full_check_passed": False,
               "stages": []}
-    # No environment values, account details or command/executable paths in reports.
+    run_id = os.environ.get("PAPERFACT_CHECK_RUN_ID", "")
+    if len(run_id) == 32 and all(char in "0123456789abcdef" for char in run_id):
+        report["run_id"] = run_id
+    # No credentials, environment dumps or command/executable paths in reports.
     (root / "build").mkdir(exist_ok=True)
     temporary = root / "build" / ("check-report-" + uuid4().hex + ".tmp")
 
@@ -174,6 +223,10 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
         checks, report["selection"] = check_plan(
             root, profile, python_tests, frontend_tests, mobile,
         )
+        if profile == "critical":
+            report["journeys"] = CRITICAL_JOURNEYS
+            for name in CRITICAL_JOURNEYS:
+                print(f"Protecting: {name}", flush=True)
         print(f"Profile: {profile}. Stage counts are not time estimates.", flush=True)
         print("Pytest percentages count cases in its phase, not overall progress.", flush=True)
         for index, (name, command) in enumerate([("Privacy scan", None), *checks], 1):
@@ -209,7 +262,7 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
         report["full_check_passed"] = profile == "full" and code == 0
         if not code:
             print("All checks passed." if profile == "full" else
-                  f"{profile.capitalize()} checks passed; full check still required before commit.",
+                  f"{profile.capitalize()} checks passed; exhaustive suite not run.",
                   flush=True)
     except KeyboardInterrupt:
         code = 130
@@ -233,7 +286,9 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
 
 def main(root, argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("full", "focused", "docs"), default="full")
+    parser.add_argument(
+        "--profile", choices=("critical", "full", "focused", "docs"), default="critical",
+    )
     parser.add_argument("--python", nargs="+", default=[], dest="python_tests")
     parser.add_argument("--frontend", nargs="+", default=[], dest="frontend_tests")
     parser.add_argument("--mobile", action="store_true")

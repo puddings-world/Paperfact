@@ -140,42 +140,50 @@ Reusable development patterns and their cross-agent synchronization are describe
 in [development skills](development-skills.md). Edit canonical `skills/` content;
 the full test suite checks that discovered copies stay synchronized.
 
-Run the complete check with the environment's Python:
+The default check protects the critical user journeys:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/check.py
 ```
 
-On macOS/Linux, use `.venv/bin/python scripts/check.py`. The default `full`
-profile runs privacy, Ruff, all Python/desktop tests, frontend tests, and mobile
-domain/service integration tests. Node.js is required for this complete gate.
-A failure stops the check with a nonzero exit status.
+On macOS/Linux use `.venv/bin/python scripts/check.py`. On Windows use
+`scripts/check_bounded.py` instead of `scripts/check.py` to enforce a 300-second
+wall budget, at most two logical processors and a 25% CPU cap for the child tree.
+The bounded entry currently fails closed on other operating systems; no equivalent
+native resource cap has been verified there.
 
-During development, run the smallest explicit selection that covers the change
-and its callers. Include normal, failure, cancellation and stale-result behavior
-where applicable. Do not run the full suite after each edit:
+The `critical` default selects existing behavior tests for startup, list packages
+and PDFs, notes and durable Q&A, AI configuration isolation, offline convergence
+and conflicts, and backup/restore. The exact selectors live in
+`scripts/check.py` (`CRITICAL_JOURNEYS`). The console names these journeys and
+`build/check-latest.json` records their selectors, stage outcomes and durations.
+This is a curated regression gate, not exhaustive coverage or installed-device
+acceptance. Missing selected tests fail rather than silently reducing coverage.
+
+For an edit, run only the affected behavior and its failure boundaries:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/check.py --profile focused --python tests/test_check_script.py
-.\.venv\Scripts\python.exe scripts/check.py --profile focused --frontend tests/test_gemini_usage.mjs
-.\.venv\Scripts\python.exe scripts/check.py --profile focused --mobile
-.\.venv\Scripts\python.exe scripts/check.py --profile docs
+.\.venv\Scripts\python.exe scripts/check_bounded.py --profile focused --python tests/test_check_script.py
 ```
 
-Replace example test paths with the relevant existing files. Python selections
-also accept a pytest `::test_name` suffix. Combine selections to cover boundaries.
-The `docs` profile checks usage instructions, distribution contracts, and this
-check runner; it is an iteration shortcut, not a docs-only commit exemption.
-Every profile scans all committable files and runs Ruff across the repository.
-Python-only focused/docs runs do not need Node. Empty or invalid selections fail;
-the full profile cannot be narrowed with selection flags.
+Python selectors accept `::test_name`; `--frontend tests/test_name.mjs` and
+`--mobile` select frontend or mobile checks. `--profile docs` checks documentation
+contracts. Explicit selectors require `--profile focused`. Every profile also
+scans committable files for secrets and runs Ruff.
 
-Once the change is coherent, freeze the candidate and run the full check once
-before declaring completion, committing, or pushing. Re-run after relevant code,
-test, dependency or configuration changes; record any concurrent edits explicitly.
-A focused pass never substitutes for the final full gate. Native Windows/Mac
-installation, previous-version upgrade, and real provider checks are separate
-acceptance steps; fixture success does not prove them.
+A focused pass permits a scoped development checkpoint. Integration requires the
+critical gate plus affected tests. Keep historical regressions intact; run
+`--profile full` explicitly when broad changes justify it or preparing a release,
+not after every edit. It includes every Python, frontend and mobile test and
+requires Node.js. The Windows bounded entry allows at most 1800 seconds for this
+profile. A timeout is incomplete validation, never a pass; investigate the slow
+area rather than silently extending the limit. Beta validation and packaging
+must fit a shared 20-30 minute budget. Do not run parallel full checks or use
+`-n auto` on the owner's machine.
+
+Report the actual selected cases, results and untested boundaries. Critical or
+focused success never sets `full_check_passed`. Native Windows/Mac installation,
+upgrade and real-provider checks remain separate release acceptance.
 
 The runner stops on the first failing test and prints actual stage durations and
 pytest's 20 slowest test phases. After 60 seconds in one test, pytest prints thread
