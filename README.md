@@ -209,8 +209,8 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 These are planned capabilities, not features in v0.4.x releases.
 
 The development sync dialog supports [explicit saved reconnection](docs/remembered-sync-connection.md):
-verify this device in one click, then choose when to sync. Hosted pairing and
-installed-device acceptance remain open.
+verify this device in one click, then choose manual, session-only or explicitly
+remembered startup sync. Hosted pairing and installed-device acceptance remain open.
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
 [Implementation plan](docs/implementation-0.5.0.md) |

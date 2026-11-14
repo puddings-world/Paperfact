@@ -153,6 +153,7 @@ RELEASE_JOURNEYS = {
     "Private diagnostics and fresh-install identity": (
         "tests/test_diagnostics.py::test_export_contains_only_reviewed_allowlisted_data",
         "tests/test_distribution.py::test_fresh_install_can_sign_in_using_bundled_application_identity",
+        "tests/test_continuous_sync.py::test_actual_main_window_resumes_only_the_opted_in_device",
     ),
     "Reading goals and source-bound research": (
         "tests/test_reading_goals.py::test_edit_reload_clear_preserves_description_notes_and_other_research",

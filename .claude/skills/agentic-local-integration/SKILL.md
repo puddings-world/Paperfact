@@ -60,6 +60,13 @@ buttons serialize through a server just to share behavior.
   workspace/device binding. A valid token and a local cancellation generation do not
   prove they refer to the same workspace. Recheck binding after credential changes;
   preserve per-request authorization and do not persist tokens in transfer state.
+- Separate saved credentials from permission to upload automatically at startup.
+  Require explicit device-local opt-in before opening the native store on launch;
+  bind it to the local database lifetime and exact verified connection. Recheck
+  permission at handshake delivery before starting uploads. Copying/restoring
+  research or rotating a saved credential must not grant the new context consent.
+  Offline authentication can back off; native-store denial or rejected credentials
+  require review. This is a validated-local pattern, not a hosted enrollment design.
 - Recheck a delayed result at its actual GUI delivery boundary. A worker can
   finish against the correct workspace and queue its signal before that workspace
   is rebound. Use bounded local identity/binding guards before filling credentials

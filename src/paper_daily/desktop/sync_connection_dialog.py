@@ -243,6 +243,7 @@ class SyncConnectionDialog(QDialog):
         self.session, self.writers_busy = session, writers_busy
         self.automatic = automatic
         self._vault = vault
+        self._startup_enabled = False
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
         self.v = VAULT_COPY.get(language, VAULT_COPY["en"])
@@ -379,6 +380,18 @@ class SyncConnectionDialog(QDialog):
         self.automatic_box.setVisible(self.automatic is not None)
         self.automatic_box.toggled.connect(self._toggle_automatic)
         layout.addWidget(self.automatic_box)
+        self.startup_box = QCheckBox(
+            "下次開啟此工作區時自動連線並同步"
+            if self.zh else "Reconnect and sync when this workspace opens on this device"
+        )
+        self.startup_box.setToolTip(
+            "將已核對連線存在系統憑證庫，並允許此裝置開啟時同步研究內容。"
+            if self.zh else "Remember the verified connection in the system credential store and "
+            "allow research synchronization on future opens. This device only."
+        )
+        self.startup_box.setVisible(self.automatic is not None)
+        self.startup_box.toggled.connect(self._toggle_startup)
+        layout.addWidget(self.startup_box)
         self.automatic_status = QLabel()
         self.automatic_status.setWordWrap(True)
         layout.addWidget(self.automatic_status)
@@ -468,6 +481,24 @@ class SyncConnectionDialog(QDialog):
         else:
             self.automatic.stop()
 
+    def _toggle_startup(self, checked):
+        if self.automatic is None:
+            return
+        if (self.busy or self.disposed or self._invalid or self.automatic.busy
+                or (checked and (not self.eligible
+                                 or self.binding != self.session.summary()["identity"]
+                                 or not self.session.summary()["authenticated"]))):
+            self._buttons()
+            return
+        self.automatic.stop()
+
+        def run(ticket, _progress):
+            self._connection_vault().set_startup(self.session, checked, ticket)
+            return checked
+
+        if not self._start("startup_enable" if checked else "startup_disable", run):
+            self._buttons()
+
     def _automatic_changed(self, value):
         if self.disposed:
             return
@@ -536,6 +567,13 @@ class SyncConnectionDialog(QDialog):
                 checked
                 or (available and live and self.eligible and self.binding == summary["identity"])
             )
+        )
+        self.startup_box.blockSignals(True)
+        self.startup_box.setChecked(self._startup_enabled)
+        self.startup_box.blockSignals(False)
+        self.startup_box.setEnabled(
+            available and (self._startup_enabled or (
+                live and self.eligible and self.binding == summary["identity"]))
         )
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
@@ -624,7 +662,8 @@ class SyncConnectionDialog(QDialog):
                 eligible = True
             except EnrollmentRequired:
                 eligible = False
-            return {"binding": binding, "eligible": eligible}
+            return {"binding": binding, "eligible": eligible,
+                    "startup": bool(self._connection_vault().startup_record())}
 
         return self._start("probe", run)
 
@@ -840,10 +879,13 @@ class SyncConnectionDialog(QDialog):
             not self._invalid
             and not self._closing
             and kind
-            in {"load_saved", "forget_saved", "connect", "connection_details", "reconnect_saved"}
+            in {"load_saved", "forget_saved", "connect", "connection_details", "reconnect_saved",
+                "startup_enable", "startup_disable"}
         ):
             self._connection_scope_current()
         if not self._invalid and not self._closing:
+            if kind in {"startup_enable", "startup_disable", "forget_saved"}:
+                self._startup_enabled = bool(self._connection_vault().startup_record())
             if worker.error:
                 self.status.setText(
                     (
@@ -859,6 +901,7 @@ class SyncConnectionDialog(QDialog):
             elif worker.ticket.cancelled:
                 self.status.setText(self.t["cancelled"])
             elif kind == "probe":
+                self._startup_enabled = worker.result["startup"]
                 self.binding, self.eligible = worker.result["binding"], worker.result["eligible"]
                 if self.binding and not self.workspace_id.text() and not self.device_id.text():
                     self._setting = True
@@ -866,6 +909,16 @@ class SyncConnectionDialog(QDialog):
                     self.device_id.setText(self.binding["device_id"])
                     self._setting = False
                 self.status.clear()
+            elif kind in {"startup_enable", "startup_disable"}:
+                if self._startup_enabled and self.automatic is not None:
+                    self.automatic.enable()
+                self.status.setText(
+                    ("已啟用此裝置的自動連線與同步。" if self.zh
+                     else "Automatic reconnect and sync enabled for this device.")
+                    if self._startup_enabled else
+                    ("已關閉下次自動連線與同步。" if self.zh
+                     else "Automatic reconnect and sync on future opens is off.")
+                )
             elif kind == "connect":
                 self._setting = True
                 self.credential.clear()

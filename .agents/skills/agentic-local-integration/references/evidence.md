@@ -530,3 +530,23 @@ source ownership, research revisions and authentication remain separate checks.
   No new global installation or cross-project reuse claim.
 
 - Regression selector: `python scripts/check_bounded.py --profile focused --python tests/test_sync_recovery_choices.py::test_explicit_root_restore_preserves_historical_proofs_for_child_restore`. This selector passed in the recorded 7-case gate. Final peer-order/budget/skill/docs gate: 25 passed, 23.3s total.
+
+
+### Device-local startup consent, 2026-11-14 (validated-local)
+
+- Trigger: process-local continuous sync required reconnection after every restart;
+  merely remembering a token did not authorize future background research uploads.
+- Invariant: opt-in stays outside research and is scoped to a physical local DB,
+  binding and exact credential fingerprint. Read the native store only after that
+  marker exists; verify the server, then recheck context/permission at GUI delivery.
+- Implementation: existing `connection_vault.py`, `desktop/continuous_sync.py`,
+  sync dialog and MainWindow startup; no new service, plaintext token store or
+  automatic enrollment. Native-store failure pauses; offline authentication backs off.
+- Evidence: 10 focused boundary/UI/fixture-delivery cases passed in 20.2s total;
+  actual MainWindow delivery plus bilingual rendering passed 3 cases in 15.2s.
+  Tests include copied DB, changed credential, cancelled save, failed forget,
+  queued handshake after permission/binding change, owner close and offline retry.
+- Limits: injected native store and isolated reference authority; native prompts,
+  installed upgrades and physical Mac/phone journey unverified. Not cross-project
+  reuse, not global installation, and not authorization to deploy or upload research.
+- Privacy: synthetic records only; no owner identifiers, tokens or research captured.

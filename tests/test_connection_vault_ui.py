@@ -302,7 +302,11 @@ def test_saved_reconnect_bilingual_screen_has_no_secret_and_keeps_details_advanc
     app.setFont(fonts.font(pixels=14))
     face = QRawFont.fromFont(app.font())
     assert face.isValid() and all(face.glyphIndexesForString("Paperfact " + chr(36899)))
-    view = SyncConnectionDialog(session, language=language, vault=saved[0])
+    from paper_daily.desktop.continuous_sync import ContinuousSync
+
+    automatic = ContinuousSync(session)
+    automatic.timer.stop()
+    view = SyncConnectionDialog(session, language=language, vault=saved[0], automatic=automatic)
     settings_style.apply(view)
     try:
         view.resize(700, 760)
@@ -315,5 +319,38 @@ def test_saved_reconnect_bilingual_screen_has_no_secret_and_keeps_details_advanc
         artifact = Path.cwd() / "build" / f"saved-reconnect-{language}.png"
         assert view.grab().save(str(artifact))
     finally:
+        automatic.stop()
+        automatic.timer.stop()
         view.close()
         app.setFont(previous)
+
+
+def test_explicit_startup_checkbox_saves_verified_connection_and_can_be_disabled(service, saved):
+    from paper_daily.desktop.continuous_sync import ContinuousSync
+
+    app = QApplication.instance() or QApplication([])
+    automatic = ContinuousSync(service[0])
+    automatic.timer.stop()
+    view = SyncConnectionDialog(service[0], language="en", vault=saved[0], automatic=automatic)
+    try:
+        view.show()
+        wait(app, lambda: view.binding is not None and not view.busy)
+        assert view.startup_box.isVisible() and not view.startup_box.isEnabled()
+        verify((app, view), service)
+        assert view.startup_box.isEnabled() and not view.startup_box.isChecked()
+        view.startup_box.click()
+        assert not view.startup_box.isEnabled()
+        wait(app, lambda: not view.busy)
+        automatic.timer.stop()
+        assert view.startup_box.isChecked() and automatic.enabled
+        assert saved[0].startup_record() and not view.credential.text()
+        view.startup_box.click()
+        wait(app, lambda: not view.busy)
+        assert not view.startup_box.isChecked() and not automatic.enabled
+        assert saved[0].startup_record() is None
+        assert saved[0].load() == saved[2]  # Disable does not delete the credential.
+    finally:
+        automatic.stop()
+        wait(app, lambda: not automatic.busy)
+        automatic.timer.stop()
+        view.close()

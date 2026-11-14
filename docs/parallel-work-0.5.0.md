@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Saved reconnection UX; background vault/identity verification and cancellation safeguards |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Device-local startup sync; explicit consent, exact-credential verification, offline retry and window-owned cancellation |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

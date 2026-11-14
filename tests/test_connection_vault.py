@@ -11,6 +11,9 @@ import pytest
 from test_workspace_sync import Native, connect
 
 from paper_daily.connection_vault import (
+    SERVICE as SERVICE_FOR_TEST,
+)
+from paper_daily.connection_vault import (
     Connection,
     ConnectionVault,
     VaultUnavailable,
@@ -69,7 +72,8 @@ class FakeVault:
 def saved(service):
     session = service[0]
     backend = FakeVault()
-    vault = ConnectionVault(session.workspace, backend=lambda: backend)
+    vault = ConnectionVault(session.workspace, backend=lambda: backend,
+                            startup_dir=session.workspace.path.parent / "device-settings")
     connection = Connection("http://127.0.0.1:8765", "workspace", "origin-device", service[2])
     return vault, backend, connection
 
@@ -280,3 +284,72 @@ def test_final_context_guard_reads_no_vault_and_rejects_changed_binding(saved, s
         conn.commit()
     assert not vault.current()
     assert backend.calls == []
+
+
+def test_startup_consent_survives_restart_but_never_travels_with_research(saved, service, tmp_path):
+    vault, backend, connection = saved
+    assert vault.startup_record() is None and not backend.calls
+    connect(service)
+    before = service[0].workspace.path.read_bytes()
+    vault.set_startup(service[0], True)
+    stamp = vault.startup_record()
+    assert stamp and service[0].workspace.path.read_bytes() == before
+    body = vault.startup_path.read_text(encoding="utf-8")
+    assert connection.token not in body and connection.endpoint not in body
+    assert str(service[0].workspace.path) not in body
+    reopened = ConnectionVault(service[0].workspace, backend=lambda: backend,
+                               startup_dir=vault.startup_path.parent)
+    assert reopened.startup_record() == stamp
+    service[0].disconnect()
+    result = reopened.reconnect_startup(service[0], stamp, Ticket())
+    assert result == {"generation": service[0].generation}
+    assert service[0].summary()["authenticated"]
+    assert service[3] == ["session_info", "session_info"]  # Authentication only.
+    copied = tmp_path / "copied-research.db"
+    shutil.copyfile(service[0].workspace.path, copied)
+    other = ConnectionVault(WorkspaceService(copied), backend=lambda: backend,
+                            startup_dir=vault.startup_path.parent)
+    assert other.startup_record() is None
+    before_calls = list(service[3])
+    other_session = SyncSession(copied, transport_factory=service[0]._factory)
+    with pytest.raises(WorkspaceChanged):
+        vault.reconnect_startup(other_session, stamp, Ticket())
+    assert not other_session.summary()["authenticated"] and service[3] == before_calls
+
+
+def test_changed_saved_credentials_disable_startup_without_contacting_service(saved, service):
+    from dataclasses import replace
+
+    vault, backend, connection = saved
+    connect(service)
+    vault.set_startup(service[0], True)
+    stamp = vault.startup_record()
+    service[0].disconnect()
+    backend.rows[SERVICE_FOR_TEST, vault.account] = replace(
+        connection, token="different-valid-credential"
+    ).encoded()
+    assert vault.reconnect_startup(service[0], stamp, Ticket()) is None
+    assert not service[0].summary()["authenticated"]
+    assert service[3] == ["session_info"]
+    vault.set_startup(service[0], False)
+    assert vault.startup_record() is None
+
+
+def test_cancelled_startup_opt_in_never_authorizes_next_open(saved, service):
+    vault, backend, _ = saved
+    connect(service)
+    ticket = Ticket()
+    backend.after_write = ticket.cancel
+    with pytest.raises(Cancelled):
+        vault.set_startup(service[0], True, ticket)
+    assert vault.startup_record() is None
+
+
+def test_forgetting_connection_removes_startup_permission_even_if_vault_fails(saved, service):
+    vault, backend, _ = saved
+    connect(service)
+    vault.set_startup(service[0], True)
+    backend.get_password = lambda *_: (_ for _ in ()).throw(RuntimeError("unavailable"))
+    with pytest.raises(VaultUnavailable):
+        vault.forget()
+    assert vault.startup_record() is None
