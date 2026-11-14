@@ -204,12 +204,20 @@ class _Server(ThreadingHTTPServer):
         pass
 
 
-def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
+def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> ThreadingHTTPServer:
     """Bind a loopback-only reference server; the caller starts/stops its thread."""
     if host not in _LOOPBACK:
         raise ValueError("Reference sync HTTP binds only literal loopback addresses")
     if type(port) is not int or not 0 <= port <= 65535:
         raise ValueError("Invalid sync server port")
+
+    if browser is not None and browser.service is not service:
+        raise ValueError("Browser sessions must use this exact authority")
+    browser_actions = {
+        "/v1/browser/pairing/prepare": "prepare",
+        "/v1/browser/pairing/complete": "complete",
+        "/v1/browser/session/forget": "forget",
+    }
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -226,7 +234,7 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
         def send_error(self, code, message=None, explain=None):
             self._error(405 if code == 501 else code if code in _ERRORS else 400)
 
-        def _reply(self, code, data):
+        def _reply(self, code, data, cookie=None):
             self.close_connection = True
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -234,6 +242,8 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Connection", "close")
+            if cookie is not None:
+                self.send_header("Set-Cookie", cookie)
             self.end_headers()
             self.wfile.write(data)
             if code >= 400:
@@ -243,16 +253,31 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
             self._reply(code, _encode({"error": _ERRORS[code]}))
 
         def _request(self):
-            if self.path not in (
-                {"/v1/push", "/v1/pull", "/v1/session/info"} | _BLOB_ROUTES | devices.ROUTES
-            ):
-                raise _RequestError(404)
-            authorization = self.headers.get_all("Authorization", [])
-            if len(authorization) != 1 or not authorization[0].startswith("Bearer "):
-                raise _RequestError(401)
-            token = authorization[0][7:]
-            if not _TOKEN.fullmatch(token):
-                raise _RequestError(401)
+            allowed = ({"/v1/push", "/v1/pull", "/v1/session/info"}
+                       | _BLOB_ROUTES | devices.ROUTES)
+            self._route = self.path
+            self._browser_cookie = None
+            if self.path.startswith("/v1/browser/"):
+                if browser is None:
+                    raise _RequestError(404)
+                self._browser_cookie = browser.cookie_from(self.headers)
+                if self.path in browser_actions:
+                    token = None
+                else:
+                    self._route = "/v1" + self.path[len("/v1/browser"):]
+                    if self._route not in allowed or self._route == devices.PAIR_REDEEM:
+                        raise _RequestError(404)
+                    browser.require_identity(self.headers, self._browser_cookie, required=True)
+                    token = browser.credential(self._browser_cookie)
+            else:
+                if self.path not in allowed:
+                    raise _RequestError(404)
+                authorization = self.headers.get_all("Authorization", [])
+                if len(authorization) != 1 or not authorization[0].startswith("Bearer "):
+                    raise _RequestError(401)
+                token = authorization[0][7:]
+                if not _TOKEN.fullmatch(token):
+                    raise _RequestError(401)
             if self.headers.get_all("Transfer-Encoding") or self.headers.get_all(
                 "Content-Encoding"
             ):
@@ -279,13 +304,23 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
         def do_POST(self):
             try:
                 token, value = self._request()
-                if self.path == "/v1/push":
+                if self.path in browser_actions:
+                    if not self.path.endswith("/forget"):
+                        browser.require_identity(
+                            self.headers, self._browser_cookie, required=False)
+                    method = getattr(browser, browser_actions[self.path])
+                    result, cookie = (method(value) if self.path.endswith("/forget")
+                                      else method(value, self._browser_cookie))
+                    self._reply(200, _encode(result), cookie)
+                    return
+                route = self._route
+                if route == "/v1/push":
                     if set(value) != {"operation"}:
                         raise _RequestError(400)
                     response = _encode(service.push(token, value["operation"]))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
-                elif self.path == "/v1/session/info":
+                elif route == "/v1/session/info":
                     _closed(value, set())
                     method = getattr(service, "session_info", None)
                     if method is None:
@@ -296,12 +331,12 @@ def make_server(service, host="127.0.0.1", port=0) -> ThreadingHTTPServer:
                     except ValueError:
                         raise RuntimeError("Invalid session identity response") from None
                     response = _encode(identity)
-                elif self.path in devices.ROUTES:
-                    response = _encode(devices.request(service, self.path, token, value))
+                elif route in devices.ROUTES:
+                    response = _encode(devices.request(service, route, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
-                elif self.path in _BLOB_ROUTES:
-                    response = _encode(_blob_request(service, self.path, token, value))
+                elif route in _BLOB_ROUTES:
+                    response = _encode(_blob_request(service, route, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
                 else:

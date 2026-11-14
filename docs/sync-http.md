@@ -2,7 +2,7 @@
 
 Status: local v0.5 integration boundary, not a public hosting solution.
 
-`make_server(service, host="127.0.0.1", port=0)` returns a `ThreadingHTTPServer`.
+`make_server(service, host="127.0.0.1", port=0, *, browser=None)` returns a `ThreadingHTTPServer`.
 The caller starts `serve_forever` and stops `shutdown`/`server_close`. Only literal
 `127.0.0.1` and `::1` bindings are accepted. This standard-library server must not
 be exposed as the production sync service.
@@ -146,3 +146,96 @@ input; absent bodies; EOF/reset/timeout; and deterministic byte/deadline limits.
 These use local fixture sockets and fake streams, without accounts or external
 services. The observed transport failure and experiment are Windows-specific;
 native Linux/macOS validation is still separate from these fixture checks.
+
+## Same-origin browser adapter (development)
+
+`BrowserSessions(service, origin, key, *, clock=None)` in `sync_browser.py` adds an
+explicit optional browser boundary to `make_server(..., browser=sessions)`.
+Default servers expose none of these routes. `key` is a dedicated private 32-byte
+signing key supplied by the embedding operator, stable across process restarts.
+There is no built-in key, automatic key generation or signing-key CLI yet. The
+adapter must use the exact authority object passed to the server.
+
+Serve the PWA and `/v1/browser/` on the same canonical HTTPS origin. Every browser
+POST requires exactly that `Origin`, `X-Paperfact-Browser: 1`, JSON framing and,
+when present, `Sec-Fetch-Site: same-origin`. Every research request also requires
+`X-Paperfact-Workspace` and `X-Paperfact-Device` matching the signed cookie. Complete
+requires the same match when the tab already observed a prepared identity. This
+prevents a shared cookie changed by another tab from changing the caller's scope.
+An explicit initial resume can discover identity before any research request.
+Reject mixed Authorization headers,
+ambiguous cookies and origin aliases. No CORS/preflight exception is added and
+forwarded Host/Origin headers do not select the trust boundary. Literal-loopback
+HTTP is a local fixture exception with a separate cookie name, never remote HTTP.
+
+| Browser POST route | Body | Result |
+|---|---|---|
+| `/v1/browser/pairing/prepare` | `invitation`: the private desktop pairing JSON string | Workspace/device IDs and a pending HttpOnly cookie; no enrollment or research write |
+| `/v1/browser/pairing/complete` | Empty object | Same workspace/device IDs and a verified cookie after admission/authentication |
+| `/v1/browser/session/forget` | Empty object | `forgotten: true` and expired local cookie; no research deletion or implicit remote revocation |
+| `/v1/browser/session/info`, `/push`, `/pull`, `/blobs/...`, `/devices/...` | Existing closed protocol bodies under `/v1/browser/` | Existing protocol results; cookie authorization rechecks revocation and exact identity |
+
+The ordinary device-pairing redeem route is excluded from the cookie facade.
+Device invite creation and management remain authenticated single-owner actions.
+
+The cookie is HMAC-SHA-256 signed and bounded, with a fixed 14-day lifetime. HTTPS
+uses `__Host-paperfact-device`, `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`
+and no Domain attribute. It contains access secrets: signing is integrity, not
+encryption. Never log or export Cookie/Set-Cookie, request bodies or signing keys.
+JavaScript gets only workspace/device IDs; credentials never enter IndexedDB,
+localStorage, service-worker cache or research exports. Keep the signing key in a
+separate private operator store, outside research and authority recovery packages.
+Changing the key invalidates cookies; device revocation is checked independently.
+
+Prepare must finish before complete: a browser that never stored the pending
+cookie cannot enroll. An exact prepare retry reuses the saved identity. Complete
+first authenticates that independent key, so an already admitted device can resume
+a lost response after invitation expiry or issuer revocation. An unused expired
+invitation cannot enroll. Active-cookie retries retain expiry; they do not mint
+another device. Forget a conflicting/expired saved attempt explicitly before
+preparing another invitation. Forget cannot retract an admission already sent.
+
+The mobile `CookieTransport(origin, {pageOrigin, fetch})` reuses the existing
+bounded parser. `preparePairing(invitation, signal)`, `completePairing(signal)` and
+`forgetSession(signal)` use the routes above. Inherited Engine operations accept
+only the non-secret `COOKIE_SESSION` handle and send no Authorization header;
+fetch uses `credentials: same-origin`, no redirects and no response caching.
+Legacy `HttpTransport` and `browserTransport` retain bearer-only, omit-cookie use.
+
+This is a local adapter/transport checkpoint, not end-user browser login. Remaining:
+pairing/reconnect/forget screens, guarded mobile workspace adoption, private key
+loading/operator configuration, same-origin HTTPS hosting, actual browser cookie
+persistence tests and physical iOS/Android acceptance. Opening existing cached
+research still sends no request or cookie automatically. A broad security/hosting
+review remains required; these fixtures do not certify resistance to XSS or theft
+by another process using the browser profile.
+
+### Browser-session behavior map
+
+`tests/test_sync_browser.py` groups eight scenarios: prepare/complete and bearer
+coexistence; lost-reply restart after expiry; competing claimants and unused
+expiry; CSRF/origin/media-type refusal; tampering/key/origin/expiry/duplicate-cookie
+refusal; revocation/forget; opt-in/exact-authority configuration; and a competing-tab
+cookie change that cannot enroll/read under the wrong observed identity. These use
+actual loopback HTTP and synthetic secrets. `mobile/tests/browser-session.test.mjs`
+covers cookie-only Engine framing, same-origin/error boundaries and cancellation
+with legacy bearer compatibility. The existing shell-upgrade scenario now verifies
+v19 transport eviction while preserving research caches. No combinatorial stress
+matrix or real account is used.
+
+Design references checked 2026-11-14:
+[MDN cookie attributes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
+and [OWASP CSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+Local checkpoint evidence (2026-11-14): all 14 critical selectors plus affected
+browser, pairing, bearer/framing and usage-doc scenarios passed **50 Python cases
+in 13.63s**, **16.8s including privacy/Ruff**. The four named mobile files passed
+**18 cases in 3.04s**, **3.19s under the governor**. Both used the Windows 25% CPU,
+two-logical-core, 300-second bound; no full/release matrix ran. The mobile fetch
+adapter is simulated, while Python scenarios use actual loopback HTTP. Neither
+proves browser cookie persistence, TLS/proxy configuration or physical phones.
+
+The locally validated lesson is request-time workspace/device binding when
+cookies are shared across tabs. Existing bearer isolation alone did not establish
+that boundary. Keep this evidence scoped here: browser and hosted acceptance are
+pending, and no global skill/authentication policy was promoted from it.

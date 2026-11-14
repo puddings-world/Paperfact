@@ -213,8 +213,9 @@ verify this device in one click, then choose manual, session-only or explicitly
 remembered startup sync. The [desktop pairing flow](docs/sync-device-management.md#desktop-pairing-and-retry)
 lets a connected device create private pairing details for another desktop. Paste,
 pair and join in a separate folder; the new device keeps its own credential in
-the system store. Mobile pairing screens, hosted setup and installed-device
-acceptance remain open.
+the system store. A [same-origin browser-session adapter](docs/sync-http.md#same-origin-browser-adapter-development)
+and cookie-only mobile transport are implemented locally. Mobile pairing screens,
+operator key setup, hosting and installed-device acceptance remain open.
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
 [Implementation plan](docs/implementation-0.5.0.md) |

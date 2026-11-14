@@ -211,3 +211,59 @@ class BrowserHttpTransport extends HttpTransport {
  }
 }
 export function browserTransport(origin,options={}){return new BrowserHttpTransport(origin,options);}
+
+
+/** Non-secret Engine handle: the browser alone attaches the HttpOnly cookie. */
+export const COOKIE_SESSION = 'paperfact-browser-session-v1';
+export class CookieTransport extends HttpTransport {
+  constructor(origin=globalThis.location?.origin, {
+    pageOrigin=globalThis.location?.origin, fetch=globalThis.fetch
+  }={}) {
+    const target=new HttpTransport(origin).origin;
+    requireThat(typeof pageOrigin==='string' && new URL(pageOrigin).origin===pageOrigin &&
+      target===pageOrigin, 'browser_same_origin_required');
+    const scope={identity:null};
+    super(target,{fetch:(url,options)=>{
+      const path=new URL(url).pathname;
+      requireThat(new URL(url).origin===pageOrigin && path.startsWith('/v1/'),
+        'browser_same_origin_required');
+      const headers={...options.headers,'X-Paperfact-Browser':'1'};
+      delete headers.Authorization;
+      if(scope.identity && !path.endsWith('/forget')) {
+        headers['X-Paperfact-Workspace']=scope.identity.workspace_id;
+        headers['X-Paperfact-Device']=scope.identity.device_id;
+      }
+      return fetch(pageOrigin+'/v1/browser'+path.slice(3),
+        {...options,headers,credentials:'same-origin'});
+    }});
+    this.scope=scope;
+  }
+  async post(route,body,token,signal) {
+    requireThat(token===COOKIE_SESSION, 'invalid_session');
+    if(!['/v1/pairing/prepare','/v1/pairing/complete','/v1/session/forget'].includes(route))
+      requireThat(this.scope.identity!==null,'invalid_session');
+    return super.post(route,body,token,signal);
+  }
+  async preparePairing(invitation,signal) {
+    requireThat(typeof invitation==='string' && new TextEncoder().encode(invitation).length<=8192,
+      'invalid_pairing');
+    const value=await this.post('/v1/pairing/prepare',{invitation},COOKIE_SESSION,signal);
+    closed(value,['workspace_id','device_id']);identifier(value.workspace_id);identifier(value.device_id);
+    this.scope.identity={...value};
+    return value;
+  }
+  async completePairing(signal) {
+    const value=await this.post('/v1/pairing/complete',{},COOKIE_SESSION,signal);
+    closed(value,['workspace_id','device_id']);identifier(value.workspace_id);identifier(value.device_id);
+    if(this.scope.identity)requireThat(value.workspace_id===this.scope.identity.workspace_id &&
+      value.device_id===this.scope.identity.device_id,'invalid_response');
+    this.scope.identity={...value};
+    return value;
+  }
+  async forgetSession(signal) {
+    const value=await this.post('/v1/session/forget',{},COOKIE_SESSION,signal);
+    closed(value,['forgotten']);requireThat(value.forgotten===true,'invalid_response');
+    this.scope.identity=null;
+    return value;
+  }
+}

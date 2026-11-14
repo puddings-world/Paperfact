@@ -64,3 +64,10 @@ suppress stale cards while retaining scientific history; receipt alone grants no
 PDF activation or scientific certification. This closes a consumer compatibility
 gap, not the still-gated authority publication/enrollment path. See the
 [event contract](../docs/sync-projection.md#mobile-lineage-event-consumer).
+
+The [same-origin browser-session adapter](../docs/sync-http.md#same-origin-browser-adapter-development)
+and `CookieTransport` now provide a local HttpOnly-cookie protocol foundation.
+They are not yet wired into the Connection form or operator CLI. The static
+preview above therefore remains synthetic/manual-bearer use; it does not create
+an authenticated hosted service. Actual browser persistence and phone acceptance
+remain open. The shell cache revision changes to v20 for the new transport.
