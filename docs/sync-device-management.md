@@ -136,8 +136,9 @@ already trusted device can explicitly authorize another device through pairing.
 
 Status: local authority, Python SDK, desktop pairing screens and native receiver
 retry storage implemented. Mobile pairing/reconnect/forget and HttpOnly browser
-credential persistence are exercised in isolated Chromium; operator key loading
-and same-origin HTTPS hosting remain pending.
+credential persistence are exercised in isolated Chromium; operator key creation
+and explicit serve loading are restart-tested. Same-origin HTTPS/static hosting
+and physical-device acceptance remain pending.
 No service was deployed and no real device was enrolled. The first trusted device
 still requires operator-issued credentials. AI/Google Slides login is separate.
 

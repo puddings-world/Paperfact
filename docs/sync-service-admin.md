@@ -45,13 +45,75 @@ its intended device, keep it out of Git/issues/research packages and remove the
 transport copy when no longer needed. Access from other programs running as the
 same OS user is outside this file-permission boundary.
 
+## Enable browser pairing explicitly
+
+After initializing the dedicated service directory, create a separate signing key
+outside it and outside research/Git. The parent directory must already exist:
+
+```sh
+paperfact sync-admin create-browser-key --output "$HOME/.paperfact-sync/operator-browser-key.json"
+paperfact sync-admin serve --state "$HOME/.paperfact-sync/service" --port 8765 --browser-origin https://sync.example.org --browser-key-file "$HOME/.paperfact-sync/operator-browser-key.json"
+```
+
+```powershell
+paperfact sync-admin create-browser-key --output "$env:USERPROFILE/.paperfact-sync/operator-browser-key.json"
+paperfact sync-admin serve --state "$env:USERPROFILE/.paperfact-sync/service" --port 8765 --browser-origin https://sync.example.org --browser-key-file "$env:USERPROFILE/.paperfact-sync/operator-browser-key.json"
+```
+
+Replace the example domain with your reviewed same-origin HTTPS host. Successful
+creation returns `state=created` and `key_file`, never the key. Repeating validates
+the existing file and returns `already_exists` without rotating it. The serving
+receipt adds `browser_origin`; the listener remains loopback-only. Without both
+browser flags, browser routes are disabled. Supplying just one, an alias origin,
+a missing/corrupt key or a key below authority state refuses startup before the
+authority/listener opens. `--require-mount` still runs before either.
+
+Serve the versioned PWA and `/v1/` through a separately reviewed same-origin TLS
+proxy. These commands do not install that proxy, publish files, create GCP resources
+or allow remote plain HTTP. Do not serve a Git checkout or the mobile test fixtures
+as the production document root. Static artifact preparation, proxy limits and
+hosted acceptance remain separate deployment gates. The review-only Linux unit
+contains an optional browser invocation; no system service is installed here.
+
+Keep the same private key across restarts. It is excluded from authority backup
+and must remain outside research, packages, diagnostics and Git. POSIX loads require
+a current-user-owned regular file with no group/other permission bits and one
+hardlink. Symbolic links, junctions, oversized/ambiguous records and changed reads
+are refused. On Windows, file creation inherits the selected directory's ACL;
+this code does not certify or modify that ACL. Use an operator-private directory
+and verify its ACL separately. No OS permission takeover is performed.
+
+A failed write is unconfirmed and retained for review; an invalid existing file
+is never overwritten. Use a new output path when needed. Replacing the configured
+key logs out existing browser cookies after service restart; it does not revoke
+devices or delete research. Authority disaster recovery requires fresh enrollment;
+do not carry an old browser connection into a restored authority. There is no
+automatic rotation, key recovery service or production secret-manager integration.
+
+The file is closed JSON `paperfact.browser-signing-key.v1` with one `key`: exactly
+32 random bytes in canonical base64url. `create_key(output)` returns a safe receipt;
+`load_key(path)` returns private bytes only to the in-process adapter. Both APIs are
+in `sync_browser_key.py`. The commit scanner rejects this record even if renamed,
+without printing its contents. Conventional `*-browser-key.json` paths are ignored;
+neither safeguard makes a checkout a private key store.
+
+Seven behavior scenarios in `tests/test_sync_browser_key.py` cover stable creation
+and receipts/backup exclusion, invalid existing files/hardlinks, the POSIX ownership
+contract, changed-read refusal, fail-before-authority configuration, actual CLI
+restart with the same pending cookie/device, and renamed-key privacy scanning.
+On Windows the read-race fixture uses an allowed in-place update because replacing
+an open file is refused by the OS. POSIX mode/rename and Windows ACL acceptance
+remain platform-specific observations; simulated ownership checks are not a live
+Linux/macOS result. Existing browser, bearer and mount regressions remain selected.
+
 ## Command reference
 
 | Command | Required options | Optional options | Outcome |
 |---|---|---|---|
 | `sync-admin init` | `--state DIRECTORY` | `--help` | Initialize or validate a dedicated reference authority |
 | `sync-admin issue` | `--state DIRECTORY --endpoint URL --workspace ID --device ID --output FILE` | `--help` | Issue one new device and save its connection record |
-| `sync-admin serve` | `--state DIRECTORY` | `--port INTEGER` (default 8765; 0 chooses an ephemeral test port), `--require-mount DIRECTORY`, `--help` | Serve the reference protocol on 127.0.0.1 |
+| `sync-admin create-browser-key` | `--output FILE` | `--help` | Exclusively create or validate a private operator signing key; no authority needed |
+| `sync-admin serve` | `--state DIRECTORY` | `--port INTEGER` (default 8765; 0 chooses an ephemeral test port), `--require-mount DIRECTORY`, paired `--browser-origin URL --browser-key-file FILE`, `--help` | Serve the reference protocol on 127.0.0.1; browser routes are opt-in |
 
 All commands support `--help` without initializing service state. URLs use the
 same HTTPS/literal-loopback policy as the desktop; remote plain HTTP, query tokens
@@ -97,7 +159,7 @@ mobile device tests remain separate from loopback fixture checks.
 
 Operator examples store private state/connection files outside the checkout.
 Conventional `*-connection.json` files and local authority directories are ignored
-by this repo. The pre-commit full check also rejects complete version-1 connection
+by this repo. The privacy scan in every check profile also rejects complete version-1 connection
 records containing credentials, even under another filename; it does not print
 the credential. The explicit `REPLACE_WITH_NEW_DEVICE_TOKEN` placeholder and
 empty templates are allowed. These guards do not make a Git checkout a private
@@ -185,3 +247,16 @@ No command provisions a bucket, changes IAM or configures a timer.
 ## Compare an old device with an authority backup
 
 `review-device-backup --database FILE --input DIRECTORY --workspace ID [--seconds 30]` is a bounded read-only comparison, not device migration. See the [full CLI/API and desktop workflow](device-recovery-review.md). It does not use credentials, GCP, research contents in output or implicit database initialization.
+
+Local operator checkpoint (2026-11-14): all 14 critical selectors plus affected
+key/browser/admin/mount/privacy/documentation cases passed **53 Python cases in
+11.55s**, **14.8s including privacy/Ruff**. The initial affected-only selection
+passed 25 cases in 9.1s including checks; scopes overlap and are not additive.
+Every process stayed inside the existing Windows 25% CPU/two-core/300-second
+governor. No historical full, release matrix, POSIX host, real Windows ACL,
+production key, GCP account or TLS deployment was tested or changed.
+
+The validated-local evidence is explicit stable key loading before authority
+startup, separate backup scope and format-aware non-echoing commit scanning.
+This extends the project's existing private-output safeguards; no new global
+skill or automatic provisioning rule was introduced.

@@ -187,3 +187,21 @@ reads UTF-8 JSON from stdin. Neither command calls an AI provider.
 Use `integration config --workspace /absolute/data/folder` for host settings, or
 copy them from **研究資料 → 本地整合** in the desktop. The workspace must match the
 desktop's data folder. See [tools, JSON examples and retry rules](local-integration.md).
+
+## Private sync service (development)
+
+After source/operator setup:
+
+```sh
+paperfact sync-admin create-browser-key --output /absolute/private/operator-browser-key.json
+paperfact sync-admin serve --state /absolute/service --browser-origin https://sync.example.org --browser-key-file /absolute/private/operator-browser-key.json
+```
+
+The first command returns `created` or `already_exists` without key material; the
+second prints a loopback serving receipt and the opted-in browser origin. Both
+support `--help`. `serve` also accepts `--port INTEGER` (8765 default, 0 ephemeral)
+and `--require-mount DIRECTORY`; the two browser flags must be used together.
+Omit both to keep browser routes disabled. Missing/unsafe key files and invalid
+configuration refuse startup rather than generating a new key. These commands do
+not provision TLS, static hosting or cloud resources. See [full operator commands,
+privacy/permissions, backup and recovery](sync-service-admin.md).

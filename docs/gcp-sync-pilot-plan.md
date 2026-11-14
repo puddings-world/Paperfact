@@ -128,11 +128,16 @@ Bucket policy references:
 
 ## Work required before a private pilot
 
-1. Freeze and validate the application candidate, then produce a signed or
-   checksum-pinned server artifact. The earlier frozen candidate passed its full gate; subsequent changes still
-   require a new coherent full gate.
+1. Freeze a coherent candidate and validate the curated release/critical plus
+   affected checks, then produce a signed or checksum-pinned server artifact.
+   Record per-OS frozen/device acceptance separately. Historical exhaustive
+   diagnosis is opt-in; use the current [test policy](testing/README.md).
 2. Adapt the [review-only systemd template](../deploy/gcp/paperfact-sync.service.example)
-   and tested `serve --require-mount` startup guard. Verify the unit on Linux with
+   and tested `serve --require-mount` startup guard. Browser opt-in now accepts paired
+   `--browser-origin` and `--browser-key-file`; create the separate private key
+   through the [operator command](sync-service-admin.md#enable-browser-pairing-explicitly),
+   outside authority backups. Preserve it across restarts and validate its service-user
+   ownership/permissions. Verify the unit on Linux with
    an unprivileged service account, supervised
    restart and graceful stop. Require the data mount before startup; a missing
    disk must stop startup rather than create an empty authority on the boot disk.

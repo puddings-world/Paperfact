@@ -23,6 +23,22 @@ SESSION_SECONDS = 14 * 24 * 60 * 60
 _COOKIE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}")
 
 
+def validate_origin(value):
+    with HttpTransport(value) as transport:
+        origin = transport.base_url
+    parts = urlsplit(origin)
+    host = parts.hostname.encode("idna").decode("ascii").lower()
+    if ":" in host:
+        host = "[" + host + "]"
+    port = parts.port
+    default_port = port is None or (parts.scheme, port) in {("https", 443), ("http", 80)}
+    suffix = "" if default_port else f":{port}"
+    canonical = f"{parts.scheme}://{host}{suffix}"
+    if origin != canonical:
+        raise ValueError("Use the browser's exact canonical service origin")
+    return origin
+
+
 def _b64(value):
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
@@ -33,8 +49,7 @@ class BrowserSessions:
     def __init__(self, service, origin, key, *, clock=None):
         if type(key) is not bytes or len(key) != 32:
             raise ValueError("Supply a dedicated private 32-byte browser signing key")
-        with HttpTransport(origin) as transport:
-            self.origin = transport.base_url
+        self.origin = validate_origin(origin)
         self.service = service
         self._key = key
         self._clock = clock or time.time

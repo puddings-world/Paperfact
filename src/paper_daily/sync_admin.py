@@ -118,12 +118,16 @@ def issue(state, endpoint, workspace, device, output):
 def configure(parser):
     sub = parser.add_subparsers(dest="admin_action", required=True)
     for action in ("init", "issue", "serve", "backup", "verify-backup", "restore-backup",
-                   "upload-backup", "download-backup", "review-device-backup"):
+                   "upload-backup", "download-backup", "review-device-backup",
+                   "create-browser-key"):
         command = sub.add_parser(action)
         if action not in {"verify-backup", "upload-backup", "download-backup",
-                          "review-device-backup"}:
+                          "review-device-backup", "create-browser-key"}:
             command.add_argument("--state", type=Path, required=True,
                                  help="Dedicated service directory, never a research workspace")
+        if action == "create-browser-key":
+            command.add_argument("--output", type=Path, required=True,
+                                 help="New private signing-key file outside service/research state")
         if action in {"backup", "verify-backup"}:
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--seconds", type=float, default=30,
@@ -162,6 +166,10 @@ def configure(parser):
             command.add_argument("--output", type=Path, required=True)
         elif action == "serve":
             command.add_argument("--port", type=int, default=8765)
+            command.add_argument(
+                "--browser-origin", help="Exact PWA HTTPS origin; requires --browser-key-file")
+            command.add_argument("--browser-key-file", type=Path,
+                                 help="Existing private signing key outside authority state")
             command.add_argument("--require-mount", type=Path,
                                  help="Refuse startup unless this data volume is mounted")
     parser.set_defaults(func=run)
@@ -169,7 +177,11 @@ def configure(parser):
 
 def run(args):
     try:
-        if args.admin_action == "review-device-backup":
+        if args.admin_action == "create-browser-key":
+            from paper_daily.sync_browser_key import create_key
+
+            result = create_key(args.output)
+        elif args.admin_action == "review-device-backup":
             from paper_daily.sync_device_recovery import review
 
             result = review(args.database, args.input, args.workspace, seconds=args.seconds)
@@ -215,10 +227,30 @@ def run(args):
         else:
             if args.require_mount is not None:
                 require_mount(args.state, args.require_mount)
-            server = make_server(authority(args.state), port=args.port)
+            browser = None
+            if args.browser_origin is not None or args.browser_key_file is not None:
+                from paper_daily.sync_browser import BrowserSessions, validate_origin
+                from paper_daily.sync_browser_key import load_key
+                from paper_daily.workspace_service import _safe_path
+
+                if args.browser_origin is None or args.browser_key_file is None:
+                    raise ValueError("Use both browser origin and private signing key")
+                origin = validate_origin(args.browser_origin)
+                key_path = _safe_path(args.browser_key_file)
+                if key_path.is_relative_to(_root(args.state)):
+                    raise ValueError("Keep the browser signing key outside authority state")
+                key = load_key(key_path)
+                service = authority(args.state)
+                browser = BrowserSessions(service, origin, key)
+            else:
+                service = authority(args.state)
+            server = make_server(
+                service, port=args.port, **({"browser": browser} if browser else {}))
             try:
-                print(json.dumps({"state": "serving", "url": f"http://127.0.0.1:{server.server_port}"}),
-                      flush=True)
+                receipt = {"state": "serving", "url": f"http://127.0.0.1:{server.server_port}"}
+                if browser is not None:
+                    receipt["browser_origin"] = browser.origin
+                print(json.dumps(receipt), flush=True)
                 server.serve_forever()
             except KeyboardInterrupt:
                 pass
@@ -240,8 +272,16 @@ def run(args):
                   "snapshot to verify any already-published objects; existing objects were not "
                   "overwritten.", file=sys.stderr)
             return 2
+        if args.admin_action == "create-browser-key":
+            print("Browser-key creation failed. Check the private output directory "
+                  "and existing file. "
+                  "Existing files were not overwritten; an interrupted write may need review.",
+                  file=sys.stderr)
+            return 2
         print("Sync administration failed. Check the dedicated state directory, device IDs "
-              "and unused output path; for serve, also check the required data mount. "
+              "and unused output path; for serve, also check the required data mount, "
+              "paired browser "
+              "origin/key options and private key-file permissions. "
               "Existing files were not overwritten.", file=sys.stderr)
         return 2
 

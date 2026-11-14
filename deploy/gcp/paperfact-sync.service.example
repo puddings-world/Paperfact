@@ -16,6 +16,11 @@ WorkingDirectory=/opt/paperfact
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUTF8=1
 ExecStart=/opt/paperfact/.venv-sync/bin/python -m paper_daily sync-admin serve --state /mnt/paperfact/service --require-mount /mnt/paperfact --port 8765
+# Optional browser pairing after private-key provisioning and same-origin TLS review:
+# Replace ExecStart above with the following single line (use the approved domain):
+# ExecStart=/opt/paperfact/.venv-sync/bin/python -m paper_daily sync-admin serve --state /mnt/paperfact/service --require-mount /mnt/paperfact --port 8765 --browser-origin https://sync.example.org --browser-key-file /etc/paperfact/private/operator-browser-key.json
+# The key must be a current-service-user-owned 0600 regular file outside authority
+# state. This unit reads it only; no startup key generation, rotation or public HTTP.
 Restart=on-failure
 RestartSec=10
 KillSignal=SIGINT

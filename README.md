@@ -216,7 +216,10 @@ pair and join in a separate folder; the new device keeps its own credential in
 the system store. A [same-origin browser-session adapter](docs/sync-http.md#same-origin-browser-adapter-development)
 and cookie-only mobile transport now power the [mobile pairing screen](docs/mobile-0.5.md#browser-pairing-and-offline-reconnection).
 Pair, reopen cached research offline and explicitly reconnect from the same browser.
-Operator key setup, HTTPS hosting and installed-device acceptance remain open.
+Operators can now [create a private signing key and explicitly enable browser pairing](docs/sync-service-admin.md#enable-browser-pairing-explicitly)
+with `paperfact sync-admin create-browser-key --output FILE` and
+`paperfact sync-admin serve --state DIR --browser-origin URL --browser-key-file FILE`. HTTPS/static hosting and
+installed-device acceptance remain open.
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
 [Implementation plan](docs/implementation-0.5.0.md) |

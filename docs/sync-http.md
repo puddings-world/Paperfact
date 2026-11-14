@@ -153,7 +153,9 @@ native Linux/macOS validation is still separate from these fixture checks.
 explicit optional browser boundary to `make_server(..., browser=sessions)`.
 Default servers expose none of these routes. `key` is a dedicated private 32-byte
 signing key supplied by the embedding operator, stable across process restarts.
-There is no built-in key, automatic key generation or signing-key CLI yet. The
+[Operator commands](sync-service-admin.md#enable-browser-pairing-explicitly) now
+create a private versioned key file and enable the adapter with paired serve flags.
+There is no built-in key or automatic startup rotation. The
 adapter must use the exact authority object passed to the server.
 
 Serve the PWA and `/v1/browser/` on the same canonical HTTPS origin. Every browser
@@ -204,8 +206,9 @@ Legacy `HttpTransport` and `browserTransport` retain bearer-only, omit-cookie us
 
 The [mobile pairing/reconnect/forget screen](mobile-0.5.md#browser-pairing-and-offline-reconnection)
 now uses this adapter through the existing guarded workspace adoption path. Actual
-Chromium cookies, IndexedDB and offline reload pass locally. Remaining: private
-key loading/operator configuration, same-origin HTTPS hosting and physical
+Chromium cookies, IndexedDB and offline reload pass locally. Operator key creation
+and explicit serve loading are now implemented and restart-tested. Remaining:
+same-origin HTTPS/static hosting, platform key permissions and physical
 iOS/Android acceptance. Opening existing cached
 research still sends no request or cookie automatically. A broad security/hosting
 review remains required; these fixtures do not certify resistance to XSS or theft

@@ -11,8 +11,8 @@ The Connection page now presents three main actions, with manual IDs/credentials
 under **Advanced: manual connection** and local import/export/language controls
 under **Local data and language**. This remains private v0.5 development, requiring
 the [same-origin service adapter](sync-http.md#same-origin-browser-adapter-development).
-The plain static preview does not enable it, and operator signing-key loading and
-HTTPS deployment are still pending.
+The plain static preview does not enable it. [Operator signing-key loading](sync-service-admin.md#enable-browser-pairing-explicitly)
+is now implemented; same-origin HTTPS/static deployment remains pending.
 
 1. On a connected desktop choose **Devices > Pair another device > Copy pairing
    details**. Open the PWA on that service's same origin, paste the details and
@@ -86,7 +86,7 @@ were inspected. These timings are scoped, not a complete release result.
 Real cookies were tested over literal-loopback HTTP (the development exception).
 Production HTTPS flags/origin refusal have protocol tests, not live TLS acceptance.
 Safari/iOS/Android, installed PWA eviction behavior, installed Mac upgrades,
-operator key loading, same-origin hosting and external deployment remain gates.
+platform key-permission checks, same-origin hosting and external deployment remain gates.
 
 ## Current saved-Lineage read path
 

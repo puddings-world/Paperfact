@@ -81,6 +81,12 @@ def scan_privacy(root, files, terms):
                 record = json.loads(text)
             except (ValueError, RecursionError):
                 record = None
+            if (isinstance(record, dict)
+                    and record.get("format") == "paperfact.browser-signing-key.v1"
+                    and isinstance(record.get("key"), str)
+                    and record["key"] not in ("", "REPLACE_WITH_BROWSER_SIGNING_KEY")):
+                found.append(
+                    f"{path.relative_to(root).as_posix()}:1: Paperfact browser signing key")
             if (
                 isinstance(record, dict)
                 and set(record) == {"format", "endpoint", "workspace_id", "device_id", "token"}

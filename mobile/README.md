@@ -69,8 +69,9 @@ The [same-origin browser-session adapter](../docs/sync-http.md#same-origin-brows
 and `CookieTransport` now provide a local HttpOnly-cookie protocol foundation.
 The Connection form now offers Pair and remember, Reconnect and confirmed Forget;
 manual bearer setup is under Advanced. Browser persistence and offline reload are
-verified in isolated Chromium. Operator signing-key setup, HTTPS deployment and
-physical phones remain open. The static preview above does not provision a service.
+verified in isolated Chromium. Operator signing-key creation/loading is now
+[available explicitly](../docs/sync-service-admin.md#enable-browser-pairing-explicitly);
+HTTPS/static deployment, platform permissions and physical phones remain open. The static preview above does not provision a service.
 Shell v21 includes the pairing view; research caches are retained.
 
 [User flow, API, browser-test command and exact limits](../docs/mobile-0.5.md#browser-pairing-and-offline-reconnection).
