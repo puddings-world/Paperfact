@@ -428,3 +428,29 @@ def test_new_workspace_rekeys_order_scope_without_accepting_stale_membership(rea
     )
     assert rekeyed["operation"]["payload"]["observed_set"] != original_digest
     assert [event["outcome"] for event in expected][-2:] == ["conflict", "conflict"]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
+    state, tmp_path, legacy
+):
+    import secrets
+
+    root, old, owner, _manifest, _data = state
+    code = secrets.token_urlsafe(32)
+    if legacy:
+        with old._transaction(write=True) as conn:
+            conn.execute("DROP TABLE sync_pairings")
+    else:
+        old.create_pairing(owner, code)
+    original = dump(old.path)
+    source, destination = tmp_path / "pair-backup", tmp_path / "pair-recovered"
+    backup.export(root, source)
+    recovery.restore(source, destination, "workspace-a", "new-workspace")
+    restored = sync_admin.authority(destination)
+    with restored._transaction() as conn:
+        assert conn.execute("SELECT count(*) FROM sync_pairings").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM sync_devices").fetchone()[0] == 0
+    with pytest.raises(PermissionError):
+        restored.redeem_pairing(code, "new-workspace", "mac", secrets.token_urlsafe(32))
+    assert dump(old.path) == original

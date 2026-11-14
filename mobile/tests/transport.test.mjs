@@ -167,3 +167,42 @@ test(
   assert.ok(ui.includes('selectionStart'));
 }
 );
+
+
+test('pairing uses bounded fixed routes and distinct owner/invitation/device secrets', async () => {
+  const seen = [], code = 'p'.repeat(43), credential = 'k'.repeat(43);
+  const transport = new HttpTransport('https://example.org', {fetch: async (url, options) => {
+    seen.push([url, options]);
+    return url.endsWith('/create')
+      ? json({workspace_id:'work', issuer_device_id:'desktop', expires_at:2000000000})
+      : json({workspace_id:'work', device_id:'phone'});
+  }});
+  assert.equal((await transport.create_pairing('owner-secret', code)).issuer_device_id, 'desktop');
+  assert.deepEqual(await transport.redeem_pairing(code, 'work', 'phone', credential),
+    {workspace_id:'work', device_id:'phone'});
+  assert.equal(seen[0][1].headers.Authorization, 'Bearer owner-secret');
+  assert.equal(seen[1][1].headers.Authorization, 'Bearer ' + code);
+  assert.equal(JSON.parse(seen[1][1].body).credential, credential);
+  for (const [url, options] of seen) {
+    assert.equal(url.includes(code) || url.includes(credential), false);
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.referrerPolicy, 'no-referrer');
+  }
+});
+
+test('pairing refuses wrong response identity, leaked fields and malformed secrets', async () => {
+  let calls = 0;
+  const transport = new HttpTransport('https://example.org', {fetch: async url => {
+    calls++;
+    return url.endsWith('/create')
+      ? json({workspace_id:'work', issuer_device_id:'desktop', expires_at:2000000000, token:'unsafe'})
+      : json({workspace_id:'other', device_id:'phone'});
+  }});
+  await assert.rejects(transport.create_pairing('owner-secret', 'p'.repeat(43)));
+  await assert.rejects(transport.redeem_pairing('p'.repeat(43), 'work', 'phone', 'k'.repeat(43)));
+  assert.equal(calls, 2);
+  await assert.rejects(transport.create_pairing('owner-secret', 'short'));
+  assert.equal(calls, 2);
+});

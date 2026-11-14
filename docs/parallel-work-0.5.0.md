@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Post-backup paper/note recovery; shared parent proof, preserved later edits and native peer delivery |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Trusted-device pairing; authority/HTTP/desktop-client/mobile-transport core. Next: receiver lifecycle and pairing screens |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

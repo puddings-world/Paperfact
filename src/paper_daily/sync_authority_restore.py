@@ -56,8 +56,14 @@ def _event(raw, workspace):
 
 def _scope(conn, workspace, replacement):
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if tables != TABLES:
+    if tables not in (TABLES, TABLES | {"sync_pairings"}):
         raise ValueError("Authority recovery requires the supported reference schema")
+    if "sync_pairings" in tables:
+        from paper_daily.sync_device_management import PAIRING_COLUMNS
+
+        columns = tuple(row[1] for row in conn.execute("PRAGMA table_info(sync_pairings)"))
+        if columns != PAIRING_COLUMNS:
+            raise ValueError("Authority pairing schema is unsupported")
     known = set()
     for table in (
         "sync_devices",

@@ -1,7 +1,7 @@
 """Bounded loopback HTTP adapter and explicit sync transport.
 
 The stdlib server is for local integration, not public deployment. Production TLS,
-identity enrollment, abuse controls and deployment belong to a separate service.
+account enrollment, abuse controls and deployment remain separate hosting concerns.
 """
 
 from __future__ import annotations
@@ -466,6 +466,17 @@ class HttpTransport:
     def session_info(self, token):
         """Resolve authenticated identity before binding a workspace transfer session."""
         return _session_identity(self._post("/v1/session/info", token, {}))
+
+    def create_pairing(self, token, code):
+        value = self._post(devices.PAIR_CREATE, token, {"code": devices.pairing_secret(code)})
+        return devices.pairing_created(value)
+
+    def redeem_pairing(self, code, workspace_id, device_id, credential, label=None):
+        value = self._post(devices.PAIR_REDEEM, devices.pairing_secret(code), {
+            "workspace_id": _device_id(workspace_id), "device_id": _device_id(device_id),
+            "credential": devices.pairing_secret(credential), "label": device_label(label),
+        })
+        return devices.pairing_claimed(value, workspace_id, device_id)
 
     def device_catalog(self, token, *, after=None, limit=50):
         bounds = devices.catalog_bounds(after, limit)

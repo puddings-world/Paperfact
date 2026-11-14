@@ -103,6 +103,28 @@ export class HttpTransport {
       throw new TransportError('invalid_response');
     }
   }
+  async create_pairing(token, code, signal) {
+    requireThat(typeof code === 'string' && /^[A-Za-z0-9_-]{43}$/.test(code), 'invalid_pairing');
+    const value = await this.post('/v1/devices/pairing/create', {code}, token, signal);
+    closed(value, ['workspace_id', 'issuer_device_id', 'expires_at']);
+    identifier(value.workspace_id);
+    identifier(value.issuer_device_id);
+    requireThat(Number.isSafeInteger(value.expires_at) && value.expires_at > 0, 'invalid_response');
+    return value;
+  }
+  async redeem_pairing(code, workspace_id, device_id, credential, label = null, signal) {
+    requireThat(typeof code === 'string' && /^[A-Za-z0-9_-]{43}$/.test(code), 'invalid_pairing');
+    requireThat(typeof credential === 'string' && /^[A-Za-z0-9_-]{43}$/.test(credential), 'invalid_pairing');
+    identifier(workspace_id);
+    identifier(device_id);
+    requireThat(label === null || typeof label === 'string', 'invalid_pairing');
+    const value = await this.post('/v1/devices/pairing/redeem', {
+      workspace_id, device_id, credential, label,
+    }, code, signal);
+    closed(value, ['workspace_id', 'device_id']);
+    requireThat(value.workspace_id === workspace_id && value.device_id === device_id, 'invalid_response');
+    return value;
+  }
   async session_info(token, signal) {
     const value = await this.post('/v1/session/info', {}, token, signal);
     closed(value, ['workspace_id', 'device_id']);

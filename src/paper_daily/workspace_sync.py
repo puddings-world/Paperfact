@@ -115,6 +115,7 @@ class GuardedTransport:
             "device_catalog",
             "rename_device",
             "revoke_peer",
+            "create_pairing",
             "push",
             "pull",
             "blob_begin",

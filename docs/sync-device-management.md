@@ -4,8 +4,9 @@
 local `ReferenceService` authority a bounded, single-owner device catalog,
 owner-entered labels and peer revocation. The reference HTTP transport and bounded
 desktop Devices dialog expose those existing authenticated actions. Production
-identity, account and pairing flows remain separate gates; no public enrollment
-or administrative revocation endpoint is introduced.
+account identity and end-user pairing screens remain separate gates. The local
+one-time pairing core is described below; administrative enrollment/revocation
+remain private seams.
 
 ## Ownership model
 
@@ -128,3 +129,114 @@ The production pairing gap is unchanged: a trusted operator must issue the initi
 workspace/device credential outside the public reference HTTP adapter. Listing
 or revoking peers does not implement account login, prove who should receive a new
 device credential, recover an owner's lost access or authorize remote enrollment.
+
+
+## One-time device pairing core
+
+Status: local authority, Python SDK and mobile transport implemented; **desktop
+and mobile pairing screens and durable receiver credential storage are pending**.
+No service was deployed and no real device was enrolled. The first trusted device
+still requires operator-issued credentials. AI/Google Slides login is separate.
+
+```mermaid
+sequenceDiagram
+    participant A as Verified owner device
+    participant S as Private authority
+    participant B as New device
+    A->>A: Generate random invitation secret
+    A->>S: Create invitation with existing device credential
+    S-->>A: Workspace, issuer and fixed expiry
+    A->>B: Explicitly share invitation through a private channel
+    B->>B: Generate independent device ID and credential
+    B->>S: Redeem invitation for that exact device
+    S-->>B: Bound workspace and device identity
+    B->>S: Verify with the new device credential
+    Note over B,S: Joining local research and enabling sync are separate explicit actions
+```
+
+```python
+service.create_pairing(device_token, code)
+# {"workspace_id", "issuer_device_id", "expires_at"}
+service.redeem_pairing(code, workspace_id, device_id, credential, label=None)
+# {"workspace_id", "device_id"}
+
+transport.create_pairing(device_token, code)
+transport.redeem_pairing(code, workspace_id, device_id, credential, label=None)
+client.create_pairing(code, ticket)  # DeviceClient, exact current enrolled session
+```
+
+Generate `code` and the independent `credential` with `secrets.token_urlsafe(32)`
+in Python or 32 cryptographically random bytes encoded as base64url on a browser.
+They must be distinct. An invitation may never become a device credential; the
+service rejects collision with any invitation hash or existing device credential.
+Use a fresh device identifier and preserve the same pending credential/label for
+an exact retry. Lost-response retry is supported during the invitation lifetime;
+restart-safe receiver storage and cancellation-after-send UX remain pending.
+
+The existing authenticated framing exposes:
+
+| Route | Bearer | Closed request body | Closed success body |
+|---|---|---|---|
+| `/v1/devices/pairing/create` | Existing active device credential | `code` | `workspace_id`, `issuer_device_id`, `expires_at` |
+| `/v1/devices/pairing/redeem` | One-time invitation code | `workspace_id`, `device_id`, `credential`, nullable `label` | `workspace_id`, `device_id` |
+
+The mobile `HttpTransport` exposes the same names with an optional final
+`AbortSignal`; create is `(token, code, signal)` and redeem is
+`(code, workspace_id, device_id, credential, label = null, signal)`.
+No secret is put in URLs. Responses use no-store; bodies/authorization must not
+be logged by production infrastructure. TLS and literal-loopback rules are unchanged.
+
+- Any active device may grant its own workspace only, following the existing
+  single-owner trust model. Revoking the issuer prevents outstanding invitations
+  from admitting a new device. It does not revoke independently paired devices.
+- A grant expires after 600 seconds by server time. Exact create retries keep the
+  original expiry; used or expired secrets cannot be renewed. Expired hash
+  tombstones remain in the authority to reject reuse. Up to 100 unexpired grants
+  (including consumed ones) may exist per workspace; this is not an abuse-rate limit.
+- Claim and enrollment share one immediate SQLite transaction. Repeating the
+  same device/credential/original-label returns its identity without overwriting
+  a later label. A second claimant, changed request, wrong workspace, revoked
+  device or invalid invitation is refused. Cancellation cannot retract a grant
+  or device already committed remotely.
+- Only secret hashes are stored; neither the old credential nor the invitation
+  becomes the new device credential. Labels are explicit user metadata.
+- Authorities created before pairing upgrade idempotently. Recovery accepts old
+  backups without the new table, validates the optional table's exact columns,
+  and creates a fresh authority with no previous devices or invitation grants.
+
+Local evidence (2026-11-14): nine core/loopback cases passed in 4.9s including
+checks; after wiring the guarded-session method, twelve core/context/old-new
+backup cases passed in 6.6s. Mobile transport passed nine cases in 3.5s, followed
+by the actual JavaScript-to-Python protocol program in 1.8s. The latter now covers
+pair creation, exact retry, independent credential verification, second-claim
+refusal and revocation as well as its existing research/file scenarios. These are
+isolated synthetic fixtures under the Windows CPU governor, not real browser,
+Keychain, hosted identity or installed Windows/Mac/phone acceptance.
+
+
+### Pairing behavior map
+
+| Selector | Observable requirement |
+|---|---|
+| `test_pairing_creates_independent_device_once_and_stores_no_raw_secrets` | A new device has its own credential; create retry retains expiry; claim retry preserves later labels; existing IDs and invitation-as-device-secret collisions make no writes |
+| `test_pairing_refuses_changed_authority_without_creating_another_device` | Expiry, revoked issuer, wrong workspace and a different second claimant cannot enroll; a revoked receiver cannot be reactivated by retry |
+| `test_pairing_claim_rolls_back_device_and_consumption_together` | A failure after device insertion rolls back both that device and invitation consumption; the original request can retry |
+| `test_concurrent_claims_enroll_only_one_device` | Two different claimants race; exactly one new device is saved |
+| `test_pairing_quota_and_restart_are_bounded` | Active invitation quota is enforced, expiry frees a slot, and reinitialization retains existing credentials |
+| `test_actual_http_pairing_retries_and_revocation_keep_credentials_private` | Real loopback create/redeem/authenticate/revoke works; a second identity cannot reuse the grant |
+| `test_pairing_uses_the_guarded_device_context_without_changing_local_research` | Desktop SDK shares the verified session fence; a disconnected context cannot issue a new grant; local research/outbox remain unchanged |
+| `test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants` | Both old backups and active-grant backups restore without carrying previous devices or invitations |
+
+The first six selectors are in `tests/test_sync_pairing.py`; the last two are in
+`test_workspace_devices.py` and `test_sync_authority_restore.py`. The existing
+mobile protocol program now includes pairing alongside research/file transfer;
+one program is not one behavior or a completion percentage. No expanded stress
+matrix or live login was used. The final core/compatibility/docs selection passed
+**32 cases in 25.85s**, **29.2s including checks**. Selections overlap earlier
+results; neither the historical full suite nor the complete release profile ran.
+
+Next integration: explicit create/copy and receive/verify screens, a retained
+receiver attempt for lost-response retry, and native-vault opt-in bound to the
+joined destination. Mobile persistent authentication needs a separately reviewed
+browser/session boundary; this transport does not put credentials in IndexedDB or
+localStorage. Revise the PWA shell cache when those UI modules are connected.
