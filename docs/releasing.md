@@ -20,7 +20,10 @@ reinstall the same version, then uninstall while preserving generated research.
 See [the verifier contract](toolchain.md). This is separate from real upgrade,
 shortcut/registration and device checks. The new installer phase has local
 simulation coverage only until a subsequent Windows candidate job runs it;
-run 43640792668 predates this phase. Do not relabel that earlier candidate as
+run 43640792668 predates this phase. Automatic resource helpers may briefly outlive
+the reader; installer verification waits for recognized fixture producers before
+hashing every research file. A 30-second drain timeout is a failure, not a retry
+of the AI or resource operation. Do not relabel that earlier candidate as
 installed acceptance or dispatch a rebuild for documentation-only changes.
 
 

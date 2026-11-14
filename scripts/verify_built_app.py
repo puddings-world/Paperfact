@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import sysconfig
+import time
 import traceback
 import zipfile
 from pathlib import Path
@@ -280,6 +281,23 @@ def _installer_input(built, out, installer):
                 source_identity=info, version=__version__)
 
 
+def _wait_for_idle(data, *, seconds=30, now=time.monotonic, pause=time.sleep):
+    """Drain known fixture producers; unknown files/errors must still fail."""
+    from paper_daily.enrollment_history import ActiveResearchWork, idle_lock_files
+
+    deadline = now() + seconds
+    while True:
+        try:
+            return idle_lock_files(data / "papers.db")
+        except ActiveResearchWork as error:
+            remaining = deadline - now()
+            if remaining <= 0:
+                raise ValueError(
+                    "Fixture research work did not finish within its budget"
+                ) from error
+            pause(min(.25, remaining))
+
+
 def _windows_install(plan, out, recipient, empty, run, acceptance, integration_check):
     installed, installer = plan["installed"], plan["installer"]
     data = Path(recipient["PAPERFACT_DATA"])
@@ -303,6 +321,8 @@ def _windows_install(plan, out, recipient, empty, run, acceptance, integration_c
 
         def ready():
             owned()
+            _wait_for_idle(data)
+            owned()  # Recheck the destination after waiting, before native mutation.
             if uninstall:
                 _safe_stamp(command[0])
             snapshot.append(_data_hash(data))

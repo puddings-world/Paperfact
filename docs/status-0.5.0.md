@@ -3,12 +3,13 @@
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
 CI-only Windows install/same-version reinstall/uninstall verification is added.
-Native runs 43644279988 and 43644980935 failed before setup execution while
-fingerprinting fixture files; run 43645524973 confirms the failure also occurs
-within the research directory. No exact denied file is established yet. Private
-diagnostic path notes are now available for the next scoped run; installation
-acceptance remains open. Mac/Linux native reports passed for source 84ec689;
-4594626 remains the last common three-platform delivered candidate.
+Native runs 43644279988, 43644980935 and 43645524973 stopped before setup while
+fingerprinting fixture files. A local source reproduction identified an active
+automatic resources helper holding a .research-jobs lock after the reader exited;
+waiting for that known producer released it and preserved all research bytes.
+A bounded 30-second producer drain is now covered locally; native installation
+acceptance remains open until the next scoped Windows run. Mac/Linux reports
+passed for source 84ec689; 4594626 remains the last common three-platform candidate.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

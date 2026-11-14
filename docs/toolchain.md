@@ -73,7 +73,10 @@ unexpected paths and existing install destinations. It creates only
 registration or automatic launch), then checks installed CLI/reader/MCP behavior,
 same-version reinstall and uninstall. Each installer action checks that the
 bounded synthetic research tree is unchanged; the report records the setup
-payload SHA-256 and exact failure stage. Links/reparse points and changed owned
+payload SHA-256 and exact failure stage. Before taking each snapshot, it waits
+at most 30 seconds for recognized local research producers to release their
+native locks. Unknown lock entries, a timeout or unreadable research still fail;
+no coordination file is deleted or omitted from the final fingerprint. Links/reparse points and changed owned
 paths are refused. No reboot, application closing or application restart is
 requested. Do not use this flag for an owner's installed app. It does not test
 0.4-to-0.5 upgrade, registry/shortcut integration or physical-device acceptance.

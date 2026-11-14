@@ -183,3 +183,38 @@ def test_installer_preserves_data_and_records_exact_failure(ci_build, fault, mon
         perform()
     assert not seen
     assert acceptance.report["active_check"] == "windows-install"
+
+
+def test_producer_drain_is_bounded_and_does_not_retry_unknown_failures(tmp_path, monkeypatch):
+    from paper_daily import enrollment_history
+
+    elapsed, calls = [0.0], []
+
+    def clock():
+        return elapsed[0]
+
+    def pause(seconds):
+        elapsed[0] += seconds
+
+    def active_then_idle(database):
+        calls.append(database)
+        if elapsed[0] < .5:
+            raise enrollment_history.ActiveResearchWork("active fixture producer")
+        return ["verified closed lock"]
+
+    monkeypatch.setattr(enrollment_history, "idle_lock_files", active_then_idle)
+    assert verify._wait_for_idle(tmp_path, now=clock, pause=pause) == ["verified closed lock"]
+    assert elapsed[0] == .5 and calls == [tmp_path / "papers.db"] * 3
+    elapsed[0] = 0
+    with pytest.raises(ValueError, match="did not finish within its budget"):
+        verify._wait_for_idle(tmp_path, seconds=.25, now=clock, pause=pause)
+    assert elapsed[0] == .25
+
+    def unknown(database):
+        raise ValueError("Unknown local research job lock entry")
+
+    monkeypatch.setattr(enrollment_history, "idle_lock_files", unknown)
+    elapsed[0] = 0
+    with pytest.raises(ValueError, match="Unknown local research job lock"):
+        verify._wait_for_idle(tmp_path, now=clock, pause=pause)
+    assert elapsed[0] == 0  # Never turn malformed/unknown files into a timeout or pass.

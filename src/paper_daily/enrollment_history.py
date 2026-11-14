@@ -544,6 +544,10 @@ def collect(conn, database, ticket):
     }
 
 
+class ActiveResearchWork(ValueError):
+    """A recognized native producer still owns its local coordination lock."""
+
+
 def idle_lock_files(database):
     """Closed local mutex files are not research; active producers block a snapshot."""
     import errno
@@ -585,7 +589,7 @@ def idle_lock_files(database):
                     raise ValueError("Unknown local research job lock content")
             except OSError as exc:
                 if exc.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
-                    raise ValueError(
+                    raise ActiveResearchWork(
                         "Wait for active research work before preparing enrollment"
                     ) from exc
                 raise

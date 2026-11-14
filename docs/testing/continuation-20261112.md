@@ -5680,3 +5680,33 @@ additional worktree was introduced.
   assertions retained; no additional collected cases. Working native gates remain
   explicitly open; source-qualified prior Mac/Linux evidence is not a common
   three-platform pass for the current diagnostic commit.
+
+
+### 2026-11-15: reproduce and drain the native fixture producer
+
+- Avoided a diagnostic rebuild: source fixture reproduction under the existing
+  Windows governor identified .research-jobs/<sha256>.lock as the denied path
+  after reader exit, but not after import. Exact source lock key matches feature
+  resources and owner demo:paperfact. The helper is an intentional detached Popen
+  from ReaderPage._check_resources; no cache attribution or handle leak is claimed.
+- In a second bounded reproduction, the maintained idle_lock_files validator
+  observed the producer finish after 4.89s, then complete research fingerprint,
+  export, exact-source audit and actual CLI/MCP restart/retry passed. Total 20.563s.
+  This is partial source diagnostic evidence, not frozen package acceptance:
+  source doctor had already reported missing formula assets in this worktree.
+  No assets were downloaded, no account login/model call or owner data was used.
+- Added typed ActiveResearchWork (still a ValueError for existing callers) and
+  installer-only bounded polling of that type before each research snapshot.
+  Unknown/malformed locks and all other errors fail immediately; 30-second drain
+  timeout fails; native destination identity is rechecked after waiting. Every
+  research file, including closed mutex files, remains in the final byte hash.
+  No deletion, lock skipping, repeated producer execution or process killing.
+- Focused: 27 passed in 13.32s / 16.6s total, covering existing active/unknown-lock
+  enrollment guards, complete frozen verifier and install simulations. One new
+  collected case tests drain success, timeout and unknown-error refusal with a
+  synthetic clock; daily critical and curated release selectors unchanged.
+- Production drain helper replay: 19.453s total; post-reader wait 4.83s, then
+  complete research reads/export/audit/CLI/MCP passed in the partial source
+  diagnostic. Critical 14 passed in 5.26s / 11.2s total; docs 58 passed in 1.80s /
+  5.4s total. First affected check stopped on one Ruff line-length finding
+  before pytest (4.9s); fixed without changing assertions.
