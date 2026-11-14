@@ -1,4 +1,4 @@
-"""Explicit copy-as-new note recovery through the native target transaction.
+"""Explicit note/manual-highlight copies through the native target transaction.
 
 Old operation envelopes are immutable review input, never re-keyed for replay.
 Positioned notes use exact originals; scientific-group recovery remains separate.
@@ -10,6 +10,7 @@ import hmac
 import secrets
 import sqlite3
 from contextlib import closing
+from copy import deepcopy
 from dataclasses import dataclass, field
 from uuid import NAMESPACE_URL, uuid5
 
@@ -25,6 +26,7 @@ from paper_daily.workspace_sync import local_binding
 
 _KEY = secrets.token_bytes(32)
 FORMAT = "paperfact.recovery-note-copy.v1"
+MANUAL_FORMAT = "paperfact.recovery-manual-highlight-copy.v1"
 
 
 def _sign(observed, change_id, operation_json, with_original=False):
@@ -63,21 +65,34 @@ def _binding_in(conn, observed):
         raise ValueError("Recovery target native binding changed")
 
 
-def _original(conn, operation, check):
-    """Verify this note's exact owned PDF without activating or projecting it."""
+def is_manual_highlight(operation):
+    return (operation["entity_type"] == "research_content"
+            and operation["payload"].get("feature") == "manual_highlight")
+
+
+def _position(operation):
     payload = operation["payload"]
-    if payload.get("page") is None and payload.get("anchor") is None:
-        return None
+    if is_manual_highlight(operation):
+        return (payload["scope"]["id"], payload["source_document_hash"],
+                payload["data"]["anchor"], payload["data"]["quote"])
     anchor = payload.get("anchor")
+    if payload.get("page") is None and anchor is None:
+        return None
     if not anchor or not anchor.get("document_hash"):
         raise ValueError("Original-bound notes require exact original verification before recovery")
-    return inspect_original(
-        conn, payload["paper_id"], operation["parents"][0], anchor["document_hash"], check,
-        anchor=anchor,
-    )
+    return payload["paper_id"], anchor["document_hash"], anchor, None
 
 
-def inspect_original(conn, paper, parent, digest, check, *, anchor=None):
+def _original(conn, operation, check):
+    position = _position(operation)
+    if position is None:
+        return None
+    paper, digest, anchor, quote = position
+    return inspect_original(conn, paper, operation["parents"][0], digest, check,
+                            anchor=anchor, quote=quote)
+
+
+def inspect_original(conn, paper, parent, digest, check, *, anchor=None, quote=None):
     """Read exact native-owned original bytes; no activation or write authority."""
     from paper_daily import note_positions, sync_source_files
     from paper_daily.sync_documents import (
@@ -91,13 +106,13 @@ def inspect_original(conn, paper, parent, digest, check, *, anchor=None):
     if (parent["kind"] != "paper" or parent["id"] != paper or not _paper_current(
         conn, dict(paper_id=paper, parent_incarnation=parent["incarnation"])
     )):
-        raise ValueError("The note's original belongs to another paper lifetime")
+        raise ValueError("The original belongs to another paper lifetime")
     # Immutable retained originals may differ from the currently active PDF.
     source = sync_source_files.inspectable(conn, paper, digest)
     if source is None:
         document = desired_document(conn, paper)
         if document is None or document["sha256"] != digest or not _paper_current(conn, document):
-            raise ValueError("The note's exact original is not owned by the recovery target")
+            raise ValueError("The exact original is not owned by the recovery target")
         row = conn.execute(
             "SELECT workspace,blob_root FROM document_reader_paths WHERE id=1"
         ).fetchone() if conn.execute(
@@ -105,7 +120,7 @@ def inspect_original(conn, paper, parent, digest, check, *, anchor=None):
         ).fetchone() else None
         binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
         if row is None or binding is None or row[0] != binding[0]:
-            raise ValueError("The note's original has no matching native storage registration")
+            raise ValueError("The original has no matching native storage registration")
         verified = verify_document(_ReadOnlyStore(row[1]), document)
         source = verified._path
     from paper_daily.sync_documents import _identity
@@ -116,21 +131,27 @@ def inspect_original(conn, paper, parent, digest, check, *, anchor=None):
     from paper_daily.sync_documents import MAX_PDF_BYTES
 
     if not 0 < source.stat().st_size <= MAX_PDF_BYTES:
-        raise ValueError("The note's original exceeds its byte budget")
+        raise ValueError("The original exceeds its byte budget")
     with source.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
-            raise ValueError("The note's original differs from its recorded hash")
+            raise ValueError("The original differs from its recorded hash")
     import pymupdf
 
     check()
     with pymupdf.open(source) as pdf:
         if pdf.needs_pass or pdf.page_count < 1:
-            raise ValueError("The note's original is not a readable PDF")
+            raise ValueError("The original is not a readable PDF")
         if anchor is not None:
             note_positions.verify(pdf, anchor)
+        if quote is not None:
+            from paper_daily.manual_highlight_ops import selection_quote
+
+            actual = selection_quote(pdf, anchor)
+            if " ".join(actual.split()) != " ".join(quote.split()):
+                raise ValueError("Highlight quotation differs from its exact PDF position")
     check()
     if _identity(source) != version:
-        raise ValueError("The note's original changed during verification")
+        raise ValueError("The original changed during verification")
     return source, version
 
 
@@ -139,11 +160,32 @@ def _original_current(proof):
         from paper_daily.sync_documents import _identity
 
         if _identity(proof[0]) != proof[1]:
-            raise ValueError("The note's original changed before recovery committed")
+            raise ValueError("The original changed before recovery committed")
+
+
+def _manual_slot(conn, operation):
+    if not is_manual_highlight(operation):
+        return
+    paper, digest, anchor, _quote = _position(operation)
+    row = conn.execute(
+        "SELECT local_id FROM research_paper_identity WHERE sync_id=?", (paper,),
+    ).fetchone()
+    if row is None:
+        raise ValueError("The manual highlight has no native paper mapping")
+    duplicate = conn.execute(
+        "SELECT 1 FROM pdf_highlights WHERE paper_id=? AND document_hash=? AND CASE "
+        "WHEN length(CAST(anchor AS BLOB))<=32768 THEN CASE WHEN json_valid(anchor) THEN "
+        "json_extract(anchor,'$.p0')=? AND json_extract(anchor,'$.o0')=? AND "
+        "json_extract(anchor,'$.p1')=? AND json_extract(anchor,'$.o1')=? ELSE 0 END "
+        "ELSE 0 END LIMIT 1",
+        (row[0], digest, *(anchor[key] for key in ("p0", "o0", "p1", "o1"))),
+    ).fetchone()
+    if duplicate:
+        raise ValueError("Target already contains this manual selection; keep the existing mark")
 
 
 def _source_input(observed, source, operation, check):
-    """Read the old note's owned original; never infer it from an untrusted path."""
+    """Read the recorded owned original; never infer it from an untrusted path."""
     from paper_daily.sync_source_files import _inspection_paths
 
     with closing(_readonly_connection(observed.source.database)) as old:
@@ -164,8 +206,8 @@ def _source_input(observed, source, operation, check):
         from paper_daily.sync_files import file_id
         from paper_daily.sync_source_files import FEATURE
 
-        identity = file_id(source["payload"]["paper_id"], FEATURE,
-                           source["payload"]["anchor"]["document_hash"])
+        paper, digest, _anchor, _quote = _position(source)
+        identity = file_id(paper, FEATURE, digest)
         current = client._optimistic_graph(conn)[0].get(("research_file", identity))
         if current and (not current["active"] or current["parents"] != operation["parents"]):
             raise ValueError("Deleted or retired original requires explicit source restoration")
@@ -186,9 +228,10 @@ def _stage_original(plan, operation, check):
     request = str(uuid5(
         NAMESPACE_URL, "paperfact:recovery-note-original:" + operation["operation_id"]
     ))
+    paper, digest, _anchor, _quote = _position(operation)
     staged = prepare_source(
-        client, operation["payload"]["paper_id"], proof[0],
-        document_hash=operation["payload"]["anchor"]["document_hash"],
+        client, paper, proof[0],
+        document_hash=digest,
         parent_incarnation=operation["parents"][0]["incarnation"],
         store=BlobStore(store.root), version_root=Path(root), request_id=request,
     )
@@ -205,6 +248,10 @@ class NoteCopy:
     operation_json: str = field(repr=False)
     _seal: str = field(repr=False)
     with_original: bool = False
+
+    @property
+    def manual_highlight(self):
+        return is_manual_highlight(backup._decode(self.operation_json))
 
     def apply(self, *, seconds=30, cancelled=lambda: False):
         """Commit new research and its retry receipt/outbox together; no network."""
@@ -249,6 +296,7 @@ class NoteCopy:
                 if previous is None:
                     # Hold the SQLite writer lock before the final preview fence.
                     self.observed._check(check)
+                    _manual_slot(conn, operation)
                     if self.with_original:
                         from paper_daily.sync_source_files import publish_source_in
 
@@ -268,7 +316,7 @@ class NoteCopy:
                 conn.rollback()
                 raise
         return dict(
-            format=FORMAT,
+            format=MANUAL_FORMAT if self.manual_highlight else FORMAT,
             state="saved_locally",
             applied=receipt["applied"],
             sequence=receipt["sequence"],
@@ -285,7 +333,7 @@ class NoteCopy:
 def prepare(
     observed, change_id, request_id, *, with_original=False, seconds=30, cancelled=lambda: False,
 ):
-    """Prepare an explicit v2 note copy, optionally with its verified original."""
+    """Prepare a distinct native note/manual-mark copy, optionally with its original."""
     if type(with_original) is not bool:
         raise ValueError("Choose explicitly whether to include the original")
     _identifier(request_id)
@@ -293,14 +341,22 @@ def prepare(
     _auth(observed, check)
     comparison = observed.compare(change_id, seconds=seconds, cancelled=cancelled)
     source = comparison["source"]["operation"]
-    if source["version"] != 2 or source["entity_type"] != "note" or source["action"] != "put":
-        raise ValueError("This action copies version-2 note puts only; keep other changes pending")
+    manual = is_manual_highlight(source)
+    if (source["version"] != 2 or source["action"] != "put"
+            or source["entity_type"] != "note" and not manual):
+        raise ValueError(
+            "This action copies manual-highlight or note puts only (version 2); "
+            "keep other changes pending"
+        )
     blocked = set(comparison["blocking_reasons"]) - {
         "target_restore_requires_confirmation",
         "target_entity_lifetime_changed",
         "target_parent_lifetime_changed",
         "note_original_verification_required",
     }
+    if manual:
+        # The typed mark adapter verifies this closure through _original/_source_input.
+        blocked.discard("scientific_source_closure_required")
     if blocked:
         raise ValueError(
             "Resolve note parent/source requirements before copying: " + ", ".join(sorted(blocked))
@@ -317,7 +373,16 @@ def prepare(
             candidates._fingerprint(source),
         ]
     )
-    entity_id = str(uuid5(NAMESPACE_URL, "paperfact:recovery-note-copy:" + address))
+    kind = "manual-highlight" if manual else "note"
+    copied_key = str(uuid5(NAMESPACE_URL, "paperfact:recovery-" + kind + "-copy:" + address))
+    payload = deepcopy(source["payload"])
+    if manual:
+        from paper_daily.sync_content import content_id
+
+        payload["key"] = copied_key
+        entity_id = content_id(payload["scope"], "manual_highlight", copied_key)
+    else:
+        entity_id = copied_key
     with closing(_readonly_connection(observed.database)) as conn:
         conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
         conn.execute("BEGIN")
@@ -343,11 +408,11 @@ def prepare(
                 or operation["version"] != 2
                 or operation["workspace_id"] != observed.binding["workspace_id"]
                 or operation["device_id"] != observed.binding["device_id"]
-                or operation["entity_type"] != "note"
+                or operation["entity_type"] != source["entity_type"]
                 or operation["entity_id"] != entity_id
                 or operation["operation_id"] != request_id
                 or operation["action"] != "put"
-                or operation["payload"] != source["payload"]
+                or operation["payload"] != payload
                 or operation["parents"] != parents
                 or operation["incarnation"] != request_id
                 or operation["base_revision"] != 0
@@ -357,9 +422,9 @@ def prepare(
         else:
             operation = conn._capture_client.new_graph_operation_in(
                 conn,
-                "note",
+                source["entity_type"],
                 entity_id,
-                source["payload"],
+                payload,
                 operation_id=request_id,
             )
             if operation["parents"] != parents:
@@ -367,6 +432,7 @@ def prepare(
             if operation["base_revision"] or operation["depends_on"] is not None:
                 raise ValueError("Recovery copy identity already exists")
             encoded = canonical_operation(operation)
+            _manual_slot(conn, operation)
             if with_original:
                 _source_input(observed, source, operation, check)
             else:

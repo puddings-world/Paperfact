@@ -472,3 +472,24 @@ native-history inspection neither initializes one nor writes the old database.
 No historical suite, actual provider login or owner research data is involved.
 Independent manual-mark recovery, reading links, semantic validation, hosted TLS
 and installed Mac/phone remain separate acceptance boundaries.
+
+
+## Independent manual highlight copy (2026-11-14)
+
+`tests/test_sync_recovery_manual_highlight.py` uses the existing native note-copy
+transaction; normal drawing and recovery share `selection_quote` parsing only.
+That parser grants no file ownership or write authority. The adapter still checks
+actual old/destination ownership, paper lifetimes and the exact original hash.
+
+| Scenario | Observable result |
+|---|---|
+| Distinct copy + independent peer | A new portable/manual identity preserves source data, creation time and position; a differently positioned existing mark remains; original/mark reach another native workspace |
+| Retry + later deletion | Repeating the successful request never resurrects the copy or requires lost source bytes; a deliberately new copy can use the destination's owned original |
+| Wrong quote / position / document | No research/outbox changes and no substituted PDF or converted note |
+| Occupied selection | Existing same-position mark is preserved; copying refuses before publication instead of evading the storage uniqueness rule |
+| Failure/cancellation after mark write | Original ownership, mark and journal/outbox roll back; retry creates one copy |
+| Hyphenated multiline original | The same actual PDF selection produces the same joined quotation as normal drawing and is recoverable |
+| English/Traditional Chinese Qt | Full quote/page range and actual Chinese action label are readable; cancel writes nothing, repeated confirmation makes one copy; collision is explained with copying disabled |
+
+Existing note-copy assertions and normal manual-add/remove tests remain intact.
+A full historical suite and installed Mac/phone acceptance are not implied.

@@ -285,3 +285,6 @@ legacy mappings remain in development.
 The same recovery review can restore source-verified highlight analysis and PDF
 marks together while preserving manual marks and hidden choices. See
 [recovery actions and limits](docs/device-recovery-review.md).
+
+Independent manual highlights can also be copied with their verified original.
+Existing selections are preserved; an occupied position is shown for review.

@@ -310,9 +310,36 @@ def load(owner, path, fingerprint, *, document=None, readonly=False):
                          document, _json(analysis))
 
 
-def _anchor(view, anchor, quote):
+def selection_quote(document, anchor):
+    """Read the same line-aware manual selection text from an already opened PDF."""
     from paper_daily.pdf_selection_text import level_words
 
+    lines = []
+    if anchor["p1"] >= len(document) or anchor["p1"] - anchor["p0"] > 100:
+        raise ValueError("Highlight page range is outside the displayed PDF")
+    for page in range(anchor["p0"], anchor["p1"] + 1):
+        words = level_words(document[page])
+        indices = {index for index, _word in words}
+        if ((page == anchor["p0"] and anchor["o0"] not in indices)
+                or (page == anchor["p1"] and anchor["o1"] not in indices)):
+            raise ValueError("Highlight word range is outside the displayed PDF")
+        for index, word in words:
+            if ((page == anchor["p0"] and index < anchor["o0"])
+                    or (page == anchor["p1"] and index > anchor["o1"])):
+                continue
+            if lines and lines[-1][-1][0] == page and abs(lines[-1][-1][1] - word[1]) < 3:
+                lines[-1].append((page, word[1], word[4]))
+            else:
+                lines.append([(page, word[1], word[4])])
+    text = ""
+    for line in lines:
+        part = " ".join(word[2] for word in line)
+        text = (text[:-1] + part if text.endswith("-")
+                else text + " " + part if text else part)
+    return text
+
+
+def _anchor(view, anchor, quote):
     if (not isinstance(anchor, dict) or set(anchor) - (ANCHOR_KEYS | {"document_hash"})
             or not set(anchor) >= ANCHOR_KEYS
             or any(type(anchor[key]) is not int or not 0 <= anchor[key] <= 1000000
@@ -322,29 +349,8 @@ def _anchor(view, anchor, quote):
         raise ValueError("Invalid highlight coordinates")
     if not isinstance(quote, str) or not quote.strip() or len(quote.encode()) > 32768:
         raise ValueError("Invalid highlight quotation")
-    lines = []
     with _pdf_document(view.path) as pdf:
-        if anchor["p1"] >= len(pdf) or anchor["p1"] - anchor["p0"] > 100:
-            raise ValueError("Highlight page range is outside the displayed PDF")
-        for page in range(anchor["p0"], anchor["p1"] + 1):
-            words = level_words(pdf[page])
-            indices = {index for index, _word in words}
-            if ((page == anchor["p0"] and anchor["o0"] not in indices)
-                    or (page == anchor["p1"] and anchor["o1"] not in indices)):
-                raise ValueError("Highlight word range is outside the displayed PDF")
-            for index, word in words:
-                if ((page == anchor["p0"] and index < anchor["o0"])
-                        or (page == anchor["p1"] and index > anchor["o1"])):
-                    continue
-                if lines and lines[-1][-1][0] == page and abs(lines[-1][-1][1] - word[1]) < 3:
-                    lines[-1].append((page, word[1], word[4]))
-                else:
-                    lines.append([(page, word[1], word[4])])
-    text = ""
-    for line in lines:
-        part = " ".join(word[2] for word in line)
-        text = (text[:-1] + part if text.endswith("-")
-                else text + " " + part if text else part)
+        text = selection_quote(pdf, anchor)
     if " ".join(text.split()) != " ".join(quote.split()):
         raise ValueError("Highlight text does not match the displayed PDF coordinates")
     return json.dumps({key: anchor[key] for key in sorted(ANCHOR_KEYS)}, sort_keys=True)

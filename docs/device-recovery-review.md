@@ -353,3 +353,35 @@ source ownership remains pending. Quote location is not semantic support, and
 installed Mac/phone and hosted-service acceptance remain separate gates.
 
 Restored original ownership does not switch the active primary PDF.
+
+
+## Independent manual highlights
+
+In the old-device review, select a manual highlight and choose **Copy as new
+highlight** (or **Copy highlight and original** when the original is missing).
+Compare the complete quotation and page range, then confirm. The result is a
+manual highlight in the PDF reader, never a converted text note. Existing marks
+remain unchanged. An occupied exact selection shows why copying is unavailable;
+keep/review the existing mark instead of bypassing its one-selection constraint.
+
+The existing `sync_recovery_note_copy.prepare(observed, change_id, request_id, *,
+with_original=False, seconds=30, cancelled=...)` now accepts native manual-highlight
+puts as well as notes. It returns the same sealed copy adapter, with a
+`manual_highlight` property and `apply(...)`. Notes retain their existing identities
+and receipt format. Manual copies have a distinct portable key and return
+`paperfact.recovery-manual-highlight-copy.v1`; their native operation journal is
+the retry receipt. No new generic recovery engine or wire feature was introduced.
+
+The adapter checks the exact owned PDF and actual selected text, using the same
+line-aware/dehyphenating extraction as normal manual drawing. Whitespace, page
+positions, source identity and selected words are checked without guessing or
+substituting the current PDF. A byte-bounded JSON position query rejects a target
+collision before copying, including different JSON formatting of the same geometry.
+The transaction rechecks the slot. Unrelated/differently positioned marks remain.
+
+If requested, verified original ownership, the new mark and its outbox/journal
+commit together. Failure/cancellation rolls back all owned research. A repeated
+successful request preserves later deletion and no longer requires original bytes;
+a new request may use an independently owned target original. Original ownership
+does not switch the active PDF. Source envelopes/files stay unchanged. AI marks,
+analysis groups, reading links and Lineage still use their own actions/gates.

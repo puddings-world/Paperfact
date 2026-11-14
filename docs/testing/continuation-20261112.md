@@ -4678,3 +4678,41 @@ mapping, hosted HTTPS and installed Apple Silicon/phone acceptance. Exact quote
 location does not certify semantic support or change the active primary PDF.
 Existing ownership/transaction skills cover this reused method; no duplicate
 skill, extra worktree, release, deployment or push was introduced.
+
+
+## Independent manual-highlight copies (2026-11-14)
+
+Extended the existing sealed note-copy adapter, not a parallel recovery engine.
+Native manual-highlight puts receive a distinct portable copy key, retain quote,
+position and creation time, and return a distinct result format. Notes retain
+their original identity derivation and receipt format. Owned original, mark and
+journal/outbox share the existing transaction and retry boundary. Later deletion
+stays deleted on repeat; new copies can use the destination's verified original.
+
+Normal drawing and recovery now share line-aware selection parsing, including
+cross-line hyphen joins. The parser grants no file/write authority. Recovery
+still checks owned bytes, source paper lifetime, exact hash, coordinates and quote.
+The typed adapter discharges only the manual mark's generic source-closure blocker;
+other research stays unsupported by this copy action.
+
+The real storage schema permits one manual mark per paper/PDF/selection. A new
+UUID alone cannot make a duplicate valid. Added a bounded semantic geometry lookup
+before copy and again inside the transaction; collisions preserve the existing
+mark and show a clear disabled-action reason. Different positions stay independent.
+Native English/Traditional Chinese review shows full quote/page range, confirms
+before writing, cancels without work and rejects rapid repeated activation.
+
+Evidence: eight backend cases passed in 67.52s pytest / 70.9s total. The three
+native UI cases passed in the subsequent shared-adapter cohort; that cohort then
+failed on an old note error-message assertion. Both legacy error wordings were
+restored without changing any old assertions. Final integration scope includes
+all 17 existing note-copy cases, positioned-note native transfer, two normal manual
+add/remove variants, all three manual-copy UI cases and all 14 critical journeys:
+37 passed in 132.08s pytest / 135.8s total. These scopes overlap. Privacy and Ruff
+passed with 25% CPU/two processors and a 300-second budget. No historical suite,
+owner research, actual account login, paid call, deployment or release was used.
+
+Remaining: reading-link/Lineage groups, explicit source-deletion decisions,
+foreign-workspace/legacy and portable-audit mappings, hosted HTTPS and installed
+Apple Silicon/phone acceptance. Existing copy/ownership/receipt skills cover this
+reuse; no duplicate skill, extra worktree or protocol feature was introduced.

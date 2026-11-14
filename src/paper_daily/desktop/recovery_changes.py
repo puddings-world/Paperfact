@@ -265,6 +265,84 @@ TEXT["zh-TW"].update({
 })
 
 
+TEXT["en"].update({
+    "copy_manual": (
+        "Copy as new highlight"
+    ),
+    "copy_manual_original": (
+        "Copy highlight and original"
+    ),
+    "ready_manual": (
+        "Compare the exact quotation and position, then copy as a distinct manu"
+        "al highlight. Existing marks stay unchanged."
+    ),
+    "ready_manual_original": (
+        "Compare the exact quotation and position. Copy the verified original a"
+        "nd a new manual highlight together; existing marks stay unchanged."
+    ),
+    "already_manual": (
+        "This highlight was already copied. Later edits or deletion stay unchan"
+        "ged."
+    ),
+    "saved_manual": (
+        "Saved a new manual highlight locally. Remote acceptance is unchecked."
+    ),
+    "saved_manual_changed": (
+        "The manual highlight was saved, but the review changed. Reopen it to i"
+        "nspect the result."
+    ),
+    "confirm_manual": (
+        "Copy this selection as a new manual highlight? Existing marks and late"
+        "r edits stay unchanged. No AI call is made."
+    ),
+    "confirm_manual_original": (
+        "Copy this verified original and a new manual highlight together? Exist"
+        "ing marks stay unchanged and the active primary PDF is not switched. N"
+        "o AI call is made."
+    ),
+    "manual_highlight": (
+        "Manual highlight"
+    ),
+})
+TEXT["zh-TW"].update({
+    "copy_manual": (
+        "複製為新手動畫線"
+    ),
+    "copy_manual_original": (
+        "一起複製畫線與原文"
+    ),
+    "ready_manual": (
+        "先比較引文與位置，再複製為新的手動畫線；現有標記"
+        "不會被覆蓋。"
+    ),
+    "ready_manual_original": (
+        "先比較引文與位置。會一起複製核對過的原文與新的手"
+        "動畫線；現有標記不會被覆蓋。"
+    ),
+    "already_manual": (
+        "這筆手動畫線已經複製過。之後的修改或刪除不會被覆"
+        "蓋。"
+    ),
+    "saved_manual": (
+        "已在本機儲存新的手動畫線；尚未核對遠端接收狀態。"
+    ),
+    "saved_manual_changed": (
+        "手動畫線已儲存，但比較畫面已變動。請重新開啟查看"
+        "結果。"
+    ),
+    "confirm_manual": (
+        "要將這段選取範圍複製為新的手動畫線嗎？現有標記與"
+        "後續修改會保留，不會呼叫 AI。"
+    ),
+    "confirm_manual_original": (
+        "要一起複製核對過的原文與新的手動畫線嗎？現有標記"
+        "會保留，也不會切換目前原文或呼叫 AI。"
+    ),
+    "manual_highlight": (
+        "手動畫線"
+    ),
+})
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -382,9 +460,12 @@ class RecoveryChanges(QWidget):
         self.copy_button.setEnabled(bool(active and self.observed and self.plan))
         action = self.action_select.currentData()
         key = "retry" if action == "copy" else "retry_action"
-        label = "copy_original" if action == "copy" and getattr(
-            self.plan, "with_original", False
-        ) else action or "apply"
+        selected_plan = self.action_plans.get(action, (None, False))[0]
+        manual = getattr(selected_plan, "manual_highlight", False)
+        label = ("copy_manual_original" if getattr(selected_plan, "with_original", False)
+                 else "copy_manual") if action == "copy" and manual else (
+            "copy_original" if action == "copy" and getattr(
+                self.plan, "with_original", False) else action or "apply")
         self.copy_button.setText(self.t[key if self.failed_copy else label])
         self.action_select.setEnabled(bool(active and self.observed and self.action_plans))
         self.action_row.setVisible(bool(self.observed and self.action_plans))
@@ -405,6 +486,9 @@ class RecoveryChanges(QWidget):
                 key = "ready_original"
             if action in GROUP_ACTIONS and not already:
                 key = "ready_" + action
+            if action == "copy" and getattr(plan, "manual_highlight", False):
+                key = ("already_manual" if already else "ready_manual_original"
+                       if plan.with_original else "ready_manual")
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -521,7 +605,7 @@ class RecoveryChanges(QWidget):
             operation = comparison["source"]["operation"]
             supported = (
                 operation["version"] == 2
-                and operation["entity_type"] == "note"
+                and (operation["entity_type"] == "note" or note_copy.is_manual_highlight(operation))
                 and operation["action"] == "put"
             )
             plan, already = None, False
@@ -551,19 +635,24 @@ class RecoveryChanges(QWidget):
                     )
                 try:
                     plan = note_copy.prepare(observed, selected, request_id, cancelled=stopped)
-                except (OSError, ValueError):
+                except (OSError, ValueError) as error:
+                    if note_copy.is_manual_highlight(operation):
+                        comparison["manual_copy_issue"] = str(error)[:240]
                     # Missing parent/source proof keeps comparison readable.
                     # A previously saved request must still validate its receipt.
                     observed._check(backup._guard(30, stopped))
                     if already:
                         raise
-                    if operation["payload"].get("anchor") is not None:
+                    if (operation["payload"].get("anchor") is not None
+                            or note_copy.is_manual_highlight(operation)):
                         try:
                             plan = note_copy.prepare(
                                 observed, selected, request_id, with_original=True,
                                 cancelled=stopped,
                             )
-                        except (OSError, ValueError):
+                        except (OSError, ValueError) as error:
+                            if note_copy.is_manual_highlight(operation):
+                                comparison["manual_copy_issue"] = str(error)[:240]
                             observed._check(backup._guard(30, stopped))
             plans = self._metadata_plans(observed, selected, comparison, stopped)
             return observed, selected, comparison, plan, already, plans
@@ -720,6 +809,8 @@ class RecoveryChanges(QWidget):
         return "\n\n".join(parts)
 
     def _completion(self, receipt, changed=False):
+        if receipt.get("format") == note_copy.MANUAL_FORMAT:
+            return self.t["saved_manual_changed" if changed else "saved_manual"]
         if "choice" not in receipt:
             return self.t["saved_changed" if changed else "saved"]
         return self.t["decision_changed" if changed else
@@ -730,13 +821,16 @@ class RecoveryChanges(QWidget):
             return False
         plan, action = self.plan, self.action_select.currentData()
         include_original = action == "copy" and getattr(plan, "with_original", False)
-        if action in {"replace", "restore"} or action in GROUP_ACTIONS or include_original:
+        manual = action == "copy" and getattr(plan, "manual_highlight", False)
+        if (manual or action in {"replace", "restore"}
+                or action in GROUP_ACTIONS or include_original):
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_" + action] if action in GROUP_ACTIONS else
+                    self.t["confirm_manual_original" if include_original else "confirm_manual"]
+                    if manual else self.t["confirm_" + action] if action in GROUP_ACTIONS else
                     self.t["confirm_original"] if include_original else
                     self.t["confirm_body"].format(action=self.t[action]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -873,6 +967,8 @@ class RecoveryChanges(QWidget):
                     label = "copy_original" if action == "copy" and getattr(
                         plan, "with_original", False
                     ) else action
+                    if action == "copy" and getattr(plan, "manual_highlight", False):
+                        label = "copy_manual_original" if plan.with_original else "copy_manual"
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))
@@ -892,6 +988,12 @@ class RecoveryChanges(QWidget):
                               if comparison.get(key + "_issue")), None)
                 if issue:
                     self.notice.setText(self.t["group_blocked"] + issue)
+                if comparison.get("manual_copy_issue") and plan is None:
+                    self.notice.setText(comparison["manual_copy_issue"])
+                if plan is not None and plan.manual_highlight:
+                    key = ("already_manual" if already else "ready_manual_original"
+                           if plan.with_original else "ready_manual")
+                    self.notice.setText(self.t[key])
                 self.old.setFocus()
             owner.status.setText(self.notice.text())
         except (OSError, ValueError, TypeError):
@@ -941,6 +1043,10 @@ class RecoveryChanges(QWidget):
         payload = operation["payload"]
         if operation["entity_type"] == "note":
             return payload["body"]
+        if note_copy.is_manual_highlight(operation):
+            anchor = payload["data"]["anchor"]
+            return (self.t["manual_highlight"] + "\n\n" + payload["data"]["quote"]
+                    + "\n\np. " + str(anchor["p0"] + 1) + " - " + str(anchor["p1"] + 1))
         import json
 
         return json.dumps(payload, ensure_ascii=False, indent=2)
