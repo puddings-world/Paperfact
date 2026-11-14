@@ -287,3 +287,18 @@ compound source/content enrollment are still gated. See the
 [consumer contract and limits](sync-projection.md#mobile-lineage-event-consumer).
 Physical phone/Mac, actual browser layout, native credentials and hosted HTTPS
 acceptance remain separate; no installer or deployment was produced here.
+
+
+## Preserve work when service history changes
+
+Before uploading from a nonempty local history, the foreground sync verifies its
+last received event against the service. Missing or changed history stops the
+pass before outbox upload or reading-position reconciliation; drafts, local notes,
+receipts and cursor remain intact. The message asks for service-backup review,
+not browser storage deletion. Reconnecting cannot bypass that comparison.
+
+The v24 static shell refreshes engine/transport/message code while retaining
+research storage. This is local source/artifact behavior; an installed PWA must
+receive the updated shell and service before pilot acceptance. This frontier
+check does not replace full authority-generation negotiation, private HTTPS
+hosting or Safari/physical-device durability checks.

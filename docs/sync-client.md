@@ -9,7 +9,7 @@ desktop conflict UI is installed by this module.
 - `new_operation(kind, entity_id, payload, ...)` creates a bounded list/note envelope.
   Retain it when retrying the same action; `save(operation)` writes research and
   its outgoing operation atomically. A changed payload using the same ID fails.
-- `sync_once(transport, token, limit=100)` pushes a bounded batch, then pulls a
+- `sync_once(transport, token, limit=100)` verifies retained history, pushes a bounded batch, then pulls a
   contiguous event batch. Concurrent calls on the same instance return `busy`.
   The supplied transport owns authentication and network policy.
 - Acknowledged edits remain causal predecessors until their server events arrive
@@ -296,3 +296,29 @@ session-generation checks, byte budgets and pre-push ownership verification.
 updates, same-transaction creation, wrong-parent rejection, deletion/restoration,
 pending replacement conflicts, missing-authority-byte retry, atomic writer failure
 and preparation dependency/exception behavior. All use synthetic workspaces.
+
+
+## Verify retained history before upload
+
+For a nonzero cursor, `verify_frontier(transport, token)` requests exactly the last
+received event (`pull(after=cursor-1, limit=1)`) and compares its complete canonical
+event with the bounded retained local inbox record. It opens a read-only local
+transaction and closes it before the request. `sync_once` performs this before
+`prepare_push`, attachment bytes, operations or acknowledgments. Cursor zero needs
+no historical probe, so initial bootstrap retains its existing behavior.
+
+Missing, replaced or unprovable frontier history raises
+`sync_journal.SyncHistoryUnavailable` (a `ValueError` subclass). Nothing is dropped,
+acknowledged, recursored or replaced to make the pass appear successful. Preserve
+the local database/outbox and inspect the authority backup/generation with its
+operator. Repeated retries cannot bypass the check. The desktop pauses automatic
+sync and displays preservation guidance; mobile applies the same event check
+before outbox upload or reading-position reconciliation.
+
+This proves one retained frontier at the observation time, not a cryptographic
+commitment to all history or protection against a server reset during the pass.
+Complete authority-generation negotiation/rollback acceptance remains a release
+gate. Use the reviewed authority recovery/new-device flow; never reset the cursor,
+discard the outbox or blindly replay old envelopes. An unavailable legacy server
+may return a generic rejection, but it still cannot trigger pre-probe upload in
+the updated client. Real installed-device and hosted checks remain separate.

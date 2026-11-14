@@ -202,6 +202,7 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.
+- Verify retained service history before uploading; if it changed, pause and keep local work.
 - Keep local use and personal AI accounts independent of optional sync.
 - Give each list a reading goal, so its papers open with the depth and background
   work that goal needs.

@@ -14,6 +14,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
+
+class SyncHistoryUnavailable(ValueError):
+    """The service cannot prove the device's retained synchronization frontier."""
+
+
 MAX_BYTES = 256 * 1024
 PREFIX = "paperfact_sync_"
 ID = re.compile(r"[A-Za-z0-9_.:-]{1,128}")

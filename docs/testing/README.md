@@ -76,7 +76,7 @@ remains available for addressing changes and exhaustive diagnosis. The release
 selection does not grow by adding every variant of the new feature.
 
 Original-source retirement/restoration adds one complete native peer lifecycle
-representative to the release gate (35 Python selectors after the owner-identity representative below, not collected cases).
+representative to the release gate (36 Python selectors including retained-history continuity, not collected cases).
 Its regular focused checks use a metadata-only fixture instead of downloading an
 unrelated original first. The source-lifetime transition is distinct from deck
 transfer or corpus-key validation; no historical assertion was removed to add it.
@@ -435,3 +435,18 @@ uses restore on a known retired mark; it grants no original ownership. See
 [the scenario map](device-recovery-review-scenarios.md#original-identity-manual-restore-2026-11-15).
 Only affected shared decision/removal representatives rerun. Daily critical stays
 14 and the curated release selection is unchanged; no new stress matrix.
+
+
+### Retained service history before outbound research
+
+`tests/test_sync_history_frontier.py` protects an actual push-before-history bug:
+missing/different last-received events prevent attachment preparation, upload and
+acknowledgment, while matching history permits normal sync. It also checks the
+closed authenticated HTTP error and automatic desktop pause without private error
+text or repeated background requests. The release map adds one selector for the
+three short history cases; daily critical stays unchanged.
+
+The matching mobile regression lives in the existing `engine.test.mjs` release
+selection and checks both refusal and unchanged offline state. Transport/shell
+checks retain auth/blob error separation and preserve research storage when v24
+static code replaces v23. These are scoped fixtures, not installed/cloud proof.

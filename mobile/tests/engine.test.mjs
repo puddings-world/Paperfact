@@ -306,3 +306,39 @@ async function deleteCurrent(engine, id, options = {}) {
     ...options
   });
 }
+
+test('retained history is verified before mobile upload and preserves offline work on failure',async()=>{
+  for(const mode of ['missing','different','matching']) {
+    const transport=await demoTransport(),store=new MemoryStore('demo-workspace','demo-phone');
+    const engine=new Engine(store,{transport});
+    await engine.connect('fixture-token');await engine.sync();
+    await engine.saveNote('offline-note',PAPER,'Keep my offline research',{
+      observed:await engine.observeNote('offline-note',PAPER),
+    });
+    const before=await store.read(),pull=transport.pull.bind(transport),checks=[];
+    transport.calls.length=0;
+    transport.pull=async(...args)=>{
+      checks.push([args[1],args[2]]);
+      const events=await pull(...args);
+      if(mode==='missing')return [];
+      if(mode==='different' && args[1]===before.cursor-1){
+        events[0].operation.device_id='different-author';
+        if(events[0].outcome==='accepted')events[0].head.operation=structuredClone(events[0].operation);
+      }
+      return events;
+    };
+    if(mode==='matching') {
+      await engine.sync();
+      assert.equal((await store.read()).outbox.length,0);
+      assert.deepEqual(checks[0],[before.cursor-1,1]);
+      assert.equal(transport.calls[0][0],'pull');
+    } else {
+      for(let repeat=0;repeat<2;repeat++) {
+        await assert.rejects(engine.sync(),/sync_history_unavailable/);
+        assert.deepEqual(await store.read(),before);
+      }
+      assert(!transport.calls.some(call=>call[0]==='push'));
+      assert.deepEqual(checks,[[before.cursor-1,1],[before.cursor-1,1]]);
+    }
+  }
+});

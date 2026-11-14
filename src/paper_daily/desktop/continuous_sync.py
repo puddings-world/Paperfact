@@ -27,6 +27,13 @@ COPY = {
 }
 
 
+COPY["en"]["history"] = "Sync paused: preserve local work and review service history"
+COPY["zh-TW"]["history"] = (
+    "\u540c\u6b65\u66ab\u505c\uff1a\u4fdd\u7559\u672c\u6a5f\u8cc7\u6599\u4e26"
+    "\u6aa2\u67e5\u670d\u52d9\u6b77\u53f2"
+)
+
+
 def status_text(value, language="en"):
     locale = language if language in COPY else "en"
     text = COPY[locale][value["state"]]
@@ -224,7 +231,7 @@ class ContinuousSync(QObject):
                 self._report("offline")
             elif worker.error:
                 self.enabled = False
-                self._report("paused")
+                self._report("history" if worker.error == "history" else "paused")
             else:
                 result = worker.result
                 self._result = {key: result[key] for key in (

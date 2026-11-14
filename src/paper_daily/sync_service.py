@@ -16,7 +16,7 @@ from pathlib import Path
 from paper_daily.sync_blob_service import BlobServiceMixin
 from paper_daily.sync_device_management import DeviceManagementMixin
 from paper_daily.sync_graph import apply_accepted, check_preconditions
-from paper_daily.sync_journal import ID, canonical_operation
+from paper_daily.sync_journal import ID, SyncHistoryUnavailable, canonical_operation
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
@@ -307,7 +307,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
             if type(limit) is not int or not 1 <= limit <= 1000:
                 raise ValueError("Batch size must be between 1 and 1000")
             if after > self._high_water(conn, workspace):
-                raise ValueError("Sync cursor is ahead of this workspace")
+                raise SyncHistoryUnavailable("Sync cursor is ahead of this workspace")
             rows = conn.execute(
                 "SELECT event FROM sync_events WHERE workspace=? AND sequence>? "
                 "ORDER BY sequence LIMIT ?",

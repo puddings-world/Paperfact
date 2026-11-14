@@ -28,7 +28,7 @@ from paper_daily.sync_device_management import (
     _device_id,
     device_label,
 )
-from paper_daily.sync_journal import ID, canonical_operation
+from paper_daily.sync_journal import ID, SyncHistoryUnavailable, canonical_operation
 
 BLOB_CHUNK_BYTES = 256 * 1024
 _BLOB_ROUTES = {"/v1/blobs/" + name for name in ("begin", "append", "commit", "cancel", "read")}
@@ -45,6 +45,7 @@ _ERRORS = {
     408: "request_timeout",
     409: "blob_unavailable",
     411: "content_length_required",
+    412: "sync_history_unavailable",
     413: "request_too_large",
     415: "unsupported_media_type",
     500: "service_unavailable",
@@ -363,6 +364,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                 self._reply(200, response)
             except _RequestError as exc:
                 self._error(exc.status)
+            except SyncHistoryUnavailable:
+                self._error(412)
             except BlobUnavailableError:
                 self._error(409)
             except BlobDisabledError:
@@ -456,6 +459,8 @@ class HttpTransport:
                     raise PermissionError("Sync authorization was rejected")
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
+                if response.status_code == 412 and path == "/v1/pull":
+                    raise SyncHistoryUnavailable("Shared sync history needs recovery review")
                 if response.status_code == 409:
                     raise BlobUnavailableError("Sync attachment bytes are unavailable; retry later")
                 if response.status_code == 503 or (

@@ -28,6 +28,7 @@ from paper_daily.connection_vault import (
     VaultUnavailable,
 )
 from paper_daily.sync_device_management import PairingUnavailableError
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped, local_binding
 
@@ -242,6 +243,19 @@ COPY["zh-TW"].update({
 })
 
 
+
+COPY["en"]["history"] = (
+    "Sync paused: shared history cannot be verified. Keep this workspace and its pending "
+    "work; review the service backup with its operator before retrying. Do not reset local data."
+)
+COPY["zh-TW"]["history"] = (
+    "\u540c\u6b65\u66ab\u505c\uff1a\u5171\u7528\u6b77\u53f2\u7121\u6cd5\u6838\u5c0d\u3002"
+    "\u8acb\u4fdd\u7559\u672c\u6a5f\u8207\u5f85\u9001\u8cc7\u6599\uff0c"
+    "\u5148\u8207\u7ba1\u7406\u8005\u6aa2\u67e5\u670d\u52d9\u5099\u4efd\uff0c"
+    "\u4e0d\u8981\u91cd\u8a2d\u672c\u6a5f\u8cc7\u6599\u3002"
+)
+
+
 class SyncWorker(QThread):
     progress = Signal(object)
 
@@ -255,7 +269,9 @@ class SyncWorker(QThread):
             self.result = self.task(self.ticket, self.progress.emit)
         except Exception as error:
             self.error = (
-                "pair_unavailable"
+                "history"
+                if isinstance(error, SyncHistoryUnavailable)
+                else "pair_unavailable"
                 if isinstance(error, PairingUnavailableError)
                 else "pairing_pending"
                 if isinstance(error, PendingPairingExists)

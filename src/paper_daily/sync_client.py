@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import json
 import threading
+from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
-from paper_daily.sync_journal import ID, Journal, canonical_operation
+from paper_daily.sync_journal import (
+    ID,
+    MAX_BYTES,
+    Journal,
+    SyncHistoryUnavailable,
+    canonical_operation,
+)
 
 
 def validate_event(event, workspace_id):
@@ -1654,6 +1661,33 @@ class SyncClient:
         applied = self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
         return applied + self._materialize_orders(conn, cursor)
 
+    def verify_frontier(self, transport, token):
+        """Read-only proof of the last retained event, before sending work or bytes."""
+        with closing(self.journal._connect()) as conn:
+            conn.execute("BEGIN")
+            self.journal._binding(conn)
+            cursor = conn.execute("SELECT sequence FROM paperfact_sync_cursor").fetchone()[0]
+            row = conn.execute(
+                "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+                "FROM paperfact_sync_inbox WHERE sequence=?", (2 * MAX_BYTES + 4096, cursor),
+            ).fetchone() if cursor else None
+        if not cursor:
+            return
+        message = "Shared sync history could not be verified; preserve this workspace for recovery"
+        if row is None or row[0] is None:
+            raise SyncHistoryUnavailable(message)
+        events = transport.pull(token, after=cursor - 1, limit=1)
+        try:
+            matches = (isinstance(events, list) and len(events) == 1
+                and events[0].get("sequence") == cursor
+                and validate_event(events[0], self.journal.workspace_id) == validate_event(
+                    json.loads(row[0]), self.journal.workspace_id,
+                ))
+        except (ValueError, TypeError, AttributeError):
+            matches = False
+        if not matches:
+            raise SyncHistoryUnavailable(message)
+
     def sync_once(self, transport, token, *, limit=100, prepare_push=None):
         """One bounded pass, with no timer, hidden retries, login or network policy."""
         if type(limit) is not int or not 1 <= limit <= 1000:
@@ -1663,6 +1697,7 @@ class SyncClient:
         if not self._running.acquire(blocking=False):
             return {"busy": True}
         try:
+            self.verify_frontier(transport, token)
             pushed, deferred_push = 0, 0
             skipped = set()
             for operation in self.journal.pending(limit):

@@ -143,6 +143,9 @@ CRITICAL_JOURNEYS = {
 # One representative per additional release risk; historical matrices are opt-in.
 RELEASE_JOURNEYS = {
     **CRITICAL_JOURNEYS,
+    "Retained history before upload": (
+        "tests/test_sync_history_frontier.py::test_frontier_is_checked_before_prepare_push_and_acknowledgment",
+    ),
     "Atomic receive, deletion and access revocation": (
         "tests/test_sync_client.py::test_remote_batch_rolls_back_cursor_and_content_if_writer_fails",
         "tests/test_sync_client.py::test_delete_against_offline_edit_keeps_edit_as_conflict",

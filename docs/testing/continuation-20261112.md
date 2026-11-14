@@ -5764,3 +5764,49 @@ additional worktree was introduced.
   privacy/Ruff/whitespace green. Checkpoint review reuses the existing confirmed
   note/manual/Lineage decision pattern; no new universal skill or duplicate
   protocol is warranted. No native package rebuild or release in this turn.
+
+
+### 2026-11-15: verify retained history before outbound work
+
+- Current journey audit found desktop and mobile sync pushed before pulling.
+  The service already rejected a future cursor, but only after outgoing work could
+  be admitted. New regression demonstrated missing history did not raise before
+  the fix (one failed in 0.67s / 3.8s total). No old expectation was weakened.
+- Nonzero-cursor clients now request exactly the retained frontier event and
+  compare complete canonical event data before prepare_push/file bytes/outbox
+  upload/acknowledgment. Local inbox reads are bounded and closed before network;
+  initial cursor-zero bootstrap is unchanged. No source-generation fallback,
+  cursor reset, outbox deletion, envelope replay or hidden operation retry.
+- Reference service pull exposes typed SyncHistoryUnavailable/HTTP 412 after
+  authentication, with a closed non-content error. Python and mobile transport
+  distinguish it from auth/attachment errors. Desktop automatic sync pauses with
+  en/zh preservation guidance; PWA shows equivalent guidance and v24 refreshes
+  only static code, preserving research caches/IndexedDB.
+- Python: 5 passed in 2.85s / 5.9s total (missing/different/matching frontier,
+  authenticated HTTP error, automatic pause/no retry/private error isolation).
+  Mobile: 22 passed / 0 failed in 3.5s governed time across history/engine/
+  transport/static-shell tests. One new JS case exercises all three history states.
+- Existing desktop manual/retry/offline-concurrent-note compatibility: 3 passed
+  in 4.24s / 7.2s total. Actual JavaScript -> Python HTTP service integration
+  passed in 1.953s, including rich analysis, offline note chain, retries, PDF,
+  conflict/edit-delete and editable-deck offline closure. CPU capped, sequential.
+- A frontier comparison is not proof of every historical event or protection
+  against authority reset during the pass. Complete generation negotiation,
+  installed Windows/Mac and hosted/phone acceptance remain open. No cloud action,
+  login/model call, real-user data, release or native package rebuild performed.
+- Consolidated mobile history regression into existing engine.test.mjs so the
+  established release mobile selection includes it. Added one release Python
+  selector for the three short frontier scenarios (36 selectors, not cases);
+  daily critical remains 14. This pins an observed data-safety requirement, not
+  a new stress matrix. PWA artifact built/verified locally: 50 files, 3912422 bytes,
+  eeb27a957d584bf2f703aedca8f82cb73dded54d71ae731966a4afe218eabeed.
+- Final source critical: 14 passed in 8.72s / 12.2s total. After consolidating
+  the JS case, mobile selection remains 22 passed/0 failed in 3.188s; docs 58
+  passed in 2.19s / 5.5s total. Privacy/Ruff/whitespace green; actual flattened
+  map confirms critical 14 selectors and release 36 selectors. No full-release
+  or historical suite run. Existing SW assertions were retained while updating
+  the intentional cache version to v24 and adding v23 retirement coverage.
+- Checkpoint review: validate retained history before publishing new work, use
+  categorical recovery guidance, and never repair a missing prefix by discarding
+  local state. Keep this verified project evidence; no new global rule/skill,
+  background service, credentials, cloud resources or extra worktree introduced.

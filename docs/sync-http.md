@@ -250,3 +250,15 @@ existing outboxes and exact pairing identity. Neither client echoes an upstream
 body or starts a hidden retry loop. The [review-only HTTPS handoff](sync-service-admin.md#same-origin-https-proxy-handoff)
 uses that status for provisional rate/connection limits; live proxy acceptance is
 still required.
+
+
+### Unavailable retained history
+
+An authenticated pull whose cursor is ahead of the authority returns HTTP 412
+with only `{"error":"sync_history_unavailable"}`. No sequence count, operation,
+workspace content or exception text is exposed. Authentication still runs first.
+`HttpTransport.pull` maps this to `SyncHistoryUnavailable`; other endpoint errors
+retain their existing meanings (including attachment HTTP 409). Mobile maps 412
+only on pull to the same preservation guidance. The client-side retained-event
+check also rejects an empty or different frontier before upload; see
+[the client contract](sync-client.md#verify-retained-history-before-upload).

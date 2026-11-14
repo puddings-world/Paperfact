@@ -123,6 +123,11 @@ async() => {
   }
   );
   await assert.rejects(transport.session_info('private-token'), /session_denied/);
+  transport=new HttpTransport('https://example.org',{
+    fetch:async()=>new Response('private service history',{status:412}),
+  });
+  await assert.rejects(transport.pull('private-token',5,1),error=>error.code==='sync_history_unavailable');
+  await assert.rejects(transport.session_info('private-token'),error=>error.code==='request_rejected');
 }
 );
 test(

@@ -207,6 +207,19 @@ export class Engine {
   async syncRun(generation) {
     await this.authenticated(generation);
     this.onChange('syncing');
+    // Validate the retained frontier before upload or local reconciliation.
+    const retained = await this.store.read();
+    if(retained.cursor) {
+      const frontier = await this.transport.pull(this.#token, retained.cursor - 1, 1,
+        this.controller.signal);
+      this.check(generation);
+      requireThat(Array.isArray(frontier) && frontier.length === 1 &&
+        frontier[0]?.sequence === retained.cursor, 'sync_history_unavailable');
+      validateEvent(frontier[0], retained.workspace);
+      const previous = own(retained.receipts, frontier[0].operation.operation_id);
+      requireThat(previous?.sequence === retained.cursor &&
+        stable(previous) === stable(frontier[0]), 'sync_history_unavailable');
+    }
     if((await this.store.read()).positionIntents || (await this.store.read()).positionRetentions)
       await this.store.update(state=>{this.check(generation);reconcilePositionIntents(state);});
     const queued =(await this.store.read()).outbox.slice(0, 100);
