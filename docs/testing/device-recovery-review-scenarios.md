@@ -405,3 +405,24 @@ and nine usage-document cases. Same CPU/time governor; no whole historical suite
 The current-input-only negative expectation was intentionally expanded: verified
 historical pins recover, while unavailable pins still refuse without mutation.
 No source research/cache was repaired or rewritten by these operations.
+
+
+## Complete native deck group (2026-11-14)
+
+Behavior selectors live in `tests/test_sync_recovery_deck_group.py`:
+
+| Scenario | User-visible invariant |
+|---|---|
+| Complete group and native peer | All editable objects, both PNGs, speaker notes, sources and owned original survive atomic local publication, authenticated transfer and independent native reopen; source stays unchanged |
+| Write failure / cancellation | Failure after publishing the original rolls back deck, ownership, applied slot, outbox and decision; retry creates exactly one group |
+| Changed target / forged plan | Work added after comparison or altered prepared authority cannot overwrite the destination |
+| Deleted target / receipt retry | Repeating an old successful request preserves later deletion; a new explicit restore reactivates the complete slot |
+| Damaged asset / lost original / late private file | No partial research or hidden private deck, even when the change occurs after comparison |
+| English / Traditional Chinese Qt | Existing review displays speaker/canvas/source text, cancellation writes nothing, confirmation plus repeated click creates one group |
+| Changed installed file after activation | A file race before commit rolls back even a provisionally activated slot |
+
+This scope does not certify scientific support, unknown legacy provenance,
+related-paper ownership mapping, real native vaults or installed Mac/phone and
+hosted HTTPS journeys. Historical full-suite status is unaffected. Existing
+claim/note review and held-worker cancellation/context cases run as adjacent
+regressions, not a new exhaustive matrix.

@@ -251,7 +251,7 @@ original decision, preserving later edits/deletions without requiring the PDF ag
 Results say `state="saved_locally"`, `remote_acceptance_checked=False`,
 `semantic_validation="not_performed"` and `recovery_complete=False`.
 No old operation replay, AI/model call, remote acceptance claim or account transfer.
-Highlight/link/Lineage/deck groups, unknown legacy/source-lifetime
+Highlight/link/Lineage groups, related-paper deck mapping, unknown legacy/source-lifetime
 migration, full audit, hosted deployment and installed/device acceptance remain
 open. [Behavior evidence](testing/device-recovery-review-scenarios.md#complete-portable-claim-group-2026-11-14).
 
@@ -276,3 +276,32 @@ The resolved envelopes remain review input. Recovery still emits new typed
 operations/one local receipt in the existing transaction and preserves current
 source edits/deletions. Missing historical pins, wrong parent epochs and unknown
 legacy mappings remain pending. No AI call or new MCP/network interface is needed.
+
+
+## Complete editable deck recovery
+
+In the existing old-device change review, select a recorded deck, compare both
+panes, then choose **Use old complete deck**. Confirmation is required before
+replacing/restoring that slot. Cancel leaves research and queues unchanged;
+repeated activation reuses the same durable decision. No AI call is made.
+
+`sync_recovery_deck_group.prepare(observed, change_id, request_id, *, replace=False,
+seconds=60, cancelled=...)` returns a sealed `DeckGroup` with a read-only
+`comparison` and `apply(*, seconds=60, cancelled=...)`. The comparison retains full
+editable slide data, speaker notes, figures, source catalog and original hashes.
+The native UI summarizes saved text; this is not a visual slide renderer.
+
+Source closure hashes, JSON/PNG validity and native PDF ownership are verified
+before staging. Schema-1 inputs receive the known source workspace; schema-2
+scope remains exact. The recovered deck uses a new native envelope. Source bytes
+stay unchanged. Original ownership, desired deck, verified local activation,
+outbox and bounded decision receipt commit in one transaction. Failures may
+leave unowned immutable staged bytes, never a partially published research group.
+
+A different/deleted target needs explicit `replace=True`; its old history stays.
+Target changes, late private legacy decks, damaged current managed files, missing
+originals and corrupted assets refuse publication. A successful receipt retry
+preserves later edits/deletions and does not require lost source files again.
+Root-paper originals are supported; related/foreign original owners still require
+explicit mapping. Scientific support, installed-device acceptance and full
+highlight/Lineage recovery are not certified by this operation.

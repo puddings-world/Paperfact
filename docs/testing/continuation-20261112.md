@@ -4579,3 +4579,34 @@ Full deck recovery, verified cross-workspace source mapping, hosted TLS and
 installed Mac/phone acceptance remain open. The existing local-integration skill
 already distinguishes historical proof from current authority; no duplicate skill
 or unverified global rule was added at this checkpoint.
+
+
+## Atomic native deck recovery and desktop review (2026-11-14)
+
+Implemented `sync_recovery_deck_group.prepare` and the existing recovery review's
+English/Traditional Chinese **Use old complete deck** action. Full editable
+objects, tables, both PNG assets, speaker notes, source URLs/catalog and verified
+root-paper originals survive new native publication and independent peer reopen.
+Confirmation/cancellation and repeated clicks use the existing worker boundary.
+
+Original ownership, desired/applied deck, outbox and payload-bound receipt share
+one transaction. Native artifact activation uses its established capture boundary;
+the first real rollback test exposed direct writes being correctly denied before
+that fix. Damaged/missing bytes, stale targets, altered prepared plans, late
+private legacy files and post-activation file changes cannot partially publish.
+A recorded successful retry preserves later deletion; a new explicit restore is
+required. The old source and owner research stay unchanged. No paid/model call.
+
+Evidence: 18 deck/claim/note/held-worker cases passed in 99.51s pytest / 103.1s total.
+The final table/caption/URL comparison and real peer scenarios plus all 14 curated
+critical cases passed: 17 in 38.68s pytest / 42.1s total. These scopes overlap and
+are not summed. Privacy, Ruff and configured whitespace checks passed. Windows
+CPU hard cap 25%, maximum two logical processors; no historical full suite run.
+The existing scenario map documents each protected user-visible requirement.
+
+Related/foreign original-owner mapping, legacy private-deck enrollment,
+highlight/link/Lineage recovery, scientific semantic validation, hosted HTTPS and
+installed Mac/phone acceptance remain open. No release, deployment or push.
+Existing transaction/receipt/provenance skills already cover this reused method;
+no duplicate skill was introduced. No controllable Claude session was available;
+the existing execution board remains the handoff.

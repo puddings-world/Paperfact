@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Workspace-scoped deck inputs verified locally; next complete atomic deck recovery and remaining scientific groups |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Complete native deck recovery, atomic assets/originals and bilingual review validated locally; remaining source mapping and scientific groups |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

@@ -25,6 +25,7 @@ from paper_daily import sync_authority_backup as backup
 from paper_daily import sync_recovery_candidates as candidates
 from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_claim_group as claim_group
+from paper_daily import sync_recovery_deck_group as deck_group
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
@@ -213,6 +214,22 @@ TEXT["zh-TW"].update({
 })
 
 
+TEXT["en"].update({
+    "deck_group": "Use old complete deck",
+    "ready_deck_group": "Compare slides, speaker notes and sources before confirming. "
+                        "Exact originals and image assets are included. No AI call is made.",
+    "confirm_deck_group": "Save this complete old deck and its verified originals? "
+                          "This replaces or restores the selected slot; earlier history remains. "
+                          "Open editors keep their drafts. Scientific support is not certified.",
+})
+TEXT["zh-TW"].update({
+    "deck_group": "????????",
+    "ready_deck_group": "?????????????????????????????? PDF ??????? AI?",
+    "confirm_deck_group": "?????????????????????????????????????"
+                          "???????????????????????????",
+})
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -351,8 +368,8 @@ class RecoveryChanges(QWidget):
             )
             if action == "copy" and not already and getattr(plan, "with_original", False):
                 key = "ready_original"
-            if action == "claim_group" and not already:
-                key = "ready_claim_group"
+            if action in {"claim_group", "deck_group"} and not already:
+                key = "ready_" + action
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -577,7 +594,46 @@ class RecoveryChanges(QWidget):
                 observed._check(backup._guard(60, stopped))
             else:
                 plans["claim_group"] = (group, group.already)
+        if operation["entity_type"] == "research_file" and operation["payload"].get(
+            "feature"
+        ) == "deck":
+            request = str(uuid5(NAMESPACE_URL, "paperfact:deck-group-ui:" + candidates._json([
+                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
+            ])))
+            try:
+                group = deck_group.prepare(
+                    observed, selected, request, replace=True, cancelled=stopped,
+                )
+            except (OSError, ValueError) as error:
+                comparison["deck_group_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans["deck_group"] = (group, group.already)
         return plans
+
+    def _deck_text(self, comparison, side):
+        value = comparison[side]
+        if value is None:
+            return self.t["retired"] if comparison["state"] == "retired" else self.t["absent"]
+        deck = value["deck"]
+        parts = [deck["title"]]
+        for index, slide in enumerate(deck["slides"], 1):
+            parts.extend([str(index) + ". " + slide["title"], slide["takeaway"],
+                          *slide["bullets"], slide["speaker_notes"]])
+            for element in slide.get("elements") or []:
+                if element.get("text"):
+                    parts.append(element["text"])
+                if element["kind"] == "table":
+                    parts.extend(" | ".join(row) for row in element.get("rows", []))
+        for row in deck["sources"]:
+            parts.extend(value for value in (row["label"], row.get("text"), row.get("url"))
+                         if value)
+        parts.extend(row.get("caption") or row["label"] for row in deck["figures"])
+        return "\n\n".join(parts)
 
     def _group_text(self, members, side):
         parts = []
@@ -609,13 +665,13 @@ class RecoveryChanges(QWidget):
             return False
         plan, action = self.plan, self.action_select.currentData()
         include_original = action == "copy" and getattr(plan, "with_original", False)
-        if action in {"replace", "restore", "claim_group"} or include_original:
+        if action in {"replace", "restore", "claim_group", "deck_group"} or include_original:
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_claim_group"] if action == "claim_group" else
+                    self.t["confirm_" + action] if action in {"claim_group", "deck_group"} else
                     self.t["confirm_original"] if include_original else
                     self.t["confirm_body"].format(action=self.t[action]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -738,10 +794,12 @@ class RecoveryChanges(QWidget):
                 self.action_plans = dict(plans)
                 if plan is not None:
                     self.action_plans["copy"] = (plan, already)
-                group = self.action_plans.get("claim_group", (None, False))[0]
+                group_action = "deck_group" if "deck_group" in self.action_plans else "claim_group"
+                group = self.action_plans.get(group_action, (None, False))[0]
                 if group is not None and group.comparison:
-                    self.old.setPlainText(self._group_text(group.comparison, "source"))
-                    self.current.setPlainText(self._group_text(group.comparison, "current"))
+                    render = self._deck_text if group_action == "deck_group" else self._group_text
+                    self.old.setPlainText(render(group.comparison, "source"))
+                    self.current.setPlainText(render(group.comparison, "current"))
                 self.action_select.blockSignals(True)
                 self.action_select.clear()
                 self.action_select.addItem(self.t["review"], "")
@@ -753,19 +811,20 @@ class RecoveryChanges(QWidget):
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))
                 elif group is not None:
-                    self.action_select.setCurrentIndex(self.action_select.findData("claim_group"))
+                    self.action_select.setCurrentIndex(self.action_select.findData(group_action))
                 self.action_select.blockSignals(False)
                 self.action_changed(self.action_select.currentIndex())
                 self.notice.setText(
                     self.t["already" if already else "ready_original" if getattr(
                         plan, "with_original", False
                     ) else "ready" if plan is not None else
-                           "ready_claim_group" if group is not None and not group.already else
+                           "ready_" + group_action if group is not None and not group.already else
                            "already_action" if group is not None else
                            "ready_action" if len(plans) > 1 else "unsupported"]
                 )
-                if comparison.get("claim_group_issue"):
-                    self.notice.setText(self.t["group_blocked"] + comparison["claim_group_issue"])
+                issue = comparison.get("claim_group_issue") or comparison.get("deck_group_issue")
+                if issue:
+                    self.notice.setText(self.t["group_blocked"] + issue)
                 self.old.setFocus()
             owner.status.setText(self.notice.text())
         except (OSError, ValueError, TypeError):
