@@ -4,9 +4,12 @@ import copy
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
+from paper_daily import sync_operations
 from paper_daily.store import SCHEMA
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_journal import Journal
@@ -75,7 +78,12 @@ def sync_all(a, b, tmp_path):
     return service, ta, tb
 
 
-def test_atomic_list_intake_reaches_empty_peer_with_papers_memberships_and_notes(pair, tmp_path):
+def test_atomic_list_intake_reaches_empty_peer_with_papers_memberships_and_notes(
+    pair, tmp_path, monkeypatch,
+):
+    # Deliberately differs from the receiving machine's wall clock.
+    created = datetime(2026, 1, 2, tzinfo=UTC)
+    monkeypatch.setattr(sync_operations, "datetime", SimpleNamespace(now=lambda _tz: created))
     a, b = pair
     operations = ResearchOperations(a)
     result = operations.create_list(
@@ -98,6 +106,10 @@ def test_atomic_list_intake_reaches_empty_peer_with_papers_memberships_and_notes
     assert len(content(b)["papers"]) == 2
     assert len(content(b)["members"]) == 2
     assert len(content(b)["notes"]) == 3
+    for side in (a, b):
+        assert query(side, "SELECT kind,page,anchor,created_at FROM notes ORDER BY id") == [
+            ("note", None, None, created.isoformat(timespec="seconds"))
+        ] * 3
     assert a.status()["pending"] == b.status()["deferred"] == 0
 
 
@@ -107,6 +119,11 @@ def test_exact_intake_retry_after_transfer_does_not_revert_edits_or_add_records(
     entries = [{"paper": paper(), "notes": ["Original note"]}]
     first = operations.create_list("Original list", entries, request_id="intake-one")
     service, ta, tb = sync_all(a, b, tmp_path)
+    timestamps = query(a, "SELECT created_at FROM notes ORDER BY id")
+    a.save(a.new_graph_operation(
+        "note", first["papers"][0]["note_ids"][0],
+        dict(paper_id=first["papers"][0]["paper_id"], body="Later note interpretation"),
+    ))
     a.save(a.new_graph_operation("list", first["list_id"], {"name": "Renamed", "note": ""}))
     a.sync_once(service, ta)
     b.sync_once(service, tb)
@@ -114,6 +131,9 @@ def test_exact_intake_retry_after_transfer_does_not_revert_edits_or_add_records(
     assert restarted.create_list("Original list", entries, request_id="intake-one") == first
     assert content(a) == content(b)
     assert content(a)["lists"][0][1] == "Renamed"
+    assert content(a)["notes"][0][1] == "Later note interpretation"
+    assert query(a, "SELECT created_at FROM notes ORDER BY id") == timestamps
+    assert query(b, "SELECT created_at FROM notes ORDER BY id") == timestamps
     assert a.journal.pending() == []
     with pytest.raises(ValueError, match="retry changed"):
         restarted.create_list("Changed retry", entries, request_id="intake-one")
@@ -137,7 +157,7 @@ def test_concurrent_intake_retry_has_one_logical_result(pair):
     assert len(a.journal.pending()) == 3
 
 
-def test_add_to_list_reuses_explicit_paper_and_preserves_read_state(pair):
+def test_add_to_list_reuses_explicit_paper_and_preserves_read_state(pair, monkeypatch):
     a, _ = pair
     operations = ResearchOperations(a)
     first = operations.create_list("First", [{"paper": paper()}], request_id="first")
@@ -148,9 +168,14 @@ def test_add_to_list_reuses_explicit_paper_and_preserves_read_state(pair):
     )[0][0]
     with sqlite3.connect(a.journal.path) as conn:
         conn.execute("UPDATE list_papers SET state='read' WHERE list_id=?", (first["list_id"],))
+    created = datetime(2026, 1, 3, tzinfo=UTC)
+    monkeypatch.setattr(sync_operations, "datetime", SimpleNamespace(now=lambda _tz: created))
     operations.add_papers(
         second["list_id"], [{"paper_id": paper_id, "notes": ["Reuse context"]}], request_id="reuse"
     )
+    assert query(a, "SELECT body,created_at FROM notes") == [
+        ("Reuse context", created.isoformat(timespec="seconds"))
+    ]
     operations.add_papers(
         first["list_id"],
         [{"paper_id": paper_id, "citation": "Updated reason"}],
@@ -183,6 +208,7 @@ def test_compound_writer_failure_rolls_back_every_research_and_identity_row(pair
     assert a.journal.pending() == []
     assert query(a, "SELECT * FROM research_action_receipts") == []
     assert query(a, "SELECT * FROM research_note_identity") == []
+    assert query(a, "SELECT * FROM research_rich_note_projection") == []
     assert query(a, "SELECT * FROM research_paper_identity") == []
     a.writer = research_writer
     operations.create_list(

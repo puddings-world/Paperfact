@@ -43,11 +43,23 @@ result = actions.create_list(
 - `add_papers(list_id, entries, request_id=...)` adds to an active graph list. Explicit
   reuse of a portable paper preserves its metadata, existing read state and ordering;
   citation changes do not reset those local fields.
+- New notes use the existing full native note contract: source-authored UTC
+  creation time, `kind="note"`, and explicit empty page/anchor. One intake captures
+  its clock once; an empty peer preserves that time instead of substituting its
+  own wall clock. This applies to both `create_list` and `add_papers`. Callers still
+  provide ordinary text strings. No wire format, result shape or operation count changes.
 - Stable action-derived IDs and an immutable request fingerprint make identical
   retries return the original result, even after sync/restart. Changed content using
   the same request ID fails. Distinct requests may legitimately create equally named lists.
 - Empty named lists are supported. Unsupported/invalid entries fail before saving;
   a later writer or receipt failure rolls back every record and identity mapping.
+
+Successful retry retains the original note IDs and creation times, including after
+later edits and process restart. Partial writer or receipt failure also rolls back
+rich-note projection markers. Existing two-field legacy note operations remain
+readable; this does not infer missing historical times or rewrite old receipts.
+Existing desktop/CLI/MCP routes retain their separate current contracts; this
+library fix does not redirect the public 500-candidate import into its 200-paper bound.
 
 The result contains `list_id`, per-paper portable IDs/membership IDs/note IDs, and
 the emitted `operation_ids`. It contains neither provider credentials nor research

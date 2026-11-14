@@ -5484,3 +5484,31 @@ additional worktree was introduced.
 - Final docs gate: 58 passed in 1.87s / 5.1s total, privacy/Ruff/whitespace
   passed. Checkpoint is locally verified only; source/native e753ad3 acceptance
   remains scoped to its exact artifact and does not cover this new note action.
+
+## 2026-11-15: source-authored compound-intake note timestamps
+
+- Previous turn made progress: confirmed note retirement committed/integrated.
+  This turn reviewed writer scope, then reproduced a concrete divergence in
+  ResearchOperations intake: two-field notes omit source creation time.
+  Fixed-clock native empty-peer test failed before the change (3.54s pytest /
+  6.6s total): expected source 2026-01-02, observed current receiver/writer time.
+- Emit the existing six-field native note payload with the one source clock
+  already captured by intake. Both create_list/add_papers keep their text input,
+  bounds, request fingerprint, result shape, stable IDs and operation count.
+  No new wire type, implicit legacy migration or public CLI/MCP redirection.
+- Strengthen existing tests, no new collected cases/selectors: actual source/peer
+  metadata equality under different clocks; restart/retry preserves note edits
+  and original times; partial writer/receipt failures also roll back rich-note
+  projections. Initial four affected cases: 4 passed in 9.33s / 12.3s total,
+  privacy/Ruff green under the two-core/25%-CPU/300s governor.
+- Source audit inventory is explicitly historical; link current implementation
+  contracts rather than treating the October baseline as current missing work.
+  Still no arbitrary existing-workspace adoption or claim of complete writer
+  enrollment. Installed/hosted/mobile gates and remaining recovery/audit scope
+  stay open; no native build, owner-data access or paid/provider activity.
+- Final add-papers timestamp case plus unchanged concurrent-retry/paged-HTTP
+  representatives: 3 passed in 7.62s / 10.7s total, privacy/Ruff green under
+  the same single-job resource governor. No new collected cases or selectors.
+- Daily critical: 14 passed in 7.25s / 10.4s total, privacy/Ruff/whitespace
+  passed. Reused existing source-clock/payload-bound-receipt pattern, recorded
+  in project evidence; no new global skill or publication/hosting claim.

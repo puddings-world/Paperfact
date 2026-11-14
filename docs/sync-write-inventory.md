@@ -1,7 +1,11 @@
 # Sync mutation inventory
 
-Status: reviewed baseline, 2026-10-26 (S01). The existing application is v0.4.1.
-This is a source audit, not a claim that these writers now participate in sync.
+Status: historical baseline from 2026-10-26 (S01), when the application was v0.4.1.
+The tables below preserve that original audit, not current implementation status.
+For current coverage and actual evidence use [v0.5 status](status-0.5.0.md),
+[writer enrollment](adr/0007-research-writer-enrollment.md),
+[workspace-copy coverage](workspace-enrollment.md), and [graph actions](sync-operations.md).
+Do not infer missing or completed adapters from an old table row alone.
 Opt-in store capture now exercises existing SQL writers in fixtures; full runtime
 enrollment remains gated. See ADR0007 and the implementation ledger for the current
 tested boundary; the table below preserves the original inventory and remaining scope.

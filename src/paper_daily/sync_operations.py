@@ -428,7 +428,14 @@ class ResearchOperations:
                     save(
                         "note",
                         identity,
-                        {"paper_id": paper_id, "body": body},
+                        {
+                            "paper_id": paper_id,
+                            "body": body,
+                            "kind": "note",
+                            "created_at": added_at,
+                            "page": None,
+                            "anchor": None,
+                        },
                         f"note-op:{index}:{offset}",
                     )
                     entry["note_ids"].append(identity)
