@@ -587,6 +587,51 @@ TEXT["zh-TW"].update(
 )
 
 
+TEXT["en"].update(
+    restore_manual=(
+        "Restore original manual-highlight identity"
+    ),
+    ready_restore_manual=(
+        "Restore this known deleted manual highlight after checking its exact owned "
+        "original. The mark keeps its original identity; active selections are prote"
+        "cted."
+    ),
+    confirm_restore_manual=(
+        "Restore the selected deleted manual highlight under its original identity? "
+        "Its exact owned PDF and selected words are checked. Existing marks and the "
+        "active reader are kept."
+    ),
+    manual_restore_blocked=(
+        "Identity restore is unavailable. Verify or restore the exact original and i"
+        "nspect existing selections, then compare again. "
+    ),
+)
+
+TEXT["zh-TW"].update(
+    restore_manual=(
+        "\u9084\u539f\u539f\u8eab\u5206\u624b\u52d5\u756b\u7dda"
+    ),
+    ready_restore_manual=(
+        "\u6838\u5c0d\u5df2\u64c1\u6709\u7684\u6b63\u78ba\u539f\u6587\u5f8c\uff0c"
+        "\u9084\u539f\u6b64\u5df2\u522a\u9664\u7684\u624b\u52d5\u756b\u7dda\u3002"
+        "\u4fdd\u7559\u539f\u8eab\u5206\uff0c\u4e0d\u8986\u84cb\u4ecd\u5b58\u5728"
+        "\u7684\u6a19\u8a18\u3002"
+    ),
+    confirm_restore_manual=(
+        "\u4ee5\u539f\u8eab\u5206\u9084\u539f\u9078\u5b9a\u7684\u5df2\u522a\u9664"
+        "\u624b\u52d5\u756b\u7dda\uff1f\u5c07\u6838\u5c0d\u5df2\u64c1\u6709\u7684"
+        "\u6b63\u78ba PDF \u8207\u9078\u53d6\u6587\u5b57"
+        "\u3002\u4fdd\u7559\u65e2\u6709\u6a19\u8a18\u8207\u76ee\u524d\u95b1\u8b80"
+        "\u756b\u9762\u3002"
+    ),
+    manual_restore_blocked=(
+        "\u76ee\u524d\u7121\u6cd5\u9084\u539f\u539f\u8eab\u5206\u3002\u8acb\u5148"
+        "\u6838\u5c0d\u6216\u9084\u539f\u6b63\u78ba\u539f\u6587\u3001\u6aa2\u67e5"
+        "\u65e2\u6709\u9078\u53d6\uff0c\u518d\u91cd\u65b0\u6bd4\u8f03\u3002 "
+    ),
+)
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -733,6 +778,8 @@ class RecoveryChanges(QWidget):
             if action == "copy" and getattr(plan, "manual_highlight", False):
                 key = ("already_manual" if already else "ready_manual_original"
                        if plan.with_original else "ready_manual")
+            if action == "restore" and not already and getattr(plan, "manual_restore", False):
+                key = "ready_restore_manual"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -933,13 +980,20 @@ class RecoveryChanges(QWidget):
                 and operation["action"] == "delete"):
             options.append("remove")
             current_action = "remove"
+        manual_source = (operation["version"] == 2 and operation["action"] == "put"
+                         and note_copy.is_manual_highlight(operation))
+        if manual_source:
+            options.append("restore")
+            state = comparison["target"]["entity_state"]
+            if state is not None and not state["active"]:
+                current_action = "restore"
         plans = {}
         for action in options:
             identity = [
                 observed.binding, operation["workspace_id"], operation["device_id"],
                 operation["operation_id"], candidates._fingerprint(operation), action,
             ]
-            if action == "remove":
+            if action == "remove" or action == "restore" and manual_source:
                 state = comparison["target"]["entity_state"]
                 identity.append({key: state[key] for key in ("incarnation", "active", "parents")}
                                 if state is not None else None)
@@ -956,8 +1010,12 @@ class RecoveryChanges(QWidget):
                 continue
             try:
                 plan = choices.prepare(observed, selected, action, request_id, cancelled=stopped)
-            except ValueError:
+            except (OSError, ValueError) as error:
                 if saved or native:
+                    raise
+                if action == "restore" and manual_source:
+                    comparison["manual_restore_issue"] = str(error)[:240]
+                elif isinstance(error, OSError):
                     raise
                 continue
             plans[action] = (plan, saved)
@@ -1207,6 +1265,9 @@ class RecoveryChanges(QWidget):
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
                     self.t["confirm_remove"] if action == "remove" else
+                    self.t["confirm_restore_manual"] if action == "restore" and getattr(
+                        plan, "manual_restore", False
+                    ) else
                     self.t["confirm_manual_original" if include_original else "confirm_manual"]
                     if manual else self.t["confirm_" + action] if action in GROUP_ACTIONS else
                     self.t["confirm_original"] if include_original else
@@ -1349,6 +1410,10 @@ class RecoveryChanges(QWidget):
                     ) else action
                     if action == "copy" and getattr(plan, "manual_highlight", False):
                         label = "copy_manual_original" if plan.with_original else "copy_manual"
+                    if action == "restore" and getattr(
+                        self.action_plans[action][0], "manual_restore", False
+                    ):
+                        label = "restore_manual"
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))
@@ -1374,6 +1439,10 @@ class RecoveryChanges(QWidget):
                     key = ("already_manual" if already else "ready_manual_original"
                            if plan.with_original else "ready_manual")
                     self.notice.setText(self.t[key])
+                if comparison.get("manual_restore_issue"):
+                    self.notice.setText(
+                        self.t["manual_restore_blocked"] + comparison["manual_restore_issue"]
+                    )
                 if (comparison.get("reading_context") and "reading_group" not in plans
                         and not comparison.get("reading_group_issue")):
                     self.notice.setText(self.t["reading_context_ready"])

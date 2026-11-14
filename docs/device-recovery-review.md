@@ -387,6 +387,40 @@ does not switch the active PDF. Source envelopes/files stay unchanged. AI marks,
 analysis groups, reading links and Lineage still use their own actions/gates.
 
 
+## Restore a known deleted manual highlight
+
+Compare a recorded manual-highlight put against its known retired target and
+choose **Restore original manual-highlight identity**, then confirm (default No).
+This keeps the original portable mark key; **Copy as new highlight** remains a
+separate action. Active targets, duplicate selections and unproved tombstones
+cannot be overwritten through restore.
+
+The existing `sync_recovery_choices.prepare(observed, change_id, "restore",
+request_id, *, seconds=30, cancelled=...)` now accepts this typed source. The
+returned `Decision.manual_restore` property identifies the action. The target's
+retained native creation, deletion, projection and integer-identity mapping must
+agree, including the original creation timestamp and exact mapped paper lifetime.
+The mark's source PDF must already be independently owned and eligible at the
+target. Verify or restore its original-source association separately if needed;
+cached bytes alone do not grant restore permission. No file ownership is granted
+or primary-reader switch performed by the mark restore.
+
+Preparation uses the same byte/position/selected-text verification as manual
+copy, off the GUI thread. The sealed plan retains a native file-version witness;
+apply checks it before and after the native write while holding the target SQL
+transaction. PDF mutation, stale metadata, receipt failure or cancellation rolls
+back research, outbox and receipt. Known successful retry uses the committed
+application receipt, preserves later edits/deletions and does not require missing
+PDF bytes again. `originals_verified: true` records verification at that successful
+commit, not current file availability on a retry. Text correspondence does not
+certify a scientific interpretation.
+
+The UI makes restore an explicit alternative, not the selected copy action.
+When its original is unavailable, the comparison remains readable and explains
+why restore is blocked. The same standard native journal delivers the restored
+mark to an independent peer, without a new wire type or provider call.
+Legacy/unknown identities and unproved parent/source migrations remain pending.
+
 ## Confirmed manual-highlight removal
 
 For a recorded manual-highlight deletion, compare the restored workspace's

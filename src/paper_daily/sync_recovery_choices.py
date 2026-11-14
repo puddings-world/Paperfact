@@ -69,8 +69,11 @@ def _context(observed, source, choice, request_id):
     )
 
 
-def _seal(observed, change_id, request_id, fingerprint, operation):
-    data = candidates._json([observed._seal, change_id, request_id, fingerprint, operation])
+def _seal(observed, change_id, request_id, fingerprint, operation, original=None):
+    data = candidates._json([
+        observed._seal, change_id, request_id, fingerprint, operation,
+        id(original) if original is not None else None,
+    ])
     return hmac.new(_KEY, data.encode("utf-8"), "sha256").hexdigest()
 
 
@@ -194,7 +197,11 @@ def _result(receipt, *, applied, reused):
         replayed=False,
         source_discarded=False,
         recovery_complete=False,
-        originals_verified=False,
+        # Only source-verified manual highlights use research_content restore here.
+        # This records verification at commit, not continuing file availability.
+        originals_verified=(
+            receipt["choice"] == "restore" and receipt["entity_type"] == "research_content"
+        ),
         remote_accepted=None,
         remote_acceptance_checked=False,
     )
@@ -209,6 +216,12 @@ class Decision:
     receipt_json: str = field(repr=False)
     operation_json: str | None = field(repr=False)
     _seal: str = field(repr=False)
+    _original: object = field(default=None, repr=False)
+
+    @property
+    def manual_restore(self):
+        receipt = backup._decode(self.receipt_json)
+        return receipt["choice"] == "restore" and receipt["entity_type"] == "research_content"
 
     def apply(self, *, seconds=30, cancelled=lambda: False):
         check = backup._guard(seconds, cancelled)
@@ -219,6 +232,7 @@ class Decision:
             self.request_id,
             self.fingerprint,
             [self.receipt_json, self.operation_json],
+            self._original,
         )
         if not hmac.compare_digest(expected, self._seal):
             raise ValueError("Use the original prepared recovery decision")
@@ -246,7 +260,13 @@ class Decision:
                 client = conn._capture_client
                 if client is None:
                     raise ValueError("Recovery requires the actual native target writer")
+                if self.manual_restore and (
+                    self.operation_json is None or self._original is None
+                ):
+                    raise ValueError("Manual restore requires its verified owned original proof")
                 if self.operation_json is not None:
+                    if self._original is not None:
+                        native._original_current(self._original)
                     operation = backup._decode(self.operation_json)
                     saved = client.journal.apply_in(conn, operation, client.writer)
                     if not saved["applied"]:
@@ -255,6 +275,8 @@ class Decision:
                         )
                     receipt["sequence"] = saved["sequence"]
                 _write_receipt(conn, self.request_id, self.fingerprint, receipt)
+                if self._original is not None:
+                    native._original_current(self._original)
                 self.observed.source._check(check)
                 native._binding_in(conn, self.observed)
                 if tuple(generation._identity(path)) != self.observed.identity:
@@ -486,6 +508,68 @@ def _manual_removal(conn, observed, comparison, request_id, check):
     return canonical_operation(operation)
 
 
+def _manual_restore(conn, observed, comparison, request_id, check):
+    """Restore a known retired manual identity against an already owned exact PDF."""
+    from paper_daily import sync_recovery_claim_group as history
+    from paper_daily.sync_content import _local_scope, content_id
+
+    source = comparison["source"]["operation"]
+    if (source["version"] != 2 or source["action"] != "put"
+            or not native.is_manual_highlight(source)):
+        raise ValueError("Select a recorded native manual highlight to restore")
+    payload = source["payload"]
+    if content_id(payload["scope"], "manual_highlight", payload["key"]) != source["entity_id"]:
+        raise ValueError("Manual restore source differs from its typed identity")
+    state = comparison["target"]["entity_state"]
+    current = history._head(conn, source["entity_id"])
+    if (state is None or state["active"] or current is None or current["action"] != "delete"
+            or current != comparison["target"]["effective_operation"]
+            or current["incarnation"] != state["incarnation"]):
+        raise ValueError("Manual restore requires a known retired target, not active research")
+    created = history._old(conn, current["incarnation"], check)
+    if (created["version"] != 2 or created["action"] != "put"
+            or not native.is_manual_highlight(created)
+            or any(created[key] != current[key] for key in (
+                "workspace_id", "entity_type", "entity_id", "incarnation", "parents"
+            )) or created["operation_id"] != current["incarnation"]
+            or created["payload"]["scope"] != payload["scope"]
+            or created["payload"]["key"] != payload["key"]):
+        raise ValueError("Retired target has no exact native manual creation proof")
+    mapper = _parent_mapper(conn, observed, source, check)
+    parents = [mapper(parent) for parent in source["parents"]]
+    if (len(parents) != 1 or parents[0]["kind"] != "paper"
+            or payload["scope"] != {"kind": "paper", "id": parents[0]["id"]}):
+        raise ValueError("Manual restore needs the exact mapped paper lifetime")
+    marker = conn.execute(
+        "SELECT feature,scope_kind,scope_id,item_key,incarnation,parent_incarnation "
+        "FROM research_content_projection WHERE entity_id=?", (source["entity_id"],),
+    ).fetchone()
+    expected = ("manual_highlight", "paper", payload["scope"]["id"], payload["key"],
+                current["incarnation"], current["parents"][0]["incarnation"])
+    if marker is None or tuple(marker) != expected:
+        raise ValueError("Retired manual projection differs from native history")
+    identity = conn.execute(
+        "SELECT local_id,paper_id,created_at FROM research_content_identity "
+        "WHERE feature='manual_highlight' AND sync_key=?", (payload["key"],),
+    ).fetchone()
+    local = _local_scope(conn, payload["scope"], required=True)
+    if identity is None or tuple(identity) != (None, local, payload["data"]["created_at"]):
+        raise ValueError("Retired manual identity still has visible or unproved content")
+    operation = conn._capture_client.new_graph_operation_in(
+        conn, "research_content", source["entity_id"], payload,
+        operation_id=request_id, restore=True,
+    )
+    if operation["parents"] != parents:
+        raise ValueError("Manual restore differs from its exact paper parents")
+    native._manual_slot(conn, operation)
+    # The maintained verifier checks ownership, PDF bytes and exact selected text.
+    # Do slow work during preparation; apply uses sealed file-version fences.
+    proof = native._original(conn, operation, check)
+    if proof is None:
+        raise ValueError("Manual restore requires a verified exact original")
+    return canonical_operation(operation), proof
+
+
 def _build(conn, observed, comparison, choice, request_id, check):
     source = comparison["source"]["operation"]
     if choice == "keep":
@@ -567,6 +651,7 @@ def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=la
     source = comparison["source"]["operation"]
     fingerprint = _fingerprint(observed, source, choice)
     context = _context(observed, source, choice, request_id)
+    original = None
     with closing(_readonly_connection(observed.database)) as conn:
         conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
         conn.execute("BEGIN")
@@ -577,7 +662,12 @@ def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=la
         else:
             if _operation(conn, request_id) is not None:
                 raise ValueError("Recovery request collides with another native operation")
-            encoded = _build(conn, observed, comparison, choice, request_id, check)
+            if choice == "restore" and native.is_manual_highlight(source):
+                encoded, original = _manual_restore(
+                    conn, observed, comparison, request_id, check,
+                )
+            else:
+                encoded = _build(conn, observed, comparison, choice, request_id, check)
             operation = json.loads(encoded) if encoded is not None else None
             receipt = dict(
                 context,
@@ -596,5 +686,6 @@ def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=la
         fingerprint,
         receipt_json,
         encoded,
-        _seal(observed, change_id, request_id, fingerprint, [receipt_json, encoded]),
+        _seal(observed, change_id, request_id, fingerprint, [receipt_json, encoded], original),
+        original,
     )

@@ -5304,3 +5304,48 @@ additional worktree was introduced.
 
 - Final daily critical: 14 passed in 5.13s pytest / 8.4s total; privacy/Ruff
   green. No full historical/release run, redundant peer matrix or new selector.
+
+
+## 2026-11-15: source-verified original-identity manual restore
+
+- The existing restore choice now handles a selected native manual put only when
+  its target is known retired. Prove the retained target creation/deletion,
+  projection, integer identity/creation date and exact mapped paper lifetime.
+  Restore the original portable key; active/duplicate/unproved content refuses.
+  The target must already own an eligible exact original; this action does not
+  grant file ownership or switch the primary reader. Legacy/source mapping stays
+  outside this slice; the existing explicit original-source action remains separate.
+- Reuses maintained byte/position/selected-text verification during preparation,
+  off the GUI. The sealed Decision now optionally retains that immutable native
+  file-version witness. The application receipt, native restore and outbox share
+  one SQL transaction; file changes before/after writing, stale state, receipt
+  failure and cancellation roll back. Successful retry uses its payload-bound
+  application receipt before current-source eligibility and preserves later
+  deletion/edits even if bytes disappear. The verified-original flag records
+  verification at commit, not continued availability. No AI or new wire format.
+- Existing recovery selector offers original-identity restore separately from
+  its default independent copy. Dedicated Chinese/English confirmation defaults
+  to No; target-lifetime request IDs prevent accidental repeat work. Unavailable
+  originals keep comparison readable and show a bounded reason.
+- Five new collected cases only. Real source/target/peer fidelity and retry,
+  forged/file witness refusal, atomic/stale/post-write mutation rollback,
+  active/duplicate/unavailable refusal, and real Chinese No/Yes/deduplication plus
+  missing-original comparison. Shared restore/removal/receipt representatives:
+  10 passed in 77.64s pytest / 81.2s total. After stronger fault/UI assertions,
+  only those 2 affected cases reran: 2 passed in 19.17s / 22.3s total. Earlier
+  four-case passes overlap; counts are not added. Privacy/Ruff green; sequential
+  two-core/25%-CPU/300s-bounded checks, not a historical/release matrix.
+- Fault injection initially patched a temporary read connection's client, so it
+  never reached the real transaction. Source inspection confirmed each native
+  CaptureConnection attaches a fresh client. Patched the maintained shared writer
+  callback imported by those connections; the exact same rollback assertion now
+  passes with an observed file mutation. No production bypass or relaxed test.
+- README/recovery guide/scenarios/status/handoff/test map describe the API and
+  limitations. Reused existing native proof/receipt patterns; no new global skill,
+  setting panel, worktree or selector matrix. Hosted first-device identity/HTTPS/
+  native vaults, installed Windows/Apple Silicon/phone acceptance, remaining
+  scientific and legacy mapping work stay open. No cloud, push, release, owner
+  app restart or private research migration.
+
+- Final daily critical: 14 passed in 7.59s pytest / 11.2s total, privacy/Ruff
+  green. No unchanged whole recovery/corpus/mobile matrix or historical run.

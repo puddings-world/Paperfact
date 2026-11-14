@@ -277,7 +277,9 @@ The recovery review compares saved and current research before confirmation:
 - Keep or restore supported list/reading state and copy notes or manual highlights
   with their verified original, preserving existing selections and later edits.
 - Confirm a recorded manual-highlight deletion after comparing the current mark;
-  its native history stays, and retries preserve a later restored mark.
+  its native history stays, and retries preserve a later restored mark. Restore a
+  known deleted mark under its original identity after checking the exact owned
+  PDF and selected text; active marks are protected.
 - Restore or retire a retained original's source association with confirmation;
   cached PDFs, notes and history stay intact, and restored sources get fresh versions.
   Restoring a PDF alone does not revive old lineage claims: explicitly recheck the

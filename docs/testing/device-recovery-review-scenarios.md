@@ -633,3 +633,28 @@ No PDF authority is minted or needed, and no provider call is made. Existing
 metadata, parent-proof, held-worker and Chinese copy cases cover shared controls.
 Native Windows/Apple Silicon installed acceptance remains separate. This is not
 a generic scientific-delete or in-place manual-restore implementation.
+
+
+## Original-identity manual restore (2026-11-15)
+
+Five focused cases in `test_sync_recovery_manual_restore.py` reuse the real
+manual/original-copy fixture to establish independent target PDF ownership:
+
+- Restore the known retired key with one fresh native operation; preserve source
+  research and transfer the complete result to an independent peer. A committed
+  retry preserves a later deletion even after original bytes disappear.
+- Reject a substituted/removed file proof and PDF changes after comparison.
+- Receipt failure and a stale target roll back. A PDF changed at the actual
+  connection's writer boundary also rolls back the already-written mark/outbox/
+  receipt, exercising the post-write file fence.
+- Active targets, another mark occupying the exact selection and missing owned
+  originals refuse without writes. These do not become implicit file restores.
+- Actual Chinese Qt review offers restore separately from the default new copy.
+  No on confirmation writes nothing; repeated Yes creates one original-identity
+  restore. After another deletion and lost PDF, comparison stays readable and
+  explains the missing restore option.
+
+No new source or file authority is inferred from a cache or hash, and no model
+call is needed. Shared metadata/removal/cancellation/receipt cases remain intact.
+Physical-device/native-vault/hosted acceptance and legacy/source mapping remain
+separate gates; the verified-original flag describes the committed decision.

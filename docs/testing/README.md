@@ -414,3 +414,15 @@ confirmation/deduplication. See the manual-highlight section of
 [recovery scenarios](device-recovery-review-scenarios.md#confirmed-manual-highlight-removal-2026-11-15).
 Existing typed-choice/parent/worker and Chinese copy representatives are reused;
 no daily/release selector or cross-product matrix is added.
+
+
+## Known-deleted manual identity restore (2026-11-15)
+
+Five new outcomes cover native key/peer fidelity and later-deletion-safe retry;
+sealed PDF witness/byte changes; receipt rollback, stale target and mid-write PDF
+mutation; active/duplicate/unavailable source refusal; and actual Chinese
+confirmation plus readable missing-original comparison. The public choice API
+uses restore on a known retired mark; it grants no original ownership. See
+[the scenario map](device-recovery-review-scenarios.md#original-identity-manual-restore-2026-11-15).
+Only affected shared decision/removal representatives rerun. Daily critical stays
+14 and the curated release selection is unchanged; no new stress matrix.
