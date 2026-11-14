@@ -403,3 +403,14 @@ clients in the test; no AI or credential file is needed. Existing packaged-runne
 cases now require the frozen-CLI audit stages and reject incomplete results. Fake
 child orchestration is not native package acceptance. No daily/release matrix is
 added; M21 remains a real installed Windows/Apple Silicon UI gate.
+
+
+## Confirmed manual-mark deletion (2026-11-15)
+
+Five new scoped outcomes cover single-mark native retirement and independent peer
+delivery, preserving later restores on retry, atomic receipt failure, stale/
+untracked/absent target refusal, unrelated note protection and actual Qt No/Yes
+confirmation/deduplication. See the manual-highlight section of
+[recovery scenarios](device-recovery-review-scenarios.md#confirmed-manual-highlight-removal-2026-11-15).
+Existing typed-choice/parent/worker and Chinese copy representatives are reused;
+no daily/release selector or cross-product matrix is added.

@@ -387,6 +387,35 @@ does not switch the active PDF. Source envelopes/files stay unchanged. AI marks,
 analysis groups, reading links and Lineage still use their own actions/gates.
 
 
+## Confirmed manual-highlight removal
+
+For a recorded manual-highlight deletion, compare the restored workspace's
+current selection, choose **Remove current manual highlight**, and confirm.
+The default answer is No. An absent or already retired mark has no new removal
+plan; keep the current state instead. Other research deletions still need their
+own typed actions. The existing copy action remains a distinct, verified-source
+operation for manual-highlight puts.
+
+`sync_recovery_choices.prepare(observed, change_id, "remove", request_id, *,
+seconds=30, cancelled=...)` returns the existing sealed `Decision`, with
+`apply(*, seconds=30, cancelled=...)`. It requires a version-2 native deletion
+whose retained creation operation proves the exact manual feature, key, entity,
+workspace, incarnation and paper parents. A tombstone ID alone is insufficient.
+The destination must have an active native manual mark with the exact mapped
+paper lifetime, matching effective operation, projection marker and visible row.
+Untracked edits, unknown source history, unrelated note/AI deletions and stale
+comparisons refuse. Review both versions again after a refusal.
+
+The action writes a new destination-native deletion and payload-bound receipt
+in one transaction. A receipt failure rolls back the mark, outbox and decision.
+Originals and other marks/notes are retained; no PDF verification, restoration,
+activation or model call is needed to remove this mark. `originals_verified`
+remains false. An independent native peer receives the deletion through normal
+sync. A successful retry returns the saved decision and preserves a later
+restore/edit; a fresh UI request is scoped to the current target lifetime.
+History supports subsequent explicit recovery. No arbitrary paper/content
+retirement or legacy-source mapping is introduced by this action.
+
 ## Exact reading-link context: comparison prerequisite
 
 The old-device comparison now resolves saved explanation links against their exact

@@ -552,6 +552,41 @@ TEXT["zh-TW"].update({
 })
 
 
+TEXT["en"].update(
+    remove=(
+        "Remove current manual highlight"
+    ),
+    ready_remove=(
+        "Review the current manual highlight on the right, then confirm its removal."
+        " Its history stays; no PDF or other research is removed."
+    ),
+    confirm_remove=(
+        "Remove only the currently shown manual highlight? Its history stays. PDFs, "
+        "notes and other highlights are unchanged. This deletion can synchronize fro"
+        "m the restored workspace."
+    ),
+)
+
+TEXT["zh-TW"].update(
+    remove=(
+        "\u79fb\u9664\u76ee\u524d\u624b\u52d5\u756b\u7dda"
+    ),
+    ready_remove=(
+        "\u8acb\u6838\u5c0d\u53f3\u5074\u76ee\u524d\u7684\u624b\u52d5\u756b\u7dda"
+        "\uff0c\u518d\u78ba\u8a8d\u79fb\u9664\u3002\u6b77\u53f2\u4ecd\u6703\u4fdd"
+        "\u7559\uff0c\u4e0d\u79fb\u9664 PDF \u6216\u5176"
+        "\u4ed6\u7814\u7a76\u5167\u5bb9\u3002"
+    ),
+    confirm_remove=(
+        "\u53ea\u79fb\u9664\u76ee\u524d\u986f\u793a\u7684\u624b\u52d5\u756b\u7dda"
+        "\uff1f\u6b77\u53f2\u4ecd\u6703\u4fdd\u7559\uff0cPDF\u3001"
+        "\u7b46\u8a18\u8207\u5176\u4ed6\u756b\u7dda\u4e0d\u8b8a\u3002\u6b64\u522a"
+        "\u9664\u53ef\u7531\u9084\u539f\u5de5\u4f5c\u5340\u540c\u6b65\u81f3\u5176"
+        "\u4ed6\u88dd\u7f6e\u3002"
+    ),
+)
+
+
 class RecoveryChanges(QWidget):
     def __init__(self, panel):
         super().__init__(panel)
@@ -693,7 +728,7 @@ class RecoveryChanges(QWidget):
             )
             if action == "copy" and not already and getattr(plan, "with_original", False):
                 key = "ready_original"
-            if action in GROUP_ACTIONS and not already:
+            if (action in GROUP_ACTIONS or action == "remove") and not already:
                 key = "ready_" + action
             if action == "copy" and getattr(plan, "manual_highlight", False):
                 key = ("already_manual" if already else "ready_manual_original"
@@ -894,13 +929,22 @@ class RecoveryChanges(QWidget):
                 "restore" if not current["active"] or current["parents"] != parents else "replace"
             )
             options.extend(("add", "replace", "restore"))
+        if (operation["version"] == 2 and operation["entity_type"] == "research_content"
+                and operation["action"] == "delete"):
+            options.append("remove")
+            current_action = "remove"
         plans = {}
         for action in options:
+            identity = [
+                observed.binding, operation["workspace_id"], operation["device_id"],
+                operation["operation_id"], candidates._fingerprint(operation), action,
+            ]
+            if action == "remove":
+                state = comparison["target"]["entity_state"]
+                identity.append({key: state[key] for key in ("incarnation", "active", "parents")}
+                                if state is not None else None)
             request_id = str(uuid5(NAMESPACE_URL, "paperfact:recovery-choice-ui:v1:" +
-                candidates._json([
-                    observed.binding, operation["workspace_id"], operation["device_id"],
-                    operation["operation_id"], candidates._fingerprint(operation), action,
-                ])))
+                                   candidates._json(identity)))
             with closing(_readonly_connection(observed.database)) as conn:
                 saved = conn.execute(
                     "SELECT 1 FROM integration_operations WHERE id=?", (request_id,)
@@ -1155,13 +1199,14 @@ class RecoveryChanges(QWidget):
         plan, action = self.plan, self.action_select.currentData()
         include_original = action == "copy" and getattr(plan, "with_original", False)
         manual = action == "copy" and getattr(plan, "manual_highlight", False)
-        if (manual or action in {"replace", "restore"}
+        if (manual or action in {"replace", "restore", "remove"}
                 or action in GROUP_ACTIONS or include_original):
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
+                    self.t["confirm_remove"] if action == "remove" else
                     self.t["confirm_manual_original" if include_original else "confirm_manual"]
                     if manual else self.t["confirm_" + action] if action in GROUP_ACTIONS else
                     self.t["confirm_original"] if include_original else

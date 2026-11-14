@@ -5264,3 +5264,43 @@ additional worktree was introduced.
   green. These overlap earlier counts. Incoming rich-view/stall changes were
   preserved, not independently certified as a full native UI acceptance by this
   package checkpoint. Existing board remains the shared handoff.
+
+
+## 2026-11-15: confirmed single manual-highlight retirement
+
+- Existing recovery choices now support a narrowly typed remove decision for a
+  recorded version-2 manual-highlight deletion. Resolve the exact incarnation's
+  creation from retained local/accepted native history; prove its workspace,
+  entity, feature/key and parents. A tombstone/hash/title is not enough. Generic
+  research/notes/AI deletions remain outside this action; KINDS is unchanged.
+- Target comparison must match the effective native manual head, exact mapped
+  active paper lifetime, projection marker and bounded visible row. The shared
+  sealed Decision writes one new native deletion and its receipt atomically.
+  Source remains unchanged; originals are neither inspected nor granted; receipt
+  flags preserve that distinction. Existing successful retry preserves a later
+  restored mark. UI request identity includes the current native target lifetime.
+- Reuses the existing recovery selector/worker and Yes/No confirmation (No by
+  default). The action is explicit, never preselected as automatic replay.
+  Five new actual isolated outcomes cover independent peer delivery and another
+  retained mark, later-restore-safe retry, receipt rollback and stale refusal,
+  untracked/absent target plus wrong-note refusal, and real Qt No/Yes deduplication.
+  These pass: 5 in 26.95s pytest / 30.5s total.
+- Shared compatibility representatives: 9 passed in 28.48s / 31.8s total, including
+  note replacement, exact parent proof, held apply across cancel/close/workspace/
+  binding changes, confirmation selection/target changes, and Chinese manual copy.
+  No historical/default selector growth or new worker/worktree/settings panel.
+- First negative fixtures hit existing protections before the intended boundary:
+  a duplicate anchor was correctly refused, then an ordinary SQLite connection
+  lacked the native capture callback. Corrected to a distinct real selection and
+  the existing CaptureConnection/suppress_capture fault-injection seam in fixtures
+  only. Assertions were retained; production capture is never suppressed here.
+  Lint-only corrections ran no tests. No repeated paid calls, account login,
+  private research or cleanup. All checks use one CPU-bounded job at a time.
+- README/recovery guide/scenarios/status/handoff/test map updated. Reuses existing
+  native provenance, lifecycle and atomic-receipt patterns; no new global skill.
+  Manual in-place restore/legacy mapping, other scientific deletion choices and
+  hosted/installed/native-vault/physical-device gates remain open. No push, release,
+  cloud deployment, owner-app restart or data migration.
+
+- Final daily critical: 14 passed in 5.13s pytest / 8.4s total; privacy/Ruff
+  green. No full historical/release run, redundant peer matrix or new selector.

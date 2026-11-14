@@ -1,7 +1,7 @@
 """Typed recovery choices with native writes and payload-bound local receipts.
 
 This preserves the old workspace. It does not replay old envelopes, transfer file
-ownership, implement destructive recovery or claim complete reconciliation.
+ownership, implement arbitrary destructive recovery or claim complete reconciliation.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ KINDS = frozenset(
     {"list", "paper", "membership", "reading_state", "note", "list_order", "workspace_list_order"}
 )
 ORDERS = frozenset({"list_order", "workspace_list_order"})
-CHOICES = frozenset({"keep", "add", "replace", "restore"})
+CHOICES = frozenset({"keep", "add", "replace", "restore", "remove"})
 MAX_RECEIPT = 8192
 _KEY = secrets.token_bytes(32)
 
@@ -161,6 +161,10 @@ def _prior(conn, request_id, fingerprint, context):
         )
     ):
         raise ValueError("Recovery decision and native operation disagree")
+    if receipt["choice"] == "remove" and (
+        operation["entity_type"] != "research_content" or operation["action"] != "delete"
+    ):
+        raise ValueError("Manual removal receipt must contain its native deletion")
     actual = conn.execute(
         "SELECT sequence FROM paperfact_sync_operations WHERE operation_id=?",
         (request_id,),
@@ -417,10 +421,77 @@ def _parent_mapper(conn, observed, source, check):
     return mapped
 
 
+def _manual_removal(conn, observed, comparison, request_id, check):
+    """Retire one explicitly compared manual mark; no file/source grant or replay."""
+    from paper_daily import sync_recovery_claim_group as history
+    from paper_daily.sync_content import content_id, content_payload
+
+    root = comparison["source"]["operation"]
+    if (root["version"] != 2 or root["entity_type"] != "research_content"
+            or root["action"] != "delete"):
+        raise ValueError("Select a recorded manual-highlight deletion")
+    with closing(_readonly_connection(observed.source.database)) as old:
+        old.execute("BEGIN")
+        created = history._old(old, root["incarnation"], check)
+    if (created["version"] != 2 or created["action"] != "put"
+            or not native.is_manual_highlight(created)
+            or any(created[key] != root[key] for key in (
+                "workspace_id", "entity_type", "entity_id", "incarnation", "parents"
+            )) or created["operation_id"] != root["incarnation"]):
+        raise ValueError("Deletion has no exact native manual-highlight creation proof")
+    payload = created["payload"]
+    if content_id(payload["scope"], "manual_highlight", payload["key"]) != root["entity_id"]:
+        raise ValueError("Manual-highlight source identity differs from its typed slot")
+    mapper = _parent_mapper(conn, observed, root, check)
+    parents = [mapper(parent) for parent in root["parents"]]
+    if len(parents) != 1 or parents[0]["kind"] != "paper":
+        raise ValueError("Manual removal requires one exact paper parent")
+    current = history._head(conn, root["entity_id"])
+    state = comparison["target"]["entity_state"]
+    if (state is None or not state["active"] or current is None or current["action"] != "put"
+            or not native.is_manual_highlight(current)
+            or current != comparison["target"]["effective_operation"]
+            or current["parents"] != parents or current["incarnation"] != state["incarnation"]):
+        raise ValueError("Compare an active manual highlight in the exact mapped paper lifetime")
+    value = current["payload"]
+    if (value["scope"] != {"kind": "paper", "id": parents[0]["id"]}
+            or value["scope"] != payload["scope"] or value["key"] != payload["key"]
+            or content_id(value["scope"], "manual_highlight", value["key"]) != root["entity_id"]):
+        raise ValueError("Current manual highlight differs from the selected typed scope")
+    marker = conn.execute(
+        "SELECT feature,scope_kind,scope_id,item_key,incarnation,parent_incarnation,source_hash "
+        "FROM research_content_projection WHERE entity_id=?", (root["entity_id"],),
+    ).fetchone()
+    expected = ("manual_highlight", "paper", value["scope"]["id"], value["key"],
+                current["incarnation"], parents[0]["incarnation"], value["source_document_hash"])
+    if marker is None or tuple(marker) != expected:
+        raise ValueError("Current manual-highlight projection differs from native history")
+    identity = conn.execute(
+        "SELECT local_id FROM research_content_identity WHERE feature='manual_highlight' "
+        "AND sync_key=?", (value["key"],),
+    ).fetchone()
+    row = None if identity is None else conn.execute(
+        "SELECT id,paper_id,document_hash,CASE WHEN length(CAST(anchor AS BLOB))<=? "
+        "THEN anchor END AS anchor,CASE WHEN length(CAST(quote AS BLOB))<=? "
+        "THEN quote END AS quote,created_at FROM pdf_highlights WHERE id=?",
+        (MAX_BYTES, MAX_BYTES, identity[0]),
+    ).fetchone()
+    if row is None or content_payload(conn, "pdf_highlights", dict(row)) != value:
+        raise ValueError("Visible manual highlight changed outside its native history")
+    operation = conn._capture_client.new_graph_operation_in(
+        conn, "research_content", root["entity_id"], {}, action="delete", operation_id=request_id,
+    )
+    if operation["parents"] != parents:
+        raise ValueError("Manual removal requires the exact mapped paper lifetime")
+    return canonical_operation(operation)
+
+
 def _build(conn, observed, comparison, choice, request_id, check):
     source = comparison["source"]["operation"]
     if choice == "keep":
         return None
+    if choice == "remove":
+        return _manual_removal(conn, observed, comparison, request_id, check)
     if source["version"] != 2 or source["entity_type"] not in KINDS or source["action"] != "put":
         raise ValueError("This content requires its own typed recovery action; retain it pending")
     mapped = _parent_mapper(conn, observed, source, check)
@@ -486,10 +557,10 @@ def _build(conn, observed, comparison, choice, request_id, check):
 
 
 def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=lambda: False):
-    """Review explicit keep/add/replace/restore; never convert arbitrary research."""
+    """Review typed choices, including confirmed manual deletion; never convert research."""
     _identifier(request_id)
     if not isinstance(choice, str) or choice not in CHOICES:
-        raise ValueError("Choose keep, add, replace or restore explicitly")
+        raise ValueError("Choose keep, add, replace, restore or typed removal explicitly")
     check = backup._guard(seconds, cancelled)
     native._auth(observed, check)
     comparison = observed.compare(change_id, seconds=seconds, cancelled=cancelled)

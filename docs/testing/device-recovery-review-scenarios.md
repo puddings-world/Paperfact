@@ -612,3 +612,24 @@ whole-paper deletion: that wire operation remains explicitly unsupported.
 Existing target retirement/refusal, rollback/cancellation and UI regressions
 remain unchanged. Explicit historical source inspection is not target source
 restoration, foreign mapping, semantic support or physical-device acceptance.
+
+
+## Confirmed manual-highlight removal (2026-11-15)
+
+Five focused cases in `test_sync_recovery_manual_removal.py` use actual separate
+source/target/peer journals and projections, plus a real Qt review:
+
+- Remove only the selected native manual entity; another positioned mark remains.
+  Normal sync reaches an independent peer; saved retry preserves a later restore.
+- Fail the decision receipt after the native write: all research/outbox/receipt
+  changes roll back. A later native edit invalidates the observed comparison.
+- Deliberately corrupt visible content through the existing isolated suppression
+  seam: native/visible mismatch refuses. An absent/retired mark needs no new
+  removal; other arbitrary note deletions cannot use this action.
+- Actual review compares the current quotation. No on confirmation performs no
+  write; repeated Yes activation creates one deletion and disables reapplication.
+
+No PDF authority is minted or needed, and no provider call is made. Existing
+metadata, parent-proof, held-worker and Chinese copy cases cover shared controls.
+Native Windows/Apple Silicon installed acceptance remains separate. This is not
+a generic scientific-delete or in-place manual-restore implementation.

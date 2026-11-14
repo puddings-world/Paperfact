@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit current-corpus audit shared by CLI/MCP; independent generated/imported/bound original readers verified. Daily critical stays 14; no release selectors added. Desktop whole-corpus action verified in Qt; source-complete synthetic acceptance ZIP generated and actual source CLI roundtrip verified, with new frozen audit report stages; remaining recovery/mapping/list-survey audit and hosted/device gates stay open; cloud inputs requested |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit current-corpus audit shared by CLI/MCP; independent generated/imported/bound original readers verified. Daily critical stays 14; no release selectors added. Desktop whole-corpus action verified in Qt; source-complete synthetic acceptance ZIP generated and actual source CLI roundtrip verified, with new frozen audit report stages; confirmed manual-highlight retirement now uses the shared native decision/Qt confirmation and preserves later restores; remaining recovery/mapping/list-survey audit and hosted/device gates stay open; cloud inputs requested |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task
