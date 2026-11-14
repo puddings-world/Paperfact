@@ -75,6 +75,25 @@ def group(original_group):
     return old, index, change, path, root, service, sha, data, token
 
 
+def pin_dive(old, root, digest):
+    payload = deepcopy(root["payload"])
+    payload["data"]["body_json"]["inputs"]["dive"] = digest
+    payload["data"]["source_hash"] = claim_content.source_digest(
+        payload["data"]["body_json"]["inputs"], payload["source_document_hash"],
+    )
+    operation = old.new_graph_operation("research_content", root["entity_id"], payload)
+    old.save(operation)
+    return operation
+
+
+def refresh(group, root):
+    old, previous, _, path, _, service, sha, data, token = group
+    source = candidates.prepare(old.journal.path, previous.snapshot, previous.workspace)
+    change = next(row["change_id"] for row in source.page()["items"]
+                  if row["operation_id"] == root["operation_id"])
+    return old, source, change, path, root, service, sha, data, token
+
+
 def prepare(group, request=None, *, replace=False):
     _, source, change, path, *_ = group
     return recovery.prepare(target.observe(source, path), change, request or str(uuid4()),
@@ -194,10 +213,11 @@ def test_mismatched_generation_and_corrupt_receipt_refuse_without_writes(group):
         scope=scope, feature="dive", key="main", source_document_hash=root["payload"][
             "source_document_hash"], data=dict(body="Another generation", spec="fixture",
                                              written_at=STAMP))))
+    unavailable = pin_dive(old, root, "0" * 64)
     updated = candidates.prepare(old.journal.path, source.snapshot, source.workspace)
     selected = next(row["change_id"] for row in updated.page()["items"]
-                    if row["operation_id"] == root["operation_id"])
-    with pytest.raises(ValueError, match="mix claim generations"):
+                    if row["operation_id"] == unavailable["operation_id"])
+    with pytest.raises(ValueError, match="No native history matches"):
         recovery.prepare(target.observe(updated, path), selected, str(uuid4()), replace=True)
     assert dump(path) == before
 
@@ -215,6 +235,7 @@ def test_desktop_reviews_all_inputs_confirms_once_and_preserves_manual_notes(
             dict(scope=scope, feature="dive", key="main",
                  source_document_hash=root["payload"]["source_document_hash"],
                  data=dict(body="Another generation", spec="fixture", written_at=STAMP))))
+        root = pin_dive(old, root, "0" * 64)
         source = candidates.prepare(old.journal.path, source.snapshot, source.workspace)
     owner = WorkspaceDialog(old.journal.path, language="en")
     owner.show()
@@ -237,7 +258,7 @@ def test_desktop_reviews_all_inputs_confirms_once_and_preserves_manual_notes(
         wait(app, lambda: not owner.busy)
         if invalid_inputs:
             assert ui.action_select.findData("claim_group") == -1
-            assert "Analysis inputs changed" in ui.notice.text()
+            assert "No native history matches" in ui.notice.text()
             assert ui.old.toPlainText() and attached(path).journal.pending() == []
             return
         assert ui.action_select.currentData() == "claim_group", owner.status.text()
@@ -287,3 +308,85 @@ def test_schema_valid_but_false_claim_location_cannot_be_recovered(group):
     with pytest.raises(ValueError, match="no longer matches its original"):
         recovery.prepare(target.observe(index, path), change, str(uuid4()))
     assert dump(path) == before and attached(path).journal.pending() == []
+
+
+@pytest.mark.parametrize("origin", [
+    "journal", "accepted_peer", "conflicting_peer", "corrupt_cache",
+])
+def test_pinned_history_recovers_exact_input_and_rejects_unaccepted_foreign_versions(
+    group, pair, tmp_path, origin,
+):
+    from paper_daily import sync_admin
+
+    old, _, _, path, root, _, sha, *_ = group
+    scope = root["payload"]["scope"]
+    identity = content_id(scope, "dive", "main")
+    chosen_id = None
+    expected = "Pinned deep explanation"
+    if origin == "journal":
+        old.save(old.new_graph_operation("research_content", identity, dict(
+            scope=scope, feature="dive", key="main", source_document_hash=sha,
+            data=dict(body="A newer source-side analysis", spec="fixture", written_at=STAMP))))
+        old.save(old.new_graph_operation("research_content", identity, {}, action="delete"))
+    else:
+        service = sync_admin.authority(tmp_path / "marked-authority")
+        sender = pair[2]
+        token = service.enroll("workspace", "b")
+        chosen_data = dict(body="Earlier accepted peer analysis", spec="fixture", written_at=STAMP)
+        wanted = dict(scope=scope, feature="dive", key="main", source_document_hash=sha,
+                      data=chosen_data)
+        if origin in {"accepted_peer", "corrupt_cache"}:
+            chosen = sender.new_graph_operation("research_content", identity, wanted)
+            sender.save(chosen)
+            assert sender.sync_once(service, token)["pending"] == 0
+            newer = sender.new_graph_operation("research_content", identity, {
+                **wanted, "data": {**chosen_data, "body": "Newer accepted peer analysis"}})
+            sender.save(newer)
+            assert sender.sync_once(service, token)["pending"] == 0
+        else:
+            accepted = sender.new_graph_operation("research_content", identity, {
+                **wanted, "data": {**chosen_data, "body": "A different accepted peer input"}})
+            assert service.push(token, accepted)["outcome"] == "accepted"
+            chosen = sender.new_graph_operation("research_content", identity, wanted)
+            assert service.push(token, chosen)["outcome"] == "conflict"
+        chosen_id = chosen["operation_id"]
+        old.receive(service.pull(token, after=old.status()["cursor"]))
+        if origin == "accepted_peer":
+            # A missing derived graph receipt must not erase authoritative inbox history.
+            with closing(sqlite3.connect(old.journal.path)) as conn, conn:
+                conn.execute("DELETE FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                             (chosen_id,))
+        elif origin == "corrupt_cache":
+            with closing(sqlite3.connect(old.journal.path)) as conn, conn:
+                conn.execute(
+                    "UPDATE paperfact_sync_graph_receipts SET event=(SELECT event FROM "
+                    "paperfact_sync_graph_receipts WHERE operation_id=?) WHERE operation_id=?",
+                    (newer["operation_id"], chosen_id),
+                )
+        else:
+            with closing(_readonly_connection(old.journal.path)) as conn:
+                assert conn.execute(
+                    "SELECT 1 FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+                    (chosen_id,),
+                ).fetchone()
+        root = pin_dive(old, root, claim_content.input_digest(chosen_data))
+        expected = chosen_data["body"]
+    updated = refresh(group, root)
+    before, destination = dump(old.journal.path), dump(path)
+    if origin in {"conflicting_peer", "corrupt_cache"}:
+        reason = ("No native history matches" if origin == "conflicting_peer"
+                  else "another operation")
+        with pytest.raises(ValueError, match=reason):
+            prepare(updated)
+        assert dump(path) == destination and dump(old.journal.path) == before
+        return
+    plan = prepare(updated)
+    assert plan.comparison[0]["source"]["body"] == expected
+    receipt = plan.apply()
+    assert receipt["applied"] and not receipt["remote_acceptance_checked"]
+    if chosen_id:
+        assert receipt["sources"][0]["id"] == chosen_id
+    assert content(path)["dives"][0][1] == expected
+    assert not plan.apply()["applied"]
+    assert dump(old.journal.path) == before
+    assert len(attached(path).journal.pending()) == 4

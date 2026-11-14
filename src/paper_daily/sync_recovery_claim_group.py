@@ -22,6 +22,7 @@ from paper_daily import sync_recovery_choices as choices
 from paper_daily import sync_recovery_note_copy as native
 from paper_daily.manual_highlight_ops import _readonly_connection
 from paper_daily.sync_capture import CaptureConnection
+from paper_daily.sync_client import validate_event
 from paper_daily.sync_content import FEATURES as CONTENT_FEATURES
 from paper_daily.sync_content import content_id, content_payload
 from paper_daily.sync_journal import MAX_BYTES, _identifier, canonical_operation
@@ -90,7 +91,55 @@ def _visible(conn, payload):
     ))) if row is not None else None
 
 
-def _old(conn, identity):
+def _received(conn, identity, check):
+    """A cache locates a receipt; retained inbox history proves its contents."""
+    check()
+    binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
+    cached = conn.execute(
+        "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+        "FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+        (candidates.review.MAX_EVENT, identity),
+    ).fetchone()
+    event = None
+    if cached:
+        if cached[0] is None:
+            raise ValueError("Historical receipt exceeds its byte budget")
+        event = backup._decode(cached[0])
+        validate_event(event, binding[0])
+        if event["operation"]["operation_id"] != identity:
+            raise ValueError("Historical receipt names another operation")
+        rows = conn.execute(
+            "SELECT sequence,CASE WHEN length(CAST(event AS BLOB))<=? THEN event END,outcome "
+            "FROM paperfact_sync_inbox WHERE sequence=?",
+            (candidates.review.MAX_EVENT, event["sequence"]),
+        ).fetchall()
+    else:
+        conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
+        try:
+            rows = conn.execute(
+                "SELECT sequence,event,outcome FROM paperfact_sync_inbox WHERE CASE "
+                "WHEN length(CAST(event AS BLOB))<=? THEN CASE WHEN json_valid(event) THEN "
+                "json_extract(event,'$.operation.operation_id')=? ELSE 0 END ELSE 0 END LIMIT 2",
+                (candidates.review.MAX_EVENT, identity),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            check()
+            raise
+        finally:
+            conn.set_progress_handler(None, 0)
+    if len(rows) != 1 or rows[0][1] is None:
+        raise ValueError("The recorded operation has no unique retained inbox event")
+    recorded = backup._decode(rows[0][1])
+    validate_event(recorded, binding[0])
+    if (recorded["operation"]["operation_id"] != identity
+            or recorded["sequence"] != rows[0][0] or recorded["outcome"] != rows[0][2]
+            or event is not None and recorded != event):
+        raise ValueError("Historical receipt differs from retained inbox history")
+    check()
+    return recorded["operation"]
+
+
+def _old(conn, identity, check=lambda: None):
     row = conn.execute(
         "SELECT CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END,fingerprint "
         "FROM paperfact_sync_operations WHERE operation_id=?", (MAX_BYTES, identity),
@@ -100,18 +149,81 @@ def _old(conn, identity):
         if operation is None or candidates._fingerprint(operation) != row[1]:
             raise ValueError("Recorded source journal changed")
     else:
-        row = conn.execute(
-            "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
-            "FROM paperfact_sync_graph_receipts WHERE operation_id=?",
-            (candidates.review.MAX_EVENT, identity),
-        ).fetchone()
-        operation = backup._decode(row[0])["operation"] if row and row[0] else None
-    if operation is None:
-        raise ValueError("The group's recorded source operation is unavailable")
+        operation = _received(conn, identity, check)
     canonical_operation(operation)
     if operation["operation_id"] != identity:
         raise ValueError("Recorded source identity changed")
     return operation
+
+
+def _matches_input(operation, root, feature):
+    if operation is None:
+        return False
+    payload = operation["payload"]
+    return (operation["version"] == 2 and operation["action"] == "put"
+            and operation["entity_type"] == "research_content"
+            and operation["workspace_id"] == root["workspace_id"]
+            and operation["parents"] == root["parents"]
+            and payload.get("feature") == feature
+            and payload["scope"] == root["payload"]["scope"]
+            and payload["source_document_hash"] in (None, root["payload"]["source_document_hash"])
+            and claim_content.input_digest(payload["data"]) == root["payload"]["data"][
+                "body_json"]["inputs"][feature])
+
+
+def _historical_input(conn, root, feature, check):
+    """Resolve a content pin, never infer a dependency from recency or a title."""
+    identity = content_id(root["payload"]["scope"], feature, "main")
+    current = _head(conn, identity)
+    if _matches_input(current, root, feature):
+        return current
+    for number, (raw, fingerprint) in enumerate(conn.execute(
+        "SELECT CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END,fingerprint "
+        "FROM paperfact_sync_operations WHERE entity_type='research_content' AND entity_id=? "
+        "ORDER BY sequence DESC", (MAX_BYTES, identity),
+    ), 1):
+        check()
+        if number > candidates.review.MAX_RECORDS or raw is None:
+            raise ValueError("Historical input exceeds its record/byte budget")
+        operation = backup._decode(raw)
+        canonical_operation(operation)
+        if (operation["entity_id"] != identity
+                or candidates._fingerprint(operation) != fingerprint):
+            raise ValueError("Historical input journal fingerprint changed")
+        if _matches_input(operation, root, feature):
+            return operation
+    # Only accepted foreign versions are dependencies. A conflict is retained
+    # research, but its presence alone cannot supply an accepted input version.
+    conn.set_progress_handler(lambda: (check(), 0)[1], 1000)
+    try:
+        for number, (sequence, raw) in enumerate(conn.execute(
+            "SELECT sequence,event FROM paperfact_sync_inbox WHERE outcome='accepted' AND CASE "
+            "WHEN length(CAST(event AS BLOB))<=? THEN CASE WHEN json_valid(event) THEN "
+            "json_extract(event,'$.operation.entity_type')='research_content' AND "
+            "json_extract(event,'$.operation.entity_id')=? ELSE 0 END ELSE 0 END "
+            "ORDER BY sequence DESC",
+            (candidates.review.MAX_EVENT, identity),
+        ), 1):
+            check()
+            if number > candidates.review.MAX_RECORDS:
+                raise ValueError("Historical input exceeds its record budget")
+            event = backup._decode(raw)
+            validate_event(event, root["workspace_id"])
+            if event["sequence"] != sequence or event["outcome"] != "accepted":
+                raise ValueError("Historical input event differs from retained history")
+            if _matches_input(event["operation"], root, feature):
+                retained = _old(conn, event["operation"]["operation_id"], check)
+                if retained != event["operation"]:
+                    raise ValueError("Historical input differs from its retained operation")
+                return retained
+    except sqlite3.OperationalError:
+        check()
+        raise
+    finally:
+        conn.set_progress_handler(None, 0)
+    raise ValueError(
+        "No native history matches the pinned analysis input; do not mix claim generations"
+    )
 
 
 def _inputs(observed, root, check, recorded=None):
@@ -130,9 +242,8 @@ def _inputs(observed, root, check, recorded=None):
         conn.execute("BEGIN")
         for index, feature in enumerate(FEATURES):
             check()
-            operation = _old(conn, recorded[index]["id"]) if recorded else (
-                root if feature == "claims" else _head(
-                    conn, content_id(dict(kind="paper", id=paper), feature, "main")))
+            operation = _old(conn, recorded[index]["id"], check) if recorded else (
+                root if feature == "claims" else _historical_input(conn, root, feature, check))
             if (operation is None or operation["version"] != 2 or operation["action"] != "put"
                     or operation["entity_type"] != "research_content"
                     or operation["workspace_id"] != root["workspace_id"]
@@ -217,7 +328,7 @@ def _prior(conn, observed, root, request, replace, check):
     sources = _inputs(observed, root, check, receipt["sources"])
     parents = None
     for source, reference in zip(sources, receipt["native"], strict=True):
-        operation = _old(conn, reference["id"])
+        operation = _old(conn, reference["id"], check)
         if (operation["entity_type"] != "research_content"
                 or operation["workspace_id"] != context["workspace_id"]
                 or operation["payload"] != source["payload"]

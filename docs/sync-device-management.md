@@ -351,7 +351,9 @@ bringing in its exact PDF. Manual notes and the active PDF stay unchanged.
 
 A refusal states why the inputs or original still need review. Do not regenerate
 analysis to work around it: no AI call is needed for supported recovery. If the
-old native inputs no longer match the claim generation, preserve the source for
-historical dependency recovery. A saved action can safely be retried after later
+current native inputs changed, recovery looks for the pinned older version in
+retained native history. It can also recover an input deleted on the old device.
+If no matching version is retained, preserve the source for explicit mapping;
+a different/current input is not substituted. A saved action can safely be retried after later
 edits; refresh to see the recorded decision. Remote upload remains separate from
 local save. See [requirements and limits](device-recovery-review.md#complete-source-pinned-claim-groups).

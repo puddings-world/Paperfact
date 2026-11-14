@@ -230,8 +230,11 @@ verification does not certify semantic support. Different generations are never
 combined merely because they share a paper or PDF hash.
 
 `sync_recovery_claim_group.prepare(...)` performs read-only comparison. The
-source must provide coherent current native input versions and an owned original;
-nonportable legacy source IDs or historical dependency discovery need migration.
+source must provide exact native input values and an owned original. Current
+matching versions are read directly; otherwise recovery searches the retained
+local journal and accepted inbox history by the pinned full data digest and exact
+paper lifetime. A newer edit or source-side deletion does not replace that input.
+Nonportable legacy source IDs and changed source-parent lifetimes still need mapping.
 `replace=False` refuses differing/deleted destination members. Explicit
 `replace=True` prepares all three members together, with native restoration where
 required; visible rows inconsistent with native history still refuse to protect
@@ -248,6 +251,28 @@ original decision, preserving later edits/deletions without requiring the PDF ag
 Results say `state="saved_locally"`, `remote_acceptance_checked=False`,
 `semantic_validation="not_performed"` and `recovery_complete=False`.
 No old operation replay, AI/model call, remote acceptance claim or account transfer.
-Highlight/link/Lineage/deck groups, historical input discovery, unknown legacy
+Highlight/link/Lineage/deck groups, unknown legacy/source-lifetime
 migration, full audit, hosted deployment and installed/device acceptance remain
 open. [Behavior evidence](testing/device-recovery-review-scenarios.md#complete-portable-claim-group-2026-11-14).
+
+
+### Historical native claim inputs
+
+Exact input data hashes can resolve a previous native version after source-side
+editing/deletion. Recovery searches only that feature's portable entity, workspace,
+paper epoch and matching original hash (or its explicitly unbound analysis value).
+It accepts retained own-journal intentions and accepted foreign inbox versions;
+a foreign conflict/cache entry alone cannot supply a dependency. It does not infer
+inputs from titles, similar text or whichever analysis happens to be newest.
+
+Retained inbox events prove received versions. A graph receipt is only a lookup
+cache: missing caches can fall back to bounded inbox lookup; caches disagreeing
+with retained events refuse without repair or publication. Source/target leases,
+per-record byte limits, 100,000-record limits, cancellation and the caller's wall
+budget remain enforced. JSON parsing follows the byte guard; scans create no
+source index/table or extra background service.
+
+The resolved envelopes remain review input. Recovery still emits new typed
+operations/one local receipt in the existing transaction and preserves current
+source edits/deletions. Missing historical pins, wrong parent epochs and unknown
+legacy mappings remain pending. No AI call or new MCP/network interface is needed.

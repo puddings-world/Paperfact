@@ -267,7 +267,9 @@ explicitly copy the note and the old device's verified original atomically;
 [see the recovery workflow](docs/sync-device-management.md#recover-a-note-tied-to-a-pdf-position).
 Complete portable claim sets can also recover with their exact deep/close analysis
 inputs and original PDF in one confirmed transaction; [review the whole group](docs/sync-device-management.md#recover-a-complete-claim-group).
-Historical/legacy input mapping, unavailable originals, other scientific groups
+Exact input pins can resolve older native journal or accepted peer versions, even
+after a source-side analysis edit/deletion. Legacy/source-lifetime mapping,
+unavailable originals, other scientific groups
 and hosted/device acceptance remain separate gates.
 
 Recorded recovery decisions can preserve supported list/member/reading/order

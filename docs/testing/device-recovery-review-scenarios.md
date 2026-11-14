@@ -365,3 +365,43 @@ Final missing-receipt/healthy-peer follow-up plus usage documentation passed
 **11 cases in22.10s pytest /25.2s including checks**. This validates the last
 receipt guard; earlier unaffected critical/source/UI results are reused rather
 than rerun. All checks used isolated data and simulated/local services.
+
+
+## Resolve historical claim inputs (2026-11-14)
+
+This intentionally expands the previous current-input-only behavior. An edited
+source input no longer blocks recovery when its exact pinned native version is
+retained. Existing negative cases still assert no writes: their fixtures now use
+an actually unavailable pin rather than rejecting a recoverable historical value.
+Corrupt/deleted receipt and wrong-generation protections were not removed.
+
+`test_pinned_history_recovers_exact_input_and_rejects_unaccepted_foreign_versions`
+adds four parameterized ownership journeys:
+
+| History case | Observable result |
+|---|---|
+| Local journal | A newer source analysis followed by source-side deletion still resolves the original pinned input; target gets that version and source remains unchanged |
+| Accepted peer, missing graph cache | Two real accepted peer versions enter the old device's inbox; the older pinned version is recovered, not the newer head; missing cache does not prevent validated retry |
+| Foreign conflict | An actual service conflict remains in history/cache but cannot be used as an accepted input; no target/source mutation |
+| Corrupt graph cache | A cached receipt for another operation cannot masquerade as the selected inbox event; refuse before publication without repair |
+
+The first ten related cases passed **54.83s pytest /58.1s including privacy/Ruff**.
+After adding cache/inbox consistency and the deleted-source branch, the final
+four history cases passed **19.49s pytest /22.7s total**. Windows 25% CPU,
+two-core/300-second governor; these are overlapping focused results. The old
+source authority is a synthetic service whose real accepted/conflict events are
+received through the native client; no hand-built receipt substitutes for it.
+
+The existing source-pinned group transaction, visible-row guard, passage checking,
+local-only result state and explicit UI confirmation are reused. Legacy local
+source IDs, changed source-parent lifetimes, absent originals, other scientific
+groups and installed/hosted/device acceptance remain open. No AI call, source
+index/table, background watcher, global skill or additional worktree was added.
+
+
+Final integration: **34 passed in63.97s pytest /67.6s including privacy/Ruff**,
+covering all14 curated critical journeys, all11 claim-group/history outcomes
+and nine usage-document cases. Same CPU/time governor; no whole historical suite.
+The current-input-only negative expectation was intentionally expanded: verified
+historical pins recover, while unavailable pins still refuse without mutation.
+No source research/cache was repaired or rewritten by these operations.

@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Portable claim-group recovery verified locally; remaining dependent reading/highlight/Lineage/deck groups and external gates |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Historical native claim inputs verified locally; remaining reading/highlight/Lineage/deck groups and external gates |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task
