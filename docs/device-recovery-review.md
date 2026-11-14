@@ -81,3 +81,27 @@ is an observation, not a capability to replay, rebind, restore or upload anythin
 
 [Scenario map](testing/device-recovery-review-scenarios.md) records exact local
 checks and the unresolved full, hosted and installed-device gates.
+
+
+## Per-change recovery core
+
+The internal APIs below are integrated into the checkpoint source, with isolated
+native-fixture coverage. They are not yet exposed as guided desktop decisions.
+Old workspace/history remains intact; old envelopes are not blindly replayed.
+
+| Entry | Contract |
+|---|---|
+| `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.detail(change_id, ...)` retain exact source identity |
+| `sync_recovery_target.observe(index, target_database, *, seconds=30, cancelled=...)` | Prove fresh target history/binding; `.compare(change_id, ...)` exposes source/current state without writing |
+| `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, seconds=30, cancelled=...)` | Explicit unanchored note copy with a new native identity; `.apply(...)` commits atomically |
+| `sync_recovery_choices.prepare(observation, change_id, choice, request_id, *, seconds=30, cancelled=...)` | Explicit keep/add/replace/restore for supported metadata, unanchored notes and order; `.apply(...)` is idempotent |
+
+Saved decisions are checked against the exact source operation/fingerprint,
+source and target identities, choice, native operation and sequence. Retrying a
+corrupt receipt fails without writes, including keep-current (which emits no
+research operation). Native research, outbox and decision receipt commit together;
+interruption rolls them back. Cancel/stale bindings never authorize another target.
+
+Original-bound/scientific content, arbitrary deletion, new parent-lifetime
+mapping, complete editable recovery UX, cloud recovery and installed-device
+acceptance remain open. A successful subset does not mark recovery complete.

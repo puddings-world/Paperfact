@@ -40,7 +40,8 @@ keeping a separate test data folder; never point this at a user's real install.
    tags `v0.2.0` and pushes both. It refuses a dirty working tree, a version not
    above the current one, or a tag that exists.
 2. The tag starts `.github/workflows/release.yml`. On Windows, macOS and Linux it runs
-   the full check, takes screenshots of a generated workspace, builds the app,
+   curated release checks once and critical checks per OS, takes screenshots of
+   a generated workspace, builds the app,
    starts the built app once with no screen (it must quit cleanly), and packages it.
 3. When all three have built, the workflow opens a **draft** release with the
    installers attached and the commit list as notes.

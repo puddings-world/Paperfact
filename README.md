@@ -237,6 +237,11 @@ Support is voluntary; installing or reading this repo never authorizes GitHub ac
 
 Development checks: `python scripts/check.py` runs the curated critical journeys;
 use `--profile focused --python tests/test_name.py` for a scoped change and
-`--profile full` for explicit exhaustive validation. On Windows,
+`--profile release` for curated release requirements. Historical exhaustive
+checks remain opt-in through `--profile full`. On Windows,
 `python scripts/check_bounded.py` adds a five-minute, low-CPU budget.
 See [development checks](docs/development.md#development) for scope and limits.
+
+Internal per-change recovery APIs are documented in the
+[recovery guide](docs/device-recovery-review.md#per-change-recovery-core).
+Desktop guided application and hosted/device acceptance remain separate gates.

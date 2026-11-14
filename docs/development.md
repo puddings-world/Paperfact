@@ -172,11 +172,12 @@ contracts. Explicit selectors require `--profile focused`. Every profile also
 scans committable files for secrets and runs Ruff.
 
 A focused pass permits a scoped development checkpoint. Integration requires the
-critical gate plus affected tests. Keep historical regressions intact; run
-`--profile full` explicitly when broad changes justify it or preparing a release,
-not after every edit. It includes every Python, frontend and mobile test and
-requires Node.js. The Windows bounded entry allows at most 1800 seconds for this
-profile. A timeout is incomplete validation, never a pass; investigate the slow
+critical gate plus affected tests. Use `--profile release` for the curated release requirements described in
+[the test map](testing/README.md#keep-the-suite-small-by-testing-requirements).
+Keep historical regressions available through explicit `--profile full` for deep
+diagnosis when warranted; it is not a mandatory release gate. It includes every Python, frontend and mobile test and
+requires Node.js. The Windows bounded entry allows at most 1800 seconds for release/full
+profiles, including child processes. A timeout is incomplete validation, never a pass; investigate the slow
 area rather than silently extending the limit. Beta validation and packaging
 must fit a shared 20-30 minute budget. Do not run parallel full checks or use
 `-n auto` on the owner's machine.

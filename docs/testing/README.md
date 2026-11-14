@@ -41,6 +41,62 @@ deleted, skipped or reclassified as passing.
 - Fixture checks do not certify live providers, installed Windows/Mac upgrades,
   physical phone behavior or a deployed sync service. Those are separate gates.
 
+## Keep the suite small by testing requirements
+
+The owner approved this reduction on 2026-11-14. The historical function count is
+not a release target. Choose one representative for each observable invariant;
+add a boundary case only when it protects a distinct failure or an actual bug.
+
+| Occasion | Required scope | Budget |
+|---|---|---|
+| Edit/checkpoint | Changed behavior, callers and a relevant failure boundary (`focused`) | 3-5 minutes locally |
+| Candidate build | Critical journeys on each desktop OS; frozen-app acceptance; affected regressions | Validation plus packaging: 20-30 minutes |
+| Public release | Curated `release` journeys once; critical/frozen acceptance on every shipped desktop OS; device checklist | 20-30 minutes per CI build job |
+| Deep diagnosis | Explicit historical `full` or a selected stress/migration matrix when a change warrants it | Opt-in; never the automatic development or release prerequisite |
+
+The release requirements add atomic receive, delete/edit conflicts, revoked
+access, editable attachment transfer/repair, late UI delivery, private diagnostics,
+fresh-install identity, reading goals, exact claim/Lineage/highlight sources and
+recovery provenance. Exact Python selectors are `RELEASE_JOURNEYS` in
+`scripts/check.py`. Five existing frontend files, seven named mobile domain files
+and one actual mobile-to-Python protocol program complete the curated automated
+baseline. Changed domains still require their relevant regressions; this baseline
+does not claim complete v0.5 feature/device acceptance.
+
+### Cross-platform split
+
+The release workflow runs the common `release` selection once, on the Windows
+tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
+Manual candidate builds use `critical`, not the larger release selection. All
+build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
+This wiring is not evidence that Actions or installed Mac/Linux acceptance passed.
+
+| Platform boundary | Additional observation required |
+|---|---|
+| Windows | Installer/reinstall/upgrade, working data preserved, launch and shortcuts |
+| Apple Silicon Mac | Native arm64 app activates, Chinese input/focus/shortcuts work, install/update preserves data |
+| Linux | AppImage permissions/dependencies, launch and update preserve data |
+| Windows + Mac | Real offline edits, reconnect/conflict, interrupted attachment retry and independent restore |
+| iOS / Android PWA | Physical browser install, offline launch/save/reopen and foreground reconnect; record each OS separately |
+
+Use [Mac and multi-device acceptance](mac-acceptance-0.5.md) for actual expected
+results. Fixture success must not fill a physical-device result.
+
+### Consolidate historical cases without erasing protection
+
+- Keep a case when it protects a unique user-visible invariant or a concrete past bug.
+- Merge repeated setup and duplicate assertions into a shared behavior case;
+  parameterize only genuinely different boundaries, not every internal combination.
+- Remove a source-string/internal-shape assertion only when a behavioral replacement
+  demonstrably covers its requirement. Packaging/security contracts can be distinct.
+- Keep exhaustive malformed-input, long stress and legacy-migration matrices
+  opt-in unless that domain changed or a specific regression requires them.
+- For each actual retirement, record old test ID, replacement, requirement and
+  verification. No bulk deletion by filename, age or raw count.
+
+This is the selection policy and initial curated gate, not a claim that all
+historical cases have already been reviewed or deduplicated.
+
 ## Historical results and detailed scenario maps
 
 The following records retain their original scope and date. References to a

@@ -34,10 +34,10 @@ class BudgetUnavailable(RuntimeError):
 def seconds_for(arguments):
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
-        "--profile", choices=("critical", "full", "focused", "docs"), default="critical",
+        "--profile", choices=("critical", "release", "full", "focused", "docs"), default="critical",
     )
     options, _ = parser.parse_known_args(arguments)
-    return FULL_SECONDS if options.profile == "full" else LOCAL_SECONDS
+    return FULL_SECONDS if options.profile in {"full", "release"} else LOCAL_SECONDS
 
 
 class WindowsBudget:

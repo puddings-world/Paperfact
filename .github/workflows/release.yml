@@ -37,7 +37,7 @@ jobs:
           - os: ubuntu-22.04
             name: linux
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 75
+    timeout-minutes: 30
     env:
       # The reports print Chinese; a Windows runner's console is cp1252.
       PYTHONIOENCODING: utf-8
@@ -86,8 +86,10 @@ jobs:
           uv run python -m paper_daily fonts
           uv run python -m paper_daily web-assets
 
-      - name: Tests
-        run: uv run python scripts/check.py
+      # Common release risks run once; every OS retains critical native journeys.
+      - name: Curated source acceptance
+        timeout-minutes: 10
+        run: uv run python scripts/check.py --profile ${{ matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'critical' }}
 
       - name: Screenshots
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/screenshots.py shots --demo
