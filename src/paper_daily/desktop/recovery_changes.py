@@ -24,6 +24,7 @@ from paper_daily import research_generation as generation
 from paper_daily import sync_authority_backup as backup
 from paper_daily import sync_recovery_candidates as candidates
 from paper_daily import sync_recovery_choices as choices
+from paper_daily import sync_recovery_claim_group as claim_group
 from paper_daily import sync_recovery_note_copy as note_copy
 from paper_daily import sync_recovery_target as target
 from paper_daily.manual_highlight_ops import _readonly_connection
@@ -126,6 +127,19 @@ TEXT = {
 
 
 TEXT["en"].update({
+    "claim_group": "Use old complete claim group",
+    "group_blocked": "This complete group needs further review: ",
+    "ready_claim_group": (
+        "Review the claims and both exact analysis inputs together. Confirmation replaces "
+        "this group and includes its verified PDF; manual notes and the active PDF are preserved."
+    ),
+    "confirm_claim_group": (
+        "Use this old claim set, deep explanation and close reading together, with its exact PDF? "
+        "Different/deleted group members are replaced/restored; earlier history and manual notes "
+        "are retained. This does not certify the research judgments or call AI."
+    ),
+    "group_dive": "Deep explanation", "group_close_reading": "Close reading",
+    "group_claims": "Claims", "group_judgment": "Proposed judgment",
     "copy_original": "Copy note and original",
     "ready_original": (
         "This note needs its original PDF. Copy the note and verified original together; "
@@ -154,6 +168,19 @@ TEXT["en"].update({
                     "Earlier history is retained. Check both content panes before continuing.",
 })
 TEXT["zh-TW"].update({
+    "claim_group": "使用舊版整組主張研究",
+    "group_blocked": "這整組研究仍需核對：",
+    "ready_claim_group": (
+        "請一起比對主張與兩份原始分析。確認後會替換這整組內容並帶入核實的 PDF；"
+        "手動筆記與目前 PDF 保留。"
+    ),
+    "confirm_claim_group": (
+        "確定一起使用舊版主張、深入分析、逐段講解與對應 PDF？"
+        "差異或已刪除的組內項目將被替換或復原；舊歷史與手動筆記保留。"
+        "不會呼叫 AI，也不代表已核實研究判斷。"
+    ),
+    "group_dive": "深入分析", "group_close_reading": "逐段講解",
+    "group_claims": "主張", "group_judgment": "研究判斷（待核實）",
     "copy_original": "另存筆記與原文",
     "ready_original": (
         "這筆筆記需要原文 PDF。可一起另存筆記與核實的原文；"
@@ -324,6 +351,8 @@ class RecoveryChanges(QWidget):
             )
             if action == "copy" and not already and getattr(plan, "with_original", False):
                 key = "ready_original"
+            if action == "claim_group" and not already:
+                key = "ready_claim_group"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -529,7 +558,45 @@ class RecoveryChanges(QWidget):
                     raise
                 continue
             plans[action] = (plan, saved)
+        if operation["entity_type"] == "research_content" and operation["payload"].get(
+            "feature"
+        ) == "claims":
+            request = str(uuid5(NAMESPACE_URL, "paperfact:claim-group-ui:" + candidates._json([
+                observed.binding, operation["operation_id"], candidates._fingerprint(operation),
+            ])))
+            try:
+                group = claim_group.prepare(
+                    observed, selected, request, replace=True, cancelled=stopped,
+                )
+            except (OSError, ValueError) as error:
+                comparison["claim_group_issue"] = str(error)[:240]
+                with closing(_readonly_connection(observed.database)) as conn:
+                    if conn.execute("SELECT 1 FROM integration_operations WHERE id=?",
+                                    (request,)).fetchone():
+                        raise
+                observed._check(backup._guard(60, stopped))
+            else:
+                plans["claim_group"] = (group, group.already)
         return plans
+
+    def _group_text(self, members, side):
+        parts = []
+        for member in members:
+            feature, data = member["feature"], member[side]
+            parts.append(self.t["group_" + feature])
+            if data is None:
+                parts.append(self.t["retired"] if side == "current" and member.get(
+                    "state"
+                ) == "retired" else self.t["absent"])
+            elif feature != "claims":
+                parts.append(data["body"])
+            else:
+                for claim in data["body_json"]["report"]["claims"]:
+                    judgment = claim["judgment"]
+                    parts.append(claim["text"] + "\n" + self.t["group_judgment"] + ": "
+                                 + judgment["status"] + " ? " + judgment["reason"])
+                    parts.extend(passage["quote"] for passage in claim["passages"])
+        return "\n\n".join(parts)
 
     def _completion(self, receipt, changed=False):
         if "choice" not in receipt:
@@ -542,12 +609,13 @@ class RecoveryChanges(QWidget):
             return False
         plan, action = self.plan, self.action_select.currentData()
         include_original = action == "copy" and getattr(plan, "with_original", False)
-        if action in {"replace", "restore"} or include_original:
+        if action in {"replace", "restore", "claim_group"} or include_original:
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
+                    self.t["confirm_claim_group"] if action == "claim_group" else
                     self.t["confirm_original"] if include_original else
                     self.t["confirm_body"].format(action=self.t[action]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -670,6 +738,10 @@ class RecoveryChanges(QWidget):
                 self.action_plans = dict(plans)
                 if plan is not None:
                     self.action_plans["copy"] = (plan, already)
+                group = self.action_plans.get("claim_group", (None, False))[0]
+                if group is not None and group.comparison:
+                    self.old.setPlainText(self._group_text(group.comparison, "source"))
+                    self.current.setPlainText(self._group_text(group.comparison, "current"))
                 self.action_select.blockSignals(True)
                 self.action_select.clear()
                 self.action_select.addItem(self.t["review"], "")
@@ -680,14 +752,20 @@ class RecoveryChanges(QWidget):
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))
+                elif group is not None:
+                    self.action_select.setCurrentIndex(self.action_select.findData("claim_group"))
                 self.action_select.blockSignals(False)
                 self.action_changed(self.action_select.currentIndex())
                 self.notice.setText(
                     self.t["already" if already else "ready_original" if getattr(
                         plan, "with_original", False
                     ) else "ready" if plan is not None else
+                           "ready_claim_group" if group is not None and not group.already else
+                           "already_action" if group is not None else
                            "ready_action" if len(plans) > 1 else "unsupported"]
                 )
+                if comparison.get("claim_group_issue"):
+                    self.notice.setText(self.t["group_blocked"] + comparison["claim_group_issue"])
                 self.old.setFocus()
             owner.status.setText(self.notice.text())
         except (OSError, ValueError, TypeError):

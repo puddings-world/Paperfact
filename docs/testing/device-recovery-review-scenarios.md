@@ -309,3 +309,59 @@ in 42.26s pytest / 45.7s including checks**: all five original-plus-note cases a
 nine usage-document cases. Earlier unaffected critical/owned-original/plain-copy
 evidence is reused, not rerun by habit or summed. No production, OS-store or
 physical-device acceptance is inferred from the fixture service.
+
+
+## Complete portable claim group (2026-11-14)
+
+`sync_recovery_claim_group` recovers claims together with the exact native dive
+and close-reading data they pin and their owned original. Existing native source
+publication, journal and receipt storage provide one transaction. The shared
+original reader was extracted from the already verified positioned-note path;
+it grants byte inspection, not publication or semantic authority.
+
+`tests/test_sync_recovery_claim_group.py` contains seven observable cases:
+
+| Scenario | Researcher-visible assertion |
+|---|---|
+| Complete offline/native peer journey | Exact claims, two pinned analyses and PDF survive independent native join/download; manual notes/source DB stay unchanged; retries preserve later edits; different target needs explicit replacement |
+| Failure after an earlier child | Original and first analysis were written inside the transaction, then failure in the second analysis leaves no research/outbox/receipt; retry saves one group |
+| Cancellation after an earlier child | Same all-or-nothing result, with no partial group |
+| Mismatched generation and corrupt receipt | Refuse without writes, rather than mixing current analysis with older claims or duplicating a saved decision |
+| Real desktop confirmation | Both panes show all inputs and proposed judgments; No writes nothing; rapid repeated Yes saves one group and preserves manual notes |
+| Real desktop refusal | Mixed native input hashes remove the group action and show a reason while source comparison stays readable |
+| Schema-valid forged location | Recomputed report IDs/schema cannot authorize an invented quotation; fresh PDF location checking refuses without target mutation |
+
+The native peer journey also simulates an older writer with a no-op capture hook:
+visible research changed without journal history. New replacement refuses rather
+than overwriting that private draft; committed retry preserves it. A plain raw
+SQLite writer was initially rejected by the existing trigger, so the fixture now
+models the intended older writer explicitly. Production triggers are unchanged.
+
+Evidence: initial five cases passed 41.81s pytest /44.9s total; expanded explicit
+replacement/forged-location cases passed two in20.54s /23.5s total. Integration
+passed **37 in122.12s pytest /125.8s including privacy and Ruff**: 14 critical
+journeys, six owned-original note cases, five note-plus-original cases, one full
+claim peer journey, two real claim UI outcomes and nine usage-document cases.
+After the visible-row guard, the **final seven claim cases passed57.86s pytest /
+61.0s total**. Counts overlap and are not added. Windows governor: 25% CPU,
+two logical cores, 300-second maximum; no exhaustive/release run or real AI call.
+
+Scope: portable native claims with coherent current native input pins. Located
+passages are rechecked, missing/unlocated evidence stays explicitly unresolved;
+caller semantic judgments are never certified. Historical dependency discovery,
+legacy local source-ID migration, highlight/link/Lineage/deck groups, complete
+audit, cloud/native-store and installed Windows/Apple Silicon/phone acceptance
+remain open. This reuses existing typed-composition and exact-source boundaries;
+no new portable rule or duplicate/global skill was needed.
+
+
+Missing group receipts are not silently reconstructed from leftover native writes:
+the original/child operation IDs must be unused for a new decision. The receipt
+case now checks both corruption and deletion while preserving every saved row;
+exact already-committed requests still return their validated original decision.
+
+
+Final missing-receipt/healthy-peer follow-up plus usage documentation passed
+**11 cases in22.10s pytest /25.2s including checks**. This validates the last
+receipt guard; earlier unaffected critical/source/UI results are reused rather
+than rerun. All checks used isolated data and simulated/local services.

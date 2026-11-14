@@ -71,6 +71,14 @@ def _original(conn, operation, check):
     anchor = payload.get("anchor")
     if not anchor or not anchor.get("document_hash"):
         raise ValueError("Original-bound notes require exact original verification before recovery")
+    return inspect_original(
+        conn, payload["paper_id"], operation["parents"][0], anchor["document_hash"], check,
+        anchor=anchor,
+    )
+
+
+def inspect_original(conn, paper, parent, digest, check, *, anchor=None):
+    """Read exact native-owned original bytes; no activation or write authority."""
     from paper_daily import note_positions, sync_source_files
     from paper_daily.sync_documents import (
         _paper_current,
@@ -80,9 +88,9 @@ def _original(conn, operation, check):
     from paper_daily.workspace_service import _ReadOnlyStore
 
     check()
-    paper, digest = payload["paper_id"], anchor["document_hash"]
-    parent = operation["parents"][0]
-    if not _paper_current(conn, dict(paper_id=paper, parent_incarnation=parent["incarnation"])):
+    if (parent["kind"] != "paper" or parent["id"] != paper or not _paper_current(
+        conn, dict(paper_id=paper, parent_incarnation=parent["incarnation"])
+    )):
         raise ValueError("The note's original belongs to another paper lifetime")
     # Immutable retained originals may differ from the currently active PDF.
     source = sync_source_files.inspectable(conn, paper, digest)
@@ -95,7 +103,8 @@ def _original(conn, operation, check):
         ).fetchone() if conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='document_reader_paths'"
         ).fetchone() else None
-        if row is None or row[0] != operation["workspace_id"]:
+        binding = conn.execute("SELECT workspace FROM research_sync_binding WHERE id=1").fetchone()
+        if row is None or binding is None or row[0] != binding[0]:
             raise ValueError("The note's original has no matching native storage registration")
         verified = verify_document(_ReadOnlyStore(row[1]), document)
         source = verified._path
@@ -117,7 +126,8 @@ def _original(conn, operation, check):
     with pymupdf.open(source) as pdf:
         if pdf.needs_pass or pdf.page_count < 1:
             raise ValueError("The note's original is not a readable PDF")
-        note_positions.verify(pdf, anchor)
+        if anchor is not None:
+            note_positions.verify(pdf, anchor)
     check()
     if _identity(source) != version:
         raise ValueError("The note's original changed during verification")

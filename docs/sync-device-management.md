@@ -339,3 +339,19 @@ source mapping; the current PDF is not guessed as a historical source. Originals
 unavailable on both devices and compound scientific groups need separate recovery.
 Explicitly deleted/retired originals are not resurrected by this copy action.
 See [behavior evidence and limits](testing/device-recovery-review-scenarios.md#exact-original-positioned-note-recovery-2026-11-14).
+
+
+### Recover a complete claim group
+
+In the existing old-device change review, select a portable claim-set change and
+compare it with the separately restored workspace. Both panes show the deep
+explanation, close reading and claims together. **Use old complete claim group**
+requires confirmation before replacing/restoring any different group member and
+bringing in its exact PDF. Manual notes and the active PDF stay unchanged.
+
+A refusal states why the inputs or original still need review. Do not regenerate
+analysis to work around it: no AI call is needed for supported recovery. If the
+old native inputs no longer match the claim generation, preserve the source for
+historical dependency recovery. A saved action can safely be retried after later
+edits; refresh to see the recorded decision. Remote upload remains separate from
+local save. See [requirements and limits](device-recovery-review.md#complete-source-pinned-claim-groups).

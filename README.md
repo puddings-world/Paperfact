@@ -265,8 +265,10 @@ content and copy-as-new notes. Positioned notes keep their page, passage and
 source hash after exact-original verification. If its PDF is missing there,
 explicitly copy the note and the old device's verified original atomically;
 [see the recovery workflow](docs/sync-device-management.md#recover-a-note-tied-to-a-pdf-position).
-Legacy source mapping, unavailable originals, scientific-group recovery and hosted/device
-acceptance remain separate gates.
+Complete portable claim sets can also recover with their exact deep/close analysis
+inputs and original PDF in one confirmed transaction; [review the whole group](docs/sync-device-management.md#recover-a-complete-claim-group).
+Historical/legacy input mapping, unavailable originals, other scientific groups
+and hosted/device acceptance remain separate gates.
 
 Recorded recovery decisions can preserve supported list/member/reading/order
 links across restored lifetimes; see the [recovery workflow](docs/device-recovery-review.md#recover-related-lists-without-losing-their-links).

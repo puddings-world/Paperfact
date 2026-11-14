@@ -97,6 +97,7 @@ Old workspace/history remains intact; old envelopes are not blindly replayed.
 | `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.details(change_id, ...)` retain exact source identity |
 | `sync_recovery_target.observe(index, target_database, *, seconds=30, cancelled=...)` | Prove fresh target history/binding; `.compare(change_id, ...)` exposes source/current state without writing |
 | `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, with_original=False, seconds=30, cancelled=...)` | Explicit note copy with a new native identity; positioned notes require exact PDF/selection verification; `with_original=True` includes the verified old-device original in the same native transaction |
+| `sync_recovery_claim_group.prepare(observation, change_id, request_id, *, replace=False, seconds=60, cancelled=...)` | Complete portable claims, exact native dive/close inputs and original; `.comparison` shows all three members; `.apply(...)` commits atomically and returns local-only state |
 | `sync_recovery_choices.prepare(observation, change_id, choice, request_id, *, seconds=30, cancelled=...)` | Explicit keep/add/replace/restore for supported metadata, unanchored notes and order; `.apply(...)` is idempotent |
 
 Saved decisions are checked against the exact source operation/fingerprint,
@@ -217,3 +218,36 @@ the write transaction and byte changes before commit roll back the whole copy.
 Only a successful committed receipt can skip later source availability checks.
 This extends copying, not metadata keep/replace/restore for anchored notes.
 [Requirements and evidence](testing/device-recovery-review-scenarios.md#exact-original-positioned-note-recovery-2026-11-14).
+
+
+## Complete source-pinned claim groups
+
+A portable native claim set pins the full deep/close analysis data hashes used
+for generation. Recovery validates these exact native inputs, the PDF's hash,
+page count and each recorded located passage. It preserves every claim,
+proposed judgment, unlocated/missing passage and generation field; location
+verification does not certify semantic support. Different generations are never
+combined merely because they share a paper or PDF hash.
+
+`sync_recovery_claim_group.prepare(...)` performs read-only comparison. The
+source must provide coherent current native input versions and an owned original;
+nonportable legacy source IDs or historical dependency discovery need migration.
+`replace=False` refuses differing/deleted destination members. Explicit
+`replace=True` prepares all three members together, with native restoration where
+required; visible rows inconsistent with native history still refuse to protect
+untracked private edits. The UI previews the whole group before confirmation.
+
+Confirmation stages verified bytes, then uses the existing typed source publisher
+and native research writer in one transaction with a bounded payload-bound
+receipt. An error/cancellation after an earlier child write rolls back original
+ownership, all three results, outbox and receipt. An unowned staged cache can
+remain; it grants no ownership or active-PDF change. Repeated confirmation or
+reconstructed requests validate recorded source/native operations and return the
+original decision, preserving later edits/deletions without requiring the PDF again.
+
+Results say `state="saved_locally"`, `remote_acceptance_checked=False`,
+`semantic_validation="not_performed"` and `recovery_complete=False`.
+No old operation replay, AI/model call, remote acceptance claim or account transfer.
+Highlight/link/Lineage/deck groups, historical input discovery, unknown legacy
+migration, full audit, hosted deployment and installed/device acceptance remain
+open. [Behavior evidence](testing/device-recovery-review-scenarios.md#complete-portable-claim-group-2026-11-14).
