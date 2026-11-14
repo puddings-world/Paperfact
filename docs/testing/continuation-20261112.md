@@ -5004,3 +5004,46 @@ additional worktree was introduced.
   scientific/manual-mark deletion choices, foreign/legacy mappings, broader audit
   integration, hosted identity/HTTPS/native vaults and installed Windows/Apple
   Silicon/physical-phone acceptance remain open. No release or deployment.
+
+
+## 2026-11-15: Useful packaged-acceptance failure reports
+
+- Audited the current release scope before choosing another local feature. Mac
+  installed verification previously wrote report.json only on total success,
+  leaving failures as disconnected raw logs. Extended that existing runner, not
+  the app protocol or a new daemon/service. No packaged binary was built or run.
+- The closed paperfact.packaged-acceptance.v1 report is durably updated at each
+  named check and on failure, timeout or Ctrl+C. It retains completed checks, the
+  detection stage, categorical failure and host OS/architecture. Only status
+  passed + passed true + exit 0 accept the packaged local workflow. Hard kill or
+  report-write failure may leave an incomplete running/missing report, never pass.
+- Version is parsed only from the frozen CLI; commit/dirty are allowlisted from
+  bounded fixed packaged metadata reads. Unknown values stay unknown; no mutable
+  checkout identity is substituted. Reports exclude raw exception/command/output,
+  private paths/accounts/environment and research. Raw logs stay separate and
+  require review. Existing output folders are refused without changing old reports.
+  CLI exits 1 on failure and 130 on interruption, without printing raw exceptions.
+- Tests cover process failure, zero-exit background traceback, timeout with partial
+  local output, missing executable, interruption, metadata limits/privacy and
+  preserved previous runs. One fake-child success journey exercises the actual
+  orchestration, real synthetic ZIP fidelity and duplicate-import SQL assertions;
+  it is not native-app acceptance. A real child Python CLI invocation against a
+  nonexistent bundle checks sanitized nonzero failure and unchanged old report.
+- Initial core + report/distribution/usage selection: 36 passed in 11.54s pytest /
+  17.3s total. Strengthening the success journey exposed platform.machine launching
+  a Windows cold-start subprocess before report initialization. Reused the app's
+  no-shell sysconfig/os.uname approach. Final changed report/distribution/usage
+  selection: 23 passed in 2.80s pytest / 6.8s total, Privacy/Ruff green. Unchanged
+  app critical evidence is reused. Historical assertions/unchanged functions were
+  preserved, not loosened; no whole-suite or packaging run during iteration.
+- README, toolchain, release and Mac acceptance guides now explain report states,
+  candidate identity, retry directories and sharing limits. Existing CI already
+  collects report.json in its always-run provenance artifact; workflow upload
+  permissions/log collection were not changed. No release/deployment was invoked.
+- Existing public-app-support skill covers categorical reports and separate raw
+  logs; existing local patterns cover no-shell identity. No duplicate/global skill
+  was created. Actual frozen Windows/macOS/Linux execution, native Mac foreground/
+  Keychain, hosted identity/HTTPS and physical multi-device/PWA acceptance remain
+  open alongside the remaining research recovery/mapping/audit requirements.
+- Final updated usage-doc contracts: 9 passed in 1.42s pytest / 9.7s total;
+  no repeated product/core or packaging run after documentation-only edits.

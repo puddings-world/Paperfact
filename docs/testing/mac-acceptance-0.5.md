@@ -109,7 +109,40 @@ The output directory must not already exist. The script generates synthetic data
 and isolated account/data homes. It checks first use, duplicate import, export,
 file fidelity, local CLI/MCP retries and native Launch Services foreground behavior.
 The Mac foreground check requires Apple's Swift toolchain. `report.json` is
-written only after successful completion; a missing report is not a pass.
+updated at each check, including failure, timeout or Ctrl+C. Only `status: passed`
+and `passed: true` with exit code 0 mean this packaged local journey completed.
+`running` is an incomplete record after a crash/kill, not proof a process is still
+running. Missing/unwritable reports are not passes. Failure returns exit code 1;
+Ctrl+C returns 130. Use a new output directory for every retry; an existing report
+is preserved and is never reclassified as the latest attempt.
+The closed `paperfact.packaged-acceptance.v1` report records completed checks,
+the check where failure was detected, a categorical failure and host OS/architecture.
+Its build version comes from the frozen CLI; commit/dirty state come only from
+fixed packaged metadata. Unknown identity stays unknown; never substitute the
+mutable checkout identity or omit the candidate artifact hash from the run record.
+It contains no raw exception text, command/output, private path or account data.
+Review and share `report.json` first; raw local `.log` files require separate
+review. Do not send the entire output folder or generated research workspace.
+The existing CI still captures its generated fixture logs separately.
+
+| Report check | What it verifies |
+|---|---|
+| `isolation`, `version`, `doctor`, `first-use` | Separate fixture/account homes, actual frozen version, prerequisites and empty GUI startup |
+| `first-use-privacy`, `credential-isolation` | No AI account configuration was created/imported into the fixture |
+| `seed`, `share-link`, `share-link-checksum` | Generated research package and exact checksum-bearing sharing link |
+| `import`, `import-again`, `reader`, `export` | Import twice, read, export; a duplicate import must not duplicate the list item |
+| `file-fidelity`, `research-content` | Exact exported PDF/assets plus saved analysis and membership |
+| `local-integration`, `appimage-integration` | Frozen JSON CLI and actual MCP stdio retry/restart behavior; AppImage variant when present |
+| `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
+
+`timeout` means a child exceeded its 90-second limit; `missing_file` means a
+required executable/tool or generated input was unavailable. `process_failed`
+records a nonzero child exit; `background_traceback` or `app_traceback` detects
+an error despite apparent process success. Validation/assertion failures stop
+the workflow before acceptance. The reported check is where the problem was
+detected, not a proven root cause. Keep the fixture privately; use a new output
+folder for a retry and compare the actual candidate identities.
+
 This does not run the physical two-device sync journey or real provider login.
 Do not claim the full suite passed merely because packaged-app verification passes.
 

@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Native Lineage retirement verified: 8 affected, critical/docs 23, exact-history journey recheck; next other deletion/origin/audit recovery and hosting/device gates. Reuse evidence; keep focused validation small |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Packaged acceptance failure/identity reporting verified with bounded focused checks; next remaining recovery/origin/audit and hosted/private-pairing/device gates. No packaging or full-suite run during iteration |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

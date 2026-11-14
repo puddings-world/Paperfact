@@ -16,7 +16,14 @@ feature branch that develops it.
 
 For the first public beta, use a candidate branch and **workflow_dispatch** to
 build without publishing. Run `scripts/verify_built_app.py` against the frozen app;
-the workflow does this on all three platforms. Mark any eventual beta release
+the workflow does this on all three platforms. Its `report.json` now records
+per-check progress and categorical failure/timeout/interruption, not just success.
+Only `status: passed`, `passed: true` and exit code 0 accept that local workflow;
+`running`, failed, interrupted or missing reports do not. Each retry uses a new
+output directory. The existing always-uploaded provenance artifact includes this
+content-minimized report; raw fixture logs stay a separate artifact. See
+[Mac acceptance](testing/mac-acceptance-0.5.md) for the schema and sharing limits.
+Mark any eventual beta release
 **pre-release** so existing installations do not treat it as stable.
 
 The build includes license texts, upstream notices and `build-info.json` with its

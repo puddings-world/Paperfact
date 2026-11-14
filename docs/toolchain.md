@@ -50,6 +50,22 @@ views fall back to Qt's plain rich text, showing formulas as their source.
 `tests/conftest.py`) so no Chromium starts per test; `node --test tests/*.mjs` runs
 the JavaScript tests.
 
+## Packaged local acceptance
+
+Run `python scripts/verify_built_app.py <built-app-folder> <new-output-folder>`
+from the matching development environment after building. This uses generated
+research and isolated account/data homes. It checks local startup, package
+roundtrip and CLI/MCP boundaries, plus Launch Services foreground behavior on
+macOS (requires Apple Swift). It does not deploy sync or log into a real account.
+
+`report.json` records the active/completed checks, frozen build identity when
+available and categorical failure. It is written during the run, not only on
+success; only `status: passed`, `passed: true` and exit code 0 accept the checked
+local journey. A hard kill may leave an incomplete `running` record. Failed
+checks exit 1; Ctrl+C exits 130. Every retry needs a new output directory.
+Review the report before sharing; raw `.log` files are separate local diagnostic
+material. See [release checks](releasing.md) and [Mac acceptance](testing/mac-acceptance-0.5.md).
+
 ## Diagnosing a slow window
 
 The app always records freezes over 0.25 s, with the code location only, to

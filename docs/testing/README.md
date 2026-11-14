@@ -17,7 +17,7 @@ snapshots and do not describe the current default or certify the present source.
 | Offline synchronization | Restart/retry, lost acknowledgments, concurrent edits, deletion conflicts and atomic receive | `tests/test_sync_client.py` |
 | Device pairing | Explicit copy/pair/join, independent credentials, lost-reply resume and native-store/context refusal | [Pairing behavior map](../sync-device-management.md#desktop-pairing-and-retry) |
 | Backup and recovery | Preview/restore without changing the source; reject corrupt or stale recovery decisions; cancel safely | `tests/test_workspace_dialog.py`, recovery scenario maps below |
-| Desktop, distribution and mobile | Worker/status delivery, dialogs, update notices, package contracts, offline mobile domain and service behavior | `tests/test_update_notices.py`, `tests/test_distribution.py`, `mobile/tests/` |
+| Desktop, distribution and mobile | Worker/status delivery, dialogs, update notices, package contracts, safe per-stage packaged acceptance/failure reports, offline mobile domain and service behavior | `tests/test_update_notices.py`, `tests/test_distribution.py`, `tests/test_built_app_verification.py`, `mobile/tests/` |
 
 These families include normal paths plus many variants of cancellation, repeated
 clicks, stale windows, changed papers/accounts, corrupt files and interrupted
