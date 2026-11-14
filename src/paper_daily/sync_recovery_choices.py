@@ -165,9 +165,10 @@ def _prior(conn, request_id, fingerprint, context):
     ):
         raise ValueError("Recovery decision and native operation disagree")
     if receipt["choice"] == "remove" and (
-        operation["entity_type"] != "research_content" or operation["action"] != "delete"
+        operation["entity_type"] not in {"research_content", "note"}
+        or operation["action"] != "delete"
     ):
-        raise ValueError("Manual removal receipt must contain its native deletion")
+        raise ValueError("Typed removal receipt must contain its native deletion")
     actual = conn.execute(
         "SELECT sequence FROM paperfact_sync_operations WHERE operation_id=?",
         (request_id,),
@@ -217,6 +218,11 @@ class Decision:
     operation_json: str | None = field(repr=False)
     _seal: str = field(repr=False)
     _original: object = field(default=None, repr=False)
+
+    @property
+    def note_removal(self):
+        receipt = backup._decode(self.receipt_json)
+        return receipt["choice"] == "remove" and receipt["entity_type"] == "note"
 
     @property
     def manual_restore(self):
@@ -443,6 +449,72 @@ def _parent_mapper(conn, observed, source, check):
     return mapped
 
 
+def _note_removal(conn, observed, comparison, request_id, check):
+    """Remove only a compared native note; retained anchors confer no file authority."""
+    from paper_daily import sync_recovery_claim_group as history
+    from paper_daily.sync_content import RICH_NOTE_FIELDS, _local_scope, content_payload
+
+    root = comparison["source"]["operation"]
+    if root["version"] != 2 or root["entity_type"] != "note" or root["action"] != "delete":
+        raise ValueError("Select a recorded native note deletion")
+    with closing(_readonly_connection(observed.source.database)) as old:
+        old.execute("BEGIN")
+        created = history._old(old, root["incarnation"], check)
+    if (created["version"] != 2 or created["action"] != "put"
+            or created["operation_id"] != root["incarnation"]
+            or any(created[key] != root[key] for key in (
+                "workspace_id", "entity_type", "entity_id", "incarnation", "parents"
+            ))):
+        raise ValueError("Note deletion has no exact native creation proof")
+    mapper = _parent_mapper(conn, observed, root, check)
+    parents = [mapper(parent) for parent in root["parents"]]
+    if len(parents) != 1 or parents[0]["kind"] != "paper":
+        raise ValueError("Note removal requires one exact mapped paper lifetime")
+    state = comparison["target"]["entity_state"]
+    current = comparison["target"]["effective_operation"]
+    if (state is None or not state["active"] or current is None
+            or current["version"] != 2 or current["action"] != "put"
+            or current["entity_type"] != "note" or current["entity_id"] != root["entity_id"]
+            or current["incarnation"] != state["incarnation"] or current["parents"] != parents
+            or current["workspace_id"] != observed.binding["workspace_id"]):
+        raise ValueError("Select a proven manual-highlight deletion or active native note deletion")
+    value = current["payload"]
+    if value["paper_id"] != parents[0]["id"]:
+        raise ValueError("Current note differs from its exact mapped paper")
+    mapping = conn.execute(
+        "SELECT local_id,paper_id,created_at FROM research_note_identity WHERE sync_id=?",
+        (root["entity_id"],),
+    ).fetchone()
+    if (mapping is None or type(mapping[0]) is not int or mapping[0] <= 0
+            or mapping[1] != _local_scope(conn, {"kind": "paper", "id": value["paper_id"]})):
+        raise ValueError("Note removal requires its exact native integer identity")
+    row = conn.execute(
+        "SELECT id,paper_id,created_at,kind,page,body,anchor FROM notes WHERE id=? "
+        "AND length(CAST(body AS BLOB))<=? AND (anchor IS NULL OR "
+        "length(CAST(anchor AS BLOB))<=?)", (mapping[0], MAX_BYTES, MAX_BYTES),
+    ).fetchone()
+    if row is None or row["paper_id"] != mapping[1] or row["created_at"] != mapping[2]:
+        raise ValueError("Visible note identity changed outside its native history")
+    marker = conn.execute(
+        "SELECT incarnation,parent_incarnation FROM research_rich_note_projection WHERE sync_id=?",
+        (root["entity_id"],),
+    ).fetchone()
+    if marker is not None and tuple(marker) != (current["incarnation"], parents[0]["incarnation"]):
+        raise ValueError("Current note projection differs from its native history")
+    if set(value) == RICH_NOTE_FIELDS:
+        if marker is None or content_payload(conn, "notes", dict(row)) != value:
+            raise ValueError("Visible positioned note differs from its native history")
+    elif (row["kind"] != "note" or row["page"] is not None
+            or row["anchor"] is not None or row["body"] != value["body"]):
+        raise ValueError("Visible text note differs from its native history")
+    operation = conn._capture_client.new_graph_operation_in(
+        conn, "note", root["entity_id"], {}, action="delete", operation_id=request_id,
+    )
+    if operation["parents"] != parents:
+        raise ValueError("Note removal requires the exact mapped paper lifetime")
+    return canonical_operation(operation)
+
+
 def _manual_removal(conn, observed, comparison, request_id, check):
     """Retire one explicitly compared manual mark; no file/source grant or replay."""
     from paper_daily import sync_recovery_claim_group as history
@@ -575,6 +647,8 @@ def _build(conn, observed, comparison, choice, request_id, check):
     if choice == "keep":
         return None
     if choice == "remove":
+        if source["entity_type"] == "note":
+            return _note_removal(conn, observed, comparison, request_id, check)
         return _manual_removal(conn, observed, comparison, request_id, check)
     if source["version"] != 2 or source["entity_type"] not in KINDS or source["action"] != "put":
         raise ValueError("This content requires its own typed recovery action; retain it pending")
@@ -641,7 +715,7 @@ def _build(conn, observed, comparison, choice, request_id, check):
 
 
 def prepare(observed, change_id, choice, request_id, *, seconds=30, cancelled=lambda: False):
-    """Review typed choices, including confirmed manual deletion; never convert research."""
+    """Review typed choices, including confirmed note/mark deletion; never convert research."""
     _identifier(request_id)
     if not isinstance(choice, str) or choice not in CHOICES:
         raise ValueError("Choose keep, add, replace, restore or typed removal explicitly")

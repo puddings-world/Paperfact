@@ -5447,3 +5447,40 @@ additional worktree was introduced.
 - Evidence-only documentation validation: 58 passed in 4.81s / 13.7s total;
   privacy/Ruff/whitespace passed. Reused unchanged native/critical evidence.
   No new selector count, broad historical run, deployment or stable release.
+
+## 2026-11-15: confirmed native note retirement after authority recovery
+
+- Prior turn made progress: global file-open filter removed and actual Mac
+  three-launch/native acceptance passed. No new installer needed for this scoped
+  checkpoint; delivered candidate e753ad3 does not include the following work.
+- Existing choices.prepare(..., "remove", ...) now accepts recorded v2 note
+  deletions with retained native creation proof, active exact-parent target head,
+  integer identity/creation clock, bounded visible payload and rich projection.
+  Plain and positioned notes use the actual native writer; no source ownership
+  grant, PDF inspection/activation or AI. Existing mark removal stays separate.
+- Reuse one transaction for native deletion, outbox and application receipt;
+  failed/cancelled writes roll back. Same-request retries preserve later native
+  restore/edit, even after deletion reaches an independent native peer. UI uses
+  note-specific en/zh text, default-No confirmation and current-target-lifetime
+  request IDs through the existing worker/controller.
+- Five new collected cases only. With the unchanged arbitrary-note refusal
+  representative, 6 passed in 36.85s pytest / 40.0s total. Final projection guard
+  and existing manual-removal/note-replace representatives: 3 passed in 21.33s /
+  24.5s total (one overlapping case). Privacy/Ruff green under two-core/25%-CPU/
+  300s limits. Daily critical stays 14; release stays 35 selectors.
+- First fixture run compared an unrelated legacy two-field note creation clock
+  that its wire payload never carries. Corrected that new fixture to the full
+  native timestamp-carrying note payload; retained exact peer-row equality and
+  both plain/positioned deletion cases. Not a global legacy-clock migration fix.
+- Reused typed-history/native-receipt patterns; no new global skill. Other
+  scientific/parent deletion, legacy mapping and installed/hosted acceptance
+  stay open. No historical matrix, real accounts, owner data or native rebuild.
+- Critical: 14 passed in 8.21s / 11.5s total; privacy/Ruff/whitespace green.
+  Final review caught terminal encoding replacing new Chinese labels with
+  question marks. Replaced them with ASCII Unicode escapes and strengthened
+  the UI test to assert the actual Chinese label/wording, not internal text
+  aliases only: 1 passed in 5.62s / 8.9s total. Existing critical/source-control
+  evidence reused after this text-only correction; no unchanged whole rerun.
+- Final docs gate: 58 passed in 1.87s / 5.1s total, privacy/Ruff/whitespace
+  passed. Checkpoint is locally verified only; source/native e753ad3 acceptance
+  remains scoped to its exact artifact and does not cover this new note action.

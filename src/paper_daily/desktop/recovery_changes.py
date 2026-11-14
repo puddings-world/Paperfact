@@ -588,6 +588,39 @@ TEXT["zh-TW"].update(
 
 
 TEXT["en"].update(
+    remove_note="Remove current note",
+    ready_remove_note=(
+        "Review the current note on the right, then confirm removal of only that note. "
+        "Its history, PDF, source anchors and other research remain retained."
+    ),
+    confirm_remove_note=(
+        "Remove only the currently shown note? Its history and source anchors stay retained; "
+        "PDFs and other notes remain. This deletion can synchronize from the restored workspace."
+    ),
+)
+TEXT["zh-TW"].update(
+    remove_note=(
+        "\u79fb\u9664\u76ee\u524d\u7b46\u8a18"
+    ),
+    ready_remove_note=(
+        "\u8acb\u6838\u5c0d\u53f3\u5074\u76ee\u524d\u7684\u7b46\u8a18\uff0c\u518d"
+        "\u78ba\u8a8d\u53ea\u79fb\u9664\u9019\u4e00\u5247\uff1b\u6b77\u53f2\u3001"
+        "\u539f\u6587\u3001\u4f86\u6e90\u5b9a\u4f4d\u8207\u5176\u4ed6\u7814\u7a76"
+        "\u5747\u4fdd\u7559\u3002"
+    ),
+    confirm_remove_note=(
+        "\u53ea\u79fb\u9664\u76ee\u524d\u986f\u793a\u7684\u9019\u4e00\u5247\u7b46"
+        "\u8a18\uff1f\u6b77\u53f2\u8207\u4f86\u6e90\u5b9a\u4f4d\u4ecd\u4fdd\u7559"
+        "\uff0cPDF \u8207\u5176\u4ed6\u7b46\u8a18\u4e0d\u8b8a"
+        "\u3002\u6b64\u522a\u9664\u53ef\u7531\u9084\u539f\u5de5\u4f5c\u5340\u540c"
+        "\u6b65\u81f3\u5176\u4ed6\u88dd\u7f6e\u3002"
+    ),
+)
+
+
+
+
+TEXT["en"].update(
     restore_manual=(
         "Restore original manual-highlight identity"
     ),
@@ -780,6 +813,8 @@ class RecoveryChanges(QWidget):
                        if plan.with_original else "ready_manual")
             if action == "restore" and not already and getattr(plan, "manual_restore", False):
                 key = "ready_restore_manual"
+            if action == "remove" and not already and getattr(plan, "note_removal", False):
+                key = "ready_remove_note"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -976,7 +1011,7 @@ class RecoveryChanges(QWidget):
                 "restore" if not current["active"] or current["parents"] != parents else "replace"
             )
             options.extend(("add", "replace", "restore"))
-        if (operation["version"] == 2 and operation["entity_type"] == "research_content"
+        if (operation["version"] == 2 and operation["entity_type"] in {"research_content", "note"}
                 and operation["action"] == "delete"):
             options.append("remove")
             current_action = "remove"
@@ -1264,7 +1299,8 @@ class RecoveryChanges(QWidget):
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
-                    self.t["confirm_remove"] if action == "remove" else
+                    self.t["confirm_remove_note" if getattr(plan, "note_removal", False)
+                           else "confirm_remove"] if action == "remove" else
                     self.t["confirm_restore_manual"] if action == "restore" and getattr(
                         plan, "manual_restore", False
                     ) else
@@ -1414,6 +1450,10 @@ class RecoveryChanges(QWidget):
                         self.action_plans[action][0], "manual_restore", False
                     ):
                         label = "restore_manual"
+                    if action == "remove" and getattr(
+                        self.action_plans[action][0], "note_removal", False
+                    ):
+                        label = "remove_note"
                     self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))

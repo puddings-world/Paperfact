@@ -278,6 +278,8 @@ The recovery review compares saved and current research before confirmation:
 
 - Keep or restore supported list/reading state and copy notes or manual highlights
   with their verified original, preserving existing selections and later edits.
+- Confirm a recorded note deletion after comparing its current text and position;
+  native history and PDFs stay, and retry preserves later restores.
 - Confirm a recorded manual-highlight deletion after comparing the current mark;
   its native history stays, and retries preserve a later restored mark. Restore a
   known deleted mark under its original identity after checking the exact owned

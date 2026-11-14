@@ -437,8 +437,8 @@ whose retained creation operation proves the exact manual feature, key, entity,
 workspace, incarnation and paper parents. A tombstone ID alone is insufficient.
 The destination must have an active native manual mark with the exact mapped
 paper lifetime, matching effective operation, projection marker and visible row.
-Untracked edits, unknown source history, unrelated note/AI deletions and stale
-comparisons refuse. Review both versions again after a refusal.
+Untracked edits, unknown source history, AI deletions and stale comparisons
+refuse. Notes use their separate typed removal below; they never become highlights. Review both versions again after a refusal.
 
 The action writes a new destination-native deletion and payload-bound receipt
 in one transaction. A receipt failure rolls back the mark, outbox and decision.
@@ -449,6 +449,31 @@ sync. A successful retry returns the saved decision and preserves a later
 restore/edit; a fresh UI request is scoped to the current target lifetime.
 History supports subsequent explicit recovery. No arbitrary paper/content
 retirement or legacy-source mapping is introduced by this action.
+
+## Confirmed note removal
+
+Compare a recorded version-2 native note deletion and choose **Remove current
+note**, then confirm (default No). Both ordinary text and positioned/rich notes
+are supported. An absent or retired note has no removal action. Review the
+current note, not just the old tombstone; unsaved drafts are outside this review.
+
+`sync_recovery_choices.prepare(observed, change_id, "remove", request_id, *,
+seconds=30, cancelled=...)` returns the same sealed `Decision`. Its
+`note_removal` property selects note-specific English/Traditional Chinese copy.
+The retained source creation must prove the note identity, workspace, incarnation
+and paper parents. The target must have an active native head, exact mapped paper
+lifetime and integer-note identity, matching creation date, bounded visible data
+and, for rich notes, a matching native projection. Untracked edits, missing
+history, stale comparisons and inactive/foreign-parent targets refuse.
+
+The new native deletion, outbox entry and payload-bound decision receipt commit
+atomically. Receipt failure or cancellation rolls everything back. Normal sync
+propagates the deletion to a peer. Same-request retry returns its receipt without
+erasing a later restore/edit; the UI derives a fresh ID for a changed target
+lifetime. History retains the prior body and source anchors, and PDFs and other
+notes remain. No original verification/grant, reader activation or AI is needed;
+`originals_verified` remains false. This does not implement arbitrary scientific
+or parent deletion, implicit legacy migration, or physical-device acceptance.
 
 ## Exact reading-link context: comparison prerequisite
 
