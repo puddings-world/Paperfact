@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Exact-original note recovery verified locally; remaining compound recovery and installed-device/hosted acceptance |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Atomic note-plus-original recovery verified locally; remaining scientific groups and installed-device/hosted acceptance |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

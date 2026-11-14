@@ -96,7 +96,7 @@ Old workspace/history remains intact; old envelopes are not blindly replayed.
 |---|---|
 | `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.details(change_id, ...)` retain exact source identity |
 | `sync_recovery_target.observe(index, target_database, *, seconds=30, cancelled=...)` | Prove fresh target history/binding; `.compare(change_id, ...)` exposes source/current state without writing |
-| `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, seconds=30, cancelled=...)` | Explicit note copy with a new native identity; positioned notes require exact owned PDF/selection verification; `.apply(...)` commits atomically |
+| `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, with_original=False, seconds=30, cancelled=...)` | Explicit note copy with a new native identity; positioned notes require exact PDF/selection verification; `with_original=True` includes the verified old-device original in the same native transaction |
 | `sync_recovery_choices.prepare(observation, change_id, choice, request_id, *, seconds=30, cancelled=...)` | Explicit keep/add/replace/restore for supported metadata, unanchored notes and order; `.apply(...)` is idempotent |
 
 Saved decisions are checked against the exact source operation/fingerprint,
@@ -105,7 +105,7 @@ corrupt receipt fails without writes, including keep-current (which emits no
 research operation). Native research, outbox and decision receipt commit together;
 interruption rolls them back. Cancel/stale bindings never authorize another target.
 
-Legacy/hashless positions, absent original artifacts, compound scientific content, arbitrary deletion, unproved parent changes, complete editable recovery UX, cloud recovery and installed-device
+Legacy/hashless positions, unavailable original bytes, compound scientific content, arbitrary deletion, unproved parent changes, complete editable recovery UX, cloud recovery and installed-device
 acceptance remain open. A successful subset does not mark recovery complete.
 
 
@@ -208,7 +208,10 @@ closed rather than being presented as a new unsupported action.
 
 Positioned note copies use the same `sync_recovery_note_copy.prepare(...)` API.
 The target must own the exact hash through an immutable original artifact or
-its desired primary PDF. Geometry and recorded selected words are verified;
+its desired primary PDF. Explicit `with_original=True` also supports an original
+missing from the target/backup: inspect the old device's owned PDF first, then
+stage bytes off-lock and publish original ownership plus note in one transaction.
+Geometry and recorded selected words are verified;
 private commentary is not compared as a quotation. Verification repeats inside
 the write transaction and byte changes before commit roll back the whole copy.
 Only a successful committed receipt can skip later source availability checks.

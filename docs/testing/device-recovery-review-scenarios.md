@@ -245,3 +245,67 @@ budget. Counts overlap the earlier 23-case selection and must not be summed.
 No exhaustive historical, release or physical-device pass is claimed. The change
 reuses the existing exact-source and native-transaction skill boundaries; no new
 global rule or duplicate skill was introduced.
+
+
+## Atomic note plus post-backup original (2026-11-14)
+
+The note-copy API now accepts explicit `with_original=True`. It validates the
+source note's current native paper lifetime and owned exact-original bytes; the
+source does not need the desktop capture adapter merely to prove its projection.
+The destination still requires its actual native writer and registered file store.
+Comparison only reads and plans. Confirmation stages verified bytes using the
+existing `prepare_source`, then calls `publish_source_in` inside the note's write
+transaction. No new replay format, model call, primary-PDF switch or cloud service.
+
+`tests/test_sync_recovery_note_original_group.py` covers five executed cases:
+
+| Requirement | Observable assertion |
+|---|---|
+| Post-backup PDF plus note | Two typed native operations commit together; exact note/PDF reach an independently joined native client; old database stays unchanged |
+| Failure after the original write | Simulated failure during the second child leaves neither ownership nor note/outbox; exact retry creates one group |
+| Cancellation after the original write | Both children and journal records roll back; retry creates one group |
+| Source mutation and sealed choice | Changed old PDF or forged include-original flag cannot publish research; exact-byte repair permits retry |
+| Desktop review/confirmation | Clear note-plus-original label, read-only comparison, cancelled confirmation preserves cache/research, repeated confirmation saves one group |
+
+The first case also edits the copied note and explicitly deletes the original:
+committed retry preserves both later decisions; a new copy request cannot restore
+the retired original. Byte staging may leave an unowned cache after a cancelled
+write; it cannot grant graph ownership or change the active PDF.
+
+Initial five-case selection passed **5 in 28.61s pytest / 31.7s including privacy
+and Ruff**, under the Windows 25% CPU/two-core/300-second governor. The desktop
+case was then strengthened to compare cache/research before comparison as well
+as before cancellation; its final result is recorded with integration evidence.
+Initial failures corrected source-side capture assumptions, an import location
+and a fixture using another review's scoped change ID. Existing assertions remain.
+
+This closes the original-plus-positioned-note dependency group only. Deep
+analysis/claim/highlight/Lineage/deck groups, unavailable historical sources,
+explicit original restoration, hosted deployment and installed/physical-device
+acceptance remain separate required work. No historical full or release run.
+
+
+Integration passed **33 cases in 74.58s pytest / 78.1s including checks**:
+14 curated critical journeys, all six owned-original note cases, the strengthened
+compound UI case, two plain-note retry/parent-proof cases, the existing plain-copy
+UI journey and nine usage-document cases. No exhaustive suite was started.
+
+Source inspection also exposed the missing-primary boundary: a desired primary
+manifest can exist before PDF bytes arrive. Its filesystem failure now offers the
+same verified note-plus-original action. The strengthened actual UI fixture uses
+that state, confirms comparison/cancel leave both cache and research unchanged,
+and saves exactly the pre-existing document operation plus two recovery children.
+Final three plain/positioned/compound desktop journeys passed **3 in 22.07s pytest /
+25.6s including checks**. The last source-input fences explicitly recheck target
+identity/binding after old-source inspection and before byte staging.
+
+This is an application of the existing typed-composition/byte-proof skill, not a
+new portable rule. No duplicated skill, global installation, account access,
+research upload or external deployment was introduced.
+
+
+The final destination-fence change and pending-primary UI fixture passed **14 cases
+in 42.26s pytest / 45.7s including checks**: all five original-plus-note cases and
+nine usage-document cases. Earlier unaffected critical/owned-original/plain-copy
+evidence is reused, not rerun by habit or summed. No production, OS-store or
+physical-device acceptance is inferred from the fixture service.

@@ -126,6 +126,15 @@ TEXT = {
 
 
 TEXT["en"].update({
+    "copy_original": "Copy note and original",
+    "ready_original": (
+        "This note needs its original PDF. Copy the note and verified original together; "
+        "existing notes and the active PDF stay unchanged. Destination sync can upload both."
+    ),
+    "confirm_original": (
+        "Copy this note and its verified original PDF into the selected restored workspace? "
+        "Both are queued for destination sync. Existing notes and the active PDF stay unchanged."
+    ),
     "action": "Action", "review": "Compare only", "keep": "Keep current content",
     "add": "Add old content", "replace": "Use old version", "restore": "Restore old content",
     "apply": "Apply selected action", "retry_action": "Retry selected action",
@@ -145,6 +154,15 @@ TEXT["en"].update({
                     "Earlier history is retained. Check both content panes before continuing.",
 })
 TEXT["zh-TW"].update({
+    "copy_original": "另存筆記與原文",
+    "ready_original": (
+        "這筆筆記需要原文 PDF。可一起另存筆記與核實的原文；"
+        "既有筆記與目前 PDF 保持不變。目標工作區可同步兩者。"
+    ),
+    "confirm_original": (
+        "確定將這筆筆記與核實的原文 PDF 一起另存到選定的還原工作區？"
+        "兩者都會排入目標工作區同步；既有筆記與目前 PDF 保持不變。"
+    ),
     "action": "處理方式", "review": "只比較",
     "keep": "保留目前內容", "add": "新增舊內容",
     "replace": "使用舊版本", "restore": "還原舊內容",
@@ -285,7 +303,10 @@ class RecoveryChanges(QWidget):
         self.copy_button.setEnabled(bool(active and self.observed and self.plan))
         action = self.action_select.currentData()
         key = "retry" if action == "copy" else "retry_action"
-        self.copy_button.setText(self.t[key if self.failed_copy else action or "apply"])
+        label = "copy_original" if action == "copy" and getattr(
+            self.plan, "with_original", False
+        ) else action or "apply"
+        self.copy_button.setText(self.t[key if self.failed_copy else label])
         self.action_select.setEnabled(bool(active and self.observed and self.action_plans))
         self.action_row.setVisible(bool(self.observed and self.action_plans))
 
@@ -301,6 +322,8 @@ class RecoveryChanges(QWidget):
             key = ("already" if action == "copy" else "already_action") if already else (
                 "ready" if action == "copy" else "ready_action"
             )
+            if action == "copy" and not already and getattr(plan, "with_original", False):
+                key = "ready_original"
             self.notice.setText(self.t[key])
         self.controls(not self.owner.busy and not self.owner._invalid)
 
@@ -447,12 +470,20 @@ class RecoveryChanges(QWidget):
                     )
                 try:
                     plan = note_copy.prepare(observed, selected, request_id, cancelled=stopped)
-                except ValueError:
-                    # Missing parent proof disables copying, not read-only review.
+                except (OSError, ValueError):
+                    # Missing parent/source proof keeps comparison readable.
                     # A previously saved request must still validate its receipt.
                     observed._check(backup._guard(30, stopped))
                     if already:
                         raise
+                    if operation["payload"].get("anchor") is not None:
+                        try:
+                            plan = note_copy.prepare(
+                                observed, selected, request_id, with_original=True,
+                                cancelled=stopped,
+                            )
+                        except (OSError, ValueError):
+                            observed._check(backup._guard(30, stopped))
             plans = self._metadata_plans(observed, selected, comparison, stopped)
             return observed, selected, comparison, plan, already, plans
 
@@ -510,12 +541,14 @@ class RecoveryChanges(QWidget):
         if self._confirming or not self.copy_button.isEnabled():
             return False
         plan, action = self.plan, self.action_select.currentData()
-        if action in {"replace", "restore"}:
+        include_original = action == "copy" and getattr(plan, "with_original", False)
+        if action in {"replace", "restore"} or include_original:
             self._confirming = True
             self.controls(False)
             try:
                 answer = QMessageBox.question(
                     self, self.t["confirm_title"],
+                    self.t["confirm_original"] if include_original else
                     self.t["confirm_body"].format(action=self.t[action]),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No,
@@ -641,13 +674,18 @@ class RecoveryChanges(QWidget):
                 self.action_select.clear()
                 self.action_select.addItem(self.t["review"], "")
                 for action in self.action_plans:
-                    self.action_select.addItem(self.t[action], action)
+                    label = "copy_original" if action == "copy" and getattr(
+                        plan, "with_original", False
+                    ) else action
+                    self.action_select.addItem(self.t[label], action)
                 if plan is not None:
                     self.action_select.setCurrentIndex(self.action_select.findData("copy"))
                 self.action_select.blockSignals(False)
                 self.action_changed(self.action_select.currentIndex())
                 self.notice.setText(
-                    self.t["already" if already else "ready" if plan is not None else
+                    self.t["already" if already else "ready_original" if getattr(
+                        plan, "with_original", False
+                    ) else "ready" if plan is not None else
                            "ready_action" if len(plans) > 1 else "unsupported"]
                 )
                 self.old.setFocus()

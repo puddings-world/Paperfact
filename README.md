@@ -262,9 +262,10 @@ Internal per-change recovery APIs are documented in the
 [recovery guide](docs/device-recovery-review.md#per-change-recovery-core).
 Desktop comparison offers explicit keep/add/replace/restore for supported
 content and copy-as-new notes. Positioned notes keep their page, passage and
-source hash after exact-original verification in the target workspace;
+source hash after exact-original verification. If its PDF is missing there,
+explicitly copy the note and the old device's verified original atomically;
 [see the recovery workflow](docs/sync-device-management.md#recover-a-note-tied-to-a-pdf-position).
-Legacy source mapping, absent originals, compound recovery and hosted/device
+Legacy source mapping, unavailable originals, scientific-group recovery and hosted/device
 acceptance remain separate gates.
 
 Recorded recovery decisions can preserve supported list/member/reading/order

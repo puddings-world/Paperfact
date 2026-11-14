@@ -324,12 +324,18 @@ and no native credential store, private research or cloud service was accessed.
 In the old-device change review, select the separately restored workspace and
 compare the note. Copy becomes available when its parent mapping and exact
 original PDF can be verified there. Download the paper's offline files in that
-workspace first if its original is missing. The same copy button preserves page,
+workspace first if its original is missing. If the old device has the exact
+owned PDF, comparison instead offers **Copy note and original** with explicit
+confirmation. Comparison creates no cache or research writes; confirmation stages
+verified bytes and commits original ownership plus note together. A failed or
+cancelled write rolls both back; staged unowned cache bytes can remain for retry.
+The same copy button preserves page,
 selected passage and source hash; it does not move or replace existing notes.
 Confirmation verifies again, writes locally and queues destination sync. It makes
 no AI call. A repeated confirmation cannot create another copy.
 
 Page-only legacy notes with no recorded original hash stay pending for explicit
-source mapping; the current PDF is not guessed as a historical source. Missing
-original artifacts and compound scientific groups need separate recovery.
+source mapping; the current PDF is not guessed as a historical source. Originals
+unavailable on both devices and compound scientific groups need separate recovery.
+Explicitly deleted/retired originals are not resurrected by this copy action.
 See [behavior evidence and limits](testing/device-recovery-review-scenarios.md#exact-original-positioned-note-recovery-2026-11-14).

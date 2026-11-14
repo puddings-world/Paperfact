@@ -1,7 +1,7 @@
 """Explicit copy-as-new note recovery through the native target transaction.
 
 Old operation envelopes are immutable review input, never re-keyed for replay.
-Positioned notes require owned exact-original bytes; compound recovery remains separate.
+Positioned notes use exact originals; scientific-group recovery remains separate.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ _KEY = secrets.token_bytes(32)
 FORMAT = "paperfact.recovery-note-copy.v1"
 
 
-def _sign(observed, change_id, operation_json):
-    message = candidates._json([observed._seal, change_id, operation_json])
+def _sign(observed, change_id, operation_json, with_original=False):
+    message = candidates._json([observed._seal, change_id, operation_json, with_original])
     return hmac.new(_KEY, message.encode("utf-8"), "sha256").hexdigest()
 
 
@@ -81,6 +81,9 @@ def _original(conn, operation, check):
 
     check()
     paper, digest = payload["paper_id"], anchor["document_hash"]
+    parent = operation["parents"][0]
+    if not _paper_current(conn, dict(paper_id=paper, parent_incarnation=parent["incarnation"])):
+        raise ValueError("The note's original belongs to another paper lifetime")
     # Immutable retained originals may differ from the currently active PDF.
     source = sync_source_files.inspectable(conn, paper, digest)
     if source is None:
@@ -129,23 +132,90 @@ def _original_current(proof):
             raise ValueError("The note's original changed before recovery committed")
 
 
+def _source_input(observed, source, operation, check):
+    """Read the old note's owned original; never infer it from an untrusted path."""
+    from paper_daily.sync_source_files import _inspection_paths
+
+    with closing(_readonly_connection(observed.source.database)) as old:
+        old.execute("BEGIN")
+        proof = _original(old, source, check)
+        if proof is None:
+            raise ValueError("Only positioned notes can include an original")
+    # Inspection may take time; fence destination replacement before staging bytes.
+    _auth(observed, check)
+    observed._check(check)
+    with closing(_readonly_connection(observed.database)) as conn:
+        conn.execute("BEGIN")
+        _binding_in(conn, observed)
+        registered = _inspection_paths(conn)
+        if registered is None:
+            raise ValueError("The restored workspace has no registered original storage")
+        client = conn._capture_client
+        from paper_daily.sync_files import file_id
+        from paper_daily.sync_source_files import FEATURE
+
+        identity = file_id(source["payload"]["paper_id"], FEATURE,
+                           source["payload"]["anchor"]["document_hash"])
+        current = client._optimistic_graph(conn)[0].get(("research_file", identity))
+        if current and (not current["active"] or current["parents"] != operation["parents"]):
+            raise ValueError("Deleted or retired original requires explicit source restoration")
+    _original_current(proof)
+    observed.source._check(check)
+    observed._check(check)
+    return proof, registered, client
+
+
+def _stage_original(plan, operation, check):
+    from pathlib import Path
+
+    from paper_daily.sync_blobs import BlobStore
+    from paper_daily.sync_source_files import prepare_source
+
+    source = plan.observed.source.details(plan.change_id)["operation"]
+    proof, (store, root), client = _source_input(plan.observed, source, operation, check)
+    request = str(uuid5(
+        NAMESPACE_URL, "paperfact:recovery-note-original:" + operation["operation_id"]
+    ))
+    staged = prepare_source(
+        client, operation["payload"]["paper_id"], proof[0],
+        document_hash=operation["payload"]["anchor"]["document_hash"],
+        parent_incarnation=operation["parents"][0]["incarnation"],
+        store=BlobStore(store.root), version_root=Path(root), request_id=request,
+    )
+    _original_current(proof)
+    plan.observed.source._check(check)
+    check()
+    return staged
+
+
 @dataclass(frozen=True)
 class NoteCopy:
     observed: object = field(repr=False)
     change_id: str
     operation_json: str = field(repr=False)
     _seal: str = field(repr=False)
+    with_original: bool = False
 
     def apply(self, *, seconds=30, cancelled=lambda: False):
         """Commit new research and its retry receipt/outbox together; no network."""
         check = backup._guard(seconds, cancelled)
         _auth(self.observed, check)
-        expected = _sign(self.observed, self.change_id, self.operation_json)
+        expected = _sign(self.observed, self.change_id, self.operation_json, self.with_original)
         if not hmac.compare_digest(expected, self._seal):
             raise ValueError("Use the original prepared note-copy decision")
         operation = backup._decode(self.operation_json)
         canonical_operation(operation)
         path = self.observed.database
+        staged = None
+        if self.with_original:
+            with closing(_readonly_connection(path)) as prior:
+                saved = prior.execute(
+                    "SELECT 1 FROM paperfact_sync_operations WHERE operation_id=?",
+                    (operation["operation_id"],),
+                ).fetchone()
+            if saved is None:
+                self.observed._check(check)
+                staged = _stage_original(self, operation, check)
         # mode=rw cannot create a missing/replaced database directory.
         with closing(
             sqlite3.connect(
@@ -169,6 +239,12 @@ class NoteCopy:
                 if previous is None:
                     # Hold the SQLite writer lock before the final preview fence.
                     self.observed._check(check)
+                    if self.with_original:
+                        from paper_daily.sync_source_files import publish_source_in
+
+                        if staged is None:
+                            raise ValueError("The original needs its verified staging proof")
+                        publish_source_in(conn, client, staged)
                 proof = _original(conn, operation, check) if previous is None else None
                 receipt = client.journal.apply_in(conn, operation, client.writer)
                 _original_current(proof)
@@ -196,8 +272,12 @@ class NoteCopy:
         )
 
 
-def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: False):
-    """Prepare an explicit copy of a v2 note; never silently replace or restore."""
+def prepare(
+    observed, change_id, request_id, *, with_original=False, seconds=30, cancelled=lambda: False,
+):
+    """Prepare an explicit v2 note copy, optionally with its verified original."""
+    if type(with_original) is not bool:
+        raise ValueError("Choose explicitly whether to include the original")
     _identifier(request_id)
     check = backup._guard(seconds, cancelled)
     _auth(observed, check)
@@ -277,6 +357,10 @@ def prepare(observed, change_id, request_id, *, seconds=30, cancelled=lambda: Fa
             if operation["base_revision"] or operation["depends_on"] is not None:
                 raise ValueError("Recovery copy identity already exists")
             encoded = canonical_operation(operation)
-            _original(conn, operation, check)
+            if with_original:
+                _source_input(observed, source, operation, check)
+            else:
+                _original(conn, operation, check)
     observed._check(check)
-    return NoteCopy(observed, change_id, encoded, _sign(observed, change_id, encoded))
+    return NoteCopy(observed, change_id, encoded,
+                    _sign(observed, change_id, encoded, with_original), with_original)
