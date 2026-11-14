@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 from test_sync_device_recovery import dump
 from test_sync_files import PAPER, paper_payload
+from test_sync_recovery_note_copy import capture_recovered_authority
 from test_sync_recovery_target import attached
 from test_sync_recovery_target import codec as codec
 from test_sync_recovery_target import pair as pair
@@ -379,3 +380,232 @@ def test_corrupt_saved_provenance_cannot_be_reused_as_a_recovery_decision(popula
                 "UPDATE integration_operations SET result=? WHERE id=?", (original, request)
             )
     assert plan.apply()["request_reused"]
+
+
+def new_list_membership(data):
+    old = data[0]
+    root = old.new_graph_operation(
+        "list", "new-recovery-list", dict(name="New research list", note=None)
+    )
+    old.save(root)
+    member = membership_id(root["entity_id"], PAPER)
+    child = old.new_graph_operation(
+        "membership",
+        member,
+        dict(
+            list_id=root["entity_id"],
+            paper_id=PAPER,
+            citation=None,
+            added_at=STAMP,
+        ),
+    )
+    old.save(child)
+    return root, child
+
+
+def recover(data, operation, choice="add"):
+    observed, change = select(data, operation)
+    return choices.prepare(observed, change, choice, str(uuid4())).apply()
+
+
+def test_receipt_proven_new_list_preserves_membership_reading_and_both_orders(
+    request, monkeypatch, tmp_path_factory
+):
+    hosted = capture_recovered_authority(monkeypatch)
+    populated = request.getfixturevalue("populated")
+    old, _source, _change, path, _operation = populated
+    root, child = new_list_membership(populated)
+    reading = old.new_graph_operation(
+        "reading_state",
+        child["entity_id"],
+        dict(
+            list_id=root["entity_id"],
+            paper_id=PAPER,
+            state="read",
+            delivered_at=None,
+            read_at=STAMP,
+        ),
+    )
+    old.save(reading)
+    order = old.new_order_operation("list_order", root["entity_id"], [child["entity_id"]])
+    old.save(order)
+    lists = old.new_order_operation(
+        "workspace_list_order", "workspace-lists", [root["entity_id"], "backed-list", "second-list"]
+    )
+    old.save(lists)
+    before = dump(old.journal.path)
+    recover(populated, root)
+    for operation, choice in ((child, "add"), (reading, "add"), (order, "add"), (lists, "replace")):
+        assert recover(populated, operation, choice)["applied"]
+    pending = attached(path).journal.pending()
+    assert len(pending) == 5 and dump(old.journal.path) == before
+    assert [op["entity_type"] for op in pending] == [
+        "list",
+        "membership",
+        "reading_state",
+        "list_order",
+        "workspace_list_order",
+    ]
+    assert pending[1]["parents"] != child["parents"]
+    assert pending[1]["payload"] == child["payload"]
+    assert pending[2]["payload"] == reading["payload"]
+    assert pending[3]["payload"]["items"][0]["id"] == child["entity_id"]
+    assert pending[3]["payload"]["items"][0]["incarnation"] == pending[1]["incarnation"]
+    assert pending[3]["payload"]["items"] != order["payload"]["items"]
+    assert pending[4]["payload"]["items"][0]["incarnation"] == pending[0]["incarnation"]
+    with closing(_readonly_connection(path)) as conn:
+        row = conn.execute(
+            "SELECT l.name FROM lists l JOIN list_papers p ON p.list_id=l.id WHERE l.id=?",
+            (root["entity_id"],),
+        ).fetchone()
+        assert row[0] == "New research list"
+    from test_workspace_sync import Native
+
+    from paper_daily import sync_bootstrap
+    from paper_daily.workspace_service import Ticket
+    from paper_daily.workspace_sync import SyncSession
+
+    service = hosted["service"]
+    synced = attached(path).sync_once(service, hosted["token"])
+    assert synced["pending"] == synced["conflicts"] == 0
+    token = service.enroll("fresh-research", "hierarchy-peer")
+    session = SyncSession(path, transport_factory=lambda url: Native(url, service, []))
+    destination = tmp_path_factory.mktemp("recovery-hierarchy-peer") / "workspace"
+    session.connect(
+        "https://recovery.fixture.invalid", "fresh-research", "hierarchy-peer", token, Ticket()
+    )
+    try:
+        assert sync_bootstrap.join(session, destination, Ticket())["state"] == "metadata_ready"
+    finally:
+        session.disconnect()
+    peer = attached(destination / "papers.db")
+    assert peer.journal.pending() == []
+    with closing(_readonly_connection(peer.journal.path)) as conn:
+        row = conn.execute(
+            "SELECT l.name,p.state,p.read_at,p.position FROM lists l "
+            "JOIN list_papers p ON p.list_id=l.id WHERE l.id=?",
+            (root["entity_id"],),
+        ).fetchone()
+        assert tuple(row) == ("New research list", "read", STAMP, 0)
+        raw = conn.execute(
+            "SELECT operation FROM paperfact_sync_heads "
+            "WHERE entity_type='workspace_list_order' AND entity_id='workspace-lists'"
+        ).fetchone()[0]
+        received_order = json.loads(raw)["payload"]["items"]
+        assert [item["id"] for item in received_order] == [
+            root["entity_id"],
+            "backed-list",
+            "second-list",
+        ]
+        assert received_order[0]["incarnation"] == pending[0]["incarnation"]
+    assert dump(old.journal.path) == before
+
+
+@pytest.mark.parametrize("damage", ["unrecorded", "corrupt_receipt", "recreated", "receipt_budget"])
+def test_parent_mapping_requires_valid_receipt_and_current_exact_lifetime(
+    populated, damage, monkeypatch
+):
+    _old, _source, _change, path, _operation = populated
+    root, child = new_list_membership(populated)
+    client = attached(path)
+    if damage == "unrecorded":
+        client.save(client.new_graph_operation("list", root["entity_id"], root["payload"]))
+    else:
+        result = recover(populated, root)
+        if damage == "corrupt_receipt":
+            with closing(sqlite3.connect(path)) as conn, conn:
+                row = conn.execute(
+                    "SELECT result FROM integration_operations WHERE id=?", (result["request_id"],)
+                ).fetchone()[0]
+                receipt = json.loads(row)
+                receipt["source_fingerprint"] = "0" * 64
+                conn.execute(
+                    "UPDATE integration_operations SET result=? WHERE id=?",
+                    (
+                        json.dumps(receipt, sort_keys=True, separators=(",", ":")),
+                        result["request_id"],
+                    ),
+                )
+        elif damage == "receipt_budget":
+            monkeypatch.setattr(choices, "MAX_RECEIPT", 1)
+        else:
+            client.save(client.new_graph_operation("list", root["entity_id"], {}, action="delete"))
+            client.save(
+                client.new_graph_operation("list", root["entity_id"], root["payload"], restore=True)
+            )
+    observed, change = select(populated, child)
+    before = dump(path)
+    with pytest.raises(ValueError):
+        choices.prepare(observed, change, "add", str(uuid4()))
+    assert dump(path) == before
+
+
+def test_parent_proof_is_rechecked_at_apply_and_refresh_preserves_later_root_edit(populated):
+    _old, _source, _change, path, _operation = populated
+    root, child = new_list_membership(populated)
+    recover(populated, root)
+    observed, change = select(populated, child)
+    decision = choices.prepare(observed, change, "add", str(uuid4()))
+    client = attached(path)
+    client.save(
+        client.new_graph_operation(
+            "list", root["entity_id"], dict(name="Later target name", note=None)
+        )
+    )
+    before = dump(path)
+    with pytest.raises(ValueError, match="target changed"):
+        decision.apply()
+    assert dump(path) == before
+    assert recover(populated, child)["applied"]
+    with closing(_readonly_connection(path)) as conn:
+        row = conn.execute("SELECT name FROM lists WHERE id=?", (root["entity_id"],)).fetchone()
+        assert row[0] == "Later target name"
+
+
+def test_reusing_old_incarnation_without_a_recovery_receipt_does_not_prove_parent(populated):
+    _old, _source, _change, path, _operation = populated
+    root, child = new_list_membership(populated)
+    client = attached(path)
+    client.save(
+        client.new_graph_operation(
+            "list", root["entity_id"], root["payload"], operation_id=root["incarnation"]
+        )
+    )
+    observed, change = select(populated, child)
+    before = dump(path)
+    with pytest.raises(ValueError):
+        choices.prepare(observed, change, "add", str(uuid4()))
+    assert dump(path) == before
+
+
+def test_explicit_root_restore_preserves_historical_proofs_for_child_restore(populated):
+    old, _source, _change, path, _operation = populated
+    root, child = new_list_membership(populated)
+    reading = old.new_graph_operation(
+        "reading_state",
+        child["entity_id"],
+        dict(
+            list_id=root["entity_id"],
+            paper_id=PAPER,
+            state="read",
+            delivered_at=None,
+            read_at=STAMP,
+        ),
+    )
+    old.save(reading)
+    order = old.new_order_operation("list_order", root["entity_id"], [child["entity_id"]])
+    old.save(order)
+    before = dump(old.journal.path)
+    operations = (root, child, reading, order)
+    for operation in operations:
+        assert recover(populated, operation)["applied"]
+    client = attached(path)
+    client.save(client.new_graph_operation("list", root["entity_id"], {}, action="delete"))
+    for operation in operations:
+        assert recover(populated, operation, "restore")["applied"]
+    assert len(client.journal.pending()) == 9 and dump(old.journal.path) == before
+    with closing(_readonly_connection(path)) as conn:
+        row = conn.execute(
+            "SELECT state,read_at FROM list_papers WHERE list_id=?", (root["entity_id"],)
+        ).fetchone()
+        assert tuple(row) == ("read", STAMP)

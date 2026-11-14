@@ -247,3 +247,6 @@ Internal per-change recovery APIs are documented in the
 Desktop comparison offers explicit keep/add/replace/restore for supported
 content, plus unanchored-note copy. Original-bound/compound recovery and
 hosted/device acceptance remain separate gates.
+
+Recorded recovery decisions can preserve supported list/member/reading/order
+links across restored lifetimes; see the [recovery workflow](docs/device-recovery-review.md#recover-related-lists-without-losing-their-links).

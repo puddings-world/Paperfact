@@ -222,17 +222,9 @@ def test_rapid_parallel_confirmation_creates_exactly_one_note(prepared):
     assert bodies(path) == ["Backed up note", "Old device's unsent revision"]
 
 
-def test_copy_syncs_through_recovered_authority_to_another_native_client(
-    request,
-    monkeypatch,
-    tmp_path_factory,
-):
+def capture_recovered_authority(monkeypatch):
+    """Capture only the synthetic recovered service and fixture device credential."""
     import test_sync_recovery_target as fixtures
-    from test_workspace_sync import Native
-
-    from paper_daily import sync_bootstrap
-    from paper_daily.workspace_service import Ticket
-    from paper_daily.workspace_sync import SyncSession
 
     publish = fixtures.publish
     hosted = {}
@@ -251,6 +243,21 @@ def test_copy_syncs_through_recovered_authority_to_another_native_client(
         return service
 
     monkeypatch.setattr(fixtures, "publish", capture)
+    return hosted
+
+
+def test_copy_syncs_through_recovered_authority_to_another_native_client(
+    request,
+    monkeypatch,
+    tmp_path_factory,
+):
+    from test_workspace_sync import Native
+
+    from paper_daily import sync_bootstrap
+    from paper_daily.workspace_service import Ticket
+    from paper_daily.workspace_sync import SyncSession
+
+    hosted = capture_recovered_authority(monkeypatch)
     prepared = request.getfixturevalue("prepared")
     old, source, _change, path, source_op = prepared
     before = dump(old.journal.path)

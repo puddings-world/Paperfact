@@ -295,9 +295,15 @@ def test_unsupported_change_has_clear_pending_state_without_enabling_copy(
         )
     else:
         operation = old.new_graph_operation(
-            "note", str(uuid4()), dict(
-                paper_id=PAPER, body="Retained content", kind="note",
-                created_at="2026-11-14T00:00:00+00:00", page=1, anchor=None,
+            "note",
+            str(uuid4()),
+            dict(
+                paper_id=PAPER,
+                body="Retained content",
+                kind="note",
+                created_at="2026-11-14T00:00:00+00:00",
+                page=1,
+                anchor=None,
             ),
         )
     old.save(operation)
@@ -420,7 +426,6 @@ def test_bilingual_compact_review_renders_and_enter_compares(app, prepared, lang
         app.setFont(previous_font)
 
 
-
 def metadata_review(view, app, prepared, action):
     old, source, _change, path, _operation = prepared
     identity = "added-list" if action == "add" else "backed-list"
@@ -451,10 +456,12 @@ def test_metadata_choice_is_explicit_saved_once_and_recognized_after_reload(
     path = prepared[3]
     previous = len(attached(path).journal.pending())
     confirmations = []
+
     def confirm(*args):
         confirmations.append(args)
         assert not ui.copy()
         return QMessageBox.StandardButton.Yes
+
     monkeypatch.setattr(QMessageBox, "question", confirm)
     ui.action_select.setCurrentIndex(ui.action_select.findData(action))
     assert ui.copy_button.isEnabled() and ui.copy()
@@ -487,11 +494,13 @@ def test_keep_current_records_only_a_decision_and_confirm_cancel_writes_nothing(
     path = prepared[3]
     before = dump(path)
     calls = []
+
     def cancel(*args):
         calls.append(args)
         assert args[-1] == QMessageBox.StandardButton.No
         assert not ui.copy()
         return QMessageBox.StandardButton.No
+
     monkeypatch.setattr(QMessageBox, "question", cancel)
     ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
     assert not ui.copy() and not view.busy
@@ -500,11 +509,13 @@ def test_keep_current_records_only_a_decision_and_confirm_cancel_writes_nothing(
 
     original = choices.Decision.apply
     attempts = []
+
     def transient(plan, **kwargs):
         attempts.append(plan.request_id)
         if len(attempts) == 1:
             raise RuntimeError("simulated decision delivery failure")
         return original(plan, **kwargs)
+
     monkeypatch.setattr(choices.Decision, "apply", transient)
     ui.action_select.setCurrentIndex(ui.action_select.findData("keep"))
     assert ui.copy()
@@ -539,23 +550,26 @@ def test_confirmation_cannot_apply_after_selection_changed(
     path = prepared[3]
     retained = []
     ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
+
     def during_confirmation(*args):
         if change == "selection":
             ui.rows.setCurrentRow(0)
         else:
             client = attached(path)
-            client.save(client.new_graph_operation(
-                "list", "backed-list", dict(name="Later target edit", note=None)
-            ))
+            client.save(
+                client.new_graph_operation(
+                    "list", "backed-list", dict(name="Later target edit", note=None)
+                )
+            )
         retained.append(dump(path))
         return QMessageBox.StandardButton.Yes
+
     monkeypatch.setattr(QMessageBox, "question", during_confirmation)
     assert ui.copy() == (change == "target")
     wait(app, lambda: not view.busy)
     assert dump(path) == retained[0]
     if change == "target":
         assert ui.notice.text() == ui.t["stale"]
-
 
 
 def test_note_replacement_requires_explicit_choice_and_preserves_note_identity(
@@ -569,9 +583,7 @@ def test_note_replacement_requires_explicit_choice_and_preserves_note_identity(
     with closing(_readonly_connection(prepared[3])) as conn:
         before = conn.execute("SELECT id,body FROM notes ORDER BY id").fetchall()
     assert before[0][1] == "Backed up note"
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes
-    )
+    monkeypatch.setattr(QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes)
     ui.action_select.setCurrentIndex(ui.action_select.findData("replace"))
     assert ui.copy()
     wait(app, lambda: not view.busy)
@@ -581,3 +593,68 @@ def test_note_replacement_requires_explicit_choice_and_preserves_note_identity(
     pending = attached(prepared[3]).journal.pending()
     assert len(pending) == 1 and pending[0]["entity_id"] == prepared[4]["entity_id"]
     assert ui.notice.text() == ui.t["decision_saved"]
+
+
+def test_desktop_recovers_new_list_and_membership_then_restores_changed_parent(
+    view, app, prepared, monkeypatch
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    from paper_daily.sync_schema_v2 import membership_id
+
+    old, source, _change, path, _operation = prepared
+    root = old.new_graph_operation(
+        "list", "new-linked-list", dict(name="Linked research", note=None)
+    )
+    old.save(root)
+    member = old.new_graph_operation(
+        "membership",
+        membership_id(root["entity_id"], PAPER),
+        dict(
+            list_id=root["entity_id"],
+            paper_id=PAPER,
+            citation=None,
+            added_at="2026-11-14T00:00:00+00:00",
+        ),
+    )
+    old.save(member)
+    ui = view.device_review.changes
+    ui.reset_source(source.snapshot)
+    monkeypatch.setattr(QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes)
+
+    def apply(operation, choice):
+        assert ui.load(path.parent)
+        wait(app, lambda: not view.busy)
+        position = next(
+            i
+            for i, row in enumerate(ui.page["items"])
+            if row["operation_id"] == operation["operation_id"]
+        )
+        ui.rows.setCurrentRow(position)
+        assert ui.compare()
+        wait(app, lambda: not view.busy)
+        index = ui.action_select.findData(choice)
+        assert index >= 0, ui.notice.text()
+        ui.action_select.setCurrentIndex(index)
+        assert ui.copy_button.isEnabled() and ui.copy()
+        wait(app, lambda: not view.busy)
+        assert ui.notice.text() == ui.t["decision_saved"]
+
+    before = dump(old.journal.path)
+    apply(root, "add")
+    apply(member, "add")
+    client = attached(path)
+    client.save(client.new_graph_operation("list", root["entity_id"], {}, action="delete"))
+    apply(root, "restore")
+    apply(member, "restore")
+    pending = client.journal.pending()
+    assert len(pending) == 5 and dump(old.journal.path) == before
+    assert pending[-1]["entity_type"] == "membership"
+    assert pending[-1]["incarnation"] != pending[1]["incarnation"]
+    with closing(_readonly_connection(path)) as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM list_papers WHERE list_id=?", (root["entity_id"],)
+            ).fetchone()[0]
+            == 1
+        )

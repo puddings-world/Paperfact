@@ -464,8 +464,13 @@ class RecoveryChanges(QWidget):
             and operation["action"] == "put"
         ):
             current = comparison["target"]["entity_state"]
+            parents = [
+                dict(parent["expected"], incarnation=parent["current"]["incarnation"])
+                for parent in comparison["target"]["parents"] if parent["current"] is not None
+            ]
             current_action = (
-                "add" if current is None else "replace" if current["active"] else "restore"
+                "add" if current is None else
+                "restore" if not current["active"] or current["parents"] != parents else "replace"
             )
             options.extend(("add", "replace", "restore"))
         plans = {}

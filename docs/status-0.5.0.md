@@ -12,9 +12,9 @@ candidates remain preserved separately, not silently promoted or released.
 |---|---|---|
 | Offline sync, history/conflicts and attachments | Implementations and scoped local fixture evidence in the preserved development work | Coherent source checkpoint, critical journeys, affected regressions and installed-device journey |
 | Mobile PWA | Offline/domain/service and browser fixture evidence recorded in development ledgers | Durable pairing, hosted service and physical phone acceptance |
-| Scientific audit and recovery UI | Contextual typed choices and note copy integrated; source-bound repeat detection, confirmation and stale-target guards verified | Original-bound/compound recovery, new parent mappings and audit integration |
-| Metadata recovery | Source-bound receipt reuse now rejects corrupted provenance for keep/replace; critical plus recovery integration passed 21 cases in 39.2s total | Original-bound/compound recovery and new parent mappings |
-| Tests and resource use | Curated release: 33 Python + 24 frontend + 87 mobile cases and one actual HTTP program passed in 34.3s; runner regressions 59 passed | CI/device execution; historical deduplication; native resource cap on Mac/Linux |
+| Scientific audit and recovery UI | Typed choices, recorded parent mapping and explicit child restore verified locally; reference authority and a second native client preserve links/order | Original-bound/compound recovery, new parent mappings and audit integration |
+| Metadata recovery | Recorded parent decisions preserve linked metadata, reading and ordering; explicit descendant restore and native peer delivery verified | Original-bound/compound recovery and unproved parent migrations |
+| Tests and resource use | Critical/parent/desktop checks passed in 65.4s; native peers in 18.0s; final budget/skill/docs gate in 23.3s. Expanded release profile awaits release execution | CI/device execution; historical deduplication; native resource cap on Mac/Linux |
 | Release | No new release, cloud deployment or installed Mac acceptance from this checkpoint | Identifiable artifacts, upgrade/reporting checks, Windows/Apple Silicon/phone journey |
 
 Immediate priority is integrating this preserved checkpoint, completing recovery

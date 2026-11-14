@@ -94,7 +94,7 @@ Old workspace/history remains intact; old envelopes are not blindly replayed.
 
 | Entry | Contract |
 |---|---|
-| `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.detail(change_id, ...)` retain exact source identity |
+| `sync_recovery_candidates.prepare(database, snapshot, workspace, *, seconds=30, cancelled=...)` | Read-only index; `.page(...)` and `.details(change_id, ...)` retain exact source identity |
 | `sync_recovery_target.observe(index, target_database, *, seconds=30, cancelled=...)` | Prove fresh target history/binding; `.compare(change_id, ...)` exposes source/current state without writing |
 | `sync_recovery_note_copy.prepare(observation, change_id, request_id, *, seconds=30, cancelled=...)` | Explicit unanchored note copy with a new native identity; `.apply(...)` commits atomically |
 | `sync_recovery_choices.prepare(observation, change_id, choice, request_id, *, seconds=30, cancelled=...)` | Explicit keep/add/replace/restore for supported metadata, unanchored notes and order; `.apply(...)` is idempotent |
@@ -105,8 +105,7 @@ corrupt receipt fails without writes, including keep-current (which emits no
 research operation). Native research, outbox and decision receipt commit together;
 interruption rolls them back. Cancel/stale bindings never authorize another target.
 
-Original-bound/scientific content, arbitrary deletion, new parent-lifetime
-mapping, complete editable recovery UX, cloud recovery and installed-device
+Original-bound/scientific content, arbitrary deletion, unproved parent changes, complete editable recovery UX, cloud recovery and installed-device
 acceptance remain open. A successful subset does not mark recovery complete.
 
 
@@ -133,7 +132,7 @@ Cancellation/close drains active work. Changing the workspace, source binding or
 queued target observation blocks stale application. A save that already committed
 is reported as saved even if cancellation or a target change occurs afterwards.
 PDF-bound notes, unsupported scientific/file content and deletion remain visible
-but pending; there is no generic flatten/replay action. Exact-original verification, new parent-lifetime mapping, compound recovery and
+but pending; there is no generic flatten/replay action. Exact-original verification, unproved parent changes, compound recovery and
 complete recovery/device acceptance remain outstanding.
 
 
@@ -166,4 +165,31 @@ The controls cover supported lists, paper metadata, membership, reading state,
 order and unanchored notes, subject to exact parent-lifetime checks. Keep is a
 local preservation decision, not proof of original ownership or complete recovery.
 PDF-positioned notes and unsupported scientific/file operations cannot obtain a
-generic write capability; new parent mapping and original verification remain open.
+generic write capability; unproved parent changes and original verification remain blocked.
+
+
+## Recover related lists without losing their links
+
+Recover the supported parent first, then review its children. For example:
+**list > membership > reading state > paper order**, followed by list order.
+Each step remains an explicit native action; it does not replay the old envelope.
+
+A changed parent lifetime requires a recorded recovery decision, the exact old
+operation/fingerprint, its actual native journal receipt, and the current target
+lifetime. Unchanged parents are checked against the selected verified backup.
+A same-named entity, matching ID or deliberate reuse of an old incarnation is not
+an unrecorded recovery grant. Missing, corrupt or superseded proofs block writes.
+
+Historical parent proofs are checked separately from current write eligibility.
+After explicit list deletion/restore, a retained child needs explicit restore
+under the verified new parent. Restoring the list alone never revives children.
+Membership/order lifetimes and complete-set digests are rebuilt by the existing
+native builders; the chosen order is preserved without dropping extra members.
+A target edit after preparation invalidates the decision; refreshing can preserve
+the newer parent name while recovering its children.
+
+Local reference-service and second-native-client fixtures verify accepted list,
+membership, reading time and order delivery. This is not installed-device/hosted
+acceptance. Arbitrary parent migration, PDF/scientific ownership and compound
+file recovery remain open. Copy-as-new still requires the original paper lifetime;
+use a supported typed note add/restore when its parent was explicitly mapped.

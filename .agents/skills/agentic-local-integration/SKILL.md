@@ -33,6 +33,11 @@ buttons serialize through a server just to share behavior.
   Parent deletion/restoration needs an explicit lifecycle boundary so retained children
   cannot silently attach themselves to a new incarnation. This applies to replication,
   not every ordinary local integration.
+  During explicit disaster recovery, validate the historical source/native proof
+  separately from current write eligibility. A recorded parent mapping can support
+  an explicit child restore; a coincident ID or retained child flag cannot. Rebuild
+  current order-set digests rather than transferring old scope authority. See the
+  validated-local recovery checkpoint in the existing evidence reference.
 - For a command that reorders a complete collection, validate the observed members
   separately from the order record's revision. A canonical digest of exact active
   identities/incarnations can avoid false conflicts from unrelated metadata edits.

@@ -125,3 +125,37 @@ Final portable note-identity, stale-target and usage-contract checks passed 11
 cases in 9.81s, 13.6s total. Invalidated observations also disable the action
 button, even if an old prepared choice remains in memory. These overlap earlier
 checks and do not claim another complete release-profile run.
+
+
+## Recorded parent lifetimes (2026-11-14)
+
+| Requirement | Test / result boundary |
+|---|---|
+| New list retains membership, reading time and both order scopes | `test_receipt_proven_new_list_preserves_membership_reading_and_both_orders`: five new native operations; old source unchanged; reference authority accepts them; a fresh native peer retains saved content |
+| IDs do not grant recovery | `test_parent_mapping_requires_valid_receipt_and_current_exact_lifetime`: unrecorded matching entity, corrupt receipt and unapproved recreation refuse without writes |
+| Old incarnation cannot be reused as an implicit grant | `test_reusing_old_incarnation_without_a_recovery_receipt_does_not_prove_parent` |
+| Explicit parent and child restore | `test_explicit_root_restore_preserves_historical_proofs_for_child_restore`: list/member/reading/order restore in sequence; prior native history remains usable |
+| Later parent edits survive | `test_parent_proof_is_rechecked_at_apply_and_refresh_preserves_later_root_edit`: stale apply refuses; refreshed child recovery retains the newer parent name |
+| Actual desktop actions | `test_desktop_recovers_new_list_and_membership_then_restores_changed_parent`: add then restore via the contextual selector and native worker |
+
+Two regressions initially failed: guessed lifetime reuse was accepted, and valid
+child restore was refused by conflating historical proofs with current parents.
+The resolver now checks historical native/source relationships separately from
+current active lifetimes. The eligibility guard follows the native client's
+explicit restore contract for changed parents, even when the child's own active
+flag remains true. Prefix lifetimes are checked against the actual backup graph.
+Ordering proof includes historical item links and a recomputed complete-set digest.
+Receipt bytes/counts and SQL work are bounded; a changed target invalidates apply.
+
+Initial affected checks passed 9 cases in 45.19s (48.9s total). Refined proof checks
+passed 7 in 34.74s (38.1s total). Critical, desktop and affected regressions passed
+32 in 61.66s (65.4s total). The expanded authority/peer journey plus the unchanged
+note-copy peer journey passed 2 in 13.96s (18.0s total). Counts overlap; this is not
+a historical full-suite, installed-device, cloud, phone or semantic-original pass.
+The two peer journeys now share their existing fixture-service capture helper.
+No owner research, real credentials or paid calls were used.
+
+Final saved peer-order, receipt-budget, skill-synchronization and usage checks
+passed 25 cases in 17.54s, 23.3s total. The peer stores the exact three-list order
+and new root incarnation. An over-budget receipt fails without writes. These
+are overlapping focused checks, not a rerun of the expanded release profile.

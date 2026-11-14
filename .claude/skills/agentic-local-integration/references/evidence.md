@@ -510,3 +510,23 @@ source ownership, research revisions and authentication remain separate checks.
   application gate remains unproven. No release claim follows from these tests.
 - Privacy review: no credentials, identifying paths, raw user prompts or research
   content included. No telemetry upload, global installation or rule promotion.
+
+
+### Recorded parent recovery, 2026-11-14 (validated-local)
+
+- Trigger: new recovery roots broke old child/order lifetimes; guessed old IDs
+  were accepted, while legitimate child restore failed after parent restoration.
+- Invariant: verify immutable source/native receipt chains, then independently
+  check the current writable parent. Never replay the old envelope or infer a
+  recovery grant from ID equality. Recompute order scope/set digests natively.
+- Evidence: `sync_recovery_choices.py`; native chain/refusal/restore cases in
+  `test_sync_recovery_choices.py`; actual Qt sequence in `test_recovery_changes_ui.py`.
+  Focused proof 7 passed/38.1s total; affected critical/desktop 32 passed/65.4s;
+  actual reference-authority and native peer journeys 2 passed/18.0s total.
+- Limits: synthetic isolated local fixtures, supported v2 typed content only;
+  original/file/compound ownership, arbitrary parent migration, installed devices
+  and hosted acceptance remain open. Not a rule for ordinary single-DB CRUD.
+- Privacy: synthetic content only, no account tokens, owner paths or raw research.
+  No new global installation or cross-project reuse claim.
+
+- Regression selector: `python scripts/check_bounded.py --profile focused --python tests/test_sync_recovery_choices.py::test_explicit_root_restore_preserves_historical_proofs_for_child_restore`. This selector passed in the recorded 7-case gate. Final peer-order/budget/skill/docs gate: 25 passed, 23.3s total.
