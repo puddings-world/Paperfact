@@ -255,6 +255,8 @@ try {
   assert.equal(state.outbox.length, 0);
   // Python serializes float coordinates as 200.0; keep authoritative raw bytes.
   const artifact = ready.artifact;
+  artifact.payload.input_versions={...artifact.payload.input_versions,
+    schema_version:2,workspace_id:'earlier-workspace'};
   assert.ok(Buffer.from(artifact.blobs[artifact.payload.body.sha256],'base64').toString('utf8').includes('200.0'));
   for(const description of [artifact.payload.body,...artifact.payload.assets]) {
     const data = Buffer.from(artifact.blobs[description.sha256],'base64');
@@ -271,6 +273,8 @@ try {
   assert.equal(projection(await store.read()).decks[0].id,artifactId);
   await engine.downloadArtifact(artifactId); engine.disconnect();
   const deck = await engine.deck(artifactId);
+  assert.equal(deck.operation.payload.input_versions.schema_version,2);
+  assert.equal(deck.operation.payload.input_versions.workspace_id,'earlier-workspace');
   assert.equal(deck.body.deck.title,'研究 🧪');
   assert.equal(deck.body.deck.slides[0].elements[1].x,200);
   assert.equal(deck.body.deck.slides[0].speaker_notes,'原文引用與講稿');

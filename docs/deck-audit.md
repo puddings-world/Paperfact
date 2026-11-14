@@ -107,3 +107,12 @@ same-hash distinct owners, old A/current B, parent replacement, budgets and nati
 lifecycle/off-thread checks. No user research database, real account/provider,
 external service, release or publication is used. Full canonical integration and
 its complete check, physical device/OS and accessibility acceptance remain pending.
+
+## Recorded input workspace
+
+Schema-2 input references authorize source lookup only in their recorded native
+workspace. A foreign workspace is reported as `source_owner_unrecorded`; a
+coincident document ID, current PDF or focal paper cannot replace missing owner
+proof. Legacy schema-1 references retain the existing exact native checks.
+Cross-workspace deck recovery still needs an explicit verified mapping and atomic
+publication; accepting scoped manifests alone does not implement that action.

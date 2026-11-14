@@ -22,7 +22,7 @@ from paper_daily.sync_artifacts import (
     stage_bytes,
     version_directory,
 )
-from paper_daily.sync_files import canonical_json, file_id
+from paper_daily.sync_files import canonical_json, file_id, scope_input_versions
 
 
 @dataclass(frozen=True)
@@ -233,13 +233,13 @@ def _observation(conn, client, local_id, mode):
         "desired_document": desired,
         "applied_document": applied,
         "inputs_sha256": input_hash,
-        "input_versions": {
+        "input_versions": scope_input_versions({
             "schema_version": 1,
             "complete": False,
             "entities": refs,
             "documents": documents,
             "inputs_sha256": input_hash,
-        },
+        }, client.journal.workspace_id),
     }
 
 

@@ -170,3 +170,20 @@ test('storage failure while fetching an updated closure retains old applied deck
   await assert.rejects(state.engine.downloadArtifact(id),/storage_write_failed/); state.store.failure=null;
   assert.equal((await state.engine.deck(id)).body.deck.title,'Original');
 });
+
+
+test('recorded deck input scope survives authenticated sync and offline reopen without rebasing',async()=>{
+  const state=await setup(), item=await fixture();
+  item.payload.input_versions={...structuredClone(versions),schema_version:2,workspace_id:'earlier-workspace'};
+  const id=await publish(state,item);
+  await state.engine.downloadArtifact(id); state.engine.disconnect();
+  const reopened=new Engine(new MemoryStore('demo-workspace','demo-phone',await state.store.read()));
+  const deck=await reopened.deck(id);
+  assert.deepEqual(deck.operation.payload.input_versions,item.payload.input_versions);
+  assert.equal(deck.body.deck.title,'Original');
+  for(const mutate of [v=>delete v.workspace_id,v=>v.workspace_id='https://untrusted.invalid',
+    v=>v.schema_version=true,v=>v.token='not-a-permitted-field']) {
+    const bad=structuredClone(item.payload); mutate(bad.input_versions);
+    assert.throws(()=>validateArtifact(bad,id));
+  }
+});

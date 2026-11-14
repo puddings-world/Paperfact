@@ -413,7 +413,11 @@ class DeckAuditReader:
                 if len(used) > MAX_SOURCE_IDS:
                     _fail("input_limit")
                 sources = [row for row in raw["sources"] if row["id"] in used]
-                refs = operation["payload"]["input_versions"]["documents"]
+                input_versions = operation["payload"]["input_versions"]
+                refs = input_versions["documents"] if (
+                    input_versions["schema_version"] == 1
+                    or input_versions["workspace_id"] == workspace
+                ) else []
                 figures = {row["id"]: row for row in raw["figures"]}
                 originals, results, files, budget = {}, [], dict(closure.files), [0, 0, 0]
                 index = store.root / "index.sqlite"

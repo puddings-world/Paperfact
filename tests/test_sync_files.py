@@ -711,3 +711,29 @@ def test_corrupt_local_staging_partial_can_be_retried(pair):
         stage_bytes(storage, {sha: content})
     stage_bytes(storage, {sha: content})
     assert storage.verified_path(manifest).read_bytes() == content
+
+
+def test_new_deck_records_input_workspace_and_keeps_it_through_edit_and_copy(pair, codec):
+    from paper_daily.sync_files import scope_input_versions
+
+    value = codec[0]
+    operation = save_current(pair, value)
+    versions = copy.deepcopy(operation["payload"]["input_versions"])
+    assert versions["schema_version"] == 2 and versions["workspace_id"] == "workspace"
+    assert versions["complete"] is False
+    loaded = presentations.load_deck(LOCAL, "guide")
+    loaded.title = "Later manual edit"
+    presentations.save_deck(loaded)
+    with pair[1].journal.transaction() as conn:
+        current = desired_file(conn, operation["entity_id"])
+    assert current["payload"]["input_versions"] == versions
+    assert scope_input_versions(versions, "restored-workspace") == versions
+    assert versions == operation["payload"]["input_versions"]
+    for damage in (lambda v: v.pop("workspace_id"),
+                   lambda v: v.update(workspace_id="https://untrusted.invalid"),
+                   lambda v: v.update(schema_version=True),
+                   lambda v: v.update(token="not-a-permitted-field")):
+        bad = copy.deepcopy(current["payload"])
+        damage(bad["input_versions"])
+        with pytest.raises(ValueError):
+            validate_payload(bad)

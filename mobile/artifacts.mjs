@@ -35,8 +35,11 @@ function array(value,max,min = 0) {
 export const fileId = (paper,slot) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'deck',slot]));
 export const sourceFileId = (paper,sha) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'original_source',sha]));
 export function validateInputVersions(value) {
-  closed(value,['schema_version','complete','entities','documents','inputs_sha256']);
-  requireArtifact(value.schema_version === 1 && typeof value.complete === 'boolean');
+  requireArtifact(value && [1,2].includes(value.schema_version));
+  closed(value,['schema_version','complete','entities','documents','inputs_sha256',
+    ...(value.schema_version === 2 ? ['workspace_id'] : [])]);
+  requireArtifact(typeof value.complete === 'boolean');
+  if(value.schema_version === 2) id(value.workspace_id);
   hash(value.inputs_sha256,true);
   array(value.entities,256); array(value.documents,128);
   const seen = new Set();
@@ -71,7 +74,8 @@ export function validateArtifact(payload, entityId, parents) {
     if (parents) requireArtifact(parents.length === 1 && parents[0].kind === 'paper' && parents[0].id === payload.paper_id);
     validateInputVersions(payload.input_versions);
     const versions = payload.input_versions;
-    requireArtifact(versions.complete === false && versions.entities.length === 0 &&
+    requireArtifact(versions.schema_version === 1 && versions.complete === false &&
+      versions.entities.length === 0 &&
       versions.documents.length === 0 && versions.inputs_sha256 === null);
     closed(payload.body,['sha256','size','media_type']);
     hash(payload.body.sha256); integer(payload.body.size,1024,1);

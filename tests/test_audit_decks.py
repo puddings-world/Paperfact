@@ -619,3 +619,25 @@ def test_aggregate_output_input_budget_applies_across_cited_sources(saved, monke
         assert research_audit.validate(value) == value
     with pytest.raises(ValueError, match="input_limit"):
         reader(saved).prepare()
+
+
+@pytest.mark.parametrize("origin", ["legacy", "workspace", "different-workspace"])
+def test_recorded_input_workspace_cannot_authorize_coincident_current_references(saved, origin):
+    def update(_body, payload):
+        versions = payload["input_versions"]
+        versions.pop("workspace_id", None)
+        versions["schema_version"] = 1 if origin == "legacy" else 2
+        if origin != "legacy":
+            versions["workspace_id"] = origin
+
+    revise(saved, update)
+    before = bytes_snapshot(saved.root)
+    report = reader(saved).prepare().report
+    assert bytes_snapshot(saved.root) == before
+    if origin in {"legacy", "workspace"}:
+        assert report["coverage_complete"] and report["covered_sources"] == 2
+    else:
+        assert not report["coverage_complete"] and report["covered_sources"] == 0
+        assert {row["state"] for row in report["sources"]} == {"source_owner_unrecorded"}
+        assert not any(check["state"] in {"located", "observed"}
+                       for row in report["sources"] for check in row["report"]["checks"])

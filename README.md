@@ -274,3 +274,8 @@ and hosted/device acceptance remain separate gates.
 
 Recorded recovery decisions can preserve supported list/member/reading/order
 links across restored lifetimes; see the [recovery workflow](docs/device-recovery-review.md#recover-related-lists-without-losing-their-links).
+
+Editable deck sync retains the workspace of newly observed research inputs,
+including offline mobile reopen. Saved-evidence checks refuse to infer source
+ownership across workspaces. See [deck provenance](docs/sync-files.md) and
+[saved evidence](docs/deck-audit.md); complete deck recovery remains in development.

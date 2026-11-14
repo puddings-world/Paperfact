@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from copy import deepcopy
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 MAX_BODY = 8 * 1024**2
@@ -112,13 +113,17 @@ def file_id(paper_id, feature, slot):
 
 
 def validate_input_versions(value):
-    closed(value, {"schema_version", "complete", "entities", "documents", "inputs_sha256"})
-    if (
-        type(value["schema_version"]) is not int
-        or value["schema_version"] != 1
-        or type(value["complete"]) is not bool
-    ):
-        raise ValueError("Unsupported input-version format")
+    if not isinstance(value, dict):
+        raise ValueError("Input versions must be an object")
+    fields = {"schema_version", "complete", "entities", "documents", "inputs_sha256"}
+    version = value.get("schema_version")
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("Unsupported input-version format; update the app/service")
+    closed(value, fields | ({"workspace_id"} if version == 2 else set()))
+    if type(value["complete"]) is not bool:
+        raise ValueError("Input coverage must be explicit")
+    if version == 2:
+        identifier(value["workspace_id"])
     digest(value["inputs_sha256"], nullable=True)
     seen = set()
     for key, maximum in (("entities", 256), ("documents", 128)):
@@ -154,6 +159,17 @@ def validate_input_versions(value):
             seen.add(identity)
     if len(canonical_json(value)) > 64 * 1024:
         raise ValueError("Input-version block exceeds 64 KiB")
+
+
+def scope_input_versions(value, workspace_id):
+    """Stamp a caller-observed input scope; never rebase an already recorded one."""
+    validate_input_versions(value)
+    identifier(workspace_id)
+    result = deepcopy(value)
+    if result["schema_version"] == 1:
+        result.update(schema_version=2, workspace_id=workspace_id)
+    validate_input_versions(result)
+    return result
 
 
 def validate_payload(payload, *, entity_id=None, parents=None):

@@ -4549,3 +4549,33 @@ call, upload, commit, push, installer or release occurred. Current goal remains
 active; complete audit/recovery integration and hosted/installed acceptance are
 not claimed by these preflights. Next action is the unchanged standard full check
 on a hashed, frozen candidate, not more repeatedly broadened partial selections.
+
+
+## Workspace-scoped deck inputs (2026-11-14)
+
+New native deck observations emit closed schema-2 input provenance with their
+origin workspace. Manual edits preserve the exact loaded provenance, including
+legacy schema 1. Saved-evidence reads accept same-workspace references only;
+foreign scope stays explicitly unverified even when native IDs coincide. No
+original is inferred from the current focal paper. Mobile validation and offline
+reopen retain the same block. Original-source manifests remain strict schema 1.
+
+An existing audit test caught a variable shadowing error: the new input block
+replaced the captured database-version witness. Renamed the variable; retained
+all old read-only, mutation-refusal and exact-source assertions.
+
+Evidence: 46 affected Python cases passed in 78.29s pytest / 81.5s total; 17 mobile
+artifact cases passed; actual JavaScript/Python HTTP authority fixture passed.
+Critical integration gate: 14 passed in 7.68s pytest / 10.8s total. Privacy and
+Ruff passed. All runs used the Windows 25% CPU/two-processor governor. No full
+historical suite, paid AI or owner research database was used.
+
+Fresh ignored PWA artifact: `build/mobile-workspace-inputs-v23`, 50 files,
+3,911,242 bytes, independently verified content ID
+`f61ec2ac7aab6f917da315ec9f53354275073e2d863a7f720b8b39139128e776`.
+This is build integrity evidence, not browser/physical-device acceptance.
+
+Full deck recovery, verified cross-workspace source mapping, hosted TLS and
+installed Mac/phone acceptance remain open. The existing local-integration skill
+already distinguishes historical proof from current authority; no duplicate skill
+or unverified global rule was added at this checkpoint.

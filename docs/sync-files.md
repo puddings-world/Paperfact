@@ -46,7 +46,7 @@ Portable generation metadata permits only `inputs`, `backend`, `model`. Account
 profiles, CLI/request IDs, credentials and arbitrary execution receipts are omitted.
 Citation URLs are inert HTTP(S) references, never automatic download instructions.
 
-`input_versions` is the closed version-1 observation summary: `complete`, bounded
+`input_versions` accepts closed observation schemas 1 and 2: `complete`, bounded
 `entities`, `documents`, and nullable `inputs_sha256`. Entity references contain
 `kind,id,incarnation,revision,depends_on`; document references contain
 `paper_id,operation_id,incarnation,parent_incarnation,sha256`. Limits are 256 entity
@@ -55,6 +55,13 @@ coverage, not freshness. Deck producers conservatively emit `complete:false`.
 Manual edits retain the loaded artifact's PDF/input provenance; generation uses
 the actual original/figure hashes captured in its evidence, never the latest PDF
 metadata as a substitute.
+
+New native observations emit schema 2 with an explicit `workspace_id`. Entity and
+document references belong to that recorded workspace, not the destination of a
+copy or recovery. Already loaded schema-1 or schema-2 provenance remains exact
+through manual edits; existing schema-2 scope is never rebased. Legacy schema 1
+remains readable. These observations describe historical inputs, not permission
+to publish or proof that a quotation supports a scientific claim.
 
 ## Actual save, receive and recovery
 
