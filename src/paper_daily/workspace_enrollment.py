@@ -29,7 +29,11 @@ from paper_daily.sync_journal import Journal
 from paper_daily.sync_operations import ResearchOperations
 from paper_daily.sync_recovery_fs import publish_directory
 from paper_daily.sync_research import prepare as prepare_adapter
-from paper_daily.sync_research import research_order_writer, research_writer
+from paper_daily.sync_research import (
+    research_order_writer,
+    research_projection_writer,
+    research_writer,
+)
 from paper_daily.workspace_service import SnapshotChanged, Ticket, _read, _safe_path
 
 MAX_ROWS = 100_000
@@ -38,7 +42,7 @@ MAX_FILES = 256
 MAX_BYTES = 512 * 1024**2
 PRIVATE_FILES = {".env", "credentials.json", "tokens.json", "settings.json", "config.json"}
 PRIVATE_KV_PREFIXES = ("ui.", "ai.", "provider.", "account.", "usage.", "auth.")
-SUPPORTED = CORE | set(CONTENT_TABLES) | INBOX_RESEARCH
+SUPPORTED = CORE | set(CONTENT_TABLES) | INBOX_RESEARCH | {"paper_lineage_sets"}
 LOCAL_DERIVED = {
     "authors",
     "paper_authors",
@@ -78,6 +82,9 @@ def _schema():
         conn.execute(source_archive_schema)
         conn.execute(history_archive_schema)
         conn.execute(local_owner_schema)
+        from paper_daily.lineage_sets import SCHEMA as lineage_schema
+
+        conn.execute(lineage_schema)
         from paper_daily import enrolled_deck_proposals, local_deck_proposals
 
         local_deck_proposals._schema(conn, create=True)
@@ -133,9 +140,9 @@ def _database(conn, ticket, *, history=None):
         if not pin_cleanup_recognized(conn):
             blockers.append("pin cleanup trigger requires review")
     optional = set(getattr(sync_recovery, "OPTIONAL_RESEARCH_TABLES", set()))
-    optional.update({
-        "research_source_archive", "research_history_archive", "research_local_source_owners"
-    })
+    optional.update(
+        {"research_source_archive", "research_history_archive", "research_local_source_owners"}
+    )
     if not (set(trusted) - set(optional) - history_tables) <= names:
         blockers.append("schema: initialized current research schema required")
     for table in sorted(names - {"sqlite_sequence"}):
@@ -200,7 +207,8 @@ def _database(conn, ticket, *, history=None):
                     blockers.append("list pin requires an existing list membership")
         counts[table] = len(selected)
         if selected and table not in SUPPORTED | LOCAL_DERIVED | history_tables | {
-            "paper_annotation_known", "research_history_archive"
+            "paper_annotation_known",
+            "research_history_archive",
         }:
             blockers.append("unsupported writer scope: " + table)
         if selected and table in SUPPORTED and table not in research_tables:
@@ -208,6 +216,15 @@ def _database(conn, ticket, *, history=None):
         if table in research_tables:
             rows[table] = selected
     return rows, counts, digest.hexdigest(), excluded, blockers
+
+
+def _source_descriptor(path, receipt):
+    from paper_daily.source_snapshots import LINEAGE_FORMAT
+
+    result = {"path": str(path), "sha256": receipt["sha256"], "size": receipt["size"]}
+    if json.loads(receipt["owner_json"])["format"] == LINEAGE_FORMAT:
+        result["archive_only"] = True
+    return result
 
 
 def _files(
@@ -278,7 +295,11 @@ def _files(
                 aliases[candidate] = digest
             continue
         if not candidate.is_file():
-            candidates = [item for item in owned_sources if item["sha256"] == digest]
+            candidates = [
+                item
+                for item in owned_sources
+                if item["sha256"] == digest and not item.get("archive_only", False)
+            ]
             if candidates:
                 candidate = _safe_path(candidates[0]["path"])
         if not candidate.is_file():
@@ -397,26 +418,27 @@ class EnrollmentService:
 
         imported = local_source_owners.list_owned(self.database)
         receipts = source_snapshots.list_owned(self.database)
+        from paper_daily.lineage_candidates import source_receipts as lineage_receipts
+
+        merged = {r["request_id"]: r for r in receipts}
+        for row in lineage_receipts(self.database, conn):
+            prior = merged.get(row["request_id"])
+            if prior is not None and prior != row:
+                raise ValueError("Lineage source observation identity was reused")
+            merged[row["request_id"]] = row
+        receipts = list(merged.values())
         provenance = {row["record_id"]: row for row in source_provenance.archived(conn)}
         for receipt in receipts + imported:
             archived = source_provenance.wrap(receipt)
             provenance[archived["record_id"]] = archived
         owned_sources = [
-            {
-                "path": str(source_snapshots.source_path(self.database, row)),
-                "sha256": row["sha256"],
-                "size": row["size"],
-            }
+            _source_descriptor(source_snapshots.source_path(self.database, row), row)
             for row in receipts
         ]
         owned_sources.extend(
-            {
-                "path": str(
-                    source_snapshots.source_path(self.database, row, max_pdf_bytes=MAX_PDF_BYTES)
-                ),
-                "sha256": row["sha256"],
-                "size": row["size"],
-            }
+            _source_descriptor(
+                source_snapshots.source_path(self.database, row, max_pdf_bytes=MAX_PDF_BYTES), row
+            )
             for row in imported
         )
         owned_sources.extend(common["objects"])
@@ -431,9 +453,7 @@ class EnrollmentService:
             if not cached.is_file() or cached.stat().st_size != receipt["size"]:
                 blockers.append("archived original source bytes require explicit migration")
                 continue
-            owned_sources.append(
-                {"path": str(cached), "sha256": receipt["sha256"], "size": receipt["size"]}
-            )
+            owned_sources.append(_source_descriptor(cached, receipt))
             seen_owned.add((str(cached), receipt["sha256"]))
         history_sources = []
         required_sources = set(history["sources"]) | {
@@ -492,6 +512,9 @@ class EnrollmentService:
         from paper_daily.later_outcome_packages import add_enrollment_sources as add_later_sources
 
         add_later_sources(conn, rows.get("paper_later_outcomes", []), sources, ticket=ticket)
+        from paper_daily.lineage_enrollment import sources as lineage_sources
+
+        sources.update(lineage_sources(self.database, rows.get("paper_lineage_sets", []), ticket))
         from collections import Counter
 
         from paper_daily import manual_deck_enrollment
@@ -663,6 +686,10 @@ class EnrollmentService:
                     with closing(sqlite3.connect(database)) as copied:
                         copied.executescript(store.SCHEMA)
                         store._migrate(copied)
+                        if "paper_lineage_sets" in before["rows"]:
+                            from paper_daily.lineage_sets import SCHEMA as lineage_schema
+
+                            copied.execute(lineage_schema)
                         for table, values in before["rows"].items():
                             for row in values:
                                 columns = ",".join('"' + column + '"' for column in row)
@@ -691,6 +718,7 @@ class EnrollmentService:
                         Journal(database, workspace_id=workspace, device_id=device),
                         research_writer,
                         order_writer=research_order_writer,
+                        projection_writer=research_projection_writer,
                     )
                     blobs = BlobStore(stage / "blobs", quota_bytes=MAX_BYTES)
                     from paper_daily.sync_artifacts import register_paths
@@ -810,6 +838,16 @@ class EnrollmentService:
                             store=blobs,
                             version_root=stage / "research-versions",
                             request_id="enroll-source:" + portable + ":" + digest[:32],
+                        )
+                    from paper_daily.lineage_enrollment import publish_in as enroll_lineage
+
+                    with client.journal.transaction() as conn:
+                        enroll_lineage(
+                            conn,
+                            client,
+                            before["rows"].get("paper_lineage_sets", []),
+                            request_id=request_id,
+                            ticket=ticket,
                         )
                     from paper_daily.manual_deck_enrollment import publish as publish_manual
 

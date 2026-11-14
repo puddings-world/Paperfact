@@ -80,3 +80,44 @@ journey. The following remain required development work:
 
 Newer annotation contracts must be present in the receiving build. Unknown kinds
 or feature payloads are rejected, never skipped to make the cursor appear current.
+
+## One-paste connection setup (development candidate)
+
+Paste a credential-bearing connection record into **Paste connection details
+from your service**, then choose **Use connection details**. The record is parsed
+in a guarded background worker using the existing closed `Connection` format;
+this neither contacts the service nor authorizes research synchronization.
+Review the populated endpoint/workspace/device, then explicitly verify and
+connect. Automatic synchronization is a separate opt-in. Manual fields remain
+available, including credentials too large for the native-vault record format.
+
+```mermaid
+flowchart LR
+    Issued[Service issues a new device credential] --> Paste[Paste connection details]
+    Paste --> Review[Review populated settings]
+    Review --> Verify[Verify and connect]
+    Verify --> Join[Join into a separate workspace when required]
+    Join --> Enable[Explicitly enable background sync]
+```
+
+The closed JSON format is version 1, with exactly `format`, `endpoint`,
+`workspace_id`, `device_id` and `token`. It uses the existing vault record's size,
+identifier, credential and HTTPS/literal-loopback URL validation; duplicate JSON
+fields are rejected. An example shape, with deliberately unusable placeholders:
+
+```json
+{"format":1,"endpoint":"https://sync.example.org","workspace_id":"example-workspace","device_id":"new-mac-device","token":"REPLACE_WITH_NEW_DEVICE_TOKEN"}
+```
+
+This is private connection material, not a public share link or a signed pairing
+code. Receive it only from the operator of the intended service. Do not put it in
+issues, research packages or documentation. Each device requires its own issued
+identity/credential; copying the desktop's identity is not enrollment. This UI
+adds no issuance, OAuth, remote HTTPS deployment or account recovery endpoint.
+No actual service configuration or credential is created by reading this guide.
+
+The input is masked and cleared once parsing starts; accepted credentials remain
+masked in the manual form until explicit verification clears them. Pending parse
+blocks repeated activation, and cancel/close/workspace changes reject late
+results. Invalid records preserve existing fields and do not disconnect a
+verified route. A successful load stops the old route before replacing fields.

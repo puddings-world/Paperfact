@@ -1,4 +1,4 @@
-"""Typed address helpers remain inactive and preserve known corpus identity."""
+"""Typed address helpers preserve optional storage and known corpus identity."""
 
 import copy
 
@@ -216,7 +216,10 @@ def test_importing_helpers_does_not_register_store_producer_routes_or_wire_domai
     from paper_daily.sync_journal import canonical_operation
     from paper_daily.sync_schema_v2 import OPTIONAL
 
-    assert "lineage" not in sync_content.FEATURES and "lineage" not in ai_profiles.TASKS
+    # The enabled task-routing contract is separate from helper side effects.
+    # The fresh-process boundary case checks all registries before/after import.
+    assert "lineage" not in sync_content.FEATURES
+    assert "lineage" in ai_profiles.TASKS
     assert "paper_lineage_sets" not in research_generation.REGISTRY
     assert "paper_lineage_sets" not in store.SCHEMA and "content_address" not in OPTIONAL
     path = tmp_path / "unactivated.sqlite"

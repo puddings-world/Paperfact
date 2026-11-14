@@ -24,6 +24,7 @@ from paper_daily import annotation_content
 from paper_daily.inbox_recovery import DETACHED_ORIGINALS as INBOX_DETACHED_ORIGINALS
 from paper_daily.inbox_recovery import PROTOCOL as INBOX_PROTOCOL
 from paper_daily.inbox_recovery import RESEARCH as INBOX_RESEARCH
+from paper_daily.recovery_provenance import schema_definition_scope
 from paper_daily.store import SCHEMA, _migrate
 from paper_daily.sync_blobs import BlobManifest, BlobStore, _no_link
 from paper_daily.sync_client import validate_event
@@ -64,10 +65,17 @@ RESEARCH_TABLES = frozenset(
     }
 )
 OPTIONAL_RESEARCH_TABLES = {
-    "list_reading_goals", "reading_positions", "paper_later_outcomes"
+    "list_reading_goals", "reading_positions", "paper_later_outcomes", "paper_lineage_sets"
 } | INBOX_RESEARCH
 
 PROTOCOL = {
+    "research_lineage_actions": "request_id body_json",
+    "research_lineage_imports": "request_id body_json",
+    "research_lineage_sync_sources": (
+        "entity_id paper_id corpus_key operation_json active fingerprint"
+    ),
+    "research_lineage_sync_history": "operation_id entity_id operation_json",
+    "research_lineage_publications": "request_id candidate_id row_json sources_json",
     "research_observed_current_deck_recovery": "paper_id slot parent_token manifest_json",
     "research_common_primary_recovery": "paper_id parent_token sha256 size media_type",
     "research_local_deck_proposals": (
@@ -160,6 +168,7 @@ PROTOCOL = {
     "integration_operations": "id fingerprint result created_at",
 }
 EXCLUDED_PROTOCOL = {
+    "paperfact_sync_lineage_history_scan",
     "research_capture_dirty",
     "research_capture_bases",
     "research_document_transfers",
@@ -220,6 +229,9 @@ def _research_schema():
     with closing(sqlite3.connect(":memory:")) as conn:
         conn.executescript(SCHEMA)
         _migrate(conn)
+        from paper_daily.lineage_sets import SCHEMA as lineage_schema
+
+        conn.execute(lineage_schema)
         return {
             name: [row[1] for row in conn.execute(f'PRAGMA table_info("{name}")')]
             for name in (
@@ -311,6 +323,12 @@ class _Records:
         from paper_daily.inbox_recovery import Records as InboxRecords
 
         self.inbox = InboxRecords()
+        from paper_daily.lineage_recovery import Records as LineageRecords
+
+        self.lineage = LineageRecords()
+        from paper_daily.lineage_enrollment_archive import Records as ArchivedLineage
+
+        self.lineage_archive = ArchivedLineage()
 
     def _artifact(self, payload):
         self.artifacts[_json(payload)] = payload
@@ -321,6 +339,34 @@ class _Records:
         )
 
     def row(self, name, row):
+        if name in {"paper_lineage_sets", "research_lineage_publications",
+                    "research_lineage_imports", "research_lineage_actions",
+                    "research_generation_requests", "research_generation_recovery",
+                    "research_local_source_owners", "research_lineage_sync_sources",
+                    "research_lineage_sync_history", "research_file_versions",
+                    "research_file_desired", "research_paper_projection",
+                    "paperfact_sync_graph", "paperfact_sync_heads", "paperfact_sync_operations"}:
+            self.lineage.add(name, row)
+        if name == "research_lineage_actions":
+            return  # Provenance closure is checked with all retained Lineage records.
+        if name == "paper_lineage_sets":
+            from paper_daily.lineage_sets import decode
+
+            body = decode(row["body_json"])
+            self.annotation_owners.update(b["paper_id"] for b in body["bindings"])
+            self.research_sources.update(
+                s["document_hash"] for s in body["report"]["sources"]
+                if s["document_hash"] is not None
+            )
+            return
+        if name == "research_lineage_publications":
+            from paper_daily.lineage_recovery import publication
+
+            _saved, originals = publication(row)
+            for original in originals:
+                _add_blob(self.refs, original)
+                self.research_sources.add(original["sha256"])
+            return
         if name == "research_observed_current_deck_recovery":
             from paper_daily import proposal_recovery_current as observed
 
@@ -715,11 +761,13 @@ class _Records:
             from paper_daily.enrollment_history import validate
 
             _original, sources = validate(row)
+            self.lineage_archive.add_history(row["protocol"], _original)
             self.research_sources.update(sources)
         elif name == "research_source_archive":
             from paper_daily.source_provenance import validate
 
             receipt = validate(row)
+            self.lineage_archive.add_source(receipt)
             _add_blob(self.refs, receipt)
             self.research_sources.add(receipt["sha256"])
             self.archived_sources[receipt["sha256"]] = {
@@ -750,6 +798,12 @@ class _Records:
 
             validate_request_record(row)
             context = _load(row["context_json"])
+            if context.get("format") == "paperfact.lineage-proposal-context.v1":
+                from paper_daily.lineage_candidates import originals
+
+                for descriptor in originals(row):
+                    _add_blob(self.refs, descriptor)
+                    self.research_sources.add(descriptor["sha256"])
             if context["document"] is not None:
                 self.research_sources.add(context["document"]["sha256"])
             binding = context["binding"]
@@ -900,6 +954,8 @@ class _Records:
                 for operation in self.applied_files.values()
             ):
                 raise RecoveryError("Observed manual current has multiple saved owners")
+        self.lineage.finish(self)
+        self.lineage_archive.finish(self)
         self.later_outcomes.finish(self)
         self.inbox.finish()
         from paper_daily.legacy_brief_recovery import validate_records
@@ -1018,6 +1074,7 @@ def _fingerprint(path):
     return digest.hexdigest(), size
 
 
+@schema_definition_scope()
 def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=None):
     """Create a complete archive or leave the source and requested output untouched."""
     source, output = _path(database), _path(output)
@@ -1226,9 +1283,20 @@ def create(database, output, *, blob_store=None, legacy_root=None, pdf_roots=Non
                 raise RecoveryError(
                     "Current presentation requires complete migration before backup"
                 ) from error
+            from paper_daily.lineage_candidates import source_receipts as lineage_receipts
+
+            def complete_source_receipts(source):
+                merged = {r["request_id"]: r for r in list_owned(source)}
+                for row in lineage_receipts(source, conn):
+                    prior = merged.get(row["request_id"])
+                    if prior is not None and prior != row:
+                        raise RecoveryError("Lineage source observation identity was reused")
+                    merged[row["request_id"]] = row
+                return list(merged.values())
+
             source_aliases, source_caches, source_cache_bytes = {}, {}, 0
             for name, loader in (
-                ("research_source_snapshot_recovery", list_owned),
+                ("research_source_snapshot_recovery", complete_source_receipts),
                 ("research_generation_recovery", research_generation.list_recovery_requests),
                 ("research_chat_recovery", research_chat.list_recovery_requests),
                 ("research_compound_recovery", research_compound.list_recovery_requests),
@@ -1528,6 +1596,7 @@ def _table_rows(archive, table):
             raise RecoveryError("Recovery row count differs from its manifest")
 
 
+@schema_definition_scope()
 def inspect(package):
     """Verify the complete archive without touching an active workspace."""
     with zipfile.ZipFile(_path(package)) as archive:
@@ -1586,6 +1655,8 @@ def _validate_closures(records, read):
     for row in [*records.observed_currents.values(), *records.archived_observed_currents.values()]:
         proposal_recovery_current.read(row, read)
     _validate_positions(records, read)
+    records.lineage.imported.verify(read)
+    records.lineage_archive.verify(read)
     for row in records.legacy_briefs.values():
         validate_markdown(read(row))
     for payload in records.artifacts.values():
@@ -1675,6 +1746,7 @@ def _detached_files(stage, records):
         destination.write_bytes(canonical_json(raw))
 
 
+@schema_definition_scope()
 def restore_detached(package, destination):
     """Rebuild research and archived protocol evidence in a fresh isolated directory."""
     package, destination = _path(package), _path(destination)
@@ -1694,6 +1766,10 @@ def restore_detached(package, destination):
         ):
             conn.executescript(SCHEMA)
             _migrate(conn)
+            if any(item["name"] == "paper_lineage_sets" for item in manifest["tables"]):
+                from paper_daily.lineage_sets import SCHEMA as lineage_schema
+
+                conn.execute(lineage_schema)
             records = _Records(manifest["workspace_id"], manifest["cursor"])
             if any(item["name"] == "research_source_archive" for item in manifest["tables"]):
                 from paper_daily.source_provenance import SCHEMA as archive_schema

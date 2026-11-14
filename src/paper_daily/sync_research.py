@@ -92,6 +92,10 @@ def initialize(conn: sqlite3.Connection, *, workspace_id: str, device_id: str) -
         from paper_daily.inbox_content import initialize as initialize_inbox
 
         initialize_inbox(conn)
+        from paper_daily.lineage_projection import initialize_in as initialize_lineage
+
+        # Candidate-only enrollment must not materialize a scientific report store.
+        initialize_lineage(conn, include_report=False)
         paper_namespace = uuid5(NAMESPACE_URL, f"paperfact:{workspace_id}:{device_id}:papers")
         paper_rows = conn.execute(
             "SELECT id FROM papers WHERE id NOT IN (SELECT local_id FROM research_paper_identity)"
@@ -474,6 +478,12 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
             write_inbox(conn, operation)
             return
         if operation["entity_type"] == "research_content":
+            from paper_daily import lineage_dependencies
+
+            if lineage_dependencies.requires_readiness(operation):
+                from paper_daily.lineage_projection import apply_in
+
+                return apply_in(conn, operation)
             from paper_daily.sync_content import write_content
 
             write_content(conn, operation)
@@ -555,3 +565,26 @@ def research_writer(conn: sqlite3.Connection, operation: dict) -> None:
             "ON CONFLICT(sync_id) DO UPDATE SET incarnation=excluded.incarnation",
             (identity, operation["incarnation"]),
         )
+
+
+def research_projection_writer(conn, operation, *, visible):
+    """Graph receive adapter preserving source provenance separately from visibility.
+
+    Native schema initialization and event acceptance remain caller obligations.
+    This is DML only under the journal authorizer; it never initializes tables or
+    commits. Ordinary rows retain the existing deletion behavior. Typed Lineage
+    keeps its full put and exact source pins when hidden. Native wire admission
+    remains independently gated by the common codec.
+    """
+    from paper_daily import lineage_dependencies
+
+    if not conn.in_transaction or type(visible) is not bool:
+        raise ValueError("Research projection requires its transaction and visibility")
+    if lineage_dependencies.requires_readiness(operation):
+        from paper_daily.lineage_projection import apply_in
+
+        return apply_in(conn, operation, visible=visible)
+    value = json.loads(canonical_operation(operation))
+    if not visible:
+        value.update(action="delete", payload={})
+    return research_writer(conn, value)

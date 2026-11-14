@@ -170,3 +170,20 @@ privately rather than treating the entire folder as a disposable cache.
 The nightly job runs `refresh` (to pick up newly published papers) then `today` (to
 build the briefing pack), and a Claude session turns the pack into the deep dive. See
 the [optional ML workflow](ml-daily.md) for setup.
+
+The reference sync administration commands use the same locked Python runtime,
+SQLite and HTTP dependencies as the app; no additional service SDK is required.
+Run `paperfact sync-admin --help` for the explicit local setup entry point. This
+is loopback development tooling, not a production hosting installation.
+
+
+## Headless sync-service/operator environment
+
+Run `scripts/setup-sync-service.ps1` on Windows or
+`bash scripts/setup-sync-service.sh` on macOS/Linux. It uses `uv.lock`, Python 3.11
+and the optional `gcp` extra in `.venv-sync`, leaving desktop `.venv` separate.
+The Google Cloud Storage SDK and google-crc32c are locked operator/dev dependencies,
+not ordinary client requirements. Setup only installs/shows offline help; it does
+not discover ADC or create service/cloud state. [Publication/API and limits](gcp-backup-publication.md).
+The desktop build configuration excludes cloud operator namespaces; real installer and Linux
+operator acceptance remain separate from static/fixture checks.

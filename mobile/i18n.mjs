@@ -343,3 +343,35 @@ Object.assign(messages['zh-TW'], {
   workspaceResumeUnavailable:'未能開啟上次工作區。請從「連線」選擇；既有本機研究資料未變更。',
   workspaceChoiceNotSaved:'工作區已開啟；瀏覽器無法記住本次選擇，下次需重新選取。'
 });
+
+
+Object.assign(messages.en, {
+ unsupported_lineage:'The research lineage format or paper references could not be validated. Existing research was kept.',
+ lineage_capability_required:'The snapshot has incomplete research lineage declarations. Export it again from the desktop app.',
+ lineage_portable_owner_required:'Research lineage requires a current portable snapshot from the desktop app.'
+});
+Object.assign(messages['zh-TW'], {
+  "unsupported_lineage": "\u7121\u6cd5\u6838\u5c0d\u7814\u7a76\u8108\u7d61\u683c\u5f0f\u6216\u8ad6\u6587\u5c0d\u61c9\uff0c\u539f\u6709\u7814\u7a76\u8cc7\u6599\u5df2\u4fdd\u7559\u3002",
+  "lineage_capability_required": "\u5feb\u7167\u7684\u7814\u7a76\u8108\u7d61\u5ba3\u544a\u4e0d\u5b8c\u6574\uff0c\u8acb\u5f9e\u684c\u9762\u7248\u91cd\u65b0\u532f\u51fa\u3002",
+  "lineage_portable_owner_required": "\u7814\u7a76\u8108\u7d61\u9700\u8981\u684c\u9762\u7248\u532f\u51fa\u7684\u65b0\u7248\u53ef\u651c\u5feb\u7167\u3002"
+});
+
+Object.assign(messages.en, {
+  "invalid_lineage_operation": "This research update could not be validated. Existing research was kept.",
+  "stale_lineage_parent": "A selected paper changed. The research update was not applied.",
+  "stale_lineage_source": "A referenced original is no longer the selected version. The update was not applied.",
+  "changed_lineage_address": "This update changed its saved research identity. Existing research was kept.",
+  "changed_lineage_parents": "This update changed its selected papers. Existing research was kept.",
+  "changed_lineage_incarnation": "This update refers to another research version. Existing research was kept."
+});
+Object.assign(messages['zh-TW'], {
+  "invalid_lineage_operation": "\u7121\u6cd5\u6838\u5c0d\u9019\u7b46\u7814\u7a76\u66f4\u65b0\uff0c\u539f\u6709\u8cc7\u6599\u5df2\u4fdd\u7559\u3002",
+  "stale_lineage_parent": "\u9078\u53d6\u7684\u8ad6\u6587\u5df2\u6539\u8b8a\uff0c\u9019\u7b46\u7814\u7a76\u66f4\u65b0\u672a\u5957\u7528\u3002",
+  "stale_lineage_source": "\u5f15\u7528\u7684\u539f\u6587\u5df2\u975e\u9078\u53d6\u7248\u672c\uff0c\u9019\u7b46\u66f4\u65b0\u672a\u5957\u7528\u3002",
+  "changed_lineage_address": "\u9019\u7b46\u66f4\u65b0\u6539\u8b8a\u4e86\u7814\u7a76\u8b58\u5225\uff0c\u539f\u6709\u8cc7\u6599\u5df2\u4fdd\u7559\u3002",
+  "changed_lineage_parents": "\u9019\u7b46\u66f4\u65b0\u6539\u8b8a\u4e86\u9078\u53d6\u8ad6\u6587\uff0c\u539f\u6709\u8cc7\u6599\u5df2\u4fdd\u7559\u3002",
+  "changed_lineage_incarnation": "\u9019\u7b46\u66f4\u65b0\u5c6c\u65bc\u53e6\u4e00\u500b\u7814\u7a76\u7248\u672c\uff0c\u539f\u6709\u8cc7\u6599\u5df2\u4fdd\u7559\u3002"
+});
+
+messages.en.ipv6_same_origin_required = "For IPv6 local testing, open the app on the same service origin, or use 127.0.0.1.";
+messages['zh-TW'].ipv6_same_origin_required = "\u4f7f\u7528 IPv6 \u672c\u6a5f\u6e2c\u8a66\u6642\uff0c\u8acb\u5f9e\u76f8\u540c\u7684\u670d\u52d9\u7db2\u5740\u958b\u555f App\uff0c\u6216\u6539\u7528 127.0.0.1\u3002";

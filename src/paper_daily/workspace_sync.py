@@ -13,7 +13,11 @@ from paper_daily.sync_capture import RESEARCH, trusted_connection
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_http import HttpTransport
 from paper_daily.sync_journal import Journal, _identifier
-from paper_daily.sync_research import research_order_writer, research_writer
+from paper_daily.sync_research import (
+    research_order_writer,
+    research_projection_writer,
+    research_writer,
+)
 from paper_daily.workspace_service import Cancelled, WorkspaceService, _binding, _read, _tables
 
 
@@ -291,7 +295,10 @@ class SyncSession:
         journal = GuardedJournal.attach_existing(self.workspace.path, **identity)
         journal.live = live
         return SyncClient.attach_existing(
-            journal, research_writer, order_writer=research_order_writer
+            journal,
+            research_writer,
+            order_writer=research_order_writer,
+            projection_writer=research_projection_writer,
         )
 
     def sync(self, ticket, progress=lambda _value: None, *, max_pages=100, seconds=20):
@@ -330,6 +337,17 @@ class SyncSession:
                         break
                     if time.monotonic() >= deadline:
                         break
+                from paper_daily.lineage_history_repair import HistoryRepair
+
+                history = HistoryRepair(
+                    client, current_path=self.workspace.current_path,
+                    expected_identity=self.workspace.identity,
+                )
+                remaining = deadline - time.monotonic()
+                history_status = (
+                    history.drain(ticket, progress, max_steps=16, seconds=min(3, remaining))
+                    if remaining > 0 else history.status()
+                )
                 files.download_pending()
                 live()
                 file_status = files.status()
@@ -344,6 +362,7 @@ class SyncSession:
                     "last_success": self.last_success,
                     "attachments": file_status,
                     "local_binding": identity,
+                    "lineage_history": history_status,
                 }
             finally:
                 files.close()

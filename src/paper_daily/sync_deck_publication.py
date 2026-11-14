@@ -94,7 +94,11 @@ def runtime(*, database=None):
     from paper_daily import store
     from paper_daily.sync_client import SyncClient
     from paper_daily.sync_journal import Journal
-    from paper_daily.sync_research import research_order_writer, research_writer
+    from paper_daily.sync_research import (
+        research_order_writer,
+        research_projection_writer,
+        research_writer,
+    )
 
     path = Path(database if database is not None else store.DB_PATH)
     if not path.is_file():
@@ -110,7 +114,12 @@ def runtime(*, database=None):
         if row is None:
             raise ValueError("Incomplete research binding")
     journal = Journal.attach_existing(path, workspace_id=row[0], device_id=row[1])
-    return SyncClient.attach_existing(journal, research_writer, order_writer=research_order_writer)
+    return SyncClient.attach_existing(
+        journal,
+        research_writer,
+        order_writer=research_order_writer,
+        projection_writer=research_projection_writer,
+    )
 
 
 def _observation(conn, client, local_id, mode):

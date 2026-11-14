@@ -25,6 +25,8 @@ _SOURCE_FIELDS = {
     "pins": ("scope", "paper_id", "pinned_at"),
     "reading_positions": ("paper_id", "document_hash", "page", "recorded_at", "method"),
     "paper_later_outcomes": ("paper_id", "body_json", "document_hash", "written_at"),
+    "paper_lineage_sets": ("paper_id", "corpus_key", "body_json", "source_hash",
+                           "document_hash", "written_at"),
     "papers": ("id", "title", "authors_json", "year", "doi", "page_url"),
     "notes": ("id", "paper_id", "body", "created_at", "kind", "page", "anchor"),
     "dives": ("paper_id", "body", "written_at"),
@@ -156,7 +158,8 @@ def _preflight(conn, max_records, max_bytes):
     records, size = 0, 0
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table, fields in _SOURCE_FIELDS.items():
-        if table in {"reading_positions", "paper_later_outcomes"} and table not in tables:
+        if (table in {"reading_positions", "paper_later_outcomes", "paper_lineage_sets"}
+                and table not in tables):
             continue
         lengths = "+".join(f"COALESCE(length(CAST({field} AS BLOB)),0)" for field in fields)
         row = conn.execute(f"SELECT COUNT(*),COALESCE(SUM({lengths}),0) FROM {table}").fetchone()
@@ -846,6 +849,10 @@ def read_manifest(
         conn.execute("BEGIN")
         # Positions require the portable owner plus its exact original declaration.
         # Version 1 and incomplete source closures retain the existing refusal.
+        from paper_daily import lineage_read_projection
+
+        if schema_version == 1 and lineage_read_projection.present(conn):
+            raise ValueError("Lineage read projection requires portable schema version 2")
         position_rows = None
         if schema_version == 2:
             from paper_daily.reading_position_projection import declarations
@@ -859,6 +866,7 @@ def read_manifest(
         result = _project(conn, workspace_id, max_records, max_bytes, position_rows=position_rows)
         if schema_version == 2:
             result = _portable_projection(conn, result)
+            lineage_read_projection.attach(conn, result)
             _document_projection(conn, result, verified_documents, max_records, max_bytes)
             from paper_daily.reading_position_projection import attach
 

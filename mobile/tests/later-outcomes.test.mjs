@@ -66,7 +66,7 @@ test('initial exact typed tombstone suppresses stale snapshot, foreign incarnati
 test('new static dependency is exact offline shell member; dynamic/private URLs stay excluded',()=>{
  const scope='https://example.org/mobile/',url=scope+'later-outcomes.mjs';assert(SHELL.includes('./later-outcomes.mjs'));
  assert(cacheable(new Request(url),scope));assert(!cacheable(new Request(url+'?private=1'),scope));assert(!cacheable(new Request(url,{headers:{Authorization:'Bearer fake'}}),scope));
- assert.match(readFileSync(new URL('../sw.mjs',import.meta.url),'utf8'),/paperfact-mobile-shell-v16/);
+ assert.match(readFileSync(new URL('../sw.mjs',import.meta.url),'utf8'),/paperfact-mobile-shell-v19/);
  for(const path of SHELL)if(!path.includes('/vendor/'))assert.doesNotThrow(()=>readFileSync(new URL(path==='./'?'../index.html':'../'+path.slice(2),import.meta.url)));
  assert.doesNotThrow(()=>validateLaterBody(body(),validateContentTimestamp));
 });

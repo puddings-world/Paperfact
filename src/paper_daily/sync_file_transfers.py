@@ -88,6 +88,11 @@ class FileTransfers:
             return generation == self._generation
 
     def ready_to_push(self, operation):
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            with self.client.journal.transaction() as conn:
+                return lineage_dependencies.ready_to_push_in(conn, self.client, operation)
         if operation["entity_type"] != "research_file" or operation["action"] != "put":
             return True
         with self.client.journal.transaction() as conn:

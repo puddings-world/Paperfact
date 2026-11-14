@@ -42,7 +42,7 @@ No elapsed-time or percentage estimate substitutes for these outcomes.
 | M05 | Export the list and import it into another empty test workspace | PDF and attachments survive; notes, list name and editable slides retain changes. |
 | M06 | Sign into your own supported AI connection; select a model | Effective account/model is visible; other machines' credentials were not imported. |
 | M07 | In References, select no auto followup, then explicitly test a maximum of one extra call | Chosen bound belongs to that job; repeated clicks create one job; partial content survives. Extra calls occur only if the response is incomplete. Real AI replies are nondeterministic; use fixture tests to prove the exact bound. |
-| M08 | Open sync settings, expand/collapse setup, load a saved connection | Fields retain edits; loading only reveals Verify; no research upload starts until an explicit sync action. |
+| M08 | Open sync settings, paste this device's private connection record, load it, then verify | The input is masked and cleared after loading; fields identify this device. Loading alone does not connect, save credentials, enroll or upload research. Invalid input preserves the previous connection. |
 | M09 | Connect each device with its own credential to the same test workspace/service | Authentication identifies the expected workspace/device; credentials never travel in a package. |
 | M10 | On Mac disconnect network, edit `Mac offline note`, close/reopen | Local save survives; UI reports pending/offline, not fully synchronized. |
 | M11 | On Windows edit a different note, then reconnect Mac and sync both | Both independent edits appear on both machines without duplicates. |
@@ -50,12 +50,39 @@ No elapsed-time or percentage estimate substitutes for these outcomes.
 | M13 | Interrupt sync, reopen, retry; open another paper during background work | Progress can resume, no duplicated records, no result applied to the wrong paper. |
 | M14 | Download/pin PDF on Mac, go offline, reopen it | Verified local original opens; a missing attachment is reported accurately. |
 | M15 | Preview and export diagnostics after a reproducible failure | Report identifies this build and OS/CPU; preview matches export; upload requires your action. |
+| M16 | Enable automatic sync explicitly, edit locally, wait for the bounded pass, close/reopen | Local changes reach the peer without manual repeat clicks; after restart reconnect and enable session sync again. Loading a record alone does not resume uploads. |
+| M17 | Interrupt a large attachment transfer, reconnect, then run the offline file check | Pending/retrying file status remains distinct from metadata caught up; retry yields exact verified bytes. Disconnect only after offline verification passes, then reopen the PDF and editable deck. |
+| M18 | From Windows, confirm revocation of the Mac test device; attempt another Mac sync | Future remote access is rejected; locally downloaded research and unsent edits remain. Do not reuse the revoked device ID or delete its outbox. |
+| M19 | Create a complete recovery backup, restore into a new detached test directory, inspect both conflict variants and files | Source workspace remains unchanged; restored content and exact attachments are retained. Restore does not reconnect or reactivate the original device identity. A missing required file blocks complete backup rather than silently omitting it. |
+| M20 | On a physical phone, open the private PWA, cache selected research, go offline, add a uniquely labeled note, close/reopen, reconnect | Cached research and saved note survive; explicit reconnect delivers the note once to Windows and Mac. Mobile background execution is not required. Test iOS and Android separately; an untested platform remains not run. |
+
 
 M09–M14 require a deployed, mutually reachable test service and two separately
 issued device credentials. `127.0.0.1` on the Mac is the Mac itself. Package
 import/export tests do not establish live synchronization. No hosted service is
 provisioned by this document. Stop a journey on data loss and retain its test
 workspace privately for diagnosis; do not delete/reinitialize to hide a failure.
+
+## Shared-service and recovery prerequisites
+
+For M09-M14 and M16-M20, use a disposable workspace and a mutually reachable
+service with separate device credentials. Provision a replacement test identity
+before M18 so revocation does not prevent later cases. Never paste connection
+records into the acceptance report. The [GCP pilot plan](../gcp-sync-pilot-plan.md)
+is a proposal, not a deployed endpoint; its public-edge, backup and restore gates
+must pass before treating that service as usable away from home.
+
+M19 tests a detached client research backup through the app's recovery actions;
+see [the recovery contract](../sync-recovery.md). It does not test restoration of
+the cloud authority. Record cloud authority disaster recovery separately, including
+fresh service/workspace identity when restoring older history; never reset a
+client cursor to disguise lost server history.
+
+For each run, record device/OS, artifact hash, candidate commit, case ID,
+pass/fail/not run, expected/actual result and reviewed diagnostic filename.
+Keep the Windows/Mac/phone records together. A passing automated test or a package
+import cannot fill a physical-device result. Stop on data loss and preserve the
+isolated workspace privately for diagnosis.
 
 ## Automated packaged-app checks (maintainer)
 

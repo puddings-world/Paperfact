@@ -29,7 +29,8 @@ _PUBLICATION_LOCK = threading.RLock()
 _DEFAULT_POLICY = object()
 POSITION_FORMATS = {"paperfact.position-source-owner.v1", "paperfact.position-source-owner.v2"}
 NOTE_FORMAT = "paperfact.note-source-owner.v1"
-ATOMIC_FORMATS = {"paperfact.position-source-owner.v2", NOTE_FORMAT}
+LINEAGE_FORMAT = "paperfact.lineage-source-observation.v1"
+ATOMIC_FORMATS = {"paperfact.position-source-owner.v2", NOTE_FORMAT, LINEAGE_FORMAT}
 
 
 def _owner(context, snapshot):
@@ -84,6 +85,12 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
         isinstance(owner, dict) and owner.get("format") in POSITION_FORMATS
     )
     note = isinstance(owner, dict) and owner.get("format") == NOTE_FORMAT
+    lineage = isinstance(owner, dict) and owner.get("format") == LINEAGE_FORMAT
+    lineage_fields = (
+        {"corpus_id", "generation_request_id", "source_id", "source_identity",
+         "focal_paper_id", "focal_lifecycle"}
+        if lineage else set()
+    )
     claim_content.closed(
         owner,
         {
@@ -93,9 +100,12 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
             "paper_id",
             "parent_lifecycle",
             "source_owner_id",
-        } | ({"position_key"} if position else set()) | ({"draft_key"} if note else set()),
+        } | ({"position_key"} if position else set())
+        | ({"draft_key"} if note else set()) | lineage_fields,
     )
-    if owner["format"] not in {"paperfact.source-owner.v1", NOTE_FORMAT, *POSITION_FORMATS}:
+    if owner["format"] not in {
+        "paperfact.source-owner.v1", NOTE_FORMAT, LINEAGE_FORMAT, *POSITION_FORMATS
+    }:
         raise ValueError("Unsupported source snapshot owner")
     identity = owner["database_identity"]
     if (
@@ -121,6 +131,10 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
                 "note-choice:" + claim_content.hashed(owner)):
             raise ValueError("Note choice receipt requires its exact typed owner")
     claim_content.digest(row["sha256"])
+    if lineage:
+        from paper_daily.lineage_source_snapshots import validate_owner
+
+        validate_owner(owner, row)
     if position and (
         owner["position_key"] != row["sha256"] or owner["source_owner_id"] != owner["paper_id"]
     ):

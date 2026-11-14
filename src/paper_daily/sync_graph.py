@@ -129,6 +129,20 @@ def queue_context_transition(get_entity, get_receipt, operation, current):
     return receipt["outcome"] == "accepted" and receipt["sequence"] == current["structure_revision"]
 
 
+def _check_address(operation, current):
+    typed = ("content_address" in operation or bool(current and "content_address" in current)
+             or operation.get("payload", {}).get("feature") == "lineage")
+    if not typed:
+        return
+    from paper_daily import lineage_address
+
+    if current is not None:
+        lineage_address.check_known(operation["entity_type"], operation["entity_id"], current,
+                                    operation)
+    elif not lineage_address.validate(operation):
+        raise ValueError("Lineage operation lost its registered content address")
+
+
 def check_preconditions(get_entity, get_receipt, operation) -> bool:
     """Return False for preserved graph conflict; raise for missing/invalid dependencies.
 
@@ -148,6 +162,13 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
             )
         return True
 
+    _check_address(operation, current)
+    if (operation.get("content_address", {}).get("feature") == "lineage"
+            and "source_dependencies" in operation):
+        from paper_daily.lineage_dependencies import active
+
+        if not active(get_entity, operation):
+            return False
     if (
         kind == "membership"
         and operation["action"] == "put"
@@ -245,6 +266,7 @@ def apply_accepted(get_entity, set_entity, operation, sequence):
         raise ValueError("Invalid graph event sequence")
     kind, identity = operation["entity_type"], operation["entity_id"]
     current = get_entity(kind, identity)
+    _check_address(operation, current)
     lifecycle = (
         current is None
         or current["incarnation"] != operation["incarnation"]
@@ -256,6 +278,8 @@ def apply_accepted(get_entity, set_entity, operation, sequence):
         "active": operation["action"] == "put",
         "parents": deepcopy(operation["parents"]),
     }
+    if "content_address" in operation:
+        state["content_address"] = deepcopy(operation["content_address"])
     parents = []
     for ref in operation["parents"]:
         parent = get_entity(ref["kind"], ref["id"])

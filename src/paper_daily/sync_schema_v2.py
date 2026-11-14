@@ -93,8 +93,9 @@ def _paper(payload):
                 raise ValueError("Paper URLs must be HTTP(S) without embedded credentials")
 
 
-def canonical_operation(value: dict) -> str:
-    if not isinstance(value, dict) or not REQUIRED <= set(value) <= REQUIRED | OPTIONAL:
+def _header(value, *, additional=()):
+    if (not isinstance(value, dict)
+            or not REQUIRED <= set(value) <= REQUIRED | OPTIONAL | set(additional)):
         raise ValueError("Unexpected or missing version-2 operation fields")
     if type(value["version"]) is not int or value["version"] != 2:
         raise ValueError("Unsupported graph protocol version")
@@ -132,6 +133,15 @@ def canonical_operation(value: dict) -> str:
         raise ValueError("Unsupported graph operation")
     if not isinstance(payload, dict):
         raise ValueError("Payload must be an object")
+    return kind, action, payload
+
+
+def canonical_operation(value: dict) -> str:
+    from paper_daily import lineage_dependencies
+
+    if isinstance(value, dict) and lineage_dependencies.requires_readiness(value):
+        return lineage_dependencies.canonical_operation(value)
+    kind, action, payload = _header(value)
     parents = value["parents"]
     pin_closure = kind == "research_content" and (
         (action == "put" and payload.get("feature") == "list_pin")
@@ -306,6 +316,10 @@ def canonical_operation(value: dict) -> str:
                 raise ValueError("Membership added_at requires a timezone")
         except ValueError as exc:
             raise ValueError("Membership added_at must be an ISO timestamp with timezone") from exc
+    return _encode(value)
+
+
+def _encode(value):
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     if len(encoded.encode("utf-8")) > MAX_BYTES:
         raise ValueError("Sync operation exceeds 256 KiB")

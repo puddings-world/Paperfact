@@ -17,6 +17,9 @@ SCHEMA = (
     "record_id TEXT PRIMARY KEY,protocol TEXT NOT NULL,body_json TEXT NOT NULL);"
 )
 FORMATS = {
+    "research_lineage_publications": "request_id candidate_id row_json sources_json",
+    "research_lineage_imports": "request_id body_json",
+    "research_lineage_actions": "request_id body_json",
     "research_observed_current_deck_recovery": "paper_id slot parent_token manifest_json",
     "research_local_deck_proposals": (
         "proposal_id request_id paper_id captured_json owner_json manifest_json fingerprint"
@@ -127,6 +130,10 @@ def generation_sources(row):
         raise ValueError("Archived generation context exceeds its declared bound")
     context = _value(row["context_json"])
     output = _value(row["row_json"])
+    if context.get("format") == "paperfact.lineage-proposal-context.v1":
+        from paper_daily.lineage_candidates import originals
+
+        return {r["sha256"] for r in originals(row)}
     owner = context["owner_id"]
     reader = context["input_reader"]
     inputs = context["inputs"]
@@ -206,6 +213,31 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol == "research_lineage_publications":
+        from paper_daily.lineage_recovery import publication
+
+        _row, sources = publication(record)
+        return {source["sha256"] for source in sources}
+    if protocol == "research_lineage_imports":
+        from paper_daily.lineage_package_publish import validate_record as validate_import
+        from paper_daily.lineage_sets import decode
+
+        action = validate_import(record)
+        sources = {source["sha256"] for item in action["records"] for source in item["sources"]}
+        for item in action["records"]:
+            before = _value(item["before_json"])
+            if before is not None:
+                sources.update(
+                    source["document_hash"]
+                    for source in decode(before["body_json"])["report"]["sources"]
+                    if source["availability"] == "available"
+                )
+        return sources
+    if protocol == "research_lineage_actions":
+        from paper_daily.lineage_lifecycle import validate_record as validate_action
+
+        validate_action(record)
+        return set()  # Archive evidence grants no source ownership or replay rights.
     if protocol == "research_observed_current_deck_recovery":
         from paper_daily.proposal_recovery_current import validate as validate_current
 

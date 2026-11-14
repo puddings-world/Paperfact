@@ -129,6 +129,7 @@ class PreparedImport:
     version_root: Path
     work: Path
     proposals: tuple = ()
+    lineage: object = None
 
     def preview(self):
         value = json.loads(self.report)
@@ -209,6 +210,11 @@ class PackageImporter:
             ):
                 raise UnsupportedPackage("The package metadata exceeds its byte budget")
             manifest, tables, owners = bundle._validated(z)
+            lineage = None
+            if tables.get("paper_lineage_sets"):
+                from paper_daily.lineage_package_targets import validate
+
+                lineage = validate(z, manifest, tables, cancelled=lambda: ticket.cancelled)
             if not isinstance(tables, dict) or any(
                 not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows)
                 for rows in tables.values()
@@ -227,6 +233,7 @@ class PackageImporter:
                 "pins",
                 "queue_pins",
                 "deck_proposals",
+                "paper_lineage_sets",
                 *bundle.PER_PAPER,
                 "pdf_ai_highlights",
                 "pdf_highlights",
@@ -300,9 +307,14 @@ class PackageImporter:
                         [relative],
                     )
             files = {name: z.read("files/" + name) for name in owners}
+            if lineage is not None:
+                for name, data in lineage.files:
+                    if files.get(name) != data:
+                        raise ValueError("Lineage package bytes changed during validation")
+                    files[name] = data
         if version(selected) != before:
             raise ValueError("The selected package changed while it was inspected")
-        return selected, before, digest.hexdigest(), manifest, tables, owners, files
+        return selected, before, digest.hexdigest(), manifest, tables, owners, files, lineage
 
     def prepare(
         self,
@@ -315,6 +327,7 @@ class PackageImporter:
         target_list_id=None,
         paper_mapping=None,
         confirmed_mapping=False,
+        lineage_decision=None,
     ):
         if any(
             type(value) is not bool for value in (replace, allow_new_namespace, confirmed_mapping)
@@ -322,9 +335,11 @@ class PackageImporter:
             raise ValueError("Import choices must be explicit booleans")
         ticket = ticket or Ticket()
         self._check()
-        selected, stamp, fingerprint, manifest, tables, owners, files = self._inventory(
+        selected, stamp, fingerprint, manifest, tables, owners, files, lineage = self._inventory(
             archive, ticket
         )
+        if lineage_decision is not None and lineage is None:
+            raise ValueError("The selected package has no Lineage comparison to approve")
         proposal_store_index = None
         if tables.get("deck_proposals"):
             from paper_daily.local_blob_binding import bind
@@ -341,6 +356,11 @@ class PackageImporter:
         mapping_option = dict(paper_mapping or {})
         if (target_list_id or mapping_option) and not confirmed_mapping:
             raise UnsupportedPackage("Existing targets require an explicitly confirmed mapping")
+        decision_key = None
+        if lineage_decision is not None:
+            from paper_daily.lineage_import_review import fingerprint as decision_fingerprint
+
+            decision_key = decision_fingerprint(lineage_decision)
         action_fingerprint = _hash(
             canonical_json(
                 {
@@ -349,6 +369,7 @@ class PackageImporter:
                     "list": target_list_id,
                     "papers": mapping_option,
                     "new_namespace": bool(allow_new_namespace),
+                    **({"lineage_decision": decision_key} if decision_key is not None else {}),
                 }
             )
         )
@@ -606,7 +627,70 @@ class PackageImporter:
                     artifacts,
                     report,
                     ticket,
+                    consumed_originals=tuple(name for name, _data in lineage.files)
+                    if lineage is not None else (),
                 )
+                if lineage is not None:
+                    report.setdefault("lineage_reports", 0)
+                    report.setdefault("lineage_reused", 0)
+                    from paper_daily import lineage_package_native
+                    from paper_daily.lineage_import_review import admit_in
+                    from paper_daily.sync_content import content_id
+
+                    choices = admit_in(
+                        conn, self, lineage, identities, fingerprint, lineage_decision,
+                    )
+                    report.setdefault("lineage_preserved", 0)
+                    report.setdefault("lineage_replaced", 0)
+                    lineage_targets = []
+                    lineage_adoptions = {}
+                    sources = {op["entity_id"]: op for *_rest, op in originals}
+                    for payload in lineage_package_native.payloads(lineage, identities):
+                        local = next(value["local_id"] for value in papers.values()
+                                     if value["portable_id"] == payload["scope"]["id"])
+                        lineage_targets.append(lineage_package_native.target_in(
+                            conn, local, payload["key"]))
+                        current_row = lineage_package_native.saved_in(conn, local, payload["key"])
+                        key = content_id(payload["scope"], "lineage", payload["key"])
+                        remember("research_content", key)
+                        prior = sync_capture._current(conn, self.client, "research_content", key)
+                        selected_choice = choices.get(key)
+                        if selected_choice == "keep":
+                            report["lineage_preserved"] += 1
+                            continue
+                        if selected_choice == "adopt":
+                            from paper_daily.lineage_matching_adoption import eligible_in
+
+                            if not eligible_in(conn, self.client, key, payload, current_row):
+                                raise ValueError("Matching Lineage changed before adoption preview")
+                            lineage_adoptions[key] = current_row
+                        if prior is not None and selected_choice != "replace":
+                            if prior["payload"] != payload:
+                                raise UnsupportedPackage(
+                                    "Lineage replacement requires reviewed adoption"
+                                )
+                            from paper_daily.lineage_wire import decode_row
+
+                            if current_row != decode_row(conn, prior["payload"]):
+                                raise UnsupportedPackage(
+                                    "Saved Lineage changed outside its native projection"
+                                )
+                            report["lineage_reused"] = report.get("lineage_reused", 0) + 1
+                            continue
+                        if current_row is not None and selected_choice not in {"replace", "adopt"}:
+                            raise UnsupportedPackage("Unowned Lineage requires reviewed adoption")
+                        operation = lineage_package_native.build_in(
+                            conn, self.client, lineage, identities, payload,
+                            _uid(request, "research_content", key), sources,
+                        )
+                        operations.append(operation)
+                        self.client._overlay_optimistic(conn._capture_graph_cache, operation)
+                        if selected_choice == "adopt":
+                            report["lineage_adopted"] = report.get("lineage_adopted", 0) + 1
+                        elif selected_choice == "replace":
+                            report["lineage_replaced"] += 1
+                        else:
+                            report["lineage_reports"] = report.get("lineage_reports", 0) + 1
                 for table in known_categories():
                     report.setdefault(table, 0)
                 # End our own read snapshot before the source seam's bounded
@@ -641,6 +725,8 @@ class PackageImporter:
                     "proposal_store_index": proposal_store_index,
                     "proposal_parents": proposal_parents,
                     "proposal_replace": replace,
+                    "lineage_targets": lineage_targets if lineage is not None else None,
+                    "lineage_adoptions": lineage_adoptions if lineage is not None else {},
                 }
                 return PreparedImport(
                     _SEAL,
@@ -655,6 +741,7 @@ class PackageImporter:
                     self.version_root,
                     work,
                     proposals,
+                    lineage,
                 )
             except BaseException:
                 self._cleanup(work)
@@ -710,6 +797,9 @@ class PackageImporter:
         from paper_daily.sync_source_files import encode
 
         records = [
+            (item["paper_id"], item, True) for item in manifest.get("lineage_sources", [])
+        ]
+        records += [
             (item["paper_id"], item, True) for item in manifest.get("position_sources", [])
         ]
         records += [
@@ -847,12 +937,13 @@ class PackageImporter:
             add("note", _uid(fingerprint, "note", index), payload, "notes")
 
     def _prepare_decks(
-        self, conn, files, owners, identities, fingerprint, request, add, artifacts, report, ticket
+        self, conn, files, owners, identities, fingerprint, request, add, artifacts, report, ticket,
+        *, consumed_originals=(),
     ):
         from paper_daily.presentations import deck_from_dict
         from paper_daily.slide_layout import used_figures
 
-        consumed = set()
+        consumed = set(consumed_originals)
         for relative, data in files.items():
             parts = Path(relative).parts
             if (
@@ -1016,8 +1107,9 @@ class PackageImporter:
                 for kind, identity, expected in json.loads(prepared.observations):
                     if _snapshot(conn, self.client, kind, identity) != expected:
                         raise ValueError("Import targets changed after preview; prepare again")
-                from paper_daily import deck_proposal_packages
+                from paper_daily import deck_proposal_packages, lineage_package_native
 
+                lineage_package_native.check_targets_in(conn, data.get("lineage_targets"))
                 with deck_proposal_packages.import_targets_in(
                     conn, self.client, prepared.proposals,
                     current=lambda: self._current_ticket(ticket),
@@ -1051,13 +1143,25 @@ class PackageImporter:
 
                     for operation in json.loads(prepared.operations):
                         ticket.check()
-                        actual = self.client.new_graph_operation_in(
-                            conn,
-                            operation["entity_type"],
-                            operation["entity_id"],
-                            operation["payload"],
-                            operation_id=operation["operation_id"],
-                        )
+                        if operation["payload"].get("feature") == "lineage":
+                            from paper_daily import lineage_package_native, lineage_projection
+
+                            if prepared.lineage is None:
+                                raise ValueError("Lineage import needs its validated archive lease")
+                            lineage_projection.initialize_in(conn)
+                            identities = {old: value["portable_id"] for old, value in
+                                          json.loads(prepared.report)["identity_mapping"].items()}
+                            actual = lineage_package_native.rebuild_in(
+                                conn, self.client, prepared.lineage, identities, operation,
+                            )
+                        else:
+                            actual = self.client.new_graph_operation_in(
+                                conn,
+                                operation["entity_type"],
+                                operation["entity_id"],
+                                operation["payload"],
+                                operation_id=operation["operation_id"],
+                            )
                         if canonical_operation(actual) != canonical_operation(operation):
                             raise ValueError("Import graph changed before its observed write")
                         if operation["operation_id"] in originals:
@@ -1069,6 +1173,12 @@ class PackageImporter:
                                     "Original source differs from its prepared operation"
                                 )
                         else:
+                            observed_adoption = data.get("lineage_adoptions", {}).get(
+                                operation["entity_id"])
+                            if observed_adoption is not None:
+                                from paper_daily.lineage_matching_adoption import consume_in
+
+                                consume_in(conn, self.client, operation, observed_adoption)
                             self.client.journal.apply_in(conn, operation, self.client.writer)
                     for target, proof in prepared.documents:
                         if not bind_verified_document(conn, target, proof):

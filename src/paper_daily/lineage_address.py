@@ -100,10 +100,12 @@ def check_known(kind, identity, state, operation):
     metadata(kind, identity, state)
     if state.get("content_address") is not None:
         validate(operation)
-        old = {(p["kind"], p["id"]) for p in state["parents"]}
-        new = {(p["kind"], p["id"]) for p in operation["parents"]}
+        old = [(p["kind"], p["id"]) for p in state["parents"]]
+        new = [(p["kind"], p["id"]) for p in operation["parents"]]
         if old != new:
-            raise ValueError("Known lineage content cannot move to different paper parents")
+            raise ValueError(
+                "Known lineage content cannot reorder or move to different paper parents"
+            )
     if state.get("content_address") != operation.get("content_address"):
         raise ValueError("Known research content address cannot be stripped or changed")
 

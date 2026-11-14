@@ -104,3 +104,15 @@ Use the full generated checksum, not the placeholder above. `--preview` only rea
 the package; importing preserves existing content unless `--replace` is explicit.
 MCP's existing local research operations remain available; these new commands do
 not add network tools to the MCP server. See [local integration](local-integration.md).
+
+
+## Development v0.5 Lineage packages
+
+Unbound list imports now preserve saved Lineage reports, every available exact
+focal/peer original and selected context outside the list, without importing
+that context's unrelated notes or adding it as list membership. PDFs are required
+for this content. Same-ID bibliographic collisions require reviewed mapping;
+scientific conflicts preserve current research by default. Enrolled receivers
+still refuse Lineage until compound sync import is complete. See the
+[source-complete workflow and current limits](lineage-packages.md#normal-list-package-workflow).
+This is development behavior, not a claim about the installed v0.4 releases.

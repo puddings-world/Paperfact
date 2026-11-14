@@ -1,5 +1,20 @@
 # v0.5.0 parallel work and Claude handoff
 
+Current continuation, 2026-11-13: use `Paperfact-develop` on `develop/0.5`;
+verify the worktree and existing changes before editing. The historical mobile
+worktree mentioned below is no longer in the current worktree inventory. Mobile
+source is integrated. Native Lineage source publication, strict journal/service
+admission, conflicts and capacity now have focused local evidence; use the
+[current status](status-0.5.0.md) and [continuation ledger](testing/continuation-20261112.md).
+
+A process inventory confirms Claude processes exist, but no process has been
+identified as a controllable Paperfact session. Process presence is not an
+available messaging channel or proof that a handoff was received. No unrelated
+session was contacted. Shared contracts/status/ledger are the current handoff;
+independent ownership must be established before concurrent edits.
+
+## Historical dispatch record (2026-10-26)
+
 Status: **Claude dispatch awaiting workspace trust**, 2026-10-26.
 An isolated `Paperfact-mobile` worktree on `feature/0.5-mobile-reader` exists.
 The native Claude CLI refused launch with `Workspace not trusted`; the owner must

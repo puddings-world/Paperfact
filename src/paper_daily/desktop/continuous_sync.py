@@ -8,6 +8,8 @@ COPY = {
     "en": {
         "off": "Automatic sync off", "waiting": "Waiting to sync",
         "working": "Syncing", "idle": "Automatic sync on",
+        "files_pending": "Files pending",
+        "files_retry": "Retrying files",
         "offline": "Offline; local changes retained", "paused": "Sync paused; reconnect or retry",
         "changed": "Connection changed; enable sync again", "closing": "Stopping sync",
     },
@@ -16,8 +18,29 @@ COPY = {
         "idle": "自動同步已開啟", "offline": "離線；本機變更已保留",
         "paused": "同步已暫停；請重新連線或重試", "changed": "連線已變更；請重新開啟同步",
         "closing": "正在停止同步",
+        "files_pending": "附件待同步",
+        "files_retry": "附件重試中",
     },
 }
+
+
+def status_text(value, language="en"):
+    locale = language if language in COPY else "en"
+    text = COPY[locale][value["state"]]
+    attachments = (value.get("result") or {}).get("attachments")
+    if attachments:
+        pending, failed = attachments.get("pending"), attachments.get("failed")
+        if type(pending) is int and type(failed) is int:
+            text += (f"；附件待處理 {pending}、失敗 {failed}" if locale == "zh-TW"
+                     else f"; files pending {pending}, failed {failed}")
+        text += ("；離線可用性請另行核對" if locale == "zh-TW"
+                 else "; verify offline availability separately")
+    history = (value.get("result") or {}).get("lineage_history")
+    if isinstance(history, dict) and history.get("more"):
+        from paper_daily.desktop.history_index_text import progress_text
+
+        text += "; " + progress_text(history, locale)
+    return text
 
 
 class ContinuousSync(QObject):
@@ -53,7 +76,10 @@ class ContinuousSync(QObject):
     def summary(self):
         return {"enabled": self.enabled, "state": self.state, "busy": self.busy,
                 "retry_in": max(0, int(self._next - self.clock())) if self.enabled else None,
-                "result": dict(self._result) if self._result else None}
+                "result": {**self._result, "attachments": dict(self._result["attachments"]),
+                           **({"lineage_history": dict(self._result["lineage_history"])}
+                              if "lineage_history" in self._result else {})}
+                if self._result else None}
 
     def _report(self, state):
         self.state = state
@@ -130,15 +156,36 @@ class ContinuousSync(QObject):
                 self.enabled = False
                 self._report("paused")
             else:
-                self._failures = 0
                 result = worker.result
                 self._result = {key: result[key] for key in (
                     "pushed", "received", "pending", "awaiting_receipts", "conflicts")}
+                attachments = result.get("attachments") or {}
+                self._result["attachments"] = {
+                    key: attachments[key] for key in (
+                        "pending", "failed", "steps", "storage_registered",
+                        "complete_offline_verified"
+                    ) if key in attachments
+                }
+                history = result.get("lineage_history")
+                if isinstance(history, dict):
+                    self._result["lineage_history"] = {key: history[key] for key in (
+                        "through", "target", "remaining", "more", "restored", "scanned")}
+                files_pending = bool(attachments.get("pending"))
+                files_failed = bool(attachments.get("failed"))
                 more = (not result["caught_up"] or bool(result["pending"])
-                        or bool(result["awaiting_receipts"]))
-                self._next = self.clock() + (
-                    self.debounce_seconds if self._dirty or more else self.poll_seconds)
-                self._report("waiting" if more else "idle")
+                        or bool(result["awaiting_receipts"])
+                        or bool(history and history.get("more")))
+                if files_failed:
+                    self._failures += 1
+                    self._next = self.clock() + min(300, 10 * 2 ** min(self._failures - 1, 5))
+                    self._report("files_retry")
+                else:
+                    self._failures = 0
+                    self._next = self.clock() + (
+                        self.debounce_seconds if self._dirty or more or files_pending
+                        else self.poll_seconds)
+                    self._report(
+                        "files_pending" if files_pending else "waiting" if more else "idle")
         elif self.enabled:
             self.stop()
             self._report("changed")
@@ -175,14 +222,15 @@ def controller_for(owner, session, *, blocked=lambda: False):
     owner._continuous_sync = controller
     changes = getattr(owner, "workspace_changes", None)
     if changes is not None:
-        changes.changed.connect(controller.local_changed)
+        signal = getattr(changes, "local_operations", changes.changed)
+        signal.connect(controller.local_changed)
     button = getattr(owner, "sync_status_btn", None)
     if button is not None:
         def display(value):
             copy = COPY["zh-TW"]
             button.setText(copy[value["state"]])
             result = value["result"]
-            text = copy[value["state"]]
+            text = status_text(value, "zh-TW")
             if result:
                 text += (f"；上次同步：待送 {result['pending']}，"
                          f"待確認 {result['awaiting_receipts']}，衝突 {result['conflicts']}")

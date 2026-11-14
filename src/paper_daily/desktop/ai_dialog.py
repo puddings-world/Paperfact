@@ -43,6 +43,7 @@ TASK_LABELS = {
     "slides": "論文簡報",
     "paper_highlights": "原文研究重點",
     "claims": "Claim evidence",
+    "lineage": "Research lineage",
     "audit": "AI \u8ad6\u9ede\u6838\u5c0d",
     "survey": "清單綜覽",
 }

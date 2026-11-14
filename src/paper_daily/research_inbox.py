@@ -421,13 +421,20 @@ class Inbox:
                     if enrolled:
                         from paper_daily.sync_client import SyncClient
                         from paper_daily.sync_journal import Journal
-                        from paper_daily.sync_research import research_order_writer, research_writer
+                        from paper_daily.sync_research import (
+                            research_order_writer,
+                            research_projection_writer,
+                            research_writer,
+                        )
 
                         journal = Journal.attach_existing(
                             self.path, workspace_id=enrolled[0], device_id=enrolled[1]
                         )
                         client = SyncClient.attach_existing(
-                            journal, research_writer, order_writer=research_order_writer
+                            journal,
+                            research_writer,
+                            order_writer=research_order_writer,
+                            projection_writer=research_projection_writer,
                         )
                         operation = client.new_graph_operation_in(
                             conn,
@@ -494,14 +501,21 @@ class Inbox:
             return None
         from paper_daily.sync_client import SyncClient
         from paper_daily.sync_journal import Journal
-        from paper_daily.sync_research import research_order_writer, research_writer
+        from paper_daily.sync_research import (
+            research_order_writer,
+            research_projection_writer,
+            research_writer,
+        )
 
         journal = Journal.attach_existing(
             self.path, workspace_id=enrolled[0], device_id=enrolled[1]
         )
         journal._binding(conn)
         return SyncClient.attach_existing(
-            journal, research_writer, order_writer=research_order_writer
+            journal,
+            research_writer,
+            order_writer=research_order_writer,
+            projection_writer=research_projection_writer,
         )
 
     def retained(self, view, ticket=None, *, item_id=None):

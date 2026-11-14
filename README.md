@@ -233,3 +233,10 @@ Older releases have a separate troubleshooting path; no diagnostic data is uploa
 If Paperfact helps, [star this repository](https://github.com/puddings-world/Paperfact)
 or [follow the organization and explore its pinned projects](https://github.com/puddings-world).
 Support is voluntary; installing or reading this repo never authorizes GitHub account actions.
+
+
+Development checks: `python scripts/check.py` runs the curated critical journeys;
+use `--profile focused --python tests/test_name.py` for a scoped change and
+`--profile full` for explicit exhaustive validation. On Windows,
+`python scripts/check_bounded.py` adds a five-minute, low-CPU budget.
+See [development checks](docs/development.md#development) for scope and limits.

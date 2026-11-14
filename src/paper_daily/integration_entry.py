@@ -42,6 +42,10 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "_desktop-job-v1":
         return _private_job(argv[1:])
+    if argv and argv[0] == "sync-admin":
+        from paper_daily.sync_admin import main as admin_main
+
+        return admin_main(argv[1:])
     if argv and argv[0] == "diagnostics":
         from paper_daily.diagnostics import main as diagnostics_main
 

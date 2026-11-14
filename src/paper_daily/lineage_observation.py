@@ -203,6 +203,10 @@ def _read_in(conn, corpus, corpus_id, request_id, *, captured=None, sizes=None, 
             )
         )
     target = _target(conn, sources[0]["local_id"], corpus_id)
+    from paper_daily.lineage_capacity import local_room_in
+
+    if target is None and not local_room_in(conn, sources[0]["local_id"], corpus_id):
+        _fail("lineage_set_limit")
     observation = None
     if client:
         identity = content_id(dict(kind="paper", id=parents[0]["id"]), "lineage", corpus_id)
@@ -271,7 +275,7 @@ def check_in(conn, observation, *, client=None):
     return True
 
 
-def check_after_sources_in(conn, observation, operations, *, client=None):
+def check_after_sources_in(conn, observation, operations, *, client=None, publication=None):
     """Allow only exact same-transaction original creations with this request's IDs."""
     _worker()
     expected = checked(observation)
@@ -318,6 +322,73 @@ def check_after_sources_in(conn, observation, operations, *, client=None):
             _fail("lineage_source_operation_changed")
         after["source_graph"] = before["source_graph"]
         after["source_operation"] = before["source_operation"]
+    if publication is not None:
+        from paper_daily import lineage_dependencies, lineage_projection, lineage_wire
+
+        encoded = lineage_dependencies.canonical_operation(publication)
+        owned = conn.execute(
+            "SELECT envelope FROM paperfact_sync_operations WHERE operation_id=?",
+            (expected["request_id"],),
+        ).fetchone()
+        marker, marked = lineage_projection._marker(conn, publication["entity_id"])
+        if (
+            owned is None or owned[0] != encoded
+            or publication["operation_id"] != expected["request_id"]
+            or publication["action"] != "put"
+            or publication["workspace_id"] != expected["binding"]["workspace_id"]
+            or publication["device_id"] != expected["binding"]["device_id"]
+            or publication["content_address"]["key"] != expected["corpus_id"]
+            or marker is None or marker["active"] != 1 or marked != publication
+            or actual["target"] != lineage_wire.decode_row(conn, publication["payload"])
+            or actual["observation"]["incarnation"] != publication["incarnation"]
+            or not actual["observation"]["active"]
+        ):
+            _fail("lineage_publication_changed")
+        # Only the exact own journal/marker/row mutation may differ. A queued
+        # action is not claimed remotely accepted; later edits fail above.
+        actual["target"] = expected["target"]
+        actual["observation"] = expected["observation"]
     if canonical_json(actual) != canonical_json(expected) or versions != observation._versions:
         _fail("lineage_observation_changed")
     return True
+
+
+@dataclass(frozen=True, slots=True)
+class TargetLease:
+    """Retained pre-call observation, distinct from current publication permission."""
+
+    _observation: LineageObservation = field(repr=False)
+    _seal: str = field(repr=False)
+
+
+def _lease_seal(observation):
+    data = [id(observation), observation._json, observation._seal, os.getpid()]
+    return hmac.new(_KEY, research_lineage._json(data).encode(), "sha256").hexdigest()
+
+
+def lease_data(lease):
+    """Read original archive metadata even after its view/source becomes stale."""
+    if (not isinstance(lease, TargetLease)
+            or not isinstance(lease._observation, LineageObservation)
+            or not hmac.compare_digest(lease._seal, _lease_seal(lease._observation))):
+        _fail("invalid_lineage_target_lease")
+    return lease._observation.data
+
+
+def check_target(lease):
+    """Worker-only fresh check, never a substitute for check_in at commit time."""
+    _worker()
+    data = lease_data(lease)
+    research_lineage.current(lease._observation._corpus)
+    with closing(generation._connect(Path(data["database"]))) as conn:
+        conn.execute("BEGIN")
+        return check_in(conn, lease._observation)
+
+
+def target_lease(observation):
+    """Capture only a still-current native observation, before submitting a job."""
+    _worker()
+    checked(observation)
+    lease = TargetLease(observation, _lease_seal(observation))
+    check_target(lease)
+    return lease

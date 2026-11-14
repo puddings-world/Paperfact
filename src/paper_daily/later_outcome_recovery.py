@@ -48,6 +48,8 @@ class Records:
         portable = [key for key, local in records.paper_map.items() if local == paper]
         for receipt in self.receipts:
             owner = json.loads(receipt["owner_json"])
+            if owner["format"] == source_snapshots.LINEAGE_FORMAT:
+                continue  # Archived corpus observations cannot authorize another feature.
             if (
                 receipt["sha256"] == sha
                 and owner["paper_id"] == paper

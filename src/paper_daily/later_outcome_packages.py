@@ -194,6 +194,8 @@ def _owned(conn, database, row):
         conn, document_hash=row["document_hash"]
     ) + source_snapshots.list_owned(database):
         owner = json.loads(receipt["owner_json"])
+        if owner["format"] == source_snapshots.LINEAGE_FORMAT:
+            continue  # Archived corpus observations cannot authorize another feature.
         if (
             receipt["sha256"] == row["document_hash"]
             and owner["paper_id"] == row["paper_id"]

@@ -273,6 +273,20 @@ class SyncConnectionDialog(QDialog):
             label.setWordWrap(True)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(label)
+        details_row = QHBoxLayout()
+        self.connection_details = QLineEdit()
+        self.connection_details.setEchoMode(QLineEdit.EchoMode.Password)
+        self.connection_details.setMaxLength(8192)
+        self.connection_details.setPlaceholderText(
+            "貼上同步服務提供的連線資料" if self.zh
+            else "Paste connection details from your service"
+        )
+        self.details_button = QPushButton("帶入連線資料" if self.zh else "Use connection details")
+        self.details_button.clicked.connect(self.load_connection_details)
+        self.connection_details.returnPressed.connect(self.load_connection_details)
+        details_row.addWidget(self.connection_details, 1)
+        details_row.addWidget(self.details_button)
+        layout.addLayout(details_row)
         self.setup_button = QPushButton(
             "設定新連線／修改連線" if self.zh else "Set up or edit a connection"
         )
@@ -440,9 +454,9 @@ class SyncConnectionDialog(QDialog):
     def _automatic_changed(self, value):
         if self.disposed:
             return
-        from paper_daily.desktop.continuous_sync import COPY as SYNC_COPY
+        from paper_daily.desktop.continuous_sync import status_text
 
-        self.automatic_status.setText(SYNC_COPY["zh-TW" if self.zh else "en"][value["state"]])
+        self.automatic_status.setText(status_text(value, "zh-TW" if self.zh else "en"))
         self._buttons()
 
     @property
@@ -508,6 +522,8 @@ class SyncConnectionDialog(QDialog):
         )
         for field in (self.endpoint, self.workspace_id, self.device_id, self.credential):
             field.setEnabled(available)
+        self.connection_details.setEnabled(available)
+        self.details_button.setEnabled(available)
         self.connect_button.setEnabled(available)
         self.remember_box.setEnabled(available)
         self.load_saved_button.setEnabled(available)
@@ -638,6 +654,25 @@ class SyncConnectionDialog(QDialog):
             self._vault = ConnectionVault(self.session.workspace)
         return self._vault
 
+    def load_connection_details(self):
+        if (self.busy or self.disposed or self._invalid
+                or (self.automatic is not None and self.automatic.busy)):
+            return False
+        body = self.connection_details.text()
+        if not body.strip():
+            return False
+
+        def decode(ticket, _progress):
+            ticket.check()
+            record = Connection.decoded(body)
+            ticket.check()
+            return record
+
+        started = self._start("connection_details", decode)
+        if started:
+            self.connection_details.clear()
+        return started
+
     def load_saved(self):
         def run(ticket, _progress):
             try:
@@ -716,7 +751,11 @@ class SyncConnectionDialog(QDialog):
     def _progress(self, value):
         if self._closing or self._invalid or not self._worker or self._worker.ticket.cancelled:
             return
-        if value.get("stage") == "attachments":
+        if value.get("stage") == "history_reindex":
+            from paper_daily.desktop.history_index_text import progress_text
+
+            text = progress_text(value, "zh-TW" if self.zh else "en")
+        elif value.get("stage") == "attachments":
             text = (
                 f"附件傳輸步驟：{value['steps']}"
                 if self.zh
@@ -746,12 +785,15 @@ class SyncConnectionDialog(QDialog):
         if (
             not self._invalid
             and not self._closing
-            and kind in {"load_saved", "forget_saved", "connect"}
+            and kind in {"load_saved", "forget_saved", "connect", "connection_details"}
         ):
             self._connection_scope_current()
         if not self._invalid and not self._closing:
             if worker.error:
                 self.status.setText(
+                    ("連線資料無法讀取；請確認來源及格式。" if self.zh
+                     else "Could not read connection details; check their source and format.")
+                    if kind == "connection_details" else
                     self.v["unavailable"] if worker.error == "vault" else self.t[worker.error]
                 )
             elif worker.ticket.cancelled:
@@ -774,7 +816,7 @@ class SyncConnectionDialog(QDialog):
                     if remembered is False
                     else self.t["connected"] + ("\n" + self.v["stored"] if remembered else "")
                 )
-            elif kind == "load_saved":
+            elif kind in {"load_saved", "connection_details"}:
                 record, worker.result = worker.result, None
                 if record is None:
                     self.status.setText(self.v["missing"])
@@ -792,7 +834,11 @@ class SyncConnectionDialog(QDialog):
                             field.setText(value)
                     finally:
                         self._setting = False
-                    self.status.setText(self.v["loaded"])
+                    self.status.setText(
+                        ("已帶入連線資料；請核對後按驗證並連線。" if self.zh
+                         else "Connection details loaded; review them, then verify and connect.")
+                        if kind == "connection_details" else self.v["loaded"]
+                    )
                     self.setup_button.setChecked(True)
             elif kind == "forget_saved":
                 self.status.setText(self.v["forgotten"])
@@ -822,6 +868,11 @@ class SyncConnectionDialog(QDialog):
                         "whole-workspace offline status is not verified."
                     )
                 )
+                history = result.get("lineage_history")
+                if history and history.get("more"):
+                    from paper_daily.desktop.history_index_text import progress_text
+
+                    text += "\n" + progress_text(history, "zh-TW" if self.zh else "en")
                 if not result["caught_up"]:
                     text += (
                         "\n尚有記錄，請繼續同步。"
@@ -904,6 +955,7 @@ class SyncConnectionDialog(QDialog):
             self._worker.ticket.cancel()
         self._setting = True
         self.credential.clear()
+        self.connection_details.clear()
         self._setting = False
         self._buttons()
 
@@ -939,6 +991,7 @@ class SyncConnectionDialog(QDialog):
         self._poll.stop()
         self._setting = True
         self.credential.clear()
+        self.connection_details.clear()
         self.done(QDialog.DialogCode.Rejected)
         event.accept()
 

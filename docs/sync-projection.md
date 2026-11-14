@@ -195,3 +195,108 @@ binding exists. Pass explicit process-local `VerifiedDocument` snapshots to
 `read_manifest(..., verified_documents=...)` to report currently matching bytes.
 Projection does no hashing, PDF parsing, downloading or activation. See
 [exact document contract](sync-documents.md); DTO1 is unchanged.
+
+
+## Saved Lineage read projection
+
+Development `read_manifest(..., schema_version=2)` now includes every current
+`paper_lineage_sets` row in its focal paper's nonempty `lineage` array. Each item
+has exactly `body`, `source_hash`, `document_hash`, `written_at`. The full validated
+body preserves the original report, quotes, locations, proposed judgments,
+unresolved requirements and portable selected-paper bindings. Existing registered
+identities are required; reads never mint identities, invoke AI or read PDF files.
+Each corpus counts toward the existing record/byte budgets; at most 64 per paper.
+
+A nonempty array requires `lineage` in sorted, unique `required_capabilities`.
+An unused/missing capability, empty corpus array, duplicate corpus/paper owner,
+nonportable or missing selected paper, changed digest or unsupported evidence
+refuses import before changing storage. Schema version 1 refuses nonempty saved
+Lineage instead of silently omitting it. Older receivers reject the new required
+capability. Existing snapshots without Lineage remain compatible.
+
+Mobile `validateLineageBody(body)` and
+`validateLineageProjection(rows, paperId, paperIds, validateTimestamp)` mirror the
+closed saved metadata contract. Import persists a read-only projection, not sync
+history, cursor advancement, graph/outbox work or active original-source grants.
+An available original in the report means it was captured for that analysis;
+it does not certify this device has those bytes or that a research claim is true.
+
+`renderLineage(panel, paper, el, language='en')` renders bilingual overview cards
+with native disclosure controls, plain-text quotations, proposed relationships,
+missing-evidence explanations and recorded original versions. It offers no
+unchecked PDF link or model action. Source inspection remains a separate desktop
+path. The v18 offline shell includes the saved cards and event consumer and removes stale
+shells while retaining research caches. Physical-phone, actual browser layout /
+keyboard and full shared-operation Lineage acceptance remain separate gates.
+
+
+```mermaid
+flowchart LR
+    SQL[Saved SQL reports] --> Python[Portable v2 read projection]
+    Python --> Capability[Required lineage capability]
+    Capability --> Validate[Closed mobile validation]
+    Validate --> Cache[IndexedDB readProjection only]
+    Cache --> Cards[Read-only research cards]
+    Capability -->|unsupported or invalid| Keep[Keep existing research unchanged]
+```
+
+The shared `validateEvidenceLocation(value, pages)` and
+`validateEvidenceText(value, maximum, nullable=false)` exports from `claims.mjs`
+provide the same closed primitives for claims and Lineage. These metadata checks
+supply neither PDF-byte verification nor scientific semantic validation.
+
+The Lineage storage object must be an actual research table. A same-named view
+is refused rather than read outside the table-based record/byte preflight.
+
+
+## Mobile Lineage event consumer
+
+The development mobile consumer now recognizes dependency-complete typed v2
+Lineage events in its normal `validateOperation` / `Engine.sync` path. This is a
+consumer integration; the Python service/journal still refuses live Lineage
+admission until compound publication, enrollment and receiver closure are complete.
+Native staged frames are used only as explicit synthetic events in integration
+tests, not claimed as accepted events from the live authority.
+
+`lineage-ops.mjs` supplies the Lineage-specific checks beneath the common closed
+operation envelope. A put requires its exact `content_address` and ordered
+`source_dependencies`, full portable scientific body, focal/corpus identity,
+source/document hashes and timezone-bearing timestamp. One to four distinct
+ordered paper parents must match the report bindings. Every available original
+has its exact paper/hash file ID and incarnation pin; unavailable peers have no
+invented file pin. An empty typed deletion keeps the corpus/parent address and
+has no source dependencies. Unknown fields, partial declarations and foreign or
+reordered pins refuse.
+
+Before an accepted event is recorded, `lineageReceived(state, operation, active)`
+checks known immutable corpus/parent identities and exact current paper/file
+lifetimes. An untyped generic deletion cannot strip a known one-parent Lineage
+address. An active scientific incarnation cannot be silently replaced; stale
+retirement refuses. Deletion remains possible after original retirement. Common
+server authorization, CAS/conflict decisions and blob verification remain distinct.
+The same known-address checks protect local enqueue; there is no new mobile
+Lineage editor or provider/model action.
+
+The domain functions transform a draft state. The engine must call them inside
+one store update so receipts, content, outbox removal and cursor commit together;
+a late failed dependency must not commit an earlier event from that page. Both
+MemoryStore and IndexedStore retain the existing atomic record boundary. A closed
+or superseded foreground job cannot install a late result. Duplicate foreground
+sync calls share the existing job and repeated accepted receipts are idempotent.
+
+`lineageActive` checks original file lifetimes as well as paper parents. Source
+retirement hides its old scientific projection; restoring equal bytes under a
+new file incarnation does not revive the old pin. Raw scientific receipts/history
+remain retained. A fresh explicit research update with the current exact pins
+can project again. `projectLineage` replaces only the known corpus in a saved
+snapshot and leaves that snapshot and unrelated corpora intact; typed tombstones
+cannot make old snapshot content reappear.
+
+The existing read-only overview cards display the complete scientific body and
+its unresolved judgments. File metadata is not downloaded PDF bytes: acceptance
+creates no local file/activation grant, model call, primary-document change or
+implicit download. Original-source inspection and independent scientific
+validation remain separate. The v18 static offline shell includes the new
+consumer; unsupported older clients reject its typed envelope instead of dropping
+scientific fields. Actual hosted service, browser/device and complete release
+acceptance remain open.

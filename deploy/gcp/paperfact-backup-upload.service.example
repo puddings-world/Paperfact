@@ -1,0 +1,25 @@
+# Review-only manual upload unit. No timer, credentials, bucket or IAM is installed.
+# Use a separate verified snapshot; adapt and validate all placeholders first.
+[Unit]
+Description=Publish one reviewed Paperfact authority backup
+RequiresMountsFor=/mnt/paperfact
+BindsTo=mnt-paperfact.mount
+After=mnt-paperfact.mount network-online.target
+
+[Service]
+Type=oneshot
+User=paperfact-sync
+Group=paperfact-sync
+WorkingDirectory=/opt/paperfact
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUTF8=1
+ExecStart=/opt/paperfact/.venv-sync/bin/python -m paper_daily sync-admin upload-backup --input /mnt/paperfact/backups/REPLACE_WITH_VERIFIED_SNAPSHOT --bucket REPLACE_WITH_PRIVATE_BUCKET --seconds 300 --quiet
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/mnt/paperfact/backups
+TimeoutStartSec=360
+# A process interrupted after remote publication must retry the same snapshot.
+# This unit does not capture new snapshots, prune backups or establish an RPO.

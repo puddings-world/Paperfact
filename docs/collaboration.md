@@ -24,19 +24,18 @@ if you need a file in someone else's row, ask the owner.
 A session cannot message another session. The table and the commit history are
 the only handoff, so commit often on your own branch.
 
-## Two levels of checking
+## Checking without blocking development
 
-| When | Check | Passing it means |
-|---|---|---|
-| Committing to your own branch | `scripts/check.py --profile focused` on the files you touched and the tests that use them | The commit may be made |
-| Merging into `develop/0.5` | The full check on the merged result | The merge may be pushed |
+- Own-branch checkpoint: focused checks for the changed behavior and its callers.
+- Integration into `develop/0.5`: the default critical journeys plus affected tests.
+- Release: critical and affected checks, package/device acceptance, and an explicit
+  full run when broad changes warrant it. Record uncovered boundaries honestly.
 
-The full check runs every test and reports every failure; it does not stop at the
-first one. A failure found by the full check is fixed on a branch and merged, not
-edited in the integration folder.
-
-Device, installed-package and hosted acceptance are a release checklist. They do
-not hold an item open during development.
+The owner approved the curated critical gate on 2026-11-14. Historical tests are
+retained, not weakened. Focused iteration has a 3-5 minute budget; beta validation
+and packaging together have a 20-30 minute budget. Run one check at a time with
+bounded CPU usage. A timeout is not a pass. See [development](development.md).
+Device and hosted acceptance do not block a scoped development checkpoint.
 
 ## Keep the status short
 

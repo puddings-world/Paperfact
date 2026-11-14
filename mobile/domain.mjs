@@ -3,6 +3,8 @@ import { validateArtifact } from './artifacts.mjs';
 import { inboxUUID, validateInbox, validateInboxProjection } from './inbox-schema.mjs';
 import {validatePositionProjection,positionReceived} from './reading-position-schema.mjs';
 import {validateLaterProjection} from './later-outcomes.mjs';
+import {validateLineageProjection} from './lineage.mjs';
+import {lineageOperation,validateLineageOperation,lineageActive,lineageReceived,projectLineage} from './lineage-ops.mjs';
 import { queueClosure, queueParents, requireLegacy } from './legacy-workflow.mjs';
 import {
   copy,
@@ -122,7 +124,7 @@ export function validateOperation(op, workspace) {
   closed(
   op,
   op.version === 2 ?[...base, 'incarnation', 'parents', 'structure_revision']: base,
-  ['resolution_of', ...(op.version === 2 ?['structure_depends_on']: [])]
+  ['resolution_of', ...(op.version === 2 ?['structure_depends_on',...(lineageOperation(op)?['content_address','source_dependencies']:[])]: [])]
   );
   requireThat(op.workspace_id === workspace, 'wrong_workspace');
   for(const name of['operation_id', 'workspace_id', 'device_id', 'entity_id']) identifier(op[name]);
@@ -141,7 +143,7 @@ export function validateOperation(op, workspace) {
     identifier(op.incarnation);
     integer(op.structure_revision);
     requireThat(Array.isArray(op.parents));
-    parentShape(op);
+    if(lineageOperation(op))validateLineageOperation(op);else parentShape(op);
     if(op.entity_type==='inbox_item') inboxUUID(op.entity_id);
   } else requireThat(op.entity_type!=='inbox_item','unsupported_version');
   if(op.action === 'delete') {
@@ -163,7 +165,7 @@ export function validateOperation(op, workspace) {
   } else if(op.entity_type === 'research_file') {
     validateArtifact(op.payload, op.entity_id, op.parents);
   } else if(op.entity_type === 'research_content') {
-    validateContent(op.payload, op.entity_id, op.parents);
+    if(!lineageOperation(op))validateContent(op.payload, op.entity_id, op.parents);
   } else if(op.entity_type === 'list') {
     closed(op.payload, ['name', 'note']);
     boundedText(op.payload.name, 200);
@@ -231,6 +233,8 @@ export function active(state, kind, id, trail = new Set()) {
   graph = state.graph[key];
   if(! graph?.active || trail.has(key)) return false;
   trail = new Set([...trail, key]);
+  const op=state.entities[key]?.operation;
+  if(op&& !lineageActive(state,op,active,trail))return false;
   return graph.parents.every(p => state.graph[keyOf(p.kind, p.id)]?.incarnation === p.incarnation && active(state,
   p.kind, p.id, trail));
 }
@@ -244,6 +248,7 @@ function applyGraph(state, op, sequence) {
     active: op.action === 'put',
     structure_revision: (! old || old.incarnation !== op.incarnation || op.action === 'delete') ? sequence: old.structure_revision
   };
+  if(Object.hasOwn(op,'content_address'))state.graph[key].content_address=copy(op.content_address);
   for(const p of op.parents) {
     const parent = state.graph[keyOf(p.kind, p.id)];
     if(parent?.active && parent.incarnation === p.incarnation) parent.structure_revision = sequence;
@@ -349,6 +354,7 @@ export function receive(state, events) {
     local = state.outbox.find(item => item.operation.operation_id === op.operation_id);
     if(local) requireThat(stable(local.operation) === stable(op), 'changed_retry');
     if(event.outcome==='accepted') {
+      lineageReceived(state,op,active);
       positionReceived(state,op,active,stable);
       legacyReceived(state,op); inboxReceived(state,op);
     }
@@ -506,6 +512,7 @@ export function enqueue(state, op) {
     requireThat(stable(existing) === stable(op), 'changed_retry');
     return op;
   }
+  lineageReceived(optimistic(state),op,active);
   state.outbox.push({
     operation: copy(op),
     acknowledged: null
@@ -534,8 +541,11 @@ export function validateProjection(value, workspace) {
   const required=value.required_capabilities??[];
   requireThat(!Object.hasOwn(value,'required_capabilities') || required.length>0,'unused_capability');
   requireThat(Array.isArray(required) && stable(required)===stable([...new Set(required)].sort()) &&
-    required.every(cap=>['inbox','queue_pin','reading_position','later_outcome'].includes(cap)),'unsupported_capability');
+    required.every(cap=>['inbox','queue_pin','reading_position','later_outcome','lineage'].includes(cap)),'unsupported_capability');
   requireThat(required.includes('inbox')===Object.hasOwn(value,'inbox'),'inbox_capability_required');
+  const hasLineage=value.papers.some(row=>Object.hasOwn(row,'lineage'));
+  requireThat(required.includes('lineage')===hasLineage,'lineage_capability_required');
+  if(hasLineage)requireThat(value.schema_version===2,'lineage_portable_owner_required');
   const hasLater=value.papers.some(row=>Object.hasOwn(row,'later_outcome'));
   requireThat(required.includes('later_outcome')===hasLater,'later_outcome_capability_required');
   const hasQueuePin=value.papers.some(row=>Object.hasOwn(row,'queue_pin'));
@@ -588,8 +598,12 @@ export function validateProjection(value, workspace) {
     validateContentTimestamp(paper.queue_pin.pinned_at);
   }
   for(const paper of value.papers) if(Object.hasOwn(paper,'later_outcome'))validateLaterProjection(paper.later_outcome,validateContentTimestamp);
+  const lineagePapers=new Set(value.papers.map(row=>row.id));
+  if(hasLineage)requireThat(lineagePapers.size===value.papers.length,'unsupported_lineage');
+  for(const paper of value.papers)if(Object.hasOwn(paper,'lineage'))
+    validateLineageProjection(paper.lineage,paper.id,lineagePapers,validateContentTimestamp);
   result.papers = value.papers.map(row =>({
-    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id','queue_pin','later_outcome']),
+    ...pick(row, ['id', 'title', 'authors', 'year', 'doi', 'url', 'pdf_asset_id','queue_pin','later_outcome','lineage']),
     analysis_sections: sections(row.analysis_sections),
     citations: (row.citations ??[]).map(c => pick(c, ['ref_key', 'title', 'doi', 'purpose', 'gist', 'verdict',
     'why', 'basis', 'year']))
@@ -667,7 +681,9 @@ export function projection(state) {
   Object.values(state.receipts),
   supplementary?.highlights ??[]
   );
-  const contentHighlights = projectContent(papers, lists, rows('research_content'));
+  const contentRows=rows('research_content');
+  projectLineage(papers,Object.values(view.entities),contentRows.filter(row=>lineageOperation(row.operation)));
+  const contentHighlights = projectContent(papers, lists, contentRows.filter(row=>!lineageOperation(row.operation)));
   return {
     ...((hasKind('inbox_item') || supplementary?.inbox) ? {inbox:{
       items:[...rows('inbox_item').map(({operation:op})=>({id:op.entity_id,payload:op.payload,active:true,version:op.operation_id,incarnation:op.incarnation,sync_state:statusFor(state,'inbox_item',op.entity_id),editable:true})),

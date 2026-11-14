@@ -43,7 +43,10 @@ a = Analysis(
     pathex=[str(ROOT / "src")],
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["tkinter", "pytest", "ruff"],
+    # GCP backup publication is a source-only operator tool; keep its SDKs out
+    # of the ordinary desktop/client bundle even when installed for dev tests.
+    excludes=["tkinter", "pytest", "ruff", "google.cloud", "google.auth", "google.api_core",
+              "google_crc32c"],
     noarchive=False,
 )
 # Qt WebEngine links against Qt Quick, so the Qt hooks bring every QML plugin

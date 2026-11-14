@@ -226,6 +226,76 @@ await check('Linked QA persists across IndexedDB reopen and actual UI reload wit
   const cached=await caches.match(new URL('./chat-view.mjs',location.href));
   assert(cached,'offline conversation module missing');
 });
+await check('Lineage exact IndexedDB reopen, real read-only cards and source-lifetime retirement',async()=>{
+  const {lineageRow}=await import('./tests/fixtures/lineage-data.mjs');
+  const {contentId}=await import('./ids.mjs');
+  const {sourceFileId}=await import('./artifacts.mjs');
+  const {operation}=await import('./fixture.mjs');
+  let store=await IndexedStore.open('demo-workspace','demo-phone');
+  const before=await store.read(),row=lineageRow();
+  row.body.bindings[0].paper_id=PAPER;
+  const parent={kind:'paper',id:PAPER,incarnation:before.graph['paper/'+PAPER].incarnation};
+  const sha=row.document_hash,id=sourceFileId(PAPER,sha);
+  const payload={paper_id:PAPER,feature:'original_source',slot:sha,format_version:1,
+    source_document_hash:sha,input_versions:{schema_version:1,complete:false,entities:[],documents:[],inputs_sha256:null},
+    body:{sha256:'b'.repeat(64),size:160,media_type:'application/json'},
+    assets:[{id:'original',role:'original_pdf',sha256:sha,size:256,media_type:'application/pdf'}]};
+  const source=operation('research_file',id,payload,{operationId:'browser-lineage-source',parents:[parent]});
+  const body={scope:{kind:'paper',id:PAPER},feature:'lineage',key:row.body.corpus_id,source_document_hash:sha,
+    data:{body_json:row.body,source_hash:row.source_hash,document_hash:sha,written_at:row.written_at}};
+  const science={...operation('research_content',contentId(body.scope,'lineage',body.key),body,
+    {operationId:'browser-lineage-report',parents:[parent]}),
+    content_address:{feature:'lineage',key:body.key},source_dependencies:[{source_id:row.body.report.focal,
+      paper_id:PAPER,file_id:id,incarnation:source.incarnation}]};
+  const event=(op,sequence)=>({sequence,outcome:'accepted',operation:op,head:{revision:sequence,operation:op}});
+  const events=[event(source,before.cursor+1),event(science,before.cursor+2)];
+  const authority=await IndexedStore.open('demo-workspace','fixture-authority');
+  await store.update(state=>receive(state,events));await authority.update(state=>receive(state,events));
+  store.close();store=await IndexedStore.open('demo-workspace','demo-phone');
+  const saved=await store.read(),paper=projection(saved).papers.find(p=>p.id===PAPER);
+  assert(JSON.stringify(paper.lineage)==JSON.stringify([row]),'reopen lost scientific body');
+  assert(JSON.stringify(saved.files)===JSON.stringify(before.files),'metadata changed PDF bytes');
+  assert(JSON.stringify(saved.artifactFiles)===JSON.stringify(before.artifactFiles),'metadata created byte grants');
+  assert(JSON.stringify(saved.drafts)===JSON.stringify(before.drafts),'receive lost drafts');
+  const bad={...structuredClone(science),operation_id:'bad-browser-lineage'};
+  bad.source_dependencies[0].incarnation='changed-original';
+  let rejected=false;try{await store.update(state=>{state.drafts.lineage='must rollback';receive(state,[event(bad,state.cursor+1)]);});}catch{rejected=true;}
+  assert(rejected,'stale original was accepted');
+  assert(JSON.stringify(await store.read())===JSON.stringify(saved),'failed page changed durable state');
+  const frame=document.querySelector('#reader');
+  const live=frame.contentDocument;live.querySelector('#tab-overview').click();
+  [...live.querySelectorAll('header button')][0].click();
+  await until(()=>live.querySelector('.lineage-card'));
+  assert(live.querySelector('.lineage-card').textContent.includes(row.body.report.statements[0].text),'foreground refresh omitted new science');
+  async function overview(){
+    const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
+    frame.contentWindow.location.reload();await loaded;
+    await until(()=>frame.contentDocument.querySelector('.paper-card')||frame.contentDocument.querySelector('#tab-overview'));
+    const doc=frame.contentDocument;doc.querySelector('.paper-card')?.click();doc.querySelector('#tab-overview').click();return doc;
+  }
+  const doc=await overview();await until(()=>doc.querySelector('.lineage-card'));
+  const card=doc.querySelector('.lineage-card'),summary=card.querySelector('.lineage-corpus>summary');
+  assert(card.textContent.includes(row.body.report.statements[0].text),'actual overview omitted Lineage');
+  assert(card.textContent.includes(row.body.report.statements[0].passages[0].quote),'actual overview omitted original quote');
+  assert(!card.querySelector('button,a,textarea'),'read-only cards exposed an unchecked action');
+  assert(card.scrollWidth<=card.clientWidth+1,'phone-width Lineage card overflowed');
+  summary.focus();const open=summary.parentElement.open;summary.click();
+  assert(summary.parentElement.open!==open,'native disclosure could not toggle');summary.click();
+  assert(await caches.match(new URL('./lineage-ops.mjs',location.href)),'new receiver missing from offline shell');
+  const retired={...source,operation_id:'browser-lineage-source-retired',action:'delete',payload:{}};
+  const restored={...source,operation_id:'browser-lineage-source-restored',incarnation:'browser-lineage-source-restored'};
+  const next=[event(retired,saved.cursor+1),event(restored,saved.cursor+2)];
+  await store.update(state=>receive(state,next));await authority.update(state=>receive(state,next));
+  const after=await store.read();assert(projection(after).papers.find(p=>p.id===PAPER).lineage.length===0,'same-hash restoration revived old source pin');
+  assert(JSON.stringify(after.entities['research_content/'+science.entity_id].operation)===JSON.stringify(science),'retirement discarded scientific history');
+  assert(JSON.stringify(after.entities['paper_document/'+PAPER])===JSON.stringify(before.entities['paper_document/'+PAPER]),'retirement changed primary document');
+  [...doc.querySelectorAll('header button')][0].click();
+  await until(()=>!doc.querySelector('.lineage-card'));
+  assert(doc.querySelector('#tab-overview'),'source update moved away from the paper reader');
+  const reloaded=await overview();await until(()=>!reloaded.querySelector('.lineage-card'));
+  store.close();authority.close();
+});
+
 document.body.dataset.result = results.some(line => line.startsWith('FAIL')) ? 'fail': 'pass';
 result.textContent = results.join('\n') + '\n' + document.body.dataset.result.toUpperCase();
 async function saveCurrent(engine, id, paperId, body, options = {}) {

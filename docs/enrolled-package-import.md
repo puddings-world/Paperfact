@@ -35,8 +35,14 @@ an empty list namespace. In a nonempty workspace, an unknown package requires
 `allow_new_namespace=True`, or a reviewed `target_list_id`/`paper_mapping` with
 `confirmed_mapping=True`. Mapping values are receiver-local paper IDs; destination
 list IDs are the workspace list IDs. Names/titles never establish identity.
-The current desktop import button does not yet expose this review UI; ambiguous
-imports return an actionable error instead of creating hidden duplicates.
+The desktop file and sharing-link entry points now open a native review for an
+enrolled workspace. Choose a new destination list or an existing active list,
+then explicitly pair incoming papers with existing local papers when needed.
+Titles are display/search text, never automatic matching authority. Preparation
+runs in a worker; only the separate confirmation button applies the reviewed
+operation. Changing destinations invalidates confirmation. Broken capture cannot
+fall back into the legacy SQL importer. Unbound workspaces retain their existing
+import flow.
 
 ## Supported research and exact bytes
 
@@ -84,10 +90,79 @@ other device. `previously_applied` is a historical receipt, with
 - A list package is the content selected by its existing exporter. It is not an
   export of every device preference, complete workspace history, reading-state
   surface, provider account, credential or cache directory.
-- Updated-package origin negotiation, a desktop mapping preview/confirmation UI,
-  and unbound imported-original ownership receipts are separate follow-ons.
+- Updated-package origin negotiation, unowned scientific-result adoption and
+  unbound imported-original ownership receipts remain separate follow-ons. Desktop
+  mapping/confirmation and explicit native version comparison are locally integrated.
 
 Budgets are 500 papers, 4,000 research rows, 4,096 ZIP entries, 512 MiB compressed
 and expanded content, and 8 MiB per metadata file. Existing per-document, deck,
 asset and protocol validators add their own lower limits. No provider/network or
 background synchronization starts as a consequence of import.
+
+
+### Source-complete Lineage import (v0.5 development)
+
+The enrolled importer now accepts source-complete Lineage packages through the
+same public bundle entry. It maps all selected peers and prepares their exact
+original versions, independently of the current primary PDF. A byte-validated
+package lease fixes scientific content; sealed file proofs grant the exact bytes.
+Source publication, the typed report operation, local research and the import
+receipt share one transaction. Missing/corrupt PDFs, stale preview targets,
+cancellation and late failure cannot partially replace research.
+
+The preview/result includes `lineage_reports` and `lineage_reused`. An identical
+native report can be reused after rechecking its saved SQL content. A different
+saved report requires the [explicit version comparison](lineage-import-comparison.md),
+including when `replace=True`. The desktop destination/mapping and native version
+choice UI are now integrated locally. Unowned/removed reports still require their
+separate adoption/restoration; Keep current does not silently enroll them.
+Import does not start AI calls or remote sync. [Scenario map and evidence](testing/enrolled-lineage-import-candidate.md).
+
+
+## Desktop destination review (v0.5 development)
+
+1. Open **Import research package**, from a local file or a sharing link.
+2. Keep **New list**, or select the actual existing destination. Each incoming
+   paper remains separate unless explicitly paired with an existing paper.
+3. Use **Choose existing paper** to search its title or exact local ID; choose a
+   result explicitly. Reset removes that pairing. Long titles have bounded labels
+   while the underlying exact target ID is retained. Search offers up to 50 active
+   matches after lifecycle filtering; this does not enable paper deletion.
+4. Select **Review changes**. The preview shows readable counts and PDF conflicts,
+   not internal operation IDs or JSON. Review does not commit research.
+5. Select **Import reviewed changes** to save. Ordinary sync follows its own
+   connection/consent settings; import itself starts no upload or model call.
+
+Canceling the paper picker preserves the current preview. Changing a mapping or
+destination requires another review. Closing while work is active cancels its
+publication ticket and waits for the admitted worker before releasing files.
+Stale delivered previews cannot enable confirmation in another workspace. If
+commit already won before a workspace switch, the dialog reports local success
+in the original workspace without navigating the new workspace.
+
+A changed archive must be reopened: its old target choices are not applied to
+new package contents. Different native Lineage reports open a read-only comparison
+before explicit choices and final confirmation. Unowned/removed reports remain
+protected; this dialog does not bypass separate adoption or restoration.
+
+![Native package review with synthetic research](images/package-review-desktop.png)
+
+### Worker-owned review API
+
+- `PackageReview(database, data_root, archive, *, current_path=None)` binds one
+  existing enrolled/captured receiver and archive.
+- `inspect(ticket=None) -> dict` validates the archive and returns its name,
+  incoming paper IDs/titles and active destination lists; no research commit.
+- `search(query: str) -> dict` returns up to 50 active local paper IDs/titles/year
+  and a `more` flag. Query length is at most 200 characters.
+- `prepare(*, target_list_id=None, paper_mapping=None, ticket=None, lineage_choices=None) -> dict` stages
+  the maintained import and returns a readable preview contract. Its archive
+  fingerprint and observed destinations must remain current.
+- `apply(ticket=None) -> dict` publishes only that prepared operation through the
+  same transactional importer and retry receipt as other entry points.
+- `close()` cancels the currently admitted ticket; a completed publication cannot
+  be retracted. `discard()` removes private staging and must run after work drains.
+
+Run inspection/search/preparation/application/discard on the owned worker. The
+desktop dialog serializes these tasks and rechecks receiver identity at GUI
+delivery. See [concrete behavior cases](testing/package-review-scenarios.md).

@@ -7,6 +7,9 @@ import {inboxLabel,researchInboxDialog} from './inbox-view.mjs';
 import {activityLabel,activityReport,researchActivityDialog,activateActivity,canOpenSavedNote} from './research-activity.mjs';
 import { renderLegacyWorkflow } from './legacy-view.mjs';
 import { laterOutcomeText } from './later-outcomes.mjs';
+import { renderLineage } from './lineage-view.mjs';
+import {lineageSourceDialog,SOURCE_COPY} from './lineage-source-view.mjs';
+import {lineageSourceAvailable} from './lineage-originals.mjs';
 import { renderReadingGoal } from './reading-goal.mjs';
 import {
   IndexedStore,
@@ -27,7 +30,7 @@ import {
   statusFor
 } from './domain.mjs';
 import {
-  HttpTransport
+  browserTransport
 } from './transport.mjs';
 import {
   demoTransport,
@@ -184,6 +187,7 @@ function render() {
   activityDialog?.check();
   inboxDialog?.check();
   positionDialog?.check();
+  void lineageDialog?.refresh();
   clearDeckURLs();
   const focus = retainFocus(),
   data = projection(state),
@@ -468,8 +472,14 @@ function renderOverview(panel, paper, data) {
   ));
   if(paper.later_outcome) panel.append(el('p',{class:'notice',role:'status'},
     laterOutcomeText(paper.later_outcome,language,pdfURL?pdfHash:null)));
+  renderLineage(panel,paper,el,language,{
+    label:(SOURCE_COPY[language]??SOURCE_COPY.en).open,
+    note:(SOURCE_COPY[language]??SOURCE_COPY.en).scope,
+    available:(row,sourceId)=>!switchingWorkspace&&!busy&&lineageSourceAvailable(state,paper.id,row,sourceId),
+    open:(row,sourceId,page)=>showLineageSource(paper.id,row,sourceId,page)
+  });
   const sections = paper.analysis_sections ??[];
-  if(! sections.length) panel.append(el('div', {
+  if(! sections.length && !paper.lineage?.length) panel.append(el('div', {
     class: 'card'
   }, el('h2', {}, t('explanation')), text('noAnalysis')));
   sections.forEach(section => panel.append(el(
@@ -813,6 +823,16 @@ function renderPdf(panel, paper) {
   }, t('openPdf'))
   ));
 }
+let lineageDialog=null;
+function showLineageSource(paper,row,sourceId,page){
+ if(lineageDialog||switchingWorkspace||busy)return;
+ const owner=engine,ownedStore=store,generation=owner.generation;
+ const current=()=>engine===owner&&store===ownedStore&&owner.generation===generation&&view.paper===paper&&view.tab==='overview'&&!switchingWorkspace;
+ lineageDialog=lineageSourceDialog(el,{engine:owner,paper,row,sourceId,page,language,current,
+  connected:()=>connected,available:()=>lineageSourceAvailable(state,paper,row,sourceId),
+  onClose:()=>{lineageDialog=null;}});
+ document.body.append(lineageDialog.dialog);lineageDialog.dialog.showModal();void lineageDialog.load(false);
+}
 let positionDialog=null;
 function showReadingPosition(paper) {
   if(positionDialog||busy)return;
@@ -957,7 +977,7 @@ function showConnection() {
     token.value = '';
     dialog.close();
     void attempt(
-    () => openWorkspace(workspace.value, device.value, new HttpTransport(origin.value), {
+    () => openWorkspace(workspace.value, device.value, browserTransport(origin.value), {
       token: credential
     }),
     {
@@ -1111,7 +1131,7 @@ try {
     try {
       cached=await IndexedStore.openExisting(resume.hint.workspace,resume.hint.device);
       if(cached) {
-        await openWorkspace(resume.hint.workspace,resume.hint.device,new HttpTransport(resume.hint.origin),{existingStore:cached,remember:false});
+        await openWorkspace(resume.hint.workspace,resume.hint.device,browserTransport(resume.hint.origin),{existingStore:cached,remember:false});
         restored=true;notice='workspaceRestored';isError=false;render();
       } else resumeStatus='missing';
     } catch {

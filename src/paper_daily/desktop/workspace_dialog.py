@@ -288,6 +288,10 @@ class WorkspaceDialog(QDialog):
         )
         self.recovery_copy_button.clicked.connect(self._recovery_adoption_settings)
         group.addWidget(self.recovery_copy_button)
+        from paper_daily.desktop.device_recovery_review import DeviceRecoveryReview
+
+        self.device_review = DeviceRecoveryReview(self)
+        group.addWidget(self.device_review)
         self.open_created_button = QPushButton(
             "開啟新工作區視窗" if self.zh else "Open created workspace"
         )
@@ -339,6 +343,7 @@ class WorkspaceDialog(QDialog):
         self.inspect_button.setEnabled(active and self._ready)
         self.restore_button.setEnabled(active and self._ready and self.preview is not None)
         self.recovery_copy_button.setEnabled(active and self._ready)
+        self.device_review.set_active(active and self._ready)
         self.open_created_button.setEnabled(
             active and self.created_destination is not None and not self._opened
         )
@@ -391,6 +396,12 @@ class WorkspaceDialog(QDialog):
                 self.status.setText(self.t["cancelled"])
             elif kind == "status":
                 self._show_status(worker.result)
+            elif kind == "device_review":
+                try:
+                    self.device_review.deliver(worker.result)
+                except (OSError, ValueError):
+                    self.status.setText(self.t["changed"])
+                    self._invalid = True
             elif kind == "inspect":
                 self.preview = worker.result
                 self.package = self._inspecting
@@ -690,6 +701,7 @@ class WorkspaceDialog(QDialog):
             if counts[key] is not None:
                 parts.append(f"{label if self.zh else key}: {_number(counts[key])}")
         sync = result["sync"]
+        self.device_review.enrolled = sync is not None
         if sync is None:
             parts.append(self.t["local"])
         else:

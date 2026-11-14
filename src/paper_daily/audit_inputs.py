@@ -157,6 +157,34 @@ def _saved_rows(conn, table, fields, paper_id):
     return _rows(conn, table, fields, paper_id)
 
 
+def _lineage_items(row):
+    """Keep every passage bound to its selected original, never the focal PDF."""
+    from paper_daily import lineage_sets
+
+    try:
+        lineage_sets.validate_row(row)
+        body = lineage_sets.decode(row["body_json"])
+        sources = {source["id"]: source["document_hash"] for source in body["report"]["sources"]}
+        return [
+            _item(
+                "lineage:" + row["corpus_key"] + ":" + statement["id"],
+                "lineage",
+                statement["text"],
+                sources[statement["subject"]],
+                [
+                    _passage(
+                        passage["quote"], sources[passage["source_id"]],
+                        passage["location"]["page"], passage["location"]["anchor"],
+                    )
+                    for passage in statement["passages"]
+                ],
+            )
+            for statement in body["report"]["statements"]
+        ]
+    except (ValueError, KeyError, TypeError, RecursionError):
+        raise research_audit.AuditError("invalid_saved_content") from None
+
+
 def read_items(conn, paper_id):
     """Versionless legacy text stays unversioned; no old cache becomes authority."""
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -201,6 +229,11 @@ def read_items(conn, paper_id):
                             [_passage(highlight["text"], digest, highlight["page"])],
                         )
                     )
+    from paper_daily import lineage_sets
+
+    if lineage_sets.TABLE in tables:
+        for row in _saved_rows(conn, lineage_sets.TABLE, lineage_sets.COLUMNS, paper_id):
+            items.extend(_lineage_items(row))
     for row in _rows(conn, "pdf_highlights", "id document_hash quote anchor", paper_id):
         items.append(
             _item(
@@ -334,7 +367,7 @@ class AuditCapture:
             raise research_audit.AuditError("saved_content_changed")
         # Explicit coverage is as important as the returned findings.
         report.pop("id")
-        report["not_checked"] += ["editable_decks", "list_surveys", "grounded_lineage"]
+        report["not_checked"] += ["editable_decks", "list_surveys", "lineage_other_originals"]
         return {**report, "id": claim_content.hashed(report)}
 
 

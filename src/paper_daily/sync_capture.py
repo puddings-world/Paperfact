@@ -288,7 +288,11 @@ class CaptureConnection(sqlite3.Connection):
     def _activate(self):
         from paper_daily.sync_client import SyncClient
         from paper_daily.sync_journal import Journal
-        from paper_daily.sync_research import research_order_writer, research_writer
+        from paper_daily.sync_research import (
+            research_order_writer,
+            research_projection_writer,
+            research_writer,
+        )
 
         row = self.execute(
             "SELECT workspace,device FROM research_capture_binding WHERE id=1"
@@ -298,7 +302,10 @@ class CaptureConnection(sqlite3.Connection):
         path = next(r[2] for r in self.execute("PRAGMA database_list") if r[1] == "main")
         journal = Journal.attach_existing(Path(path), workspace_id=row[0], device_id=row[1])
         self._capture_client = SyncClient.attach_existing(
-            journal, research_writer, order_writer=research_order_writer
+            journal,
+            research_writer,
+            order_writer=research_order_writer,
+            projection_writer=research_projection_writer,
         )
         from paper_daily.legacy_workflow import require_ready
 

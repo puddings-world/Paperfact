@@ -98,6 +98,7 @@ def arrange(view, layout, actions, recovery, unavailable):
     )
     advanced.addWidget(view.enrollment_button)
     advanced.addWidget(view.recovery_copy_button)
+    advanced.addWidget(view.device_review)
     advanced.addWidget(unavailable)
     advanced.addStretch()
     while layout.count():

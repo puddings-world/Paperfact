@@ -1,8 +1,9 @@
 # v0.5.0 — Research across devices
 
-Status: in development, unreleased; updated 2026-10-30. The independently
+Status: in development, unreleased; updated 2026-11-13. The independently
 maintained v0.4.x releases remain the daily-use line. They do not enable unfinished
-v0.5 synchronization. See `delivery-status-0.5.md` for current implementation evidence.
+v0.5 synchronization. See [current implementation evidence](status-0.5.0.md);
+[delivery status](delivery-status-0.5.md) preserves the historical gate ledger.
 The reference service, managed PDF reader, partial app-writer capture and independent
 mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
@@ -65,8 +66,15 @@ Per-list purpose editing, sharing, capture and mobile display are in the current
 local candidate. Source-pinned claim extraction, deterministic quote-location
 checks, saved-first cards and portable/unbound original-version inspection also
 have fixture coverage. Quote location does not certify semantic support. Grounded
-lineage, the complete analysis audit, remaining typed producer/history enrollment,
-complete editable-recovery migration/UX and physical-device acceptance remain open;
+lineage has a saved-first desktop reader, explicit native publication and mobile
+saved display with local integration tests. Source-complete enrolled package
+import and mobile exact-original reading now have affected integration evidence.
+Native package version comparison and preserved prior history now have local
+integration evidence. Existing-beta history backfill now has a bounded local
+service, offline action and automatic-sync integration with fixture acceptance.
+Unknown legacy-result migration, actual installed migration, complete analysis audit, remaining typed
+producer/history enrollment, complete editable-recovery migration/UX and
+physical-device acceptance remain open;
 task templates do not satisfy those gates. A bounded local A1 audit and the
 editable-recovery service have focused coverage in the current candidate; neither
 satisfies the complete audit or recovery release requirement.
@@ -158,3 +166,27 @@ the transactional revision and authorization requirements.
 
 Architecture: [sync design](sync-architecture.md).
 Implementation and agent handoff: [work plan](implementation-0.5.0.md).
+
+
+Local recovery preparation now includes explicit authority snapshot export and
+read-only verification; see [operator backup](sync-authority-backup.md). Cloud
+backup automation, hosted restore and installed old-device recovery acceptance
+remain required; local export/reconstruction does not complete the milestone.
+
+
+Exact matching-package adoption now has an explicit reviewed native path; see
+[legacy matching analysis](lineage-matching-adoption.md). This advances migration
+without claiming direct source selection for every unowned legacy result, native
+history repair or full installed/release acceptance.
+
+
+Cloud backup preparation includes a [tested local GCS publication adapter](gcp-backup-publication.md)
+with shared content and completion-last manifests. Actual private GCS execution,
+remote fetch/restore, managed scheduling/retention, capacity and physical-device
+acceptance remain required; a simulated upload is not an operational backup.
+
+- Local cloud-backup retrieval: implemented exact-snapshot download, byte/generation verification and closure-before-completion; cloud restore rehearsal, retention/scheduling and installed-device acceptance remain pending. See [operator workflow](gcp-backup-retrieval.md).
+
+- Old-device recovery review: local read-only journal/backup comparison and Advanced desktop entry implemented; explicit fresh-identity per-change reconciliation and installed recovery journey remain pending. [Details](device-recovery-review.md).
+
+- Direct private-result adoption: explicit original-selection backend and saved-reader verification/confirmation now implemented for supported rows; no list package or AI required. Native authority corruption, unknown migrations and full/device/hosted gates remain open. [Workflow](lineage-direct-adoption.md).

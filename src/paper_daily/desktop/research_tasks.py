@@ -107,5 +107,10 @@ def button(reader):
     from paper_daily.desktop.research_audit import open_report as open_audit
 
     audit.triggered.connect(lambda: open_audit(reader))
+    lineage = menu.addAction("\u7814\u7a76\u8108\u7d61\u5206\u6790\u2026")
+    lineage.setData("grounded_lineage")
+    from paper_daily.desktop.lineage_dialog import open_report as open_lineage
+
+    lineage.triggered.connect(lambda: open_lineage(reader))
     widget.setMenu(menu)
     return widget
