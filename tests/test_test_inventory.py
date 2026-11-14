@@ -197,3 +197,43 @@ def test_collection_restores_caller_import_paths_on_success_or_error(tmp_path, f
     else:
         assert COLLECT["collect"](tmp_path, tmp_path / "build/report.json", execute=execute) == 0
     assert sys.path == original
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_collection_isolates_outer_pytest_options_and_restores_them(tmp_path, monkeypatch, failure):
+    scope(tmp_path)
+    monkeypatch.setenv("PYTEST_ADDOPTS", "--outer-run-only-option")
+
+    def execute(*args, **kwargs):
+        assert "PYTEST_ADDOPTS" not in os.environ
+        if failure:
+            raise OSError("synthetic collection failure")
+        return 0
+
+    if failure:
+        with pytest.raises(OSError, match="synthetic collection failure"):
+            COLLECT["collect"](tmp_path, tmp_path / "build/report.json", execute=execute)
+    else:
+        assert COLLECT["collect"](
+            tmp_path, tmp_path / "build/report.json", execute=execute
+        ) == 0
+    assert os.environ["PYTEST_ADDOPTS"] == "--outer-run-only-option"
+
+
+def test_actual_collection_ignores_outer_execution_options(tmp_path):
+    tests = scope(tmp_path)
+    (tests / "test_inventory_only.py").write_text(
+        "def test_not_executed():\n    raise AssertionError('body must not run')\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path)],
+        cwd=tmp_path,
+        env={**os.environ, "PYTEST_ADDOPTS": "--outer-run-only-option",
+             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONUTF8": "1"},
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    value = json.loads((tmp_path / "build/test-inventory.json").read_text(encoding="utf-8"))
+    assert value["nodes"] == ["tests/test_inventory_only.py::test_not_executed"]
+    assert value["status"] == "collection only; no tests executed by this command"

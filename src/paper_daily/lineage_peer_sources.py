@@ -205,3 +205,55 @@ def publish_in(conn, client, prepared):
         raise
     conn.execute("RELEASE " + savepoint)
     return operations
+
+
+def pins_in(conn, client, prepared, operations, *, publication=None):
+    """Capture exact original incarnations after same-transaction peer publication.
+
+    Returned data must travel with the Lineage operation and be checked against
+    the service graph on acceptance. Do not recapture latest file lifetimes there.
+    This creates no row, journal entry, receipt or commit.
+    """
+    _worker()
+    if not isinstance(prepared, PreparedPeerSources) or not hmac.compare_digest(
+        prepared._seal,
+        _seal(prepared._observation, prepared._entries, prepared._store, prepared._root),
+    ):
+        _fail("invalid_lineage_peer_staging")
+    data = observation.checked(prepared._observation)
+    if data["binding"] is None:
+        _fail("lineage_compound_sync_publication_required")
+    if not isinstance(client, SyncClient) or client.journal.path.resolve() != Path(
+        data["database"]
+    ):
+        _fail("lineage_client_scope_changed")
+    observation.check_after_sources_in(
+        conn, prepared._observation, operations, client=client, publication=publication
+    )
+    _storage_in(conn, prepared._observation, prepared._store, prepared._root)
+    for entry in prepared._entries:
+        if file_change.version(entry.path) != entry.version:
+            _fail("lineage_staged_bytes_changed")
+    graph = client._optimistic_graph(conn)[0]
+    result = []
+    for source in data["sources"]:
+        if source["document_hash"] is None:
+            continue
+        operation = operations[source["source_id"]]
+        state = graph.get(("research_file", operation["entity_id"]))
+        if (
+            not state
+            or not state["active"]
+            or state["incarnation"] != operation["incarnation"]
+            or state["parents"] != [source["parent"]]
+        ):
+            _fail("lineage_source_operation_changed")
+        result.append(
+            dict(
+                source_id=source["source_id"],
+                paper_id=source["parent"]["id"],
+                file_id=operation["entity_id"],
+                incarnation=state["incarnation"],
+            )
+        )
+    return result

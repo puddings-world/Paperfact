@@ -13,7 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+# Cloud operator SDKs are development/test dependencies, not desktop runtime.
+dev = ["pytest>=8", "ruff>=0.5", "google-cloud-storage>=3,<4", "google-crc32c>=1.5,<2"]
+gcp = ["google-cloud-storage>=3,<4", "google-crc32c>=1.5,<2"]
 # Turning the app into an installer (scripts/build_app.py).
 build = ["pyinstaller>=6.10"]
 # The desktop reader. pyside6-addons is a ~1 GB download and carries Qt's native PDF

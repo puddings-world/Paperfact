@@ -473,6 +473,9 @@ class ReaderPreparation(QObject):
                         target._qa_pending = {
                             item["user_key"]: item for item in publication.snapshot.data["pending"]
                         }
+                        notice = getattr(target, "saved_text_notice", None)
+                        if notice is not None:
+                            notice.accept_snapshot(publication.snapshot, request.targets)
                         installed = True
                     return allowed
 

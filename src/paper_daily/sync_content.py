@@ -836,6 +836,30 @@ def _record_projection(conn, operation, feature, scope, key, source_hash):
     )
 
 
+def _legacy_note_clock(conn, operation):
+    """A verified plain birth had no portable creation timestamp to preserve."""
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='paperfact_sync_graph_receipts'"
+    ).fetchone() is None:
+        return False
+    row = conn.execute(
+        "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
+        (operation["incarnation"],),
+    ).fetchone()
+    if row is None:
+        return False
+    birth = json.loads(row[0])["operation"]
+    return (
+        birth["workspace_id"] == operation["workspace_id"]
+        and birth["entity_type"] == "note"
+        and birth["entity_id"] == operation["entity_id"]
+        and birth["operation_id"] == operation["incarnation"]
+        and birth["action"] == "put"
+        and set(birth["payload"]) == {"paper_id", "body"}
+        and birth["payload"]["paper_id"] == operation["payload"]["paper_id"]
+    )
+
+
 def write_rich_note(conn, operation):
     """Explicit rich v2 notes share the old stable note ID; legacy plain writes stay guarded."""
     if not conn.in_transaction:
@@ -871,7 +895,24 @@ def write_rich_note(conn, operation):
     if payload["paper_id"] != parent["id"]:
         raise ValueError("Rich note differs from its paper parent")
     if mapping is not None and mapping[2] != payload["created_at"]:
-        raise ValueError("Note creation identity cannot change")
+        if marker is not None and not _legacy_note_clock(conn, operation):
+            raise ValueError("Note creation identity cannot change")
+        # Legacy plain operations omitted creation time; each receiver assigned its
+        # own. Only a verified plain projection may adopt the first rich timestamp.
+        from paper_daily.sync_research import _plain_note
+
+        if marker is None:
+            _plain_note(conn, mapping)
+        else:
+            current_identity = conn.execute(
+                "SELECT paper_id,created_at FROM notes WHERE id=?", (mapping[0],)
+            ).fetchone()
+            if current_identity is None or tuple(current_identity) != tuple(mapping[1:]):
+                raise ValueError("Mapped note changed outside the adapter")
+        conn.execute("UPDATE notes SET created_at=? WHERE id=?",
+                     (payload["created_at"], mapping[0]))
+        conn.execute("UPDATE research_note_identity SET created_at=? WHERE sync_id=?",
+                     (payload["created_at"], identity))
     anchor = (
         json.dumps(payload["anchor"], sort_keys=True) if payload["anchor"] is not None else None
     )

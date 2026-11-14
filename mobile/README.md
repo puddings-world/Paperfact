@@ -1,6 +1,9 @@
 # Paperfact mobile reader
 
 Dependency-free PWA implementation for the private v0.5 development protocol.
+Native Lineage cards offer exact-original PDF links, verified offline reading and
+explicit download. Imported saved-report metadata alone grants no source bytes.
+See [source-reading evidence and limits](../docs/testing/mobile-lineage-originals-candidate.md).
 This directory is an isolated implementation slice, not a public sync deployment.
 
 From the repository root:
@@ -46,3 +49,18 @@ See [implementation and remaining gates](../docs/mobile-0.5.md). The reference
 authority has no CORS grant or browser login endpoint. The developer connection
 form does not bypass that boundary. Production pairing, browser authentication,
 hosting and secure deployment remain required integration work.
+
+
+Portable development read snapshots now retain complete saved Lineage metadata
+and show it in bilingual, read-only overview cards. Unsupported clients refuse
+the required capability before writes. Original snapshots are not current-byte or
+scientific-verdict authority; these cards do not activate PDFs or call a model.
+See the [format and API](../docs/sync-projection.md#saved-lineage-read-projection).
+
+
+The development receiver also understands closed typed Lineage events with exact
+paper/original-file lifetime pins. Source retirement and corpus tombstones
+suppress stale cards while retaining scientific history; receipt alone grants no
+PDF activation or scientific certification. This closes a consumer compatibility
+gap, not the still-gated authority publication/enrollment path. See the
+[event contract](../docs/sync-projection.md#mobile-lineage-event-consumer).

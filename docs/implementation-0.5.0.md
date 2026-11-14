@@ -1,6 +1,6 @@
 # v0.5.0 implementation and session handoff
 
-Status: local implementation in development, updated 2026-10-30. Build identity
+Status: local implementation in development, updated 2026-11-13. Build identity
 is `0.5.0.dev`; this is not the daily-use maintenance release. See
 [current isolated integration status](status-0.5.0.md) and
 [the historical delivery ledger](delivery-status-0.5.md) for implemented coverage,
@@ -17,9 +17,11 @@ publication has been performed by these local candidates.
 4. [Current architecture](architecture.md), [local integration](local-integration.md),
    [sharing](sharing.md), and the mobile section of [reader guide](reader-guide.md).
 
-Use the active `Paperfact` checkout. The old `paper-daily` checkout is an archive;
-verify the repository remote, branch, and worktree before editing. Preserve other
-sessions' changes. This plan is shared context, not authorization to deploy, upload
+Current isolated integration is `Paperfact-develop` on `develop/0.5`, as recorded
+in the linked current status. The old `paper-daily` checkout is an archive; the
+separate `Paperfact` checkout can hold independent daily/release work. Verify the
+repository remote, branch and worktree before editing. Preserve other sessions'
+changes; never copy research or rebind a running app merely to match a checkout. This plan is shared context, not authorization to deploy, upload
 research, publish a release, install global hooks, or use paid model calls.
 
 Applicable canonical skills: `agentic-local-integration`, `agentic-provider-routing`,

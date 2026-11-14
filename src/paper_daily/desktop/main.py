@@ -1186,6 +1186,10 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         from paper_daily.desktop.reader_preparation import ReaderPreparation
 
         self.preparation = ReaderPreparation(self)
+        from paper_daily.desktop.saved_text_notice import SavedTextNotice
+
+        self.saved_text_notice = SavedTextNotice(self)
+        outer.insertWidget(1, self.saved_text_notice)
         from paper_daily.desktop.qa_presentation import ChatPresentation
 
         self.qa_presentation = ChatPresentation(self)
@@ -1208,6 +1212,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
     # ---- loading ---------------------------------------------------------
     def load(self, paper: Paper) -> None:
+        notice = getattr(self, "saved_text_notice", None)
+        if notice is not None:
+            notice.reset()
         material_preparation = getattr(self, "material_preparation", None)
         if material_preparation is not None:
             material_preparation.invalidate(clear=True)
@@ -1238,6 +1245,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         from paper_daily.desktop import highlight_actions
 
         highlight_actions.capture(self, paper, self._qa_view_database)
+        self.saved_text_notice.bind(self._highlight_owner)
         pal = self.win.pal
         self.title.setText(paper.title)
         if hasattr(self.win, "compact_title"):
@@ -1869,6 +1877,9 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self._show_claims_button()
         pal = self.win.pal
         rows = self.win.data.notes(self.paper.id)
+        notice = getattr(self, "saved_text_notice", None)
+        if notice is not None:
+            notice.accept_notes(rows)
         self._visible_notes = {int(row["id"]): dict(row) for row in rows}
         links = _backlinks_html(self.win.data.backlinks(self.paper.id), pal)
         if not rows:
@@ -3118,6 +3129,7 @@ class MainWindow(QWidget):
 
         self._external_refresh_pending = False
         self.workspace_changes = WorkspaceChanges(self)
+        self.reader_page.saved_text_notice.set_watcher(self.workspace_changes)
         self.workspace_changes.changed.connect(self._external_lists_changed)
         self.workspace_changes.timer.timeout.disconnect(self.workspace_changes.poll_in_background)
         self.workspace_changes.timer.timeout.connect(
@@ -4262,14 +4274,14 @@ class MainWindow(QWidget):
         from paper_daily import feedback
 
         feedback.safe_record("ui.action", "bundle_import")
-        from paper_daily.desktop.bundle_dialog import BundleDialog
+        from paper_daily.desktop.bundle_dialog import import_dialog
 
         source, _filter = QFileDialog.getOpenFileName(
             self, "匯入研究資料包", "", "Paperfact 研究資料包 (*.zip)"
         )
         if not source:
             return
-        dialog = BundleDialog(self, source=source)
+        dialog = import_dialog(self, source=source)
         dialog.exec()
         if dialog.result_data:
             self._open_list(dialog.result_data["list"])
@@ -4277,7 +4289,7 @@ class MainWindow(QWidget):
     def _import_bundle_link(self):
         from tempfile import TemporaryDirectory
 
-        from paper_daily.desktop.bundle_dialog import BundleDialog
+        from paper_daily.desktop.bundle_dialog import import_dialog
         from paper_daily.desktop.bundle_link_dialog import BundleLinkDialog
 
         if getattr(self, "_link_transfer_active", False):
@@ -4288,7 +4300,7 @@ class MainWindow(QWidget):
                 download = BundleLinkDialog(Path(folder), self)
                 if download.exec() != QDialog.DialogCode.Accepted or not download.source:
                     return
-                dialog = BundleDialog(self, source=download.source, download_missing=False)
+                dialog = import_dialog(self, source=download.source, download_missing=False)
                 dialog.exec()
                 if dialog.result_data:
                     self._open_list(dialog.result_data["list"])

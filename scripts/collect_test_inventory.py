@@ -56,6 +56,7 @@ def collect(root, output, *, selections=("tests",), execute=None):
                     raise ValueError("Use a fresh interpreter to collect this checkout")
     plugin = Inventory()
     previous_path = list(sys.path)
+    outer_options = os.environ.pop("PYTEST_ADDOPTS", None)
     try:
         sys.path.insert(0, str(source))
         code = execute(
@@ -73,6 +74,8 @@ def collect(root, output, *, selections=("tests",), execute=None):
         )
     finally:
         sys.path[:] = previous_path
+        if outer_options is not None:
+            os.environ["PYTEST_ADDOPTS"] = outer_options
     if code:
         return int(code)
     nodes = plugin.nodes

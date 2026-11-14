@@ -38,7 +38,9 @@ profile scans committable files for secrets, runs Ruff, and tests the named key
 journeys. On Windows, `scripts/check_bounded.py` applies a 300-second wall budget
 and limited CPU to that same check. Its native governor is Windows-only.
 Use `--profile focused` for changed behavior (3-5 minutes), and `--profile full`
-explicitly for broad release validation when justified. Beta validation and
+only for deep historical/stress diagnosis when justified. Public releases use
+`--profile release`, critical/frozen checks per OS and device acceptance; see
+[the test map](docs/testing/README.md#keep-the-suite-small-by-testing-requirements). Beta validation and
 packaging share a 20-30 minute budget. Keep historical assertions; never disguise
 a timeout or a partial pass as exhaustive validation. Report exact counts and
 unperformed installed-device/provider checks. See [development](docs/development.md).

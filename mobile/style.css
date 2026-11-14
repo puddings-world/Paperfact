@@ -37,3 +37,34 @@
 }
 @media(max-width:380px) { header { padding:12px; } }
 header button:active:not(:disabled) { background:var(--line); }
+
+
+.lineage-card { overflow-wrap: anywhere; }
+.lineage-card .notice { line-height: 1.6; }
+.lineage-card summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 600; }
+.lineage-card summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 4px; }
+.lineage-card summary:hover { color: var(--muted); }
+.lineage-card summary:active { opacity: .75; }
+.lineage-corpus + .lineage-corpus, .lineage-originals { border-top: 1px solid var(--line); margin-top: 20px; }
+.lineage-stage { margin: 24px 0; }
+.lineage-stage h3 { font-size: 16px; margin: 0 0 12px; }
+.lineage-stage article + article { margin-top: 24px; }
+.lineage-passage { padding: 12px 0; }
+.lineage-source { font-size: 14px; font-weight: 600; line-height: 1.5; }
+.lineage-passage blockquote { font-size: 16px; margin: 12px 0; overflow-wrap: anywhere; }
+.lineage-version { display: block; font-size: 12px; overflow-wrap: anywhere; }
+
+.lineage-source-dialog { width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 24px; overflow: auto; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); background: var(--paper); }
+.lineage-source-dialog::backdrop { background: #183b3660; }
+.lineage-source-dialog h2 { margin: 0 0 12px; }
+.lineage-source-dialog .toolbar { margin: 16px 0; flex-wrap: wrap; }
+.lineage-source-dialog .pdf-frame { width: 100%; height: min(65dvh, 760px); border: 1px solid var(--line); }
+.lineage-source-dialog button:active { opacity: .75; }
+@media (max-width: 520px) { .lineage-source-dialog { padding: 16px; } }
+
+.source-open-link { display: inline-block; min-height: 44px; padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--paper); font-weight: 600; text-decoration: none; }
+.source-open-link:hover { opacity: .9; }
+.source-open-link:active { opacity: .75; }
+.source-preview { margin-top: 16px; }
+.source-preview summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
+.source-preview summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }

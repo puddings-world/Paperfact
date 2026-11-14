@@ -174,3 +174,18 @@ export class HttpTransport {
     requireThat(committed.complete===true && committed.sha256===hash && committed.size===bytes.length,'invalid_response');
   }
 }
+
+/** Browser CSP preflight belongs at credential send, never local workspace restore. */
+class BrowserHttpTransport extends HttpTransport {
+ constructor(origin,{pageOrigin=globalThis.location?.origin,...options}={}){
+  super(origin,options);this.pageOrigin=pageOrigin;
+ }
+ async post(route,body,token,signal){
+  const target=new URL(this.origin);
+  if(target.protocol==='http:'&&target.hostname==='[::1]'){
+   requireThat(typeof this.pageOrigin==='string'&&new URL(this.pageOrigin).origin===target.origin,'ipv6_same_origin_required');
+  }
+  return super.post(route,body,token,signal);
+ }
+}
+export function browserTransport(origin,options={}){return new BrowserHttpTransport(origin,options);}

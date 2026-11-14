@@ -1231,6 +1231,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--version", action="version", version=f"paperfact {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
+    from paper_daily.sync_admin import configure as configure_sync_admin
+
+    configure_sync_admin(
+        sub.add_parser("sync-admin", help="manage a loopback reference sync service"))
     sub.add_parser("mcp", help="local stdio MCP server (requires --workspace)")
     sub.add_parser("integration", help="offline JSON research operations (requires --workspace)")
 

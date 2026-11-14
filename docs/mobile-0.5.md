@@ -1,9 +1,31 @@
 # Mobile reader implementation — v0.5
 
-Status: isolated `0.5.0.dev` integration candidate, updated 2026-11-02. This is not
+Status: integrated `0.5.0.dev` development candidate, updated 2026-11-13. This is not
 a public release or completed cross-device acceptance. The separately maintained
 0.4.x line remains for daily use. See [current status](status-0.5.0.md) for exact
 evidence and remaining gates.
+
+## Current saved-Lineage read path
+
+Portable schema-v2 snapshots now retain complete Lineage reports and require an
+explicit receiver capability. The mobile overview renders bilingual saved-only
+cards with proposed roles, original quotations, location states and missing
+citation/semantic evidence. Import grants no cursor, graph, model or source-byte
+authority. [Closed format and APIs](sync-projection.md#saved-lineage-read-projection).
+
+Native saved Lineage cards now offer exact-original reading and located-page
+links. The dialog opens verified cached bytes offline, with an explicit download
+action when bytes are absent. It preserves the main PDF and pending notes; close
+revokes local URLs and restores the still-current opener. Imported read-only
+metadata alone grants no bytes. Changed source/report lifetimes and canceled or
+stale views refuse delivery. [Behavior and browser evidence](testing/mobile-lineage-originals-candidate.md).
+
+The integrated mobile Node scope passes **647 cases**. Earlier Python/HTTP and
+isolated Chromium evidence are recorded separately, with no combined release
+total. Physical phones, installed Mac and the complete full gate remain separate
+acceptance requirements.
+
+![Exact original reading with synthetic research at 390 px width](images/lineage-original-mobile.png)
 
 ## Local startup and header
 
@@ -151,15 +173,33 @@ rollback/reopen, note/outbox durability and retry, scope isolation, UI note save
 draft/focus/selection retention and static-shell service-worker cache checks.
 An optional output directory captures desktop and phone-sized screenshots.
 
-Evidence at handback: **58 Node checks** and actual Python HTTP interoperability passed;
+Historical isolated-slice handback evidence: **58 Node checks** and actual Python HTTP interoperability passed;
 four real headless Edge browser checks passed on Windows. Desktop 1320×900 and
 phone-sized 390×844 screenshots were inspected: readable layout, visible actions,
 no horizontal clipping. This is browser emulation, not physical iPhone/Android
 acceptance. Background delivery, installed standalone mode, operating-system
 eviction, private browsing, real offline restart, screen readers and live accounts
 were not tested. No deployed service, real research, paid calls or account login
-was used. Parent must integrate this command into `scripts/check.py` and run the
-full repository check after merging the isolated worktree; this slice alone does
-not claim that acceptance.
+was used. `scripts/check.py` now includes the mobile entry point in its full gate.
+The historical slice result does not certify the accumulated current revision;
+a matching full repository check remains required.
 
 Current unpositioned text-note behavior and exact limits: [desktop/mobile editing](mobile-note-editing.md).
+
+
+## Development Lineage event compatibility
+
+The mobile event consumer now validates full typed Lineage updates and projects
+them into the existing read-only cards. It checks the complete selected paper
+cohort and each available original's file incarnation. Retiring a source hides
+the old projection; same-hash restoration needs a new explicit pinned update.
+Malformed/obsolete events preserve the stored page, cursor, drafts and outbox
+through the engine's atomic store update. No PDF download or model is implied.
+
+The v18 offline shell includes this consumer. Python-generated three-original
+frames are checked across the language boundary; the synthetic event tests do
+not establish live server acceptance. The authority's Lineage admission and
+compound source/content enrollment are still gated. See the
+[consumer contract and limits](sync-projection.md#mobile-lineage-event-consumer).
+Physical phone/Mac, actual browser layout, native credentials and hosted HTTPS
+acceptance remain separate; no installer or deployment was produced here.

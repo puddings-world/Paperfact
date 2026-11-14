@@ -26,9 +26,12 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from paper_daily import annotation_content, bundle_files
 from paper_daily.config import DATA_DIR, PDF_DIR
@@ -50,6 +53,8 @@ KV_KEYS = ("citegraph.{pid}", "followups.checked.{pid}", "resources:{pid}")
 
 def _required_capabilities(tables):
     capabilities = []
+    if tables.get("paper_lineage_sets"):
+        capabilities.append("lineage")
     if tables.get("deck_proposals"):
         capabilities.append("deck_proposals")
     if tables.get("paper_later_outcomes"):
@@ -209,6 +214,9 @@ def export(
 
     `with_pdfs` packs every locally available PDF without requiring the network.
     """
+    if threading.current_thread() is threading.main_thread():
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="paperfact-package") as pool:
+            return pool.submit(export, list_id, out, notes, with_pdfs, log).result()
     with connect() as conn:
         database = Path(next(row[2] for row in conn.execute("PRAGMA database_list")
                              if row[1] == "main"))
@@ -224,6 +232,11 @@ def export(
         )
         ids = [m["paper_id"] for m in members]
         marks_sql = ",".join("?" * len(ids))
+        from paper_daily.lineage_read_projection import present as lineage_present
+
+        has_lineage = bool(ids and lineage_present(conn) and conn.execute(
+            f"SELECT 1 FROM paper_lineage_sets WHERE paper_id IN ({marks_sql}) LIMIT 1", ids
+        ).fetchone())
         if (
             not with_pdfs
             and conn.execute(
@@ -326,6 +339,19 @@ def export(
 
         kv = [row for row in kv if not redundant_hint(conn, row)]
 
+    from paper_daily import lineage_packages
+
+    lineage_export = (
+        lineage_packages.collect(database, ids, with_pdfs=with_pdfs) if has_lineage else None
+    )
+    if lineage_export is not None:
+        context = {row["id"]: row for row in tables["papers"] + tables["cited_papers"]}
+        for row in lineage_export.papers:
+            if row["id"] in context and context[row["id"]] != row:
+                raise ValueError("Lineage paper context changed during export; retry")
+            context[row["id"]] = row
+        tables["cited_papers"] = [context[pid] for pid in sorted(set(context) - set(ids))]
+        tables["paper_lineage_sets"] = lineage_export.rows
     pdfs, captured, paths = {}, {}, {}
     for row in tables["papers"]:
         pid = row["id"]
@@ -389,6 +415,8 @@ def export(
     if proposal_export is not None:
         tables[deck_proposal_packages.TABLE] = list(proposal_export.rows)
         files.update(dict(proposal_export.files))
+    if lineage_export is not None:
+        files.update(dict(lineage_export.files))
     capabilities = _required_capabilities(tables)
     manifest = {
         "format": 2 if capabilities else FORMAT,
@@ -404,6 +432,8 @@ def export(
         },
         "counts": {t: len(rows) for t, rows in tables.items()} | {"files": len(files)},
     }
+    if lineage_export is not None and lineage_export.records:
+        manifest["lineage_sources"] = lineage_export.records
     if "claim_evidence" in capabilities:
         manifest["claim_sources"] = claim_sources
     if position_sources:
@@ -444,6 +474,7 @@ def export(
 
         check_later_export(later_export)
         deck_proposal_packages.check_export(proposal_export)
+        lineage_packages.check_export(lineage_export)
         os.replace(staged, out)
     finally:
         staged.unlink(missing_ok=True)
@@ -569,6 +600,11 @@ def _validated(z):
         from paper_daily import deck_proposal_packages
 
         deck_proposal_packages.validate_package(z, manifest, tables)
+        from paper_daily import lineage_packages
+
+        if ("paper_lineage_sets" in tables or "lineage_sources" in manifest
+                or "lineage" in manifest.get("capabilities", [])):
+            lineage_packages.validate_package(z, manifest, tables)
         required = _required_capabilities(tables)
         capabilities = manifest.get("capabilities", [])
         if manifest["format"] == 2:
@@ -652,6 +688,8 @@ def _validated(z):
             if record and f"files/pdf/{_safe_name(pid)}.pdf" not in names:
                 raise ValueError(f"資料包缺少 PDF：{pid}")
     owners = {}
+    lineage_files = {record["path"]: record["paper_id"]
+                     for record in manifest.get("lineage_sources", [])}
     for name in names:
         if not name.startswith("files/") or name.endswith("/"):
             continue
@@ -665,6 +703,9 @@ def _validated(z):
             or not (DATA_DIR / rel).resolve().is_relative_to(DATA_DIR.resolve())
         ):
             raise ValueError(f"bundle path escapes the data directory: {name}")
+        if relative in lineage_files:
+            owners[relative] = lineage_files[relative]
+            continue  # The bounded Lineage validator checked exact bytes and ownership.
         matches = [pid for pid in ids if _owns_file(pid, rel)]
         if len(matches) != 1:
             raise ValueError(f"資料包檔案缺少唯一論文歸屬：{relative}")
@@ -760,11 +801,36 @@ def _check_workspace_aliases(conn, owners):
             raise ValueError("Bundle file aliases another local paper; reconcile identities first")
 
 
+
+def _check_lineage_papers(conn, tables):
+    """An implicit same-ID mapping cannot attach originals to a different paper."""
+    from paper_daily import lineage_sets, paper_identity
+
+    selected = {binding["paper_id"] for row in tables["paper_lineage_sets"]
+                for binding in lineage_sets.decode(row["body_json"])["bindings"]}
+    defaults = dict(year=None, doi=None, arxiv_id=None, s2_id=None, authors_json=None)
+    for incoming in tables["papers"] + tables.get("cited_papers", []):
+        if incoming["id"] not in selected:
+            continue
+        current = conn.execute("SELECT * FROM papers WHERE id=?", (incoming["id"],)).fetchone()
+        if current is None:
+            continue
+        a = paper_identity.paper(defaults | incoming)
+        b = paper_identity.paper(dict(current))
+        title_a = " ".join(a.title.casefold().split())
+        title_b = " ".join(b.title.casefold().split())
+        if not title_a or title_a != title_b or not paper_identity._compatible(a, b):
+            raise ValueError("Lineage paper ID collision requires an explicit reviewed mapping")
+
+
 def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m: None) -> dict:
     """Bring a bundle into this workspace. Returns what was added.
 
     With `pdfs`, each paper's PDF is then fetched from its verified URL and kept
     only if it is byte for byte the file the analyses were made from."""
+    if threading.current_thread() is threading.main_thread():
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="paperfact-package") as pool:
+            return pool.submit(import_, path, replace, pdfs, log).result()
     from contextlib import closing
 
     from paper_daily import store
@@ -805,6 +871,24 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             package_hash.update(block)
         z.fp.seek(original_position)
         package_sha256 = package_hash.hexdigest()
+        from paper_daily import (
+            lineage_package_publish,
+            lineage_package_targets,
+            lineage_sets,
+            research_generation,
+        )
+
+        lineage_stage = None
+        if tables.get("paper_lineage_sets"):
+            package = lineage_package_targets.validate(z, manifest, tables)
+            selected = {binding["paper_id"] for row in tables["paper_lineage_sets"]
+                        for binding in lineage_sets.decode(row["body_json"])["bindings"]}
+            lineage_stage = lineage_package_publish.stage(
+                database, package, {pid: pid for pid in selected},
+                request_id=str(uuid5(NAMESPACE_URL, "paperfact-lineage-package:" + package_sha256)),
+                expected_native=research_generation._identity(database),
+            )
+            del package
         from paper_daily import deck_proposal_packages
 
         proposal_imports = deck_proposal_packages.prepare_local_imports(
@@ -856,7 +940,7 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             if not name.startswith("files/") or name.endswith("/"):
                 continue
             relative = Path(name.removeprefix("files/"))
-            if relative.parts[0] == "deck-proposals":
+            if relative.parts[0] in {"deck-proposals", "lineage-sources"}:
                 continue
             owner = owners[relative.as_posix()]
             if owner in conflicts and not (
@@ -899,6 +983,11 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
         # database commit restores installed files as the connection rolls back.
         with bundle_files.stage(DATA_DIR, z, relatives) as staged, connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if lineage_stage is not None:
+                from paper_daily.research_lifecycle import ensure_lifecycle
+
+                _check_lineage_papers(conn, tables)
+                ensure_lifecycle(conn)
             with deck_proposal_packages.local_imports_in(
                 conn, proposal_imports, allow_updates=replace
             ) as grant:
@@ -911,6 +1000,13 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
                 report["cited_papers"] = _insert(
                     conn, "papers", tables.get("cited_papers", []), replace=False
                 )
+                if lineage_stage is not None:
+                    observed = lineage_package_publish.observe_in(conn, lineage_stage)
+                    result = lineage_package_publish.publish_in(
+                        conn, lineage_stage, observed, replace=replace
+                    )
+                    report["lineage_reports"] = result["reports"]
+                    report["lineage_state"] = result["state"]
                 conn.execute(
                     "INSERT OR IGNORE INTO lists(id, name, note, created_at) VALUES (?,?,?,?)",
                     (listing["id"], listing["name"], listing.get("note"), listing["created_at"]),

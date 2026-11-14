@@ -82,6 +82,11 @@ class AttachmentSteps:
         return False
 
     def prepare(self, operation):
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            with self.client.journal.transaction() as conn:
+                return lineage_dependencies.ready_to_push_in(conn, self.client, operation)
         if operation["action"] == "delete":
             return True
         kind = operation["entity_type"]

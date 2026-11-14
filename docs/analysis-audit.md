@@ -49,8 +49,31 @@ recorded anchor document hash; their prose is never automatically treated as an
 original quotation. Answers use the validated typed Q&A source link, when present.
 All preserve old source versions and leave missing bindings unknown. Versionless
 legacy text stays versionless. Selected editable decks have a separate bounded
-audit entry described below. List surveys, grounded-lineage sets and cross-output
-consistency remain explicit adapter gaps, not successful checks.
+audit entry described below. Saved grounded-lineage statements now use the
+source-aware adapter below. List surveys, complete multi-original corpus checks
+and cross-output consistency remain explicit gaps, not successful checks.
+
+## Saved research lineage
+
+The same desktop checker and `analysis.audit` CLI/MCP operation now include
+current canonical `paper_lineage_sets` for the selected focal paper. Each
+statement retains its subject original hash; each quotation retains its own
+selected source hash, page and anchor. IDs include the corpus identity so two
+corpora with the same statement do not collide. Generation proposals, archived
+versions and imported model judgments do not become scientific verification.
+
+This action checks only the owned original currently opened in the reader.
+Quotations in that exact version can be located and navigated. A quotation from
+another selected paper/version is reported as `source_mismatch`, with no
+fabricated location or navigation into the focal PDF. Open the recorded source
+through the Lineage reader to inspect that original. The report explicitly lists
+`lineage_other_originals` as unchecked; it does not claim a complete corpus audit
+or semantic support. No model, download, schema creation or research write occurs.
+
+Malformed saved content fails the complete audit rather than omitting its items.
+Changed or removed Lineage invalidates an existing capture; refreshing reads the
+new current content. Shared total item/byte/passage limits still apply. See
+[concrete cases](testing/audit-lineage-scenarios.md).
 
 Bounds: 256 items, 1 MiB input JSON, 512 declared passages and 512 distinct lexical
 quantity checks across outputs; individual text is at most 120,000 characters.

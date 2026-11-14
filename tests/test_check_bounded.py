@@ -21,6 +21,7 @@ spec.loader.exec_module(module)
     [
         ([], 300),
         (["--profile", "full"], 1800),
+        (["--profile", "release"], 1800),
         (["--profile", "focused", "--python", "tests/test_x.py"], 300),
         (["--profile=docs"], 300),
     ],

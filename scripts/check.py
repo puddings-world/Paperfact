@@ -134,6 +134,42 @@ CRITICAL_JOURNEYS = {
 }
 
 
+# One representative per additional release risk; historical matrices are opt-in.
+RELEASE_JOURNEYS = {
+    **CRITICAL_JOURNEYS,
+    "Atomic receive, deletion and access revocation": (
+        "tests/test_sync_client.py::test_remote_batch_rolls_back_cursor_and_content_if_writer_fails",
+        "tests/test_sync_client.py::test_delete_against_offline_edit_keeps_edit_as_conflict",
+        "tests/test_sync_client.py::test_revoked_token_does_not_acknowledge_pending_content",
+    ),
+    "Editable attachments and repair": (
+        "tests/test_sync_files.py::test_actual_save_transfer_receive_reopen_export_keeps_editable_deck",
+        "tests/test_sync_files.py::test_corrupt_download_partial_is_repaired_on_retry",
+    ),
+    "Late UI delivery": (
+        "tests/test_reader_chat.py::test_reentrant_submit_then_navigation_never_writes_other_paper",
+        "tests/test_update_notices.py::test_download_finishing_after_close_does_not_start_installer",
+    ),
+    "Private diagnostics and fresh-install identity": (
+        "tests/test_diagnostics.py::test_export_contains_only_reviewed_allowlisted_data",
+        "tests/test_distribution.py::test_fresh_install_can_sign_in_using_bundled_application_identity",
+    ),
+    "Reading goals and source-bound research": (
+        "tests/test_reading_goals.py::test_edit_reload_clear_preserves_description_notes_and_other_research",
+        "tests/test_claim_notes_job.py::test_generated_cards_keep_exact_source_and_edited_cards_survive_refresh",
+        "tests/test_lineage_observation.py::test_two_corpus_keys_do_not_alias_and_historical_json_bytes_remain_exact",
+        "tests/test_highlight_draft_application.py::test_confirmed_group_keeps_manual_hidden_and_private_content_with_one_retry",
+    ),
+    "Recovery provenance and durable confirmation": (
+        "tests/test_sync_recovery_choices.py::test_corrupt_saved_provenance_cannot_be_reused_as_a_recovery_decision",
+        "tests/test_sync_recovery_note_copy.py::test_repeated_apply_and_restart_preparation_do_not_duplicate_or_overwrite",
+    ),
+}
+RELEASE_MOBILE = (
+    "domain", "engine", "transport", "draft", "artifacts", "workspace-startup", "plain-note",
+)
+
+
 def selected_tests(root, values, suffix):
     """Only explicit repository test files, optionally a pytest node ID."""
     selected = []
@@ -158,7 +194,7 @@ def selected_tests(root, values, suffix):
 
 
 def check_plan(root, profile, python_tests, frontend_tests, mobile):
-    if profile not in {"full", "critical", "focused", "docs"}:
+    if profile not in {"full", "critical", "release", "focused", "docs"}:
         raise ValueError("Unknown check profile.")
     if profile != "focused" and (python_tests or frontend_tests or mobile):
         raise ValueError("Selections require --profile focused; fixed profiles cannot be narrowed.")
@@ -166,10 +202,16 @@ def check_plan(root, profile, python_tests, frontend_tests, mobile):
         raise ValueError("Focused checks require --python, --frontend or --mobile.")
     python_tests = selected_tests(root, python_tests, ".py")
     frontend_tests = selected_tests(root, frontend_tests, ".mjs")
-    if profile == "critical":
+    if profile in {"critical", "release"}:
+        journeys = RELEASE_JOURNEYS if profile == "release" else CRITICAL_JOURNEYS
         python_tests = selected_tests(root, [
-            test for group in CRITICAL_JOURNEYS.values() for test in group
+            test for group in journeys.values() for test in group
         ], ".py")
+    if profile == "release":
+        frontend_tests = selected_tests(root, [
+            "tests/test_gemini_usage.mjs", "tests/test_pocket_pdfjs.mjs",
+            "tests/test_presentation_html.mjs", "tests/test_web_ai.mjs", "tests/test_typeset.mjs",
+        ], ".mjs")
     if profile == "docs":
         python_tests = selected_tests(root, DOC_TESTS, ".py")
     if profile == "full":
@@ -195,8 +237,16 @@ def check_plan(root, profile, python_tests, frontend_tests, mobile):
         checks.append(("Mobile domain and Python service integration", [
             node, str(root / "mobile" / "check.mjs"), "--python", sys.executable,
         ]))
+    if profile == "release":
+        mobile_tests = ["mobile/tests/" + name + ".test.mjs" for name in RELEASE_MOBILE]
+        if not all((root / name).is_file() for name in mobile_tests):
+            raise ValueError("A required release mobile test is missing.")
+        checks.append(("Mobile offline domain", [node, "--test", *mobile_tests]))
+        checks.append(("Mobile/Python sync protocol", [
+            node, str(root / "mobile/service-check.mjs"), sys.executable,
+        ]))
     return checks, {"python": python_tests, "frontend": frontend_tests,
-                    "mobile": profile == "full" or mobile}
+                    "mobile": profile in {"full", "release"} or mobile}
 
 
 def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
@@ -223,9 +273,10 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
         checks, report["selection"] = check_plan(
             root, profile, python_tests, frontend_tests, mobile,
         )
-        if profile == "critical":
-            report["journeys"] = CRITICAL_JOURNEYS
-            for name in CRITICAL_JOURNEYS:
+        if profile in {"critical", "release"}:
+            journeys = RELEASE_JOURNEYS if profile == "release" else CRITICAL_JOURNEYS
+            report["journeys"] = journeys
+            for name in journeys:
                 print(f"Protecting: {name}", flush=True)
         print(f"Profile: {profile}. Stage counts are not time estimates.", flush=True)
         print("Pytest percentages count cases in its phase, not overall progress.", flush=True)
@@ -287,7 +338,7 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
 def main(root, argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--profile", choices=("critical", "full", "focused", "docs"), default="critical",
+        "--profile", choices=("critical", "release", "full", "focused", "docs"), default="critical",
     )
     parser.add_argument("--python", nargs="+", default=[], dest="python_tests")
     parser.add_argument("--frontend", nargs="+", default=[], dest="frontend_tests")

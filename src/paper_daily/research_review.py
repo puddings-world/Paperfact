@@ -67,7 +67,7 @@ SOURCE_AWARE_REASON = "Claim sets require source-aware review"
 def _source_aware_required(view):
     scope = view.get("scope") or {}
     retained = view.get("retained")
-    return scope.get("table") == "paper_claim_sets" or (
+    return scope.get("table") in {"paper_claim_sets", "paper_lineage_sets"} or (
         view.get("origin") == "remote"
         and isinstance(retained, dict)
         and retained.get("feature") == "claims"
@@ -75,7 +75,10 @@ def _source_aware_required(view):
 
 
 def _source_aware_block(view):
-    view.update(apply=False, editable=False, reason=SOURCE_AWARE_REASON)
+    reason = ("Lineage proposals require corpus-aware publication"
+              if (view.get("scope") or {}).get("table") == "paper_lineage_sets"
+              else SOURCE_AWARE_REASON)
+    view.update(apply=False, editable=False, reason=reason)
     return view
 
 
@@ -820,6 +823,8 @@ class ResearchReview:
 
     def targets(self, preview, *, after="", limit=30):
         data = self._verify_preview(preview)
+        if (data.get("scope") or {}).get("table") == "paper_lineage_sets":
+            raise ValueError("Lineage proposals require corpus-aware publication")
         if data["origin"] in {"archived_draft", "archived_resume", "archived_note_resume"}:
             return self.resume_targets(preview, after=after, limit=limit)
         from paper_daily.research_annotation_review import remote_group
@@ -1213,7 +1218,8 @@ class ResearchReview:
             if data.get("resume_state", "ready") != "ready":
                 raise ValueError("Saved draft needs refreshed review before application")
             if _source_aware_required(data):
-                raise ValueError(SOURCE_AWARE_REASON)
+                _source_aware_block(data)
+                raise ValueError(data["reason"])
             if not data["apply"]:
                 raise ValueError(data["reason"])
             if data["requires_confirmation"] and confirm_target is not True:
@@ -1367,7 +1373,10 @@ class ResearchReview:
     @staticmethod
     def _receipt(conn, identity, fingerprint, data, result):
         scope = data.get("scope") or {}
-        kind = generation.REGISTRY[scope["table"]][0] if "table" in scope else scope.get("kind")
+        if scope.get("table") == "paper_lineage_sets":
+            kind = "paper"  # Keeping a proposal is a decision, never canonical publication.
+        else:
+            kind = generation.REGISTRY[scope["table"]][0] if "table" in scope else scope.get("kind")
         provenance = {
             "source_document_hash": data["source_hash"],
             "target_kind": kind,
@@ -1404,6 +1413,8 @@ class ResearchReview:
         return DraftStore(self).list(origin, identity, **options)
 
     def export_text(self, preview, *, body=None):
+        from paper_daily.lineage_candidates import export_content as lineage_export
+
         data = self._verify_preview(preview)
         # Explicit allowlist: no original contexts, paths, input receipts or credentials.
         value = {
@@ -1411,7 +1422,9 @@ class ResearchReview:
             "origin": data["origin"],
             "source_document_hash": data["source_hash"],
             "content": (
-                _claim_export(data["retained"])
+                lineage_export(data["retained"])
+                if (data.get("scope") or {}).get("table") == "paper_lineage_sets"
+                else _claim_export(data["retained"])
                 if _source_aware_required(data)
                 else _export_content(data["retained"])
             ),

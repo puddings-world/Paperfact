@@ -1,8 +1,165 @@
 # Understand Paperfact tests
 
+## Start here: scope, not case counts
+
+Updated 2026-11-14. The default development gate is now the curated critical
+journeys, not every historical test. See [development checks](../development.md#development)
+for commands, budgets and report meaning. Historical results below are dated
+snapshots and do not describe the current default or certify the present source.
+
+| Test family | User behavior and failure boundaries protected | Representative source |
+|---|---|---|
+| Reading and notes | Open papers, save/reopen notes and questions; preserve drafts when navigation or a worker races | `tests/test_reader_chat.py`, `tests/test_list_notes.py` |
+| AI routing and analysis | Keep account/model settings isolated; retain durable questions and avoid duplicate delivery | `tests/test_ai_profiles.py`, `tests/test_ai_providers.py`, `tests/test_research_chat.py` |
+| Originals and research evidence | Preserve exact PDF/source versions, citation locations, highlights and claim/lineage decisions | The original, highlight and Lineage scenario maps below |
+| Slides and attachments | Preserve editable slide content and only activate fully verified attachment closures | `tests/test_sync_files.py` |
+| Lists and sharing | Carry PDFs, analyses, list names/order and pinned papers; preserve receiver edits and reject unsafe paths | `tests/test_bundle.py`, `tests/test_package_review.py` |
+| Offline synchronization | Restart/retry, lost acknowledgments, concurrent edits, deletion conflicts and atomic receive | `tests/test_sync_client.py` |
+| Backup and recovery | Preview/restore without changing the source; reject corrupt or stale recovery decisions; cancel safely | `tests/test_workspace_dialog.py`, recovery scenario maps below |
+| Desktop, distribution and mobile | Worker/status delivery, dialogs, update notices, package contracts, offline mobile domain and service behavior | `tests/test_update_notices.py`, `tests/test_distribution.py`, `mobile/tests/` |
+
+These families include normal paths plus many variants of cancellation, repeated
+clicks, stale windows, changed papers/accounts, corrupt files and interrupted
+transactions. Several tests can protect one feature; case count is neither a
+feature count nor a completion percentage.
+
+The default `CRITICAL_JOURNEYS` in `scripts/check.py` currently selects 14 existing
+cases across startup, packages/PDFs, notes/Q&A, AI isolation, offline sync and
+backup/restore. A focused change adds only its relevant regressions. The old
+suite remains available through explicit `--profile full`; it is not silently
+deleted, skipped or reclassified as passing.
+
+### What is actually documented?
+
+- This page is the human entry point; scenario maps below explain selected flows.
+- `catalog.json` is **partial reviewed documentation**: 333 explained functions at
+  this update. Its collection totals refer to older recorded snapshots, not a
+  fresh collection or a current passing run. Unlisted functions have no reviewed
+  human explanation in that catalog.
+- `build/check-latest.json` describes the latest executed selection and outcome;
+  it is local and ignored by Git. A critical pass does not set `full_check_passed`.
+- Fixture checks do not certify live providers, installed Windows/Mac upgrades,
+  physical phone behavior or a deployed sync service. Those are separate gates.
+
+## Keep the suite small by testing requirements
+
+The owner approved this reduction on 2026-11-14. The historical function count is
+not a release target. Choose one representative for each observable invariant;
+add a boundary case only when it protects a distinct failure or an actual bug.
+
+| Occasion | Required scope | Budget |
+|---|---|---|
+| Edit/checkpoint | Changed behavior, callers and a relevant failure boundary (`focused`) | 3-5 minutes locally |
+| Candidate build | Critical journeys on each desktop OS; frozen-app acceptance; affected regressions | Validation plus packaging: 20-30 minutes |
+| Public release | Curated `release` journeys once; critical/frozen acceptance on every shipped desktop OS; device checklist | 20-30 minutes per CI build job |
+| Deep diagnosis | Explicit historical `full` or a selected stress/migration matrix when a change warrants it | Opt-in; never the automatic development or release prerequisite |
+
+The release requirements add atomic receive, delete/edit conflicts, revoked
+access, editable attachment transfer/repair, late UI delivery, private diagnostics,
+fresh-install identity, reading goals, exact claim/Lineage/highlight sources and
+recovery provenance. Exact Python selectors are `RELEASE_JOURNEYS` in
+`scripts/check.py`. Five existing frontend files, seven named mobile domain files
+and one actual mobile-to-Python protocol program complete the curated automated
+baseline. Changed domains still require their relevant regressions; this baseline
+does not claim complete v0.5 feature/device acceptance.
+
+### Cross-platform split
+
+The release workflow runs the common `release` selection once, on the Windows
+tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
+Manual candidate builds use `critical`, not the larger release selection. All
+build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
+This wiring is not evidence that Actions or installed Mac/Linux acceptance passed.
+
+| Platform boundary | Additional observation required |
+|---|---|
+| Windows | Installer/reinstall/upgrade, working data preserved, launch and shortcuts |
+| Apple Silicon Mac | Native arm64 app activates, Chinese input/focus/shortcuts work, install/update preserves data |
+| Linux | AppImage permissions/dependencies, launch and update preserve data |
+| Windows + Mac | Real offline edits, reconnect/conflict, interrupted attachment retry and independent restore |
+| iOS / Android PWA | Physical browser install, offline launch/save/reopen and foreground reconnect; record each OS separately |
+
+Use [Mac and multi-device acceptance](mac-acceptance-0.5.md) for actual expected
+results. Fixture success must not fill a physical-device result.
+
+### Consolidate historical cases without erasing protection
+
+- Keep a case when it protects a unique user-visible invariant or a concrete past bug.
+- Merge repeated setup and duplicate assertions into a shared behavior case;
+  parameterize only genuinely different boundaries, not every internal combination.
+- Remove a source-string/internal-shape assertion only when a behavioral replacement
+  demonstrably covers its requirement. Packaging/security contracts can be distinct.
+- Keep exhaustive malformed-input, long stress and legacy-migration matrices
+  opt-in unless that domain changed or a specific regression requires them.
+- For each actual retirement, record old test ID, replacement, requirement and
+  verification. No bulk deletion by filename, age or raw count.
+
+This is the selection policy and initial curated gate, not a claim that all
+historical cases have already been reviewed or deduplicated.
+
+## Historical results and detailed scenario maps
+
+The following records retain their original scope and date. References to a
+mandatory full check reflect the earlier policy, superseded by the current
+[development policy](../development.md#development).
+
+
 Updated 2026-11-02. `0.5.0.dev`, unreleased. Start with the
 [visual feature overview](acceptance-overview.html) or
 [plain Traditional Chinese status](current-status.zh-TW.md).
+
+The new [desktop Lineage scenario map](lineage-desktop-scenarios.md) explains
+20 application/Qt cases and their exact limits. The final action/coordinator/menu
+scope passed 41 cases. The newer [schema lifecycle map](lineage-schema-scenarios.md)
+explains first analysis/receive initialization and rollback; its related 21-case
+gate passes the unchanged candidate-only absence assertion. Neither selected gate
+certifies a release or overrides the requirement for a new coherent full check.
+
+The [Lineage lifecycle scenario map](lineage-lifecycle-scenarios.md) explains
+the original 19 backend/sharing cases plus actual retained-version, native
+rollback and Qt control journeys. The newer related 48-case gate passes; the
+ledger records later UI-only verification and remaining full-release and
+installed-device limits. [Historical-original scenarios](lineage-historical-original-scenarios.md)
+explain independent source proofs and real Qt windows for all three origins.
+
+For the native Lineage synchronization work, see the
+[17 scenario explanations](lineage-shared-scenarios.md): real publication,
+conflicts, source lifetimes, HTTP/mobile delivery and competing-device capacity.
+The [fresh enrollment/recovery map](lineage-enrollment-scenarios.md) explains
+exact copies, fresh native authority, archive integrity and identity collision
+refusal. The [continuation ledger](continuation-20261112.md) keeps dated results
+and failures.
+
+The [saved Lineage audit scenarios](audit-lineage-scenarios.md) explain which
+original each quotation is checked against, read-only failure/invalidation and
+real bilingual source navigation.
+
+The [saved-text update map](saved-text-update-scenarios.md) explains the real
+reader's background notice, draft/PDF preservation, explicit reload and retry,
+plus the shared observer's stale-token and workspace delivery guards.
+
+The [automatic-sync wakeup scenarios](continuous-outbox-scenarios.md) distinguish
+actual new local writes from projection/acknowledgment changes, preserve offline
+backoff/consent, and cover manual-sync and accepted-before-receive races.
+
+The latest canonical full run stopped at **3,349 passed and one failed**
+(old inactive-stage Lineage routing assertion); frontend/mobile were not reached.
+The [enrolled import candidate map](enrolled-lineage-import-candidate.md) and
+[mobile originals candidate](mobile-lineage-originals-candidate.md) describe
+originally isolated work now integrated for affected checks, not released features.
+The old activation/refusal expectations and rollback precondition are now
+[reconciled with accepted v0.5 behavior](lineage-contract-reconciliation.md);
+a new complete gate is still required.
+
+The [native import review map](package-review-scenarios.md) explains explicit
+destination/paper choice, queued delivery and final-publication cancellation.
+
+The [native version-comparison map](lineage-import-comparison-scenarios.md) covers
+explicit keep/replace, preserved peer history and actual backup/restore.
+
+The [older-beta history repair map](lineage-history-repair-scenarios.md) covers
+actual bounded reindex, resume/cancel, offline UI, backup isolation and automatic
+scheduling, separate from installed-device/full gates.
 
 The current full check has not passed. Selected checks prove their named actions,
 not the whole application, scientific quality or installed-device readiness.
@@ -162,3 +319,17 @@ not be added or described as one current application pass.
 The generated explanation map now starts with reviewed prose selected. Uncheck
 that filter to inspect the full undocumented inventory; collection is never
 an execution result. New note/source scenarios use synthetic research only.
+
+- [Authority backup behavior map](authority-backup-scenarios.md): exact snapshots, committed attachments, cancellation and publication boundaries.
+
+- [Authority fresh-identity recovery](authority-restore-scenarios.md): exact replay, old-session rejection, native deck/Lineage rejoin and source-proof journeys.
+
+- [Exact-content Lineage adoption](lineage-matching-adoption-scenarios.md): explicit matching package approval, rollback, parent lifetimes and pending desktop actions.
+
+- [GCS backup publication](gcs-backup-scenarios.md): real snapshots/SDK interface, simulated cloud, isolated operator setup, immutable retry and shared content.
+
+- [GCS backup retrieval](gcs-fetch-scenarios.md): exact snapshot, untrusted manifests, bounded SDK ranged bytes and fresh-workspace recovery; no live cloud.
+
+- [Old-device recovery review](device-recovery-review-scenarios.md): uncertain acknowledgments, exact backup prefix, no mutation, worker cancellation/close and GUI binding changes.
+
+- [Direct saved Lineage adoption](lineage-direct-adoption-scenarios.md): selected PDFs, unchanged science/model, atomic sources/history/outbox, native peer recovery and real verification/confirmation controls.

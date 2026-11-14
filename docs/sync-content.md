@@ -92,3 +92,8 @@ File-only scopes (`presentations`, figures/text caches, paper-highlights,
 reading-links, material-positions and research-questions JSON) are explicitly not
 enrolled by this SQL registry. The PDF-only document transfer is not a generic JSON
 transport. Bundle ownership/hash checks are not substitutes for this closed schema.
+
+For notes originating in the legacy two-field protocol, creation time was local
+receiver metadata rather than shared identity. Reconciliation uses the verified
+birth receipt to handle those old timestamps; native rich-note creation metadata
+remains protected. Stable note IDs and parent bindings are preserved.

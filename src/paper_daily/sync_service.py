@@ -124,7 +124,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
             workspace, device = self._authenticate(conn, token)
             return {"workspace_id": workspace, "device_id": device}
 
-    def enroll(self, workspace_id: str, device_id: str) -> str:
+    def enroll(self, workspace_id: str, device_id: str, *, before_commit=None) -> str:
         """Trusted admin only: issue a token once for a new workspace/device pair."""
         for value in (workspace_id, device_id):
             if not isinstance(value, str) or not ID.fullmatch(value):
@@ -141,6 +141,8 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 "INSERT INTO sync_devices(token_hash,workspace,device) VALUES(?,?,?)",
                 (self._token_hash(token), workspace_id, device_id),
             )
+            if before_commit is not None:
+                before_commit(token)
         return token
 
     def revoke(self, token: str) -> None:
@@ -228,6 +230,10 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 ):
                     raise ValueError("Version 1 cannot bypass an enrolled paper parent")
             graph_ready = check_preconditions(get_entity, get_receipt, value)
+            from paper_daily import lineage_capacity, lineage_dependencies
+
+            if graph_ready and lineage_dependencies.requires_readiness(value):
+                graph_ready = lineage_capacity.authority_room_in(conn, value)
             if graph_ready and value["entity_type"] in ORDER_KINDS:
                 graph = {
                     (row["entity_type"], row["entity_id"]): json.loads(row["metadata"])

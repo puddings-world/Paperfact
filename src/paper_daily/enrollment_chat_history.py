@@ -345,7 +345,8 @@ def add_live_sources(inventory, live, manifests, owned_sources, papers):
             raise ValueError("Live QA original has no current paper")
         primary = manifests.get(paper)
         candidates = ([primary] if primary and primary["sha256"] == digest else []) + [
-            row for row in owned_sources if row["sha256"] == digest
+            row for row in owned_sources
+            if row["sha256"] == digest and not row.get("archive_only", False)
         ]
         if not candidates:
             raise ValueError("Live QA requires its exact original source PDF")

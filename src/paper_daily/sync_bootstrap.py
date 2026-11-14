@@ -20,7 +20,12 @@ from paper_daily.sync_capture import CaptureConnection, install
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_journal import Journal
 from paper_daily.sync_recovery_fs import publish_directory
-from paper_daily.sync_research import prepare, research_order_writer, research_writer
+from paper_daily.sync_research import (
+    prepare,
+    research_order_writer,
+    research_projection_writer,
+    research_writer,
+)
 from paper_daily.workspace_service import _safe_path
 from paper_daily.workspace_sync import GuardedJournal, local_binding
 
@@ -118,7 +123,12 @@ def _initialize(folder, spec):
     identity = {key: spec[key] for key in ("workspace_id", "device_id")}
     prepare(path, **identity)
     journal = Journal(path, **identity)
-    SyncClient(journal, research_writer, order_writer=research_order_writer)
+    SyncClient(
+        journal,
+        research_writer,
+        order_writer=research_order_writer,
+        projection_writer=research_projection_writer,
+    )
     conn = sqlite3.connect(path, factory=CaptureConnection)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -236,7 +246,10 @@ def join(session, destination, ticket, progress=lambda _value: None, *, max_page
         journal = GuardedJournal.attach_existing(path, **identity)
         journal.live = live
         client = SyncClient.attach_existing(
-            journal, research_writer, order_writer=research_order_writer
+            journal,
+            research_writer,
+            order_writer=research_order_writer,
+            projection_writer=research_projection_writer,
         )
         deadline, received = time.monotonic() + seconds, 0
         ready = False

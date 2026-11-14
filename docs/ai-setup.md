@@ -257,3 +257,22 @@ than repaired. To move a whole workspace, close the app and privately back up
 the entire configured data directory, including PDFs, figures and editable decks.
 Copying only `papers.db` does not preserve all research files. To share selected
 lists without account settings, use a research package; see [Installation](install.md).
+
+
+### Research lineage task (v0.5 development)
+
+The AI task settings page includes **Research lineage** (`lineage`). It uses the
+same account/model controls as other tasks: inherit the global default or choose
+a separate supported account and exact model. Saving or cancelling these choices
+never generates an analysis or changes the account's shared model.
+
+A job captures `llm.freeze_connections(("lineage",))` after normal access preflight
+and passes that immutable value to `LineageJob.prepare`. Later settings changes
+apply to the next job, not the running request. An undeclared/missing task in a
+frozen map is still refused; this registration does not add a fallback or login
+flow inside the analysis worker. Requested and returned models remain separate.
+
+The [desktop lineage workflow](lineage-reader.md) now provides source selection,
+explicit generation and exact-original inspection in the development app. Task
+configuration alone triggers no analysis. Scientific correctness, reviewed
+archive adoption and installed-device acceptance remain separate gates.

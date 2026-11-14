@@ -1,4 +1,4 @@
-"""One explicit, source-bound lineage proposal; no retrieval or publication."""
+"""One source-bound Lineage proposal with private retention, not canonical installation."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from paper_daily import lineage_content, llm, research_job_lock, research_lineag
 from paper_daily.ai_job_intent import FrozenRoutes
 from paper_daily.ai_types import Completion
 from paper_daily.research_evidence import EvidenceError
+from paper_daily.store import now
 
 TASK = "lineage"
 MAX_PROMPT_BYTES = 256 * 1024
@@ -76,7 +77,7 @@ def _guard(corpus, cancelled, current, route_current):
 
 @dataclass(frozen=True, slots=True)
 class LineageResult:
-    """Temporary original-snapshot report, never a persisted publication receipt."""
+    """Original-snapshot proposal; retained candidates grant no canonical authority."""
 
     _corpus: research_lineage.CorpusSnapshot = field(repr=False)
     _report_json: str = field(repr=False)
@@ -109,6 +110,9 @@ class _State:
     reply: _Reply | None = None
     result: LineageResult | None = None
     retained: str | None = None
+    originals: list = field(default_factory=list, repr=False)
+    candidate: object = field(default=None, repr=False)
+    publication: object = field(default=None, repr=False)
     lock: object = field(default_factory=threading.Lock, repr=False)
 
 
@@ -125,6 +129,9 @@ class LineageJob:
     max_tokens: int
     max_prompt_bytes: int
     request_id: str = field(default_factory=lambda: str(uuid4()))
+    corpus_id: str = field(default_factory=lambda: str(uuid4()))
+    started_at: str = field(default_factory=now)
+    _target: object = field(default=None, repr=False)
     _state: _State = field(default_factory=_State, init=False, repr=False, compare=False)
 
     @property
@@ -135,10 +142,28 @@ class LineageJob:
     def prepare(
         cls, corpus, *, connections, max_calls=1, max_tokens=4000,
         max_prompt_bytes=MAX_PROMPT_BYTES, route_current=lambda: True,
-        cancelled=lambda: False, current=lambda: True,
+        cancelled=lambda: False, current=lambda: True, corpus_id=None,
+        publication_observation=None,
     ):
         """Worker-only capture; missing explicit Lineage route cannot fall back."""
         _worker()
+        target = None
+        request_id = str(uuid4())
+        if publication_observation is not None:
+            from paper_daily import lineage_observation
+
+            if (not isinstance(publication_observation, lineage_observation.LineageObservation)
+                    or publication_observation._corpus is not corpus):
+                _fail("lineage_observation_corpus_mismatch")
+            target = lineage_observation.target_lease(publication_observation)
+            base = lineage_observation.lease_data(target)
+            if corpus_id is not None and corpus_id != base["corpus_id"]:
+                _fail("lineage_observation_corpus_mismatch")
+            corpus_id, request_id = base["corpus_id"], base["request_id"]
+        if corpus_id is not None:
+            from paper_daily.lineage_sets import uuid
+
+            uuid(corpus_id)
         if type(max_calls) is not int or max_calls != 1:
             _fail("invalid_call_budget")
         if (type(max_prompt_bytes) is not int
@@ -163,7 +188,45 @@ class LineageJob:
         captured = research_lineage._checked(corpus)
         return cls(corpus, connections, prompt, Path(captured["database"]),
                    lineage_content.hashed(corpus.sources), route_current,
-                   max_tokens, max_prompt_bytes)
+                   max_tokens, max_prompt_bytes, corpus_id=corpus_id or str(uuid4()),
+                   request_id=request_id, _target=target)
+
+    def _reason(self, current):
+        reason = _reason(self._corpus, current, self._route_current)
+        if reason is not None or self._target is None:
+            return reason
+        from paper_daily import lineage_observation
+
+        try:
+            lineage_observation.check_target(self._target)
+        except (research_lineage.LineageError, EvidenceError, OSError, sqlite3.Error):
+            return "lineage_target_changed"
+        return None
+
+    def _guard(self, cancelled, current):
+        if cancelled():
+            _fail("cancelled")
+        reason = self._reason(current)
+        if reason:
+            _fail(reason)
+
+    def _persist_result(self):
+        from paper_daily import lineage_candidates
+
+        state = self._state
+        if state.publication is not None:
+            return state.result
+        if state.candidate is None:
+            state.candidate = lineage_candidates.prepare(
+                self._corpus, state.result.report, state.result.execution, state.originals,
+                started_at=self.started_at, reason=state.result.retention_reason,
+                target=self._target,
+            )
+        state.publication = lineage_candidates.persist(state.candidate)
+        execution = dict(state.result.execution, persistence="candidate",
+                         candidate_id=state.publication.candidate_id)
+        state.result = replace(state.result, _execution_json=research_lineage._json(execution))
+        return state.result
 
     def run(self, *, cancelled=lambda: False, current=lambda: True,
             progress=lambda stage: None):
@@ -176,20 +239,28 @@ class LineageJob:
             if state.result is not None:
                 if cancelled():
                     _fail("cancelled")
-                reason = _reason(self._corpus, current, self._route_current)
+                reason = self._reason(current)
                 state.retained = state.retained or reason
                 if state.retained and state.result.retention_reason is None:
                     state.result = replace(state.result, retention_reason=state.retained)
-                return state.result
+                return self._persist_result()
             if state.reply is None:
                 if state.attempted:
                     _fail("explicit_new_job_required")
-                _guard(self._corpus, cancelled, current, self._route_current)
+                self._guard(cancelled, current)
                 with research_job_lock.claim(self._database, TASK, self._lock_key) as owned:
                     if not owned:
                         _fail("already_running")
+                    from paper_daily.lineage_source_snapshots import retain
+
+                    progress("source_retention")
+                    self._guard(cancelled, current)
+                    state.originals = retain(
+                        self._corpus, corpus_id=self.corpus_id, request_id=self.request_id,
+                        cancelled=cancelled)
+                    self._guard(cancelled, current)
                     progress("model")
-                    _guard(self._corpus, cancelled, current, self._route_current)
+                    self._guard(cancelled, current)
                     state.attempted = True
                     cfg = self._routes.settings(TASK)
                     with llm.connection_scope(self._routes):
@@ -220,7 +291,7 @@ class LineageJob:
             if cancelled():
                 state.retained = state.retained or "cancelled_after_completion"
                 _fail("cancelled")
-            state.retained = state.retained or _reason(self._corpus, current, self._route_current)
+            state.retained = state.retained or self._reason(current)
             progress("quote_verification")
             try:
                 proposals = research_lineage.parse_proposals(state.reply.text, self._corpus)
@@ -239,10 +310,11 @@ class LineageJob:
             if cancelled():
                 state.retained = state.retained or "cancelled_after_completion"
                 _fail("cancelled")
-            state.retained = state.retained or _reason(self._corpus, current, self._route_current)
+            state.retained = state.retained or self._reason(current)
             cfg = self._routes.settings(TASK)
             execution = dict(
-                task=TASK, request_id=self.request_id, backend=cfg.backend,
+                task=TASK, request_id=self.request_id, corpus_id=self.corpus_id,
+                backend=cfg.backend,
                 requested_model=cfg.effective_model, returned_model=state.reply.returned_model,
                 max_calls=1, model_calls=1, max_tokens=self.max_tokens,
                 input_hash=lineage_content.hashed(json.loads(self._prompt)),
@@ -254,6 +326,6 @@ class LineageJob:
                 state.retained,
             )
             state.reply = None
-            return state.result
+            return self._persist_result()
         finally:
             state.lock.release()

@@ -1,5 +1,12 @@
 # Master reconciliation and Mac delivery gate — 2026-11-05
 
+Current local ancestry check, 2026-11-13: `master` at `1b44466` is an ancestor of
+`develop/0.5` at `aa4b30e`; `git rev-list --left-right --count develop/0.5...master`
+returns `84 0`. No local maintenance commit is missing from the development branch.
+This read-only check did not fetch or establish the latest remote state. The
+pending-merge narrative below is historical; packaging and installed-device gates
+remain unfulfilled unless the current status records separate acceptance.
+
 Remote master was verified and fetched as `1b44466a2aaf5a3ea17a3eba16f27777f0507a36`.
 No remote `feature/0.5-sync-foundation` existed at that check. The isolated candidate
 has a pending merge through `8bc4a3b`; the subsequent `docs/ai-setup.md` change from

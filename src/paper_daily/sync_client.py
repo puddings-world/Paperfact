@@ -50,7 +50,10 @@ class SyncClient:
     Neither credentials nor model calls are stored or executed by this client.
     """
 
-    def __init__(self, journal: Journal, writer, *, order_writer=None):
+    def __init__(self, journal: Journal, writer, *, order_writer=None, projection_writer=None):
+        if projection_writer is not None and not callable(projection_writer):
+            raise ValueError("Projection writer must be callable or None")
+        self.projection_writer = projection_writer
         self.journal = journal
         self.writer = writer
         self.order_writer = order_writer
@@ -136,9 +139,12 @@ class SyncClient:
             conn.close()
 
     @classmethod
-    def attach_existing(cls, journal, writer, *, order_writer=None):
-        """Use initialized sync tables on the caller's current transaction."""
+    def attach_existing(cls, journal, writer, *, order_writer=None, projection_writer=None):
+        """Use initialized sync tables on the caller's current transaction; no DDL."""
+        if projection_writer is not None and not callable(projection_writer):
+            raise ValueError("Projection writer must be callable or None")
         value = cls.__new__(cls)
+        value.projection_writer = projection_writer
         value.journal, value.writer, value.order_writer = journal, writer, order_writer
         value._running = threading.Lock()
         return value
@@ -218,10 +224,14 @@ class SyncClient:
         """Overlay one local intent without inventing an accepted server sequence."""
         state, touches, own = graph
         key = (operation["entity_type"], operation["entity_id"])
+        old = state.get(key)
+        if operation["version"] == 2:
+            from paper_daily.sync_graph import _check_address
+
+            _check_address(operation, old)
         own[key] = operation
         if operation["version"] != 2:
             return
-        old = state.get(key)
         lifecycle = (
             old is None
             or not old["active"]
@@ -234,6 +244,8 @@ class SyncClient:
             "active": operation["action"] == "put",
             "parents": operation["parents"],
         }
+        if "content_address" in operation:
+            state[key]["content_address"] = dict(operation["content_address"])
         if lifecycle:
             touches[key] = operation["operation_id"]
         for parent in operation["parents"]:
@@ -293,6 +305,16 @@ class SyncClient:
             restore=restore,
         )
 
+    def new_lineage_operation_in(self, conn, prepared_sources, source_operations, payload):
+        """Build from the original sealed corpus and same-transaction source publication.
+
+        Data construction only; this does not enable the common Lineage registry
+        or publish a scientific row/outbox. The caller owns its transaction.
+        """
+        from paper_daily.lineage_operations import build_in
+
+        return build_in(conn, self, prepared_sources, source_operations, payload)
+
     def _new_graph_operation(
         self,
         conn,
@@ -304,6 +326,7 @@ class SyncClient:
         operation_id=None,
         restore=False,
         retirement=False,
+        lineage_template=None,
     ):
         if type(restore) is not bool:
             raise ValueError("Restore must be an explicit boolean choice")
@@ -337,8 +360,16 @@ class SyncClient:
         elif kind == "research_content" and action == "put":
             from paper_daily.sync_content import parent_identities, validate_payload
 
-            validate_payload(payload, entity_id=entity_id)
-            requested = parent_identities(payload)
+            if payload.get("feature") == "lineage":
+                from paper_daily import lineage_dependencies, lineage_wire
+
+                if lineage_template is None:
+                    raise ValueError("Lineage puts require the observed native builder")
+                lineage_dependencies.canonical_operation(lineage_template)
+                requested = lineage_wire.parent_identities(payload)
+            else:
+                validate_payload(payload, entity_id=entity_id)
+                requested = parent_identities(payload)
         elif kind == "list_order" and action == "put":
             requested = [("list", entity_id)]
         elif action == "delete":
@@ -362,6 +393,10 @@ class SyncClient:
             parents.append(
                 {"kind": parent_key[0], "id": parent_key[1], "incarnation": parent["incarnation"]}
             )
+        if lineage_template is not None and action == "put":
+            if parents != lineage_template["parents"]:
+                raise ValueError("Lineage parents changed; explicitly observe a new analysis")
+            parents = lineage_template["parents"]
         if kind == "reading_state":
             parents = self._reading_parents(state, entity_id)
         changed_parent = current and self._parent_keys(current["parents"]) != self._parent_keys(
@@ -406,11 +441,21 @@ class SyncClient:
         }
         if key in touches:
             operation["structure_depends_on"] = touches[key]
+        address = (lineage_template or current or {}).get("content_address")
+        if address is not None:
+            operation["content_address"] = dict(address)
+            operation["source_dependencies"] = (
+                lineage_template["source_dependencies"] if action == "put" else []
+            )
         operation = json.loads(canonical_operation(operation))
         self._guard_membership_creation(conn, operation)
         self._guard_reading_parents(conn, operation)
         self._guard_order(conn, operation)
         self._guard_document_parent(conn, operation)
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            self._guard_content_parent(conn, operation)
         return operation
 
     def new_order_operation(
@@ -490,6 +535,14 @@ class SyncClient:
                 raise ValueError("Content retirement no longer matches its conflict")
             return
         graph, _, _ = self._optimistic_graph(conn)
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            lineage_dependencies.canonical_operation(operation)
+            if not lineage_dependencies.active(
+                lambda kind, identity: graph.get((kind, identity)), operation
+            ):
+                raise ValueError("Lineage requires every exact active original dependency")
         for parent in operation["parents"]:
             current = graph.get((parent["kind"], parent["id"]))
             if (
@@ -749,11 +802,23 @@ class SyncClient:
             {"ref": ref, "current": graph.get((ref["kind"], ref["id"]))}
             for ref in (state or operation).get("parents", [])
         ]
-        return {
+        result = {
             "event": event, "resolved_by": target["resolved_by"],
             "head": dict(head) if head else None, "state": state, "parents": parents,
             "outstanding": self._outstanding(conn, key),
         }
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            canonical = json.loads(head["operation"]) if head and head["operation"] else None
+            references = list(operation["source_dependencies"])
+            if canonical is not None:
+                references.extend(canonical.get("source_dependencies", []))
+            result["originals"] = [
+                {"ref": ref, "current": graph.get(("research_file", ref["file_id"]))}
+                for ref in references
+            ]
+        return result
 
     def resolve_conflict(
         self, sequence, *, choice="incoming", payload=None, operation_id=None, restore=False
@@ -891,6 +956,12 @@ class SyncClient:
                         or parent["incarnation"] != ref["incarnation"]
                         for ref in references
                     )
+                    from paper_daily import lineage_dependencies
+
+                    if source is not None and lineage_dependencies.requires_readiness(source):
+                        obsolete = obsolete or not lineage_dependencies.active(
+                            lambda kind, identity: self._graph_entity(conn, kind, identity), source
+                        )
                     retirement = choice == "canonical" and (obsolete or source is None)
                     if retirement:
                         operation.update(
@@ -901,6 +972,10 @@ class SyncClient:
                             incarnation=state["incarnation"] if state else conflict["incarnation"],
                             structure_revision=state["structure_revision"] if state else 0,
                         )
+                        address = (state or conflict).get("content_address")
+                        if address is not None:
+                            operation["content_address"] = dict(address)
+                            operation["source_dependencies"] = []
                         if payload not in (None, {}):
                             raise ValueError("Canonical retirement requires an empty payload")
                     else:
@@ -911,6 +986,10 @@ class SyncClient:
                             action=operation["action"],
                             operation_id=operation["operation_id"],
                             restore=restore,
+                            lineage_template=source
+                            if (source is not None
+                                and lineage_dependencies.requires_readiness(source))
+                            else None,
                         )
                         operation["resolution_of"] = conflict["operation_id"]
                 elif restore:
@@ -1117,6 +1196,12 @@ class SyncClient:
                 )
                 self._record_conflict_state(conn, event)
                 self._record_graph_state(conn, event)
+                from paper_daily import lineage_dependencies
+
+                if event["outcome"] == "accepted" and lineage_dependencies.requires_readiness(op):
+                    from paper_daily.lineage_projection import _retain_received_in
+
+                    _retain_received_in(conn, self, event)
                 self._invalidate_order_cache(conn, op)
                 cursor = sequence
                 received += 1
@@ -1178,6 +1263,42 @@ class SyncClient:
             applied += 1
         return applied
 
+    @staticmethod
+    def _projection_encoded(operation):
+        from paper_daily import lineage_dependencies
+
+        if lineage_dependencies.requires_readiness(operation):
+            return lineage_dependencies.canonical_operation(operation)
+        return canonical_operation(operation)
+
+    def _write_projection_in(self, conn, source, *, visible):
+        """Preserve an immutable source for explicitly registered graph projectors.
+
+        The receive owner validates events and owns transaction/cursor rollback.
+        This dispatch creates no event, outbox or schema. A typed source without
+        an explicit projector cannot fall back to a synthetic generic deletion.
+        """
+        from paper_daily import lineage_dependencies
+
+        if not conn.in_transaction or type(visible) is not bool:
+            raise ValueError("Projection requires a transaction and boolean visibility")
+        encoded = self._projection_encoded(source)
+        operation = json.loads(encoded)
+        if self.projection_writer is None and lineage_dependencies.requires_readiness(operation):
+            raise ValueError("Typed Lineage receive requires an explicit projection writer")
+        conn.set_authorizer(self.journal._authorize_writer)
+        try:
+            if self.projection_writer is not None:
+                self.projection_writer(conn, operation, visible=visible)
+            else:
+                if not visible:
+                    operation.update(action="delete", payload={})
+                self.writer(conn, operation)
+        finally:
+            conn.set_authorizer(None)
+        if self.projection_writer is not None and self._projection_encoded(operation) != encoded:
+            raise ValueError("Projection writer cannot change its original operation")
+
     def _materialize_graph(self, conn, cursor):
         heads = conn.execute(
             "SELECT h.*,p.source,p.operation AS projected_operation,p.active,p.reason "
@@ -1185,11 +1306,13 @@ class SyncClient:
             "USING(entity_type,entity_id) "
             "WHERE h.entity_type NOT IN ('list_order','workspace_list_order') "
             "ORDER BY CASE WHEN h.entity_type IN ('list','paper') THEN 0 "
-            "WHEN h.entity_type='reading_state' THEN 2 ELSE 1 END,h.revision"
+            "WHEN h.entity_type='research_file' THEN 1 "
+            "WHEN h.entity_type='reading_state' THEN 3 ELSE 2 END,h.revision"
         ).fetchall()
         pending = self._pending_graph(conn, cursor)
         outstanding = {(op["entity_type"], op["entity_id"]) for op in pending}
         applied = 0
+        lineage_initialized = False
 
         def blocked(key, reason):
             conn.execute(
@@ -1204,14 +1327,7 @@ class SyncClient:
                 head["applied_revision"] != head["revision"] or bool(head["active"]) != visible
             )
             if changed:
-                operation = json.loads(canonical_operation(source))
-                if not visible:
-                    operation.update(action="delete", payload={})
-                conn.set_authorizer(self.journal._authorize_writer)
-                try:
-                    self.writer(conn, operation)
-                finally:
-                    conn.set_authorizer(None)
+                self._write_projection_in(conn, source, visible=visible)
             conn.execute(
                 "UPDATE paperfact_sync_heads SET applied_revision=revision "
                 "WHERE entity_type=? AND entity_id=?",
@@ -1220,7 +1336,7 @@ class SyncClient:
             conn.execute(
                 "UPDATE paperfact_sync_graph_projection SET operation=?,active=?,reason=? "
                 "WHERE entity_type=? AND entity_id=?",
-                (canonical_operation(source), int(visible), reason, *key),
+                (self._projection_encoded(source), int(visible), reason, *key),
             )
             return int(changed)
 
@@ -1305,7 +1421,24 @@ class SyncClient:
                 # An accepted retirement is already canonical absence, not a child
                 # waiting forever for an obsolete parent's incarnation to return.
                 reason = None
-            if reason in ("parent_pending", "parent_deferred"):
+            from paper_daily import lineage_dependencies
+
+            if lineage_dependencies.requires_readiness(source):
+                if not lineage_initialized:
+                    from paper_daily.lineage_projection import initialize_receive_in
+
+                    initialize_receive_in(conn, self, source)
+                    lineage_initialized = True
+                # This checks every dependency's outstanding edits first, before
+                # any earlier missing/retired parent or source can hide science.
+                reason = lineage_dependencies.projection_reason_in(conn, self, source)
+            if reason in (
+                "parent_pending",
+                "parent_deferred",
+                "source_pending",
+                "source_deferred",
+                "projection_capacity",
+            ):
                 blocked(key, reason)
                 continue
             if head["operation"] is None and source["entity_type"] == "paper":
@@ -1535,6 +1668,9 @@ class SyncClient:
             for operation in self.journal.pending(limit):
                 dependencies = {operation.get("depends_on"), operation.get("structure_depends_on")}
                 dependencies.update(ref["incarnation"] for ref in operation.get("parents", []))
+                dependencies.update(
+                    ref["incarnation"] for ref in operation.get("source_dependencies", [])
+                )
                 if operation["entity_type"] in ("list_order", "workspace_list_order"):
                     dependencies.update(
                         item["incarnation"] for item in operation["payload"].get("items", [])

@@ -7,7 +7,7 @@ export const SHELL =['./', './index.html', './style.css', './app.mjs', './worksp
 './position-recovery.mjs',
 './vendor/pdfjs-6.4.299/pdf.mjs', './vendor/pdfjs-6.4.299/pdf.worker.mjs',
 './vendor/pdfjs-6.4.299/LICENSE', './vendor/pdfjs-6.4.299/provenance.json',
-'./later-outcomes.mjs', './engine.mjs', './transport.mjs', './fixture.mjs', './i18n.mjs', './view.mjs', './manifest.webmanifest',
+'./lineage-originals.mjs', './lineage-source-view.mjs', './lineage.mjs', './lineage-ops.mjs', './lineage-view.mjs', './later-outcomes.mjs', './engine.mjs', './transport.mjs', './fixture.mjs', './i18n.mjs', './view.mjs', './manifest.webmanifest',
 './icon.svg', './sw-policy.mjs', './content.mjs', './chat-view.mjs', './annotations.mjs', './claims.mjs', './reading-goal.mjs', './list-pins.mjs', './research-activity.mjs', './inbox-schema.mjs', './inbox-ops.mjs', './inbox-view.mjs', './ids.mjs', './artifacts.mjs', './artifact-engine.mjs', './legacy-workflow.mjs', './legacy-view.mjs'];
 export function cacheable(request, scope) {
   const url = new URL(request.url),

@@ -469,6 +469,8 @@ def _validate_row(context, row):
     from paper_daily.sync_content import FEATURES, validate_payload
 
     data = context.data
+    if data.get("table") not in REGISTRY:
+        raise ValueError("Unsupported research generation target")
     kind, column, feature, _ = REGISTRY[data["table"]]
     fields = FEATURES[feature][2].split()
     if (
@@ -530,6 +532,10 @@ def validate_request_record(record):
     if record["status"] not in ("accepted", "candidate"):
         raise ValueError("Invalid generation receipt status")
     data = json.loads(record["context_json"])
+    if isinstance(data, dict) and data.get("format") == "paperfact.lineage-proposal-context.v1":
+        from paper_daily.lineage_candidates import validate
+
+        return validate(record)
     fields = {
         "version",
         "started_at",

@@ -1,0 +1,31 @@
+# Review-only pilot template. No infrastructure or service is installed by this file.
+# Pin /mnt/paperfact to the approved data disk UUID in the host mount configuration.
+[Unit]
+Description=Paperfact private sync authority
+RequiresMountsFor=/mnt/paperfact
+BindsTo=mnt-paperfact.mount
+After=mnt-paperfact.mount network.target
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=paperfact-sync
+Group=paperfact-sync
+WorkingDirectory=/opt/paperfact
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUTF8=1
+ExecStart=/opt/paperfact/.venv-sync/bin/python -m paper_daily sync-admin serve --state /mnt/paperfact/service --require-mount /mnt/paperfact --port 8765
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/mnt/paperfact/service
+
+[Install]
+WantedBy=multi-user.target

@@ -13,13 +13,18 @@ ten-plus years of ICLR / ICML / NeurIPS and prepares nightly deep dives.
 For cross-device work, read `docs/roadmap-0.5.0.md`, then
 `docs/sync-architecture.md` and `docs/implementation-0.5.0.md`.
 They separate agreed scope, proposed architecture, unresolved decisions, and
-implementation tasks. Sync and the independent mobile PWA are not implemented.
-The S01 baseline is in `docs/sync-write-inventory.md`; `docs/adr/0001-local-sync-journal.md`
-records the journal foundation. The reference client/service and explicit list/note
-adapter are in development; existing app writers are not enrolled yet. Follow the
-updated ledger and `docs/parallel-work-0.5.0.md` for ownership; do not overwrite another
-session's files. Production identity/hosting and full research coverage remain gated.
-Use the active `Paperfact` checkout; the old `paper-daily` checkout is an archive.
+implementation tasks. Current evidence is in `docs/status-0.5.0.md`; historical
+stage descriptions are not claims about the present code. Sync, enrolled writers
+and the independent mobile PWA have partial local integration coverage, not full
+release or physical-device acceptance. The latest full result is failed; use the
+exact scenario maps and `docs/testing/continuation-20261112.md` for remaining gates.
+The GCP pilot remains a proposal in `docs/gcp-sync-pilot-plan.md`, with no deployment.
+Use the verified active integration checkout `Paperfact-develop` on `develop/0.5`.
+The old `paper-daily` checkout is an archive and separate `Paperfact`/maintenance
+checkouts may hold independent release work. Verify the worktree before editing.
+Preserve other sessions' uncommitted changes; follow `docs/parallel-work-0.5.0.md`.
+Production identity/hosting, complete research coverage and device acceptance
+remain gated.
 Keep repository planning documentation concise and in English.
 
 ## Intent

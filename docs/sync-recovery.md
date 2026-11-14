@@ -48,6 +48,22 @@ Other legacy text, figures, brief files,
 presentation histories/drafts and research JSON files require migration first.
 There is no misleading “metadata complete” backup mode.
 
+Schema definitions are reused only within each synchronous create, inspect or
+restore operation. The scope contains immutable column metadata, not research
+rows, database connections, file hashes or validation decisions. Every archive
+row and nested retained-history group is still validated; independent calls,
+threads and retries construct fresh metadata. This bounds repeated schema
+construction when a research archive includes earlier recovery provenance.
+
+Private Lineage original observations also use the existing typed source-receipt
+closure: each selected available PDF keeps its own paper, lifetime, corpus and
+request identity. Their `paperfact.lineage-source-observation.v1` records and exact
+PDF bytes are retained in independent backups. Schema-valid Lineage proposal
+records also retain their ordered source closure; a replaced database's owned
+sidecar includes the original version pairs rather than borrowing current PDFs.
+They grant no claim/source lookup permission, synchronization identity or resumable producer. Detached restore keeps
+them as historical recovery records. See [the producer boundary](grounded-lineage-producer.md#durable-original-observations-2026-11-13-continuation).
+
 ## Detached restore
 
 Restore checks the closed archive inventory, bounded counts/sizes and every digest.
@@ -102,3 +118,85 @@ and Apple's [rename contract](https://github.com/apple-oss-distributions/xnu/blo
 and [flag definitions](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/stdio.h).
 Fixture tests exercise both POSIX native contracts and failure codes. Real macOS/Linux
 filesystem integration remains a platform acceptance check when tested from Windows.
+
+
+## Staged Lineage result and original closure
+
+The local development backup registry includes optional `paper_lineage_sets`
+research and private `research_lineage_publications` receipts. The latter has
+closed fields `request_id`, `candidate_id`, `row_json`, `sources_json`. This does
+not enable a Lineage task, desktop action or live protocol capability.
+
+An unbound canonical row must have a complete publication receipt. Each receipt must match
+its exact retained candidate, pre-call publication-base descriptor and every
+original association in `research_local_source_owners`. All selected paper IDs
+must exist; unavailable originals stay explicitly unavailable. Every declared PDF
+is included by verified hash and size. Equal bytes may be stored once but do not
+merge different source/paper/request identities. Missing history, a changed
+association or missing original refuses backup before publishing an output file.
+Archive inspection repeats these checks, even when an altered container's table
+hashes have been recomputed.
+
+Detached restore installs the exact research rows using maintained schema and
+keeps old publication/candidate/source observations in `recovery_records`; it
+never installs old publication authority, local original grants or sync identity.
+The PDF objects remain in the detached archive's verified `objects` directory.
+An old reader that does not recognize these tables must reject the package rather
+than ignore them. This is a format extension within the closed recovery registry,
+not a compatibility promise for v0.4 clients.
+
+Recovered Lineage can be inspected as preserved research, but conversion into an
+editable synchronized workspace remains explicitly blocked until typed fresh
+source ownership and Lineage enrollment are implemented. The inspection explains
+that gate and preserves the detached source. This is not an automatic destructive
+migration or a completed active-source reader. List-sharing packages, live sync,
+mobile projection and full installed-device acceptance remain separate work.
+
+
+The development recovery registry now also preserves staged bound projections:
+`research_lineage_sync_sources` (current metadata) and
+`research_lineage_sync_history` (immutable complete operations). A bound canonical
+row must match the exact visible marker and historical operation after retained
+paper-alias mapping. Every available original pin must match its retained file
+incarnation, exact paper parent and workspace, with full verified bytes. Hidden
+or deleted reports retain earlier scientific/source history without restoring an
+active report. Missing history or altered source lifetimes cannot be disguised
+by recomputing ZIP/table hashes. See the
+[bound history contract](grounded-lineage-producer.md#bound-projection-history-and-detached-recovery).
+
+These two protocol tables restore into `recovery_records`, never live projection
+or sync/source authority. Historical pins remain archival evidence after source
+retirement, not permission to attach to a restored incarnation. The existing
+explicit owned BlobStore input remains required. This archive-only extension does
+not activate the Lineage producer, network admission, editable enrollment or UI.
+
+
+## Native imported Lineage history
+
+Recovery now preserves `research_lineage_imports` as typed protocol data beside
+current `paper_lineage_sets` and every exact local original association. Both
+current and displaced reports retain their referenced PDF versions. Archive
+inspection independently verifies original hashes, page counts and located
+quotations; recomputing container/table hashes cannot make a false location true.
+Missing/foreign associations or unavailable required bytes refuse without a
+partial destination. Unknown future research schemas remain unsupported.
+
+Detached restoration keeps import/source/lifecycle records in `recovery_records`
+and original bytes under `objects/`; it does not reactivate old native or sync
+identities. A fresh local paper lifetime alone grants no access through the native
+imported-source reader. Reviewed editable adoption and actual source-UI activation
+remain pending. Retired historical source data do not recreate deleted papers.
+See [the imported-history contract](lineage-packages.md#imported-history-backup-and-detached-restore)
+for exact boundaries, limits and regression coverage.
+
+
+### Staged fresh Lineage original preparation
+
+The internal [fresh-source adoption component](lineage-packages.md#fresh-originals-from-detached-recovery-inspections)
+can verify active unbound imported/generated archive cohorts and stage fresh
+receiver originals in bounded batches. A caller-owned savepoint covers all
+batches, source associations and fresh parent lifetimes; retry is idempotent.
+It never edits the detached source or installs old native grants. It is not
+registered in `RecoveryAdoptionService.prepare`: complete history retention and
+compound Lineage enrollment must close before synchronized editable copies are
+enabled. The user-facing unsupported-content blocker remains in force.

@@ -357,3 +357,34 @@ def test_cli_defaults_to_critical_journeys():
     finally:
         main.__globals__["run_checks"] = original
     assert calls[0]["profile"] == "critical"
+
+
+def test_release_gate_is_curated_and_preserves_frontend_mobile_protocol_checks(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(CHECK["shutil"], "which", lambda _: "node")
+    expected = [test for group in CHECK["RELEASE_JOURNEYS"].values() for test in group]
+    for test in expected:
+        fixture_test(tmp_path, test.partition("::")[0])
+    for name in ("gemini_usage", "pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
+        fixture_test(tmp_path, "tests/test_" + name + ".mjs")
+    for name in CHECK["RELEASE_MOBILE"]:
+        path = tmp_path / ("mobile/tests/" + name + ".test.mjs")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("// fixture", encoding="utf-8")
+    observed = []
+    def execute(command, **kwargs):
+        observed.append(command)
+        return SimpleNamespace(returncode=0)
+    assert CHECK["run_checks"](tmp_path, execute, files=[], profile="release") == 0
+    report = report_at(tmp_path)
+    assert report["selection"]["python"] == expected
+    assert report["selection"]["mobile"] and len(report["selection"]["frontend"]) == 5
+    assert not report["full_check_passed"]
+    assert "tests" not in observed[1]
+    assert observed[-2][:2] == ["node", "--test"]
+    assert observed[-1][1] == str(tmp_path / "mobile/service-check.mjs")
+    assert set(CHECK["CRITICAL_JOURNEYS"]) <= set(report["journeys"])
+    (tmp_path / "mobile/tests/domain.test.mjs").unlink()
+    assert CHECK["run_checks"](tmp_path, files=[], profile="release") == 1
+    assert not report_at(tmp_path)["full_check_passed"]

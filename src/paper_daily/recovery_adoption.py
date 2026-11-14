@@ -45,6 +45,14 @@ def _report(value, *, private_files=0):
     members = {row["paper_id"] for row in tables.get("list_papers", [])}
     records = _records(value)
     blockers = []
+    if tables.get("paper_lineage_sets"):
+        from paper_daily.lineage_recovery_sources import _authority
+
+        try:
+            for row in tables["paper_lineage_sets"]:
+                _authority(records, row)
+        except ValueError:
+            blockers.append("Lineage current originals or lifetimes require fresh review")
     from paper_daily.sync_content import _stamp
 
     membership_pairs = {(row["list_id"], row["paper_id"]) for row in tables.get("list_papers", [])}
@@ -121,8 +129,11 @@ class RecoveryAdoptionService:
             raise SnapshotChanged("Recovered manifest changed")
         registry = sync_recovery._registry()
         trusted, trusted_objects = _schema()
+        from paper_daily import lineage_sets
+
         trusted.update(
             {
+                "paper_lineage_sets": lineage_sets.COLUMNS.split(),
                 "research_chat_links": [
                     "local_id",
                     "message_id",
@@ -520,6 +531,7 @@ class RecoveryAdoptionService:
             raise ValueError("Editable recovery preparation is already active")
         try:
             value = self._validate(inspection, ticket)
+            _require_fresh_identity(value, request_id)
             if not inspection.report["supported"]:
                 from paper_daily.workspace_enrollment import EnrollmentBlocked
 
@@ -538,6 +550,10 @@ class RecoveryAdoptionService:
                 with closing(sqlite3.connect(database)) as conn:
                     conn.executescript(store.SCHEMA)
                     store._migrate(conn)
+                    if "paper_lineage_sets" in value["tables"]:
+                        from paper_daily.lineage_sets import SCHEMA as lineage_schema
+
+                        conn.execute(lineage_schema)
                     for table in value["manifest"]["tables"]:
                         if (
                             table["section"] != "research"
@@ -565,6 +581,8 @@ class RecoveryAdoptionService:
 
                     stage_later_outcomes(self, inspection, conn, value, ticket)
                     conn.commit()
+                if value["tables"].get("paper_lineage_sets"):
+                    _stage_lineage(self, inspection, database, ticket)
                 records = _records(value)
                 pdfs = {}
                 for portable, target in records.applied_pdf.items():
@@ -610,6 +628,49 @@ class RecoveryAdoptionService:
                 }
         finally:
             self._running.release()
+
+
+def _require_fresh_identity(value, request_id):
+    """A retry seed must not recreate any recovered workspace/device identity."""
+    from uuid import UUID, uuid5
+
+    request = UUID(request_id)
+    if str(request) != request_id:
+        raise ValueError("Editable recovery requires a canonical request ID")
+    workspace, device = str(uuid5(request, "workspace")), str(uuid5(request, "device"))
+    headers = [value["manifest"]]
+    pending = [(row, 0) for row in value["tables"].get(recovery_provenance.TABLE, [])]
+    with recovery_provenance.schema_definition_scope():
+        while pending:
+            row, depth = pending.pop()
+            if depth >= recovery_provenance.MAX_DEPTH:
+                raise ValueError("Recovered identity nesting exceeds its bound")
+            archived = recovery_provenance.decode(row)
+            if archived["kind"] == "manifest":
+                headers.append(archived["manifest"])
+            elif archived["table"] == recovery_provenance.TABLE:
+                pending.append((archived["record"], depth + 1))
+    if any(
+        workspace == header["workspace_id"] or device == header["origin_device_id"]
+        for header in headers
+    ):
+        raise ValueError("Editable recovery requires fresh workspace and device identities")
+
+
+def _stage_lineage(service, inspection, database, ticket):
+    """Keep the public library API usable; do source-byte work on a worker."""
+    if threading.current_thread() is threading.main_thread():
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="lineage-recovery") as pool:
+            return pool.submit(_stage_lineage, service, inspection, database, ticket).result()
+    from paper_daily import lineage_recovery_sources
+
+    prepared = lineage_recovery_sources.prepare(service, inspection, database, ticket=ticket)
+    with closing(sqlite3.connect(database)) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        lineage_recovery_sources.stage_in(conn, prepared, ticket=ticket)
+        conn.commit()
 
 
 def _stage_live_chat(conn, value, original_root, staged_root, ticket):

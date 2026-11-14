@@ -9,7 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from shiboken6 import isValid
 
-from paper_daily import store
+from paper_daily import store, sync_capture
 
 
 def _file_identity(path):
@@ -74,8 +74,41 @@ class _ReaderLifetime:
         return self.drained.is_set()
 
 
+def _outbox_clock(conn, previous=None):
+    """Journal-owned operations only; receiving/acknowledging never appends here."""
+    names = {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name IN ('paperfact_sync_identity','paperfact_sync_operations',"
+        "'paperfact_sync_cursor')"
+    )}
+    if not {"paperfact_sync_identity", "paperfact_sync_operations"} <= names:
+        return None
+    identity = conn.execute(
+        "SELECT workspace,device FROM paperfact_sync_identity WHERE id=1"
+    ).fetchone()
+    if identity is None:
+        return None
+    sequence = conn.execute(
+        "SELECT COALESCE(MAX(sequence),0) FROM paperfact_sync_operations"
+    ).fetchone()[0]
+    needed = False
+    if previous is not None and tuple(identity) == previous[:2] and sequence > previous[2]:
+        row = (conn.execute("SELECT sequence FROM paperfact_sync_cursor WHERE id=1").fetchone()
+               if "paperfact_sync_cursor" in names else None)
+        cursor = row[0] if row is not None else 0
+        # Inspect only appended rows, not the workspace's entire retained history.
+        needed = conn.execute(
+            "SELECT 1 FROM paperfact_sync_operations WHERE sequence>? "
+            "AND (server_revision IS NULL OR server_revision>?) LIMIT 1",
+            (previous[2], cursor),
+        ).fetchone() is not None
+    return (*identity, sequence, needed)
+
+
 class WorkspaceChanges(QObject):
     changed = Signal()
+    local_operations = Signal()
+    research = Signal(object)
     _read = Signal(object)
 
     def __init__(self, parent=None):
@@ -86,7 +119,10 @@ class WorkspaceChanges(QObject):
         self._reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="workspace-revision")
         self._lifetime = _ReaderLifetime(self._reader)
         self.destroyed.connect(self._lifetime.close)
-        self.revision = self._revision()
+        self._research_request = None
+        initial = self._revision()
+        self.revision = initial[:3] if initial is not None else None
+        self._outbox = initial[4] if initial is not None and len(initial) == 5 else None
         self._read.connect(self._apply, Qt.ConnectionType.QueuedConnection)
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
@@ -112,19 +148,55 @@ class WorkspaceChanges(QObject):
         except (OSError, TypeError, ValueError):
             return False
 
+    def watch_research(self, owner, token=None):
+        """Observe only the actual loaded paper; no new worker or schema migration."""
+        if owner is None:
+            self._research_request = None
+            return
+        from paper_daily.manual_highlight_ops import HighlightOwner
+
+        if not isinstance(owner, HighlightOwner) or owner.database != self._database:
+            raise ValueError("Research observation belongs to another workspace")
+        self._research_request = (owner, token)
+
     def _revision(self):
         if not self._current():
             return None
         database = self._database
         try:
             # Short read-only access; never follow the process-global path.
-            conn = sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=0.025)
+            request = self._research_request
+            conn = sqlite3.connect(
+                database.as_uri() + "?mode=ro", uri=True, timeout=0.025,
+                factory=(
+                    sync_capture.CaptureConnection if request is not None else sqlite3.Connection
+                ),
+            )
+            conn.row_factory = sqlite3.Row
             try:
+                conn.execute("BEGIN")
                 revision = conn.execute(
                     "SELECT revision,(SELECT COALESCE(MAX(id),0) FROM integration_changes) "
                     "FROM workspace_revision WHERE id=1"
                 ).fetchone()
-                return (str(database), *revision) if revision else None
+                if revision is None:
+                    return None
+                result = (str(database), *revision)
+                research = None
+                if request is not None:
+                    from paper_daily.reading_change_inputs import read
+
+                    owner, token = request
+                    try:
+                        signatures = read(conn, owner)
+                        research = (token, owner.paper_id, signatures)
+                    except (ValueError, sqlite3.Error):
+                        # One stale reader cannot prevent other research from syncing.
+                        pass
+                outbox = _outbox_clock(conn, getattr(self, "_outbox", None))
+                if outbox is not None:
+                    return (*result, research, outbox)
+                return (*result, research) if research is not None else result
             finally:
                 conn.close()
         except (sqlite3.Error, OSError):
@@ -173,8 +245,26 @@ class WorkspaceChanges(QObject):
             return
         if revision[0] != str(self._database):
             return
-        if revision != self.revision:
-            self.revision = revision
+        if len(revision) >= 4 and revision[3] is not None and self._research_request is not None:
+            token, paper_id, signatures = revision[3]
+            owner, current_token = self._research_request
+            if token == current_token and paper_id == owner.paper_id:
+                self.research.emit(dict(token=token, paper_id=paper_id, signatures=signatures))
+        if not self._current():
+            return
+        if len(revision) == 5:
+            marker = revision[4]
+            if self._outbox is None:
+                self._outbox = marker
+            elif marker[:2] == self._outbox[:2] and marker[2] > self._outbox[2]:
+                self._outbox = marker
+                if marker[3]:
+                    self.local_operations.emit()
+        if not self._current():
+            return
+        base = revision[:3]
+        if base != self.revision:
+            self.revision = base
             self.changed.emit()
 
     def poll(self):

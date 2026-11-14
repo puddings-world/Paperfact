@@ -61,7 +61,7 @@ TEXT = {
         "limits": (
             "Not checked: semantic support, image-only text, scientific interpret"
             "ation, author identity, full reference resolution, decks, list surve"
-            "ys and grounded-lineage sets."
+            "ys and other originals referenced by lineage. Only the loaded original is checked."
         ),
         "linked_analysis_missing": (
             'Linked highlight record is unavailable; no qu'
@@ -85,7 +85,7 @@ TEXT = {
         "invalid_page": ("Page outside this document"),
         "invalid_anchor": ("Recorded anchor does not resolve"),
         "source_unknown": ("Source version unknown"),
-        "source_mismatch": ("Different original version"),
+        "source_mismatch": ("Another original or version; inspect its recorded source"),
         "observed": ("Number/unit occurs in the original; interpretation unchecked"),
         "not_observed": ("Number/unit not observed; may be derived or present only in an image"),
         "doi_mismatch": ("DOI identities differ"),
@@ -140,7 +140,7 @@ TEXT = {
         "no_checks": ("此項內容沒有支援的確定性檢查。"),
         "limits": (
             "未檢查：語意支持、圖片內文字、科學詮釋、作者身分、完整引用解析、簡報、清"
-            "單綜述與研究脈絡集。"
+            "單綜述與研究脈絡引用的其他原文。僅核對目前開啟的原文。"
         ),
         "located": ("已定位引文"),
         "missing": ("找不到引文"),
@@ -148,7 +148,7 @@ TEXT = {
         "invalid_page": ("頁碼超出原文"),
         "invalid_anchor": ("已存位置無法對應引文"),
         "source_unknown": ("原文版本未知"),
-        "source_mismatch": ("屬於不同版本的原文"),
+        "source_mismatch": ("對應其他原文或版本，請開啟該來源核對"),
         "observed": ("原文有相同數字與單位；詮釋仍待核對"),
         "not_observed": ("原文文字未見此數值，可能是推導或圖內資料"),
         "doi_mismatch": ("DOI 身分不一致"),
@@ -173,6 +173,7 @@ FEATURE_TEXT = {
         "highlights": "Original passage",
         "citations": "Reference",
         "followups": "Later work",
+        "lineage": "Research lineage",
     },
     "zh-TW": {
         "reading_links": (
@@ -189,6 +190,7 @@ FEATURE_TEXT = {
         "highlights": "\u539f\u6587\u91cd\u9ede",
         "citations": "\u53c3\u8003\u6587\u737b",
         "followups": "\u5f8c\u7e8c\u7814\u7a76",
+        "lineage": "\u7814\u7a76\u8108\u7d61",
     },
 }
 SAFE_STATES = {"located", "observed"}

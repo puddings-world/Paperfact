@@ -1,5 +1,9 @@
 # v0.5 delivery status
 
+Historical delivery ledger. For the active checkout, current implementation and
+remaining gates, use [current v0.5 status](status-0.5.0.md). Dated failures and
+candidate receipts below are preserved; they are not today's release verdict.
+
 Updated 2026-10-31. Branch: `feature/0.5-sync-foundation`; build identity:
 `0.5.0.dev`. This is an unreleased local candidate. The v0.4 maintenance line
 remains separate; daily research and installed apps have not been migrated.

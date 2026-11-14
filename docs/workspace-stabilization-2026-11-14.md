@@ -97,3 +97,24 @@ The new profile reuses existing assertions; no historical test was deleted or
 weakened. No additional global skill is warranted for this project-specific
 selection policy. The preserved application work remains separate from this
 workflow change and must not be declared integrated by its passing tests.
+
+
+## Consolidation and curated release evidence
+
+The current integration snapshot from `9ab77e5` was copied into the already
+existing stabilization worktree: 323 paths were byte-checked before/after copying.
+The source worktree was unchanged. The two superseded status/dispatch documents
+remain exact archives. Only four named recovery modules and their matching tests
+were promoted from the known draft; no stale full-package overlay was copied.
+
+Critical plus recovery checks passed 21 cases in 30.79 seconds (39.2 seconds with
+privacy/Ruff). The new curated release gate passed 33 Python, 24 frontend and 87
+mobile cases plus one actual mobile-to-Python HTTP program in 34.3 seconds total.
+Runner regression checks passed 59 cases in 3.48 seconds. All used isolated
+fixtures; Windows child trees were CPU-limited. This is not full-suite, Mac/Linux,
+physical phone, live-provider, CI, hosted-service or public-release acceptance.
+
+Historical tests have not been bulk-deleted. The requirement map and explicit
+retirement criteria are in the existing test index. No new global skill is
+introduced: source-bound idempotency is already an established local-integration
+invariant; this fix closes a violation rather than inventing a new paradigm.

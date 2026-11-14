@@ -474,3 +474,39 @@ Limits: native Qt and isolated SQLite on Windows; external process/network
 boundaries simulated. No user research, real account/model, service deployment,
 release, or installed Mac/phone acceptance. These are project-local observations;
 source ownership, research revisions and authentication remain separate checks.
+
+
+## Explicit native scientific workflow (2026-11-13)
+
+- Pattern revision: existing one-owner compound transaction and captured-context
+  boundaries; additional project evidence, no new global rule.
+- Status: validated-local. Project: Paperfact v0.5 development.
+- Trigger: wiring the actual application coordinator first attempted DDL through
+  a protected native connection, then checked a capture-bound loaded owner through
+  a plain journal connection. Both were refused before model invocation. Native
+  file preparation also recreated a missing blob index in a regression fixture.
+- Decision/invariant: use the actual capture-aware owner connection for the whole
+  compound action; require trusted existing native schema/store rather than
+  relaxing owner/authorizer checks or manufacturing replacement infrastructure.
+  Unbound initialization stays a separate explicit branch. Exact original bytes,
+  science/history and genuine outboxes commit together; retry verifies the prior
+  evidence without another completion. GUI delivery checks its loaded context.
+- Preconditions: an app whose native binding is connection-scoped and whose file
+  ownership is separate from cached bytes. Ordinary SQLite clients do not need a
+  connection subclass simply because this application uses one.
+- Alternative/trade-off: copying owner metadata or removing a guard would hide a
+  scope mismatch. Explicit capture-aware transactions retain the existing native
+  lifecycle and restricted-writer contract at the cost of an adapter seam.
+- Implementation: `lineage_workflow.py`, `lineage_shared_publication.py`,
+  `desktop/lineage_dialog.py`; existing native journal/source readers unchanged.
+- Evidence: `tests/test_lineage_workflow.py`, `test_lineage_workflow_native.py`,
+  `test_lineage_desktop.py` and `test_research_tasks.py`: focused check **41 passed
+  in 76.24 s**, 79.5 s total, zero skips; privacy/Ruff pass. An earlier related
+  original-reader gate passed 76 cases in 154.60 s. Selections overlap.
+- Limits: synthetic PDFs and model responses, actual offscreen Qt/SQLite and
+  loopback native service; no real account, paid call, owner research, deployment
+  or installed Mac/phone acceptance. The broader earlier Lineage diagnostic had
+  638 passes and two table-existence expectation failures; the current full
+  application gate remains unproven. No release claim follows from these tests.
+- Privacy review: no credentials, identifying paths, raw user prompts or research
+  content included. No telemetry upload, global installation or rule promotion.

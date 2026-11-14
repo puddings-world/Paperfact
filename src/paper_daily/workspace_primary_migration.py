@@ -21,7 +21,7 @@ from paper_daily.research_lifecycle import parent_lifecycle
 from paper_daily.sync_blobs import BlobStore
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_operations import ResearchOperations
-from paper_daily.sync_research import research_writer
+from paper_daily.sync_research import research_projection_writer, research_writer
 from paper_daily.workspace_service import (
     Cancelled,
     Ticket,
@@ -257,7 +257,11 @@ class PrimaryMigration:
             device_id=binding["device_id"],
         )
         journal.live = live or self._check
-        return SyncClient.attach_existing(journal, research_writer)
+        return SyncClient.attach_existing(
+            journal,
+            research_writer,
+            projection_writer=research_projection_writer,
+        )
 
     @staticmethod
     def _states(conn, client, identities):

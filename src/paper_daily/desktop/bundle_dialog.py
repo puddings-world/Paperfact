@@ -390,3 +390,32 @@ class BundleDialog(QDialog):
             event.ignore()
         else:
             super().closeEvent(event)
+
+
+def import_dialog(parent=None, *, source, download_missing=True, language="zh-TW"):
+    """Route native imports to explicit review; broken capture never opts into legacy SQL."""
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily import bundle, store
+    from paper_daily.desktop.package_review_dialog import PackageReviewDialog
+
+    database = Path(store.DB_PATH).resolve()
+    captured = False
+    if database.is_file():
+        try:
+            with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True,
+                                         timeout=0.25)) as conn:
+                names = [r[0] for r in conn.execute("SELECT name FROM sqlite_master")]
+                captured = any(n.startswith(("research_capture_", "capture_")) for n in names)
+        except sqlite3.Error:
+            captured = True
+    if captured:
+        return PackageReviewDialog(database, Path(bundle.DATA_DIR), source, parent,
+                                   language=language)
+    options = {"source": source}
+    if not download_missing:
+        options["download_missing"] = False
+    if language != "zh-TW":
+        options["language"] = language
+    return BundleDialog(parent, **options)

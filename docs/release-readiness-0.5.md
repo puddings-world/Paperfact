@@ -20,9 +20,13 @@ acceptance. Consult the [implementation ledger](implementation-0.5.0.md) for res
 
 ## Release gate matrix
 
+Use [the curated test requirements](testing/README.md#keep-the-suite-small-by-testing-requirements).
+Historical full-suite execution is not an automatic release prerequisite.
+
+
 | Gate | Required observation | Evidence target |
 |---|---|---|
-| Source checks | Privacy scan, Ruff, Python/desktop tests and all mobile/frontend tests pass | `scripts/check.py` log and exact counts for candidate commit |
+| Source checks | Privacy/Ruff, curated release requirements and changed-domain regressions pass | `scripts/check.py` log and exact counts for candidate commit |
 | Write coverage | UI, CLI, MCP, imports, AI completion and PDF replacement capture supported mutations | Writer inventory with an adapter test per supported entry point |
 | Desktop convergence | Two isolated workspaces exchange lists, memberships, notes, analysis, anchors and decks | Content/revision/hash comparison after offline edits and reopen |
 | Retry/durability | Lost responses, duplicate delivery, partial saves and restart create no duplicate research | Synthetic interruption/concurrency tests with preserved outbox/cursor assertions |
@@ -33,7 +37,7 @@ acceptance. Consult the [implementation ledger](implementation-0.5.0.md) for res
 | Access isolation | Wrong user/workspace, revoked device and stale session are denied | Service integration tests plus deployment/session review |
 | Mobile durability | Offline notes survive reload; storage failure is visible; reconnect reconciles | IndexedDB/browser tests and separately recorded physical-device journey |
 | UI safety | Cancel/retry/repeated activation, account switch and close do not misapply results | Desktop/mobile state tests, focus/draft/selection assertions |
-| Existing features | Import/read/own-AI/export, editable decks and local MCP retain their contracts | Existing full suite and frozen acceptance on every desktop platform |
+| Existing features | Import/read/own-AI/export, editable decks and local MCP retain their contracts | Curated critical journeys and frozen acceptance on every desktop platform |
 | Hosting readiness | Auth, TLS, authorization, abuse limits, operator, cost/region and recovery are settled | Reviewed deployment decision record and synthetic hosted integration results |
 | Privacy | Sync excludes AI credentials/telemetry; logs redact secrets and research bodies | Payload/log fixtures and consent boundary tests |
 | Distribution | Source, binaries, version, license/notices and provenance match | Clean build info, source archive, checksums and three-platform artifacts |
@@ -42,9 +46,9 @@ acceptance. Consult the [implementation ledger](implementation-0.5.0.md) for res
 
 | Target | Required v0.5.0 evidence | Current claim |
 |---|---|---|
-| Windows x64 source/setup EXE | Full suite, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Pending; no v0.5.0 platform acceptance recorded here |
-| macOS Apple silicon source/DMG | Full suite, frozen app, install/update preservation, offline reading and sync | Pending; no live Mac result recorded here |
-| Linux x86-64 source/AppImage | Full suite, frozen app, executable/update preservation and offline reading | Pending; no live Linux result recorded here |
+| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Pending; no v0.5.0 platform acceptance recorded here |
+| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Pending; no live Mac result recorded here |
+| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Pending; no live Linux result recorded here |
 | iPhone/Safari installed PWA | Offline launch, PDF/readability, note reload, foreground reconnect, storage/error recovery, touch/accessibility | Pending; simulation does not replace physical-device results |
 | Android/Chrome installed PWA | Same journey, including suspend/foreground and failed-network recovery | Pending; no physical-device result recorded here |
 

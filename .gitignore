@@ -20,6 +20,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .venv/
+.venv-sync/
 venv/
 dist/
 build/
@@ -56,7 +57,7 @@ desktop.ini
 # Generated icon (rebuilt by scripts/make_icon.py)
 /assets/paper-daily.ico
 
-# Private sync authority and issued device records; store outside the checkout.
+# Private sync authority and issued device records; store them outside the checkout.
 /sync-service/
 /.paperfact-sync/
 *-connection.json

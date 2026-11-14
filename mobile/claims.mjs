@@ -156,3 +156,6 @@ export function renderClaimSet(panel, row, el, t) {
   }
   panel.append(card);
 }
+
+// Shared closed evidence primitives; use does not certify source bytes or semantics.
+export { location as validateEvidenceLocation, text as validateEvidenceText };
