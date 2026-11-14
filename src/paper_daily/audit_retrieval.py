@@ -64,6 +64,9 @@ def retrieve(snapshot, items, *, cancelled=lambda: False):
     selected = {}
     total = set()
     for item in items:
+        if item.get("source_paper_id", source["paper_id"]) != source["paper_id"]:
+            selected[item["id"]] = []
+            continue
         query = tokens(item["text"])
         ranked = []
         for position, span in enumerate(spans):

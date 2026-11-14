@@ -261,14 +261,9 @@ def prepare(capture, proposals, *, cancelled=lambda: False, current=lambda: True
                 or item["text"][location["start"] : location["end"]] != fact["statement"]
             ):
                 _fail("output_location_mismatch")
-            digest = item["document_hash"]
-            binding = (
-                "unknown"
-                if digest is None
-                else "exact"
-                if digest == batch["source"]["document_hash"]
-                else "different_original"
-            )
+            bound = research_audit._source_binding(item, batch["source"])
+            binding = ("unknown" if bound == "unknown" else
+                       "exact" if bound == "exact" else "different_original")
         bindings.append(binding)
     verified = evidence.verify_snapshot(
         capture.snapshot,

@@ -14,7 +14,7 @@ from paper_daily import claim_content as content
 from paper_daily import research_evidence as evidence
 
 FORMAT = "paperfact.analysis-audit.v1"
-RULE = "source-checks.v2"
+RULE = "source-checks.v3"
 MAX_ITEMS = 256
 MAX_BYTES = 1024 * 1024
 MAX_TEXT = 120_000
@@ -45,7 +45,7 @@ LINK_FINDINGS = {
 }
 CHECKS = (
     "quote_location", "anchor", "quantity_occurrence", "reference_identity", "evidence_basis",
-    "link_provenance",
+    "link_provenance", "source_owner",
 )
 
 
@@ -119,6 +119,9 @@ def validate(items):
         if not isinstance(item, dict):
             _fail("invalid_input")
         fields = {"id", "feature", "text", "document_hash", "passages", "reference"}
+        if "source_paper_id" in item:
+            fields.add("source_paper_id")
+            _text(item["source_paper_id"], 4096)
         if "provenance" in item:
             fields.add("provenance")
         _closed(item, fields)
@@ -138,7 +141,11 @@ def validate(items):
         if passages > MAX_PASSAGES:
             _fail("passage_limit")
         for passage in item["passages"]:
-            _closed(passage, {"quote", "page", "anchor", "document_hash"})
+            fields = {"quote", "page", "anchor", "document_hash"}
+            if "source_paper_id" in passage:
+                fields.add("source_paper_id")
+                _text(passage["source_paper_id"], 4096)
+            _closed(passage, fields)
             _text(passage["quote"], evidence.MAX_QUOTE_CHARS)
             _digest(passage["document_hash"], nullable=True)
             if passage["page"] is not None and type(passage["page"]) is not int:
@@ -221,6 +228,20 @@ def _binding(expected, actual):
     return "unknown" if expected is None else "exact" if expected == actual else "different"
 
 
+def _source_binding(value, source, *, fallback_owner=None):
+    """Equal bytes do not identify the paper that owns a saved source assertion."""
+    bound = _binding(value["document_hash"], source["document_hash"])
+    owner = value.get("source_paper_id", fallback_owner)
+    if bound == "exact" and owner is not None and owner != source["paper_id"]:
+        return "different_owner"
+    return bound
+
+
+def _source_state(binding):
+    return ("source_unknown" if binding == "unknown" else
+            "source_owner_mismatch" if binding == "different_owner" else "source_mismatch")
+
+
 def _reference(reference):
     if reference is None:
         return []
@@ -267,8 +288,10 @@ def _run_checked_pages(source, items, extracted, *, cancelled, progress):
     for index, item in enumerate(items):
         if cancelled():
             _fail("cancelled")
-        binding = _binding(item["document_hash"], source["document_hash"])
+        binding = _source_binding(item, source)
         base = {"item_id": item["id"], "feature": item["feature"], "binding": binding}
+        if binding == "different_owner":
+            checks.append({**base, "rule": "source_owner", "state": "source_owner_mismatch"})
         provenance = item.get("provenance")
         if provenance and provenance["link_state"] in LINK_FINDINGS:
             checks.append(
@@ -276,7 +299,7 @@ def _run_checked_pages(source, items, extracted, *, cancelled, progress):
                  "state": LINK_FINDINGS[provenance["link_state"]]}
             )
         for number, passage in enumerate(item["passages"]):
-            bound = _binding(passage["document_hash"], source["document_hash"])
+            bound = _source_binding(passage, source, fallback_owner=item.get("source_paper_id"))
             entry = {
                 **base,
                 "rule": "quote_location",
@@ -289,7 +312,7 @@ def _run_checked_pages(source, items, extracted, *, cancelled, progress):
                 location = evidence._locate(passage, pages, indexes, whole)
                 entry.update(state=location["state"], location=location)
             else:
-                entry["state"] = "source_unknown" if bound == "unknown" else "source_mismatch"
+                entry["state"] = _source_state(bound)
             checks.append(entry)
         for quantity in quantities(item["text"]):
             quantity_count += 1
@@ -299,7 +322,7 @@ def _run_checked_pages(source, items, extracted, *, cancelled, progress):
             state = (
                 ("observed" if present else "not_observed")
                 if binding == "exact"
-                else ("source_unknown" if binding == "unknown" else "source_mismatch")
+                else _source_state(binding)
             )
             checks.append(
                 {**base, "rule": "quantity_occurrence", "state": state, "quantity": quantity}

@@ -111,3 +111,15 @@ Synthetic owned PDF/saved-output tests verify bounds, identities, exact location
 ambiguity, cancellation, stale guards, immutability and deterministic arithmetic.
 They do not establish scientific precision/recall. A rights-appropriate, manually
 reviewed corpus and independent scholarly evaluation remain required.
+
+
+## Equal bytes do not equate paper owners
+
+The saved-output adapter retains optional source_paper_id provenance for Lineage
+statements/passages, normalized through actual native aliases. Output facts from
+a known different owner remain different_original even if their PDF hashes equal
+the captured source. No focal retrieval span is supplied to that foreign-owner
+item; it cannot enter an exact-source value comparison. This changes no owner
+record, original activation or model route and makes no semantic judgment. Legacy
+single-paper shapes remain accepted. See the current source-checks.v3 boundary
+in [analysis audit](analysis-audit.md).

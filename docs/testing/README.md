@@ -76,7 +76,7 @@ remains available for addressing changes and exhaustive diagnosis. The release
 selection does not grow by adding every variant of the new feature.
 
 Original-source retirement/restoration adds one complete native peer lifecycle
-representative to the release gate (34 Python selectors, not collected cases).
+representative to the release gate (35 Python selectors after the owner-identity representative below, not collected cases).
 Its regular focused checks use a metadata-only fixture instead of downloading an
 unrelated original first. The source-lifetime transition is distinct from deck
 transfer or corpus-key validation; no historical assertion was removed to add it.
@@ -351,3 +351,17 @@ an execution result. New note/source scenarios use synthetic research only.
 - [Old-device recovery review](device-recovery-review-scenarios.md): uncertain acknowledgments, exact backup prefix, no mutation, worker cancellation/close and GUI binding changes.
 
 - [Direct saved Lineage adoption](lineage-direct-adoption-scenarios.md): selected PDFs, unchanged science/model, atomic sources/history/outbox, native peer recovery and real verification/confirmation controls.
+
+
+## Equal-byte source-owner regression (2026-11-15)
+
+The release gate adds one real three-paper Lineage case where all original PDFs
+have identical bytes. It protects the independent owner-identity boundary; the
+14-case daily critical default does not change. It does not select the 184-case
+audit module regression used while changing the shared closed schema.
+
+Six new collected cases protect distinct outcomes: quote/quantity owner refusal,
+actual saved multi-paper attribution, no borrowed retrieval/AI route/exact fact
+binding, native/local alias normalization, and English/Traditional Chinese GUI
+findings with navigation refusal. Existing cases/assertions remain unchanged.
+A matching quotation is still not semantic support or a full multi-source audit.

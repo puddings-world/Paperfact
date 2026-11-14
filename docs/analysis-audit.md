@@ -99,7 +99,26 @@ object is valid only for these new categories and `paper_context`: `record_hash`
 retains exact validated row identity, `input_hash` records the annotation input,
 `related_record_hash` records the related highlight row, and `link_state` describes
 whether its declared link can be reconstructed. None grants PDF ownership.
-Rule identity is `source-checks.v2`; legacy item shapes remain valid.
+Rule identity is `source-checks.v3`; legacy item shapes remain valid. Optional
+`source_paper_id` on an item or passage identifies its recorded paper owner in
+the same namespace as the sealed source. When a passage omits it, an explicitly
+recorded item owner is inherited. The bounded field must be a nonempty string;
+absence preserves the legacy single-paper behavior, not a newly inferred owner.
+
+Saved Lineage includes each actual statement/passage owner, mapping local IDs
+through the native alias registry when present. Equal PDF bytes never equate
+different owners: `source_owner_mismatch` retains the assertion/quote but grants
+no location or navigation. Quantities cannot be reported observed against that
+foreign owner either. Focal citing passages in a foreign-subject statement still
+use their own recorded focal owner and can be located independently.
+
+Appraisal refuses a known foreign owner before reading account/model settings;
+retrieval supplies no focal spans to a foreign-owner item. Fact comparison marks
+its output binding `different_original` even when the bytes match, so it cannot
+become an exact comparable source fact. Extraction discloses owner/binding in its
+existing captured prompt. No extra model call, automatic rewrite or schema
+migration occurs. This is source identity checking, not semantic support or
+verification of another paper's currently unavailable original.
 
 A reading link stores a quote index, explanation section and linked analysis
 input digest. It contributes its saved explanation as prose. A quote is available
@@ -169,7 +188,7 @@ navigation remain explicit limits. The remaining file/corpus boundaries are:
 |---|---|---|
 | Editable deck JSON and source/figure catalog (`sync_deck_files`, `sync_deck_publication`) | Read the actual selected retained deck version through typed deck/file ownership, validate bounded source IDs and figure assets, bind each source to its exact owned PDF | Deck `source_hash` is an input digest; a slide/source/figure may reference a different or unknown PDF. Do not use global presentation/cache paths, fabricate file ownership, or assign the focal original to every slide. |
 | `list_surveys` and retained list generation inputs | Explicitly select and capture the actual list, membership/incarnations and bounded per-paper source corpus before reading its summary | A list-wide prose summary and captured analysis rows are not per-assertion PDF citations. A single-focal `AuditCapture` cannot certify the list's corpus or assign one loaded PDF to it. |
-| Grounded lineage reports/sets and legacy `lineage_team` output | Use the typed corpus/report reader after integration, retain exact source IDs, distinct paper owners and per-parent original versions; validate prior/later citing passages against their own sources | The frozen lineage candidate and its pending recovery/export hooks are separate. This slice neither imports that code nor invents corpus/file authority, global path lookup, citation influence, or source ownership from a title/hash. |
+| Grounded lineage reports/sets and legacy `lineage_team` output | The saved typed-row adapter retains each source hash and actual owner; the loaded original is checked only for matching owners, including equal-byte cases | Full per-parent original/corpus verification and legacy team migration remain open. A title/hash never grants corpus/file authority, global path lookup, citation influence or another paper's ownership. |
 
 A future file/corpus slice must explicitly select and retain the proper source
 scope, keep malformed/unavailable sources visible and preserve the same no-model

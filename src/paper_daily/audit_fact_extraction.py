@@ -16,6 +16,7 @@ from paper_daily import (
     audit_retrieval,
     claim_content,
     llm,
+    research_audit,
 )
 from paper_daily.ai_types import Completion, Settings
 from paper_daily.research_audit import AuditError
@@ -327,6 +328,9 @@ class ExtractionJob:
                             id=item["id"],
                             text=item["text"],
                             document_hash=item["document_hash"],
+                            source_paper_id=item.get("source_paper_id"),
+                            source_binding=research_audit._source_binding(
+                                item, capture.snapshot.source),
                             spans=retrieved[item["id"]],
                         )
                         for item in items

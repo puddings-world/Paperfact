@@ -164,6 +164,8 @@ RELEASE_JOURNEYS = {
     "Reading goals and source-bound research": (
         "tests/test_reading_goals.py::test_edit_reload_clear_preserves_description_notes_and_other_research",
         "tests/test_claim_notes_job.py::test_generated_cards_keep_exact_source_and_edited_cards_survive_refresh",
+        ("tests/test_audit_lineage.py::"
+         "test_equal_pdf_bytes_never_verify_another_paper_owners_lineage"),
         ("tests/test_sync_recovery_lineage_group.py::"
          "test_group_rebinds_all_three_originals_and_retry_preserves_later_versions"),
         "tests/test_highlight_draft_application.py::test_confirmed_group_keeps_manual_hidden_and_private_content_with_one_retry",

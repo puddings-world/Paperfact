@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Explicit retained-original source inspection verified across five existing peer recovery journeys plus one ownership-safety case (6 passed, 144s); target defaults unchanged. Next remaining deletion/origin/audit and hosted/private-pairing/device gates |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Equal-byte owner attribution fixed and verified across audit/model/fact/UI boundaries; daily critical stays 14, release adds one representative. Cloud target inputs requested; remaining recovery/mapping/corpus audit and hosted/device gates stay open |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

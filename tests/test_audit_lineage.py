@@ -100,3 +100,126 @@ def test_audit_without_lineage_never_creates_optional_storage(corpus):
             "SELECT 1 FROM sqlite_master WHERE name='paper_lineage_sets'"
         ).fetchone()
     assert corpus[0].read_bytes() == before
+
+
+@pytest.fixture
+def equal_originals(corpus, monkeypatch):
+    """Real distinct paper owners with exactly equal, fully readable source bytes."""
+    from test_lineage_recovery import published
+    from test_research_evidence import pdf
+    from test_research_lineage import CHANGE, CITING, LATER, OWN_LATER, PRIOR
+
+    from paper_daily import research_generation as generation
+    from paper_daily import research_lineage
+    from paper_daily.manual_highlight_ops import observe_owner
+
+    database, root, _old = corpus
+    pdf(root / "focal.pdf", [[PRIOR, CHANGE, CITING, LATER, OWN_LATER]])
+    for name in ("prior", "later"):
+        (root / (name + ".pdf")).write_bytes((root / "focal.pdf").read_bytes())
+    selected = research_lineage.capture(database, "focal", ["prior", "later"], legacy_root=root)
+    same = database, root, selected
+    published(same, monkeypatch)
+    owner = observe_owner(database, "focal", expected_native=generation._identity(database))
+    return owner, lineage_sets.saved(database, "focal")[0], same
+
+
+def test_equal_pdf_bytes_never_verify_another_paper_owners_lineage(equal_originals):
+    owner, row, corpus = equal_originals
+    before = owner.database.read_bytes()
+    captured = capture(corpus)
+    report = captured.run()
+    body = lineage_sets.decode(row["body_json"])
+    assert len({source["document_hash"] for source in body["report"]["sources"]}) == 1
+    bindings = {binding["source_id"]: binding["paper_id"] for binding in body["bindings"]}
+    statements = {statement["id"]: statement for statement in body["report"]["statements"]}
+    foreign, local = [], []
+    for check in report["checks"]:
+        if check["rule"] != "quote_location":
+            continue
+        statement = statements[check["item_id"].rsplit(":", 1)[1]]
+        passage = statement["passages"][check["passage"]]
+        (local if bindings[passage["source_id"]] == "focal" else foreign).append(check)
+    assert foreign and local
+    assert all(check["state"] != "located" for check in foreign), foreign
+    assert all(
+        check["state"] == "source_owner_mismatch" and check["location"] is None for check in foreign
+    )
+    assert all(check["state"] == "located" for check in local)
+    assert captured.current() and owner.database.read_bytes() == before
+
+
+def test_equal_byte_foreign_owner_never_borrows_spans_model_route_or_exact_fact_binding(
+    equal_originals, monkeypatch
+):
+    from paper_daily import audit_appraisal, audit_facts, audit_retrieval, llm
+
+    owner, _row, corpus = equal_originals
+    captured = capture(corpus)
+    items = json.loads(captured._items_json)
+    foreign = next(item for item in items if item["source_paper_id"] == "prior")
+    focal = next(item for item in items if item["source_paper_id"] == "focal")
+    monkeypatch.setattr(
+        llm, "capture_connections", lambda: pytest.fail("No foreign-source AI route")
+    )
+    monkeypatch.setattr(llm, "complete_result", lambda *_a, **_k: pytest.fail("No AI call"))
+    with pytest.raises(research_audit.AuditError, match="source_owner_mismatch"):
+        audit_appraisal.AppraisalJob.prepare(captured, [foreign["id"]])
+    spans, _pages = audit_retrieval.retrieve(captured.snapshot, [foreign, focal])
+    assert spans[foreign["id"]] == [] and spans[focal["id"]]
+    fact = dict(
+        id="foreign-output",
+        category="method",
+        statement=foreign["text"],
+        origin="author_stated",
+        scope=dict(
+            construct="method",
+            outcome="comparison",
+            comparator="none",
+            population="study",
+            time="unspecified",
+            unit="text",
+            statistic="none",
+            conditions="specified",
+        ),
+        value=dict(kind="text", text=foreign["text"]),
+        location=dict(kind="output", item_id=foreign["id"], start=0, end=len(foreign["text"])),
+        passages=[],
+    )
+    proposed = dict(
+        format=audit_facts.FORMAT,
+        source=captured.snapshot.source,
+        study_type="empirical",
+        facts=[fact],
+    )
+    sheet = audit_facts.prepare(captured, proposed)
+    assert sheet.report["facts"][0]["source_binding"] == "different_original"
+    assert sheet.current() and captured.current()
+
+
+def test_lineage_audit_maps_local_owners_to_the_readers_native_paper_ids(equal_originals):
+    from paper_daily import lineage_sets
+
+    owner, row, corpus = equal_originals
+    native = {key: str(uuid4()) for key in ("focal", "prior", "later")}
+    # An actual alias registry, not a source/byte grant or a claim of full enrollment.
+    with closing(sqlite3.connect(owner.database)) as conn, conn:
+        conn.execute(
+            "CREATE TABLE research_paper_identity(sync_id TEXT PRIMARY KEY,local_id TEXT UNIQUE)"
+        )
+        conn.executemany(
+            "INSERT INTO research_paper_identity VALUES(?,?)",
+            [(value, key) for key, value in native.items()],
+        )
+    captured = capture(corpus)
+    assert captured.snapshot.source["paper_id"] == native["focal"]
+    report = captured.run()
+    assert {item["source_paper_id"] for item in report["items"]} == set(native.values())
+    body = lineage_sets.decode(row["body_json"])
+    local = next(
+        statement
+        for statement in body["report"]["statements"]
+        if statement["subject"] == body["report"]["focal"]
+    )
+    checks = [check for check in report["checks"] if check["item_id"].endswith(":" + local["id"])]
+    assert checks and all(check["state"] == "located" for check in checks)

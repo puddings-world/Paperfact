@@ -78,3 +78,11 @@ drains before the view closes; an unsaved result requires an explicit discard
 decision with Cancel as the default. Accepted closure releases dialog modality
 and the sealed PDF capture while retaining the small saved report. Native
 keyboard regressions cover unbound and enrolled workspaces.
+
+
+A saved item's explicit source_paper_id must match the sealed original's paper
+identity before appraisal can capture an account/model route. Matching PDF bytes
+from another paper are insufficient. Read-only deterministic audit shows the
+source_owner_mismatch finding, and retrieval does not borrow focal passages for
+that foreign owner. Opening an audit still makes no model call. This owner check
+is separate from semantic support and complete multi-source corpus appraisal.

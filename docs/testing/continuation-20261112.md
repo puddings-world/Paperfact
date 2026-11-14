@@ -5084,3 +5084,48 @@ additional worktree was introduced.
   other deletion choices, foreign/legacy mappings, audit integration, hosted
   identity/HTTPS/native vaults and installed Windows/Apple Silicon/physical-phone
   acceptance remain open. No deployment, release or research migration.
+
+
+## 2026-11-15: Equal PDF bytes are not paper-owner identity
+
+- Continued the full release-scope audit while requested GCP project/HTTPS/budget
+  inputs remain unconfirmed. No cloud resource/account/fee or real research was
+  touched. Onboarding already has local operator issuance/pairing; hosted/device
+  gates remain separate. The live saved-Lineage audit revealed a concrete hash-
+  only owner attribution defect rather than requiring another generic subsystem.
+- Before product edits, reproduced real three-paper saved Lineage with identical
+  original bytes and distinct actual owners. Foreign-owner quotations incorrectly
+  received located/exact checks against the focal paper. The primary regression
+  asserted they could not be located and failed against the original source.
+- source-checks.v3 adds optional closed source_paper_id provenance to items and
+  passages. The typed saved-row adapter reads actual owners and maps native
+  aliases through the real local registry. Legacy single-paper shapes stay valid.
+  Different owners never become exact because bytes match; quotes/quantities stay
+  unresolved and the bilingual GUI offers no foreign-owner jump. A focal citing
+  passage retains its own owner independently of its statement subject.
+- Propagated the boundary: no focal retrieval spans for an explicit foreign owner;
+  appraisal refuses before account/model capture; fact output binding remains
+  different_original, hence not exact-comparable. Extraction discloses the owner/
+  binding in its existing captured prompt. No second call, paid fallback, model
+  substitution, research rewrite, original activation or schema migration.
+- Six new collected cases: quote/quantity/schema owner guard, actual multi-paper
+  attribution, no borrowed spans/route/exact fact binding, native alias resolution,
+  and actual en/zh-TW Qt findings/navigation. They use real synthetic PDF/SQL/
+  publication data, with simulated model output only. Alias-registry verification
+  is not a full enrolled or installed multi-device acceptance claim.
+- Affected shared-schema/appraisal/facts/UI modules: 184 passed in 247.36s pytest /
+  251.4s total (178 existing + 6 new cases). This selection is not the daily gate
+  or a full historical/release run. Core/docs plus two existing deck compatibility
+  representatives: 25 passed in 12.95s pytest / 17.1s total. Reused the first pass
+  rather than repeating it after docs/selection changes. Release-plan/critical-
+  default/docs contracts: 13 passed in 1.42s pytest / 4.9s total. Privacy/Ruff green,
+  one bounded job at a time, at most two logical CPUs and 25% job CPU cap.
+- Release adds only the equal-byte owner representative (35 Python selectors);
+  daily critical remains 14. Historical assertions were not weakened or removed;
+  no 184-case default, new workflow/job/daemon/worktree or global skill. Existing
+  local-integration guidance already says same hashes do not grant source/owner
+  authority; this is project evidence closing that known class of violation.
+- Full per-parent/corpus/list-survey audit, expert scientific evaluation, remaining
+  deletion/mapping/recovery, hosted identity/HTTPS/native vaults and installed
+  Windows/Apple Silicon/physical-phone acceptance remain open. No push, release,
+  deployment, owner app restart or research migration from this checkpoint.

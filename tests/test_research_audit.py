@@ -188,3 +188,26 @@ def test_forged_snapshot_is_rejected(source):
     snapshot = replace(evidence.capture(source), _bytes=b"forged")
     with pytest.raises(evidence.EvidenceError, match="invalid_snapshot"):
         audit.run(snapshot, [item(source)])
+
+
+def test_equal_bytes_with_an_explicit_other_paper_owner_cannot_locate_or_verify_quantities(source):
+    snapshot = evidence.capture(source)
+    foreign = item(
+        source,
+        source_paper_id="another-paper",
+        passages=[passage(source, "Controls were assigned independently.", page=2)],
+    )
+    report = audit.run(snapshot, [foreign])
+    assert {check["state"] for check in report["checks"]} == {"source_owner_mismatch"}
+    assert report["checks"][1]["location"] is None
+    assert {check["rule"] for check in report["checks"]} == {
+        "source_owner",
+        "quote_location",
+        "quantity_occurrence",
+    }
+    same = copy.deepcopy(foreign)
+    same["source_paper_id"] = snapshot.source["paper_id"]
+    assert audit.run(snapshot, [same])["counts"] == {"located": 1, "observed": 1}
+    for invalid in (None, True, ""):
+        with pytest.raises(audit.AuditError, match="invalid_input"):
+            audit.validate([{**same, "source_paper_id": invalid}])

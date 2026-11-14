@@ -160,6 +160,14 @@ TEXT = {
         "context_requires_appraisal": ("引用語境仍需人工判讀"),
     },
 }
+TEXT["en"]["source_owner_mismatch"] = (
+    "Recorded source belongs to another paper; equal PDF bytes do not verify that owner."
+)
+TEXT["zh-TW"]["source_owner_mismatch"] = (
+    "記錄的來源屬於另一篇論文；即使 PDF 內容相同，也不代表已核實該來源。"
+)
+
+
 FEATURE_TEXT = {
     "en": {
         "reading_links": "Explanation link (semantic support unchecked)",

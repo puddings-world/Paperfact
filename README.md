@@ -247,6 +247,8 @@ and [open a bug report](https://github.com/puddings-world/Paperfact/issues/new?t
 Older releases have a separate troubleshooting path; no diagnostic data is uploaded automatically.
 For candidate installers, [packaged acceptance](docs/testing/mac-acceptance-0.5.md#automated-packaged-app-checks-maintainer)
 records which check passed or failed, even when the app cannot start.
+[Evidence checks](docs/analysis-audit.md) keep each Lineage quotation attached to
+its actual paper and PDF version, even when two papers have identical PDF bytes.
 
 If Paperfact helps, [star this repository](https://github.com/puddings-world/Paperfact)
 or [follow the organization and explore its pinned projects](https://github.com/puddings-world).

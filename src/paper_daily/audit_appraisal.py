@@ -193,6 +193,9 @@ class AppraisalJob:
             _fail("invalid_selection")
         if any(lookup[key]["feature"] in research_audit.A1_SQL_FEATURES for key in selected):
             _fail("invalid_selection")
+        if any(lookup[key].get("source_paper_id", source["paper_id"]) != source["paper_id"]
+               for key in selected):
+            _fail("source_owner_mismatch")
         if any(lookup[key]["document_hash"] != source["document_hash"] for key in selected):
             _fail("source_version_unbound")
         connections = connections if connections is not None else llm.capture_connections()

@@ -157,7 +157,7 @@ def _saved_rows(conn, table, fields, paper_id):
     return _rows(conn, table, fields, paper_id)
 
 
-def _lineage_items(row):
+def _lineage_items(conn, row):
     """Keep every passage bound to its selected original, never the focal PDF."""
     from paper_daily import lineage_sets
 
@@ -165,7 +165,19 @@ def _lineage_items(row):
         lineage_sets.validate_row(row)
         body = lineage_sets.decode(row["body_json"])
         sources = {source["id"]: source["document_hash"] for source in body["report"]["sources"]}
-        return [
+        owners = {}
+        native = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='research_paper_identity'"
+        ).fetchone()
+        for binding in body["bindings"]:
+            mapped = conn.execute(
+                "SELECT sync_id FROM research_paper_identity WHERE local_id=? LIMIT 2",
+                (binding["paper_id"],),
+            ).fetchall() if native else []
+            if len(mapped) > 1:
+                raise ValueError("Lineage source has ambiguous native paper identity")
+            owners[binding["source_id"]] = mapped[0][0] if mapped else binding["paper_id"]
+        items = [
             _item(
                 "lineage:" + row["corpus_key"] + ":" + statement["id"],
                 "lineage",
@@ -181,6 +193,11 @@ def _lineage_items(row):
             )
             for statement in body["report"]["statements"]
         ]
+        for item, statement in zip(items, body["report"]["statements"], strict=True):
+            item["source_paper_id"] = owners[statement["subject"]]
+            for passage, recorded in zip(item["passages"], statement["passages"], strict=True):
+                passage["source_paper_id"] = owners[recorded["source_id"]]
+        return items
     except (ValueError, KeyError, TypeError, RecursionError):
         raise research_audit.AuditError("invalid_saved_content") from None
 
@@ -233,7 +250,7 @@ def read_items(conn, paper_id):
 
     if lineage_sets.TABLE in tables:
         for row in _saved_rows(conn, lineage_sets.TABLE, lineage_sets.COLUMNS, paper_id):
-            items.extend(_lineage_items(row))
+            items.extend(_lineage_items(conn, row))
     for row in _rows(conn, "pdf_highlights", "id document_hash quote anchor", paper_id):
         items.append(
             _item(
