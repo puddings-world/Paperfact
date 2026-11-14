@@ -110,6 +110,7 @@ def test_failed_acceptance_reports_exact_stage_without_private_text(tmp_path, mo
 def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_path, monkeypatch):
     """Script orchestration only; fake child apps are not native package acceptance."""
     out, seen = tmp_path / "acceptance", []
+    incomplete = [False]
 
     def fake(command, **kwargs):
         env = kwargs["env"]
@@ -134,6 +135,23 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
                 db.execute("CREATE TABLE IF NOT EXISTS dives(id TEXT PRIMARY KEY,body TEXT)")
                 db.execute("INSERT OR IGNORE INTO list_papers VALUES('fixture')")
                 db.execute("INSERT OR IGNORE INTO dives VALUES('fixture','saved analysis')")
+                db.execute("CREATE TABLE IF NOT EXISTS paper_lineage_sets("
+                           "paper_id TEXT PRIMARY KEY,"
+                           "corpus_key TEXT)")
+                db.execute("INSERT OR IGNORE INTO paper_lineage_sets VALUES(?,?)",
+                           ("demo:paperfact", "3390faaf-42c5-4953-8391-024cf4fe7dce"))
+        elif "analysis.audit" in command:
+            report = dict(
+                format="paperfact.lineage-audit.v1", originals_checked=3, originals_total=3,
+                semantics="not_checked", sources=[
+                    dict(state="available", report=dict(checks=[
+                        dict(rule="quote_location", state="located") for _ in range(count)
+                    ])) for count in (2, 1, 2)
+                ],
+            )
+            if incomplete[0]:
+                report["originals_checked"] = 2
+            stdout = json.dumps(dict(ok=True, result=report)).encode()
         elif "list-export" in command:
             shutil.copyfile(destination / "original.zip", command[-1])
         return subprocess.CompletedProcess(command, 0, stdout, b"")
@@ -155,6 +173,8 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         "import-again",
         "file-fidelity",
         "research-content",
+        "lineage-audit",
+        "lineage-audit-result",
         "local-integration",
     } <= set(first["completed_checks"])
     assert first["research_files_preserved"] == 1 and first["integration"]["retry_preserved"]
@@ -162,6 +182,12 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     assert "hosted multi-device sync" in first["limitations"]
     assert verify.verify(tmp_path / "built", tmp_path / "retry")["status"] == "passed"
     assert seen.count("version") == 2
+    incomplete[0] = True
+    with pytest.raises(AssertionError, match="Packaged acceptance condition failed"):
+        verify.verify(tmp_path / "built", tmp_path / "incomplete")
+    failed = json.loads((tmp_path / "incomplete" / "report.json").read_text(encoding="utf-8"))
+    assert failed["status"] == "failed" and not failed["passed"]
+    assert failed["active_check"] == "lineage-audit-result"
 
 
 def test_main_returns_failure_without_printing_exception_or_old_success(

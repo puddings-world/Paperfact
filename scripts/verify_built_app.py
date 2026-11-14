@@ -32,6 +32,8 @@ STAGES = {
     "export",
     "file-fidelity",
     "research-content",
+    "lineage-audit",
+    "lineage-audit-result",
     "credential-isolation",
     "local-integration",
     "appimage-integration",
@@ -226,6 +228,7 @@ def _verify(built, out, acceptance):
             log = Path(env["PAPERFACT_DATA"]) / "app.log"
             if log.exists() and "Traceback" in log.read_text(encoding="utf-8", errors="replace"):
                 raise CheckFailure(label, "app_traceback")
+            return result.stdout
 
         return acceptance.call(label, execute)
 
@@ -247,8 +250,7 @@ def _verify(built, out, acceptance):
     original, returned = out / "original.zip", out / "returned.zip"
     seed = (
         "import sys; sys.path.insert(0, 'scripts'); import demo_workspace; "
-        "demo_workspace.seed(); from paper_daily import bundle; "
-        "from pathlib import Path; bundle.export('demo', Path(sys.argv[1]))"
+        "from pathlib import Path; demo_workspace.acceptance_package(Path(sys.argv[1]))"
     )
     run("seed", [sys.executable, "-c", seed, original], sender)
     run(
@@ -287,8 +289,33 @@ def _verify(built, out, acceptance):
         with closing(sqlite3.connect(workspace / "papers.db")) as db:
             require(db.execute("SELECT count(*) FROM list_papers").fetchone()[0] == 1)
             require(bool(db.execute("SELECT body FROM dives").fetchone()[0]))
+            rows = db.execute("SELECT paper_id,corpus_key FROM paper_lineage_sets").fetchall()
+            require(len(rows) == 1 and rows[0][0] == "demo:paperfact")
+            return dict(paper_id=rows[0][0], corpus_key=rows[0][1])
 
-    acceptance.call("research-content", content)
+    audit_args = acceptance.call("research-content", content)
+    arguments = out / "lineage-input.json"
+    arguments.write_text(json.dumps(audit_args), encoding="utf-8")
+    audit_output = run(
+        "lineage-audit",
+        [cli, "integration", "analysis.audit", "--workspace", workspace, "--file", arguments],
+        recipient,
+    )
+
+    def checked_lineage():
+        require(len(audit_output) <= 2 * 1024**2)
+        response = json.loads(audit_output.decode("utf-8"))
+        require(response.get("ok") is True)
+        report = response["result"]
+        require(report["format"] == "paperfact.lineage-audit.v1")
+        require(report["originals_checked"] == report["originals_total"] == 3)
+        require(len(report["sources"]) == 3 and report["semantics"] == "not_checked")
+        require(all(source["state"] == "available" for source in report["sources"]))
+        checks = [check for source in report["sources"] for check in source["report"]["checks"]
+                  if check["rule"] == "quote_location"]
+        require(len(checks) == 5 and all(check["state"] == "located" for check in checks))
+
+    acceptance.call("lineage-audit-result", checked_lineage)
     acceptance.call("credential-isolation", lambda: require(not (workspace / "llm.json").exists()))
 
     def integration_check(command, folder, env):
@@ -332,6 +359,7 @@ def _verify(built, out, acceptance):
             "reader",
             "export",
             "file-fidelity",
+            "lineage-corpus",
             "share-link-checksum",
             "json-cli",
             "mcp-stdio",

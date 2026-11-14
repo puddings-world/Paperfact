@@ -52,6 +52,13 @@ the JavaScript tests.
 
 ## Packaged local acceptance
 
+The existing `scripts/demo_workspace.py` also exposes
+`acceptance_package(destination) -> dict`: synthetic three-original Lineage material
+for offline import/audit/re-export and manual cross-device reading. It uses the
+installed PyMuPDF and production package validators, an explicitly bound empty
+fixture workspace, and no provider/test-framework dependency. The packaged verifier
+creates it automatically; manual commands are in the Mac acceptance guide.
+
 Run `python scripts/verify_built_app.py <built-app-folder> <new-output-folder>`
 from the matching development environment after building. This uses generated
 research and isolated account/data homes. It checks local startup, package

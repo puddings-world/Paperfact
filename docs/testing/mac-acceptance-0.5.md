@@ -132,6 +132,7 @@ The existing CI still captures its generated fixture logs separately.
 | `first-use-privacy`, `credential-isolation` | No AI account configuration was created/imported into the fixture |
 | `seed`, `share-link`, `share-link-checksum` | Generated research package and exact checksum-bearing sharing link |
 | `import`, `import-again`, `reader`, `export` | Import twice, read, export; a duplicate import must not duplicate the list item |
+| `lineage-audit`, `lineage-audit-result` | Actual frozen JSON CLI checks the imported synthetic corpus: three originals, five located quotations; no semantic-support claim |
 | `file-fidelity`, `research-content` | Exact exported PDF/assets plus saved analysis and membership |
 | `local-integration`, `appimage-integration` | Frozen JSON CLI and actual MCP stdio retry/restart behavior; AppImage variant when present |
 | `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
@@ -146,6 +147,47 @@ folder for a retry and compare the actual candidate identities.
 
 This does not run the physical two-device sync journey or real provider login.
 Do not claim the full suite passed merely because packaged-app verification passes.
+
+## Synthetic research material
+
+The verifier's `original.zip` contains one list member, a saved explanation and
+an explicitly authored synthetic lineage with two context papers, three originals
+and five source-pinned quotations. All four packaged PDF files (main reader plus
+three lineage originals) must survive import/export byte-for-byte. Generation
+metadata says `synthetic-fixture`, with no requested/returned model. No AI,
+account, download or private paper is required. The main paper's lineage passages
+are on page 2, so M21 also checks source navigation across pages.
+
+Copy `original.zip` to the other test machine and import it in the separate
+candidate workspace. Do not copy account homes or the whole verifier directory.
+Record the ZIP SHA-256 alongside candidate identity. The automated frozen CLI
+check does not prove the GUI behavior in M21; record that result separately.
+
+To generate the same kind of material without building an installer, run from a
+configured source checkout. These commands bind only the child process to a new
+empty fixture workspace; they do not change your app's data-location setting.
+Choose a new output filename on a repeat run; existing outputs/data are refused.
+
+Windows PowerShell:
+
+```powershell
+$fixtureData = Join-Path $env:TEMP ("paperfact-acceptance-" + [guid]::NewGuid().ToString("N"))
+.\.venv\Scripts\python.exe -c "import os,sys; os.environ['PAPERFACT_DATA']=sys.argv[1]; sys.path.insert(0,'scripts'); from demo_workspace import acceptance_package; from pathlib import Path; acceptance_package(Path(sys.argv[2]))" $fixtureData (Join-Path $PWD "Paperfact-synthetic-research.zip")
+```
+
+macOS/Linux:
+
+```sh
+fixture_data="$(mktemp -d)"
+.venv/bin/python -c 'import os,sys; os.environ["PAPERFACT_DATA"]=sys.argv[1]; sys.path.insert(0,"scripts"); from demo_workspace import acceptance_package; from pathlib import Path; acceptance_package(Path(sys.argv[2]))' "$fixture_data" "$PWD/Paperfact-synthetic-research.zip"
+```
+
+Success produces a validated ZIP at the named path. The helper API is
+`scripts.demo_workspace.acceptance_package(destination) -> dict` (the manifest).
+It requires an explicit absolute `PAPERFACT_DATA` matching the bound empty
+workspace and a new absolute output path. It constructs portable fixture data;
+it does not grant sender-native source ownership. Real receiver validation and
+observed publication create the imported source context.
 
 ## Return a useful failure report
 

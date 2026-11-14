@@ -5207,3 +5207,48 @@ additional worktree was introduced.
 - Final daily critical: 14 passed in 17.26s pytest / 23.0s total, privacy
   and Ruff green. No full historical/release/packaging run. Reused unchanged
   core/CLI/MCP and imported/bound evidence from the preceding checkpoint.
+
+
+## 2026-11-15: source-complete cross-device acceptance material
+
+- The prior verifier seed contained only one PDF and a deep explanation, so it
+  could not support the new Mac M21 corpus journey. Extended the existing demo
+  helper with `acceptance_package(destination)`: one list member, two context
+  papers, a typed synthetic Lineage, three originals/five pinned quotations, and
+  four packaged PDF files. No new app command, server or worktree.
+- The helper requires an explicitly bound empty absolute fixture workspace and
+  new absolute output. Portable data is clearly authored as synthetic-fixture,
+  with no requested/returned model. Production package validation checks the
+  archive before publication; observed receiver import creates real imported
+  original context. No sender-native grants, test-framework dependency, account,
+  network, private paper or provider hook is used. Existing screenshot seeding
+  remains unchanged except replacing deprecated fitz import with pymupdf alias.
+- Packaged verifier seed now uses this material. New lineage-audit and
+  lineage-audit-result stages invoke the actual frozen JSON CLI, require all
+  three originals/five quotations, and refuse incomplete results. Report identity
+  remains actual packaged metadata; M21 GUI/physical devices remain separate.
+- Four new collected cases only: actual ZIP/duplicate import/public JSON CLI
+  audit/re-export file equality, plus three safety refusals. Existing runner
+  orchestration now asserts the new stages and failure on incomplete audit; its
+  fake child apps are explicitly not native package acceptance. Final related
+  modules: 16 passed in 10.10s pytest / 14.1s total, privacy/Ruff green. Earlier
+  runs overlap. A deprecated import warning initially broke strict stdout; fixed
+  the source rather than relaxing the assertion. A lint-only attempt ran no tests.
+- Concrete ignored local artifact: build/acceptance-lineage-v1/
+  Paperfact-synthetic-research.zip, 9,788 bytes, SHA-256
+  b080d5312ed4e7d9da040cdd1216db1bc4531b23e0594d47274c208ed4259a9e.
+  Exact delivered bytes separately traversed real source CLI import twice, audit
+  and re-export in isolated account/data homes: 3 originals, 5 located quotes,
+  4 byte-identical PDF files. material.json records observed results and marks
+  native_package_acceptance false. This ZIP is research material, not an installer.
+- README/toolchain/Mac guide/test map updated with child-only workspace binding,
+  generation commands, original.zip handoff, checksum and actual stage meaning.
+  No full historical suite, owner research, credentials, restart, cloud, push,
+  installer build or release. Daily critical stays 14; release stays 35 selectors.
+- Existing local-integration/package ownership guidance covers this verified
+  boundary; no new global skill. Hosted identity/HTTPS/native stores, real
+  installed Windows/Apple Silicon/phone acceptance and other remaining recovery/
+  legacy/corpus gates stay open.
+
+- Final daily critical: 14 passed in 5.40s pytest / 8.7s total, privacy/Ruff
+  green. No repeat of unchanged corpus, desktop, mobile or historical matrices.

@@ -391,3 +391,15 @@ model output; the check itself refuses any model call. Existing Lineage dialog
 cases protect the shared worker, generation, saved reads and original viewers.
 No daily/release selector matrix is added. Native packaged layout/device checks
 remain separate acceptance gates.
+
+
+## Source-complete acceptance material (2026-11-15)
+
+Four new cases in `test_acceptance_research_package.py`: actual generated ZIP,
+production import twice, public JSON CLI corpus audit (3 originals/5 quotations),
+byte-identical re-export of 4 PDF files, and refusal of existing data, existing
+outputs or unspecified workspace. Synthetic generation blocks network/model
+clients in the test; no AI or credential file is needed. Existing packaged-runner
+cases now require the frozen-CLI audit stages and reject incomplete results. Fake
+child orchestration is not native package acceptance. No daily/release matrix is
+added; M21 remains a real installed Windows/Apple Silicon UI gate.
