@@ -12,6 +12,8 @@ removed; OS file events now go directly through the application. Native three-la
 acceptance passes after this fix; installed/longer-running stability remains untested.
 Treat this as an experimental test candidate, not a stable update or evidence that
 hosted synchronization is deployed. Keep the daily app and data unchanged.
+This `0.5.0.dev` test bundle does not auto-update. Obtain the next candidate
+explicitly, preserve the same separate test data folder, and record its new commit.
 Use an exact candidate build shared with the Windows tester. A published 0.4.x
 app cannot validate unshipped 0.5 synchronization. `0.5.0.dev` alone is not a
 unique build identity: record the commit and candidate artifact SHA-256.

@@ -92,6 +92,7 @@ jobs:
         run: uv sync --extra app --extra dev --extra build
 
       - name: Fonts and web assets
+        shell: bash
         run: |
           uv run python -m paper_daily fonts
           uv run python -m paper_daily web-assets
@@ -105,6 +106,7 @@ jobs:
       - name: Build verified mobile web artifact
         if: matrix.name == 'windows'
         timeout-minutes: 2
+        shell: bash
         run: |
           node --test --test-concurrency=1 tests/test_mobile_artifact.mjs
           node scripts/build_mobile.mjs --output build/mobile-web

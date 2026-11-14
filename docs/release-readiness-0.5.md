@@ -1,10 +1,12 @@
 # v0.5.0 release readiness
 
-Status: **acceptance plan, not release approval**, 2026-10-26. v0.4.1 remains the
-published baseline. The local sync journal, reference service/client, research
-adapter and attachment primitive are development foundations; their tests do not
-establish complete writer coverage, hosted security, mobile support or installer
-acceptance. Consult the [implementation ledger](implementation-0.5.0.md) for results.
+Status: **development candidate, not release approval**, updated 2026-11-15.
+Source checks, native CI, installed-device journeys and hosted acceptance are
+separate boundaries. Keep the published maintenance app and research unchanged.
+The candidate version is `0.5.0.dev`; its source commit identifies the actual build.
+See [current implementation evidence](status-0.5.0.md) and the platform table below.
+A native package pass does not prove complete writer enrollment, hosted security,
+physical-phone durability or installed upgrade preservation.
 
 ## Evidence rules
 
@@ -15,8 +17,9 @@ acceptance. Consult the [implementation ledger](implementation-0.5.0.md) for res
 - Use generated research and isolated profiles for automated acceptance. Real-user
   pilot data requires separate informed participation; do not upload the maintainer's
   workspace as a test fixture. Verify preserve/restore with hashes and content counts.
-- Only mark a gate passed after attaching its evidence. All gates below are pending
-  for v0.5.0 until the parent records a candidate result.
+- Mark each boundary `passed`, `failed` or `not run` only from its actual evidence.
+  Never turn a CI result into a physical-device pass or add overlapping test counts
+  into a completion percentage. Open gates prevent release approval.
 
 ## Release gate matrix
 
@@ -42,13 +45,18 @@ Historical full-suite execution is not an automatic release prerequisite.
 | Privacy | Sync excludes AI credentials/telemetry; logs redact secrets and research bodies | Payload/log fixtures and consent boundary tests |
 | Distribution | Source, binaries, version, license/notices and provenance match | Clean build info, source archive, checksums and three-platform artifacts |
 
+Current desktop-only CI evidence: [00151ba / run 43639589003](https://github.com/puddings-world/Paperfact/actions/runs/43639589003).
+Its Windows mobile-artifact tests failed (0/5) despite a green job: later native
+commands masked their exit status. The fail-fast/fixture-path repair is locally
+verified; a fresh CI result is required before accepting that mobile artifact.
+
 ## Platform acceptance
 
 | Target | Required v0.5.0 evidence | Current claim |
 |---|---|---|
-| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Pending; no v0.5.0 platform acceptance recorded here |
-| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Pending; no live Mac result recorded here |
-| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Pending; no live Linux result recorded here |
+| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI 00151ba: critical 14 and frozen reader/import/export/audit/CLI/MCP passed; setup install/reinstall/upgrade/uninstall and physical sync not run |
+| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `00151ba`: critical 14, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
+| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `00151ba`: critical 14, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
 | iPhone/Safari installed PWA | Offline launch, PDF/readability, note reload, foreground reconnect, storage/error recovery, touch/accessibility | Pending; simulation does not replace physical-device results |
 | Android/Chrome installed PWA | Same journey, including suspend/foreground and failed-network recovery | Pending; no physical-device result recorded here |
 
@@ -56,19 +64,30 @@ Record OS/browser versions, installed-versus-browser mode and hardware separatel
 Minimum mobile support versions remain a decision gate; do not infer them from the
 development machine's browser. Native app-store mobile packages are out of scope.
 
-## Existing build pipeline and required extensions
+## Candidate pipeline and remaining acceptance
 
 The current [release workflow](../.github/workflows/release.yml) runs
 `scripts/check.py`, generated screenshots, `scripts/build_app.py` and
 `scripts/verify_built_app.py` on Windows, macOS and Linux. Its artifact families are
-`acceptance-*`, `provenance-*`, `screenshots-*` and `build-*`.
+`acceptance-*`, `provenance-*`, `screenshots-*`, `research-fixture-*` and `build-*`;
+the Windows job also verifies/uploads the shared mobile web artifact. Only the
+synthetic research ZIP is shared, never a whole fixture account/workspace.
 `workflow_dispatch` builds candidates without creating a release; a version tag
 creates a draft only after all build jobs pass. See [releasing](releasing.md).
 
-Before v0.5.0, integrate mobile checks into the root full check and extend frozen
-acceptance to supported sync/configuration boundaries. Keep a no-network fixture
-path for packaged tests. Separately test the reviewed service and real devices;
-frozen-app success alone does not exercise cloud/mobile synchronization.
+Manual candidates run the curated `critical` selection per OS, not the historical
+suite. Tag releases additionally run the curated `release` selection once on
+Windows: named Python/frontend/mobile-domain checks and the mobile/Python protocol
+program. Preserve affected regression checks and the 30-minute per-job budget.
+The opt-in historical `full` profile is diagnostic, not a ritual release prerequisite.
+
+The frozen verifier uses generated research and isolated homes: duplicate import,
+reader, four-PDF export fidelity, three-original/five-quote audit, credential
+isolation and CLI/MCP restart/retry. Mac requires three consecutive reader starts
+and native foreground/close; Linux also exercises AppImage CLI/MCP. It does not
+install/reinstall the setup EXE or mount/upgrade the DMG on an owner's machine.
+Separately test the reviewed service, native credential stores and real devices.
+Frozen success alone does not exercise hosted multi-device or phone synchronization.
 
 Use an explicit disposable install directory for Windows acceptance with
 `/ACCEPTANCETEST=1 /NOCLOSEAPPLICATIONS /DIR=<isolated-path>`. Use a separate fixture
@@ -81,14 +100,16 @@ Expected installer names remain:
 - `Paperfact-0.5.0-macos-arm64.dmg`
 - `Paperfact-0.5.0-linux-x86_64.AppImage`
 
-Names are targets, not existing artifacts. Produce all platforms from one reviewed
-commit, keep corresponding source/license notices, and verify artifact checksums.
+These are final release targets. Development candidate filenames use `0.5.0.dev`
+and require their exact source commit. Produce platforms from one reviewed commit,
+keep corresponding source/license notices, and record artifact checksums. GitHub's
+artifact ZIP digest is not the contained installer payload's SHA-256.
 Do not claim code signing/notarization unless completed and tested for the candidate.
 
 ## Upgrade, rollback and release sequence
 
-1. Freeze the agreed scope and writer coverage. Preserve v0.4.1 for download.
-2. Back up a synthetic v0.4.1 workspace containing PDFs, anchored notes, analysis,
+1. Freeze the agreed scope/writer coverage; retain the selected published maintenance build.
+2. Back up a synthetic workspace from that recorded maintenance version, containing PDFs, anchored notes, analysis,
    lists and editable slide layouts. Record data paths and hashes before upgrade.
 3. Run source and installed upgrade paths. Preserve explicit `PAPERFACT_DATA` and
    legacy path overrides; no silent migration into an empty directory.
@@ -104,7 +125,9 @@ Do not claim code signing/notarization unless completed and tested for the candi
 8. Publish the initial v0.5.0 as a prerelease with supported/experimental features,
    service privacy/retention limits and known platform gaps stated clearly.
 
-The updater currently recognizes numeric `vX.Y.Z` release tags and ignores drafts.
+`0.5.0.dev` candidates do not auto-update to release installers; replace the test
+bundle explicitly while retaining its separate `PAPERFACT_DATA` directory.
+The updater recognizes numeric `vX.Y.Z` release tags and ignores drafts.
 Do not invent `v0.5.0-beta.1` update behavior or remove the prerelease marker to work
 around an older client's policy. Existing 0.x beta/stable channel behavior is
 described in [releasing](releasing.md); revalidate it against candidate tests.

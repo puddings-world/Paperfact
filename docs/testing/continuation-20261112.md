@@ -5543,3 +5543,28 @@ additional worktree was introduced.
   whitespace green. First run 43638983559 is terminal: Windows and Mac native
   build/frozen acceptance succeeded for 7f62f5d; Linux failed before packaging.
   Next run uses the fixed common source; no earlier job is left live/overlapped.
+- Second native run 43639589003: desktop frozen reports for clean 00151ba
+  all passed (Linux 2m37s, Mac 4m24s, Windows 6m24s). Exact JSON saved under
+  ignored build/candidate-43639589003. Linux includes AppImage CLI/MCP; Mac
+  includes three reader launches and Launch Services foreground/close.
+- Full Windows log review contradicted the green job for mobile assets: source
+  critical 14 passed, but mobile artifact tests reported 0 pass/5 fail, hidden
+  by later successful native commands in a PowerShell multiline step. Do not
+  call this complete cross-platform/PWA acceptance or release it on that basis.
+- All five failures were strict fixture cleanup path checks against Windows
+  DOS short TEMP aliases. Allocate under realpath(tmpdir()) first, retaining
+  exact root/parent/device/inode assertions and exact-owned-path removal.
+  No broad TEMP cleanup, path relaxation or production artifact rule changes.
+- Asset preparation and mobile test/build/verify use Bash fail-fast, matching
+  the existing frozen step. Existing workflow contract pins both shells.
+  This is validation repair, not proof that the mobile artifact already passes.
+- Local mobile artifact regressions now pass 5/5; workflow contract passes 1
+  (0.34s Python, 3.63s Node, 7.2s total with privacy/Ruff). Original cleanup
+  assertions retained. Actual Windows Git Bash injection: native node exit 7
+  propagates, later marker command does not execute (10s-bounded check).
+- Repair critical: 14 passed in 8.92s / 12.5s total; privacy/Ruff/whitespace
+  green. Refresh the existing readiness/roadmap: curated gates and actual
+  native/platform evidence replace stale October baseline language. Physical
+  upgrade/phone/hosted gates remain open; .dev candidates do not auto-update.
+- Documentation gate: 58 passed in 1.92s / 5.1s total, privacy/Ruff and
+  whitespace green. No new test cases/selectors or owner database/account use.

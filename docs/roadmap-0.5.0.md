@@ -161,8 +161,10 @@ the transactional revision and authorization requirements.
 - No account secrets or telemetry enter sync payloads; cross-user isolation is tested.
 - Backups restore into an isolated workspace with matching research and file hashes.
 - Mobile notes survive ordinary reload/restart and show any unsent or storage-failed state.
-- Windows, macOS, and Linux full checks and packaged acceptance pass; iPhone and
-  Android results are recorded separately from simulated browser tests.
+- Curated release requirements pass once, with critical/frozen acceptance on each
+  shipped Windows/macOS/Linux target and affected regressions. Historical exhaustive
+  runs are opt-in diagnosis. iPhone/Android physical results remain separate from
+  simulated browser tests; see [release gates](release-readiness-0.5.md).
 
 Architecture: [sync design](sync-architecture.md).
 Implementation and agent handoff: [work plan](implementation-0.5.0.md).

@@ -30,6 +30,8 @@ This adds about ten seconds of smoke time, not another build or test matrix.
 PDF open-with events are handled by the application itself, without a global
 Python event filter over WebEngine internal objects. Each job has a 30-minute total budget; manual builds
 retain critical source checks and frozen acceptance, without creating a release.
+Multi-command asset/test steps use Bash fail-fast semantics on Windows too; an
+early failed test must stop the step even if a later builder would succeed.
 
 Download `build-macos` (DMG), `provenance-macos` (source identity and report), and
 `research-fixture-macos` (only the generated synthetic `original.zip`) from that

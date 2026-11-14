@@ -9,7 +9,7 @@ import {buildMobile,verifyMobile} from '../scripts/build_mobile.mjs';
 import {SHELL} from '../mobile/sw-policy.mjs';
 const source=fileURLToPath(new URL('../mobile/',import.meta.url));
 async function fixture(run){
- const root=await mkdtemp(join(tmpdir(),'paperfact-mobile-artifact-')),local=join(root,'source'),owned=await lstat(root);
+ const root=await mkdtemp(join(await realpath(tmpdir()),'paperfact-mobile-artifact-')),local=join(root,'source'),owned=await lstat(root);
  try{
   const paths=[...new Set([...SHELL.map(path=>path==='./'?'index.html':path.slice(2)),'sw.mjs'])];
   for(const name of paths){const target=join(local,...name.split('/'));await mkdir(dirname(target),{recursive:true});await copyFile(join(source,name),target);}
