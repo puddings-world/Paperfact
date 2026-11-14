@@ -41,6 +41,12 @@ EVENTS = frozenset(
         "colors-changed",
         "window-resized",
         "window-state",
+        # Which screen was put up, by fixed names only: never a list or paper name.
+        "view-list",
+        "view-paper",
+        "view-lists",
+        "view-other",
+        *(f"reader-tab-{index}" for index in range(8)),
     }
 )
 STATES = frozenset({"active", "inactive", "hidden", "suspended", "unknown"})
@@ -237,6 +243,25 @@ def _follow_window_system(watchdog: Watchdog, app, parent) -> None:
 
     watchdog.resizes = Resizes(parent)
     parent.installEventFilter(watchdog.resizes)
+
+
+def follow_views(watchdog: Watchdog, window) -> None:
+    """Note each change of screen or reader tab, so a stall with no Python frame of
+    its own (drawing, layout, the web view) can still be placed."""
+    names = {
+        id(getattr(window, attribute, None)): name
+        for attribute, name in (
+            ("queue_page", "view-list"), ("reader_page", "view-paper"),
+            ("lists_page", "view-lists"),
+        )
+    }
+    stack = window.stack
+    stack.currentChanged.connect(
+        lambda _index: watchdog.note(names.get(id(stack.currentWidget()), "view-other"))
+    )
+    window.reader_page.tabs.currentChanged.connect(
+        lambda index: watchdog.note(f"reader-tab-{index}")
+    )
 
 
 def install(directory: Path, parent=None) -> Watchdog:

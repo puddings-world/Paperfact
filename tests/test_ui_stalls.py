@@ -177,6 +177,34 @@ def test_the_support_report_keeps_only_the_known_context(tmp_path):
     assert "secret" not in diagnostics.render(diagnostics.collect(tmp_path))
 
 
+def test_a_change_of_screen_or_reader_tab_is_noted_by_a_fixed_name(tmp_path):
+    from types import SimpleNamespace
+
+    from PySide6.QtWidgets import QApplication, QStackedWidget, QTabWidget, QWidget
+
+    app = QApplication.instance() or QApplication([])
+    stack, tabs = QStackedWidget(), QTabWidget()
+    queue, reader, lists, other = QWidget(), QWidget(), QWidget(), QWidget()
+    for page in (lists, queue, reader, other):
+        stack.addWidget(page)
+    for name in ("a", "b", "c"):
+        tabs.addTab(QWidget(), name)
+    reader.tabs = tabs
+    window = SimpleNamespace(stack=stack, queue_page=queue, reader_page=reader, lists_page=lists)
+    watch = ui_stalls.Watchdog(tmp_path / "ui-stalls.log")
+    ui_stalls.follow_views(watch, window)
+    stack.setCurrentWidget(queue)
+    stack.setCurrentWidget(reader)
+    tabs.setCurrentIndex(2)
+    stack.setCurrentWidget(other)
+    stack.setCurrentWidget(lists)
+    app.processEvents()
+    assert [event for _at, event in watch.recent] == [
+        "view-list", "view-paper", "reader-tab-2", "view-other", "view-lists"
+    ]
+    assert all(event in ui_stalls.EVENTS for _at, event in watch.recent)
+
+
 def test_the_installed_watchdog_follows_the_window_system(tmp_path):
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication, QWidget

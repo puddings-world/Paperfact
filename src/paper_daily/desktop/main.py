@@ -4974,6 +4974,7 @@ def run(
     from paper_daily.config import DATA_DIR
 
     window.stall_watch = ui_stalls.install(DATA_DIR, window)
+    ui_stalls.follow_views(window.stall_watch, window)
     from paper_daily.desktop.dormancy import Dormancy
 
     # Checks nobody is looking at stop while the window is in the background.
