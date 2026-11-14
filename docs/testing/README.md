@@ -365,3 +365,15 @@ actual saved multi-paper attribution, no borrowed retrieval/AI route/exact fact
 binding, native/local alias normalization, and English/Traditional Chinese GUI
 findings with navigation refusal. Existing cases/assertions remain unchanged.
 A matching quotation is still not semantic support or a full multi-source audit.
+
+
+## Explicit Lineage corpus audit (2026-11-15)
+
+Five focused cases in `test_audit_lineage_corpus.py` cover independently owned
+same-byte originals, immutable/stale delivery, cancellation, actual retained
+original corruption (no download/peer substitution), and explicit unavailable
+coverage/resource limits. Existing imported and bound-source representatives also
+call the new corpus operation; no additional parameter matrix is collected.
+Existing CLI/MCP cases retain default behavior and exercise the optional schema.
+Daily critical remains 14; no release selector is added for this incremental
+adapter. A desktop whole-corpus control and installed-device acceptance are pending.

@@ -249,6 +249,8 @@ For candidate installers, [packaged acceptance](docs/testing/mac-acceptance-0.5.
 records which check passed or failed, even when the app cannot start.
 [Evidence checks](docs/analysis-audit.md) keep each Lineage quotation attached to
 its actual paper and PDF version, even when two papers have identical PDF bytes.
+For a saved research lineage, CLI/MCP can explicitly check all selected local
+originals with `analysis.audit` and its optional `corpus_key`; see the linked guide.
 
 If Paperfact helps, [star this repository](https://github.com/puddings-world/Paperfact)
 or [follow the organization and explore its pinned projects](https://github.com/puddings-world).

@@ -5129,3 +5129,42 @@ additional worktree was introduced.
   deletion/mapping/recovery, hosted identity/HTTPS/native vaults and installed
   Windows/Apple Silicon/physical-phone acceptance remain open. No push, release,
   deployment, owner app restart or research migration from this checkpoint.
+
+
+## 2026-11-15: explicit current Lineage corpus audit
+
+- Added worker-only `audit_lineage.prepare` and the optional `corpus_key` on the
+  existing shared `analysis.audit` operation, including the official MCP adapter.
+  The default focal audit is unchanged. One actual provenance selector chooses
+  the maintained generated/imported/bound reader; failures never try another
+  origin, download or equal-byte peer. No model, schema creation, original
+  activation, research write or account access.
+- Each source independently verifies ownership and exact PDF bytes; statement
+  prose is checked only on its subject original, quoted passages on their own
+  source. Partitioned indices retain an explicit saved-statement correspondence.
+  Unavailable sources stay visible with no report. A sealed process-local result
+  rechecks the actual owner, unchanged DB/WAL and every original at delivery;
+  cancellation/changes discard the result. Unrelated real SQL writes invalidate
+  this conservative read lease too; it is not a persisted authority or restore.
+- Four-original, total-byte/page/word and aggregate saved-input/quantity limits
+  fail explicitly. No quality percentage or semantic/causal certification.
+- Five new collected cases only. Existing imported and bound-source cases gain
+  one whole-corpus assertion each; existing official SDK test checks the optional
+  schema and refusal. Daily critical remains 14 and release stays 35 selectors.
+- Final directly affected modules: 13 passed in 35.64s pytest / 40.6s total.
+  Imported/bound original representatives: 2 passed in 9.33s / 13.8s total.
+  Earlier individual passes overlap and are not added to these counts. One first
+  fixture erroneously corrupted the download instead of the actual owned
+  retained snapshot; corrected the target, kept the refusal assertion. One
+  misspelled selector collected no tests; the corrected representative pass is
+  recorded above. Privacy and Ruff passed; all jobs sequential and CPU-bounded.
+- Reused the canonical local-integration source-proof/delivery patterns; no new
+  universal skill or global installation is justified. This is project evidence.
+- Desktop whole-corpus control/lifecycle UX remains next; historical/legacy
+  corpus mapping, list surveys, expert evaluation and hosted/native/installed
+  Windows/Apple Silicon/physical-phone gates remain open. No deployment, push,
+  release, owner-app restart or research migration.
+
+- Final daily critical: 14 passed in 12.24s pytest / 17.7s total; privacy and
+  Ruff green. This is scoped integration evidence, not exhaustive or installed
+  release acceptance. No unchanged broad module rerun.

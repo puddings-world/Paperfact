@@ -50,6 +50,15 @@ def test_exact_peer_original_bytes_without_writes_activation_or_model(selected, 
     with closing(client.journal._connect()) as conn:
         assert not conn.execute("SELECT 1 FROM research_document_desired").fetchall()
     assert frame["source_dependencies"][index]["source_id"] == source["id"]
+    if index == 0:
+        from paper_daily import audit_lineage
+
+        audit = work(audit_lineage.prepare, owner, row)
+        report = audit.for_delivery(owner, row)
+        assert report["originals_checked"] == report["originals_total"] == 3
+        assert all(source["state"] == "available" for source in report["sources"])
+        assert client.journal.path.read_bytes() == before and client.journal.pending() == pending
+
 
 
 @pytest.mark.parametrize("changed", ["owner", "row", "source", "closed"])

@@ -62,7 +62,7 @@ selected source hash, page and anchor. IDs include the corpus identity so two
 corpora with the same statement do not collide. Generation proposals, archived
 versions and imported model judgments do not become scientific verification.
 
-This action checks only the owned original currently opened in the reader.
+Without `corpus_key`, this action checks only the owned original currently opened in the reader.
 Quotations in that exact version can be located and navigated. A quotation from
 another selected paper/version is reported as `source_mismatch`, with no
 fabricated location or navigation into the focal PDF. Open the recorded source
@@ -155,7 +155,7 @@ No existing appraisal success assertions are loosened.
 
 ## Shared agent and script operation
 
-The desktop and `analysis.audit` use the same `AuditCapture` boundary. The official
+The desktop and default `analysis.audit` use the same `AuditCapture` boundary. The official
 local MCP tool is read-only and offline. A host may receive saved text and source
 quotations in its context; the user's authorization for that host still applies.
 The operation accepts a paper ID, never a file path, SQL, provider or shell command.
@@ -169,6 +169,42 @@ PowerShell equivalent:
 ```powershell
 '{"paper_id":"PAPER_ID"}' | paperfact integration analysis.audit --workspace C:\Research\Paperfact
 ```
+
+### Explicit whole-Lineage check (CLI/MCP)
+
+The worker API is `audit_lineage.prepare(owner, expected, *, cancelled, progress)`.
+It returns `PreparedLineageAudit`, with `current()` and
+`for_delivery(owner, row)`; delivery returns a detached JSON-compatible report.
+Callbacks default to no cancellation and no progress reporting. Call preparation
+on a background worker; delivery rechecks provenance without parsing PDF bytes.
+
+`analysis.audit(paper_id, corpus_key=CORPUS_UUID)` checks exactly one current saved
+Lineage. Omit `corpus_key` for the original single-PDF behavior. The desktop
+whole-corpus button is not connected yet; its existing saved-evidence action
+continues to check the loaded original only.
+
+```powershell
+'{"paper_id":"PAPER_ID","corpus_key":"SAVED_CORPUS_UUID"}' | paperfact integration analysis.audit --workspace C:\Research\Paperfact
+```
+
+The worker selects the actual generated, imported or bound source reader once;
+reader refusal never falls through to another origin or a same-hash peer. Each
+selected source independently verifies its owned bytes. Statement quantities are
+checked only on their subject original; quotations use their own original, even
+when several papers have identical bytes. Source reports preserve partitioned
+`passage` indices plus `original_passage` indices into the saved statement.
+`passage_indices` records the correspondence explicitly.
+
+`paperfact.lineage-audit.v1` reports `originals_checked` / `originals_total`, each
+source's state and deterministic report. An unavailable original is listed with
+`report: null`; it is not a successful check. These are coverage counts, not a
+quality score. No semantic support or causal influence is certified. Limits are
+four originals, 32 MiB total retained PDF bytes, 96 total pages and 50,000 extracted
+words, in addition to existing saved-input/item/passage budgets. Exceeding a limit
+or changing ownership/source/row during preparation refuses the result;
+cancellation returns no partial report. Delivery requires the same actual loaded
+owner and unchanged row/database/file witnesses. This conservative lease also
+invalidates on unrelated real database writes; retry explicitly.
 
 A missing store is not created by the audit CLI. A missing/changed owned original,
 invalid saved data or over-budget corpus returns a bounded error. No network,
@@ -188,7 +224,7 @@ navigation remain explicit limits. The remaining file/corpus boundaries are:
 |---|---|---|
 | Editable deck JSON and source/figure catalog (`sync_deck_files`, `sync_deck_publication`) | Read the actual selected retained deck version through typed deck/file ownership, validate bounded source IDs and figure assets, bind each source to its exact owned PDF | Deck `source_hash` is an input digest; a slide/source/figure may reference a different or unknown PDF. Do not use global presentation/cache paths, fabricate file ownership, or assign the focal original to every slide. |
 | `list_surveys` and retained list generation inputs | Explicitly select and capture the actual list, membership/incarnations and bounded per-paper source corpus before reading its summary | A list-wide prose summary and captured analysis rows are not per-assertion PDF citations. A single-focal `AuditCapture` cannot certify the list's corpus or assign one loaded PDF to it. |
-| Grounded lineage reports/sets and legacy `lineage_team` output | The saved typed-row adapter retains each source hash and actual owner; the loaded original is checked only for matching owners, including equal-byte cases | Full per-parent original/corpus verification and legacy team migration remain open. A title/hash never grants corpus/file authority, global path lookup, citation influence or another paper's ownership. |
+| Grounded lineage reports/sets and legacy `lineage_team` output | The default typed-row adapter checks the loaded original. Explicit `corpus_key` independently checks a current saved corpus through its actual generated/imported/bound original readers | Desktop whole-corpus UI, historical/legacy team migration and scholarly evaluation remain open. A title/hash never grants corpus/file authority, global path lookup, citation influence or another paper's ownership. |
 
 A future file/corpus slice must explicitly select and retain the proper source
 scope, keep malformed/unavailable sources visible and preserve the same no-model
