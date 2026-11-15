@@ -1,6 +1,14 @@
 # v0.5.0 release readiness
 
-Latest Mac test package: [2fb6923 / run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806).
+Latest common-platform candidate: [e5eb093 / run43776461463](https://github.com/puddings-world/Paperfact/actions/runs/43776461463).
+Windows6m14s/Mac6m20s/Linux3m31s pass from the same clean source. Downloaded
+provenance ZIPs match independent hashes and confirm the actual frozen CLI
+source-aware report path, original/quote checks, model identity, retained read and
+cached retry with one synthetic completion. [Downloads and limits](testing/mac-acceptance-0.5.md).
+Desktop private handoff, every report dialog, physical devices, installed old-binary
+upgrades, authority/hosting and runtime-adoption gates remain. No release approval.
+
+Previous Mac test package: [2fb6923 / run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806).
 Mac arm64 source/rendering/frozen acceptance passes6m03s; downloaded provenance
 matches clean source, and the actual reading screenshot has text. Exact downloads
 and remaining physical/hosted gates are in [Mac acceptance](testing/mac-acceptance-0.5.md).
@@ -213,12 +221,12 @@ retained output and cached retry without another completion. Separately verify
 the packaged desktop private handoff and installed-device focus/account behavior.
 A direct CLI pass cannot establish that desktop transport.
 
-The source verifier now includes the bounded `source-aware-report` helper, with
-an actual source-CLI synthetic-provider round trip and verifier contract tests
-(affected43 pass44.9s). It exercises saved originals/quote location, captured
-requested/returned models, retained read and cached retry without another model
-completion. It is newer than the delivered2fb6923 Mac artifact. Closing the CLI
-gate still requires an actual frozen run; the desktop handoff/device gates remain.
+The bounded `source-aware-report` helper now passes in the actual frozen CLIs
+on all three platforms at e5eb093/run43776461463. Downloaded reports confirm saved
+originals/quote location, distinct requested/returned models, retained read and
+cached retry with one synthetic completion. This closes the named CLI gate only.
+The source verifier/helper43 pass44.9s; desktop handoff, live provider/device,
+reviewed retained-result application and pending-completion GUI gates remain.
 
 A bounded local download stopped after45s with an incomplete ZIP; it supplies no
 additional runtime evidence. Preserve the successful CI candidate rather than

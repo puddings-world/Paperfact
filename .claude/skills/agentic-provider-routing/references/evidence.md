@@ -114,3 +114,15 @@
   cached only in the live job object. Durable review/recovery, unbound generated
   publication and desktop/CLI/MCP dispatch are still required. No live login,
   entitlement claim, paid inference, original research or global installation.
+
+## Packaged report model provenance (2026-11-16)
+
+- Status: validated-local with CI platform evidence. Clean e5eb093/run43776461463
+  runs the actual frozen CLI on Windows, Mac arm64 and Linux through one loopback
+  synthetic completion, preserving different requested/returned model IDs.
+- Evidence: downloaded/hash-matched provenance on all three platforms confirms
+  saved report/originals, quotation location, retained read and cached retry with
+  no second completion. Source verifier/helper43 pass44.9s stages.
+- Limits: a controlled API profile, not live provider login, desktop private
+  handoff, account-switch races or scientific-support validation. No paid call,
+  global skill installation or account change is authorized by this evidence.

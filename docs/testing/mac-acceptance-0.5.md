@@ -1,6 +1,38 @@
 # Mac v0.5 acceptance
 
-## Latest Apple Silicon test build: 2fb6923
+## Latest common-platform test build: e5eb093
+
+[All-platform run43776461463](https://github.com/puddings-world/Paperfact/actions/runs/43776461463)
+passes from clean `e5eb093ad708b52580daccce4058d24dfcc59998`, version
+`0.5.0.dev`, beta-candidate channel. Mac arm64:6m20s; Windows x64:6m14s;
+Linux x86-64:3m31s. The downloaded, hash-checked provenance reports all match.
+
+| Download | Contents |
+|---|---|
+| [Apple Silicon Mac](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186344319) | ZIP containing the DMG |
+| [Windows x64](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186567355) | ZIP containing the setup EXE |
+| [Linux x86-64](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186432302) | ZIP containing the AppImage |
+| [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186379143) | Import the contained `original.zip` into a separate workspace |
+| [Mac report](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186229638) | Exact source identity and named acceptance results |
+
+All three frozen CLIs now pass source-aware report generation through one
+loopback synthetic completion, exact PDF/quote verification, separate requested/
+returned models, retained-result read and cached retry without another completion.
+Windows additionally passes isolated install/reinstall/uninstall and preserved
+research; Mac passes three launches/foreground; Linux passes AppImage integration.
+These results do not certify live accounts, every report dialog, an old installed
+binary upgrade, hosted sync or physical-phone durability. No public release/tag
+or hosting was created. Use the separate-app commands below and check e5eb093.
+
+GitHub-reported installer ZIP metadata (payloads not independently downloaded here):
+
+| Platform | ZIP bytes | ZIP SHA-256 |
+|---|---:|---|
+| Mac | 279451404 | `defbeda1a9e65172aea01660a0a8b6110bad5b6e696dbea641b9d0fcae8f66c0` |
+| Windows | 184674683 | `90f7b7d0398c6a1937348fc751754f40061c88530106c3df2ac19105faa862e5` |
+| Linux | 282605109 | `3c817662589dc0c75eeccc8b543940a24123031688ab48f606623a809b511f5b` |
+
+## Previous Apple Silicon test build: 2fb6923
 
 [Mac run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806)
 passes in6m03s, from clean `2fb69238377a4a43d8cccae28eef78820494bf6a`,

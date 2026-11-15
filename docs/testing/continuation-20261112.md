@@ -8677,3 +8677,21 @@ pytest/44.9s stages, under two CPUs/25% governor. No historical suite, real acco
 paid model, external search, user data, build or release was used in this checkpoint.
 The delivered2fb6923 Mac remains unchanged and does not include this new acceptance
 report. Actual frozen execution of the new stage remains a candidate gate.
+
+## 2026-11-16: same-source frozen report acceptance on three platforms
+
+Clean e5eb093/run43776461463 passes Windows6m14s, Mac6m20s and Linux3m31s.
+Actual provenance ZIPs downloaded/read and hash-matched:
+- Windows14186950654:4b3112747a351ddf2afc1816bdb96a9db049814b4ae2989a700a7e9846890aaa
+- Mac14186229638:9510b661daefd919f645d382094321649a5446c99696c039dd32b5cef58fac16
+- Linux14186920337:c2e8e81f4b9ea7cdbdaca6b5d4cd1ca468a61f7214d6fbc2def4665307bc5ae0
+
+All assert clean exact commit, passed true, completed source-aware-report and
+saved/quote_located/originals_verified/retained_read/cached_without_completion
+true, with separate synthetic requested/returned IDs. Four research files remain;
+Windows includes isolated install/reinstall/uninstall, Mac three reader starts
+and foreground, Linux AppImage integration. Installer ZIP metadata/direct links
+are in the existing Mac guide; no large payload download was attempted here.
+No public release/tag, live provider, paid call, owner-data migration or hosted
+service. The frozen-CLI report gate is closed; desktop transport/dialog, physical
+devices, old installed-binary upgrade and authority/hosting gates stay open.

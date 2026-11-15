@@ -926,6 +926,7 @@ loopback synthetic completion -> saved report/PDF export -> retained-result read
 not semantic scientific support. The endpoint rejects unexpected/repeated calls.
 `tests/test_source_report_acceptance.py` runs this whole journey against the source
 CLI; the verifier contract test also requires the named stage and its result.
-Affected verifier/helper43 pass44.9s stages locally. This stage is newer than the
-2fb6923 Mac artifact and needs a future native candidate before claiming a frozen
-pass. Existing desktop handoff/widget tests and physical devices remain separate.
+Affected verifier/helper43 pass44.9s stages locally. All three actual frozen CLIs
+now pass this stage at e5eb093/run43776461463; downloaded provenance confirms its
+named outcomes. Existing desktop handoff/widget tests and physical devices remain
+separate from this CLI evidence.

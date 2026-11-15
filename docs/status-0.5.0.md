@@ -283,3 +283,15 @@ all11 strict sync protocol checks pass; [download and test steps](testing/mac-ac
 No new Windows/Linux build at this source, public release, hosted deployment or
 physical-device acceptance is claimed. New report dialogs remain source/widget
 verified rather than comprehensively covered by standard frozen acceptance.
+
+### Common-platform previewe5eb093
+
+Run43776461463 passes Windows6m14s/Mac6m20s/Linux3m31s from clean
+e5eb093ad708b52580daccce4058d24dfcc59998. All three small provenance archives
+were downloaded, independently hash-matched and read. Actual frozen CLIs pass
+the new report stage: one synthetic completion, located quote, exact original,
+separate requested/returned model IDs, retained read and cached retry without
+another completion. This closes the named frozen-CLI report gate, not desktop
+private handoff, every report dialog, physical devices, hosted authority or full
+release approval. Downloads are in the Mac acceptance guide; no public tag or
+service was created. The daily app and owner research remain unchanged.
