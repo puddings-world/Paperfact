@@ -23,6 +23,11 @@ section readings through the existing guarded report-removal path. Other saved
 reports, originals, notes and history remain; later restores survive retries.
 Native package and physical-device acceptance of this extension remain pending.
 
+Source now isolates case-distinct POSIX workspace roots by physical directory
+identity and rejects mismatched focus requests before raising a reader. Existing
+Windows instance keys remain compatible; native Mac/Linux and old-build coexistence
+acceptance remain pending. Close older apps before testing a new candidate.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

@@ -285,6 +285,11 @@ Preview the named requirements and exact selection without running tests:
 `python scripts/check.py --profile release --plan`. The preview leaves result reports unchanged.
 
 
+Prepared and restored workspaces open in separate windows without replacing
+current drafts. Workspace focus is bound to the exact destination database;
+case-distinct Mac/Linux data roots remain separate. Close older app processes
+before installing a test build; this is not an installed-upgrade guarantee.
+
 The recovery review compares saved and current research before confirmation:
 
 - Keep or restore supported list/reading state and copy notes or manual highlights

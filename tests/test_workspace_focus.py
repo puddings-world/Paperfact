@@ -1,4 +1,7 @@
+import hashlib
 import json
+import ntpath
+import posixpath
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +17,11 @@ def test_fragmented_focus_command_waits_for_complete_frame(destination):
     for count in (1, 8, 15, 25, len(command) - 1):
         assert opening.focus_command(command[:count]) is None
     assert opening.focus_command(command) == destination
+    assert opening.focus_command(command, database_path=destination.database_path) == destination
+    with pytest.raises(ValueError, match="another workspace"):
+        opening.focus_command(
+            command, database_path=destination.database_path.with_name("other.db"),
+        )
     with pytest.raises(ValueError):
         opening.focus_command(command + command)
     with pytest.raises(ValueError):
@@ -77,3 +85,29 @@ def test_startup_rejects_mismatched_workspace_before_any_initialization(destinat
     with pytest.raises(ValueError):
         main.run()
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "platform,normalizer", [("win32", ntpath.normcase), ("darwin", posixpath.normcase),
+                            ("linux", posixpath.normcase)],
+)
+def test_instance_routing_respects_native_path_case_rules(
+    tmp_path, monkeypatch, platform, normalizer,
+):
+    upper, lower = tmp_path / "Research", tmp_path / "research"
+    monkeypatch.setattr(opening.sys, "platform", platform)
+    monkeypatch.setattr(opening.os.path, "normcase", normalizer)
+    same = normalizer(str(upper.resolve())) == normalizer(str(lower.resolve()))
+    assert (opening.instance_key(upper) == opening.instance_key(lower)) == same
+    assert opening.instance_key(upper / ".." / "Research") == opening.instance_key(upper)
+    assert not upper.exists() and not lower.exists()
+    upper.mkdir()
+    if lower.exists():
+        # Case-insensitive volumes must not launch twice for one physical directory.
+        assert opening.instance_key(upper) == opening.instance_key(lower)
+    else:
+        lower.mkdir()
+        assert opening.instance_key(upper) != opening.instance_key(lower)
+    if platform == "win32":
+        expected = hashlib.sha1(str(upper.resolve()).lower().encode("utf-8")).hexdigest()[:12]
+        assert opening.instance_key(upper) == "paperfact-" + expected

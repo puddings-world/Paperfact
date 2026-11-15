@@ -103,6 +103,7 @@ from paper_daily.desktop.presentation_pane import PresentationPane
 from paper_daily.desktop.queue_view import QueuePage
 from paper_daily.desktop.window_workspace import WindowWorkspace, current_for
 from paper_daily.store import connect, get_kv, init_db, now
+from paper_daily.workspace_open import instance_key
 
 LIGHT = {
     "ground": "#fbfbfd", "surface": "#ffffff", "sunk": "#f2f3f7",
@@ -4820,9 +4821,7 @@ class MainWindow(QWidget):
 # One window per data folder, not per machine: an installed copy and a source
 # checkout keep separate papers, and a second launch of one must not raise the
 # other's window. The build's smoke test relies on it too.
-SINGLE_INSTANCE_KEY = "paperfact-" + hashlib.sha1(
-    str(DATA_DIR.resolve()).lower().encode("utf-8")
-).hexdigest()[:12]
+SINGLE_INSTANCE_KEY = instance_key(DATA_DIR)
 
 SW_SHOW = 5
 
@@ -4934,8 +4933,12 @@ def run(
     from paper_daily import store
     from paper_daily.workspace_open import consume_startup, focus_workspace
 
+    global SINGLE_INSTANCE_KEY
     destination = consume_startup(store.DB_PATH)
     ensure_dirs()
+    # A first launch may have created the root since module import. Use its
+    # physical identity before handoff/listen so later launches use the same key.
+    SINGLE_INSTANCE_KEY = instance_key(DATA_DIR)
     init_db()
     _install_error_log()
     rich_view.prepare()
@@ -4973,7 +4976,6 @@ def run(
 
     window.ai_access = ai_access.install(window)
     from paper_daily import ui_stalls
-    from paper_daily.config import DATA_DIR
 
     window.stall_watch = ui_stalls.install(DATA_DIR, window)
     ui_stalls.follow_views(window.stall_watch, window)
@@ -5025,15 +5027,15 @@ def run(
                 from paper_daily.workspace_open import focus_command
 
                 try:
-                    selected = focus_command(command)
-                except (ValueError, OSError, UnicodeError):
+                    selected = focus_command(command, database_path=store.DB_PATH)
+                    if selected is None:
+                        return  # Qt may deliver one command across multiple readyRead signals.
+                    focus_workspace(window, selected)
+                except (ValueError, OSError, UnicodeError, sqlite3.Error):
                     conn.disconnectFromServer()
                     return
-                if selected is None:
-                    return  # Qt may deliver one command across multiple readyRead signals.
                 window.showNormal()
                 _force_visible(window)
-                focus_workspace(window, selected)
                 conn.disconnectFromServer()
                 return
             if command == b"restart":

@@ -481,3 +481,15 @@ records must remain byte/content-identical. See the existing
 [report retirement scenarios](device-recovery-review-scenarios.md#confirmed-claim-report-retirement-2026-11-15).
 Daily critical and curated release selectors are unchanged. Physical packaged
 acceptance remains separate.
+
+
+### Workspace window isolation across platforms
+
+`tests/test_workspace_focus.py` extends the existing fragmented-frame and handoff
+checks with exact destination rejection before window activation. Three platform
+policy cases cover native path normalization, physical-directory aliases,
+case-distinct roots when the host supports them, no directory creation during
+key lookup, and the existing Windows key format. These policies are simulated on
+Windows; native Mac/Linux and cross-version handoff are separate acceptance gates.
+The existing launch and restore/join UI files protect drafts, retries, credentials
+and one-click coalescing. No default/release selector or new test file was added.

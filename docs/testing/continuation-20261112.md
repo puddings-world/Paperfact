@@ -5967,3 +5967,38 @@ additional worktree was introduced.
   14 passed in 7.94s / 11.1s total. Privacy/Ruff and CRLF-aware whitespace passed.
   Source errors remain categorical; each visible-row test expects its own exact
   report label. These are scoped source/Qt-fixture results, not packaged evidence.
+
+
+## 2026-11-15: isolate workspace-window routing across platforms
+
+- Previous turn made progress: recorded deep/section retirement e2e484b integrated
+  and pushed. Audited existing preparation/opening contracts rather than assuming
+  prepared copies issue service credentials or establish runtime adoption.
+- Source diagnosis: desktop SINGLE_INSTANCE_KEY unconditionally lowercased the
+  data path. Distinct case-sensitive POSIX roots could collide; the focus handler
+  raised the reader before checking its actual database and left later validation
+  errors outside its rejection boundary. No claim of a reproduced physical Mac
+  incident is made. Formatting/import findings stopped before pytest and were
+  corrected without changing behavior expectations.
+- Added the small existing-workspace `instance_key` seam: Windows retains its old
+  normalized key; existing POSIX roots use device/inode identity. Missing roots
+  use normalized paths without creating directories. Startup recomputes after
+  ensure_dirs before handoff/listen, so first and later launches agree.
+  Physical aliases share a window; distinct directories do not share a folded key.
+- Focus frames can be bound to the receiving database; desktop validation and
+  navigation run inside rejection handling before foreground activation. This
+  changes no workspace path, research schema, sync credentials or saved draft.
+- Three new platform-policy cases extend an existing test file. Focus/launch and
+  actual restore/join Qt paths: 17 passed in 9.23s / 12.5s total, including exact
+  framing, wrong database, credential exclusion, retries and draft preservation.
+  Windows policy emulation is not native Mac/Linux case-sensitive-volume proof.
+- Existing Mac/Linux processes must be closed before installing a newer candidate:
+  old path-folded keys are not a compatible cross-version IPC protocol. Native
+  package/physical upgrade acceptance remains open. Packages remain b4ec451;
+  no rebuild, release, deployment, owner-data access or historical suite here.
+- No new portable skill is promoted: workspace identity/delayed-delivery fences
+  already describe the method, and native observations remain pending.
+- Integration evidence: docs 58 passed in 1.86s / 5.0s total; default critical
+  14 passed in 7.97s / 11.5s total. Privacy/Ruff and CRLF-aware whitespace passed.
+  The 17-case affected check took 12.5s; no historical test count or percentage
+  is used as a completion measure, and no parallel test was launched.

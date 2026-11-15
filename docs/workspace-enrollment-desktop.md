@@ -68,6 +68,17 @@ existing `workspace_open` contract to start the prepared database in another
 process. It neither rebinds nor closes the original reader. Repeated opening is
 coalesced, and opening failure can be retried without preparing another copy.
 
+Windows keeps its existing case-normalized instance key. On macOS/Linux, an
+existing workspace uses the physical directory identity, so case-distinct roots
+remain separate and aliases of one directory share a window. First-use startup
+refreshes the key after creating the data root. Focus requests must match the
+receiving reader's exact database before navigation or foreground activation;
+malformed, replaced or unavailable destinations do not raise a different reader.
+Before testing a newer Mac/Linux build, close older Paperfact processes. Their
+previous path-folded instance keys are not a cross-version handoff protocol.
+This does not rename or migrate a workspace, change its sync identity, or prove
+installed upgrade preservation.
+
 The existing service's coverage/adoption limitations remain in
 [the enrollment service contract](workspace-enrollment.md). Server workspace/device
 issuance, remembered connection and synchronization remain separate operations.

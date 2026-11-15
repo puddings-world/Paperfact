@@ -1,5 +1,6 @@
 """Explicit new-process workspace opening; never rebind the running reader."""
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -12,6 +13,17 @@ from pathlib import Path
 from paper_daily.workspace_service import _safe_path
 
 STARTUP = "PAPERFACT_OPEN_WORKSPACE"
+
+
+def instance_key(workspace_root):
+    """Separate physical POSIX roots; preserve Windows' existing instance key."""
+    root = Path(workspace_root).resolve()
+    normalized = os.path.normcase(str(root))
+    if sys.platform != "win32" and root.is_dir():
+        info = root.stat()
+        if info.st_ino:
+            normalized = f"directory:{info.st_dev}:{info.st_ino}"
+    return "paperfact-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
 
 
 @dataclass(frozen=True)
@@ -208,7 +220,7 @@ def focus_workspace(window, value):
             reader.tabs.setCurrentWidget(pane)
 
 
-def focus_command(raw):
+def focus_command(raw, *, database_path=None):
     """Bounded newline-framed local IPC; None means an incomplete focus request."""
     prefix = b"workspace-open:"
     if not isinstance(raw, bytes) or len(raw) > 8192:
@@ -219,4 +231,7 @@ def focus_command(raw):
         raise ValueError("Invalid workspace focus")
     if not raw.endswith(b"\n"):
         return None
-    return destination(json.loads(raw[len(prefix) : -1].decode("utf-8")))
+    chosen = destination(json.loads(raw[len(prefix) : -1].decode("utf-8")))
+    if database_path is not None and chosen.database_path != _safe_path(database_path):
+        raise ValueError("Focus request belongs to another workspace")
+    return chosen
