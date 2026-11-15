@@ -24,7 +24,9 @@ devices remain open. No public release or deployment.
 New source also supports confirmed `context/main` retirement (context summary and
 background-reading suggestions), with exact native/visible guards, atomic receipt,
 peer delivery and later-restore-safe retries. Nullable fields and changed/oversized
-content are covered. This source/Qt-tested change is not in the 8bf00f9 package.
+content are covered. This source/Qt-tested change is not in the 8bf00f9 package. List overviews now
+also display their recorded workflow/manual edits and unverified source status;
+complete source-aware survey generation/audit/transfer remains planned.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

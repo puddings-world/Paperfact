@@ -124,6 +124,8 @@ The ML conference workflow is optional; your lists can cover any field.
 Start from a research question, even without paper titles. Choose a survey depth,
 review the suggested branches and selection reasons, then keep the papers you want.
 The route is saved in the list overview and travels with research bundles.
+The overview identifies its recorded workflow and any manual edits; its paper
+count does not certify original-source coverage. [Evidence scope](docs/analysis-audit.md).
 [Topic research and its limits →](docs/topic-research.md)
 
 <img src="docs/images/topic-research.png" width="680" alt="Topic research preview with selectable papers, research branches, and selection reasons; synthetic example">

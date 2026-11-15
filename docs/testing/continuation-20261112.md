@@ -6256,3 +6256,40 @@ additional worktree was introduced.
 - Final docs: 58 passed in 2.05s / 5.2s total. Critical: 14 passed in
   7.70s / 10.9s total. Privacy, Ruff and CRLF-aware whitespace passed. No historical
   suite, repeated native build or real account/provider invocation.
+
+
+### 2026-11-15: list-overview evidence status and remaining survey contract
+
+- Previous turn made progress in 3ee86f5 (recorded context retirement). Current
+  source and integration started clean there. No local/native check was left live.
+- Investigated list-survey auditing: current rows hold text/count/spec/time/edit,
+  and generation digests mix analyses/context/abstracts. These do not provide a
+  portable claim-to-original ledger. Existing single-paper AuditCapture explicitly
+  leaves list_surveys unchecked. No current list/PDF was assigned to old prose.
+- Added a compact bilingual list-overview notice for recorded roadmap, saved
+  research or unknown workflow; manual edits and unverified sources are explicit.
+  It adds no button or background job and hides/clears on empty/changed workspace.
+- Expanded the existing SurveyDialog file with one behavior test that loops the
+  actual closed workflow/language states. AI/http calls fail the test, full SQL
+  dumps stay unchanged, and empty/workspace changes clear stale labels. Existing
+  rewrite-running and default-No replacement protections remain unchanged.
+- Initial Ruff line-length failures stopped before pytest; fixed escaped text
+  wrapping. Focused final: 3 passed in 1.55s / 6.5s total. No selector matrix,
+  real account/model/network call, owner data or new worktree.
+- Synthetic render initially used a nonexistent theme module, then the shared
+  environment's editable integration source rather than the uncommitted source.
+  Those outputs are not visual evidence. Corrected with explicit src PYTHONPATH,
+  an imported-file assertion and normal style/font loading. Final bounded render
+  passed in 0.984s; English and Chinese 900x500 PNGs were actually inspected under
+  ignored build/survey-evidence-20261115/current/. Text wraps without clipping.
+- Added the full remaining source-aware survey contract to the existing audit
+  plan: immutable input/member/source identities, per-statement originals and
+  explicit gaps, manual-link invalidation, shared sync/bundle/recovery transport,
+  owned-reader/sealed audit, and independent peer/stale/cancel/retry acceptance.
+  It is explicitly planned, not silently treated as complete by this status UI.
+- Reviewed harvest applicability: existing evidence/identity/unknown-state rules
+  already cover this change; no new global skill or hook was manufactured.
+  Delivered native candidate remains 8bf00f9; this source is not repackaged.
+- Final docs: 58 passed in 2.07s / 5.2s total. Default critical: 14 passed
+  in 7.41s / 10.4s total. Privacy, Ruff and CRLF-aware whitespace passed.
+  No historical-suite run, packaging rerun, release or cloud deployment.

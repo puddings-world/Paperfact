@@ -553,3 +553,16 @@ and explicit reconnection. The existing built-app verification test file also
 checks rejected/missing execution contracts and child cleanup after failure.
 Source CLI evidence is separate from the actual frozen result on each OS; neither
 substitutes for the installed Windows/Mac offline-edit journey or hosted HTTPS.
+
+
+### List-overview evidence status
+
+The existing `test_survey_dialog.py` checks one additional user requirement:
+recorded roadmap/saved-research/unknown workflows and manual-edit status are
+explained in English and Traditional Chinese, without AI/network or SQL changes.
+Deleting a survey or changing workspace clears stale evidence text. Existing
+running-rewrite and explicit replacement protections remain. This is three cases
+in that focused file, not coverage of claim-level survey source verification.
+The [remaining source contract](../analysis-audit.md#list-overviews-current-status-and-remaining-source-contract)
+is still planned. Local offscreen rendering uses the current source and the app's
+bundled fonts/style; installed cross-platform visual acceptance stays separate.

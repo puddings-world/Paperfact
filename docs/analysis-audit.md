@@ -324,6 +324,46 @@ bundled fonts. These are local fixtures, not installed Mac/phone acceptance or a
 claim that all AI outputs have been audited. Exact combined/full-gate counts belong
 to the current delivery ledger and checkpoint, not accumulated overlapping counts.
 
+## List overviews: current status and remaining source contract
+
+The list-overview dialog now identifies the recorded workflow (`topic-roadmap-v1`,
+`2026-10-survey`, or unknown), manual edits and the absence of verified claim-level
+originals. It does not inspect a PDF or invoke AI merely to display that notice.
+Unknown recipes remain unknown without exposing the raw spec. An empty/deleted
+survey or changed workspace clears the notice. This is an evidence-status display,
+not a list-survey audit or a newly verified corpus.
+
+Current `list_surveys` rows retain text, paper count, recipe, timestamp and edit
+flag. The generating digest can mix saved explanations/context and abstracts;
+the count does not identify the exact input papers or original versions. Local
+generation observations protect publication but are not a portable per-claim
+citation ledger. Current membership, equal titles or today's PDFs cannot fill
+that missing history. Existing plain surveys stay readable/editable unchanged.
+
+The remaining implementation must introduce one versioned, source-aware survey
+contract through the shared research boundary, with these requirements:
+
+- Capture the list lifetime, ordered member identities and actual input digests
+  before generation. Keep this source-set identity independent of later membership.
+- Give each statement explicit references to the selected paper lifetime and exact
+  original hash, plus bounded quotations/pages/anchors where available. Unbound
+  statements retain an explicit missing-source state; they receive no inferred PDF.
+- Retain actual recipe/provider/model provenance locally with research. Manual
+  edits must invalidate or explicitly recheck affected links instead of keeping
+  stale source claims on rewritten sentences.
+- Carry the typed report, source identities and required verified original/assets
+  through sync, bundles and recovery together. A remote reference is not a grant
+  to substitute another paper's equal-byte original or activate a retired source.
+- Reuse the owned-source readers, deterministic quote checks, bounded sealed jobs
+  and shared desktop/CLI/MCP operation. Separate quote location from scientific
+  support. Changed, missing, retired or unavailable originals remain visible;
+  malformed input fails the complete selected check rather than being omitted.
+- Keep old surveys source-unknown. No automatic model call, download or fabricated
+  legacy migration. Prove an independent peer/package roundtrip and stale-result,
+  cancellation and retry behavior before calling list-survey auditing complete.
+
+This contract is planned work; the status notice does not satisfy these gates.
+
 ## Primary references informing the design
 
 - [OpenScholar](https://arxiv.org/abs/2411.14199): retrieval, cited synthesis and self-feedback.

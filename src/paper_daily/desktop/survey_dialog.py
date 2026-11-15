@@ -54,6 +54,50 @@ SURVEY_EDIT_TEXT = {
 }
 
 
+SURVEY_EVIDENCE_TEXT = {
+    "en": {
+        "roadmap": "Recorded workflow: topic-search roadmap.",
+        "survey": "Recorded workflow: overview from saved analyses or abstracts.",
+        "unknown": "The original input workflow is not recorded.",
+        "edited": "Includes manual edits.",
+        "unverified": (
+            "Claim-level original sources are not recorded or verified here. "
+            "The paper count is not a count of verified originals; "
+            "inspect the relevant papers before relying on a statement."
+        ),
+    },
+    "zh-TW": {
+        "roadmap": (
+            "\u7d00\u9304\u7684\u7522\u751f\u65b9\u5f0f\uff1a"
+            "\u4e3b\u984c\u6aa2\u7d22\u8def\u7dda\u3002"
+        ),
+        "survey": (
+            "\u7d00\u9304\u7684\u7522\u751f\u65b9\u5f0f\uff1a"
+            "\u6574\u7406\u5df2\u5b58\u5206\u6790\u6216\u6458\u8981\u3002"
+        ),
+        "unknown": "\u672a\u7d00\u9304\u539f\u59cb\u8f38\u5165\u65b9\u5f0f\u3002",
+        "edited": "\u542b\u624b\u52d5\u7de8\u8f2f\u3002",
+        "unverified": (
+            "\u6b64\u8655\u5c1a\u672a\u7d00\u9304\u6216\u6838\u5c0d\u9010\u9805\u539f\u6587\u4f86\u6e90\u3002"
+            "\u7bc7\u6578\u4e0d\u4ee3\u8868\u5df2\u9a57\u8b49\u539f\u6587\u6578\uff1b"
+            "\u63a1\u7528\u6558\u8ff0\u524d\u8acb\u56de\u5230\u76f8\u95dc\u8ad6\u6587\u6838\u5c0d\u3002"
+        ),
+    },
+}
+
+
+def _evidence_notice(stored, language):
+    """Describe the recorded workflow, never infer sources from today's list/PDFs."""
+    if stored is None:
+        return ""
+    copy = SURVEY_EVIDENCE_TEXT.get(language, SURVEY_EVIDENCE_TEXT["en"])
+    key = ("roadmap" if stored["spec"] == survey.ROADMAP_SPEC
+           else "survey" if stored["spec"] == survey.SURVEY_SPEC else "unknown")
+    parts = [copy[key], *([copy["edited"]] if stored["edited"] else []), copy["unverified"]]
+    return " ".join(parts)
+
+
+
 class SurveyDialog(QDialog):
     def __init__(
         self, list_id: str, list_name: str, palette: dict[str, str], parent=None,
@@ -96,6 +140,10 @@ class SurveyDialog(QDialog):
         self.run_btn.clicked.connect(self._run)
         top.addWidget(self.run_btn)
         layout.addLayout(top)
+        self.evidence_notice = QLabel()
+        self.evidence_notice.setWordWrap(True)
+        self.evidence_notice.setStyleSheet(f"color:{palette['muted']};font-size:12px;")
+        layout.addWidget(self.evidence_notice)
 
         self.view = QTextBrowser()
         self.view.setOpenExternalLinks(True)
@@ -135,6 +183,8 @@ class SurveyDialog(QDialog):
 
     def _load(self) -> None:
         if not self._workspace_matches():
+            self.evidence_notice.clear()
+            self.evidence_notice.hide()
             self.status.setText(self._edit_text["workspace"])
             self.run_btn.setEnabled(False)
             self.edit_btn.setEnabled(False)
@@ -150,6 +200,8 @@ class SurveyDialog(QDialog):
                 (self.list_id,),
             ).fetchone()[0]
         self._stored = stored
+        self.evidence_notice.setText(_evidence_notice(stored, self._language))
+        self.evidence_notice.setVisible(stored is not None)
         waiting = self._waiting()
         running = self._running() or waiting
         self._shown_running = running

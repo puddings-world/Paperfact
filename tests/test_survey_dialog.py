@@ -78,3 +78,51 @@ def test_rewriting_a_topic_roadmap_asks_first(owner, monkeypatch):
         time.sleep(0)
     assert dialog.job is None
     dialog.close()
+
+
+def test_saved_overview_explains_unverified_sources_without_ai_or_writes(owner, monkeypatch):
+    import httpx
+
+    from paper_daily import llm
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Opening source status must not use AI, network or original downloads")
+
+    monkeypatch.setattr(llm, "complete", forbidden)
+    monkeypatch.setattr(llm, "complete_result", forbidden)
+    monkeypatch.setattr(httpx.Client, "request", forbidden)
+    for language in ("en", "zh-TW"):
+        text = survey_dialog.SURVEY_EVIDENCE_TEXT[language]
+        for spec, key in ((survey.ROADMAP_SPEC, "roadmap"), (survey.SURVEY_SPEC, "survey"),
+                          ("legacy-private-spec", "unknown")):
+            with store.connect() as conn:
+                conn.execute("UPDATE list_surveys SET spec=?,edited=1 WHERE list_id='x'", (spec,))
+                before = list(conn.iterdump())
+            dialog = SurveyDialog("x", "Research", LIGHT, owner, language=language)
+            try:
+                notice = dialog.evidence_notice.text()
+                assert text[key] in notice and text["unverified"] in notice
+                assert text["edited"] in notice and "legacy-private-spec" not in notice
+                assert not dialog.evidence_notice.isHidden()
+                assert dialog.job is None
+                with store.connect() as conn:
+                    assert list(conn.iterdump()) == before
+                with monkeypatch.context() as changed:
+                    changed.setattr(dialog, "_workspace_matches", lambda: False)
+                    dialog._load()
+                    assert dialog.evidence_notice.isHidden() and not dialog.evidence_notice.text()
+                    assert not dialog.run_btn.isEnabled() and not dialog.edit_btn.isEnabled()
+                dialog._load()
+                assert not dialog.evidence_notice.isHidden()
+                # A later refresh of an empty list must not retain an old evidence label.
+                with store.connect() as conn:
+                    conn.execute("DELETE FROM list_surveys WHERE list_id='x'")
+                dialog._load()
+                assert dialog.evidence_notice.isHidden() and not dialog.evidence_notice.text()
+            finally:
+                dialog.close()
+            with store.connect() as conn:
+                conn.execute(
+                    "INSERT INTO list_surveys VALUES('x','Saved overview',1,?,"
+                    "'2026-10-01T00:00',0)", (survey.ROADMAP_SPEC,),
+                )
