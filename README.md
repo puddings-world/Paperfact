@@ -263,8 +263,9 @@ is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 [Current development status](docs/status-0.5.0.md) |
 [Test explanations](docs/testing/README.md)
 
-Internal source-aware survey generation and its remaining dispatch/recovery gaps
-are documented in the implementation plan; this is not yet the desktop default.
+Source-aware survey generation can now save local report versions and exact
+original-source associations through its internal worker API. Desktop/CLI/MCP
+dispatch and recovery remain in development; see the implementation plan.
 
 
 ## Go further

@@ -140,6 +140,12 @@ class SurveyJob:
             if self._proposal is None:
                 if not survey_sources.current(self.corpus):
                     raise ValueError("Survey inputs or originals changed before AI")
+                observed = survey_sources._checked(self.corpus).get("local")
+                if observed is not None:
+                    from paper_daily.survey_local_generated import observe
+
+                    if observe(context, self.corpus.sources) != observed:
+                        raise ValueError("Local survey report changed before AI")
                 work_progress.report("Writing a source-aware survey from captured originals")
                 response = llm.complete_result(
                     self._prompt,

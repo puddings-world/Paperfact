@@ -1092,3 +1092,22 @@ survive in archive; no source grant follows from byte equality alone. New9 and n
 existing6 pass79.96s, including independent peer quote/PDF and actual Qt coverage.
 This validates local candidate preparation, not hosted credentials, runtime adoption
 or installed-device acceptance. No global rule is promoted.
+
+## Observed unbound generated survey publication (2026-11-16)
+
+- Status: validated-local; reuses existing sealed ownership, staged bytes and
+  transaction-scoped publication patterns, not a new global rule.
+- Decision: capture local current report absence/version before dispatch;
+  construct local storage from the actual sealed generation proposal, never by
+  manufacturing a portable import or refreshing its generation context.
+  Bind replacement intent to that prepared proof, then recheck under the write.
+- Evidence: survey_local_generated.py and test_survey_local_generated.py.
+  Seven new cases plus generation10/local-package8 pass25 in45.61s (49.2s stages).
+  An additional real global-workspace-switch case passes1 in1.87s (2.844s governed).
+  This is eight new cases, not26 new tests. Original-page reading and export,
+  preserved/explicitly replaced versions, exact retries, stale work, corruption
+  and post-write cancellation/failure are actual content checks.
+- Limits: only synthetic PDFs, isolated SQLite and simulated completions.
+  Desktop/CLI/MCP dispatch and durable completed-response recovery remain open,
+  as do per-list goal capture, runtime adoption, installed devices and hosting.
+  No owner research, credentials, paid calls, native build or deployment changed.

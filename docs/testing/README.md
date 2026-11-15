@@ -841,3 +841,25 @@ normal research/credential exclusion, verified primary PDF/backup, empty workspa
 imported claim originals, Lineage and actual desktop preview/prepare/open. All15
 pass79.96s (81.171s governed). No historical selector is broadened, skipped or
 weakened. This is not a full-suite, hosted-service or installed-device result.
+
+### Generated local survey publication
+
+The internal generation/publisher is not yet the desktop default. The focused
+file `tests/test_survey_local_generated.py` has eight behavior cases:
+
+| Scenario | What the assertions inspect |
+|---|---|
+| Save/read/export and retry | Same generated report, located original page, exact export closure, and unchanged SQL on retry |
+| New result arrives while work is pending | No new AI call after target changes; a staged stale result cannot overwrite the newer report |
+| Preserve or explicitly replace | Default preserves content; explicit replacement retains two versions with exactly one current; old retry cannot reactivate itself |
+| Interrupted SQL publication | Separate failure/cancel cases run actual writes, then verify complete rollback and a single successful retry |
+| Bad source or cancelled preparation | No canonical report is created after corrupt staged bytes or cancellation |
+| No selected originals | Explicit missing selection, empty source grants, and export containing report only |
+| Switch global workspace | Pending publication writes only its captured database; the other database remains byte-identical |
+
+These tests use synthetic PDFs and model responses. They cover this internal
+boundary, not installed UI buttons or live provider/hosting behavior. Related
+`test_survey_jobs.py` covers generation/account capture; existing
+`test_survey_package_local.py` covers package sharing and inactive backup.
+Run the affected selection with the focused profile; these files were not added
+to the curated critical/release selectors.

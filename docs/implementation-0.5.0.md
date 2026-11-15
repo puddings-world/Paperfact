@@ -1235,10 +1235,42 @@ Publication remains a separate observed operation: the native publisher accepts
 these proposals, and its saved reader displays the same report and exact page.
 A newer native report refuses an older proposal.
 
-Remaining work is required: captured per-list goal context, unbound generation
-publication, durable completed proposal/review recovery across process exit,
-and common desktop/CLI/MCP dispatch.
+Remaining work is required: captured per-list goal context, durable completed
+proposal/review recovery across process exit, and common desktop/CLI/MCP dispatch.
+Unbound generated publication is implemented in the following section.
 The current desktop button still uses the legacy text flow. Do not claim that
 private PDF retention alone durably stores the model response, that quote matching
 validates scientific meaning, or that this internal seam replaces device/hosted
 acceptance. No live account or paid model call was used in the ten affected cases.
+
+### Local generated survey publication
+
+`survey_local_generated.prepare(proposal, *, replace=False,
+cancelled=lambda: False) -> PreparedLocalSurvey` and
+`publish(prepared, *, cancelled=lambda: False) -> dict` now save checked AI
+survey proposals in unbound workspaces. This is an internal worker/persistence
+boundary; it does not change the current desktop/CLI/MCP survey command.
+
+The original capture records current local report absence/version before AI.
+Preparation accepts only that sealed actual proposal, stages verified original
+bytes off-lock, and binds proposal, staged content and replacement intent in its
+process proof. No ZIP, import action or generation context is invented. It reuses
+the existing local report versions and exact local source associations so the
+saved reader, research-package export and first-enrollment inventory understand
+generated reports without a second storage format.
+
+Publication rechecks list/paper lifetimes, captured inputs, current report,
+database identity and originals inside the caller-owned transaction. No supplied
+path or current global workspace can retarget it. Newer local reports also block
+a pending job before its AI call. Default publication preserves an existing
+report; explicit replacement keeps the previous version. Exact retry acknowledges
+the current identical report without duplicate writes; it never reactivates an
+older superseded report. Late failure/cancellation rolls back report and grants;
+verified unowned cache bytes may remain for a safe retry.
+
+Result states are `generated`, `preserved` or `unchanged`, with report count and
+report ID. Invalid/stale/cancelled operations raise and leave canonical data
+unchanged. A generic local original receipt is reused; this does not assert a
+foreign package import or mint sync writer authority. Runtime enrollment remains
+explicit. Shared desktop/CLI/MCP dispatch, durable completed-response/review
+recovery, captured goal context and installed/hosted/device acceptance remain.

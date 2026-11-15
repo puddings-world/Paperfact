@@ -8238,3 +8238,40 @@ preservation, notes/Q&A, configuration isolation, offline conflicts and recovery
 Per-list reading-goal context is another required generation input not yet captured
 by this internal survey seam; it must be added with stale-goal publication guards.
 Docs/skill consistency58 passes2.68s (7.6s stages); privacy/Ruff pass.
+
+## 2026-11-16: publish generated reports in unbound workspaces
+
+Implemented survey_local_generated.prepare/publish, consuming actual sealed
+survey proposals. Source capture now observes the local current report as well
+as native report state. The job refuses changed local reports before inference.
+Preparation reuses version/source storage directly, without a fake import or
+generation context. A process proof binds the proposal, staged originals and
+explicit replacement intent. Publication rechecks original inputs/lifetimes,
+database identity and local target in its transaction. Exact accepted retry is
+read-only, and a superseded old report is never reactivated. Existing local
+source receipts describe byte ownership, not an invented foreign import action.
+
+Seven new local behavior cases plus existing generation10/local-package8 pass:
+25 in45.61s,49.2s stages, governed300s/two CPUs/25% hard cap. Added pending global
+workspace-switch case passes separately1 in1.87s/2.844s governed60s. No source
+code changed after the25-case pass. Eight new cases cover saved reader/exact PDF
+page/export, duplicate retry, before-AI and post-staging target changes,
+preserve/default plus explicit replacement history, proof tampering, failure and
+cancel after actual SQL publication with rollback/retry, corrupt/missing originals
+and switching the global workspace without retargeting the captured write.
+
+The initial combined run failed1/passed10 because the new report observation
+changed an established stale-input error message. The first targeted raw-byte
+edit then failed its anchor due to mixed line endings; the shell incorrectly
+continued and repeated the unchanged failing selection (failed1/passed10).
+The next edit verified the actual region, handled its mixed endings and checked
+the edit exit before testing. Reordering code preserved the old error/assertion;
+no existing test or accepted behavior was weakened. These failures are not passes.
+
+The saved current report is durable; a completed proposal that cannot yet
+publish still lacks durable cross-process review/recovery. Desktop/CLI/MCP
+dispatch and captured per-list goal context remain required. No native build,
+paid AI call, owner-data mutation, hosted deployment or installed-device acceptance.
+
+Integration critical14 passes9.07s/13.5s stages; docs/skill consistency58
+passes2.52s/6.8s stages. Privacy/Ruff/whitespace pass. No exhaustive run.

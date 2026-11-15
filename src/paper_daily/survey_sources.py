@@ -165,7 +165,13 @@ def capture(context, *, legacy_root=None, selected_ids=None, cancelled=lambda: F
     from paper_daily.survey_publication import observe
 
     native = observe(context, sources)
-    encoded = survey_content._encode(dict(inputs=inputs, sources=sources, native=native))
+    local = None
+    if native is None:
+        from paper_daily.survey_local_generated import observe as observe_local
+
+        local = observe_local(context, sources)
+    encoded = survey_content._encode(dict(inputs=inputs, sources=sources, native=native,
+                                          local=local))
     snapshots, documents = tuple(snapshots), tuple(documents)
     result = SurveySources(context, encoded, snapshots, documents, reader,
                            _capture_seal(context, encoded, snapshots, documents, reader))
