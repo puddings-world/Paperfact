@@ -4,8 +4,10 @@ import sqlite3
 import pytest
 from test_sync_files import INPUTS
 from test_sync_files import codec as codec_fixture
+from test_sync_operations import client, paper
 from test_sync_transfers import attach
 from test_sync_transfers import setup as transfer_setup_fixture
+from test_workspace_sync import Native
 from test_workspace_sync_files import enable
 
 from paper_daily import workspace_offline as offline
@@ -14,10 +16,60 @@ from paper_daily.sync_deck_files import encode_deck
 from paper_daily.sync_documents import bind_verified_document, desired_document, verify_document
 from paper_daily.sync_file_transfers import FileTransfers
 from paper_daily.sync_files import file_id
+from paper_daily.sync_operations import ResearchOperations
+from paper_daily.sync_service import ReferenceService
 from paper_daily.workspace_service import Cancelled, SnapshotChanged, Ticket, WorkspaceChanged
+from paper_daily.workspace_sync import SyncSession
 
 transfer_setup = transfer_setup_fixture
 codec = codec_fixture
+
+
+@pytest.fixture(scope="module")
+def validation_workspace(tmp_path_factory):
+    """Real enrolled research/connection without irrelevant PDF/deck transfers."""
+    tmp_path = tmp_path_factory.mktemp("offline-validation")
+    local_client = client(tmp_path / "validation.db", "validation-device")
+    created = ResearchOperations(local_client).create_list(
+        "Validation research", [{"paper": paper()}], request_id="validation-list"
+    )
+    portable = created["papers"][0]["paper_id"]
+    enable(local_client)
+    with sqlite3.connect(local_client.journal.path) as conn:
+        local = conn.execute(
+            "SELECT local_id FROM research_paper_identity WHERE sync_id=?", (portable,)
+        ).fetchone()[0]
+    authority = ReferenceService(tmp_path / "validation-authority.db")
+    token = authority.enroll("workspace", "validation-device")
+    calls, requests = [], []
+    original = authority.blob_read
+
+    def read(*args, **kwargs):
+        requests.append((args[1], args[3]))
+        return original(*args, **kwargs)
+
+    authority.blob_read = read
+    session = SyncSession(local_client.journal.path,
+        transport_factory=lambda endpoint: Native(endpoint, authority, calls))
+    session.connect("http://127.0.0.1:1", "workspace", "validation-device", token, Ticket())
+    calls.clear()
+    return {"service": offline.OfflineService(local_client.journal.path), "session": session,
+            "local": {portable: local}, "selected": portable, "calls": calls,
+            "requests": requests, "client": local_client}
+
+
+@pytest.fixture
+def validation(validation_workspace):
+    """Only no-write actions share setup; each case independently proves isolation."""
+    local_client = validation_workspace["client"]
+    calls, requests = validation_workspace["calls"], validation_workspace["requests"]
+    before = local_client.journal.path.read_bytes()
+    pending = local_client.journal.pending(1000)
+    yield validation_workspace
+    # Rejection must preserve actual research, local settings and queued operations.
+    assert local_client.journal.path.read_bytes() == before
+    assert local_client.journal.pending(1000) == pending
+    assert not calls and not requests
 
 
 @pytest.fixture
@@ -86,8 +138,8 @@ def test_empty_selection_never_claims_offline_readiness(prepared):
 
 
 @pytest.mark.parametrize('selection', [['unknown'], [''], [1], 'paper', ['x'] * 101])
-def test_invalid_selection_does_not_change_pins(prepared, selection):
-    service, *_ = prepared
+def test_invalid_selection_does_not_change_pins(validation, selection):
+    service = validation["service"]
     with pytest.raises(ValueError):
         service.plan(selection)
     with pytest.raises(ValueError):
@@ -107,8 +159,9 @@ def test_budget_is_partial_without_hashing_or_claiming_verified_bytes(prepared, 
 @pytest.mark.parametrize('budget', [
     {'max_bytes': 0}, {'max_bytes': True}, {'seconds': float('nan')},
     {'seconds': -1}, {'max_assets': 0}])
-def test_invalid_work_budgets_fail_closed(prepared, budget):
-    service, _, local, *_ = prepared
+def test_invalid_work_budgets_fail_closed(validation, budget):
+    service = validation["service"]
+    local = validation["local"][validation["selected"]]
     with pytest.raises(ValueError):
         service.status([local], **budget)
 

@@ -113,6 +113,26 @@ phone/two-device journeys remain open; this is not a public release pass.
 Use [Mac and multi-device acceptance](mac-acceptance-0.5.md) for actual expected
 results. Fixture success must not fill a physical-device result.
 
+### Reuse only proven no-write setup
+
+The offline invalid-input representatives retain every original parameter and
+exception/no-network assertion. They now use a real captured research database,
+pending operations and an authenticated native reference connection without
+building unrelated PDF/deck transfers for each value. Only the no-write cases
+share module setup; a function-scoped guard compares exact database bytes and
+queued operations and requires zero authority/blob calls after every case.
+Write/cancel/corruption/retry and real attachment journeys retain independent full
+fixtures. A failing preservation guard is a regression, never a reason to reset
+shared state silently. This is a fixture optimization, not a reduced gate claim.
+
+Measured on Windows with max-two-processor/25% job CPU: the old two-case sample
+spent 3.99s and 2.26s on setup (7.984s total). The intermediate per-case lean fixture
+passed all 21 variants in 25.921s total. Shared no-write setup plus those same 21
+variants and two unchanged full PDF/deck/pin journeys passed 23 cases in 12.625s
+total. Those are different selections, not an apples-to-apples speedup percentage.
+The final two validation setups took 1.09s and 1.02s once per module. No product
+code, test parameter, historical assertion, critical14 or release38 selector changed.
+
 ### Consolidate historical cases without erasing protection
 
 - Keep a case when it protects a unique user-visible invariant or a concrete past bug.

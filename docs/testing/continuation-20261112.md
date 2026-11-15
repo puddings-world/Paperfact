@@ -6935,3 +6935,32 @@ additional worktree was introduced.
   11.3s total; docs 58 passed in 2.01s / 5.2s total. Privacy and Ruff passed.
   Existing ownership/context and diagnostic-evidence skills cover the change;
   there is no new portable lesson to promote. No historical/full suite rerun.
+
+## 2026-11-15: remove irrelevant attachment setup from no-write validation
+
+- Previous turn progressed and integrated 76e427c; no pending process to restart.
+  A scoped source audit still leaves persistent history/authority, remaining
+  source/recovery mapping and runtime adoption as real product work. This checkpoint
+  addresses the owner's explicit slow-test constraint before broadening that work.
+- Confirmed the selected-download invalid-selection case spent 3.99s setting up
+  two clients, PDFs and decks to test a rejection taking 0.02s; the offline invalid
+  budget case spent 2.26s on setup. Two unchanged cases passed in 7.04s pytest /
+  7.984s governed. This was measurement, not an application failure.
+- Existing test_workspace_offline validation fixture now keeps real enrolled
+  metadata, pending research and a verified native connection, without unrelated
+  PDF/deck bytes. All input variants and assertions stay. Per-case preservation
+  asserts exact database bytes, pending operations and zero network/blob calls.
+  The no-write environment is module-scoped; mutating integrations remain isolated.
+- Intermediate per-case lean setup: 21 passed in 25.00s / 25.921s total. Final shared
+  no-write setup plus the unchanged full selected PDF/editable-deck and pin lifecycle
+  representatives: 23 passed in 11.90s / 12.625s total. Validation setup took
+  1.09s/1.02s once per module. Different selections; no invented speedup percentage.
+- No product source, historical parameter/assertion, critical14 or release38
+  selector changed. The test map explains scope; development docs now name the
+  actual develop/0.5 integration line rather than superseded sync-foundation.
+  No new generic skill: this is established fixture-isolation practice, with local
+  evidence/limits recorded here. No owner data, paid call, deployment or release.
+
+- Final integration gates: critical 14 passed; docs 58 passed in 2.06s / 5.5s
+  total. Privacy and Ruff passed in both. One governed check at a time; no
+  historical/release run, application rebuild or source behavior change required.

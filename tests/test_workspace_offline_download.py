@@ -11,6 +11,8 @@ from test_sync_http import running
 from test_sync_operations import paper
 from test_sync_transfers import finish_upload
 from test_sync_transfers import setup as transfer_setup_fixture
+from test_workspace_offline import validation as validation_fixture
+from test_workspace_offline import validation_workspace as validation_workspace_fixture
 from test_workspace_sync import Native
 from test_workspace_sync_files import enable
 
@@ -30,6 +32,8 @@ from paper_daily.workspace_sync import SyncSession, SyncStopped
 
 transfer_setup = transfer_setup_fixture
 codec = codec_fixture
+validation = validation_fixture
+validation_workspace = validation_workspace_fixture
 
 
 @pytest.fixture
@@ -157,24 +161,24 @@ def test_bounded_pass_resumes_selected_pdf_at_durable_offset(world):
 
 
 @pytest.mark.parametrize('selection', [['unknown'], [''], [1], ['p'] * 101, 'not-a-list'])
-def test_invalid_selection_never_authenticates_or_transfers(world, selection):
+def test_invalid_selection_never_authenticates_or_transfers(validation, selection):
     with pytest.raises(ValueError):
-        world['session'].prepare_offline(selection, Ticket())
-    assert not world['calls'] and not world['requests']
+        validation['session'].prepare_offline(selection, Ticket())
+    assert not validation['calls'] and not validation['requests']
 
 
-def test_empty_selection_is_local_and_never_authenticates(world):
-    result = world['session'].prepare_offline([], Ticket())
+def test_empty_selection_is_local_and_never_authenticates(validation):
+    result = validation['session'].prepare_offline([], Ticket())
     assert result['state'] == 'empty' and result['attachments'] is None
-    assert not world['calls'] and not world['requests']
+    assert not validation['calls'] and not validation['requests']
 
 
 @pytest.mark.parametrize('budget', [{'steps': 0}, {'steps': True}, {'steps': 257},
                                   {'seconds': 0}, {'seconds': float('nan')}])
-def test_invalid_budgets_never_contact_authority(world, budget):
+def test_invalid_budgets_never_contact_authority(validation, budget):
     with pytest.raises(ValueError):
-        world['session'].prepare_offline(selected_ids(world), Ticket(), **budget)
-    assert not world['calls']
+        validation['session'].prepare_offline(selected_ids(validation), Ticket(), **budget)
+    assert not validation['calls']
 
 
 @pytest.mark.parametrize('change', ['disconnect', 'cancel-session', 'cancel-ticket', 'workspace'])

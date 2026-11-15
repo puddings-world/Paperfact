@@ -4,8 +4,12 @@
 
 - `master` is the daily-use 0.4.x line. Fixes and UX polish land here first and
   ship as 0.4.4, 0.4.5, and subsequent maintenance releases.
-- `feature/0.5-sync-foundation` holds unfinished 0.5 work and identifies itself
-  as `0.5.0.dev`. Merge `master` into it regularly; merge it back only for 0.5.0.
+- `develop/0.5` is the unfinished `0.5.0.dev` integration line. Continue in an
+  existing session branch/worktree recorded on the execution board; merge tested
+  checkpoints into integration. The old `feature/0.5-sync-foundation` is superseded.
+  Merge maintenance changes into development; development returns to `master`
+  only for the 0.5.0 release. See [collaboration](collaboration.md) and the
+  [current execution board](parallel-work-0.5.0.md).
 - Use separate checkouts and virtual environments. A branch switch in the
   checkout used by a running app or MCP server is not a deployment method.
 - Run development with `PAPERFACT_DATA` pointing to an independent copy. Use
