@@ -31,6 +31,9 @@ buttons serialize through a server just to share behavior.
   retain and independently verify the bounded input bytes too. Derive known local
   cache names rather than following an observation's arbitrary path. Retained
   derived text grants no current-original ownership or old-job replay authority.
+  Archive inspection may use its own read-only observation of the exact record and
+  retained originals. A readable archive is not a current generation target:
+  reject it at write boundaries and before UI account/model authorization.
 - If research and device controls share a key/value table, scope every capture,
   snapshot, import and projection by a closed research key family. A table-level
   permission must not expose credentials/settings. Resolve the feature's owner

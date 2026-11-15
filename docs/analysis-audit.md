@@ -803,3 +803,23 @@ version's same PDF survives in archive bytes. Such reports can still synchronize
 and be read. A reference-service independent peer receives actual report/original
 bytes and opens the exact quotation. These are local candidate/peer fixtures, not
 hosted enrollment, installed Mac acceptance, or automatic runtime adoption.
+
+
+### Read-only retained survey originals
+
+`survey_reader.read_retained(database, list_id, request_id, *, cancelled=...)`
+returns the existing sealed SavedReport with a distinct retained kind. The seal
+covers the exact recovery-file version as well as the observed database/WAL.
+It decodes the owned validated archive, not a freshly captured generation context.
+Original associations and titles come from that historical report's receipts and
+members. No original bytes are parsed merely to open the retained text.
+
+On source inspection, the existing private atomic receipt/PDF pair must match;
+then PDF hash/page count/quotations are checked and a bounded page image is made.
+Receipt/original/report/workspace versions are checked again before delivery.
+Missing or corrupt retained files fail without consulting a current primary PDF.
+The normal saved reader, native publisher and local publisher remain distinct:
+a sealed read-only report cannot be passed to either publication preparation.
+The desktop also disables regeneration in archive mode, including programmatic
+handler entry before account authorization. Current report returns to normal
+reading. Reviewed reapplication and installed/hosted/device gates remain open.

@@ -399,7 +399,9 @@ def test_report_read_retries_fresh_snapshot_but_bounds_continuous_changes(saved,
 
 
 @pytest.mark.parametrize("language", ["en", "zh-TW"])
-def test_completed_results_reopen_literal_content_without_ai_or_source_grants(ready, app, language):
+def test_completed_results_reopen_literal_content_without_ai_or_source_grants(
+    ready, app, language, monkeypatch,
+):
     from paper_daily import reading_goals, survey_jobs
 
     reading_goals.save(reading_goals.load(ready[0], "cat"), "<b>Original purpose</b>")
@@ -423,15 +425,28 @@ def test_completed_results_reopen_literal_content_without_ai_or_source_grants(re
             index = next(i for i, item in enumerate(pane._retained)
                          if item["request_id"] == retained.request_id)
             pane.result_selector.setCurrentIndex(index)
+            wait_until(lambda pane=pane: pane.future is None)
             text = pane.view.toPlainText()
             assert "<b>Original purpose</b>" in text and "A later purpose" not in text
             assert "The reported improvement needs review." in text
             assert "A selected method improves measurement." in text
-            assert "paperfact-source:" not in pane.view.toHtml()
-            assert "synthetic-key" not in text and pane.saved is None
+            assert "paperfact-source:" in pane.view.toHtml()
+            assert "synthetic-key" not in text and pane.saved.data["kind"] == "retained"
             assert pane.status.text() == pane.words["result_scope"]
             pane._link(QUrl("paperfact-source:0/0/0"))
-            assert pane.future is None and pane.source_panel.isHidden()
+            wait_until(lambda pane=pane: pane.future is None)
+            assert not pane.source_panel.isHidden() and pane.image.original is not None
+            assert pane.quote.text() == "A selected method improves measurement."
+            assert pane.words["result_scope"] in pane.status.text()
+            dialog.report_tabs.setCurrentIndex(1)
+            assert not dialog.source_btn.isEnabled()
+            from paper_daily.desktop import ai_access
+
+            with monkeypatch.context() as patch:
+                patch.setattr(ai_access, "requires_ai", lambda *_: pytest.fail("Archive login/AI"))
+                dialog._run_sources()
+                dialog._run_sources_ready()
+                assert dialog.job is None
             pane.refresh.click()
             wait_until(lambda pane=pane: pane.future is None)
             assert pane.result_selector.isHidden() and not pane.view.toPlainText()

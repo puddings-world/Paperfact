@@ -35,9 +35,9 @@ TEXT = {
         results_loading="Reading completed AI results...",
         results_empty="No completed AI results are retained for this list.",
         result_label="{started} | {model} | {request}",
-        result_scope=("Retained result: read-only, not applied to the current list. "
-                      "Original locations are historical; source inspection and reapplication "
-                      "are not available in this view."),
+        result_scope=("Read-only retained result. Viewing it does not change the current list. "
+                      "Open original checks the captured PDF, not today's replacement. "
+                      "Reapplication is not available in this view."),
         recorded="Recorded location",
         loading="Reading saved report...",
         inspecting="Verifying original and opening page...",
@@ -78,8 +78,11 @@ TEXT = {
         "results_empty": "\u6b64\u6e05\u55ae\u5c1a\u7121\u4fdd\u7559\u7684 AI \u7d50\u679c\u3002",
         "result_label": "{started} | {model} | {request}",
         "result_scope": (
-            "\u4fdd\u7559\u7d50\u679c\uff1a\u50c5\u4f9b\u95b1\u8b80\uff0c\u5c1a\u672a\u5957\u7528\u5230\u76ee\u524d\u6e05\u55ae\u3002"
-            "\u5f15\u7528\u4f4d\u7f6e\u70ba\u6b77\u53f2\u7d00\u9304\uff1b\u6b64\u6aa2\u8996\u5c1a\u4e0d\u63d0\u4f9b\u539f\u6587\u6838\u5c0d\u6216\u91cd\u65b0\u5957\u7528\u3002"
+            "\u4fdd\u7559\u7d50\u679c\uff1a\u50c5\u4f9b\u95b1\u8b80\uff0c"
+            "\u6aa2\u8996\u4e0d\u6703\u66f4\u6539\u76ee\u524d\u6e05\u55ae\u3002"
+            "\u958b\u555f\u539f\u6587\u6703\u6838\u5c0d\u7576\u6642\u7684 PDF\uff0c\u4e0d"
+            "\u6703\u4ee5\u76ee\u524d\u65b0\u7248\u53d6\u4ee3\u3002\u6b64\u8655\u5c1a"
+            "\u4e0d\u63d0\u4f9b\u91cd\u65b0\u5957\u7528\u3002"
         ),
         "recorded": "\u5df2\u8a18\u9304\u7684\u4f4d\u7f6e",
         "goal": "\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19",
@@ -212,6 +215,7 @@ def render(data, words, *, source_links=True):
 
 class SavedSurveyPane(QWidget):
     available = Signal()
+    state_changed = Signal()
     drained = Signal()
 
     def __init__(self, database, list_id, palette, *, current, language="en", parent=None,
@@ -318,6 +322,7 @@ class SavedSurveyPane(QWidget):
         self.stop.setEnabled(self.future is not None and not self.cancelled.is_set())
         self.page.setEnabled(idle and self.selection is not None)
         self.progress.setVisible(self.future is not None)
+        self.state_changed.emit()
 
     def _start(self, call, callback, message):
         if self.future is not None or self.closing or self.disposed:
@@ -360,13 +365,31 @@ class SavedSurveyPane(QWidget):
             self._stale()
             self._controls()
             return
-        if not 0 <= index < len(self._retained) or self.closing or self.disposed:
+        if (not 0 <= index < len(self._retained) or self.closing or self.disposed
+                or self.future is not None):
             return
         self.saved = self.selection = None
         self.source_panel.hide()
         self.image.clear()
         report = self._retained[index]["report"]
         self.view.setHtml(render(dict(report=report, sources=[]), self.words, source_links=False))
+        self.status.setText(self.words["result_scope"])
+        request_id = self._retained[index]["request_id"]
+        database, list_id, cancel = self.database, self.list_id, self.cancelled.is_set
+        self._start(
+            lambda: survey_reader.read_retained(database, list_id, request_id, cancelled=cancel),
+            self._retained_loaded,
+            self.words["results_loading"],
+        )
+
+    def _retained_loaded(self, result):
+        index = self.result_selector.currentIndex()
+        if (not result.current() or not 0 <= index < len(self._retained)
+                or self._retained[index]["request_id"] != result.data["request_id"]):
+            self.status.setText(self.words["stale"])
+            return
+        self.saved = result
+        self.view.setHtml(render(result.data, self.words))
         self.status.setText(self.words["result_scope"])
 
     def reload_after_job(self):
@@ -469,6 +492,8 @@ class SavedSurveyPane(QWidget):
         )
         if self.saved.data["update_pending"]:
             status += " | " + self.words["pending"]
+        if self.saved.data["kind"] == "retained":
+            status += " | " + self.words["result_scope"]
         self.status.setText(status)
 
     def _poll(self):

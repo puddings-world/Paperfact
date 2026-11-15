@@ -1149,3 +1149,15 @@ or installed-device acceptance. No global rule is promoted.
 - Limits: simulated models/IPC, no owner research, real accounts or deployment.
   In-app retained-result review and installed/physical-device acceptance remain;
   hard termination before retention has no exactly-once billing guarantee.
+
+
+## Retained report source inspection (2026-11-16)
+
+- Status: validated-local. A read-only report seals its exact recovery-file version
+  and inspects retained receipt/PDF bytes without substituting today's original.
+- Evidence: reader/UI/worker49 pass148.2s governed; expanded7 archive cases pass
+  12.0s. SQL stays unchanged; current-PDF replacement still opens the retained
+  quote. Corrupt/missing/in-flight changed receipts/originals are refused. Native
+  and local publishers reject the archive read, and UI cannot authorize AI from it.
+- Limits: source/Qt synthetic fixtures; no fresh writer proof, reviewed
+  reapplication, native package/device/provider acceptance or hosted deployment.

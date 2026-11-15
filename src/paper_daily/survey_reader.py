@@ -41,6 +41,7 @@ def _signature(value):
                 value._operation,
                 id(value._proof),
                 id(value._store),
+                value._archive,
             ]
         ),
         "sha256",
@@ -68,6 +69,7 @@ class SavedReport:
     _operation: object = field(repr=False)
     _store: object = field(repr=False)
     _seal: object = field(repr=False)
+    _archive: tuple | None = field(default=None, repr=False)
 
     @property
     def data(self):
@@ -80,6 +82,8 @@ class SavedReport:
                 and hmac.compare_digest(self._seal, _signature(self))
                 and _stamp(self._database) == self._stamp
                 and (self._proof is None or self._proof.matches(self._operation))
+                and (self._archive is None
+                     or _archive_stamp(Path(self._archive[0])) == self._archive[1])
             )
         except (OSError, ValueError):
             return False
@@ -188,6 +192,50 @@ def read(database, list_id, *, cancelled=lambda: False):
     return result
 
 
+def _archive_stamp(path):
+    from paper_daily import research_generation as generation
+
+    if any(generation._is_link(parent) for parent in (path, *path.parents)):
+        raise ValueError("Retained report cannot traverse links")
+    return file_change.version(path)
+
+
+def read_retained(database, list_id, request_id, *, cancelled=lambda: False):
+    """Seal read-only archive data; current originals and writer grants are irrelevant."""
+    from paper_daily import research_generation as generation
+    from paper_daily import survey_content, survey_jobs
+
+    database = Path(database).resolve(strict=True)
+    before = _stamp(database)
+    _cancel(cancelled)
+    record = survey_jobs._retained_record(database, list_id, request_id)
+    context = generation.GenerationContext(record["context_json"])
+    path = generation._recovery_path(context)
+    stamp = _archive_stamp(path)
+    if stamp[2] > generation.MAX_BYTES:
+        raise ValueError("Retained report exceeds its archive budget")
+    with path.open("rb") as stream:
+        raw = stream.read(generation.MAX_BYTES + 1)
+    if len(raw) > generation.MAX_BYTES or json.loads(raw) != record:
+        raise ValueError("Retained report changed while reading")
+    report = survey_content.decode(record["row_json"])
+    originals = survey_jobs.retained_originals(record)
+    titles = {member["paper_id"]: member["title"] for member in report["inputs"]["members"]}
+    captured = [source for source in report["sources"] if source["state"] == "captured"]
+    sources = [dict(source_id=source["id"], paper_id=source["paper_id"],
+                    title=titles[source["paper_id"]], original=row)
+               for source, row in zip(captured, originals, strict=True)]
+    data = dict(kind="retained", report=report, sources=sources, update_pending=False,
+                list_id=list_id, request_id=request_id)
+    result = SavedReport(database, before, canonical_json(data).decode(), None, None, None, "",
+                         (str(path), stamp))
+    object.__setattr__(result, "_seal", _signature(result))
+    _cancel(cancelled)
+    if not result.current():
+        raise ReadChanged("Retained report or workspace changed while reading")
+    return result
+
+
 def inspect(report, section, statement, passage, *, page=None, cancelled=lambda: False):
     """Verify one captured original and render a bounded page; never change a reader."""
     from paper_daily.local_source_owners import _read_pdf
@@ -216,12 +264,23 @@ def inspect(report, section, statement, passage, *, page=None, cancelled=lambda:
     else:
         original = binding["original"]
         path = source_snapshots.source_path(report._database, original)
+        if data["kind"] == "retained":
+            from paper_daily import position_source_snapshots
+
+            path, _initial = position_source_snapshots.verify(report._database, original)
         result = _read_pdf(path, original["sha256"], original["size"], cancelled)
         if result is None:
             raise ValueError("Saved report inspection cancelled")
         raw, version = result
 
         def fresh():
+            if data["kind"] == "retained":
+                try:
+                    checked, observed = position_source_snapshots.verify(
+                        report._database, original, known_version=version)
+                    return checked == path and observed == version
+                except (OSError, ValueError):
+                    return False
             return file_change.version(path) == version
 
     survey_packages.verify_original(raw, source, data["report"], cancelled=cancelled)

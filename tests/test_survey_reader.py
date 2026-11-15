@@ -3,8 +3,11 @@
 import json
 from contextlib import closing
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from test_survey import conn as conn
+from test_survey_jobs import ready as ready
 from test_survey_package_compound import archive
 from test_survey_package_local import local as local
 from test_survey_packages import exported as exported
@@ -119,3 +122,78 @@ def test_native_pending_update_keeps_old_applied_report_and_shows_notice(exporte
     result = survey_reader.read(client.journal.path, "list")
     assert result.data["update_pending"] and result.data["report"] == exported[0][5].report
     assert dump(client) == before
+
+
+def archived(ready):
+    from paper_daily import survey_jobs
+
+    job = survey_jobs.SurveyJob.capture(ready[0], "cat", legacy_root=ready[1])
+    proposal = job.generate()
+    receipt = survey_jobs.retain(job, proposal)
+    return job, receipt
+
+
+def test_retained_original_reader_uses_exact_private_bytes_without_applying_or_ai(ready):
+    from paper_daily import survey_jobs, survey_local_generated, survey_publication
+
+    job, receipt = archived(ready)
+    # Today's primary PDF is not the original of this historical report.
+    (ready[1] / "a.pdf").write_bytes(b"A different current original")
+    with closing(generation._connect(ready[0])) as conn:
+        before = list(conn.iterdump())
+    value = survey_reader.read_retained(ready[0], "cat", receipt.request_id)
+    assert value.current() and value.data["kind"] == "retained"
+    assert value.data["report"] == survey_jobs.read_retained(ready[0], "cat", receipt.request_id)
+    result = survey_reader.inspect(value, 0, 0, 0)
+    assert result["located"] and result["page"] == result["pages"] == 1
+    assert result["quote"] == "A selected method improves measurement."
+    assert result["document_hash"] == job._receipts[0]["sha256"]
+    assert result["image"].startswith(b"\x89PNG")
+    assert not replace(value, _archive=None).current()
+    for publisher in (survey_local_generated, survey_publication):
+        with pytest.raises(ValueError, match="checked proposal"):
+            publisher.prepare(value)
+    with pytest.raises(ValueError, match="cancelled"):
+        survey_reader.inspect(value, 0, 0, 0, cancelled=lambda: True)
+    assert len(ready[2]) == 1 and survey_reader.read(ready[0], "cat").data["kind"] == "none"
+    with closing(generation._connect(ready[0])) as conn:
+        assert list(conn.iterdump()) == before
+
+
+@pytest.mark.parametrize(
+    "change", ["record", "receipt", "original", "missing", "workspace", "during"],
+)
+def test_retained_source_changes_refuse_preview_without_substituting_primary(
+    ready, change, monkeypatch,
+):
+    from paper_daily import position_source_snapshots, source_snapshots
+
+    job, receipt = archived(ready)
+    value = survey_reader.read_retained(ready[0], "cat", receipt.request_id)
+    row = job._receipts[0]
+    source, _version = position_source_snapshots.verify(ready[0], row)
+    if change == "record":
+        path = Path(value._archive[0])
+        path.write_bytes(path.read_bytes() + b" ")
+    elif change == "receipt":
+        source_snapshots.receipt_path(ready[0], row).write_bytes(b"{}")
+    elif change == "original":
+        source.write_bytes(b"corrupt retained PDF")
+    elif change == "missing":
+        source.unlink()
+    elif change == "during":
+        actual = survey_packages.verify_original
+
+        def changed(*args, **options):
+            actual(*args, **options)
+            source_snapshots.receipt_path(ready[0], row).write_bytes(b"{}")
+
+        monkeypatch.setattr(survey_packages, "verify_original", changed)
+    else:
+        with closing(generation._connect(ready[0])) as conn, conn:
+            conn.execute("UPDATE lists SET name='Later state' WHERE id='cat'")
+    with pytest.raises((ValueError, OSError)):
+        survey_reader.inspect(value, 0, 0, 0)
+    assert len(ready[2]) == 1
+    assert (ready[1] / "a.pdf").read_bytes().startswith(b"%PDF")
+    assert survey_reader.read(ready[0], "cat").data["kind"] == "none"

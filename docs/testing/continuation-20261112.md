@@ -8437,3 +8437,28 @@ observed database replacement. No aggregate whole-suite claim is made.
 Integration critical14 passes8.10s/11.6s total; documentation consistency60
 passes2.47s/5.9s total. All use the bounded two-CPU/25% governor. No exhaustive
 historical suite, installer rebuild, real provider call or deployment.
+
+## 2026-11-16: exact retained-original inspection
+
+The existing SavedReport seal now distinguishes an owned recovery-file version
+from current canonical content. Retained report text opens without PDF parsing;
+source inspection checks its atomic private receipt/PDF pair, hash/page/quote and
+final versions. It never substitutes the current primary PDF. Archive mode cannot
+start regeneration/login; both publication preparations reject the read-only value.
+Current report returns to normal reading; reviewed reapplication remains open.
+
+Affected reader/UI/worker49 pass144.83s pytest/148.2s all stages. Added publisher
+refusal and in-flight receipt-change assertions then pass7 in8.74s/12.0s; these
+overlap the earlier49. Critical14 pass8.16s/12.1s; docs60 pass2.25s/6.0s.
+Two static runs stopped immediately on new overlong source literals/decorators;
+the existing assertions were not weakened. Prior archive UI expectations changed
+explicitly from no source action to exact verified archival inspection, as required
+by the retained-result workflow. Tests cover current-PDF replacement, report and
+receipt corruption, missing/corrupt originals, changed workspace and mutation
+during rendering. Exact SQL dumps remain unchanged and no extra model call occurs.
+
+This reuses the existing archive-versus-writer separation; the canonical skill
+reference records the verified case, without adding a new skill/global install.
+No daily research/account, real inference, background service, build, release or
+deployment changed. Native88595d3 predates this source; installed/physical/hosted
+acceptance and reviewed reapplication remain separate gates.

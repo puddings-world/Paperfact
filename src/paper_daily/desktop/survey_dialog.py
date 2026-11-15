@@ -193,6 +193,7 @@ class SurveyDialog(QDialog):
         self.report_tabs.tabBarClicked.connect(
             lambda _index: setattr(self, "_report_tab_touched", True))
         self.saved_report.available.connect(self._report_available)
+        self.saved_report.state_changed.connect(self._sync_source_button)
         self.saved_report.drained.connect(self.reject)
         layout.addWidget(self.report_tabs, 1)
         if self._hub is not None:
@@ -324,10 +325,17 @@ class SurveyDialog(QDialog):
         self.source_btn.setVisible(source)
         self.source_btn.setEnabled(
             source and self._workspace_matches() and not self._running() and not self._waiting()
+            and self.saved_report.future is None
+            and (self.saved_report.saved is None
+                 or self.saved_report.saved.data["kind"] != "retained")
         )
 
     def _run_sources(self):
         if self.report_tabs.currentIndex() != 1:
+            return
+        saved = self.saved_report.saved
+        if saved is not None and saved.data["kind"] == "retained":
+            self.saved_report.status.setText(self.saved_report.words["result_scope"])
             return
         from paper_daily.desktop.ai_access import requires_ai
 
@@ -346,6 +354,9 @@ class SurveyDialog(QDialog):
             pane._stale()
             return
         data = saved.data
+        if data["kind"] == "retained":
+            pane.status.setText(pane.words["result_scope"])
+            return
         if data.get("update_pending"):
             pane.status.setText(pane.words["pending"])
             return

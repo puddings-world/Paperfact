@@ -849,6 +849,10 @@ loads this list's completed reports in the background. Choose a captured time/mo
 entry to read its goal, statements and quotations, including results that could
 not safely publish. **Current report** returns to the current saved version.
 Nothing is regenerated or applied. Original locations in this archive view are
-historical; it does not open originals or claim current scientific verification.
-Reviewed reapplication remains pending. The88595d3 preview predates this UI.
+historical. **Open original** verifies the retained receipt, PDF hash and quote
+location before displaying that exact original page. Missing or corrupt archives
+fail visibly; today's primary PDF is never a substitute. This does not establish
+scientific support or grant publication rights. Regeneration is disabled in this
+archive view; choose **Current report** first. Reviewed reapplication remains
+pending. The88595d3 preview predates this UI.
 No sources are downloaded by this action, and an oversized input fails visibly.

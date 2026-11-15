@@ -411,8 +411,8 @@ def list_retained(database, list_id, *, cancelled=lambda: False):
     return sorted(results, key=lambda item: (item["started_at"], item["request_id"]), reverse=True)
 
 
-def read_retained(database, list_id, request_id):
-    """Read complete retained scientific data; never apply or call a model."""
+def _retained_record(database, list_id, request_id):
+    """Resolve an owned archive record without granting active publication."""
     survey_content.content.text(request_id, 128)
     for record in generation.list_recovery_requests(database):
         context = json.loads(record["context_json"])
@@ -422,5 +422,10 @@ def read_retained(database, list_id, request_id):
             and context.get("format") == RETAINED_FORMAT
         ):
             validate_retained(record)
-            return survey_content.decode(record["row_json"])
+            return record
     raise ValueError("No retained survey matches this workspace, list and request")
+
+
+def read_retained(database, list_id, request_id):
+    """Read complete retained scientific data; never apply or call a model."""
+    return survey_content.decode(_retained_record(database, list_id, request_id)["row_json"])

@@ -227,8 +227,10 @@ and were visually inspected. These source fixtures are not installed Mac accepta
 Report & sources now offers Completed AI results, with background loading,
 captured time/model selection and a read-only historical goal/statement/quote view.
 Current report returns to the saved report. Reopening this view does not call AI
-or apply retained content. Original inspection and reviewed reapplication of an
-archived result remain open; the existing88595d3 installers predate this entry.
+or apply retained content. Archived original inspection now verifies the retained
+receipt/PDF/quote without substituting today's PDF. Archive reads are refused as
+publication inputs and cannot start regeneration/login. Reviewed reapplication
+remains open; the existing88595d3 installers predate these entries.
 
 The check runner now binds child Python imports to the selected checkout's src,
 preventing a shared editable virtualenv from silently validating another branch.
