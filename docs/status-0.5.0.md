@@ -221,3 +221,16 @@ text, missing passages, retained-version notices, refresh/retry, cancel, duplica
 admission and stale workspace/list/close delivery are covered in real Qt fixtures.
 Existing editable overviews stay separate. EN/ZH screenshots use production fonts
 and were visually inspected. These source fixtures are not installed Mac acceptance.
+
+### Source after the88595d3 preview: completed-result browsing
+
+Report & sources now offers Completed AI results, with background loading,
+captured time/model selection and a read-only historical goal/statement/quote view.
+Current report returns to the saved report. Reopening this view does not call AI
+or apply retained content. Original inspection and reviewed reapplication of an
+archived result remain open; the existing88595d3 installers predate this entry.
+
+The check runner now binds child Python imports to the selected checkout's src,
+preventing a shared editable virtualenv from silently validating another branch.
+Affected report UI/worker/check-runner selection:85 pass in103.0s total. These
+are source fixtures, not installed-device/provider or hosted acceptance.

@@ -390,6 +390,27 @@ def execute(
         return dict(state="saved", report_id=proposal.report["id"], operation=operation)
 
 
+def list_retained(database, list_id, *, cancelled=lambda: False):
+    """List complete archived results; never mint current publication/source authority."""
+    survey_content.content.text(list_id, 4096)
+    database = Path(database).resolve(strict=True)
+    identity = generation._identity(database)
+    survey_sources._cancel(cancelled)
+    results = []
+    for record in generation.list_recovery_requests(database):
+        survey_sources._cancel(cancelled)
+        context = json.loads(record["context_json"])
+        if context.get("owner_id") != list_id or context.get("format") != RETAINED_FORMAT:
+            continue
+        validate_retained(record)
+        results.append(dict(request_id=record["request_id"], started_at=context["started_at"],
+                            report=survey_content.decode(record["row_json"])))
+    survey_sources._cancel(cancelled)
+    if generation._identity(database) != identity:
+        raise ValueError("The retained-result workspace changed while reading")
+    return sorted(results, key=lambda item: (item["started_at"], item["request_id"]), reverse=True)
+
+
 def read_retained(database, list_id, request_id):
     """Read complete retained scientific data; never apply or call a model."""
     survey_content.content.text(request_id, 128)

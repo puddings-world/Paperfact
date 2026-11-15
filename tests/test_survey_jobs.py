@@ -443,3 +443,31 @@ def test_completed_cancel_retains_readable_result_and_enrollment_history(ready, 
         survey_jobs.read_retained(ready[0], "another-list", result["request_id"])
     plan = EnrollmentService(ready[0]).plan(pdfs={"a": ready[1] / "a.pdf"})
     assert plan["supported"], plan["blockers"]
+
+
+def test_retained_listing_is_read_only_cancellable_and_rejects_workspace_replacement(
+    ready, monkeypatch,
+):
+    job = capture(ready)
+    report = job.generate()
+    saved = survey_jobs.retain(job, report)
+    records = survey_jobs.list_retained(ready[0], "cat")
+    assert len(records) == 1 and records[0]["request_id"] == saved.request_id
+    assert records[0]["report"] == report.report
+    assert records[0]["started_at"]
+    assert len(ready[2]) == 1
+    with pytest.raises(ValueError):
+        survey_jobs.list_retained(ready[0], "cat", cancelled=lambda: True)
+    actual = generation._identity
+    observations = []
+
+    def changed(path):
+        observations.append(1)
+        identity = actual(path)
+        return identity if len(observations) == 1 else [identity[0], identity[1] + 1]
+
+    monkeypatch.setattr(generation, "_identity", changed)
+    with pytest.raises(ValueError, match="workspace changed"):
+        survey_jobs.list_retained(ready[0], "cat")
+    assert len(ready[2]) == 1
+    assert survey_reader.read(ready[0], "cat").data["kind"] == "none"

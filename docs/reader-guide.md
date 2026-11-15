@@ -844,5 +844,11 @@ stops if changes continue. It never relaxes source checks or calls AI on refresh
 
 A completed result that cannot safely publish is retained privately. The activity
 details include its request ID; the CLI's `survey LIST --retained REQUEST` reads
-its full scientific data without AI. In-app review/reapplication remains pending.
+its full scientific data without AI. In current source, **Completed AI results**
+loads this list's completed reports in the background. Choose a captured time/model
+entry to read its goal, statements and quotations, including results that could
+not safely publish. **Current report** returns to the current saved version.
+Nothing is regenerated or applied. Original locations in this archive view are
+historical; it does not open originals or claim current scientific verification.
+Reviewed reapplication remains pending. The88595d3 preview predates this UI.
 No sources are downloaded by this action, and an oversized input fails visibly.

@@ -9,6 +9,8 @@ import pytest
 from PySide6.QtCore import QUrl
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
+from test_survey import conn as conn
+from test_survey_jobs import ready as ready
 from test_survey_package_compound import archive
 from test_survey_package_local import local as local
 from test_survey_packages import exported as exported
@@ -393,4 +395,110 @@ def test_report_read_retries_fresh_snapshot_but_bounds_continuous_changes(saved,
     finally:
         dialog.close()
         wait_until(lambda: pane.disposed)
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("language", ["en", "zh-TW"])
+def test_completed_results_reopen_literal_content_without_ai_or_source_grants(ready, app, language):
+    from paper_daily import reading_goals, survey_jobs
+
+    reading_goals.save(reading_goals.load(ready[0], "cat"), "<b>Original purpose</b>")
+    first = survey_jobs.SurveyJob.capture(ready[0], "cat", legacy_root=ready[1])
+    proposal = first.generate()
+    retained = survey_jobs.retain(first, proposal)
+    reading_goals.save(reading_goals.load(ready[0], "cat"), "A later purpose")
+    second = survey_jobs.SurveyJob.capture(ready[0], "cat", legacy_root=ready[1])
+    survey_jobs.retain(second, second.generate())
+    records = survey_jobs.list_retained(ready[0], "cat")
+    assert len(records) == 2 and survey_jobs.list_retained(ready[0], "another-list") == []
+    assert len(ready[2]) == 2
+    for _reopen in range(2):
+        dialog = SurveyDialog("cat", "Research", LIGHT, language=language)
+        pane = dialog.saved_report
+        try:
+            wait_until(lambda pane=pane: pane.future is None)
+            pane.results.click()
+            wait_until(lambda pane=pane: pane.future is None)
+            assert pane.result_selector.count() == 2
+            index = next(i for i, item in enumerate(pane._retained)
+                         if item["request_id"] == retained.request_id)
+            pane.result_selector.setCurrentIndex(index)
+            text = pane.view.toPlainText()
+            assert "<b>Original purpose</b>" in text and "A later purpose" not in text
+            assert "The reported improvement needs review." in text
+            assert "A selected method improves measurement." in text
+            assert "paperfact-source:" not in pane.view.toHtml()
+            assert "synthetic-key" not in text and pane.saved is None
+            assert pane.status.text() == pane.words["result_scope"]
+            pane._link(QUrl("paperfact-source:0/0/0"))
+            assert pane.future is None and pane.source_panel.isHidden()
+            pane.refresh.click()
+            wait_until(lambda pane=pane: pane.future is None)
+            assert pane.result_selector.isHidden() and not pane.view.toPlainText()
+            assert pane.status.text() == pane.words["empty"]
+            assert len(ready[2]) == 2
+        finally:
+            dialog.close()
+            wait_until(lambda pane=pane: pane.disposed)
+            dialog.deleteLater()
+    assert survey_reader.read(ready[0], "cat").data["kind"] == "none"
+    assert reading_goals.text(reading_goals.load(ready[0], "cat")) == "A later purpose"
+
+
+@pytest.mark.parametrize("outcome", ["empty", "failure", "cancel", "workspace", "close"])
+def test_completed_results_background_deduplication_and_delivery_guards(
+    ready, app, monkeypatch, tmp_path, outcome,
+):
+    from paper_daily import survey_jobs
+
+    dialog = SurveyDialog("cat", "Research", LIGHT, language="en")
+    dialog.show()
+    pane = dialog.saved_report
+    wait_until(lambda pane=pane: pane.future is None)
+    actual = survey_jobs.list_retained
+    entered, release = Event(), Event()
+    calls = []
+
+    def held(*args, **options):
+        calls.append(1)
+        entered.set()
+        assert release.wait(5)
+        if outcome == "failure":
+            raise ValueError("Synthetic archive failure")
+        return actual(*args, **options)
+
+    monkeypatch.setattr(survey_jobs, "list_retained", held)
+    try:
+        pane.results.click()
+        wait_until(entered.is_set)
+        pane.results.click()
+        pane.load_results()
+        assert len(calls) == 1 and not pane.results.isEnabled()
+        if outcome == "workspace":
+            monkeypatch.setattr(store, "DB_PATH", tmp_path / "another.sqlite")
+        elif outcome == "cancel":
+            pane.stop.click()
+        elif outcome == "close":
+            dialog.close()
+            assert pane.closing and pane.cancelled.is_set()
+        release.set()
+        wait_until(lambda pane=pane: pane.future is None)
+        if outcome == "close":
+            assert pane.disposed and not dialog.isVisible()
+        else:
+            expected = dict(empty="results_empty", failure="failed", cancel="cancelled",
+                            workspace="stale")[outcome]
+            assert pane.status.text() == pane.words[expected]
+            assert pane.result_selector.isHidden() and not pane.view.toPlainText()
+            if outcome != "workspace":
+                monkeypatch.setattr(survey_jobs, "list_retained", actual)
+                pane.results.click()
+                wait_until(lambda pane=pane: pane.future is None)
+                assert pane.status.text() == pane.words["results_empty"]
+                assert pane.results.isEnabled()
+        assert not ready[2]
+    finally:
+        release.set()
+        dialog.close()
+        wait_until(lambda pane=pane: pane.disposed)
         dialog.deleteLater()

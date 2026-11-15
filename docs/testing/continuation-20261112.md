@@ -8403,3 +8403,37 @@ model response. Require a saved report, located original quote, captured versus
 returned model identity, retained-result reading and cached retry without a
 second model call. Keep the private desktop handoff check separate from a direct
 CLI invocation. Until these run, do not claim frozen new-report acceptance.
+
+## 2026-11-16: completed AI result browsing and correct check source
+
+The existing saved-report pane now reads this list's validated retained survey
+results on its one background executor. The selector shows captured time/model;
+rendered goals/statements/quotations remain literal. Archive mode has no original
+links, saved-report capability or write action. Current report restores normal
+reading. No new model call, background service, worktree or owner-data change.
+Reviewed reapplication, archival original inspection and frozen/provider/device
+acceptance remain open. Candidate88595d3 predates this UI; no rebuild was started.
+
+Initial static checks stopped on new callback bindings and one line length.
+An affected run then passed12 before a native retry fixture timed out; diagnostic
+selection passed both retry variants before exposing a missing list_retained.
+Actual module paths proved the shared virtualenv was importing the develop tree,
+not this checkout. Those runs cannot certify this change. The runner now prepends
+its own src to child PYTHONPATH, preserving extra paths afterward. Two new cases
+exercise actual Python imports against a synthetic conflicting module, with and
+without an inherited search path. No existing assertions or selection were weakened.
+This source-binding lesson is recorded in the canonical development guide;
+no unrelated portable skill or global installation was added.
+
+Correct-source affected UI/worker/check-runner selection:85 pass99.41s pytest,
+103.0s all stages. A proposed optional screenshot/selector polish stopped on a
+mixed-line-ending anchor before changing files; its following seven new UI cases
+passed18.35s/21.7s stages, but no screenshot/polish claim is made. The verified UI
+cases cover EN/ZH literal goal/quote retention across reopen, no extra inference,
+current-report return, empty archive, failure/retry, repeated activation,
+cancellation, workspace-switch delivery and close/drain. The API also refuses
+observed database replacement. No aggregate whole-suite claim is made.
+
+Integration critical14 passes8.10s/11.6s total; documentation consistency60
+passes2.47s/5.9s total. All use the bounded two-CPU/25% governor. No exhaustive
+historical suite, installer rebuild, real provider call or deployment.

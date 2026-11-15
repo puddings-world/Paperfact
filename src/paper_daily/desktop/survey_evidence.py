@@ -10,6 +10,7 @@ from threading import Event
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -22,14 +23,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import survey_reader
+from paper_daily import survey_jobs, survey_reader
 from paper_daily.desktop.note_source_dialog import PagePreview
 
 TEXT = {
     "en": dict(
         tab="Report & sources",
         legacy="Editable overview",
-        refresh="Refresh",
+        refresh="Current report",
+        results="Completed AI results",
+        results_loading="Reading completed AI results...",
+        results_empty="No completed AI results are retained for this list.",
+        result_label="{started} | {model} | {request}",
+        result_scope=("Retained result: read-only, not applied to the current list. "
+                      "Original locations are historical; source inspection and reapplication "
+                      "are not available in this view."),
+        recorded="Recorded location",
         loading="Reading saved report...",
         inspecting="Verifying original and opening page...",
         empty="No source-aware report is saved for this list. Your editable overview is separate.",
@@ -64,6 +73,15 @@ TEXT = {
         not_selected="not selected",
     ),
     "zh-TW": {
+        "results": "\u5df2\u5b8c\u6210\u7684 AI \u7d50\u679c",
+        "results_loading": "\u6b63\u5728\u8b80\u53d6\u5df2\u5b8c\u6210\u7684 AI \u7d50\u679c...",
+        "results_empty": "\u6b64\u6e05\u55ae\u5c1a\u7121\u4fdd\u7559\u7684 AI \u7d50\u679c\u3002",
+        "result_label": "{started} | {model} | {request}",
+        "result_scope": (
+            "\u4fdd\u7559\u7d50\u679c\uff1a\u50c5\u4f9b\u95b1\u8b80\uff0c\u5c1a\u672a\u5957\u7528\u5230\u76ee\u524d\u6e05\u55ae\u3002"
+            "\u5f15\u7528\u4f4d\u7f6e\u70ba\u6b77\u53f2\u7d00\u9304\uff1b\u6b64\u6aa2\u8996\u5c1a\u4e0d\u63d0\u4f9b\u539f\u6587\u6838\u5c0d\u6216\u91cd\u65b0\u5957\u7528\u3002"
+        ),
+        "recorded": "\u5df2\u8a18\u9304\u7684\u4f4d\u7f6e",
         "goal": "\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19",
         "goal_empty": "\u7576\u6642\u672a\u63d0\u4f9b\u7814\u7a76\u76ee\u6a19\u3002",
         "goal_unknown": (
@@ -79,7 +97,7 @@ TEXT = {
         "no_passage": "\u6b64\u6558\u8ff0\u5c1a\u672a\u8a18\u9304\u539f\u6587\u6bb5\u843d\u3002",
         "tab": "\u5831\u544a\u8207\u4f86\u6e90",
         "legacy": "\u53ef\u7de8\u8f2f\u6458\u8981",
-        "refresh": "\u91cd\u65b0\u6574\u7406",
+        "refresh": "\u76ee\u524d\u5831\u544a",
         "loading": "\u6b63\u5728\u8b80\u53d6\u5831\u544a...",
         "inspecting": "\u6b63\u5728\u9a57\u8b49\u539f\u6587\u4e26\u958b\u555f\u9801\u9762...",
         "empty": (
@@ -121,7 +139,7 @@ TEXT = {
 }
 
 
-def render(data, words):
+def render(data, words, *, source_links=True):
     report = data["report"]
     titles = {source["source_id"]: source["title"] for source in data["sources"]}
     states = {s["id"]: s["state"] for s in report["sources"]}
@@ -170,6 +188,8 @@ def render(data, words):
                     if states[passage["source_id"]] == "captured"
                     else escape(words["missing"])
                 )
+                if not source_links:
+                    link = escape(words["recorded"])
                 parts.append(
                     "<blockquote>"
                     + escape(passage["quote"])
@@ -203,6 +223,7 @@ class SavedSurveyPane(QWidget):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="saved-survey-read")
         self.future = None
         self.saved = self.selection = None
+        self._retained = []
         self.closing = self.disposed = False
         self._refresh_available = False
         self._reload_queued = False
@@ -221,8 +242,17 @@ class SavedSurveyPane(QWidget):
         self.refresh.clicked.connect(self.reload)
         top.addWidget(self.status, 1)
         top.addWidget(self.refresh)
+        self.results = QPushButton(self.words["results"])
+        self.results.setAutoDefault(False)
+        self.results.clicked.connect(self.load_results)
+        top.addWidget(self.results)
         top.addWidget(self.stop)
         layout.addLayout(top)
+        self.result_selector = QComboBox()
+        self.result_selector.setAccessibleName(self.words["results"])
+        self.result_selector.currentIndexChanged.connect(self._select_result)
+        self.result_selector.hide()
+        layout.addWidget(self.result_selector)
         notice = QLabel(self.words["scope"])
         notice.setWordWrap(True)
         layout.addWidget(notice)
@@ -282,6 +312,8 @@ class SavedSurveyPane(QWidget):
     def _controls(self):
         idle = self.future is None and not self.closing and not self.disposed and self.current()
         self.refresh.setEnabled(idle)
+        self.results.setEnabled(idle)
+        self.result_selector.setEnabled(idle)
         self.stop.setVisible(self.future is not None)
         self.stop.setEnabled(self.future is not None and not self.cancelled.is_set())
         self.page.setEnabled(idle and self.selection is not None)
@@ -293,6 +325,49 @@ class SavedSurveyPane(QWidget):
         self.status.setText(message)
         self.future = (self.executor.submit(call), callback)
         self._controls()
+
+    def load_results(self):
+        if not self.current():
+            self._stale()
+            self._controls()
+            return
+        database, list_id, cancel = self.database, self.list_id, self.cancelled.is_set
+        self._start(
+            lambda: survey_jobs.list_retained(database, list_id, cancelled=cancel),
+            self._results_loaded,
+            self.words["results_loading"],
+        )
+
+    def _results_loaded(self, results):
+        self._retained = results
+        self.result_selector.blockSignals(True)
+        self.result_selector.clear()
+        for item in results:
+            generation = item["report"]["generation"]
+            self.result_selector.addItem(self.words["result_label"].format(
+                started=item["started_at"],
+                model=generation["returned_model"] or generation["requested_model"] or "?",
+                request=item["request_id"][:12]))
+        self.result_selector.blockSignals(False)
+        self.result_selector.setVisible(bool(results))
+        if results:
+            self._select_result(0)
+        else:
+            self.status.setText(self.words["results_empty"])
+
+    def _select_result(self, index):
+        if not self.current():
+            self._stale()
+            self._controls()
+            return
+        if not 0 <= index < len(self._retained) or self.closing or self.disposed:
+            return
+        self.saved = self.selection = None
+        self.source_panel.hide()
+        self.image.clear()
+        report = self._retained[index]["report"]
+        self.view.setHtml(render(dict(report=report, sources=[]), self.words, source_links=False))
+        self.status.setText(self.words["result_scope"])
 
     def reload_after_job(self):
         if self.closing or self.disposed or not self.current():
@@ -311,6 +386,8 @@ class SavedSurveyPane(QWidget):
         if self.future is not None or self.closing or self.disposed:
             return
         self.saved = self.selection = None
+        self._retained = []
+        self.result_selector.hide()
         self.source_panel.hide()
         self.view.clear()
         database, list_id, cancel = self.database, self.list_id, self.cancelled.is_set
@@ -438,6 +515,8 @@ class SavedSurveyPane(QWidget):
             self._controls()
 
     def _stale(self):
+        self._retained = []
+        self.result_selector.hide()
         self.saved = self.selection = None
         self.view.clear()
         self.source_panel.hide()

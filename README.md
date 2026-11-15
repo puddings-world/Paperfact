@@ -212,7 +212,10 @@ Reports retain source excerpts and their exact original versions. Opening a save
 report does not call AI. Regeneration asks for confirmation and keeps prior versions
 and the separately editable overview. Completed output is retained before
 publication; a changed target stays untouched. The [CLI reference](docs/cli-reference.md#source-aware-list-reports)
-also explains how to read a retained result without AI.
+also explains how to read a retained result without AI. In current source,
+**Completed AI results** opens retained reports in the app without another AI
+call. **Current report** returns to the saved version; retained results are
+read-only and cannot overwrite newer research.
 
 List packages preserve saved reports and original bytes for enrolled and local-only
 receivers. First-enrollment copies use fresh source mappings and retain private
