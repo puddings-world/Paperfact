@@ -20,7 +20,9 @@ archived source receipts, excluded private settings, and every reported blocker.
 PDF names are shown for review; titles are never used to infer identity.
 Known account/settings/consent/usage files and local schedule/update/sharing
 controls remain on the source and are not copied into the backup. Private account
-and diagnostic subtrees are not scanned. Research content and original PDFs still
+and diagnostic subtrees, plus the app-managed HTTP response cache, are not
+scanned or copied. This does not download replacement cache entries. Research
+content and original PDFs still
 need explicit coverage; an unknown file or setting is not silently ignored.
 Opening a synchronized copy does not derive another list from retained queue
 history. A valid old adoption marker is only local bookkeeping, not an action.

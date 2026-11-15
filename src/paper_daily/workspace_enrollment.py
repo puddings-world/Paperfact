@@ -45,7 +45,7 @@ PRIVATE_FILES = {
     "google-slides-client.json", "ai-usage.jsonl", "product-events.sqlite3",
     "product-events.sqlite3-wal", "product-events.sqlite3-shm", "product-events.sqlite3-journal",
 }
-PRIVATE_DIRECTORIES = {"ai-accounts", "usage-changes", "diagnostics"}
+PRIVATE_DIRECTORIES = {"ai-accounts", "usage-changes", "diagnostics", "httpcache"}
 # Device controls and provider bookkeeping must not become recipient authority.
 PRIVATE_KV_KEYS = frozenset({
     "analysis.schedule", "analysis.schedule.last_run", "analysis.batch", "analysis.batch.seen",
@@ -251,7 +251,7 @@ def _source_descriptor(path, receipt):
 
 
 def _inventory_entries(root, ticket):
-    """Prune known local-control namespaces without walking private descendants."""
+    """Prune owned local-control/cache namespaces without walking private descendants."""
     def failed(error):
         raise error
 

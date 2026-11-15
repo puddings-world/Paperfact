@@ -530,13 +530,17 @@ acceptance remain separate gates; a process nonce is not an authority-history pr
 ### Prepare a real existing profile without copying its authority
 
 `test_normal_local_controls_do_not_block_or_follow_a_prepared_copy` uses the actual
-schedule and update-cache writers with local sharing/failure controls, retained
+schedule, update-cache and HTTP cache writers with simulated network responses,
+local sharing/failure controls, retained
 queue/list metadata and representative account/consent/usage files. It requires:
 
 - Coverage succeeds, source research/settings stay unchanged, private values/files
   appear in neither candidate nor independent backup.
 - Protected account/diagnostic directories are pruned: a guarded scanner fails if
   any private descendants are visited, so a large CLI home is not traversed.
+  The reserved HTTP cache is likewise pruned: cached bytes never enter the backup,
+  and changing a response after coverage does not cancel a coherent research copy.
+  A similarly named `httpcache-notes` research directory still blocks.
 - A valid legacy adoption marker survives backup/restore as data; repeated list
   refresh with and without that marker preserves the complete prepared SQL dump.
 - Unknown analysis/update/drive scopes and malformed legacy markers remain blocked;

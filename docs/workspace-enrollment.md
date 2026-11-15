@@ -56,8 +56,13 @@ sealed verifier. PDFs are also included in the independent recovery archive.
 Final reader/store bindings refer to the new directory, never the temporary stage
 or source. Registered local configuration/account/consent/usage files are excluded
 from candidate and archive without interpreting their contents. Top-level
-`ai-accounts`, `usage-changes` and `diagnostics` directories are pruned before
-walking descendants. Private root links remain invalid; no credential path is
+`ai-accounts`, `usage-changes`, `diagnostics` and `httpcache` directories are
+pruned before walking descendants. `httpcache` is the reserved app-managed HTTP
+response/recheck cache, not a research directory; it is neither scanned nor
+copied, and changing its cached responses alone does not invalidate preparation.
+This does not skip arbitrary cache-like paths, declared owned-source requirements
+or explicit selected PDF verification. No cache is deleted and no request is
+issued to rebuild it. Private root links remain invalid; no credential path is
 followed or copied. Research directories/files still require complete coverage.
 
 Known `ui.`, `ai.`, `provider.`, `account.`, `usage.` and `auth.` KV scopes remain

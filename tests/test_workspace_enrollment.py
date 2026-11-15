@@ -138,6 +138,7 @@ def test_explicit_pdf_is_verified_bound_and_in_independent_backup(source, tmp_pa
         "unmapped-pdf",
         "deck",
         "derived-json",
+        "cache-like-research",
         "unknown-table",
         "unknown-kv",
         "already-bound",
@@ -148,8 +149,10 @@ def test_explicit_pdf_is_verified_bound_and_in_independent_backup(source, tmp_pa
 def test_incomplete_coverage_blocks_without_outputs(source, tmp_path, kind):
     if kind == "unmapped-pdf":
         pdf(source)
-    elif kind in {"deck", "derived-json"}:
-        folder = source.parent / ("presentations" if kind == "deck" else "reading-links")
+    elif kind in {"deck", "derived-json", "cache-like-research"}:
+        folders = {"deck": "presentations", "derived-json": "reading-links",
+                   "cache-like-research": "httpcache-notes"}
+        folder = source.parent / folders[kind]
         folder.mkdir()
         (folder / "paper.json").write_text("{}")
     else:
@@ -459,7 +462,7 @@ def test_absent_optional_recovery_table_does_not_require_source_migration(source
 def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
     source, tmp_path, monkeypatch,
 ):
-    from paper_daily import analysis_schedule, lists, updates
+    from paper_daily import analysis_schedule, http, lists, updates
 
     controls = {
         analysis_schedule.LAST_RUN: "2026-11-15",
@@ -491,10 +494,27 @@ def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
     for name in private_files:
         (source.parent / name).write_text("private-account-control", encoding="utf-8")
     private_roots = {source.parent / name
-                     for name in ("ai-accounts", "usage-changes", "diagnostics")}
+                     for name in ("ai-accounts", "usage-changes", "diagnostics", "httpcache")}
     for root in private_roots:
         (root / "nested").mkdir(parents=True)
         (root / "nested" / "private.json").write_text("private-account-control", encoding="utf-8")
+    import httpx
+
+    cache_requests = []
+    cache_body = b"private-network-response"
+    monkeypatch.setattr(http, "HTTP_CACHE", source.parent / "httpcache")
+    monkeypatch.setattr(http, "ensure_dirs", lambda: None)
+    monkeypatch.setattr(http, "_throttle", lambda *_: None)
+
+    def response(url, **kwargs):
+        cache_requests.append(url)
+        return httpx.Response(200, content=cache_body)
+
+    monkeypatch.setattr(http.httpx, "get", response)
+    cache_url = "https://cache.fixture.invalid/response"
+    assert http.fetch(cache_url) == cache_body
+    cached = http._cache_path(cache_url)
+    assert cached.read_bytes() == cache_body
     from paper_daily import workspace_enrollment as enrollment
 
     original_scan = enrollment.os.scandir
@@ -511,7 +531,18 @@ def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
     plan = EnrollmentService(source).plan()
     assert plan["supported"], plan["blockers"]
     assert plan["excluded_private_kv"] == len(private_keys)
-    result = prepare(source, tmp_path)
+    cache_updates = []
+
+    def progress(_message):
+        if not cache_updates:
+            # A completed response may update while research is being copied.
+            cached.write_bytes(cache_body + b"-updated")
+            assert http.fetch(cache_url + "?new=1") == cache_body
+            cache_updates.append(True)
+
+    result = prepare(source, tmp_path, progress=progress)
+    assert cache_updates == [True] and len(cache_requests) == 2
+    assert cached.read_bytes() == cache_body + b"-updated"
     destination = Path(result["database"])
     assert rows(destination, "SELECT key,value FROM kv WHERE key='lists.legacy_queue'") == [
         ("lists.legacy_queue", json.dumps("list")),
@@ -522,6 +553,7 @@ def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
     with zipfile.ZipFile(result["backup"]) as archive:
         data = b"\n".join(archive.read(name) for name in archive.namelist())
     assert b"private-account-control" not in data
+    assert cache_body not in data
     assert all(not (destination.parent / name).exists() for name in private_files)
     assert all(not (destination.parent / root.name).exists() for root in private_roots)
     assert b"private-share-file" not in data and b"private@example.invalid" not in data

@@ -6293,3 +6293,38 @@ additional worktree was introduced.
 - Final docs: 58 passed in 2.07s / 5.2s total. Default critical: 14 passed
   in 7.41s / 10.4s total. Privacy, Ruff and CRLF-aware whitespace passed.
   No historical-suite run, packaging rerun, release or cloud deployment.
+
+
+### 2026-11-15: exclude app-owned HTTP cache from first-enrollment research
+
+- Previous turn progressed in 6c6fadc (evidence-status UI and explicit remaining
+  survey contract). Source/integration began clean there; no test/build handle live.
+- Audited real workspace writers before changing coverage. http.fetch writes URL-
+  hashed response bytes under config.HTTP_CACHE=httpcache, including retrievals
+  after normal use. Storage maintenance already treats this namespace as cache.
+  It was not excluded, so normal cached directories blocked complete-copy coverage.
+- Extended the existing private-controls case with actual http.fetch disk writes
+  and synthetic httpx responses. Its protected scanner failed before the fix when
+  the inventory descended into httpcache (1.79s / 5.3s total). No external request.
+- Registered only the reserved top-level httpcache in the existing exclusion set;
+  no new copier or cache service. Root path/link checks remain in place, descendants
+  are not enumerated, and neither cache responses nor recheck files become backup
+  research. No cache is deleted, parsed as source authority or automatically rebuilt.
+- The regression modifies a cached response and writes another after the first
+  research inventory. Preparation still publishes coherent research/backup, retains
+  source cache bytes locally and excludes the private response marker from archive.
+  Explicit primary PDFs stay verified/bound/in the independent backup. Declared
+  original requirements and unknown/unreadable research remain guarded.
+- One distinct unknown-path boundary was added to the existing coverage case:
+  httpcache-notes is research, not an excluded prefix. All historical assertions
+  remain. Affected coverage/PDF/cache/source-change/error set: 15 passed in 30.19s /
+  33.3s total. No new test file or critical/release selector; still 14/38 selectors.
+- Actual existing Qt preview/prepare/open now includes a cached response: 1 passed
+  in 3.77s / 6.8s total, preserving exact primary PDF, notes, source and account
+  isolation. No owner data, live accounts, paid calls or native build were used.
+- This extends the existing reserved-private-tree pattern; harvest review found no
+  new global rule to promote. Remaining KV/legacy/source/runtime adoption, installed
+  and hosted/physical-device gates remain; delivered candidate is still 8bf00f9.
+- Final docs: 58 passed in 1.98s / 5.0s total. Default critical: 14 passed
+  in 8.69s / 11.7s total. Privacy, Ruff and CRLF-aware whitespace passed.
+  Source checkpoint only; no historical sweep, native rebuild or deployment.

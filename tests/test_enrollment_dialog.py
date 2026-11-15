@@ -66,6 +66,9 @@ def test_actual_preview_prepare_open_preserves_source_and_verified_pdf(
     dialog, app, source, tmp_path
 ):
     primary = pdf(source)
+    cache = source.parent / "httpcache" / "fixture" / "response.bin"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"private cached response")
     original = source.read_bytes()
     assert dialog.preview is None and not dialog.prepare_button.isEnabled()
     plan = check(dialog, app)
@@ -81,6 +84,8 @@ def test_actual_preview_prepare_open_preserves_source_and_verified_pdf(
     assert dialog.result["status"] == "prepared_for_review"
     assert not dialog.result["adopted"] and not dialog.result["uploaded"]
     assert output.is_dir() and backup.is_file() and source.read_bytes() == original
+    assert not (output / "httpcache").exists()
+    assert cache.read_bytes() == b"private cached response"
     reader = DocumentReader.from_workspace(output / "papers.db")
     try:
         assert reader.resolve("paper").path.read_bytes() == primary.read_bytes()
