@@ -213,6 +213,13 @@ retained output and cached retry without another completion. Separately verify
 the packaged desktop private handoff and installed-device focus/account behavior.
 A direct CLI pass cannot establish that desktop transport.
 
+The source verifier now includes the bounded `source-aware-report` helper, with
+an actual source-CLI synthetic-provider round trip and verifier contract tests
+(affected43 pass44.9s). It exercises saved originals/quote location, captured
+requested/returned models, retained read and cached retry without another model
+completion. It is newer than the delivered2fb6923 Mac artifact. Closing the CLI
+gate still requires an actual frozen run; the desktop handoff/device gates remain.
+
 A bounded local download stopped after45s with an incomplete ZIP; it supplies no
 additional runtime evidence. Preserve the successful CI candidate rather than
 rebuild unchanged source to work around a download. Physical devices, deployment,

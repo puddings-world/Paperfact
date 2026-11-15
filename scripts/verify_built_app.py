@@ -47,6 +47,7 @@ STAGES = {
     "credential-isolation",
     "local-integration",
     "sync-protocol",
+    "source-aware-report",
     "appimage-integration",
     "mac-foreground",
     "windows-installer-preflight",
@@ -773,6 +774,11 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
     integration = acceptance.call(
         "local-integration", lambda: integration_check([cli], out / "integration-workspace", empty)
     )
+    from verify_source_report import verify as verify_report
+
+    source_report = acceptance.call(
+        "source-aware-report", lambda: verify_report([cli], out / "source-report", empty, original),
+    )
     from verify_sync_protocol import verify as verify_sync
 
     sync_protocol = acceptance.call(
@@ -806,6 +812,7 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
         "reader_launches_verified": reader_launches,
         "instance_handoff": handoff,
         "sync_protocol": sync_protocol,
+        "source_report": source_report,
         "legacy_upgrade": legacy_upgrade,
         "integration": integration,
         "checks": [
@@ -821,12 +828,13 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
             "lineage-corpus",
             "share-link-checksum",
             "packaged-sync-execution-restart",
+            "source-aware-report",
             "json-cli",
             "mcp-stdio",
             "mcp-retry",
         ],
         "limitations": (
-            "Packaged local workflows only; no real provider login, model call, Google Slides "
+            "Synthetic model completion only; no real provider login, paid call, Google Slides "
             "export, hosted multi-device sync, Safari or physical-phone acceptance."
         ),
     }

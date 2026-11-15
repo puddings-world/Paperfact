@@ -8657,3 +8657,23 @@ has direct downloads, isolated launch and short first checks. New report dialogs
 physical devices, live accounts, old installed-binary upgrade and hosting remain
 separate gates. No public release or data migration. No Windows/Linux rebuild
 was started for this Mac delivery checkpoint.
+
+## 2026-11-16: bounded source-aware report CLI acceptance
+
+Added one loopback synthetic completion journey to the existing frozen verifier,
+using a fresh workspace/profile and generated research package. The actual supplied
+CLI imports, generates, exports, reads retained output and retries from cache.
+The exported PDF hash, quote location, requested/returned model IDs and exact
+retained/exported report agree; reads/cache produce no second completion. The
+closed report adds a named source-aware-report stage and categorical result.
+This is CLI coverage, not desktop handoff or scientific-support validation.
+
+Initial new-helper failures were fixture mistakes: missing --out, omitted files/
+ZIP prefix and a hardcoded page1 quote actually on page2. Reading the generated
+artifact identified the last; the synthetic response now uses the actual captured
+page. Product quote-location refusal was correct and was not weakened.
+Standalone source journey1 pass7.5s stages; final helper/verifier43 pass41.51s
+pytest/44.9s stages, under two CPUs/25% governor. No historical suite, real account,
+paid model, external search, user data, build or release was used in this checkpoint.
+The delivered2fb6923 Mac remains unchanged and does not include this new acceptance
+report. Actual frozen execution of the new stage remains a candidate gate.

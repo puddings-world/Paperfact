@@ -364,3 +364,20 @@ The screenshot-only render trace retains at most24 load/patch state events, with
 content-presence booleans rather than HTML or text. It records whether Python
 still considers the requested body shown, distinguishing refused delivery from
 an accepted patch without weakening readiness or publishing a blank image.
+
+## Source-aware report package acceptance
+
+`scripts/verify_source_report.py` is an internal helper invoked by the existing
+`scripts/verify_built_app.py` workflow. It receives the actual packaged CLI and
+the generated synthetic research ZIP. Its `source-aware-report` stage uses a fresh
+workspace, a synthetic local profile and one loopback-only OpenAI-format endpoint.
+No real login, account key, paid provider or external scholarly service is used.
+
+It runs import, source-aware report generation, package export, retained-result
+reading and cached generation through that executable. It checks the exact
+original PDF hash/quotation location, separate requested/returned model IDs,
+retained/exported report equality and no second model completion. One subprocess
+has a45-second deadline; the fixture endpoint bounds request bytes and read time.
+The report records named outcomes in `source_report`. A pass does not certify
+the desktop private handoff, every new report dialog, live scientific support,
+installed-device behavior or hosted synchronization.

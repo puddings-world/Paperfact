@@ -917,3 +917,15 @@ These are source/widget scenarios. Dialog reopen is not an installed OS-process
 restart, a physical Mac/iPhone check, a hosted deployment or proof that every
 original PDF has downloaded. The completion action concerns accepted local report
 files; original availability remains independently verified when opened.
+
+### Packaged report action, beyond startup
+
+The new `source-aware-report` frozen stage exercises an actual CLI import -> one
+loopback synthetic completion -> saved report/PDF export -> retained-result read
+-> cached retry. It checks quote location and requested/returned model identity,
+not semantic scientific support. The endpoint rejects unexpected/repeated calls.
+`tests/test_source_report_acceptance.py` runs this whole journey against the source
+CLI; the verifier contract test also requires the named stage and its result.
+Affected verifier/helper43 pass44.9s stages locally. This stage is newer than the
+2fb6923 Mac artifact and needs a future native candidate before claiming a frozen
+pass. Existing desktop handoff/widget tests and physical devices remain separate.
