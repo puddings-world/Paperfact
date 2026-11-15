@@ -112,6 +112,21 @@ def file_id(paper_id, feature, slot):
     return str(uuid5(NAMESPACE_URL, "paperfact:research-file:" + identity))
 
 
+def list_file_id(list_id, feature="survey", slot="overview"):
+    """Keep list artifacts distinct from the paper-file identity namespace."""
+    identifier(list_id)
+    if feature != "survey" or slot != "overview":
+        raise ValueError("Unsupported list-file feature/slot")
+    identity = json.dumps([list_id, feature, slot], separators=(",", ":"))
+    return str(uuid5(NAMESPACE_URL, "paperfact:research-list-file:" + identity))
+
+
+def artifact_owner(payload):
+    if payload.get("feature") == "survey":
+        return "list", payload["list_id"]
+    return "paper", payload["paper_id"]
+
+
 def validate_input_versions(value):
     if not isinstance(value, dict):
         raise ValueError("Input versions must be an object")
@@ -173,10 +188,10 @@ def scope_input_versions(value, workspace_id):
 
 
 def validate_payload(payload, *, entity_id=None, parents=None):
+    survey = isinstance(payload, dict) and payload.get("feature") == "survey"
     closed(
         payload,
-        {
-            "paper_id",
+        ({"list_id", "source_bindings"} if survey else {"paper_id"}) | {
             "feature",
             "slot",
             "format_version",
@@ -186,20 +201,27 @@ def validate_payload(payload, *, entity_id=None, parents=None):
             "assets",
         },
     )
-    expected = file_id(payload["paper_id"], payload["feature"], payload["slot"])
+    owner_kind, owner_id = artifact_owner(payload)
+    identity = list_file_id if survey else file_id
+    expected = identity(owner_id, payload["feature"], payload["slot"])
     if entity_id is not None and expected != entity_id:
         raise ValueError("Artifact identity does not match feature/slot")
     if parents is not None and (
         len(parents) != 1
-        or parents[0]["kind"] != "paper"
-        or parents[0]["id"] != payload["paper_id"]
+        or parents[0]["kind"] != owner_kind
+        or parents[0]["id"] != owner_id
     ):
-        raise ValueError("Artifact needs its exact paper parent")
+        raise ValueError("Artifact needs its exact owning parent")
     if type(payload["format_version"]) is not int or payload["format_version"] != 1:
         raise ValueError("Unsupported research-file format")
     digest(payload["source_document_hash"], nullable=True)
     validate_input_versions(payload["input_versions"])
     closed(payload["body"], {"sha256", "size", "media_type"})
+    if survey:
+        from paper_daily.sync_survey_files import validate_manifest
+
+        validate_manifest(payload, parents=parents)
+        return
     if payload["feature"] == "legacy_brief":
         from paper_daily.legacy_briefs import validate_manifest
 
@@ -290,6 +312,10 @@ def validate_closure(payload, read_blob):
         from paper_daily.sync_source_files import validate_source_closure
 
         return validate_source_closure(payload, blobs)
+    if payload["feature"] == "survey":
+        from paper_daily.sync_survey_files import validate_closure as validate_survey
+
+        return validate_survey(payload, blobs)
     from paper_daily.sync_deck_files import validate_deck_closure
 
     return validate_deck_closure(payload, blobs)

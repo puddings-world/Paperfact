@@ -954,3 +954,17 @@ existing receipt/Lineage/claim13 pass22.50s. This verifies original archives onl
 canonical report, peer/package/mobile and UI are pending. A256KiB operation cannot
 carry an arbitrary1MiB inline report: the planned next boundary is a scoped verified
 artifact, not a weakened wire limit or synthetic paper owner. No new global rule.
+
+
+### List-owned report artifact seam (validated-local, 2026-11-15)
+
+A report larger than the journal operation budget now uses the existing verified
+blob/desired/applied boundary with an explicit list parent and a distinct namespace.
+Selected paper/original lifetimes remain input dependencies rather than structural
+parents. The native service checks those pins in its acceptance transaction; upload
+completion alone cannot release source outcome ordering. A report received on an
+independent peer does not activate or imply availability of its original PDFs.
+The first coherent survey/source-ordering selection18 passes102.61s/109.7s stages.
+This is evidence for the existing ownership/lifecycle and verified-byte methods,
+not a new global rule. Trusted proposal publication, package/mobile/recovery, UI
+and installed/hosted acceptance are still pending for the aggregate report.

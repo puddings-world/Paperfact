@@ -94,18 +94,38 @@ def requires_readiness(operation):
 
 
 def ready_to_push_in(conn, client, operation):
-    """Wait for exact source outcomes, not bytes or a push acknowledgement.
+    """Wait for exact source outcomes; a final conflict releases the wait too."""
+    from paper_daily.sync_journal import canonical_operation as source_codec
 
-    This local metadata predicate neither authenticates nor reads files. A final
-    conflict releases the transfer wait too: graph acceptance must preserve the
-    actual conflict rather than recapturing newer source lifetimes. The caller
-    owns the transaction. This predicate itself creates no operation or acceptance receipt.
-    """
+    canonical_operation(operation)
+    parents = {p["id"]: p for p in operation["parents"]}
+
+    def check_source(source, pin):
+        source_codec(source)
+        if (
+            source["version"] != 2
+            or source["workspace_id"] != operation["workspace_id"]
+            or source["entity_type"] != "research_file"
+            or source["action"] != "put"
+            or source["operation_id"] != pin["incarnation"]
+            or source["incarnation"] != pin["incarnation"]
+            or source["entity_id"] != pin["file_id"]
+            or source["parents"] != [parents[pin["paper_id"]]]
+            or source["payload"].get("feature") != "original_source"
+        ):
+            raise ValueError("Source publication differs from the exact original dependency")
+
+    return _source_outcomes_in(conn, client, operation, operation["source_dependencies"],
+                               check_source)
+
+
+def _source_outcomes_in(conn, client, operation, pins, check_source):
+    """Shared receipt ordering for typed consumers; caller supplies exact source checks."""
     from paper_daily.sync_client import validate_event
     from paper_daily.sync_journal import MAX_BYTES
     from paper_daily.sync_journal import canonical_operation as source_codec
 
-    canonical_operation(operation)
+    source_codec(operation)
     journal = client.journal
     if not conn.in_transaction:
         raise ValueError("Source readiness requires its caller transaction")
@@ -124,25 +144,8 @@ def ready_to_push_in(conn, client, operation):
             raise ValueError("Source publication metadata exceeds its bound")
         return json.loads(value)
 
-    parents = {p["id"]: p for p in operation["parents"]}
-
-    def check_source(source, pin):
-        source_codec(source)
-        if (
-            source["version"] != 2
-            or source["workspace_id"] != journal.workspace_id
-            or source["entity_type"] != "research_file"
-            or source["action"] != "put"
-            or source["operation_id"] != pin["incarnation"]
-            or source["incarnation"] != pin["incarnation"]
-            or source["entity_id"] != pin["file_id"]
-            or source["parents"] != [parents[pin["paper_id"]]]
-            or source["payload"].get("feature") != "original_source"
-        ):
-            raise ValueError("Source publication differs from the exact original dependency")
-
     ready = True
-    for pin in operation["source_dependencies"]:
+    for pin in pins:
         received = conn.execute(
             "SELECT event FROM paperfact_sync_graph_receipts WHERE operation_id=?",
             (pin["incarnation"],),

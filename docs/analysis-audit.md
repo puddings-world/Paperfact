@@ -460,9 +460,41 @@ must use the existing verified artifact boundary with **explicit list ownership*
 - Extend desktop/CLI/MCP, mobile artifact validation, bundle mapping and recovery
   together; prove an independent peer/package roundtrip before enabling UI/AI jobs.
 
-This is the agreed next storage boundary, not a claim that list-owned artifacts
-or a durable canonical survey report are implemented. Existing plain surveys and
-published maintenance data remain unchanged.
+The native list-owned artifact seam is now implemented below. A trusted canonical
+publisher and the end-to-end product workflow are still pending. Existing plain
+surveys and published maintenance data remain unchanged.
+
+### Native list-owned report artifacts (internal)
+
+`sync_files.list_file_id(list_id, feature="survey", slot="overview")` uses a
+separate list-file namespace. The closed manifest carries `list_id`, never a fake
+`paper_id`; its only structural parent is that exact list incarnation. Referenced
+originals are input dependencies, so changing a selected source does not move the
+report to a different structural parent. Existing paper-owned file variants keep
+their original envelopes and identities.
+
+`sync_survey_files.encode(report, list_id, bindings, *, input_versions)` returns a
+bounded manifest plus a hash-addressed report blob. The blob contains the complete
+canonical prose/evidence record (`paperfact.survey-artifact.v1`); no journal size
+limit is widened. Each captured original needs a source ID, portable paper ID and
+incarnation, original file ID/incarnation and document hash, also present in the
+workspace-bound input observations. Missing inputs remain explicit in the report.
+Private source receipts and local paths never enter the manifest.
+
+Native operation admission rejects mixed owners and foreign-workspace input
+blocks. Publication waits for actual received source outcomes, separately from
+blob upload completion; the service checks exact active source lifetimes in its
+acceptance transaction. Retired sources retain a conflict instead of silently
+rebasing. Download/materialization uses the existing bounded verified closure;
+activation rechecks the desired report and exact owning list incarnation. Reading
+the report does not activate or claim availability of its PDF originals.
+
+This is a wire/storage seam, not a trusted publisher. Callers must not build source
+bindings from untrusted model JSON or treat codec validation as source authority.
+The next work derives native mappings from the sealed proposal and retained
+originals, publishes the report reference atomically, and adds bundle/recovery,
+mobile decoding and desktop/CLI/MCP/UI/AI integration before exposing the workflow.
+Native fixture transfer is not installed Mac, mobile or hosted acceptance.
 
 ## Primary references informing the design
 

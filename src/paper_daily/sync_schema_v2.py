@@ -223,7 +223,10 @@ def canonical_operation(value: dict) -> str:
         "workspace_list_order": set(),
         "inbox_item": set(),
         "paper_document": {"paper"},
-        "research_file": {"paper"},
+        "research_file": (
+            {"list"} if (action == "put" and payload.get("feature") == "survey")
+            or (action == "delete" and set(refs) == {"list"}) else {"paper"}
+        ),
         "research_content": (
             {"list", "paper", "membership"}
             if pin_closure
@@ -255,6 +258,11 @@ def canonical_operation(value: dict) -> str:
     if action == "delete":
         if payload:
             raise ValueError("Delete must have an empty payload")
+        if kind == "research_file" and set(refs) == {"list"}:
+            from paper_daily.sync_files import list_file_id
+
+            if value["entity_id"] != list_file_id(refs["list"]["id"]):
+                raise ValueError("List artifact retirement has an unrelated identity")
     elif kind == "inbox_item":
         from paper_daily.inbox_content import validate as validate_inbox
 
@@ -263,6 +271,9 @@ def canonical_operation(value: dict) -> str:
         from paper_daily.sync_files import validate_payload as validate_file
 
         validate_file(payload, entity_id=value["entity_id"], parents=parents)
+        if (payload["feature"] == "survey"
+                and payload["input_versions"]["workspace_id"] != value["workspace_id"]):
+            raise ValueError("Survey input versions belong to another workspace")
     elif kind == "research_content":
         from paper_daily.sync_content import validate_payload as validate_content
 

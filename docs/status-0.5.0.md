@@ -134,3 +134,12 @@ claim-original grants. Independent detached backup/restore preserves those bytes
 as inactive provenance. It does not save or synchronize a canonical survey report.
 The next report publisher must use a list-owned verified artifact (256KiB operation
 limit versus1MiB report), followed by peer/package/mobile/recovery and UI integration.
+
+
+Source after6b7bf46 adds the native list-owned survey artifact seam. Complete report
+bytes use existing verified blobs, not an enlarged inline journal operation.
+Metadata names the list owner and exact native source lifetimes; uploads wait for
+received original outcomes and stale sources retain conflicts. A peer can receive
+and materialize the exact report without activating its PDFs. Trusted proposal
+publication, bundle/recovery, mobile codec and UI/AI dispatch remain open. This
+source-only checkpoint does not replace the previously delivered Mac/Windows builds.

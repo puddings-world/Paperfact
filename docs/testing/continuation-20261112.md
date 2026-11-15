@@ -7771,3 +7771,43 @@ release or cloud resource change. Final critical/docs evidence follows.
 Final checkpoint gates: critical14 pass8.34s/12.2s stages; docs58 pass2.05s/5.8s
 stages. Privacy/Ruff/whitespace pass. Canonical evidence copies synchronized;
 critical/release selectors unchanged. No full historical suite or native rebuild.
+
+
+## 2026-11-15: native list-owned survey artifact seam
+
+Base6b7bf46; existing stabilization worktree/branch only. Preserve owner data and
+installed releases. Added a distinct list-file namespace and closed survey manifest,
+with no fake paper ID or change to existing paper/deck/original identities. Complete
+report JSON lives in a verified blob, not the256KiB journal envelope. Actual native
+paper/original lifetimes are bounded input dependencies, not structural parents.
+The body retains prose and evidence together; source-state gaps remain explicit.
+Native service admission checks active original lifetimes in its transaction.
+Source outcome waits reuse the existing Lineage receipt loop and still require
+actual received outcomes; upload and acknowledged-only states are insufficient.
+Materialization creates survey.json only and rechecks the exact active list owner.
+It never activates or claims offline availability of the source PDFs.
+
+New tests initially exposed fixture mistakes (old list fields, reusing producer
+statement IDs, missing blob upload, then accidentally publishing the report before
+source retirement). Corrected those to use actual contracts and keep the report
+pending until the intended stale-source publication. No production guard or old
+assertion was weakened. Final assertions exercise actual accepted peer report
+bytes, incomplete originals, corrupt bytes, closed owner/workspace/source pins,
+service conflict and delayed delivery after list retirement.
+
+Commands: scripts/check_bounded.py --profile focused --python with explicit
+selections. Initial coherent survey4 plus existing Lineage readiness14:18 pass
+102.61s,109.7s stages. Final survey5 plus existing actual deck/original peer
+journeys2:7 pass32.12s,39.0s stages. Critical14 pass13.03s,20.0s stages; docs58
+pass4.01s,11.8s stages. Privacy/Ruff pass, whitespace checked. All checks sequential
+with2 logical CPUs/25% job cap/300s wall limit; no full historical suite or build.
+Maintained critical14/release38 selectors unchanged. Existing canonical skill
+evidence records local boundary reuse; generated copies synchronized.
+
+This is not a trusted canonical survey publisher. Derive publication bindings
+from sealed captured proposals and actual native mappings next, then make the
+canonical reference/receipt atomic. Bundle/recovery mapping, mobile artifact codec,
+desktop/CLI/MCP and AI workflow are still pending. No new UI action is enabled;
+installed Mac/Windows candidates are unchanged. Hosted authority/fencing, GCP
+deployment and physical cross-device gates remain open. Collaboration uses only
+the existing board/Git; no new worktrees, jobs or cloud resources.

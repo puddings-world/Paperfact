@@ -207,6 +207,9 @@ Internal source-aware list-survey records and original-quote checks have local
 fixture coverage. Exact originals now survive retry and detached backup. Canonical
 report publication, sync/sharing and UI remain in development; see
 the [engine contract](docs/analysis-audit.md#source-aware-survey-engine-local-implementation-not-a-shipped-workflow).
+The internal [list-owned report artifact seam](docs/analysis-audit.md#native-list-owned-report-artifacts-internal)
+now transfers verified report bytes between native peers; the trusted publisher,
+mobile/package adapters and user workflow remain in development.
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.

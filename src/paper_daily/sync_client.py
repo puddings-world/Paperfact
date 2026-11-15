@@ -465,6 +465,11 @@ class SyncClient:
             else:
                 validate_payload(payload, entity_id=entity_id)
                 requested = parent_identities(payload)
+        elif kind == "research_file" and action == "put":
+            from paper_daily.sync_files import artifact_owner, validate_payload
+
+            validate_payload(payload, entity_id=entity_id)
+            requested = [artifact_owner(payload)]
         elif kind == "list_order" and action == "put":
             requested = [("list", entity_id)]
         elif action == "delete":
@@ -668,16 +673,24 @@ class SyncClient:
                 raise ValueError("Document retirement no longer matches its conflict")
             return
         state, _, _ = self._optimistic_graph(conn)
-        paper_id = (operation["entity_id"] if operation["entity_type"] == "paper_document"
-                    else operation["parents"][0]["id"])
-        parent = state.get(("paper", paper_id))
+        owner_kind, owner_id = (
+            ("paper", operation["entity_id"]) if operation["entity_type"] == "paper_document"
+            else (operation["parents"][0]["kind"], operation["parents"][0]["id"])
+        )
+        parent = state.get((owner_kind, owner_id))
         expected = (
-            [{"kind": "paper", "id": paper_id, "incarnation": parent["incarnation"]}]
+            [{"kind": owner_kind, "id": owner_id, "incarnation": parent["incarnation"]}]
             if parent
             else []
         )
         if not parent or not parent["active"] or operation["parents"] != expected:
-            raise ValueError("Document requires its exact active paper incarnation")
+            raise ValueError("Document requires its exact active owner incarnation")
+        from paper_daily import sync_survey_files
+
+        if sync_survey_files.selected(operation) and not sync_survey_files.active(
+            lambda kind, identity: state.get((kind, identity)), operation
+        ):
+            raise ValueError("Survey requires its exact active original-source lifetimes")
 
     def _guard_order(self, conn, operation):
         from paper_daily.sync_ordering import ORDER_KINDS, validate_order

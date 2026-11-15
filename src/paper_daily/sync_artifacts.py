@@ -233,8 +233,21 @@ def applied_file(conn, identity):
     return _read(conn, "research_file_applied", identity)
 
 
+def owner_current(conn, operation):
+    parent = operation["parents"][0]
+    if parent["kind"] == "list":
+        row = conn.execute(
+            "SELECT g.incarnation FROM research_list_projection g JOIN lists r "
+            "ON r.id=g.sync_id WHERE g.sync_id=?", (parent["id"],),
+        ).fetchone()
+        return row is not None and row[0] == parent["incarnation"]
+    return paper_current(conn, operation)
+
+
 def paper_current(conn, operation):
     parent = operation["parents"][0]
+    if parent["kind"] != "paper":
+        return False
     row = conn.execute(
         (
             "SELECT g.incarnation FROM research_paper_projection g JOIN "
@@ -269,8 +282,8 @@ def write_file(conn, operation):
                 (identity,),
             )
         return
-    if not paper_current(conn, operation):
-        raise ValueError("Artifact requires its projected paper incarnation")
+    if not owner_current(conn, operation):
+        raise ValueError("Artifact requires its projected owner incarnation")
     if operation["payload"]["feature"] == "legacy_brief":
         from paper_daily.legacy_workflow import require_ready
 
@@ -335,7 +348,9 @@ def materialize(store, root, operation):
     verified, body, blobs = verify_closure(store, operation)
     directory = version_directory(root, operation)
     directory.mkdir(parents=True, exist_ok=True)
-    if operation["payload"]["feature"] == "original_source":
+    if operation["payload"]["feature"] == "survey":
+        files = {"survey.json": canonical_json(body)}
+    elif operation["payload"]["feature"] == "original_source":
         files = {"source.json": canonical_json(body), "source.pdf": blobs[body["document_hash"]]}
     elif operation["payload"]["feature"] == "legacy_brief":
         from paper_daily.legacy_briefs import filename
@@ -400,7 +415,7 @@ def activate(conn, operation, directory):
     registered = paths(conn)
     if registered is None or Path(directory) != version_directory(registered[1], operation):
         raise ValueError("Artifact version is outside its registered storage")
-    if desired_file(conn, operation["entity_id"]) != operation or not paper_current(
+    if desired_file(conn, operation["entity_id"]) != operation or not owner_current(
         conn, operation
     ):
         return False

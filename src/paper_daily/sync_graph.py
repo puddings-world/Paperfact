@@ -163,6 +163,12 @@ def check_preconditions(get_entity, get_receipt, operation) -> bool:
         return True
 
     _check_address(operation, current)
+    from paper_daily import sync_survey_files
+
+    if sync_survey_files.selected(operation) and not sync_survey_files.active(
+        get_entity, operation
+    ):
+        return False
     if (operation.get("content_address", {}).get("feature") == "lineage"
             and "source_dependencies" in operation):
         from paper_daily.lineage_dependencies import active

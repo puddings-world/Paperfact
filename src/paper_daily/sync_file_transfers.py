@@ -96,6 +96,12 @@ class FileTransfers:
         if operation["entity_type"] != "research_file" or operation["action"] != "put":
             return True
         with self.client.journal.transaction() as conn:
+            from paper_daily import sync_survey_files
+
+            if sync_survey_files.selected(operation) and not sync_survey_files.ready_to_push_in(
+                conn, self.client, operation
+            ):
+                return False
             return all(
                 conn.execute(
                     (

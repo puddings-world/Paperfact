@@ -678,3 +678,16 @@ original bytes and confirm no active sync identity or source grant is revived.
 The shared receipt/Lineage/claim regression selection13 passes22.50s/26.8s stages.
 These cover archive storage and isolation, not a canonical survey report or its
 list-package/peer transport. Critical14/release38 selections remain unchanged.
+
+
+### Native list-owned survey artifact checks
+
+`tests/test_sync_survey_files.py` groups five requirements: actual independent-peer
+transfer of a report larger than the operation limit; closed owner/workspace and
+source-version rejection; retired-original conflict preservation; correctly scoped
+retirement and corrupt-byte refusal; and delayed materialization after list removal.
+Report availability never means PDF activation or scientific support. The existing
+`tests/test_lineage_transfer_readiness.py` guards the shared source-outcome wait.
+These use fixture databases, real local PDF/blob bytes and the reference service;
+no model/account/cloud calls. They do not certify the pending trusted publisher,
+package/mobile/installed-device workflow. Critical14/release38 remain unchanged.

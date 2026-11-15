@@ -93,6 +93,12 @@ class AttachmentSteps:
         if kind == "paper_document":
             return self._step(self.pdf, operation, upload=True)
         if kind == "research_file":
+            from paper_daily import sync_survey_files
+
+            if sync_survey_files.selected(operation):
+                with self.client.journal.transaction() as conn:
+                    if not sync_survey_files.ready_to_push_in(conn, self.client, operation):
+                        return False
             return self._step(self.artifact, operation, upload=True)
         return True
 
