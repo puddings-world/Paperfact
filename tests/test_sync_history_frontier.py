@@ -254,6 +254,31 @@ def test_verified_http_keeps_acknowledged_proof_across_lost_pull_and_restart(pai
         assert accepted["sequence"] == before + 1
         restarted = plain_client(local.journal.path, "a")
         assert restarted.history_checkpoint(acknowledged=True) == accepted
+        # A rollback between preflight and receive must not falsely finish the pass.
+        retained = restarted.history_checkpoint()
+        older_tail = {
+            "version": 1, "workspace_id": restarted.journal.workspace_id,
+            "after": retained, "events": [], "checkpoint": retained, "caught_up": True,
+        }
+        unchanged = snapshot(restarted.journal.path)
+        for _ in range(2):
+            with pytest.raises(SyncHistoryUnavailable, match="predates an acknowledged"):
+                restarted.receive_history(older_tail)
+            assert snapshot(restarted.journal.path) == unchanged
+            assert saved(restarted)["body"] == "Accepted before lost delivery"
+            assert restarted.status()["awaiting_receipts"] == 1
+            assert restarted.history_checkpoint(acknowledged=True) == accepted
+
+        def rolled_back_tail(*args, **kwargs):
+            if kwargs.get("after") == before and kwargs.get("limit") == 100:
+                return deepcopy(older_tail)
+            return original(*args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(transport, "history_page", rolled_back_tail)
+            with pytest.raises(SyncHistoryUnavailable, match="predates an acknowledged"):
+                restarted.sync_verified_once(transport, token)
+        assert snapshot(restarted.journal.path) == unchanged
         edit(restarted, "Causal edit after restart")
         restarted.sync_verified_once(transport, token)
         assert saved(restarted)["body"] == "Causal edit after restart"

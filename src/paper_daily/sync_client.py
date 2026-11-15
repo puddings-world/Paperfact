@@ -1219,6 +1219,8 @@ class SyncClient:
                 stored, acknowledged = self._history_in(conn)
                 if stored != prior or prior["sequence"] != cursor:
                     raise SyncHistoryUnavailable("Retained history changed before receive")
+                if history_page["caught_up"] and checkpoint["sequence"] < acknowledged["sequence"]:
+                    raise SyncHistoryUnavailable("Received history predates an acknowledged event")
                 if (prior["sequence"] < acknowledged["sequence"] <= checkpoint["sequence"]
                         and points[acknowledged["sequence"]] != acknowledged["sha256"]):
                     raise SyncHistoryUnavailable("Received history differs from acknowledgment")

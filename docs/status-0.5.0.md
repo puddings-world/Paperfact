@@ -42,7 +42,9 @@ No tag, public release, production deployment or daily-workspace migration occur
 
 Source after this candidate now uses verified history in the actual desktop sync
 entry and bounded HTTP. Received data/cursor/proof and acknowledgment/proof commit
-atomically. Inbox preparation is bounded and compared to actual local records;
+atomically. A completed receive tail older than a retained acknowledgment is
+refused before writes, preserving the note and pending receipt for retry.
+Inbox preparation is bounded and compared to actual local records;
 new writes verify the observed tip in the authority transaction. Concurrent advance
 retries, forged proofs stop, and inactive backup proof records remain preserved.
 Mobile and attachment/device mutation guards, legacy-ack review/adoption UI and

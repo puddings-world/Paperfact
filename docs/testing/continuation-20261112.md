@@ -7144,3 +7144,25 @@ additional worktree was introduced.
   2.031s governed, preserving current mobile compatibility without claiming new
   mobile proof protection. Final diff whitespace check passed. Integration HEAD
   and origin were both51972ec with a clean integration tree before checkpoint.
+
+## 2026-11-15: refuse completed history older than retained acknowledgment
+
+- Revalidated clean stabilization and integration source at 91c2525. The
+  receive transaction checked crossed acknowledgment hashes but did not
+  reject a caught_up tail ending below an already retained acknowledgment.
+- Added the check before any research/inbox/cursor/proof writes. Extended
+  the existing lost-pull/restart journey: repeated direct refusal and an
+  actual HTTP sync pass with valid preflight but a rolled-back empty tail
+  preserve the exact database, accepted note and pending receipt; a later
+  valid sync still applies the causal follow-up. No new selector matrix.
+- Final affected file: 21 passed in 3.34s, 6.4s total with privacy/Ruff,
+  under the single-check two-core/25-percent CPU governor. Initial guard
+  checks passed too; the second run followed added actual-entry coverage.
+- This refines the existing retained-ack invariant; no new global skill
+  or additional background system. Native candidate c1cbef2 unchanged.
+  Mobile durable proof flow, attachment/device guards, legacy review,
+  durable authority fencing, hosting and physical acceptance remain open.
+- Integration gates: critical 14 passed in 7.38s (10.7s total); docs 58
+  passed in 2.11s (5.4s total). Privacy/Ruff passed in both. All checks
+  ran sequentially with the same CPU governor; no full historical suite,
+  packaging, paid call, account login or owner research access.

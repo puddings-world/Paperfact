@@ -402,6 +402,10 @@ intents are acknowledged in that same transaction, repairing a lost push respons
 without another upload. Acknowledgment and its proof use one journal transaction;
 SQL/storage failure rolls back both. Binding/generation checks and existing single
 job guards remain. Missing/corrupt pages do not advance research or discard outbox.
+A page claiming caught_up must reach every retained acknowledgment. An older
+empty or partial tail is rejected before any receive writes, even if preflight
+proved that acknowledgment earlier in the pass. A valid subsequent retry remains
+possible without discarding the accepted local content or its pending receipt.
 
 An existing inbox starts proof preparation at zero, compares every bounded page
 against actual retained local events and persists only the matched prefix. It
