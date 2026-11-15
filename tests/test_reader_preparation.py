@@ -602,7 +602,7 @@ def test_delayed_rich_admission_reprepares_after_same_reader_write(
     web = HeldWeb()
     monkeypatch.setattr(reader.chat_view, "view", web)
     monkeypatch.setattr(reader.chat_view, "rich", True)
-    reader.chat_view._shown = ""
+    reader.chat_view._shown = "<p>Earlier saved content</p>"
     reader.chat_view._page_id = 1
     activate(reader)
     settle(app, lambda: not reader.preparation.busy)

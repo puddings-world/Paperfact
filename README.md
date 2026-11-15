@@ -431,3 +431,6 @@ retain the normal read timeout.
 
 Saved reading views reprepare boundedly if an asynchronous renderer callback
 finds intervening writes in the same live workspace; stale content stays refused.
+
+The first saved reading body replaces the blank document directly; subsequent
+nonempty updates keep the existing incremental rendering and scroll behavior.

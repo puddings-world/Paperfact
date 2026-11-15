@@ -114,7 +114,7 @@ class RichView(QWidget):
             return
         # Only a page that was actually loaded can take a change; one still waiting
         # to hear its scroll position has nothing on screen to change.
-        in_place = bool(body) and self._shown is not None and self._page_id > 0
+        in_place = bool(body) and bool(self._shown) and self._page_id > 0
         self._shown = body
         if in_place:
             # Loading a page again fetches and starts every script and typesets every

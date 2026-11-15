@@ -1207,3 +1207,15 @@ or installed-device acceptance. No global rule is promoted.
   observation; do not bypass the original stale-input guard.
 - Limits: synthetic/local Qt evidence; installed Mac rendering and live devices
   remain separate. No paid call or new transport/authorization grant is involved.
+
+## First content must not depend on patching a blank page (2026-11-16)
+
+- Status: validated-local with observed Mac failure. Mac232285f lifecycle trace
+  shows a blank load then nonempty patch request without its callback; DOM remains
+  empty while Python considers the body shown.
+- Evidence: populated-document requirement for patching; explicit first-body
+  regression with a missing callback, affected reader/rich-view32 pass18.3s stages.
+- Lesson: a requested placeholder is not a populated rendering surface. Load first
+  content directly; optimize updates only after there is prior nonempty content.
+- Limits: Mac corrected-build/frozen acceptance remains pending; this does not
+  establish that every WebEngine navigation or later callback is reliable.

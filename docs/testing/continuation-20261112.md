@@ -8623,3 +8623,23 @@ shown-state booleans), preserving call arguments/results and excluding HTML.
 Focused screenshot9 pass0.81s pytest/4.0s stages. Critical evidence for unchanged
 app runtime is reused fromd81e828; this diagnostic changes only the screenshot
 tool and its regressions. No further app repair is claimed before the trace.
+
+## 2026-11-16: first saved body must replace the blank document
+
+Mac232285f/run43774002067 supplies the decisive trace: an empty full load, then
+a nonempty setHtml request with no page advance and no patch callback at all.
+Python marks the requested body shown; the actual matching, complete document
+still contains an empty main element. The deferred-retry fix cannot recover a
+callback that never arrives. No renderer-crash or provider cause is inferred.
+
+RichView now requires a nonempty previous body before patching in place. Empty
+to nonempty performs the ordinary full load, independent of JavaScript callback
+delivery; later populated-document updates retain patching and scrolling. The
+new regression refuses the old unnecessary JavaScript request, then simulates
+its missing callback. The existing deferred-admission regression now starts from
+a nonempty earlier document so it continues to protect actual patch callbacks;
+it no longer asks the repaired blank transition to use the old behavior.
+
+Affected reader/rich-view32 pass14.77s pytest/18.3s stages, two CPUs/25% cap.
+No readiness predicate, deadline, stale-owner check or blank-image refusal is
+weakened. Mac source/frozen verification of the fix is still required.

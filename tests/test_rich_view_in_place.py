@@ -192,3 +192,14 @@ def test_the_real_page_typesets_only_what_changed():
     # Nothing shared: every block is new and typeset, in the page already loaded.
     assert other == {**other, "page": 1, "count": 2, "kept": False, "typeset": 1, "raw": 0,
                      "top": 0}
+
+
+def test_first_nonempty_body_replaces_blank_document_without_javascript_callback(monkeypatch):
+    view = web_view(monkeypatch, [])
+    view.view.page().runJavaScript = lambda code, *args: view.view.page().scripts.append(code)
+    view.setHtml("")
+    view.setHtml("<h2>Saved research</h2><p>Explanation is ready.</p>")
+    assert len(view.view.loads) == 2
+    assert "Saved research" in view.view.loads[-1]
+    assert view.view.page().scripts == []
+    assert view._page_id == 2 and view._body == view._shown
