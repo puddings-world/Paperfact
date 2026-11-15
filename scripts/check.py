@@ -325,6 +325,10 @@ def run_checks(root, execute=subprocess.run, files=None, *, profile="full",
             else:
                 code = execute(command, cwd=root, env={
                     **os.environ, "QT_QPA_PLATFORM": "offscreen", "PAPERFACT_PLAIN_VIEWS": "1",
+                    # Shared virtualenvs can be editable-installed to another worktree.
+                    "PYTHONPATH": os.pathsep.join(filter(None, (
+                        str((root / "src").resolve()), os.environ.get("PYTHONPATH", ""),
+                    ))),
                 }).returncode
             stage.update(seconds=round(clock() - stage_started, 3), exit_code=code,
                          status="failed" if code else "passed")

@@ -434,3 +434,46 @@ def test_focused_plan_uses_exact_selector_and_rejects_invalid_scope_without_writ
     assert CHECK["main"](tmp_path, ["--plan", "--profile", "focused"]) == 1
     assert "Focused checks require" in capsys.readouterr().out
     assert not (tmp_path / "build").exists()
+
+
+@pytest.mark.parametrize("inherited", [False, True])
+def test_checks_import_the_selected_checkout_instead_of_another_worktree(
+    tmp_path, monkeypatch, inherited,
+):
+    import os
+    import subprocess
+    import sys
+
+    source = tmp_path / "src"
+    other = tmp_path / "other-worktree"
+    source.mkdir()
+    other.mkdir()
+    for folder, marker in ((source, "current"), (other, "stale")):
+        (folder / "_source_binding_probe.py").write_text(
+            "VALUE = " + repr(marker), encoding="utf-8"
+        )
+    if inherited:
+        monkeypatch.setenv("PYTHONPATH", str(other))
+    else:
+        monkeypatch.delenv("PYTHONPATH", raising=False)
+    fixture_test(tmp_path, "tests/test_probe.py")
+    observed = []
+
+    def execute(command, **options):
+        observed.append(options["env"])
+        if "pytest" in command:
+            return subprocess.run(
+                [sys.executable, "-c",
+                 "import _source_binding_probe as p; assert p.VALUE == 'current'"],
+                cwd=options["cwd"], env=options["env"], timeout=10,
+            )
+        return SimpleNamespace(returncode=0)
+
+    assert CHECK["run_checks"](
+        tmp_path, execute, files=[], profile="focused", python_tests=["tests/test_probe.py"]
+    ) == 0
+    assert len(observed) == 2
+    for environment in observed:
+        paths = environment["PYTHONPATH"].split(os.pathsep)
+        assert paths[0] == str(source)
+        assert paths[1:] == ([str(other)] if inherited else [])

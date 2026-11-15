@@ -301,3 +301,12 @@ semanticscholar.org/product/api). Without it the crawl still works, just slower.
 GitHub answers 60 anonymous API calls an hour, which one `resources` pass over a
 reading list uses up. Set `GITHUB_TOKEN` (or `GH_TOKEN`), or be logged in with the
 `gh` CLI, whose token is picked up automatically, for 5,000.
+
+
+### Source binding for shared virtual environments
+
+The check runner prepends this checkout's `src` to each child process's
+`PYTHONPATH`. A virtual environment editable-installed to another worktree must
+not silently test that other branch. Existing extra import paths remain after
+the checkout path. Direct ad hoc Python commands still need the intended source
+binding; this does not change a global environment or reinstall the package.
