@@ -1,13 +1,17 @@
 """Authenticated loopback device controls never expose account/token metadata."""
 
 import json
+import secrets
+import sqlite3
+from contextlib import closing
 
 import pytest
 from test_sync_http import endpoint as endpoint_fixture
-from test_sync_http import request
+from test_sync_http import operation, request
 
 from paper_daily import sync_device_protocol as protocol
 from paper_daily.sync_http import HttpTransport
+from paper_daily.sync_journal import SyncHistoryUnavailable
 
 endpoint = endpoint_fixture
 
@@ -156,3 +160,59 @@ def test_catalog_response_cannot_change_authenticated_binding():
             },
             identity={"workspace_id": "workspace", "device_id": "a"},
         )
+
+
+def test_verified_device_writes_preserve_history_and_pairing_proof(endpoint):
+    service, token, url = endpoint
+    service.enroll("workspace", "peer")
+    service.push(token, operation())
+    point = service.history_page(token)["checkpoint"]
+    invalid = {**point, "sha256": "0" * 64}
+    code, credential = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+
+    def snapshot():
+        with closing(sqlite3.connect(service.path)) as conn:
+            return list(conn.iterdump())
+
+    with HttpTransport(url) as transport:
+        before = snapshot()
+        for action in (
+            lambda: transport.rename_device(token, "peer", "Phone", checkpoint=invalid),
+            lambda: transport.revoke_peer(token, "peer", checkpoint=invalid),
+            lambda: transport.create_pairing(token, code, checkpoint=invalid),
+        ):
+            for _ in range(2):
+                with pytest.raises(SyncHistoryUnavailable):
+                    action()
+                assert snapshot() == before
+        assert transport.rename_device(token, "peer", "Phone", checkpoint=point)["changed"]
+        created = transport.create_pairing(token, code, checkpoint=point)
+        assert transport.create_pairing(token, code, checkpoint=point) == created
+        with service._transaction() as conn:
+            saved = conn.execute("SELECT history_checkpoint FROM sync_pairings WHERE code_hash=?",
+                                 (service._token_hash(code),)).fetchone()[0]
+        assert json.loads(saved) == point
+        service.push(token, operation("later-event"))
+        newer = service.history_page(token)["checkpoint"]
+        assert transport.create_pairing(token, code, checkpoint=newer) == created
+        with service._transaction(write=True) as conn:
+            assert conn.execute("SELECT history_checkpoint FROM sync_pairings WHERE code_hash=?",
+                                (service._token_hash(code),)).fetchone()[0] == saved
+            conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                         (invalid["sha256"], "workspace", point["sequence"]))
+        before = snapshot()
+        for _ in range(2):
+            with pytest.raises(SyncHistoryUnavailable):
+                transport.redeem_pairing(code, "workspace", "mac", credential)
+            assert snapshot() == before
+        assert all(row["device_id"] != "mac" for row in service.device_catalog(token)["devices"])
+        with service._transaction(write=True) as conn:
+            conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                         (point["sha256"], "workspace", point["sequence"]))
+        claimed = transport.redeem_pairing(code, "workspace", "mac", credential)
+        assert claimed == {"workspace_id": "workspace", "device_id": "mac"}
+        assert transport.redeem_pairing(code, "workspace", "mac", credential) == claimed
+        assert transport.revoke_peer(token, "peer", checkpoint=newer)["changed"]
+        assert not transport.revoke_peer(token, "peer", checkpoint=newer)["changed"]
+        assert transport.session_info(credential) == claimed
+        assert len(service.pull(token)) == 2

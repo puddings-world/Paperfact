@@ -9,11 +9,12 @@ labels are owner-entered plain text and nothing about a device is inferred.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 import unicodedata
 
-from paper_daily.sync_journal import ID
+from paper_daily.sync_journal import ID, SyncHistoryUnavailable
 
 MAX_LABEL_CHARS = 64
 MAX_CATALOG_PAGE = 100
@@ -21,7 +22,7 @@ PAIRING_SECONDS = 600
 MAX_PAIRINGS = 100
 PAIRING_COLUMNS = (
     "code_hash", "workspace", "issuer_hash", "expires_at", "claimed_device",
-    "claimed_hash", "claim_label",
+    "claimed_hash", "claim_label", "history_checkpoint",
 )
 
 
@@ -86,6 +87,9 @@ class DeviceManagementMixin:
             "code_hash TEXT PRIMARY KEY,workspace TEXT NOT NULL,issuer_hash TEXT NOT NULL,"
             "expires_at INTEGER NOT NULL,claimed_device TEXT,claimed_hash TEXT,claim_label TEXT)"
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(sync_pairings)")}
+        if "history_checkpoint" not in columns:
+            conn.execute("ALTER TABLE sync_pairings ADD COLUMN history_checkpoint TEXT")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS sync_pairings_expiry ON sync_pairings(workspace,expires_at)"
         )
@@ -114,10 +118,14 @@ class DeviceManagementMixin:
             "next_cursor": page[-1]["device"] if len(rows) > limit else None,
         }
 
-    def rename_device(self, token: str, device_id: str, label: str | None) -> dict:
+    def rename_device(
+        self, token: str, device_id: str, label: str | None, *, checkpoint=None,
+    ) -> dict:
         """Set or clear a label on this or a peer device in the caller's workspace."""
         with self._transaction(write=True) as conn:
             workspace, _current = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             device_id, label = _device_id(device_id), device_label(label)
             row = conn.execute(
                 "SELECT label FROM sync_devices WHERE workspace=? AND device=?",
@@ -133,10 +141,12 @@ class DeviceManagementMixin:
                 )
             return {"device_id": device_id, "label": label, "changed": changed}
 
-    def revoke_peer(self, token: str, device_id: str) -> dict:
+    def revoke_peer(self, token: str, device_id: str, *, checkpoint=None) -> dict:
         """Revoke another device's credential; research, events and cursors are untouched."""
         with self._transaction(write=True) as conn:
             workspace, current = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             device_id = _device_id(device_id)
             if device_id == current:
                 raise CurrentDeviceError("Use local Disconnect to stop this device")
@@ -159,10 +169,26 @@ class DeviceManagementMixin:
     def _pair_now():
         return int(time.time())
 
-    def create_pairing(self, token, code):
+    def _pairing_history(self, conn, invitation):
+        raw = invitation["history_checkpoint"]
+        if raw is None:
+            return
+        try:
+            if not isinstance(raw, str) or len(raw) > 256:
+                raise ValueError("Invalid invitation checkpoint")
+            point = json.loads(raw)
+            if json.dumps(point, sort_keys=True, separators=(",", ":")) != raw:
+                raise ValueError("Noncanonical invitation checkpoint")
+            self._require_history(conn, invitation["workspace"], point)
+        except (ValueError, TypeError, KeyError) as error:
+            raise SyncHistoryUnavailable("Invitation history could not be verified") from error
+
+    def create_pairing(self, token, code, *, checkpoint=None):
         """Explicit trusted-device grant; raw invitation secrets are never persisted."""
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             pairing_secret(code)
             digest, issuer, now = self._token_hash(code), self._token_hash(token), self._pair_now()
             if conn.execute("SELECT 1 FROM sync_devices WHERE token_hash=?", (digest,)).fetchone():
@@ -170,9 +196,12 @@ class DeviceManagementMixin:
             previous = conn.execute("SELECT * FROM sync_pairings WHERE code_hash=?",
                                     (digest,)).fetchone()
             if previous is not None:
-                if (previous["workspace"] != workspace or previous["issuer_hash"] != issuer
-                        or previous["claimed_device"] is not None
-                        or previous["expires_at"] <= now):
+                if previous["workspace"] != workspace or previous["issuer_hash"] != issuer:
+                    raise ValueError("Pairing request belongs to another issuer")
+                self._pairing_history(conn, previous)
+                if checkpoint is not None and previous["history_checkpoint"] is None:
+                    raise SyncHistoryUnavailable("Create a new invitation with verified history")
+                if (previous["claimed_device"] is not None or previous["expires_at"] <= now):
                     raise ValueError("Pairing request is already used; generate a new one")
                 expires = previous["expires_at"]
             else:
@@ -184,8 +213,12 @@ class DeviceManagementMixin:
                     raise ValueError("Too many pairing invitations; wait for expiry")
                 expires = now + PAIRING_SECONDS
                 conn.execute(
-                    "INSERT INTO sync_pairings(code_hash,workspace,issuer_hash,expires_at) "
-                    "VALUES(?,?,?,?)", (digest, workspace, issuer, expires),
+                    "INSERT INTO sync_pairings("
+                    "code_hash,workspace,issuer_hash,expires_at,history_checkpoint) "
+                    "VALUES(?,?,?,?,?)",
+                    (digest, workspace, issuer, expires,
+                     json.dumps(checkpoint, sort_keys=True, separators=(",", ":"))
+                     if checkpoint is not None else None),
                 )
             return {"workspace_id": workspace, "issuer_device_id": device, "expires_at": expires}
 
@@ -207,6 +240,7 @@ class DeviceManagementMixin:
                     or issuer["workspace"] != invitation["workspace"]
                     or workspace_id != invitation["workspace"]):
                 raise PermissionError("Pairing is unavailable or expired")
+            self._pairing_history(conn, invitation)
             _device_id(workspace_id)
             _device_id(device_id)
             pairing_secret(credential)

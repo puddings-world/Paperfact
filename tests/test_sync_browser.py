@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from test_sync_http import running
+from test_sync_http import operation, running
 
 from paper_daily.sync_browser import SESSION_SECONDS, BrowserSessions
 from paper_daily.sync_http import HttpTransport, make_server
@@ -221,3 +221,33 @@ def test_proxy_throttle_is_retryable_and_never_echoes_response_or_credentials():
         assert "synthetic" not in str(failure.value)
         assert transport.session_info("synthetic-private-device-key")["device_id"] == "phone"
     assert len(seen) == 2
+
+
+def test_browser_pairing_refuses_changed_issuer_history_before_device_admission(browser):
+    browser.service.push(browser.owner, operation(device="desktop"))
+    point = browser.service.history_page(browser.owner)["checkpoint"]
+    code = secrets.token_urlsafe(32)
+    grant = browser.service.create_pairing(browser.owner, code, checkpoint=point)
+    browser.packet = Invitation(browser.origin, code=code, **grant).encoded()
+    identity, pending = prepared(browser)
+    with browser.service._transaction(write=True) as conn:
+        conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                     ("0" * 64, "workspace", point["sequence"]))
+    for _ in range(2):
+        response = post(browser, "pairing/complete", cookie=pending)
+        assert response.status_code == 412
+        assert response.json() == {"error": "sync_history_unavailable"}
+        assert "set-cookie" not in response.headers
+        assert len(browser.service.device_catalog(browser.owner)["devices"]) == 1
+        with browser.service._transaction() as conn:
+            assert conn.execute("SELECT claimed_device FROM sync_pairings WHERE code_hash=?",
+                                (browser.service._token_hash(code),)).fetchone()[0] is None
+    with browser.service._transaction(write=True) as conn:
+        conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                     (point["sha256"], "workspace", point["sequence"]))
+    completed = post(browser, "pairing/complete", cookie=pending)
+    assert completed.status_code == 200 and completed.json() == identity
+    assert "HttpOnly" in completed.headers["set-cookie"]
+    repeated = post(browser, "pairing/complete", cookie=pending)
+    assert repeated.status_code == 200 and repeated.json() == identity
+    assert len(browser.service.device_catalog(browser.owner)["devices"]) == 2

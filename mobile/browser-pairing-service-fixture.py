@@ -74,7 +74,9 @@ def main():
         origin = sys.argv[2]
         sessions = BrowserSessions(service, origin, secrets.token_bytes(32))
         code = secrets.token_urlsafe(32)
-        grant = service.create_pairing(token, code)
+        grant = service.create_pairing(
+            token, code, checkpoint=service.history_page(token)["checkpoint"],
+        )
         packet = Invitation(origin, code=code, **grant).encoded()
         server = make_server(service, browser=sessions)
         thread = threading.Thread(

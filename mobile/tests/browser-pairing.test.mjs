@@ -66,6 +66,8 @@ test('forget is explicit, cancelable, single-flight and bilingual; a busy servic
   assert.equal(await view.run('resume'),false);assert.equal(view.controls.status.text,PAIRING_COPY[language].unsupported);
   response='rate_limited';assert.equal(await view.run('resume'),false);
   assert.equal(view.controls.status.text,PAIRING_COPY[language].throttled);
+  response='sync_history_unavailable';assert.equal(await view.run('resume'),false);
+  assert.equal(view.controls.status.text,PAIRING_COPY[language].history);
   view.askForget();const pending=view.run('forget');assert.equal(await view.run('forget'),false);
   waiting.resolve();assert.equal(await pending,true);assert.equal(forgotten,1);assert.equal(cleared,1);
   assert.equal(view.controls.status.text,PAIRING_COPY[language].forgotten);

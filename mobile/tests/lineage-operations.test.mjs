@@ -126,7 +126,7 @@ test('newer consumer rejects malformed pages before any cursor, draft or outbox 
 });
 
 test('mobile shell carries its new receiver and old consumers reject typed Lineage',()=>{
- assert(SHELL.includes('./lineage-ops.mjs'));assert.match(readFileSync(new URL('../sw.mjs',import.meta.url),'utf8'),/paperfact-mobile-shell-v30/);
+ assert(SHELL.includes('./lineage-ops.mjs'));assert.match(readFileSync(new URL('../sw.mjs',import.meta.url),'utf8'),/paperfact-mobile-shell-v31/);
  assert.throws(()=>old.validateOperation(lineage(),WORKSPACE));
 });
 

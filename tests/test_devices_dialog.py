@@ -111,11 +111,11 @@ def test_rapid_label_saves_create_one_worker_and_one_change(view, service, monke
     entered, release, calls = threading.Event(), threading.Event(), []
     original = service[1].rename_device
 
-    def held(*args):
+    def held(*args, **kwargs):
         calls.append(1)
         entered.set()
         assert release.wait(8)
-        return original(*args)
+        return original(*args, **kwargs)
 
     monkeypatch.setattr(service[1], "rename_device", held)
     dialog.rename_button.click()
@@ -138,8 +138,8 @@ def test_stop_after_remote_label_commit_keeps_view_stale_until_explicit_refresh(
     dialog.label.setText("Phone")
     original = service[1].rename_device
 
-    def late(*args):
-        result = original(*args)
+    def late(*args, **kwargs):
+        result = original(*args, **kwargs)
         dialog._worker.ticket.cancel()
         return result
 
@@ -352,3 +352,18 @@ def test_parent_close_waits_for_device_worker_and_late_result_is_not_applied(ser
         release.set()
     wait(app, lambda: parent.disposed and child.disposed)
     assert service[0].summary()["authenticated"]
+
+
+def test_history_refusal_keeps_label_and_research_with_actionable_guidance(view, service):
+    app, dialog = view
+    peer = select(dialog, "peer")
+    dialog.label.setText("Keep proposed label")
+    with sqlite3.connect(service[0].workspace.path) as conn:
+        conn.execute("UPDATE paperfact_sync_cursor SET sequence=sequence+1")
+    before = service[0].workspace.path.read_bytes()
+    dialog.rename_button.click()
+    wait(app, lambda: not dialog.busy)
+    assert dialog.status.text() == dialog.t["history"]
+    assert dialog.label.text() == "Keep proposed label" and peer.text(1) == ""
+    assert service[0].workspace.path.read_bytes() == before
+    assert service[1].device_catalog(service[2])["devices"][1]["label"] is None

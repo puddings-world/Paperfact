@@ -788,3 +788,25 @@ The actual desktop PDF/deck journeys and Chromium source-position/recovery journ
 pass with retained checkpoints on the upload routes. Existing digest, quota,
 authentication and source-lifetime assertions remain. No live host/device result,
 no retraction of sent bytes, and no new global rule, hook or installation.
+
+
+## 2026-11-15: read-only device controls and issuer-bound grants
+
+Status: validated-local native Qt/bearer/cookie; durable control history and
+physical/hosted acceptance remain open. Device actions read the fully prepared
+received/acknowledged prefix without silently synchronizing or changing research.
+Absent legacy proof schema is initialized only by the authorized sync path; an
+existing damaged/missing row is never reset. The suggested sync/retry path must
+actually prepare old retained inbox records before another guarded action.
+
+Bind an issued invitation to its original verified prefix and expiry. A valid
+suffix/retry cannot refresh that grant's knowledge; admission checks the issued
+prefix inside its enrollment transaction before claiming the code or storing a
+credential. Existing admitted-device resume semantics remain separate. Recovery
+accepts old/current schema but never restores live device grants into a new identity.
+Evidence: actual device/pairing HTTP and Qt, changed-prefix browser refusal plus
+same-code retry, real legacy acknowledgment/inbox preparation and exact local
+preservation. Static shell v31 upgrades old shells while keeping research caches.
+Limits: a research-prefix proof does not version every device-control change or
+fence a restored service. No malicious-authority/physical-host guarantee, new
+universal rule, global skill installation or telemetry collection.

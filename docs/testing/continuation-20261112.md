@@ -7275,3 +7275,65 @@ additional worktree was introduced.
 - Integration gates: critical14 passed in7.90s/11.0s total; docs58 passed
   in1.88s/5.0s total, with privacy/Ruff passed. Final whitespace review and
   integration-parent checks follow; no full historical suite or packaging.
+
+
+## 2026-11-15: device controls, issuer-bound pairing and legacy proof preparation
+
+- Continued from clean common828e73f in the existing worktree. Actual desktop
+  device rename/revoke/create-invitation use read-only mutation_checkpoint and
+  explicit history/devices routes. Authority validates prefixes inside writes;
+  catalog/local Disconnect remain independent. No legacy mutation fallback.
+- sync_pairings adds bounded canonical history_checkpoint. Existing seven-column
+  authorities upgrade idempotently; backups/restores accept absent/old-seven/current
+  schemas. Grants and invitations never transfer into a new recovered workspace.
+  Issuance retries retain original prefix/expiry, including valid suffix growth;
+  unproven old invitations require a fresh code. Issuer/scope is checked first.
+- Fresh redemption and exact claim retries verify the issued prefix in the same
+  admission transaction. Wrong history creates no device and leaves code unclaimed;
+  correct recovery retries the same code. Existing admitted credential resume after
+  expiry/revocation retains its prior contract; this is not durable control fencing.
+- First native device/pairing selection:19 passed before one legacy test expected
+  generic404 instead of the existing specific continuity-refusal type. Tightened
+  that assertion to SyncHistoryUnavailable, retained unsupported-pairing behavior.
+  Held spies forward checkpoint kwargs without changing duplicate/cancel assertions.
+  Import/style gates were corrected before further tests; no test requirement removed.
+- Device/HTTP/pairing48 passed in17.76s/20.8s total. Actual Qt device/pairing27 pass
+  in54.10s/57.2s total, including singleton/repeated click, confirmation/cancellation,
+  late connection and changed workspace, preservation, native-vault retry and join.
+  New history refusal retains the proposed label/research and gives EN/ZH guidance.
+- Actual cookie browser plus authority recovery13 passed in5.21s/8.2s total. New
+  case changes issued history after browser preparation:412, no replacement cookie,
+  no admitted device or claimed code; restoring correct prefix allows exact retry.
+  Recovery covers pre-pairing, seven-column and current proof-bearing invitations.
+- Found a genuine upgrade gap: an older beta DB could lack the proof table while
+  attach_existing deliberately does no DDL. Explicit SyncSession.sync now calls
+  prepare_history_checkpoint: create only an absent table at local zero; existing
+  corrupt/missing rows refuse. Device action itself never migrates. Existing bounded
+  preparation checks actual inbox before uploads; no higher remote digest is adopted.
+- Strengthened the device journey with a real legacy accepted/unreceived operation,
+  refusal while proof is incomplete, retained inbox reception, absent-table upgrade
+  on explicit sync, successful control retry, and exact refusal after proof-row loss.
+  Final this journey plus issuer-bound HTTP2 pass in2.81s/5.7s total. Earlier initial
+  migration2 passed in2.91s/5.9s before strengthening the legacy scenario.
+- Browser completion412 maps to sanitized history guidance. Bilingual pairing21
+  unit/transport cases pass in3.172s governed; actual Chromium cookie pairing4 pass
+  in8.531s using an invitation bound to the issuer's actual prefix, not a legacy
+  unproven fake grant. No JavaScript credential persistence or automatic reload sync.
+- Shell v31 replaces v30 as current source; old-shell purge test retains every
+  previous isolation assertion. Final affected browser/shell/Lineage81 pass in
+  3.654s/3.797s governed. One local static artifact verifies in0.515s,50 files/
+  3945541 bytes, ID7bb89dcb3732d02a94b64f1bc6082c5485e85ec0e43a7252466e30461290505b.
+  Exact-artifact preparation/repeated activation/EN-ZH touch/fresh offline-document/
+  cached-only PDF verification passes in2.704s. Local build/mobile-device-history-
+  v31-* only; not deployed and not a rebuilt native installer.
+- All checks sequential with the existing two-core/25-percent governor. No critical/
+  release selector expansion, historical full suite, real account/model/owner data,
+  new worktree/module/daemon/board, public tag/release or cloud deployment. Canonical
+  evidence extended, not a new global rule. c1cbef2/run43688772032 remains the
+  delivered native/v29 candidate; later local v30 artifacts remain historical.
+- Remaining: durable authority/control-history identity and split-brain fencing,
+  native unreceived-legacy-ack review/adoption, remaining mapping/recovery/survey,
+  production obsolete-writer policy, hosted and installed/physical acceptance.
+- Final integration gates: critical14 passed in8.14s/11.4s total; docs58
+  in1.90s/5.1s total. Privacy/Ruff passed. Final whitespace and clean-parent
+  review precede checkpoint; no full historical suite or native rebuild.

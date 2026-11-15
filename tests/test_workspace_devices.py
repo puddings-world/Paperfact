@@ -1,5 +1,6 @@
 """Authenticated device actions retain local research and reject late sessions."""
 
+import sqlite3
 import threading
 
 import pytest
@@ -10,6 +11,7 @@ from test_workspace_sync import research as research_fixture
 from test_workspace_sync import service as service_fixture
 
 from paper_daily.sync_http import HttpTransport, make_server
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.workspace_devices import DeviceClient
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped
@@ -101,11 +103,11 @@ def test_duplicate_actions_are_one_job_and_identical_retry_is_idempotent(service
     entered, release = threading.Event(), threading.Event()
     original, calls, results = authority.rename_device, [], []
 
-    def held(*args):
+    def held(*args, **kwargs):
         calls.append(1)
         entered.set()
         assert release.wait(8)
-        return original(*args)
+        return original(*args, **kwargs)
 
     monkeypatch.setattr(authority, "rename_device", held)
     worker = threading.Thread(
@@ -131,8 +133,8 @@ def test_cancel_after_remote_commit_keeps_exact_result_for_refresh_retry(service
     client, ticket = DeviceClient(session), Ticket()
     original = authority.rename_device
 
-    def late(*args):
-        result = original(*args)
+    def late(*args, **kwargs):
+        result = original(*args, **kwargs)
         ticket.cancel()
         return result
 
@@ -159,3 +161,57 @@ def test_pairing_uses_the_guarded_device_context_without_changing_local_research
         client.create_pairing(secrets.token_urlsafe(32), Ticket())
     assert enrolled[0].read_bytes() == before and enrolled[1].journal.pending() == pending
     assert authority.device_catalog(service[2])["devices"][0]["device_id"] == "origin-device"
+
+
+def test_device_writes_require_prepared_proof_without_changing_local_research(service, enrolled):
+    session, authority, token, calls = service
+    authority.enroll("workspace", "peer")
+    connect(service)
+    client = DeviceClient(session)
+    local = session._client(session.identity, lambda: None)
+    point = local.mutation_checkpoint()
+    original = authority.rename_device
+    observed = []
+
+    def verified(*args, checkpoint=None):
+        observed.append(checkpoint)
+        return original(*args, checkpoint=checkpoint)
+
+    authority.rename_device = verified
+    before = enrolled[0].read_bytes()
+    assert client.rename("peer", "Laptop", Ticket())["changed"]
+    assert observed == [point] and enrolled[0].read_bytes() == before
+    operation = next(op for op in local.journal.pending() if not op.get("parents"))
+    event = authority.push(token, operation)
+    local.journal.acknowledge(operation["operation_id"], event["sequence"])
+    before, previous = enrolled[0].read_bytes(), list(calls)
+    with pytest.raises(SyncHistoryUnavailable, match="before this action"):
+        client.rename("peer", "Unproven legacy acknowledgment", Ticket())
+    assert enrolled[0].read_bytes() == before
+    assert "rename_device" not in calls[len(previous):]
+    local.receive([event])
+    before, previous = enrolled[0].read_bytes(), list(calls)
+    with pytest.raises(SyncHistoryUnavailable, match="before this action"):
+        client.rename("peer", "Must not replace Laptop", Ticket())
+    assert enrolled[0].read_bytes() == before
+    assert "rename_device" not in calls[len(previous):]
+    assert authority.device_catalog(token)["devices"][1]["label"] == "Laptop"
+
+    with sqlite3.connect(enrolled[0]) as conn:
+        conn.execute("DROP TABLE paperfact_sync_history_checkpoint")
+    before, previous = enrolled[0].read_bytes(), list(calls)
+    with pytest.raises(SyncHistoryUnavailable, match="before this action"):
+        client.rename("peer", "No hidden migration", Ticket())
+    assert enrolled[0].read_bytes() == before
+    assert "rename_device" not in calls[len(previous):]
+    result = session.sync(Ticket())
+    assert result["pending"] == 0
+    prepared = session._client(session.identity, lambda: None)
+    assert prepared.mutation_checkpoint()["sequence"] == prepared.status()["cursor"]
+    assert client.rename("peer", "Ready after sync", Ticket())["changed"]
+    with sqlite3.connect(enrolled[0]) as conn:
+        conn.execute("DELETE FROM paperfact_sync_history_checkpoint")
+    before = enrolled[0].read_bytes()
+    with pytest.raises(SyncHistoryUnavailable, match="missing"):
+        session.sync(Ticket())
+    assert enrolled[0].read_bytes() == before

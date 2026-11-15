@@ -318,6 +318,7 @@ class SyncSession:
             if bound != identity:
                 raise EnrollmentRequired("Use a new directory to join this workspace")
             client = self._client(identity, live)
+            client.prepare_history_checkpoint()
             transport = GuardedTransport(
                 transport, live, history=lambda: client.history_checkpoint(acknowledged=True),
             )

@@ -12,6 +12,7 @@ from test_sync_http import endpoint as endpoint_fixture
 
 from paper_daily.sync_device_management import MAX_PAIRINGS, PAIRING_SECONDS
 from paper_daily.sync_http import HttpTransport
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.sync_service import ReferenceService
 
 endpoint = endpoint_fixture
@@ -175,5 +176,5 @@ def test_pairing_unsupported_route_is_actionable_without_changing_legacy_request
         ))
         with pytest.raises(PairingUnavailableError):
             transport.create_pairing("synthetic-owner", secrets.token_urlsafe(32))
-        with pytest.raises(RuntimeError, match="HTTP 404"):
+        with pytest.raises(SyncHistoryUnavailable, match="continuity support"):
             transport.session_info("synthetic-owner")

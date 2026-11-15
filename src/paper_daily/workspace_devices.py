@@ -53,6 +53,10 @@ class DeviceClient:
                     if identity != self.identity:
                         raise SyncStopped("The device-management connection changed")
                     self.session._live(self.generation, ticket)
+                    if name != "device_catalog":
+                        client = self.session._client(identity, live)
+                        kwargs["checkpoint"] = client.mutation_checkpoint()
+                        live()
                     result = getattr(transport, name)(token, *args, **kwargs)
                     result = validate(result)
                     live()

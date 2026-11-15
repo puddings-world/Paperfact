@@ -280,7 +280,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
         def _request(self):
             allowed = ({"/v1/push", "/v1/pull", "/v1/session/info",
                         "/v1/history/pull", "/v1/history/push"}
-                       | _BLOB_ROUTES | _HISTORY_BLOB_ROUTES | devices.ROUTES)
+                       | _BLOB_ROUTES | _HISTORY_BLOB_ROUTES
+                       | devices.ROUTES | devices.HISTORY_ROUTES)
             self._route = self.path
             self._browser_cookie = None
             if self.path.startswith("/v1/browser/"):
@@ -387,7 +388,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                     except ValueError:
                         raise RuntimeError("Invalid session identity response") from None
                     response = _encode(identity)
-                elif route in devices.ROUTES:
+                elif route in devices.ROUTES | devices.HISTORY_ROUTES:
                     response = _encode(devices.request(service, route, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
@@ -539,7 +540,7 @@ class HttpTransport:
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
                 if response.status_code == 412 and (
-                    path == "/v1/pull" or path.startswith("/v1/history/")
+                    path in {"/v1/pull", devices.PAIR_REDEEM} or path.startswith("/v1/history/")
                 ):
                     raise SyncHistoryUnavailable("Shared sync history needs recovery review")
                 if response.status_code == 409:
@@ -639,8 +640,13 @@ class HttpTransport:
         """Resolve authenticated identity before binding a workspace transfer session."""
         return _session_identity(self._post("/v1/session/info", token, {}))
 
-    def create_pairing(self, token, code):
-        value = self._post(devices.PAIR_CREATE, token, {"code": devices.pairing_secret(code)})
+    def create_pairing(self, token, code, *, checkpoint=None):
+        path = ("/v1/history/devices/pairing/create"
+                if checkpoint is not None else devices.PAIR_CREATE)
+        payload = {"code": devices.pairing_secret(code)}
+        if checkpoint is not None:
+            payload["checkpoint"] = checkpoint
+        value = self._post(path, token, payload)
         return devices.pairing_created(value)
 
     def redeem_pairing(self, code, workspace_id, device_id, credential, label=None):
@@ -654,14 +660,22 @@ class HttpTransport:
         bounds = devices.catalog_bounds(after, limit)
         return devices.catalog(self._post("/v1/devices/list", token, bounds), **bounds)
 
-    def rename_device(self, token, device_id, label):
+    def rename_device(self, token, device_id, label, *, checkpoint=None):
         target, label = _device_id(device_id), device_label(label)
-        result = self._post("/v1/devices/rename", token, {"device_id": target, "label": label})
+        path = "/v1/history/devices/rename" if checkpoint is not None else "/v1/devices/rename"
+        payload = {"device_id": target, "label": label}
+        if checkpoint is not None:
+            payload["checkpoint"] = checkpoint
+        result = self._post(path, token, payload)
         return devices.renamed(result, target, label)
 
-    def revoke_peer(self, token, device_id):
+    def revoke_peer(self, token, device_id, *, checkpoint=None):
         target = _device_id(device_id)
-        result = self._post("/v1/devices/revoke", token, {"device_id": target})
+        path = "/v1/history/devices/revoke" if checkpoint is not None else "/v1/devices/revoke"
+        payload = {"device_id": target}
+        if checkpoint is not None:
+            payload["checkpoint"] = checkpoint
+        result = self._post(path, token, payload)
         return devices.revoked(result, target)
 
     def blob_begin(self, token, manifest, *, checkpoint=None):

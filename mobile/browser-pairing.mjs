@@ -14,6 +14,7 @@ export const PAIRING_COPY={
   denied:'Connection was rejected or expired. Reconnect a pending attempt, or forget it before using fresh pairing details.',
   throttled:'The service is busy. Wait a moment, then reconnect. Local research is unchanged.',
   unsupported:'This service has not enabled browser pairing. Check the service setup or use Advanced manual connection.',
+  history:"Keep local research. Ask the inviting device to review the service history before retrying pairing.",
   wrongOrigin:'Open this reader on the same website as your sync service.',invalid:'Pairing details could not be read. Copy them again from your desktop.',
   empty:'Paste pairing details first.',stop:'Stop'},
  'zh-TW':{title:'連接此瀏覽器',hint:'貼上已連線桌面裝置提供的配對資料。',
@@ -28,6 +29,7 @@ export const PAIRING_COPY={
   denied:'連線被拒絕或已過期。可重試未完成配對，或先移除已存連線再使用新資料。',
   throttled:'服務暫時忙碌，請稍後重新連線。本機研究未變更。',
   unsupported:'此服務尚未啟用瀏覽器配對，請確認服務設定，或使用進階手動連線。',
+  history:"\u8acb\u4fdd\u7559\u672c\u6a5f\u7814\u7a76\u8cc7\u6599\uff0c\u8acb\u5148\u5728\u767c\u51fa\u9080\u8acb\u7684\u88dd\u7f6e\u6838\u5c0d\u670d\u52d9\u6b77\u53f2\uff0c\u518d\u91cd\u8a66\u914d\u5c0d\u3002",
   wrongOrigin:'請從同步服務的相同網站開啟此閱讀器。',invalid:'無法讀取配對資料，請從桌面版重新複製。',
   empty:'請先貼上配對資料。',stop:'停止'}
 };
@@ -64,6 +66,7 @@ export function browserPairingPanel(el,{language='en',transport=null,current=()=
  function errorKey(error) {
   if(controller?.signal.aborted||error.message==='cancelled')return 'cancelled';
   if(error.message==='session_denied')return 'denied';
+  if(error.message==='sync_history_unavailable')return 'history';
   if(error.message==='unsupported_service')return 'unsupported';
   if(error.message==='rate_limited')return 'throttled';
   if(error.message==='browser_same_origin_required')return 'wrongOrigin';

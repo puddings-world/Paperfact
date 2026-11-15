@@ -434,7 +434,7 @@ def test_new_workspace_rekeys_order_scope_without_accepting_stale_membership(rea
     assert [event["outcome"] for event in expected][-2:] == ["conflict", "conflict"]
 
 
-@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("legacy", [False, True, "old-columns"])
 def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
     state, tmp_path, legacy
 ):
@@ -442,11 +442,14 @@ def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
 
     root, old, owner, _manifest, _data = state
     code = secrets.token_urlsafe(32)
-    if legacy:
+    if legacy is True:
         with old._transaction(write=True) as conn:
             conn.execute("DROP TABLE sync_pairings")
     else:
-        old.create_pairing(owner, code)
+        old.create_pairing(owner, code, checkpoint=old.history_page(owner)["checkpoint"])
+        if legacy == "old-columns":
+            with old._transaction(write=True) as conn:
+                conn.execute("ALTER TABLE sync_pairings DROP COLUMN history_checkpoint")
     original = dump(old.path)
     source, destination = tmp_path / "pair-backup", tmp_path / "pair-recovered"
     backup.export(root, source)

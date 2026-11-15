@@ -311,7 +311,7 @@ Source after candidate c1cbef2 connects durable history to the actual desktop
 SyncSession and authenticated bounded HTTP transport. The delivered c1cbef2 app
 and mobile v29 still use their earlier frontier/execution protocol. Current source
 adds mobile proof persistence and transaction-bound attachment guards below.
-Device-control guards remain open. This is not durable
+Device-control and invitation guards are documented below. This is not durable
 split-brain fencing, malicious-authority protection or installed/hosted acceptance.
 No new server or daemon is added; this is a version1 proof subprotocol alongside
 existing operation-envelope versions.
@@ -365,7 +365,7 @@ These checks do not protect against a malicious authority, unchecked database
 replacement, forged metadata, an in-place restore or two active service forks.
 Desktop event/ack proof persistence and transaction-bound research pushes are
 implemented below, followed by mobile proof persistence and attachment guards.
-Device-control guards, durable authority identity/fencing and installed/hosted
+Durable authority identity/fencing and installed/hosted
 acceptance remain gates.
 
 ### Verified desktop flow and wire contract
@@ -459,7 +459,7 @@ Older importers must reject v3 instead of silently discarding proof metadata.
 
 Validated on isolated Windows Chromium and loopback Python fixtures. This does not
 establish physical Safari durability, native installed-device convergence, hosted
-access, durable authority fencing or history guards for device-control writes.
+access or durable authority/device-control history fencing.
 The delivered c1cbef2/v29 candidate has not been rebuilt for this source.
 
 
@@ -495,7 +495,62 @@ checks; it does not retract bytes already transmitted.
 Mobile Engine.historyCheckpoint(generation) returns a copied higher retained point
 only after received-prefix preparation reaches the local cursor. Its original-source
 uploader receives that checkpoint explicitly and sends it on begin/append/commit.
-Unrelated downloads remain independently usable. Device-control mutation guards,
+Unrelated downloads remain independently usable. Device guards are described below;
 durable authority fencing and installed/hosted acceptance remain separate gates.
 The delivered c1cbef2 candidate and the earlier local v30 static artifact are unchanged;
 these source changes require a matching future client/service/static deployment.
+
+
+### Device controls and issuer-bound invitations
+
+Actual desktop DeviceClient.rename/revoke/create_pairing pass the local
+SyncClient.mutation_checkpoint() through the existing authenticated device context.
+That read-only method requires the received proof to reach the cursor and the
+retained acknowledgment to cover known unreceived acceptance. It neither syncs
+research implicitly nor writes protocol state. Unprepared/legacy evidence stops
+with guidance to preserve work and explicitly synchronize/review history.
+
+| Route | Closed request fields |
+|---|---|
+| `POST /v1/history/devices/rename` | device_id, label, checkpoint |
+| `POST /v1/history/devices/revoke` | device_id, checkpoint |
+| `POST /v1/history/devices/pairing/create` | code, checkpoint |
+
+HttpTransport/reference rename_device, revoke_peer and create_pairing accept the
+optional keyword-only checkpoint. Supplying it requires the verified route and
+checks the retained prefix in the authority write transaction. There is no fallback
+to legacy control routes. Catalog reads and local Disconnect remain independent.
+
+New verified invitations retain a bounded canonical history_checkpoint in the
+existing sync_pairings row. Issuance retries preserve the original point and expiry,
+even after a valid suffix advance; a legacy unproven invitation requires a fresh
+code instead of being silently upgraded. Scope/issuer ownership is checked before
+reading an existing invitation's proof. Fresh redeem_pairing and its exact claim
+retries verify the issued prefix inside the transaction that admits the new device.
+A mismatch leaves the code unclaimed and creates no credential; valid recovery can
+retry the same code. Invitation packets/responses contain no additional credentials
+or internal proof metadata. Browser completion uses the same admission boundary.
+An already admitted credential still follows existing resume/expiry/revocation
+semantics; research synchronization checks the client's own retained history.
+
+SyncClient.prepare_history_checkpoint() is called only by explicit desktop sync.
+It initializes a genuinely absent legacy proof table at the local zero seed, then
+the existing bounded preparation compares actual inbox records before upload.
+An existing table with missing/corrupt evidence is refused, never reset. Device
+controls remain read-only even on an old schema; the suggested sync/retry path is
+verified with a real legacy acknowledgment and retained inbox. This does not
+silently adopt unreceived legacy acknowledgments that lack sufficient evidence.
+
+Authority recovery accepts old seven-column and current proof-bearing invitation
+schemas, as well as pre-pairing backups. It carries no device grants or invitations
+into the new workspace. Existing old direct experiment APIs remain available;
+guarded clients do not downgrade to them. Production compatibility policy must
+refuse obsolete prototype writers when the host is hardened for release.
+
+These are research-prefix checks, not a journal/version proof of every control
+change. A rollback that preserves the research prefix can still undo device state;
+durable authority identity, control-history continuity and split-brain fencing
+remain release gates. No deployment, installed device or physical-phone acceptance
+is implied by local bearer/cookie/Qt fixtures. New mobile shell v31 supplies matching
+bilingual history-refusal guidance and discards old static shells without touching
+research caches. The delivered native/v29 candidate remains unchanged.

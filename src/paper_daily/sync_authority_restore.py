@@ -66,7 +66,7 @@ def _scope(conn, workspace, replacement):
         from paper_daily.sync_device_management import PAIRING_COLUMNS
 
         columns = tuple(row[1] for row in conn.execute("PRAGMA table_info(sync_pairings)"))
-        if columns != PAIRING_COLUMNS:
+        if columns not in (PAIRING_COLUMNS, PAIRING_COLUMNS[:-1]):
             raise ValueError("Authority pairing schema is unsupported")
     known = set()
     for table in (

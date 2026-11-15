@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from paper_daily.sync_device_management import PairingUnavailableError, device_label
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.workspace_devices import DeviceClient, DeviceContextChanged
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped
@@ -86,6 +87,7 @@ COPY = {
 
 
 COPY["en"].update({
+    "history": "Keep local research. Sync and review workspace history before changing devices.",
     "pair_unavailable": (
         "This service does not support pairing. "
         "Update it or use manual connection details."
@@ -97,6 +99,12 @@ COPY["en"].update({
     "pair_copied": "Pairing details copied. Paste them into Paperfact on your other device.",
 })
 COPY["zh-TW"].update({
+    "history": (
+        "\u8acb\u4fdd\u7559\u672c\u6a5f\u7814\u7a76\u8cc7\u6599"
+        "\uff0c\u5148\u540c\u6b65\u4e26\u6838\u5c0d\u5de5\u4f5c"
+        "\u5340\u6b77\u53f2\uff0c\u518d\u8b8a\u66f4\u88dd\u7f6e"
+        "\u8a2d\u5b9a\u3002"
+    ),
     "pair_unavailable": "此服務尚不支援配對，請更新服務或使用進階手動連線資料。",
     "pair": "配對另一台裝置", "pair_copy": "複製配對資料",
     "pair_help": "請只貼到自己的另一台裝置；這會允許存取此工作區。",
@@ -117,7 +125,9 @@ class DeviceWorker(QThread):
             self.result = self.task(self.ticket)
         except Exception as error:
             self.error = (
-                "pair_unavailable"
+                "history"
+                if isinstance(error, SyncHistoryUnavailable)
+                else "pair_unavailable"
                 if isinstance(error, PairingUnavailableError)
                 else "authorization"
                 if isinstance(error, PermissionError)

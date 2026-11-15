@@ -107,3 +107,10 @@ HttpTransport.uploadOriginalBody(token, payload, bytes, signal, checkpoint).
 The matching service validates the retained prefix at begin/append/commit, including
 its final ownership transaction. Unsupported verified routes preserve pending work;
 see [attachment guards and remaining gates](../docs/sync-http.md#attachment-history-guards).
+
+
+Current source uses shell v31 with history-refusal guidance for pending browser
+pairing. New invitations created by the desktop retain issuer history on the
+service; browser admission checks it before creating a device. Older installed
+shells remain historical candidates, not proof of current hosting/device acceptance.
+See [device and pairing contract](../docs/sync-http.md#device-controls-and-issuer-bound-invitations).

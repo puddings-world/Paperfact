@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 from contextlib import closing
 from pathlib import Path
@@ -1780,6 +1781,42 @@ class SyncClient:
             received, accepted = self._history_in(conn)
             return (accepted if accepted["sequence"] > received["sequence"] else received
                     ) if acknowledged else received
+
+    def prepare_history_checkpoint(self):
+        """Initialize only a missing legacy proof table during explicit synchronization."""
+        with self.journal.transaction() as conn:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                            "AND name='paperfact_sync_history_checkpoint'").fetchone():
+                self._history_in(conn)
+                return False
+            conn.execute("CREATE TABLE paperfact_sync_history_checkpoint ("
+                         "id INTEGER PRIMARY KEY CHECK(id=1),sequence INTEGER NOT NULL,"
+                         "sha256 TEXT NOT NULL,ack_sequence INTEGER NOT NULL,"
+                         "ack_sha256 TEXT NOT NULL)")
+            seed = history_seed(self.journal.workspace_id)
+            conn.execute("INSERT INTO paperfact_sync_history_checkpoint VALUES(1,0,?,0,?)",
+                         (seed, seed))
+            return True
+
+    def mutation_checkpoint(self):
+        """Read a fully prepared local proof without receiving or changing research."""
+        try:
+            with closing(self.journal._connect()) as conn:
+                conn.execute("BEGIN")
+                received, acknowledged = self._history_in(conn)
+                cursor = conn.execute("SELECT sequence FROM paperfact_sync_cursor").fetchone()[0]
+                latest = conn.execute(
+                    "SELECT COALESCE(MAX(server_revision),0) FROM paperfact_sync_operations"
+                ).fetchone()[0]
+                if (type(cursor) is not int or type(latest) is not int
+                        or cursor < 0 or latest < 0 or received["sequence"] != cursor
+                        or latest > max(cursor, acknowledged["sequence"])):
+                    raise SyncHistoryUnavailable(
+                        "Synchronize and review retained history before this action")
+                return acknowledged if acknowledged["sequence"] > cursor else received
+        except sqlite3.DatabaseError as error:
+            raise SyncHistoryUnavailable(
+                "Synchronize retained history before this action; keep local work") from error
 
     def _prepare_received_history(self, transport, token, limit):
         before = self.history_checkpoint()

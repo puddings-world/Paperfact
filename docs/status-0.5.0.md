@@ -47,11 +47,14 @@ refused before writes, preserving the note and pending receipt for retry.
 Inbox preparation is bounded and compared to actual local records;
 new writes verify the observed tip in the authority transaction. Concurrent advance
 retries, forged proofs stop, and inactive backup proof records remain preserved.
-Mobile v30 saves received/acknowledged proofs with the local transaction and retains
+Mobile v31 saves received/acknowledged proofs with the local transaction and retains
 inactive v3 recovery observations. Actual desktop/mobile attachment uploads now
 carry the retained prefix into server mutation transactions, including a second
-check after physical verification and before ownership. Device-control guards,
-native legacy-ack review/adoption UI and durable authority fencing remain open. Candidate c1cbef2 has not been rebuilt for
+check after physical verification and before ownership. Actual desktop device
+controls now require prepared proofs; fresh invitation claims recheck the original
+issuer prefix. Explicit sync initializes missing legacy proof tables without
+resetting damaged evidence. Native legacy-ack review/adoption UI and durable
+authority fencing remain open. Candidate c1cbef2 has not been rebuilt for
 this source. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated

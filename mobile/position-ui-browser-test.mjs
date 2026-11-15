@@ -165,7 +165,7 @@ await check('read-only snapshot dialog has no editable page or count authority b
 });
 await check('shell contains both position UI modules with exact parser assets before offline reopen',async()=>{
   await navigator.serviceWorker.register('./sw.mjs',{type:'module'});await navigator.serviceWorker.ready;
-  const cache=await caches.open('paperfact-mobile-shell-v30');for(const path of ['position-view.mjs','position-dialog.mjs','vendor/pdfjs-6.4.299/pdf.worker.mjs'])
+  const cache=await caches.open('paperfact-mobile-shell-v31');for(const path of ['position-view.mjs','position-dialog.mjs','vendor/pdfjs-6.4.299/pdf.worker.mjs'])
     assert(await cache.match('./'+path),'Missing UI shell asset');
 });
 globalThis.runOfflinePositionChecks=async()=>{

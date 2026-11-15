@@ -226,7 +226,7 @@ if(fixtureResponse.ok) {
 }
 await check('all parser/worker/license shell assets installed before offline continuation',async()=>{
   await navigator.serviceWorker.register('./sw.mjs',{type:'module'});await navigator.serviceWorker.ready;
-  const cache=await caches.open('paperfact-mobile-shell-v30');
+  const cache=await caches.open('paperfact-mobile-shell-v31');
   for(const name of ['pdf.mjs','pdf.worker.mjs','LICENSE','provenance.json'])assert(await cache.match('./vendor/pdfjs-6.4.299/'+name),'Missing offline '+name);
 });
 globalThis.runOfflinePositionChecks=async()=>{

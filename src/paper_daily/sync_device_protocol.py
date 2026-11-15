@@ -11,6 +11,10 @@ ROUTES = {"/v1/devices/" + name for name in ("list", "rename", "revoke")}
 PAIR_CREATE = "/v1/devices/pairing/create"
 PAIR_REDEEM = "/v1/devices/pairing/redeem"
 ROUTES |= {PAIR_CREATE, PAIR_REDEEM}
+HISTORY_ROUTES = {
+    "/v1/history/devices/rename", "/v1/history/devices/revoke",
+    "/v1/history/devices/pairing/create",
+}
 
 
 def pairing_created(value, identity=None):
@@ -113,9 +117,16 @@ def request(service, path, token, value):
         result = service.redeem_pairing(token, **value)
         return pairing_claimed(result, value["workspace_id"], value["device_id"])
     identity = service.session_info(token)
+    guard = {}
+    if path in HISTORY_ROUTES:
+        if "checkpoint" not in value or not isinstance(value["checkpoint"], dict):
+            raise ValueError("A retained history checkpoint is required")
+        value = dict(value)
+        guard["checkpoint"] = value.pop("checkpoint")
+        path = "/v1/devices/" + path[len("/v1/history/devices/"):]
     if path == PAIR_CREATE:
         closed(value, {"code"})
-        result = service.create_pairing(token, pairing_secret(value["code"]))
+        result = service.create_pairing(token, pairing_secret(value["code"]), **guard)
         return pairing_created(result, identity)
     if path.endswith("/list"):
         closed(value, {"after", "limit"})
@@ -125,7 +136,7 @@ def request(service, path, token, value):
     if path.endswith("/rename"):
         closed(value, {"device_id", "label"})
         target, label = _device_id(value["device_id"]), device_label(value["label"])
-        return renamed(service.rename_device(token, target, label), target, label)
+        return renamed(service.rename_device(token, target, label, **guard), target, label)
     closed(value, {"device_id"})
     target = _device_id(value["device_id"])
-    return revoked(service.revoke_peer(token, target), target)
+    return revoked(service.revoke_peer(token, target, **guard), target)
