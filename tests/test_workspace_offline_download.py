@@ -318,6 +318,12 @@ def test_private_empty_filter_never_means_download_everything(world):
             assert files.status()['pending'] == 4
             result = files.download_selected([])
             assert result['transfer_targets'] == result['remaining_targets'] == 0
+            assert files.download_selected([], artifact_ids=[])['transfer_targets'] == 0
+            for bad in ([{}], [world['selected']] * 457):
+                with pytest.raises(ValueError):
+                    files.download_selected([world['selected']], artifact_ids=bad)
+            with pytest.raises(ValueError):
+                files.download_selected([], artifact_ids=[world['selected']])
             assert files.status(paper_ids=[])['pending'] == 0
             assert files.status()['pending'] == 4
             with pytest.raises(ValueError):

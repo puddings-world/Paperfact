@@ -395,10 +395,14 @@ class SyncSession:
 
             def signature(value):
                 return [(row["paper_id"], row["portable_id"], row["pdf"]["target"],
-                         [(item["entity_id"], item["operation"]) for item in row["artifacts"]],
+                         [(item["entity_id"], item["operation"], item.get("source_pins", ()))
+                          for item in row["artifacts"]],
                          row["artifact_inventory_available"]) for row in value["papers"]]
 
             expected = signature(plan)
+            artifact_ids = list(dict.fromkeys(
+                item["entity_id"] for row in plan["papers"] for item in row["artifacts"]
+            ))
             with self.authorized(ticket) as (transport, token, identity, live):
                 if offline.identity != identity:
                     raise EnrollmentRequired("The selected workspace does not match the connection")
@@ -425,13 +429,20 @@ class SyncSession:
                 try:
                     progress({"stage": "offline_download", "selected": len(selected),
                               "steps": 0})
-                    download = files.download_selected(portable)
+                    download = files.download_selected(portable, artifact_ids=artifact_ids)
                     selected_live()
-                    status = {**files.status(paper_ids=portable), **download}
+                    status = {**files.status(paper_ids=portable, artifact_ids=artifact_ids),
+                              **download}
                     missing = sum(row["pdf"]["target"] is None for row in plan["papers"])
+                    missing_artifacts = sum(item["operation"] is None
+                                            for row in plan["papers"] for item in row["artifacts"])
+                    current = offline.plan(selected, ticket)
+                    stale = any(item["state"] == "stale"
+                                for row in current["papers"] for item in row["artifacts"])
                     inventory = all(row["artifact_inventory_available"] for row in plan["papers"])
                     partial = bool(status["pending"] or status["failed"]
-                                   or status["remaining_targets"] or missing
+                                   or status["remaining_targets"] or missing or missing_artifacts
+                                   or stale
                                    or not inventory or not status["storage_registered"])
                     selected_live()
                     with self._state:
@@ -442,6 +453,7 @@ class SyncSession:
                     return {"state": "partial" if partial else "downloaded",
                             "paper_ids": selected, "portable_ids": portable,
                             "attachments": status, "missing_pdf_manifests": missing,
+                            "missing_artifact_manifests": missing_artifacts,
                             "partial": partial, "verification_required": True}
                 finally:
                     files.close()

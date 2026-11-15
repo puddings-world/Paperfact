@@ -18,20 +18,30 @@ result = session.prepare_offline(
 
 `SyncSession.prepare_offline` accepts at most 100 selected **local** paper IDs.
 The existing `OfflineService.plan` resolves and validates their portable identities
-and current desired PDF/editable-deck manifests. Duplicates are collapsed. Empty
+and current desired PDF/editable-deck/required-original manifests. Duplicates are
+collapsed. Empty
 selection is a local no-op; invalid selections/budgets fail before authentication.
 A nonempty selection requires an explicitly connected matching workspace/device.
 There is no implicit enrollment, metadata push/pull, provider/model call or pin.
 Unknown remote manifests remain unknown until a separate explicit metadata sync.
 
 The action downloads exactly the current primary PDFs and both supported editable
-deck slots (`notes`, `guide`) for those selected portable papers. The blob store
+deck slots (`notes`, `guide`) for those selected portable papers, plus the exact
+owned originals needed by their current annotations and saved Lineage. Selecting
+one focal paper therefore includes its declared corpus originals, without
+activating the other papers' primary PDFs or fetching their unrelated decks. The blob store
 naturally deduplicates shared assets; bytes shared by two decks need not be fetched
 again. Unrelated desired/applied bindings and transfer rows remain untouched.
 
-`AttachmentSteps.download_selected(portable_ids)` is the private integration seam.
-`download_pending(paper_ids=None, include_applied=False)` and
-`status(paper_ids=None)` retain the old global default behavior for ordinary sync.
+`AttachmentSteps.download_selected(portable_ids, *, artifact_ids=None)` is the
+private integration seam. The guarded session passes exact artifact IDs from its
+validated offline plan to both download and status; these IDs are not a public
+input or file capability. They are canonical UUIDs, deduplicated and limited to
+456 entries (two slots per selected paper plus 256 original dependencies).
+`download_pending(paper_ids=None, include_applied=False, artifact_ids=None)` and
+`status(paper_ids=None, artifact_ids=None)` retain the old global default behavior
+when no exact plan scope is supplied. Their selected exact queries accommodate
+that bounded complete scope rather than truncating it to the old 200-file page.
 An explicit empty filter means no targets, never all targets. The selected action
 also rechecks already-applied targets: a matching applied metadata row does not
 prove the corresponding immutable bytes still exist or are intact.
@@ -44,7 +54,8 @@ workspace/device before reading private bytes. Credentials remain in the session
 existing transfer receipts persist only operation/endpoint/progress metadata.
 
 A selected guard revalidates local/portable identity, current desired PDF targets,
-canonical deck operations and artifact inventory before/after coordinator steps,
+canonical artifact operations, native source lifetime pins and artifact inventory
+before/after coordinator steps,
 private transport requests and guarded commits. Applied-version changes caused by
 the download are permitted; a new desired version is not silently substituted for
 the one selected when the action began. Workspace/session changes, disconnect,
@@ -70,7 +81,10 @@ asset counts. It never invents a total percentage or ETA. The result contains:
   `transfer_targets`, `attempted_targets`, `completed_targets` and
   `remaining_targets`, plus storage availability.
 - `missing_pdf_manifests`: selected papers with no known current PDF manifest.
-- `partial`: true for unfinished, failed, missing-manifest or unconfigured work.
+- `missing_artifact_manifests`: required originals with no known manifest; a zero
+  transfer-pending counter cannot turn these into a completed download.
+- `partial`: true for unfinished, failed, missing-manifest, stale source-pin or
+  unconfigured work.
 - `verification_required=True`; `complete_offline_verified` stays false.
 
 A zero metadata pending count cannot hide an unattempted or corrupt already-applied

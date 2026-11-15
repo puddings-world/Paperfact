@@ -4,7 +4,7 @@ import time
 
 from paper_daily.sync_blobs import BlobStore
 from paper_daily.sync_file_transfers import FileTransfers
-from paper_daily.sync_files import file_id
+from paper_daily.sync_files import file_id, uuid
 from paper_daily.sync_transfers import DocumentTransfers
 from paper_daily.workspace_service import Cancelled, _binding, _paths, _tables
 from paper_daily.workspace_sync import SyncStopped
@@ -120,21 +120,25 @@ class AttachmentSteps:
         column = "json_extract(d.operation,'$.payload.paper_id')" if artifacts else "d.paper_id"
         return f" AND {column} IN ({','.join('?' for _ in values)})", values
 
-    def download_selected(self, paper_ids):
+    def download_selected(self, paper_ids, *, artifact_ids=None):
         """Explicitly recheck/download selected targets, including previously applied files."""
-        return self.download_pending(paper_ids=paper_ids, include_applied=True)
+        return self.download_pending(
+            paper_ids=paper_ids, include_applied=True, artifact_ids=artifact_ids,
+        )
 
-    def download_pending(self, *, paper_ids=None, include_applied=False):
+    def download_pending(self, *, paper_ids=None, include_applied=False, artifact_ids=None):
         # Exact target comparisons skip already applied objects, so the first
         # page cannot permanently starve later papers/assets on repeated clicks.
         if type(include_applied) is not bool:
             raise ValueError("Applied-file selection must be boolean")
         pdf_scope, pdf_args = self._scope(paper_ids)
-        file_scope, file_args = self._scope(paper_ids, artifacts=True)
+        file_scope, file_args = self._artifact_scope(paper_ids, artifact_ids)
         pdf_pending = "" if include_applied else " AND (a.target IS NULL OR a.target!=d.target)"
         file_pending = ("" if include_applied
                         else " AND (a.operation IS NULL OR a.operation!=d.operation)")
         pdf_limit, file_limit = (64, 64) if paper_ids is None else (100, 200)
+        if artifact_ids is not None:
+            file_limit = max(file_limit, len(file_args))
         with self.client.journal.transaction() as conn:
             pdfs = conn.execute(
                 "SELECT d.paper_id FROM research_document_desired d LEFT JOIN "
@@ -160,9 +164,9 @@ class AttachmentSteps:
         return {"transfer_targets": len(targets), "completed_targets": completed,
                 "attempted_targets": attempted, "remaining_targets": len(targets) - completed}
 
-    def status(self, *, paper_ids=None):
+    def status(self, *, paper_ids=None, artifact_ids=None):
         pdf_scope, pdf_args = self._scope(paper_ids)
-        file_scope, file_args = self._scope(paper_ids, artifacts=True)
+        file_scope, file_args = self._artifact_scope(paper_ids, artifact_ids)
         with self.client.journal.transaction() as conn:
             pending = conn.execute(
                 "SELECT COUNT(*) FROM research_document_desired d LEFT JOIN "
@@ -181,3 +185,24 @@ class AttachmentSteps:
             "storage_registered": self.pdf is not None or self.artifact is not None,
             "complete_offline_verified": False,
         }
+
+
+    def _artifact_scope(self, paper_ids, artifact_ids):
+        """Use the guarded offline plan's exact declared dependency IDs when supplied."""
+        if artifact_ids is None:
+            return self._scope(paper_ids, artifacts=True)
+        from paper_daily.workspace_offline import MAX_ASSETS, MAX_PAPERS
+
+        selected = self._selection(paper_ids)
+        if selected is None or not isinstance(artifact_ids, (list, tuple)):
+            raise ValueError('Exact artifact selection requires an explicit paper selection')
+        if len(artifact_ids) > 2 * MAX_PAPERS + MAX_ASSETS:
+            raise ValueError('Selected artifact dependencies exceed the offline bound')
+        for identity in artifact_ids:
+            uuid(identity)
+        values = list(dict.fromkeys(artifact_ids))
+        if not selected and values:
+            raise ValueError('Empty paper selection cannot download dependencies')
+        if not values:
+            return ' AND 0', []
+        return f" AND d.entity_id IN ({','.join('?' for _ in values)})", values

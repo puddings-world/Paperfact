@@ -46,12 +46,13 @@ Both results contain:
 - `scope: selected_current_manifests`, and one `papers` entry per selected paper.
 - Each entry has local/portable identity, a bounded title, current pin intent,
   desired/applied PDF information and both supported editable-deck slots
-  (`notes`, `guide`) when declared.
-- `required_bytes` and `required_assets` deduplicate current PDF/deck closure
+  (`notes`, `guide`) when declared, plus required owned originals from current
+  reading annotations and saved Lineage corpora.
+- `required_bytes` and `required_assets` deduplicate PDF/deck/original closure
   descriptors. They count the entire declared closure, not estimated new download
   bytes; disk space for extra projections/temporary files remains separate.
 - `whole_workspace_offline_verified=False` always. This service does not inspect
-  arbitrary legacy caches, all historical versions, linked external papers,
+  arbitrary legacy caches, all historical versions, undeclared external papers,
   online citation targets, remote Google Slides, or every reader interaction.
 
 `status` adds per-paper and aggregate `ready`, plus `partial`, `verified_bytes`,
@@ -61,7 +62,12 @@ larger because existing closure verifiers can inspect a shared image twice.
 
 A paper is ready only if its current desired PDF is applied and verified, the
 artifact inventory exists, and every declared current editable deck is applied,
-byte-verified and tied to that PDF's exact source hash. Missing PDF manifests,
+byte-verified and tied to that PDF's exact source hash. Required current annotation
+originals and each available Lineage source must also have an applied, verified
+owned-original manifest. Lineage retains its exact source/parent lifetime pins;
+an equal-byte original from a different owner or lifetime cannot satisfy it.
+The focal original still needs its Lineage companion manifest even if its bytes
+match the primary PDF. Missing PDF/original manifests,
 unapplied replacement versions, absent assets, corrupt bytes and unknown or
 mismatching deck source provenance never become a ready claim. Intact deck bytes
 with unknown source provenance remain distinguishable from corrupt bytes.
@@ -71,12 +77,23 @@ space; those remain reader/platform acceptance checks.
 
 PDF/artifact states include `unchecked`, `missing_manifest`, `unbound`, `stale`,
 `verified`, `unconfigured`, `budget_exceeded`, `unavailable` and `invalid`.
-Artifact `source_state` is independently `current`, `unknown` or `mismatch`.
+Artifact `source_state` is independently `current`, `original`, `unknown` or
+`mismatch`. `source_pins` retains the bounded native Lineage constraints for snapshot
+invalidation; it grants no new ownership. An unavailable source declared by the
+saved report remains unavailable, not a reason to synthesize or fetch another PDF.
 User-facing copy should distinguish absent bytes, pending versions, integrity
 failures and a verification budget limit rather than treating them all as
 network failures.
 
 ## Resource bounds and invalidation
+
+The selected metadata plan validates the existing closed annotation and Lineage
+row contracts before following their owner mappings. It accepts at most 64 MiB
+of source metadata across the selection and 256 additional original dependencies,
+plus the two declared deck slots per selected paper. Oversized/unknown rows,
+missing owners or missing native Lineage pins refuse the plan before transport.
+No arbitrary path or citation URL is interpreted as an attachment capability.
+
 
 The default and maximum per-pass budgets are 64 MiB of manifest-described
 verification work, 256 blob checks and 10 seconds (time may be explicitly set

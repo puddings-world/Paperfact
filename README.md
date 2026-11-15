@@ -204,6 +204,8 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.
+- Prepare selected papers offline with the exact originals used by saved annotations
+  and research lineage.
 - Prepare existing CLI/MCP-created research for sync while archiving old import requests safely.
 - Preserve known reading-text caches privately in reviewed copies and backups, without treating them as verified originals.
 - Verify received and newer acknowledged history before uploading; pin the service execution during transfers and preserve local work if it changes. Desktop, mobile and service must support the same continuity handshake.

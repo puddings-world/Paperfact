@@ -1,8 +1,10 @@
 """Freshly enrolled Lineage travels through real sync and attachment operations."""
 
+import hashlib
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from test_lineage_enrollment import corpus as corpus
 from test_lineage_enrollment import selection
 from test_lineage_jobs import work
@@ -13,17 +15,22 @@ from test_workspace_sync import Native
 from paper_daily import lineage_bound_originals, lineage_projection, lineage_sets, sync_bootstrap
 from paper_daily import research_generation as generation
 from paper_daily.manual_highlight_ops import observe_owner
+from paper_daily.sync_artifacts import paths
+from paper_daily.sync_blobs import BlobManifest
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_journal import Journal
 from paper_daily.sync_research import research_projection_writer, research_writer
 from paper_daily.sync_service import ReferenceService
 from paper_daily.workspace_enrollment import EnrollmentService
-from paper_daily.workspace_service import Ticket
+from paper_daily.workspace_offline import OfflineService
+from paper_daily.workspace_service import SnapshotChanged, Ticket
 from paper_daily.workspace_sync import SyncSession
 from paper_daily.workspace_sync_files import AttachmentSteps
 
 
-def test_enrolled_report_reaches_peer_before_verified_original_download(active, corpus, tmp_path):
+def test_enrolled_report_reaches_peer_before_verified_original_download(
+    active, corpus, tmp_path, monkeypatch,
+):
     owner, original = active
     expected = {
         binding["source_id"]: (corpus[1] / (binding["paper_id"] + ".pdf")).read_bytes()
@@ -100,6 +107,80 @@ def test_enrolled_report_reaches_peer_before_verified_original_download(active, 
         travel = SyncSession(peer_path, transport_factory=lambda url: Native(url, authority, []))
         travel.connect(endpoint, workspace, peer_device, peer_token, Ticket())
         try:
+            # A reader taking only the focal paper still needs its cited corpus originals.
+            focal_download = travel.prepare_offline([remote["paper_id"]], Ticket())
+            assert focal_download["state"] == "downloaded" and not focal_download["partial"]
+            for source in body["report"]["sources"]:
+                proof = work(lineage_bound_originals.prepare, loaded, remote, source["id"])
+                assert proof is not None, "Focal offline preparation omitted a Lineage original"
+            offline = OfflineService(peer_path)
+            from paper_daily import workspace_offline
+
+            with monkeypatch.context() as patch:
+                patch.setattr(workspace_offline, "MAX_SOURCE_METADATA", 1)
+                with pytest.raises(ValueError, match="aggregate bound"):
+                    offline.plan([remote["paper_id"]])
+            report = offline.status([remote["paper_id"]])
+            assert report["ready"] and len(report["papers"][0]["artifacts"]) == 3
+            verification = offline.verification([remote["paper_id"]])
+            assert verification.advance()["ready"]
+            from paper_daily import lineage_dependencies
+
+            with peer.journal.transaction() as conn:
+                marker_id, retained = conn.execute(
+                    "SELECT entity_id,operation_json FROM research_lineage_sync_sources "
+                    "WHERE paper_id=?", (remote["paper_id"],),
+                ).fetchone()
+                import json
+
+                changed_pin = json.loads(retained)
+                changed_pin["source_dependencies"][0]["incarnation"] = str(uuid4())
+                conn.execute(
+                    "UPDATE research_lineage_sync_sources SET operation_json=? WHERE entity_id=?",
+                    (lineage_dependencies.canonical_operation(changed_pin), marker_id),
+                )
+            # Identical stored bytes cannot satisfy another original lifetime.
+            stale = offline.status([remote["paper_id"]])
+            assert not stale["ready"]
+            assert any(item["state"] == "stale" for item in stale["papers"][0]["artifacts"])
+            with pytest.raises(SnapshotChanged):
+                verification.advance()
+            assert travel.prepare_offline([remote["paper_id"]], Ticket())["state"] == "partial"
+            with peer.journal.transaction() as conn:
+                conn.execute(
+                    "UPDATE research_lineage_sync_sources SET operation_json=? WHERE entity_id=?",
+                    (retained, marker_id),
+                )
+            verification = offline.verification([remote["paper_id"]])
+            assert verification.advance()["ready"]
+            related = body["report"]["sources"][-1]
+            raw = expected[related["id"]]
+            with peer.journal.transaction() as conn:
+                # Selecting the focal paper must not activate unrelated primary PDFs.
+                assert conn.execute(
+                    "SELECT count(*) FROM research_document_applied",
+                ).fetchone()[0] == 1
+                blobs = paths(conn)[0]
+            original_path = blobs.verified_path(
+                BlobManifest(hashlib.sha256(raw).hexdigest(), len(raw)),
+            )
+            original_path.write_bytes(b"x" * len(raw))
+            assert not offline.status([remote["paper_id"]])["ready"]
+            assert not verification.advance()["ready"]
+            original_path.write_bytes(raw)
+            entity = next(item["entity_id"] for item in report["papers"][0]["artifacts"]
+                          if item["slot"] == related["document_hash"])
+            with peer.journal.transaction() as conn:
+                saved = tuple(conn.execute(
+                    "SELECT * FROM research_file_desired WHERE entity_id=?", (entity,),
+                ).fetchone())
+                conn.execute("DELETE FROM research_file_desired WHERE entity_id=?", (entity,))
+            assert not offline.status([remote["paper_id"]])["ready"]
+            missing = travel.prepare_offline([remote["paper_id"]], Ticket())
+            assert missing["state"] == "partial" and missing["missing_artifact_manifests"] == 1
+            with peer.journal.transaction() as conn:
+                conn.execute("INSERT INTO research_file_desired VALUES(?,?,?)", saved)
+            assert offline.status([remote["paper_id"]])["ready"]
             selected = [binding["paper_id"] for binding in body["bindings"]]
             downloaded = travel.prepare_offline(selected, Ticket())
             assert downloaded["state"] == "downloaded" and not downloaded["partial"]

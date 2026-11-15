@@ -700,3 +700,22 @@ preview/prepare/open test displays the history-only snapshot count. Affected
 checks: five in 18.5s total, then two in 8.8s after the bound/UI changes (overlap).
 This is Windows source/Qt evidence after f7616ae, not native packaging or physical
 acceptance. No new global rule or skill installation is inferred.
+
+
+## 2026-11-15: selected offline reading includes its owned original dependencies
+
+Status: validated-local, Windows synthetic workspaces only. A focal-only request
+previously downloaded its own files while omitting related Lineage originals.
+The existing metadata plan now validates current annotation/Lineage rows and
+retains native source/parent lifetime pins. Download, pending status and late-result
+checks consume that same exact bounded scope. Equal bytes do not substitute for
+a different owner/lifetime, and missing manifests cannot hide behind zero pending
+transfers. Unrelated primary PDFs/decks stay outside the selected action.
+Evidence: existing test_lineage_enrollment_peer representative fails before the
+fix, then covers focal-only transfer, actual original inspection, ordinary/resumable
+verification, corruption, missing manifests and source-lifetime mismatch. Existing
+claim and reading-link source plus selection/cancellation/download regressions:
+61 passed in 263.5s total; strengthened native-pin representative 1 in 36.6s
+(overlap, not distinct requirements). CPU bounded, no real account/model/research.
+This reuses existing ownership/pin/guarded-plan patterns; it adds no wire protocol,
+new module, global rule or installed/cloud/mobile acceptance claim.

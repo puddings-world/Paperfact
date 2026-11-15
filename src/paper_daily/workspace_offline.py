@@ -39,6 +39,7 @@ MAX_PAPERS = 100
 MAX_PINS = 1000
 MAX_BYTES = 64 * 1024**2
 MAX_ASSETS = 256
+MAX_SOURCE_METADATA = 64 * 1024**2
 
 
 def _selection(values):
@@ -66,6 +67,8 @@ class OfflineService:
     def _snapshot(self, selection, ticket):
         self._check(ticket)
         rows = []
+        dependency_ids = set()
+        source_budget = [0]
         with _read(self.workspace.path) as conn:
             tables = _tables(conn)
             inventory = {'research_file_desired', 'research_file_applied'} <= tables
@@ -84,23 +87,18 @@ class OfflineService:
                 artifact_ids = [(slot, file_id(portable, 'deck', slot))
                                 for slot in ('notes', 'guide')]
                 pdf = desired_document(conn, portable)
-                required_originals = set()
-                if 'paper_claim_sets' in tables:
-                    claim = conn.execute(
-                        'SELECT * FROM paper_claim_sets WHERE paper_id=?', (local,),
-                    ).fetchone()
-                    if claim:
-                        from paper_daily import annotation_content
-
-                        columns = [item[1] for item in
-                                   conn.execute('PRAGMA table_info(paper_claim_sets)')]
-                        saved = dict(zip(columns, claim, strict=True))
-                        annotation_content.validate_row('claims', saved)
-                        required = saved['document_hash']
-                        if pdf is None or required != pdf['sha256']:
-                            entity = file_id(portable, 'original_source', required)
-                            artifact_ids.append((required, entity))
-                            required_originals.add(entity)
+                required_originals = {}
+                for owner, required, pins in _required_originals(
+                    conn, local, portable, tables, ticket, source_budget,
+                ):
+                    if not pins and owner == portable and pdf and required == pdf['sha256']:
+                        continue  # Already verified by this selected primary PDF.
+                    entity = file_id(owner, 'original_source', required)
+                    artifact_ids.append((required, entity))
+                    required_originals[entity] = pins
+                    dependency_ids.add(entity)
+                    if len(dependency_ids) > MAX_ASSETS:
+                        raise ValueError("Selected original dependencies exceed the offline bound")
                 applied = applied_document(conn, portable)
                 state = ('missing_manifest' if pdf is None else 'unbound'
                          if applied != pdf else 'stale' if not _paper_current(conn, pdf)
@@ -121,7 +119,8 @@ class OfflineService:
                             if entity in required_originals:
                                 artifacts.append({'entity_id': entity, 'slot': slot,
                                                   'operation': None, 'state': 'missing_manifest',
-                                                  'source_state': 'original'})
+                                                  'source_state': 'original',
+                                                  'source_pins': required_originals[entity]})
                             continue
                         bound = applied_file(conn, entity)
                         source = operation['payload']['source_document_hash']
@@ -131,8 +130,12 @@ class OfflineService:
                         artifacts.append({
                             'entity_id': entity, 'slot': slot, 'operation': operation,
                             'state': ('unbound' if bound != operation else 'stale'
-                                      if not paper_current(conn, operation) else 'unchecked'),
+                                      if not paper_current(conn, operation)
+                                      or not _source_pins_match(
+                                          operation, required_originals.get(entity, ()),
+                                      ) else 'unchecked'),
                             'source_state': source_state,
+                            'source_pins': required_originals.get(entity, ()),
                         })
                 pinned = conn.execute(
                     'SELECT CASE WHEN length(value)<=5 THEN value ELSE NULL END '
@@ -342,3 +345,101 @@ class OfflineService:
                       verified_bytes=sum(verified.values()), verification_bytes=spent,
                       verified_assets=len(verified), checked_assets=checked)
         return report
+
+
+def _required_originals(conn, local, portable, tables, ticket, budget):
+    """Closed saved-source dependencies, never a scan of unrelated file history."""
+    from paper_daily import (
+        annotation_content,
+        claim_content,
+        lineage_dependencies,
+        lineage_projection,
+        lineage_sets,
+        lineage_wire,
+    )
+
+    required = {}
+    for feature, table in annotation_content.FEATURES.items():
+        if table not in tables:
+            continue
+        ticket.check()
+        row = conn.execute(
+            f'SELECT paper_id,CASE WHEN length(CAST(body_json AS BLOB))<=? '
+            f'THEN body_json ELSE NULL END,source_hash,document_hash,written_at '
+            f'FROM {table} WHERE paper_id=?', (annotation_content.MAX_BYTES, local),
+        ).fetchone()
+        if row:
+            saved = dict(zip(('paper_id', *annotation_content.FIELDS.split()), row, strict=True))
+            _source_metadata_budget(saved, budget)
+            annotation_content.validate_row(feature, saved)
+            if saved['document_hash'] is not None:
+                required.setdefault((portable, saved['document_hash']), set())
+    if lineage_sets.TABLE in tables:
+        rows = conn.execute(
+            'SELECT paper_id,corpus_key,CASE WHEN length(CAST(body_json AS BLOB))<=? '
+            'THEN body_json ELSE NULL END,source_hash,document_hash,written_at '
+            'FROM paper_lineage_sets WHERE paper_id=? ORDER BY corpus_key LIMIT ?',
+            (lineage_sets.MAX_BYTES, local, lineage_sets.MAX_SETS + 1),
+        ).fetchall()
+        if len(rows) > lineage_sets.MAX_SETS:
+            raise ValueError('Selected Lineage exceeds its corpus bound')
+        for row in rows:
+            ticket.check()
+            saved = dict(zip(lineage_sets.COLUMNS.split(), row, strict=True))
+            _source_metadata_budget(saved, budget)
+            lineage_sets.validate_row(saved)
+            body = lineage_sets.decode(saved['body_json'])
+            if lineage_projection.TABLE not in tables:
+                raise ValueError('Selected Lineage requires its native source pins')
+            marker_id = conn.execute(
+                'SELECT entity_id FROM research_lineage_sync_sources '
+                'WHERE paper_id=? AND corpus_key=?', (local, saved['corpus_key']),
+            ).fetchone()
+            if marker_id is None:
+                raise ValueError('Selected Lineage requires its native source pins')
+            marker, operation = lineage_projection._marker(conn, marker_id[0])
+            if (marker['active'] != 1 or marker['fingerprint'] != claim_content.hashed(saved)
+                    or lineage_wire.decode_row(conn, operation['payload']) != saved):
+                raise ValueError('Selected Lineage differs from its native source pins')
+            source_pins = {
+                pin['source_id']: pin for pin in lineage_dependencies.validate(operation)
+            }
+            parents = {parent['id']: parent for parent in operation['parents']}
+            for binding, source in zip(body['bindings'], body['report']['sources'], strict=True):
+                if source['availability'] != 'available':
+                    continue  # No original bytes were declared; never invent an original.
+                owner = conn.execute(
+                    'SELECT m.sync_id FROM research_paper_identity m JOIN papers p '
+                    'ON p.id=m.local_id WHERE m.local_id=?', (binding['paper_id'],),
+                ).fetchone()
+                if owner is None:
+                    raise ValueError('Selected Lineage original requires its current paper owner')
+                pin = source_pins[source['id']]
+                if (pin['paper_id'] != owner[0]
+                        or pin['file_id'] != file_id(owner[0], 'original_source',
+                                                     source['document_hash'])):
+                    raise ValueError('Selected Lineage source owner differs from its native pin')
+                required.setdefault((owner[0], source['document_hash']), set()).add(
+                    (owner[0], pin['incarnation'], parents[owner[0]]['incarnation']),
+                )
+    if len(required) > MAX_ASSETS:
+        raise ValueError('Selected original dependencies exceed the offline bound')
+    return [(owner, digest, tuple(sorted(pins)))
+            for (owner, digest), pins in sorted(required.items())]
+
+
+def _source_pins_match(operation, pins):
+    return all(
+        operation['incarnation'] == incarnation
+        and operation['parents'] == [dict(kind='paper', id=owner, incarnation=parent)]
+        for owner, incarnation, parent in pins
+    )
+
+
+def _source_metadata_budget(saved, budget):
+    raw = saved['body_json']
+    if not isinstance(raw, str):
+        raise ValueError('Selected source metadata exceeds its row bound')
+    budget[0] += len(raw.encode('utf-8'))
+    if budget[0] > MAX_SOURCE_METADATA:
+        raise ValueError('Selected source metadata exceeds its aggregate bound')

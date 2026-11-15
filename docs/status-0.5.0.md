@@ -27,6 +27,11 @@ for the exact new folder, avoiding another manual reconnect sequence. Windows
 source/Qt startup and cancellation checks pass; physical native-store acceptance
 remains open.
 
+Source after candidate cb6ca66 now prepares the exact annotation/Lineage originals
+when only the focal paper is selected for offline reading. Verification keeps
+native source lifetime pins and refuses missing/corrupt dependencies; unrelated
+primary PDFs remain unbound. This newer source is not in the delivered candidate.
+
 The matching v28 PWA artifact is built, not deployed. Update client/service/assets
 together; old headerless peers are refused. Close older app processes before
 manual test-bundle replacement. Full runtime adoption, remaining legacy/source

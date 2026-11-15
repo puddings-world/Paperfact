@@ -6820,3 +6820,51 @@ additional worktree was introduced.
 - Documentation-only checkpoint: governed docs profile 58 passed in 3.76s /
   7.1s total, privacy and Ruff passed. No runtime source changed after the
   candidate; critical/native evidence is reused rather than rebuilding.
+
+
+## 2026-11-15: focal-only offline reading keeps annotation and Lineage originals
+
+- Reproduced an actual gap by extending the existing three-source peer journey:
+  selecting only the focal paper reported downloaded, but actual bound Lineage
+  original inspection returned None for a related source. Pre-fix test failed in
+  11.57s / 14.9s total at that missing-original assertion.
+- OfflineService now validates closed current annotation and Lineage source rows,
+  maps their actual workspace owners, and keeps exact native Lineage source/parent
+  lifetime pins. Even the focal original needs its Lineage companion manifest;
+  primary bytes alone do not supply that reading authority. Unknown/unavailable
+  sources are not synthesized. Metadata work is bounded to 64 MiB and 256 original
+  dependencies across the selection; current deck/PDF coverage stays intact.
+- The existing guarded SyncSession passes exact planned artifact IDs to download
+  and status, with source pins in its invalidation signature. Exact queries retain
+  the bounded full scope rather than the old 200-file cutoff, and leave unrelated
+  primary PDFs/decks alone. Missing original manifests and stale source pins now
+  return partial rather than a false downloaded result. Global ordinary-sync
+  transfer defaults and the live wire protocol are unchanged. No new runtime module.
+- Affected evidence: initial source/peer slice 3 passed in 30.64s / 33.8s total.
+  Final source/offline/selected-download/peer slice: 61 passed in 260.16s / 263.5s
+  total, within the 300s governor. Many invalid-input parameters each rebuild the
+  same full world in about four seconds; consolidate their side-effect-free setup
+  later without dropping assertions. Do not rerun this unchanged slice by habit.
+- The new reading-links variant first used plain SQLite, correctly rejected by
+  paperfact_capture. CaptureConnection alone then correctly retained a stale
+  candidate because deletion lacked an observation. The fixture now uses the real
+  observe_content/observe_target/expecting transaction; no guard/test was weakened.
+  That isolated variant passed in 4.77s / 7.9s total. Formatting failures before
+  behavior execution were corrected and are not counted as application passes.
+- Strengthened final peer representative: 1 passed in 33.30s / 36.6s total.
+  Focal-only preparation makes all three bound original viewers usable without
+  activating unrelated primary PDFs. Ordinary/resumable verification refuse a
+  corrupt related original; missing manifest reports partial with count 1. A
+  different native source pin with unchanged original bytes reports stale, rejects
+  old cached verification and remains partial; restoring actual retained metadata
+  restores readiness. The original whole-selection/history/retry assertions remain.
+- Existing focused skill reference records this local evidence; project copies
+  use the maintained synchronizer. No new portable rule or global installation.
+  New behavior is source after candidate cb6ca66, not in the delivered Mac package.
+  No real account, model, owner data, host, installed Mac/phone or public release.
+  Remaining adoption/mapping, hosting/device and persistent-history gates stay open.
+
+- Final integration gate: critical 14 passed in 7.13s / 10.5s total; docs/skill
+  consistency 58 passed in 1.86s / 5.1s total. Privacy and Ruff passed in both.
+  All local checks governed, one at a time. No historical full/release selection
+  or native rebuild was repeated; existing candidate identity remains cb6ca66.

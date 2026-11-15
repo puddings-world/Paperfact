@@ -1,10 +1,12 @@
 """Required historical claim sources are verified independently of primary B."""
 
 import hashlib
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import pytest
 from test_source_enrollment import claimed
 from test_sync_files import drain
 from test_workspace_enrollment import prepare
@@ -14,6 +16,7 @@ from paper_daily import store
 from paper_daily.document_reader import DocumentReader
 from paper_daily.sync_artifacts import paths
 from paper_daily.sync_blobs import BlobManifest, BlobStore
+from paper_daily.sync_capture import CaptureConnection, expecting, observe_content, observe_target
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_file_transfers import FileTransfers
 from paper_daily.sync_journal import Journal
@@ -35,8 +38,23 @@ def prepared(source, tmp_path):
     return result, db, primary.read_bytes(), original
 
 
-def test_required_A_is_offline_ready_with_B_but_missing_or_corrupt_A_never_ready(source, tmp_path):
+@pytest.mark.parametrize("feature", ["claims", "reading_links"])
+def test_required_A_is_offline_ready_with_B_but_missing_or_corrupt_A_never_ready(
+    source, tmp_path, feature,
+):
     result, db, current, original = prepared(source, tmp_path)
+    if feature == "reading_links":
+        with closing(sqlite3.connect(db, factory=CaptureConnection)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            claim = dict(conn.execute("SELECT * FROM paper_claim_sets").fetchone())
+            observed = [observe_content(conn, "paper_claim_sets", claim),
+                        observe_target(conn, "paper", "paper", "reading_links")]
+            with expecting(conn, observed):
+                conn.execute("DELETE FROM paper_claim_sets")
+                conn.execute("INSERT INTO paper_reading_links VALUES(?,?,?,?,?)", (
+                    "paper", json.dumps(dict(links=[], analysis_hash="b" * 64)),
+                    claim["source_hash"], claim["document_hash"], claim["written_at"],
+                ))
     service = OfflineService(db)
     report = service.status(["paper"])
     assert report["ready"] and report["papers"][0]["ready"]
