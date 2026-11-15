@@ -362,7 +362,17 @@ contract through the shared research boundary, with these requirements:
   legacy migration. Prove an independent peer/package roundtrip and stale-result,
   cancellation and retry behavior before calling list-survey auditing complete.
 
-This contract is planned work; the status notice does not satisfy these gates.
+Survey generation now captures the actual ordered member paper lifetimes in its
+existing private input observation. Recreating an input paper with identical ID,
+metadata and analyses cannot publish a result prepared for its earlier lifetime.
+The original survey stays intact and the result is retained as a candidate. Older
+pending observations without member lifetimes also require explicit review. This
+protects publication identity only: these local tokens are not PDF hashes,
+per-statement sources or portable evidence. Native generation/edit peer roundtrips
+still pass. No extra model call, table, protocol or consent change was introduced.
+
+The complete portable source-aware contract remains planned work; input lifetime
+protection and the status notice do not satisfy the remaining gates.
 
 ## Primary references informing the design
 

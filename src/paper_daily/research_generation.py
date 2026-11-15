@@ -153,6 +153,8 @@ def _inputs(conn, reader, owner_id):
 
         return overview_inputs(conn, owner_id, limit=MAX_ROWS)
     if reader == "survey":
+        from paper_daily.research_lifecycle import parent_lifecycle
+
         rows = conn.execute(
             "SELECT p.*,d.body AS dive,pc.summary AS context,"
             "(SELECT COUNT(*) FROM followups f WHERE f.paper_id=p.id) AS later "
@@ -173,6 +175,12 @@ def _inputs(conn, reader, owner_id):
             "list": _dict(conn.execute("SELECT * FROM lists WHERE id=?", (owner_id,)).fetchone()),
             "papers": [dict(row) for row in rows],
             "_members": [dict(row) for row in members],
+            # Equal restored rows are not the same input paper lifetime.
+            "_paper_lifetimes": [
+                {"paper_id": row["paper_id"],
+                 "lifecycle": parent_lifecycle(conn, "paper", row["paper_id"])}
+                for row in members
+            ],
         }
     raise ValueError("Unknown generation input reader")
 

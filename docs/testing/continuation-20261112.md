@@ -7655,3 +7655,32 @@ change remains unexecuted until a later coherent candidate. No new native build.
 Final screenshot/workflow selection5 pass0.75s/3.9s stages; critical14 pass7.54s/10.8s
 stages; docs58 pass1.80s/5.1s stages. Privacy/Ruff and whitespace pass. All local
 checks sequential and governed; no historical full suite or additional native run.
+
+
+## 2026-11-15: survey input lifetimes guard same-content recreation
+
+Source afterc4edb7b. Inspection of research_generation._inputs('survey') found it
+retained paper SQL/digest/order but not each input paper lifetime. Actual mocked
+survey.write reproduction deletes/recreates an input with identical metadata and
+retained analyses during the model call. Before the fix it publishes unexpectedly
+(red1 in1.93s/5.0s stages); this is a publication identity failure, not a PDF check.
+
+The existing captured input now includes each ordered member's existing local
+paper lifecycle token. Current publication re-reads those tokens in its normal
+transaction. Recreated papers keep the old survey intact and retain this output
+as a candidate. Old pending observations without those tokens cannot automatically
+publish; retry returns the retained candidate without another model invocation.
+No source substitution, original hash, scientific support, new schema, public
+protocol field or provider behavior is invented. Unchanged rendered prompts and
+normal generation remain unchanged. The complete portable survey evidence ledger,
+statement quotations, original transfer, recovery and UI remain open.
+
+Affected9 cases pass10.78s/14.0s stages: exact prompt, same-content input recreation,
+metadata/membership/order/dive/list changes and workspace-switch isolation. Three
+additional affected cases pass5.44s/8.6s: old pending context remains a candidate,
+actual enrolled generation/edit reaches an independent peer, newer edit wins.
+All use synthetic workspaces/fake providers under the existing sequential governor.
+No native rebuild, owner research access, model call, deployment or public release.
+
+Checkpoint gates: critical14 pass7.19s/10.4s stages; docs58 pass1.93s/5.3s stages.
+Privacy/Ruff/whitespace pass. Critical/release selector lists remain unchanged.

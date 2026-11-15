@@ -914,3 +914,17 @@ negative fixture initially fell through to its deck-damage branch; corrected onl
 that fixture dispatch while retaining the specific schema-initialization refusal.
 Final affected verifier/bundle/workflow42 pass34.05s/37.3s total. Remote tagv0.4.3
 independently resolves to the same3abdf434555583ca4a6827892d54b487e9e40671.
+
+
+### Survey input lifetime checkpoint (validated-local, 2026-11-15)
+
+An actual survey job could publish across delete/recreate of an input paper when
+its restored SQL rows were byte-equivalent. The owning list remained unchanged,
+so a list-only lifetime plus text/order comparison missed this case. Retain the
+existing local lifecycle token of each actual input paper and compare it at the
+normal publication boundary. The negative reproduction failed before this change;
+9 affected cases pass10.78s and3 native/legacy cases pass5.44s. The old survey and
+candidate body both survive; exact normal prompts and independent-peer writes
+remain covered. Local lifecycle tokens are not PDF-version or semantic evidence,
+not portable source grants, and not authority anti-rollback. No global rule or
+new skill is promoted; this is evidence for the existing dependency-lifetime method.

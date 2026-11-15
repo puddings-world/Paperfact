@@ -111,3 +111,10 @@ ledgers; overlapping case counts are not summed into a completion percentage.
 Source-only screenshot readiness waits for saved/rendered content and refuses
 blank PNGs. Local plain/WebEngine capture checks pass; native Mac screenshot
 changes await the next coherent candidate. App runtime is unchanged.
+
+
+Source afterc4edb7b now captures actual survey input paper lifetimes. A same-content
+paper recreation retains a candidate instead of overwriting the old overview;
+older pending inputs without lifetime observations require review. Normal enrolled
+generation/edit still reaches an independent peer. These are private publication
+guards, not complete portable claim sources or a new native artifact.

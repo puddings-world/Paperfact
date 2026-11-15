@@ -384,3 +384,52 @@ def test_editor_controls_match_language(conn, language, save, cancel, modes):
     finally:
         editor.deleteLater()
         app.processEvents()
+
+
+def test_recreated_input_paper_with_identical_content_cannot_publish_old_survey(conn, monkeypatch):
+    from paper_daily.research_lifecycle import parent_lifecycle
+
+    seed_survey(conn)
+    before = dict(conn.execute("SELECT * FROM papers WHERE id='a'").fetchone())
+    lifetimes = []
+
+    def complete(*_args, **_kwargs):
+        lifetimes.append(parent_lifecycle(conn, 'paper', 'a'))
+        # Restored research can retain the same ID, metadata and saved analyses.
+        conn.execute("DELETE FROM papers WHERE id='a'")
+        columns = ','.join(before)
+        marks = ','.join('?' for _ in before)
+        conn.execute(f'INSERT INTO papers({columns}) VALUES({marks})', tuple(before.values()))
+        conn.commit()
+        lifetimes.append(parent_lifecycle(conn, 'paper', 'a'))
+        assert dict(conn.execute("SELECT * FROM papers WHERE id='a'").fetchone()) == before
+        return BODY, 'ok'
+
+    monkeypatch.setattr(survey.llm, 'complete', complete)
+    success, reason = survey.write('cat', force=True)
+    assert lifetimes[0] and lifetimes[1] and lifetimes[0] != lifetimes[1]
+    assert not success and 'retained' in reason
+    assert survey.get(conn, 'cat')['body'] == 'Original survey'
+    saved = receipts(conn)
+    assert len(saved) == 1 and saved[0]['status'] == 'candidate'
+    assert json.loads(saved[0]['row_json'])['body'] == BODY
+
+
+def test_older_survey_observation_without_member_lifetimes_requires_review(conn):
+    from dataclasses import replace
+
+    seed_survey(conn)
+    context = research_generation.begin_generation(conn, table='list_surveys', owner_id='cat')
+    data = context.data
+    data['inputs'].pop('_paper_lifetimes')
+    old = replace(context, _json=json.dumps(data))
+    row = dict(list_id='cat', body=BODY, papers=2, spec=survey.SURVEY_SPEC,
+               written_at=store.now(), edited=0)
+    result = research_generation.publish_generated(old, row=row)
+    assert result.status == 'candidate'
+    assert survey.get(conn, 'cat')['body'] == 'Original survey'
+    saved = receipts(conn)
+    assert len(saved) == 1 and saved[0]['status'] == 'candidate'
+    assert json.loads(saved[0]['row_json'])['body'] == BODY
+    retry = research_generation.retry_publication(store.DB_PATH, result.request_id)
+    assert retry.status == 'candidate' and retry.candidate_id == result.candidate_id
