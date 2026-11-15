@@ -1001,3 +1001,18 @@ independent HTTP/mobile transfer prove above256KiB interruption/resumption, offl
 reopening and list retirement (5.094s). Related52 cases pass15.073s: literal localized
 cards, duplicate/retry/stale delivery, old deck/original behavior and public-shell
 assets. Local fixture evidence is not physical durability or hosted acceptance.
+
+
+### Portable aggregate research and detached recovery (validated-local, 2026-11-15)
+
+Survey package collection reuses actual native report/original grants and sealed
+byte proofs. Portable content contains no sender operation/device/workspace
+authority; historical input lifetimes are data only. Independent ZIP validation
+checks actual metadata, per-owner file closure, PDF pages and located quotes: a
+rehashed invented quote still fails. Six internal groups pass12.51s. Actual detached
+restore reproduced the paper-only artifact assumption (KeyError: paper_id,5.19s).
+An explicit survey branch preserves report/PDF objects and archived mappings
+inactive; no fake paper or revived source/device is introduced. Final7 package/
+recovery plus existing deck recovery1 pass12.65s. Reviewed re-export remains gated.
+This validates local data preservation, not completed user import/export, receiver
+mapping or global scientific trust. No new global rule is promoted.

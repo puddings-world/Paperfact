@@ -725,3 +725,25 @@ unchanged. Use `scripts/check_bounded.py.execute` for explicit Node file selecti
 the ordinary focused CLI deliberately accepts root `tests/test_*` paths. Do not
 widen its selector or run the full suite to work around that limit. One governed
 job at a time,2 logical CPUs/25% cap/90s per selected command in this slice.
+
+
+### Portable survey package contract checks
+
+`tests/test_survey_packages.py` uses seven behavior groups, each beginning with the
+actual trusted native publisher and owned original PDF. They cover exact report/
+PDF ZIP roundtrip without sender writer fields or SQL changes; missing/wrong-owner/
+path/case-aliased/extra members; a rehashed false located quotation; stale final
+export publication; cancel/PDF budgets/missing managed original without fallback;
+and admitted metadata/private-field refusal. Validation returns data, never native
+import authority. These are internal contract checks, not completed bundle-button,
+receiver mapping, bound/unbound import or device acceptance. Initial6 pass14.00s
+(21.7s stages) under the300s/2-core/25% governor. Fixed critical14/release38 remain
+unchanged. No existing assertion or user behavior was weakened.
+
+The seventh group runs an actual complete backup and independent detached restore:
+report/original objects and historical paper mappings survive, no live device or
+source grant is installed, and unreviewed detached re-export keeps its original
+safety refusal. It reproduces/fixes the old applied-artifact paper-owner assumption.
+Final package/recovery7 plus existing editable-deck recovery1 pass12.65s (16.9s
+stages). This is inactive archive preservation, not reviewed report reattachment
+or completed public list-package import/export.

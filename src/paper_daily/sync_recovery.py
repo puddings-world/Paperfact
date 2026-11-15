@@ -1738,6 +1738,13 @@ def _detached_files(stage, records):
         if operation["entity_id"] in records.hidden_files:
             continue
         payload = operation["payload"]
+        if payload["feature"] == "survey":
+            # Preserve the full verified body and original references in the detached
+            # objects/recovery_records archive, without adopting a sender writer.
+            validate_closure(
+                payload, lambda row: (stage / "objects" / row["sha256"]).read_bytes()
+            )
+            continue
         local = records.paper_map.get(payload["paper_id"])
         if local is None or local not in records.paper_ids:
             raise RecoveryError("Applied deck has no exact local paper mapping")

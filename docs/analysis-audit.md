@@ -571,3 +571,55 @@ preserving research caches. Native publisher/HTTP fixture acceptance is not depl
 PWA or real Safari/iOS/Android acceptance. AI/desktop/CLI/MCP dispatch, package/
 recovery mappings and durable stale-proposal review remain open. Legacy plain
 surveys are never silently assigned source provenance.
+
+
+## Portable survey package contract (internal, product adapters pending)
+
+`survey_packages` collects a source-complete report without serializing its native
+sync operation. It is not yet called by the public bundle buttons. Hook export
+and import together only after receiver mapping, local persistence and the
+existing import transaction can preserve this content in bound and unbound stores.
+
+The portable body is `paperfact.survey-package.v1`: list ID, exact historical
+report and declared source-to-package-paper bindings. Historical input lifetimes
+remain report content; no sender operation, device, workspace binding, source
+receipt or native incarnation is adopted as receiver authority. Package validation
+proves structure and bytes, not trustworthy paper identity or permission to write.
+The receiver must explicitly map actual package papers and mint its own owners.
+
+| Internal API | Contract |
+|---|---|
+| `collect(database, list_id, *, with_pdfs=True, cancelled=...)` | Read-only worker capture of the current native list report, actual original grants and paper mappings; return sealed `SurveyExport`, or None when no current managed report exists |
+| `SurveyExport.record / sources / papers / files` | Defensive portable descriptor/context copies and immutable report/PDF bytes; private observed native state stays off the wire |
+| `check_export(value)` | Final native database/context/owner and verified-byte freshness check before replacing an existing exported package |
+| `validate_package(archive, manifest, tables, *, cancelled=...)` | Validate actual ZIP metadata, descriptor/namespace closure, report digests, exact original bytes/page counts and every retained located quotation; return untrusted portable data only |
+| `verify_original(data, source, report, *, cancelled=...)` | Bounded original-byte and retained-location checks, never scientific support or receiver ownership |
+
+The future existing version-2 bundle extension uses capability `survey_evidence`,
+`tables.survey_reports` (at most one current report) and `manifest.survey_sources`.
+Reports use derived `survey-reports/...json` paths; originals use distinct derived
+`survey-sources/...pdf` paths per package paper. Duplicate/case-aliased names,
+missing/extra objects, wrong owners and private body fields fail closed. Metadata
+is checked before large native reads; PDFs have a64MiB aggregate budget. The
+canonical report remains at1MiB; a3MiB wrapper budget preserves legal long source
+bindings. No journal, sync or report bound was raised. Original files are not
+reread for final inventory checks after their size/hash was already verified.
+
+Unlocated excerpts remain explicitly unlocated. Even a rehashed report cannot
+claim a located quote absent from the exact PDF. A missing managed original does
+not fall back to a coincident legacy file. Cancellation or stale export leaves
+research unchanged. Research-package button integration, receiver native grants,
+conflict/retry/re-export behavior and reviewed report reattachment remain unfinished;
+codec tests are not evidence that public import/export already carries reports.
+
+
+### Detached report preservation
+
+The prior restore loop assumed every applied file had a paper owner, causing
+`KeyError: paper_id` for list-owned reports. It now verifies survey closure and
+retains the complete native report and original objects alongside their historical
+mappings in `recovery_records`. It does not project a report into a fake paper,
+create a new current survey or reactivate an old device/source grant. Independent
+restore preserves exact bytes. Keep the original backup: the existing reviewed
+recovery gate still blocks direct detached re-export. Reviewed reattachment and
+the eventual unbound list-report reader/publisher remain separate required work.

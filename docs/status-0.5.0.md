@@ -164,3 +164,20 @@ over256KiB through independent HTTP ranges, with interruption/resumption and lis
 retirement. This is not an updated deployed PWA or native installer. Physical
 Safari/iOS/Android, hosted authority and device durability gates remain open.
 AI/desktop/common dispatch, package/recovery and stale-proposal review are unfinished.
+
+
+Source after4b35801 adds an internal source-complete portable survey package
+collector/validator. Actual native ownership is checked before exporting immutable
+report/original bytes; the portable body excludes sync/device authority. ZIP
+metadata, exact PDF pages and located quotations are independently rechecked.
+This has not enabled a new bundle button or declared import success. Receiver
+mapping/persistence, atomic integration with bound/unbound imports, conflicts and
+re-export remain required. Existing public bundle behavior and installed packages
+are unchanged. See the portable contract and requirement map.
+
+Detached recovery now handles list-owned applied survey files without treating
+them as paper decks. A real backup/restore preserves the complete report, exact
+PDF objects and historical mappings as inactive data; no previous device/source
+authority is revived. The original archive remains required before reviewed
+re-export. Existing editable-deck recovery is also verified. This closes the
+restore crash, not the pending receiver/UI reattachment or public package adapters.

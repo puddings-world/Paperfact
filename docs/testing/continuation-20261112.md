@@ -7911,3 +7911,48 @@ fencing or a public release. Existing delivered packages stay unchanged. Plain
 legacy surveys remain source-unknown. Package/recovery mappings, durable stale
 proposal review and AI/desktop/common CLI/MCP creation are still open. Existing
 board/Git provide handoff; no new worktree, task board, daemon or cloud resource.
+
+
+## 2026-11-15: portable survey closure and detached-restore owner fix
+
+Base4b35801; existing stabilization tree only. Internal survey_packages collector
+reads actual native report/original grants, explicit inverse paper mappings and
+verified immutable bytes without SQL writes. Metadata is bounded before loading
+paper rows. The portable body carries exact historical research plus declared
+package-paper bindings, never a sender operation/device/workspace writer. Selected
+originals use per-owner derived paths; PDF budget64MiB, report1MiB, wrapper3MiB,
+metadata8MiB. Strict actual ZIP metadata and namespace/file closure checks retain
+missing-source states and independently verify every located quotation against
+PDF pages. A rehashed false located quote fails; unlocated passages stay unresolved.
+No original fallback, path following, import grant or model/network call occurs.
+
+Tests use the actual trusted survey publisher. Initial6 pass14.00s/21.7s stages;
+final contract6 (including case-aliased reserved namespace refusal)12.51s/19.3s.
+The collector/codec remain internal, intentionally not hooked into public bundle
+buttons until receiver mapping/persistence, bound/unbound transaction and re-export
+are complete. Existing public bundle behavior is unchanged; no silent new-capability
+import or synthetic generation context is introduced. Existing board records the
+next receiver boundary rather than opening a second plan/store/daemon/worktree.
+
+Actual backup/restore reproduced KeyError: paper_id in _detached_files (expected
+red1,5.19s/11.7s stages): the old applied-file materializer assumed all owners were
+papers. An explicit survey branch validates closure and preserves the full body,
+original PDF objects and native mappings as inactive objects/recovery_records.
+It does not invent a paper, current survey row or active source/device. Existing
+generic blob reference/authority-backup paths were inspected; deck materialization
+remains on its original branch. The regression checks actual independent restore
+and exact archived mappings, absence of live sync/source authority, and original
+backup bytes. The maintained unreviewed detached-reexport refusal is preserved;
+reviewed reattachment remains required, with the original archive retained.
+
+Final package/recovery7 plus existing editable-deck recovery1:8 pass12.65s/16.9s
+stages. Fixed critical14 pass7.74s/11.8s stages; docs58 pass2.31s/7.1s stages.
+Privacy/Ruff/whitespace pass. One bounded job at a time,300s/2-core/25% governor.
+Critical14/release38 selectors unchanged; no exhaustive suite or native/mobile
+build. Canonical local-integration evidence synchronized; no new global rules.
+
+Still open: actual package receiver matching and persistence, atomic bound/unbound
+import/re-export with user-owned identities, reviewed survey recovery and stale
+proposal UI, common AI/desktop/CLI/MCP dispatch, hosted authority/fencing and
+physical Mac/phone/Safari acceptance. No installed app, owner database, credential,
+public release or cloud resource was changed. The full0.5 objective remains active.
