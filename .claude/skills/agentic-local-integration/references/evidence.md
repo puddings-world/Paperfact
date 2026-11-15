@@ -1045,3 +1045,19 @@ cases70.03s/75.7s stages). Do not independently commit roots to satisfy an
 existing-owner helper. This validates enrolled import only; local-only persistence,
 normal public export, hosted and installed-device flows remain open. It refines
 the existing compound-transaction lesson without adding a global rule.
+
+
+### Independent local sharing and detached absence (validated-local, 2026-11-16)
+
+Actual public native/local package export and local-only import retain exact
+survey reports/PDFs with fresh receiver-local ownership, without enrollment or a
+fabricated AI request. Version/current selection and source grants share the root
+transaction; post-publication failure rolls back research. Re-export checks actual
+owner lifetimes, all paper-context fields and file versions. A tuple/list JSON
+comparison bug was reproduced and fixed without weakening byte checks. Detached
+backup preserves versions/objects inactive; exporting an apparently absent report
+must detect retained archive data and require review rather than silently omit it.
+Changed local/compound/portable22 pass92.58s (106.5s stages). One earlier combined
+selection hit its300s limit and is not passing evidence. Installed UI, explicit
+first-enrollment mapping and reviewed reattachment remain open. This refines
+existing owner/transaction/archive lessons, not a new global rule.

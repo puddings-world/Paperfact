@@ -8032,3 +8032,66 @@ Final critical14 passes8.93s (15.1s stages); docs/skill consistency58 passes3.94
 (10.2s stages). Privacy, Ruff and whitespace pass. No exhaustive historical suite
 or native rebuild was performed. These fixture results do not replace the open
 Mac/Windows/mobile installed-device and hosted acceptance gates.
+
+
+## 2026-11-16: public survey sharing without enrollment
+
+Basec8ea528, same tree/board. Public bundle export now collects saved native or
+receiver-local reports, full exact originals and source-paper context. The common
+strict ZIP contract validates exports before atomic replacement. Local-only import
+stages originals through the maintained immutable receiver evidence cache, observes
+pre-stage parents/current report, checks same-ID paper identity before writes, and
+publishes local source associations/current report beside roots in the existing
+bundle transaction. No sender writer, fake AI request or implicit enrollment.
+
+research_local_surveys stores bounded canonical local versions with list/database
+lifetimes and source associations; replacement retains historical rows. Exact
+retry returns unchanged without duplicate versions. Local source grants never
+become primary PDFs automatically. Export checks all paper fields before reading
+bounded context and rechecks their fingerprints, original byte versions, actual
+current associations and list lifetimes before publication. Native-to-local and
+local-to-local independent receivers retain exact report/PDF data using fresh
+native local ownership. Source-complete surveys explicitly require included PDFs.
+
+Backup recognizes local versions as protocol data and retains exact PDF objects;
+independent detached restore leaves all report/source records inactive. Public
+list export now refuses retained detached survey reports until reviewed
+reattachment, rather than silently dropping them. Existing detached native-report
+coverage gains the same guard. The compound test's temporary local-only refusal
+is intentionally replaced by the now-supported successful import; no assertion is
+removed to disguise a failure.
+
+Initial local5 failed at final export after JSON serialization changed tuple file
+versions to lists. Canonical comparison fixes the representation mismatch without
+refreshing hashes or weakening mutation checks; local5 then pass9.14s/14.7s stages.
+A larger five-file selection timed out (run93c2ee1907264e7aaaee27f0bb2a4718,
+307.391s governor/return124). Stack samples were in SQLite identity/connection
+initialization, and a brief process sample does not establish CPU saturation or
+root cause. The bounded process is terminal and its reports mark timed_out; it is
+not a pass. No process restart on observation timeout or unrelated process kill.
+
+The next diagnostic changed scope: one existing shared package journey passes6.08s
+(7.797s governed/60s ceiling). Changed local/compound/portable survey files then
+pass22 in92.58s (106.5s stages) under300s/two cores/25% hard cap. Eight local groups
+cover public roundtrips, original tamper, replacement lifetimes, complete context
+bounds/final staleness, exact retry, post-publication rollback and inactive backups.
+Fixed critical14/release38 remain unchanged. Existing package/bundle regressions
+are checked separately instead of rerunning the timed-out combined selection.
+
+This is source data-path acceptance, not completed source-aware desktop UI/AI
+creation, first-enrollment mapping, reviewed report reattachment, durable service
+authority, a new native package or hosted/physical-device acceptance. Daily research
+and delivered release files remain untouched; no public release/deployment.
+
+Existing package_import/bundle44 pass130.76s (137.2s stages) as the separate
+bounded selection. This closes the earlier combined-selection regression evidence
+gap without hiding its timeout or broadening historical test selectors. The
+process inventory showed no remaining bounded pytest job after timeout; unrelated
+MCP/app/assistant/voice processes were not terminated. No saturation/root-cause
+claim is derived from cumulative process CPU counters.
+
+Final critical14 passes11.68s (18.4s stages); docs/skill consistency58 passes3.38s
+(8.5s stages). Privacy/Ruff/whitespace pass. No native build, exhaustive historical
+suite, installed-device or hosted-provider check was performed. All checks ran
+sequentially; final scoped passes supersede the earlier incomplete combined run
+for these exact inputs, while the timeout remains recorded above.

@@ -686,3 +686,45 @@ refuses before research/file publication and keeps the original archive, rather
 than silently losing the report. Complete local-only persistence, export/re-export,
 first-enrollment preservation and public reader/UI remain required. Do not infer
 a completed public sharing flow or native installer from this source checkpoint.
+
+
+### Local-only survey sharing and version storage
+
+The source implementation now extends normal list-package export/import. Export
+collects the current native report, or an actual receiver-local report in an
+unbound workspace; it includes exact declared originals and their paper context.
+Source-complete report sharing requires PDFs, so metadata-only export of such a
+report refuses explicitly. Report integrity and located excerpts still do not
+prove scientific support. Existing plain summaries keep their earlier behavior.
+
+Local-only import uses `survey_local` and requires no sync enrollment. Staging
+retains verified immutable originals in the existing receiver-owned evidence cache;
+then the existing bundle transaction creates parents, installs exact source
+associations and selects the current report. It checks same-ID paper identity
+before replacement, the original database lifetime, pre-stage target observations
+and the selected archive version. Default preservation does not grant incoming
+source ownership; explicit replacement keeps prior report versions. Exact retries
+reuse the current version and source receipts. Failed publication rolls back new
+research/source grants; staged unowned cache bytes are not research authority.
+
+| Internal local API | Contract |
+|---|---|
+| `stage(database, frame, list_id, paper_map, *, cancelled=...)` | Off-lock verified source staging from a sealed portable frame, capturing existing receiver targets without enrollment |
+| `check_targets_in(conn, staged)` | Compare exact pre-stage database/list/paper/report observations before the caller inserts or changes roots |
+| `publish_in(conn, staged, *, replace=False, cancelled=...)` | Caller-owned transaction publishes exact original associations plus a current version; savepoint rolls back partial source/report writes |
+| `current_in(conn, list_id)` / `validate_record(row)` | Bounded canonical local version read/validation; historical content alone grants no access on a copied/restored database |
+| `collect(database, list_id, *, with_pdfs=True, cancelled=...)` / `check_export(value)` | Read-only current owner/source verification, actual byte/quote checks and sealed final export freshness |
+
+`research_local_surveys` stores immutable version IDs, list IDs, canonical
+`paperfact.local-survey.v1` bodies and current flags. Bodies retain historical
+research, native database/list/paper lifetimes and exact local source associations;
+none of these private fields are serialized into the portable report. Bounded
+version history remains after replacement. Backup stores these rows and exact
+PDF objects as inactive records; restore neither revives a source grant nor
+implicitly enrolls a device. The maintained reviewed detached-reexport gate remains.
+
+`survey_packages.collect/check_export` dispatch to this local store only when no
+native report is selected. A bound workspace cannot silently use stale local
+provenance. Source-aware desktop reading/AI generation, explicit first-enrollment
+mapping and reviewed report reattachment still require implementation/acceptance.
+Public sharing data paths are implemented in source, not certified installed apps.

@@ -230,6 +230,8 @@ def test_detached_restore_preserves_report_originals_and_local_bindings_without_
     ).read_bytes()
     assert runtime(database=destination / "papers.db") is None
     assert source_snapshots.list_owned(destination / "papers.db") == []
+    with pytest.raises(ValueError, match="Keep the original archive"):
+        packages.collect(destination / "papers.db", "list")
     with closing(sqlite3.connect(destination / "papers.db")) as conn:
         assert not conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name IN "

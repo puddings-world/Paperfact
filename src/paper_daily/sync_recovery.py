@@ -69,6 +69,7 @@ OPTIONAL_RESEARCH_TABLES = {
 } | INBOX_RESEARCH
 
 PROTOCOL = {
+    "research_local_surveys": "version_id list_id body_json is_current",
     "research_lineage_actions": "request_id body_json",
     "research_lineage_imports": "request_id body_json",
     "research_lineage_sync_sources": (
@@ -800,6 +801,13 @@ class _Records:
             self.archived_sources[receipt["sha256"]] = {
                 key: receipt[key] for key in ("sha256", "size", "media_type")
             }
+        elif name == "research_local_surveys":
+            from paper_daily.survey_local import validate_record
+
+            body = validate_record(row)
+            for item in body["bindings"]:
+                _add_blob(self.refs, item["original"])
+                self.research_sources.add(item["original"]["sha256"])
         elif name == "research_local_source_owners":
             from paper_daily.local_source_owners import validate
 

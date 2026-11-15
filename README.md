@@ -213,10 +213,10 @@ publisher supports atomic original/report writes and retryable materialization;
 the mobile saved-report reader is implemented in source. Package adapters and
 the AI creation workflow remain in development. The internal portable
 [survey package contract](docs/analysis-audit.md#portable-survey-package-contract-internal-product-adapters-pending)
-now validates exact report/PDF content. The shared enrolled-list importer can
-create new roots and import reports/originals in one transaction, preserving
-existing reports by default. Normal export does not yet emit this extension;
-local-only receiver storage and complete public sharing remain in development.
+now validates exact report/PDF content. List-package export includes saved native
+or local reports and exact originals; import supports both enrolled and local-only
+receivers, preserving existing reports by default. Source-aware desktop reading,
+AI creation and first-enrollment mapping remain in development.
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.

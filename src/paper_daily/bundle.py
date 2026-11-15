@@ -351,8 +351,17 @@ def export(
 
         kv = [row for row in kv if not redundant_hint(conn, row)]
 
-    from paper_daily import lineage_packages
+    from paper_daily import lineage_packages, survey_packages
 
+    survey_export = survey_packages.collect(database, list_id, with_pdfs=with_pdfs)
+    if survey_export is not None:
+        context = {row["id"]: row for row in tables["papers"] + tables["cited_papers"]}
+        for row in survey_export.papers:
+            if row["id"] in context and context[row["id"]] != row:
+                raise ValueError("Survey paper context changed during export; retry")
+            context[row["id"]] = row
+        tables["cited_papers"] = [context[pid] for pid in sorted(set(context) - set(ids))]
+        tables["survey_reports"] = [survey_export.record]
     lineage_export = (
         lineage_packages.collect(database, ids, with_pdfs=with_pdfs) if has_lineage else None
     )
@@ -429,6 +438,8 @@ def export(
         files.update(dict(proposal_export.files))
     if lineage_export is not None:
         files.update(dict(lineage_export.files))
+    if survey_export is not None:
+        files.update(dict(survey_export.files))
     capabilities = _required_capabilities(tables)
     manifest = {
         "format": 2 if capabilities else FORMAT,
@@ -446,6 +457,8 @@ def export(
     }
     if lineage_export is not None and lineage_export.records:
         manifest["lineage_sources"] = lineage_export.records
+    if survey_export is not None and survey_export.sources:
+        manifest["survey_sources"] = survey_export.sources
     if "claim_evidence" in capabilities:
         manifest["claim_sources"] = claim_sources
     if position_sources:
@@ -487,6 +500,7 @@ def export(
         check_later_export(later_export)
         deck_proposal_packages.check_export(proposal_export)
         lineage_packages.check_export(lineage_export)
+        survey_packages.check_export(survey_export)
         os.replace(staged, out)
     finally:
         staged.unlink(missing_ok=True)
@@ -827,12 +841,13 @@ def _check_workspace_aliases(conn, owners):
 
 
 
-def _check_lineage_papers(conn, tables):
+def _check_lineage_papers(conn, tables, *, selected=None, label="Lineage"):
     """An implicit same-ID mapping cannot attach originals to a different paper."""
     from paper_daily import lineage_sets, paper_identity
 
-    selected = {binding["paper_id"] for row in tables["paper_lineage_sets"]
-                for binding in lineage_sets.decode(row["body_json"])["bindings"]}
+    if selected is None:
+        selected = {binding["paper_id"] for row in tables["paper_lineage_sets"]
+                    for binding in lineage_sets.decode(row["body_json"])["bindings"]}
     defaults = dict(year=None, doi=None, arxiv_id=None, s2_id=None, authors_json=None)
     for incoming in tables["papers"] + tables.get("cited_papers", []):
         if incoming["id"] not in selected:
@@ -845,7 +860,7 @@ def _check_lineage_papers(conn, tables):
         title_a = " ".join(a.title.casefold().split())
         title_b = " ".join(b.title.casefold().split())
         if not title_a or title_a != title_b or not paper_identity._compatible(a, b):
-            raise ValueError("Lineage paper ID collision requires an explicit reviewed mapping")
+            raise ValueError(label + " paper ID collision requires an explicit reviewed mapping")
 
 
 def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m: None) -> dict:
@@ -889,9 +904,20 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
     with (zipfile.ZipFile(path) as z, position_packages.ImportLease() as position_lease,
           later_packages.ImportLease() as later_lease):
         manifest, tables, owners = _validated(z)
+        from paper_daily import survey_local, survey_package_native
+
+        survey_stage = None
         if tables.get("survey_reports"):
-            raise ValueError("Saved survey import currently requires an enrolled receiver; "
-                             "keep the original package until local-only storage is supported")
+            from paper_daily.research_lifecycle import ensure_lifecycle
+
+            with connect() as metadata:
+                metadata.execute("BEGIN IMMEDIATE")
+                ensure_lifecycle(metadata)
+            frame = survey_package_native.validate(z, manifest, tables)
+            survey_stage = survey_local.stage(
+                database, frame, manifest["list"]["id"],
+                {item["paper_id"]: item["paper_id"]
+                 for item in manifest.get("survey_sources", [])})
         package_hash = hashlib.sha256()
         original_position = z.fp.tell()
         z.fp.seek(0)
@@ -968,7 +994,8 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
             if not name.startswith("files/") or name.endswith("/"):
                 continue
             relative = Path(name.removeprefix("files/"))
-            if relative.parts[0] in {"deck-proposals", "lineage-sources"}:
+            if relative.parts[0] in {"deck-proposals", "lineage-sources",
+                                     "survey-sources", "survey-reports"}:
                 continue
             owner = owners[relative.as_posix()]
             if owner in conflicts and not (
@@ -1011,6 +1038,12 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
         # database commit restores installed files as the connection rolls back.
         with bundle_files.stage(DATA_DIR, z, relatives) as staged, connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if survey_stage is not None:
+                survey_local.check_targets_in(conn, survey_stage)
+                _check_lineage_papers(
+                    conn, tables, selected={item["paper_id"]
+                                            for item in manifest.get("survey_sources", [])},
+                    label="Survey")
             if lineage_stage is not None:
                 from paper_daily.research_lifecycle import ensure_lifecycle
 
@@ -1061,6 +1094,10 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
                     )
                     joined += 1
                 report["joined_list"] = joined
+                if survey_stage is not None:
+                    result = survey_local.publish_in(conn, survey_stage, replace=replace)
+                    report["survey_reports"] = result["reports"]
+                    report["survey_state"] = result["state"]
                 pins = [{"scope": listing["id"], **pin} for pin in tables.get("pins", [])]
                 report["pins"] = _insert(conn, "pins", pins, replace=False)
                 incoming_queue_pins = [

@@ -174,6 +174,10 @@ def check_export(value):
     """Check the actual native capture at final publication, without new ownership."""
     if value is None:
         return
+    from paper_daily import survey_local
+
+    if isinstance(value, survey_local.LocalSurveyExport):
+        return survey_local.check_export(value)
     if not isinstance(value, SurveyExport) or not isinstance(value._seal, str):
         raise ValueError("Survey package requires its sealed native export")
     if not hmac.compare_digest(value._seal, _signature(value)):
@@ -201,7 +205,9 @@ def collect(database, list_id, *, with_pdfs=True, cancelled=lambda: False):
     if len(canonical_json(observed)) > MAX_METADATA:
         raise ValueError("Survey package native observation exceeds its metadata bound")
     if observed is None:
-        return None
+        from paper_daily import survey_local
+
+        return survey_local.collect(database, list_id, with_pdfs=with_pdfs, cancelled=cancelled)
     if not with_pdfs:
         raise ValueError("Include exact original PDFs to share source-aware surveys")
     with closing(_readonly_connection(database)) as conn:

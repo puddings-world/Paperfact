@@ -131,11 +131,13 @@ def test_prepared_archive_and_validated_frame_cannot_be_substituted(
     assert dump(owner.client) == before
 
 
-def test_unsupported_local_only_receiver_refuses_before_research_or_file_writes(
+def test_local_only_receiver_imports_report_without_enrollment(
     exported,
     tmp_path,
     monkeypatch,
 ):
+    from paper_daily import survey_local
+
     path = archive(exported, tmp_path)
     root = tmp_path / "local-only"
     root.mkdir()
@@ -144,14 +146,15 @@ def test_unsupported_local_only_receiver_refuses_before_research_or_file_writes(
     monkeypatch.setattr(bundle, "DATA_DIR", root)
     monkeypatch.setattr(bundle, "PDF_DIR", root / "pdf")
     store.init_db()
-    before = database.read_bytes()
-    with pytest.raises(ValueError, match="enrolled receiver"):
-        bundle.import_(path, pdfs=False)
+    result = bundle.import_(path, pdfs=False)
+    assert result["survey_state"] == "imported" and result["survey_reports"] == 1
     with closing(generation._connect(database)) as conn:
-        assert conn.execute("SELECT count(*) FROM lists").fetchone()[0] == 0
-        assert conn.execute("SELECT count(*) FROM papers").fetchone()[0] == 0
-    assert database.read_bytes() == before and path.exists()
-    assert not (root / "survey-reports").exists() and not (root / "survey-sources").exists()
+        row = survey_local.current_in(conn, result["list"])
+        assert survey_local.validate_record(row)["report"] == exported[0][5].report
+        assert not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='paperfact_sync_identity'"
+        ).fetchone()
+    assert path.exists() and not (root / "survey-reports").exists()
 
 
 def test_capability_and_list_owned_report_validation_precede_compound_writes(

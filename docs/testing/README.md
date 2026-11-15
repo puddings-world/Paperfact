@@ -784,3 +784,17 @@ writes, and preserve an existing report until explicit replacement while retaini
 history. Unsupported local-only import is checked for zero research/file changes
 and original-archive preservation. Existing package and bundle cases are selected
 together for regression evidence; historical selectors remain unchanged.
+
+
+### Local-only survey package journeys
+
+`tests/test_survey_package_local.py` exercises real public bundle entries and
+independent local SQLite receivers. Cases cover exact report/PDF import, idempotent
+retry, re-export and second-receiver ownership; post-publication failure with no
+partial roots/source/report; tampered originals and recreated list lifetimes;
+default preserve/explicit replace with retained history; full backup and inactive
+detached restore; actual native public export to local-only import; and complete
+paper-context/metadata-only export bounds. The earlier compound-import case now
+expects the newly supported local-only behavior rather than its temporary refusal.
+No historical assertion is dropped. Source-aware desktop display and first-enrollment
+mapping remain separate gates; a data roundtrip is not installed UI acceptance.

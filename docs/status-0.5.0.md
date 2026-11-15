@@ -191,6 +191,9 @@ do not invent PDF grants. Eight affected groups pass under the governor in32s.
 The shared enrolled whole-list importer now plans new roots and publishes
 originals/report/activation/action receipt in its single transaction; actual
 post-report failure and cancellation roll everything back. Default preservation
-and explicit replacement retain native history. Normal exports do not yet emit
-this extension. Local-only receiver storage/re-export, reviewed reattachment,
-desktop/AI wiring and hosted/physical gates remain open. No new installer or deployment.
+and explicit replacement retain native history. Normal list export now includes
+the extension, and a local-only receiver can import/re-export without enrollment.
+Local version history and exact source associations are stored in the same import
+transaction; detached backups preserve reports/PDFs as inactive data. Reviewed
+reattachment, first-enrollment mapping, desktop/AI wiring and hosted/physical gates
+remain open. No new installer or deployment.

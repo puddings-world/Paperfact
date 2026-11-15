@@ -24,6 +24,7 @@ FORMATS = {
     COMPOUND_TEXT: "protocol request text",
     LEGACY_TEXT: "paper_id cache sha256 text",
     "research_lineage_publications": "request_id candidate_id row_json sources_json",
+    "research_local_surveys": "version_id list_id body_json is_current",
     "research_lineage_imports": "request_id body_json",
     "research_lineage_actions": "request_id body_json",
     "research_observed_current_deck_recovery": "paper_id slot parent_token manifest_json",
@@ -220,6 +221,11 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol == "research_local_surveys":
+        from paper_daily.survey_local import validate_record as validate_survey
+
+        body = validate_survey(record)
+        return {item["original"]["sha256"] for item in body["bindings"]}
     if protocol == LEGACY_TEXT:
         from paper_daily.sync_files import text
 
