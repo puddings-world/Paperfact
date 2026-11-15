@@ -435,3 +435,101 @@ def test_acceptance_upload_excludes_synthetic_credentials_and_authority():
         *[f"build/frozen-acceptance/sync-protocol/{name}.log"
           for name in ("init", "issue", "first-listener", "second-listener")],
     ]
+
+
+@pytest.fixture(scope='module')
+def legacy_upgrade_source(tmp_path_factory):
+    import io
+
+    source = tmp_path_factory.mktemp('legacy-upgrade-source')
+    result = subprocess.run(
+        ['git', 'archive', '--format=zip', verify.LEGACY_BASELINE, 'src',
+         'scripts/demo_workspace.py'], cwd=ROOT, capture_output=True, check=True, timeout=15)
+    with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
+        # This archive is created from the exact local Git object, not user input.
+        archive.extractall(source)
+    return source
+
+
+@pytest.mark.parametrize('damage', [None, 'note', 'pdf', 'deck', 'export-note', 'init-no-op'])
+def test_pinned_legacy_source_upgrade_checks_exact_research_not_only_counts(
+    tmp_path, legacy_upgrade_source, damage,
+):
+    out = tmp_path / 'acceptance'
+    out.mkdir()
+    calls = []
+    command = [sys.executable, '-c',
+               'import sys;sys.path.insert(0,' + repr(str(ROOT / 'src')) + ');'
+               'from paper_daily.integration_entry import main;raise SystemExit(main())']
+
+    def run(label, args, env):
+        calls.append(label)
+        if label in {'legacy-source-seed', 'legacy-source-export'}:
+            assert env['PYTHONPATH'] == str(legacy_upgrade_source / 'src')
+        else:
+            assert 'PYTHONPATH' not in env
+        if label == 'legacy-upgrade-init' and damage == 'init-no-op':
+            return  # A zero-exit initializer without schema changes must not pass.
+        result = subprocess.run(list(map(str, args)), env=env, cwd=ROOT,
+                                capture_output=True, timeout=30)
+        (out / (label + '.log')).write_bytes(result.stdout + result.stderr)
+        verify.check_process(result, label)
+        workspace = Path(env['PAPERFACT_DATA'])
+        if (label == 'legacy-upgrade-export'
+                and damage in {'note', 'pdf', 'deck', 'export-note'}):
+            if damage == 'note':
+                from contextlib import closing
+
+                with closing(sqlite3.connect(workspace / 'papers.db')) as conn:
+                    conn.execute("UPDATE notes SET body='Changed after upgrade'")
+                    conn.commit()
+            elif damage == 'pdf':
+                pdf = next((workspace / 'pdf').glob('*.pdf'))
+                with pdf.open('ab') as stream:
+                    stream.write(b'changed')
+            elif damage == 'export-note':
+                target = workspace.parent / 'returned.zip'
+                with zipfile.ZipFile(target) as archive:
+                    entries = {name: archive.read(name) for name in archive.namelist()}
+                tables = json.loads(entries['tables.json'])
+                tables['notes'][0]['body'] = 'Changed exported note'
+                entries['tables.json'] = json.dumps(tables).encode('utf-8')
+                with zipfile.ZipFile(target, 'w') as archive:
+                    for name, body in entries.items():
+                        archive.writestr(name, body)
+            else:
+                deck = next((workspace / 'presentations').rglob('notes.json'))
+                value = json.loads(deck.read_text(encoding='utf-8'))
+                value['slides'][0]['elements'][0]['x'] += 1
+                deck.write_text(json.dumps(value), encoding='utf-8')
+
+    if damage:
+        reason = 'schema initialization' if damage == 'init-no-op' else 'changed during upgrade'
+        with pytest.raises(ValueError, match=reason):
+            verify._legacy_upgrade(command, legacy_upgrade_source, out, run)
+    else:
+        result = verify._legacy_upgrade(command, legacy_upgrade_source, out, run)
+        assert result['baseline_version'] == '0.4.3' and result['source_format_only']
+        assert result['research_preserved'] and result['editable_deck_preserved']
+        assert result['schema_initialized'] and result['exported_research_preserved']
+        assert result['tables']['notes'] == result['tables']['pdf_highlights'] == 1
+        assert result['tables']['chat'] == 2 and result['files'] >= 2
+        assert not result['older_binary_install_checked'] and not result['gui_upgrade_checked']
+        assert 'Saved note' not in json.dumps(result)
+    assert calls == ['legacy-source-seed', 'legacy-source-export',
+                     'legacy-upgrade-compatibility', 'legacy-upgrade-init', 'legacy-upgrade-export']
+
+
+def test_legacy_upgrade_refuses_modified_old_source_before_executing(
+    tmp_path, legacy_upgrade_source,
+):
+    source = tmp_path / 'old-source'
+    shutil.copytree(legacy_upgrade_source, source)
+    target = source / 'src/paper_daily/__init__.py'
+    with target.open('ab') as stream:
+        stream.write(bytes([10]) + b'# modified baseline' + bytes([10]))
+    calls = []
+    with pytest.raises(ValueError, match='pinned commit'):
+        verify._legacy_upgrade(['must-not-launch'], source, tmp_path,
+                               lambda *args: calls.append(args))
+    assert not calls and not (tmp_path / 'legacy-upgrade').exists()

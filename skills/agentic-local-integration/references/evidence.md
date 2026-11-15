@@ -887,3 +887,30 @@ four journeys pass9.031s against strict Python service. Exact native355382c
 candidate remains unchanged. Supported restore's fresh identity is distinct from
 external anti-rollback/control history, which is still unimplemented. No new
 universal rule, account/resource access, deployment, hook or global installation.
+
+
+## 2026-11-15: authentic old-source data preservation
+
+Status: validated-local source-format probe; native/installed/GUI gates separate.
+Generate old data with pinned old writers rather than current schema helpers.
+Verify source closure against the actual Git object, then isolate old/new imports:
+only the old source child gets its path; the new candidate receives no override.
+Compare exact old columns, exported content and file bytes before/after current
+schema initialization. Additional new columns do not prove old values survived.
+A missing known extension may mean no old data; a present malformed/view extension
+must not silently disappear. The new probe exposed a real missing-table export
+failure (reading goals/annotation metadata) and drove the bundle fix.
+
+Evidence: initial7 upgrade/schema cases pass16.86s/20.0s after actual init;
+notes/PDF/canvas/export damage and changed baseline must fail. Earlier affected41
+pass27.08s/30.3s before adding the init stage. Latest published preview metadata
+was0.4.3, while0.4.6 remained drafts; master was fully integrated. Native355382c
+candidate evidence was retained, not relabeled. No real data, old installer,
+provider account, paid call, global install, public release or deployment.
+
+Final upgrade guard verifies actual new tables after init (a zero exit alone is
+insufficient) and requires every old exported field to remain present. The no-op
+negative fixture initially fell through to its deck-damage branch; corrected only
+that fixture dispatch while retaining the specific schema-initialization refusal.
+Final affected verifier/bundle/workflow42 pass34.05s/37.3s total. Remote tagv0.4.3
+independently resolves to the same3abdf434555583ca4a6827892d54b487e9e40671.

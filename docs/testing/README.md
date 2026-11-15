@@ -645,3 +645,10 @@ through copy and detached restore. Native candidate CI runs this one focused
 representative per desktop OS unless the Windows tag release selection already
 ran it; its own three-minute cap preserves the overall candidate budget.
 No critical or release selector was added.
+
+
+The pinned old-source probe adds one explicit native stage: real0.4.3 writers
+create synthetic notes/Q&A/highlights/PDF/deck; the candidate reads and exports
+before/after schema initialization. Exact old values and file bytes are compared.
+Deliberate note/PDF/layout/export corruption must fail. This is not an old-binary
+installer/GUI-upgrade check; see the [contract](../toolchain.md#pinned-old-source-upgrade-preservation).

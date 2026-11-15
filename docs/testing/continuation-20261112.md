@@ -7545,3 +7545,52 @@ no independent anchor or durable control history is claimed implemented.
 Final integration gates: critical14 pass7.47s/10.8s total; docs58 pass1.92s/5.4s
 total. Privacy/Ruff/whitespace pass. No full historical suite or native rebuild;
 all checks sequential under the existing CPU/time governor.
+
+
+## 2026-11-15: pinned0.4.3 preservation and readiness reconciliation
+
+Source afterbeb696a. Audit confirms origin/master1b44466 matches remote and is
+fully merged (zero maintenance-only commits); no master merge was necessary.
+Published release metadata:0.4.3/0.4.1/etc are previews,0.4.6 remains draft. Latest
+public baseline0.4.3 resolves to3abdf434555583ca4a6827892d54b487e9e40671.
+Readiness had stalecb6ca66 evidence and a historical ADR said enrollment UI did not
+exist; updated references now distinguish current355382c artifacts, later source
+and genuinely remaining hosted/physical/recovery gates without inventing passes.
+
+Existing frozen verifier optionally accepts --legacy-source. CI now fetches and
+archives only the exact old src/seed script, validates closure/Git blob bytes,
+and creates synthetic old research with those writers. New CLI exports old schema,
+runs the same init_db entry used by desktop, and exports again with no source
+PYTHONPATH override. Private snapshot compares seven old table families/columns;
+both package exports compare list/order/old research fields and PDF/deck bytes.
+The source-format-only report explicitly leaves old binary install and GUI upgrade
+false. No new runtime module/worktree/daemon; no owner install/data touched.
+
+This reproduced a real OperationalError: old workspace had no list_reading_goals.
+Fixed bundle export to treat only known absent extensions as empty, including
+paper_annotation_known; existing non-table/malformed extensions still fail.
+No source schema write is required merely to export old research. The regression
+uses actual0.4.3 data, positioned Unicode note/Q&A, manual highlight, deep reading,
+renamed list/read flag and edited canvas/speaker notes. Deliberate note/PDF/canvas
+and exported-note corruption or a modified old source cannot pass.
+
+Initial missing-schema export failed; retained synthetic fixture traceback located
+the actual bundle query. Ruff/string-format issues corrected, not hidden. After
+fix6 cases pass10.76s/13.9s; affected verifier/bundle/workflow41 pass27.08s/30.3s.
+After adding actual schema init (and a valid old read/read_at flag), final7 selected
+upgrade/schema cases pass16.86s/20.0s. Final broad/gate evidence follows below.
+No historical full suite, native/OS old-binary upgrade claim, release or cloud
+resource change. New CI stage is prepared, not yet a native pass.
+
+Final upgrade guard verifies actual new tables after init (a zero exit alone is
+insufficient) and requires every old exported field to remain present. The no-op
+negative fixture initially fell through to its deck-damage branch; corrected only
+that fixture dispatch while retaining the specific schema-initialization refusal.
+Final affected verifier/bundle/workflow42 pass34.05s/37.3s total. Remote tagv0.4.3
+independently resolves to the same3abdf434555583ca4a6827892d54b487e9e40671.
+
+Checkpoint gates: two existing positive goal/annotation-capability round trips pass
+in0.98s (4.2s stages); fixed critical14 pass7.22s (10.6s stages). The existing
+docs gate passed5.168s stages/5.391s governed total. All are partial curated checks,
+not the historical suite; CPU governor remained2 logical processors/25 percent.
+No live test processes remained during the owner-requested CPU investigation.

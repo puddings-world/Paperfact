@@ -308,3 +308,11 @@ Before packaging, each OS runs six selected sync authority-lifetime journeys
 incorrect-proof refusal, retained checkpoint after restart and duplicate-listener
 refusal, alongside exact citation graphs and retry. These are CI-native and packaged
 loopback checks; they do not certify two installed devices or a deployed host.
+
+
+The next candidate workflow also prepares a pinned0.4.3 source baseline and runs
+[old-source preservation](toolchain.md#pinned-old-source-upgrade-preservation)
+inside each packaged verifier. This validates research before/after the current
+schema initialization, not an old binary's OS installer upgrade or downgrade.
+Keep those physical/installed gates separate and never relabel a draft as a
+published maintenance baseline.

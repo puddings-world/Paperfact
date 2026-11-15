@@ -244,3 +244,23 @@ def test_the_lists_pinned_papers_and_order_travel_with_it(sharer, monkeypatch):
     order = c.execute("SELECT paper_id FROM list_papers WHERE list_id='cat' ORDER BY position")
     assert [r[0] for r in order] == ["ref:a", "ref:b"]
     assert bundle.import_(pinned)["pins"] == 0
+
+
+def test_export_refuses_optional_view_instead_of_silently_omitting_research(tmp_path, monkeypatch):
+    from contextlib import closing
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    conn = _workspace(source, monkeypatch)
+    conn.execute("INSERT INTO lists(id,name,created_at) VALUES('old','Old list','now')")
+    conn.execute('DROP TABLE list_reading_goals')
+    conn.execute('CREATE VIEW list_reading_goals AS SELECT 1 AS list_id')
+    conn.commit()
+    before = list(conn.iterdump())
+    conn.close()
+    output = tmp_path / 'must-not-exist.zip'
+    with pytest.raises(ValueError, match='not a table'):
+        bundle.export('old', output)
+    with closing(sqlite3.connect(source / 'papers.db')) as check:
+        assert list(check.iterdump()) == before
+    assert not output.exists()

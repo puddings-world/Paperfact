@@ -109,8 +109,9 @@ so it may not include newer source features. Existing v0.3.0 and older installer
 skip beta notices; install a build containing this fix manually once to receive
 future beta notices. [Update details](docs/install.md#update-notices)
 To match an installer exactly, developers can check out its tag, for example
-`git switch --detach v0.4.1`, then rerun setup. Both use the same research
-operations and account-routing code; platform packaging differs.
+`git switch --detach v0.4.3`, then rerun setup. Use a separate copied workspace
+for0.5 development and upgrade tests; do not point an older app at a newer enrolled
+database. Research packages remain the supported snapshot-sharing path.
 New AI work additionally needs your own supported provider account and CLI/API
 connection; [AI setup](docs/ai-setup.md) explains those separate prerequisites.
 
@@ -383,3 +384,9 @@ This source-only UI is newer than the355382c native test candidate.
 The official development sync service now accepts only history-verified mutations
 and new pairing grants; existing research reads remain available. Low-level local
 prototype compatibility is separate. [Service policy and limits](docs/sync-http.md#verified-only-service-policy).
+
+
+Native candidate acceptance now includes a pinned0.4.3-to-current data-format
+probe: retained notes/Q&A/highlights, renamed list/order, exact PDF and editable
+slide layout before and after schema initialization. This found and fixed export
+of old databases without new optional research tables. [Exact upgrade scope](docs/toolchain.md#pinned-old-source-upgrade-preservation).

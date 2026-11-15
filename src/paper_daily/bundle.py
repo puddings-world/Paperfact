@@ -203,6 +203,16 @@ def pdf_record(row, log=lambda _m: None) -> dict | None:
     return record
 
 
+def _has_optional_table(conn, table):
+    row = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name=? COLLATE NOCASE", (table,)).fetchone()
+    if row is None:
+        return False
+    if row[0] != 'table':
+        raise ValueError('An optional research extension is not a table')
+    return True
+
+
 def _rows(conn, sql: str, args=()) -> list[dict]:
     return [dict(r) for r in conn.execute(sql, args)]
 
@@ -273,7 +283,8 @@ def export(
             ),
             "list_surveys": _rows(conn, "SELECT * FROM list_surveys WHERE list_id=?", (list_id,)),
         }
-        goals = _rows(conn, "SELECT * FROM list_reading_goals WHERE list_id=?", (list_id,))
+        goals = (_rows(conn, "SELECT * FROM list_reading_goals WHERE list_id=?", (list_id,))
+                 if _has_optional_table(conn, "list_reading_goals") else [])
         if goals:
             tables["list_reading_goals"] = goals
         far = sorted(
@@ -284,11 +295,10 @@ def export(
         )
         for table in PER_PAPER:
             optional = table in (
-                *annotation_content.FEATURES.values(), "reading_positions", "paper_later_outcomes"
+                *annotation_content.FEATURES.values(), "paper_annotation_known",
+                "reading_positions", "paper_later_outcomes"
             )
-            if optional and not conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (table,)
-            ).fetchone():
+            if optional and not _has_optional_table(conn, table):
                 tables[table] = []
                 continue
             tables[table] = _rows(

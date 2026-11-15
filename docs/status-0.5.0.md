@@ -63,7 +63,11 @@ or removal without recreating missing files. This is not distributed fencing or
 durable control-history protection. Source after897cd7a also makes official
 serve reject unverified mutation routes and unbound new pairing claims; actual
 Chrome accepts the existing v31 artifact against that strict service. No new
-native installer has been built for these source changes. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
+native installer has been built for these source changes. Source also adds pinned
+old-source backward-export/schema-initialization preservation; the next CI uses
+it on each native package. Known absent0.5 export extensions now preserve old
+workspace sharing; malformed present extensions still fail. This is not an
+installed old-binary or GUI upgrade pass. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated
 candidates are listed in [workspace stabilization](workspace-stabilization-2026-11-14.md);

@@ -18,8 +18,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+LEGACY_BASELINE = "3abdf434555583ca4a6827892d54b487e9e40671"
+LEGACY_VERSION = "0.4.3"
+
 FORMAT = "paperfact.packaged-acceptance.v1"
 STAGES = {
+    "legacy-source-preflight", "legacy-source-seed", "legacy-upgrade-snapshot",
+    "legacy-source-export", "legacy-upgrade-export", "legacy-upgrade-preservation",
+    "legacy-upgrade-compatibility", "legacy-upgrade-init",
     "isolation",
     "version",
     "doctor",
@@ -255,6 +261,177 @@ def _data_hash(root):
     return hashlib.sha256(json.dumps(sorted(entries)).encode("utf-8")).hexdigest()
 
 
+def _legacy_source_check(source):
+    """Validate the pinned closure before reading or executing any source content."""
+    source = Path(source).absolute()
+    _safe_stamp(source)
+    tree = subprocess.run(
+        ['git', 'ls-tree', '-rz', LEGACY_BASELINE, '--', 'src', 'scripts/demo_workspace.py'],
+        cwd=ROOT, capture_output=True, timeout=15, check=True,
+    ).stdout
+    expected, directories = {}, set()
+    for entry in tree.split(bytes([0])):
+        if not entry:
+            continue
+        meta, name = entry.split(bytes([9]), 1)
+        mode, kind, digest = meta.split()
+        relative = Path(name.decode('utf-8'))
+        if (mode not in {b'100644', b'100755'} or kind != b'blob'
+                or relative.is_absolute() or '..' in relative.parts):
+            raise ValueError('Unsupported legacy source entry')
+        expected[relative.as_posix()] = digest.decode('ascii')
+        directories.update(p.as_posix() for p in relative.parents if p != Path('.'))
+    pending, found = [source], set()
+    while pending:
+        for path in pending.pop().iterdir():
+            _safe_stamp(path)
+            relative = path.relative_to(source).as_posix()
+            if path.is_dir() and relative in directories:
+                pending.append(path)
+            elif path.is_file() and relative in expected:
+                found.add(relative)
+            else:
+                raise ValueError('Legacy source closure differs from the pinned commit')
+    if not expected or found != set(expected):
+        raise ValueError('Legacy source closure differs from the pinned commit')
+    for relative, digest in expected.items():
+        path = source / relative
+        if _safe_stamp(path)[2] > 4 * 1024**2:
+            raise ValueError('Legacy source file exceeds its byte budget')
+        raw = path.read_bytes()
+        actual = hashlib.sha1(b'blob ' + str(len(raw)).encode() + bytes([0]) + raw,
+                              usedforsecurity=False).hexdigest()
+        if actual != digest:
+            raise ValueError('Legacy source differs from the pinned commit')
+    return _data_hash(source)
+
+
+def _legacy_snapshot(root, prior=None):
+    """Retain old research columns and exact PDF/deck files, not just row counts."""
+    from contextlib import closing
+
+    database = root / 'papers.db'
+    _safe_stamp(database)
+    with closing(sqlite3.connect(database.resolve().as_uri() + '?mode=ro', uri=True)) as conn:
+        tables = {}
+        for table in ('papers', 'lists', 'list_papers', 'notes', 'dives', 'chat', 'pdf_highlights'):
+            columns = (prior['tables'][table][0] if prior else
+                       [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')])
+            if not columns or any(not re.fullmatch('[a-z_][a-z0-9_]*', c) for c in columns):
+                raise ValueError('Legacy research schema is unavailable')
+            selected = ','.join('"' + c + '"' for c in columns)
+            rows = conn.execute(
+                f'SELECT {selected} FROM "{table}" ORDER BY {selected}').fetchmany(101)
+            if len(rows) > 100:
+                raise ValueError('Legacy fixture exceeds its row budget')
+            tables[table] = columns, rows
+    files = {}
+    for name in ('pdf', 'presentations'):
+        folder = root / name
+        _data_hash(folder)
+        for path in folder.rglob('*'):
+            if path.is_file():
+                files[path.relative_to(root).as_posix()] = _file_hash(path, 16 * 1024**2)
+    if not files or not tables['notes'][1] or not tables['pdf_highlights'][1]:
+        raise ValueError('Legacy fixture did not include required research')
+    return dict(tables=tables, files=files)
+
+
+def _legacy_upgrade(command, source, out, run, check=lambda _label, action: action()):
+    """Old source creates data; the new CLI upgrades it without a source override."""
+    source = Path(source).absolute()
+    stamp = check('legacy-source-preflight', lambda: _legacy_source_check(source))
+    folder = out / 'legacy-upgrade'
+    folder.mkdir(exist_ok=False)
+    env = isolated_env(folder)
+    old_env = {**env, 'PYTHONPATH': str(source / 'src')}
+    seed = r"""
+import json, sys
+from pathlib import Path
+source = Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(source / 'scripts'))
+import paper_daily
+assert paper_daily.__version__ == '0.4.3'
+assert Path(paper_daily.__file__).resolve().parents[2] == source
+import demo_workspace as demo
+from paper_daily import pdf_highlights, presentations, store
+demo.seed()
+quote = demo.PDF_TEXT[0]
+anchor = dict(p0=0, o0=0, p1=0, o1=len(quote))
+now = store.now()
+with store.connect() as conn:
+    conn.execute('UPDATE lists SET name=?,note=? WHERE id=?',
+                 ('Renamed upgrade list', 'Retained research purpose', demo.LIST_ID))
+    conn.execute('UPDATE list_papers SET state=?,read_at=? WHERE list_id=?',
+                 ('read', now, demo.LIST_ID))
+    body = 'Saved note caf' + chr(233) + ' ' + chr(30740) + chr(31350)
+    conn.execute('INSERT INTO notes(paper_id,body,created_at,kind,page,anchor) VALUES(?,?,?,?,?,?)',
+                 (demo.PAPER_ID, body, now, 'note', 1, json.dumps(anchor, sort_keys=True)))
+    for role in ('user', 'assistant'):
+        conn.execute('INSERT INTO chat(paper_id,role,body,created_at,page,anchor) '
+                     'VALUES(?,?,?,?,?,?)',
+                     (demo.PAPER_ID, role, 'Retained synthetic ' + role, now, 1,
+                      json.dumps(anchor, sort_keys=True)))
+from paper_daily.config import PDF_DIR
+pdf_highlights.add(demo.PAPER_ID, pdf_highlights.document_hash(PDF_DIR / 'demo_paperfact.pdf'),
+                   anchor, quote)
+slide = presentations.Slide('Edited slide', 'Background', 'Retain the argument',
+    ['Retained bullet'], 'Retained speaker notes', ['note:1'], elements=[dict(
+        kind='text', x=120.0, y=100.0, w=900.0, h=320.0,
+        text='Hand edited canvas', size=31.0, bold=True)])
+deck = presentations.Deck(demo.PAPER_ID, demo.PDF_TEXT[0], 'Edited deck', 'notes',
+    'Researchers', 10, [slide], [dict(id='note:1', label='Saved note', kind='notes',
+    text='Retained source text')], [], ['notes', 'dive'], now, edited=True)
+presentations.save_deck(deck)
+print('Seeded pinned 0.4.3 synthetic research; no provider calls.')
+"""
+    run('legacy-source-seed', [sys.executable, '-B', '-c', seed, source], old_env)
+    run('legacy-source-export', [sys.executable, '-B', '-m', 'paper_daily', 'list-export',
+                                 'demo', '--out', folder / 'baseline.zip'], old_env)
+    workspace = Path(env['PAPERFACT_DATA'])
+    before = check('legacy-upgrade-snapshot', lambda: _legacy_snapshot(workspace))
+    run('legacy-upgrade-compatibility', [*command, 'list-export', 'demo', '--out',
+                                        folder / 'compatible.zip'], env)
+    run('legacy-upgrade-init', [*command, 'init'], env)
+    run('legacy-upgrade-export', [*command, 'list-export', 'demo', '--out',
+                                 folder / 'returned.zip'], env)
+
+    def preserved():
+        if _legacy_snapshot(workspace, before) != before or _data_hash(source) != stamp:
+            raise ValueError('Legacy research or source changed during upgrade')
+        from contextlib import closing
+
+        with closing(sqlite3.connect((workspace / 'papers.db').resolve().as_uri()
+                                     + '?mode=ro', uri=True)) as conn:
+            for table in ('list_reading_goals', 'paper_annotation_known'):
+                row = conn.execute('SELECT type FROM sqlite_master WHERE name=?',
+                                   (table,)).fetchone()
+                if row is None or row[0] != 'table':
+                    raise ValueError('Candidate schema initialization did not complete')
+        for returned in ('compatible.zip', 'returned.zip'):
+            files = compare_files(folder / 'baseline.zip', folder / returned)
+            with zipfile.ZipFile(folder / 'baseline.zip') as old, zipfile.ZipFile(
+                    folder / returned) as new:
+                previous, current = [json.loads(z.read('manifest.json')) for z in (old, new)]
+                if any(previous[key] != current[key] for key in ('list', 'members')):
+                    raise ValueError('Exported legacy list or order changed during upgrade')
+                old_tables, new_tables = [json.loads(z.read('tables.json')) for z in (old, new)]
+                for name, rows in old_tables.items():
+                    received = new_tables.get(name, [])
+                    if len(rows) != len(received) or any(
+                            any(key not in other or other[key] != value
+                                for key, value in row.items())
+                            for row, other in zip(rows, received, strict=True)):
+                        raise ValueError('Exported legacy research changed during upgrade')
+        return dict(baseline_version=LEGACY_VERSION, baseline_commit=LEGACY_BASELINE,
+                    source_format_only=True, research_preserved=True, schema_initialized=True,
+                    tables={name: len(value[1]) for name, value in before['tables'].items()},
+                    files=files, editable_deck_preserved=True, exported_research_preserved=True,
+                    older_binary_install_checked=False, gui_upgrade_checked=False)
+
+    return check('legacy-upgrade-preservation', preserved)
+
+
 def _installer_input(built, out, installer):
     """Only this repository's fresh CI build, never a maintainer's daily install."""
     from paper_daily import __version__
@@ -455,7 +632,7 @@ def _instance_handoff(command, env, out):
     check_process(subprocess.CompletedProcess(command, code, log.read_bytes(), b""), label)
     return dict(primary_ready=True, second_launch_handoff=True, primary_normal_exit=True)
 
-def _verify(built, out, acceptance, *, installer=None):
+def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
     installation = acceptance.call(
         "windows-installer-preflight", lambda: _installer_input(built, out, installer),
     ) if installer is not None else None
@@ -601,6 +778,8 @@ def _verify(built, out, acceptance, *, installer=None):
     sync_protocol = acceptance.call(
         "sync-protocol", lambda: verify_sync([cli], out / "sync-protocol", empty),
     )
+    legacy_upgrade = (_legacy_upgrade([cli], legacy_source, out, run, acceptance.call)
+                      if legacy_source is not None else None)
     if sys.platform.startswith("linux"):
         from paper_daily import __version__
 
@@ -627,6 +806,7 @@ def _verify(built, out, acceptance, *, installer=None):
         "reader_launches_verified": reader_launches,
         "instance_handoff": handoff,
         "sync_protocol": sync_protocol,
+        "legacy_upgrade": legacy_upgrade,
         "integration": integration,
         "checks": [
             "version",
@@ -664,7 +844,7 @@ def _verify(built, out, acceptance, *, installer=None):
     return result
 
 
-def verify(built, out, *, installer=None):
+def verify(built, out, *, installer=None, legacy_source=None):
     # A reused output directory must never overwrite an earlier acceptance run.
     try:
         out.mkdir(parents=True, exist_ok=False)
@@ -672,7 +852,8 @@ def verify(built, out, *, installer=None):
         raise OutputExists("Choose a new acceptance output directory") from None
     acceptance = Acceptance(built, out)
     try:
-        result = _verify(built, out, acceptance, installer=installer)
+        result = _verify(built, out, acceptance, installer=installer,
+                         **({'legacy_source': legacy_source} if legacy_source is not None else {}))
     except BaseException as error:
         acceptance.failed(error)
         # Private diagnostics stay separate from the categorical shareable report.
@@ -693,10 +874,13 @@ def main(argv=None):
     parser.add_argument("out", type=Path)
     parser.add_argument("--installer", type=Path,
                         help="Windows CI only: verify isolated install/reinstall/uninstall")
+    parser.add_argument('--legacy-source', type=Path,
+                        help='Verify preservation from the pinned 0.4.3 source archive')
     args = parser.parse_args(argv)
     try:
         verify(args.built.resolve(), args.out.resolve(),
-               installer=args.installer.absolute() if args.installer else None)
+               installer=args.installer.absolute() if args.installer else None,
+               **({'legacy_source': args.legacy_source.absolute()} if args.legacy_source else {}))
     except KeyboardInterrupt:
         print(
             "Acceptance interrupted; inspect the chosen output folder/report.json.", file=sys.stderr

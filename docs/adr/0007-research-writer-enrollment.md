@@ -1,9 +1,10 @@
 # ADR 0007: Enroll existing research writers at the transaction boundary
 
-Status: transaction boundary implemented in isolated fixtures; full writer enrollment remains incomplete. 2026-10-26.
-This follows ADRs 0003-0006. It does not enable sync, enroll real data, or authorize
-hosting. Existing store/list/intake actions and the actual desktop note editor now
-exercise capture; there is no user-facing enrollment switch yet.
+Status: original decision/source snapshot dated2026-10-26; not the current
+completion ledger. This follows ADRs0003-0006. Current enrollment UI, writer
+coverage and remaining gates are recorded in [current status](../status-0.5.0.md)
+and [desktop enrollment](../workspace-enrollment-desktop.md). The historical
+source evidence below does not enable real data or authorize hosting.
 
 ## Decision and source evidence
 

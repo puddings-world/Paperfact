@@ -295,3 +295,43 @@ only `python -m paper_daily` fixtures explicitly pin this checkout's `src`, beca
 the isolated environment intentionally drops inherited PYTHONPATH. A shared venv's
 editable install may point at another worktree. The frozen binary verifier keeps
 its clean environment and receives no source override.
+
+
+## Pinned old-source upgrade preservation
+
+Optional verifier flag: `scripts/verify_built_app.py BUILT NEW_OUTPUT
+--legacy-source build/upgrade-baseline-0.4.3`. Existing `--installer FILE` remains
+Windows CI-only; `--help` lists both. Output must be new; no owner install/data is
+selected. The baseline is exact commit3abdf434555583ca4a6827892d54b487e9e40671
+(version0.4.3, the published preview inspected2026-11-15), not a mutable latest tag.
+
+Release CI fetches that exact commit, archives only `src` and the old
+`scripts/demo_workspace.py` into a new ignored build folder, and passes the folder
+to every native verifier. The verifier compares the complete source closure with
+Git object bytes, rejects unknown/linked/changed files before execution, and uses
+isolated homes/data/proxy settings. Only the old source child receives its explicit
+PYTHONPATH; the candidate CLI receives no source override.
+
+The old code creates a renamed list, saved reading flag, PDF, positioned Unicode
+note/Q&A, manual highlight, deep reading and edited text-canvas deck. Old export
+is the reference. The new CLI must first export the untouched old schema, then
+run `init` (the desktop's schema initialization) and export again. Compare every
+old research-column value, list/order, exported research and exact PDF/deck bytes;
+new schema columns are allowed without treating them as old data. Do not substitute
+row counts or a fixture initialized by the new code.
+The probe observes new schema tables after init; a zero exit without those tables
+is refused rather than reported as successful initialization.
+
+`report.json.legacy_upgrade` contains baseline version/commit, categorical
+preservation results and counts. `source_format_only=true`,
+`older_binary_install_checked=false` and `gui_upgrade_checked=false` distinguish
+this from an actual older EXE/DMG/AppImage upgrade. Without the flag the field is
+null, not an implied pass. Local logs stay separate from the shareable report.
+Git/source closure:4096 files/64 MiB total,4 MiB per source file; fixture snapshot:
+100 rows/table and bounded files. This is a synthetic acceptance probe, not a
+migration tool for arbitrary user directories or a same-user filesystem sandbox.
+
+This probe exposed bundle export querying absent0.5 optional tables in0.4 data.
+Known absent extensions now export as empty; an existing view or malformed table
+is still refused rather than hidden. Export does not initialize or rewrite the
+source merely to make a snapshot shareable.
