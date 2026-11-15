@@ -371,8 +371,61 @@ protects publication identity only: these local tokens are not PDF hashes,
 per-statement sources or portable evidence. Native generation/edit peer roundtrips
 still pass. No extra model call, table, protocol or consent change was introduced.
 
-The complete portable source-aware contract remains planned work; input lifetime
-protection and the status notice do not satisfy the remaining gates.
+## Source-aware survey engine: local implementation, not a shipped workflow
+
+The closed record and owned-original proposal engine are implemented locally.
+Canonical saving, original retention, AI dispatch, UI, identity mapping, bundle
+transport and recovery are still required. Existing plain surveys are unchanged;
+no model call or PDF download happens from opening a list or importing this code.
+
+```mermaid
+flowchart LR
+    I[Retained list and paper input lifetimes] --> C[Owned original snapshots]
+    C --> P[Bounded exact-original prompt pages]
+    P -. AI dispatch pending .-> M[Structured survey proposal]
+    M --> V[Deterministic quote checks]
+    C --> V
+    V --> R[Sealed original-snapshot proposal]
+    R -. Persistence and source retention pending .-> S[Shared operations / packages / UI]
+```
+
+Internal development interfaces (not CLI/MCP commands yet):
+
+| Interface | Observable result and boundary |
+|---|---|
+| `survey.evidence_inputs(context)` | Exact full-prompt and per-paper digest hashes, captured list/member order/lifetimes and titles; no live lookup, paths, account details or private job context |
+| `survey_sources.capture(context, *, legacy_root=None, selected_ids=None, cancelled=...)` | Sealed existing originals from that workspace; missing and unselected sources remain explicit; no download, SQL write or current-document activation |
+| `survey_sources.pages(corpus, *, max_bytes=245760, cancelled=...)` | Original-version prompt pages or an explicit budget failure; no silent truncation or alternate-source fallback |
+| `survey_sources.verify(corpus, sections, *, provenance, cancelled=...)` | Quotes located against sealed originals; model-supplied checked locations are rejected; scientific support remains unperformed |
+| `survey_sources.current(corpus)` | Current input/desired-original readiness for a future publisher; stale original proposals remain inspectable without becoming current again |
+| `survey_sources.checked_proposal(proposal)` | Defensive report copy only from the in-process checked proposal; decoding JSON alone cannot recreate publication authority |
+| `survey_content.assemble / validate / encode / decode / render / validate_pair` | Closed versioned report, exact prose/digest pairing, source states and bounded strict JSON; no filesystem, AI or ownership grant |
+
+The record is `paperfact.survey-evidence.v1`, recipe `list-survey-sources.v1`.
+It records actual generation provider/requested/returned model fields without
+credentials or account identifiers. Source identity includes its selected input
+paper/lifetime and original hash, so equal bytes from different owners stay
+separate. Every input has an explicit source state. Statements keep their own
+interpretation and passages; a found quotation does not certify semantic support.
+Manual prose changes must fail `validate_pair` until sources are explicitly
+rechecked or invalidated. Legacy prose is not wrapped in invented evidence.
+
+Bounds:2,000 input members,16 sections,96 statements,384 passages,1MiB record,
+200KiB rendered body,500 pages per inspected original and64MiB total captured PDF
+bytes. Existing per-original extraction limits still apply. Prompt extraction
+uses a separate240KiB default budget. These are resource ceilings, not scientific
+quality scores or coverage percentages. Real prior member positions (including
+stable ties) remain preserved.
+
+Locally verified: actual legacy and registered managed PDFs, a conflicting legacy
+alias, equal-byte distinct owners, missing/not-selected originals, cancelled and
+oversized work, no research writes, stale PDF replacement, rejected forged capture
+and model locations, strict JSON/private-field denial and unchanged model prompts.
+A source record's old captured status is not current availability. The normal
+reader must use actual mapped ownership and retained originals after persistence;
+coincident IDs/titles/hashes in another workspace cannot substitute for that step.
+Independent package/native-peer/source recovery and desktop/mobile UX remain open.
+No new table, public protocol field, feature switch or provider call is enabled.
 
 ## Primary references informing the design
 

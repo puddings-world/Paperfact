@@ -203,6 +203,10 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 
 ## Next milestone: v0.5.0 (planned)
 
+Internal source-aware list-survey records and original-quote checks now have local
+fixture coverage. Saving/sync/sharing/UI integration remains in development; see
+the [engine contract](docs/analysis-audit.md#source-aware-survey-engine-local-implementation-not-a-shipped-workflow).
+
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.
 - Prepare selected papers offline with the exact originals used by saved annotations

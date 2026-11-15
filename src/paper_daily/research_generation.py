@@ -229,6 +229,7 @@ class GenerationContext:
         data = self.data["inputs"]
         if isinstance(data, dict):
             data.pop("_members", None)
+            data.pop("_paper_lifetimes", None)
         return data
 
 

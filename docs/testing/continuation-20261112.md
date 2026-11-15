@@ -7684,3 +7684,47 @@ No native rebuild, owner research access, model call, deployment or public relea
 
 Checkpoint gates: critical14 pass7.19s/10.4s stages; docs58 pass1.93s/5.3s stages.
 Privacy/Ruff/whitespace pass. Critical/release selector lists remain unchanged.
+
+
+## 2026-11-15: source-aware survey record and owned-original engine
+
+Source afterd4a4ff7. Added focused survey_content/survey_sources business modules,
+reusing closed claim primitives, actual workspace DocumentReader, sealed evidence
+snapshots and deterministic quote verification. No new table, protocol, user action,
+background service, model call, download, native build or research migration.
+The complete persistence/sync/package/recovery/UI workflow remains unimplemented;
+this checkpoint is the record/corpus boundary, not a substitute release scope.
+
+survey.evidence_inputs projects only the frozen actual full-prompt/per-paper digest,
+ordered inputs/titles and real lifetimes. Its first test exposed that .inputs hides
+_members; fixed the producer to read its private frozen data, not today's database.
+Provider-facing .inputs now also hides private paper lifetime observations. Actual
+normal prompts and same-content recreated-paper refusal remain verified (13 cases
+4.27s/7.6s stages at that intermediate point).
+
+Closed1MiB record: exact prose/digest pairing, independent paper/lifetime/hash source
+identities, missing/unselected source states, per-statement quotes and model metadata;
+no account fields or semantic-proof claim. Strict duplicate/nonfinite/budget/foreign
+source and page checks fail whole records. Local inputs and model metadata do not
+constitute receiver ownership; future publication needs retained original/mapping
+proofs. No legacy evidence or native grants are manufactured from old plain prose.
+
+Actual PDF capture/verification has process-sealed capabilities and defensive report
+copies. It keeps old original snapshots after file replacement but current() refuses
+publication readiness. A model cannot submit its own checked location. Current
+managed registration wins over a conflicting legacy alias; equal-byte distinct
+owners are not interchangeable. Capture/verify/cancel/budget failures leave SQL
+unchanged. Hash large private contexts for capability sealing, rather than charging
+their raw bytes against the smaller public report budget.
+
+Initial Ruff line lengths were corrected. Initial PDF fixture wrongly assumed a
+pdf_path column; inspected the real reader/tests and used the maintained per-paper
+PDF directory convention instead (no schema added or assertion loosened). First3
+actual-PDF cases pass4.50s/8.0s stages; final4 including managed registration and
+capability-type/budget handling pass6.75s/11.1s stages. Latest coherent contract,
+retained input and real-PDF selection15 passes4.95s/9.0s stages. Final critical/docs
+evidence follows. No full historical or real-provider/installed-device acceptance.
+
+Final integration gates: critical14 pass8.13s/11.7s stages; docs58 pass2.01s/5.7s
+stages. Privacy/Ruff/whitespace pass. Source-only checkpoint; no exhaustive suite
+or native build. Canonical source-engine evidence copies synchronized normally.

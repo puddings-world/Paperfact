@@ -652,3 +652,17 @@ create synthetic notes/Q&A/highlights/PDF/deck; the candidate reads and exports
 before/after schema initialization. Exact old values and file bytes are compared.
 Deliberate note/PDF/layout/export corruption must fail. This is not an old-binary
 installer/GUI-upgrade check; see the [contract](../toolchain.md#pinned-old-source-upgrade-preservation).
+
+
+### Source-aware survey development slice
+
+Focused contract/corpus selection:15 cases in4.95s (9.0s stages). They check the
+exact retained prompt/input hashes and paper lifetimes; strict report/prose pairing;
+wrong owner/version/unknown source/private-field/JSON refusal; and real owned PDF
+quotes. Managed source materialization must win over a different legacy alias.
+Equal bytes from separate paper owners remain distinct; replaced originals leave
+old inspectable snapshots without current publication readiness. Missing sources,
+selection, cancellation and byte budgets cannot mutate research. These are internal
+read-only engine checks, not source-ledger saving, peer/package, UI or hosted passes.
+Critical14/release38 selections are unchanged; no historical suite is required to
+iterate on this slice. The exact checkpoint is in the continuation ledger.

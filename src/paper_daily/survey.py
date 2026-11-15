@@ -238,3 +238,43 @@ def edit(list_id: str, body: str, *, expected=None) -> None:
     result = publish_edit(expected, row=row)
     if result.status != "accepted":
         raise StaleCaptureError(result.candidate_id)
+
+
+def evidence_inputs(context):
+    """Describe the exact retained prompt inputs; no live lookup or source grant.
+
+    This private-input projection is a building block for the versioned survey
+    ledger. It deliberately excludes paths, settings and the private job context.
+    A pending legacy context cannot acquire missing paper lifetimes from today.
+    """
+    from paper_daily import survey_content
+    from paper_daily.research_generation import GenerationContext
+
+    if not isinstance(context, GenerationContext):
+        raise ValueError('Survey evidence requires a retained generation observation')
+    data = context.data
+    if data['table'] != 'list_surveys' or data['input_reader'] != 'survey':
+        raise ValueError('Survey evidence requires actual survey generation inputs')
+    inputs = data['inputs']
+    if '_paper_lifetimes' not in inputs:
+        raise ValueError('Survey input lifetimes were not captured; explicit review is required')
+    rows = inputs['papers']
+    by_id = {row['id']: row for row in rows}
+    lifetimes = {row['paper_id']: row['lifecycle'] for row in inputs['_paper_lifetimes']}
+    members = inputs['_members']
+    if (not rows or len(by_id) != len(rows) or len(lifetimes) != len(members)
+            or len(members) != len(rows) or {row['paper_id'] for row in members} != set(by_id)):
+        raise ValueError('Survey input membership is incomplete or ambiguous')
+    limit = min(PER_PAPER_MAX, BUDGET // len(rows))
+    values = []
+    for member in members:
+        paper = member['paper_id']
+        row = by_id[paper]
+        values.append(dict(paper_id=paper, paper_lifecycle=lifetimes[paper],
+                           position=member['position'], title=row['title'],
+                           input_hash=survey_content.body_hash(
+                               digest(row, row['dive'], row['context'], row['later'], limit))))
+    prompt, _count = build_input_from_snapshot(inputs, context.owner_id)
+    return dict(list_id=context.owner_id, list_name=inputs['list']['name'],
+                list_lifecycle=data['parent_lifecycle'],
+                prompt_hash=survey_content.body_hash(prompt), members=values)

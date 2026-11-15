@@ -118,3 +118,11 @@ paper recreation retains a candidate instead of overwriting the old overview;
 older pending inputs without lifetime observations require review. Normal enrolled
 generation/edit still reaches an independent peer. These are private publication
 guards, not complete portable claim sources or a new native artifact.
+
+
+Source afterd4a4ff7 adds the internal versioned list-survey evidence codec and sealed
+owned-original proposal engine. Actual prompt/input hashes and lifetimes, original
+quote checks, explicit missing states and currentness are locally verified, including
+registered managed originals and foreign equal-byte refusal. No UI/AI dispatch,
+canonical storage, sync/package/recovery integration or new native build is claimed.
+See the [engine contract](analysis-audit.md#source-aware-survey-engine-local-implementation-not-a-shipped-workflow).

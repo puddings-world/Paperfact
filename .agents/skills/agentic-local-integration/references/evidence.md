@@ -928,3 +928,16 @@ candidate body both survive; exact normal prompts and independent-peer writes
 remain covered. Local lifecycle tokens are not PDF-version or semantic evidence,
 not portable source grants, and not authority anti-rollback. No global rule or
 new skill is promoted; this is evidence for the existing dependency-lifetime method.
+
+
+### Aggregate survey source engine (validated-local, 2026-11-15)
+
+The survey record/corpus slice reuses owned-original snapshots rather than treating
+strict JSON or a matching PDF hash as a source grant. Actual registered original
+beats a conflicting legacy alias; equal-byte distinct owners stay distinct. Exact
+old snapshots remain inspectable while currentness denies publication readiness.
+Local fixture15 passes4.95s, including unchanged SQL on cancel/budget/invalid work
+and refusal of model-supplied checked locations. Immutable original quote location
+is separate from scientific support and from later canonical publication. Native
+binding, durable source retention, bundle/peer/recovery and UI remain pending for
+this aggregate feature. Do not infer those gates from this local engine checkpoint.

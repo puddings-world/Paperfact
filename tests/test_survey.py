@@ -157,3 +157,102 @@ def test_a_forced_rewrite_still_keeps_an_edit_made_during_the_call(conn, monkeyp
     monkeypatch.setattr(survey.llm, "complete", edited_meanwhile)
     written, _reason = survey.write("cat", force=True)
     assert not written and survey.get(conn, "cat")["body"] == "第二次修改"
+
+
+@pytest.fixture
+def source_aware_survey():
+    from paper_daily import survey_content as content
+
+    inputs = dict(list_id='cat', list_name='Selected field', list_lifecycle='c' * 32,
+                  prompt_hash='3' * 64, members=[
+        dict(paper_id='a', paper_lifecycle='a' * 32, position=0,
+             input_hash='1' * 64, title='First selected paper'),
+        dict(paper_id='b', paper_lifecycle='b' * 32, position=0,
+             input_hash='2' * 64, title='Second selected paper'),
+    ])
+    sources = [dict(id=content.source_id('a', 'a' * 32, 'f' * 64), paper_id='a',
+                    paper_lifecycle='a' * 32, document_hash='f' * 64, page_count=1,
+                    state='captured'),
+               dict(id=content.source_id('b', 'b' * 32, None), paper_id='b',
+                    paper_lifecycle='b' * 32, document_hash=None, page_count=None,
+                    state='unavailable')]
+    sections = [dict(heading='Evidence and gaps', statements=[
+        dict(text='The first study reports a selected method.', interpretation='reported',
+             passages=[dict(source_id=sources[0]['id'], quote='A selected method',
+                            location=dict(state='located', reason=None,
+                                          anchor=dict(p0=0, o0=0, p1=0, o1=3),
+                                          page=1, candidates=[], truncated=False))]),
+        dict(text='The cross-paper relationship remains an inference.',
+             interpretation='inference', passages=[]),
+    ])]
+    return content.assemble(inputs=inputs,
+                            generation=dict(task='survey', backend='codex',
+                                            requested_model='configured-model',
+                                            returned_model=None),
+                            sources=sources, sections=sections)
+
+
+def test_source_aware_survey_roundtrip_preserves_exact_prose_and_missing_sources(
+    source_aware_survey,
+):
+    from paper_daily import survey_content as content
+
+    report = content.decode(content.encode(source_aware_survey))
+    assert report == source_aware_survey
+    prose = content.render(report)
+    assert prose == ('## Evidence and gaps\n\n'
+                     'The first study reports a selected method.\n\n'
+                     'The cross-paper relationship remains an inference.')
+    assert content.validate_pair(report, prose) == report
+    assert report['sources'][1]['document_hash'] is None
+    assert report['sections'][0]['statements'][1]['passages'] == []
+    assert report['semantic_validation'] == 'not_performed'
+    with pytest.raises(ValueError, match='prose changed'):
+        content.validate_pair(report, prose.replace('method', 'new conclusion'))
+
+
+@pytest.mark.parametrize('change', ['owner', 'lifetime', 'version', 'foreign_source',
+                                   'unavailable_location', 'page', 'semantic_claim',
+                                   'private_field'])
+def test_source_aware_survey_rejects_inconsistent_or_unselected_provenance(
+    source_aware_survey, change,
+):
+    from copy import deepcopy
+
+    from paper_daily import survey_content as content
+
+    report = deepcopy(source_aware_survey)
+    passage = report['sections'][0]['statements'][0]['passages'][0]
+    if change == 'owner':
+        report['sources'][0]['paper_id'] = 'b'
+    elif change == 'lifetime':
+        report['sources'][0]['paper_lifecycle'] = '0' * 32
+    elif change == 'version':
+        report['sources'][0]['document_hash'] = '0' * 64
+    elif change == 'foreign_source':
+        passage['source_id'] = content.source_id('foreign', 'a' * 32, 'f' * 64)
+    elif change == 'unavailable_location':
+        passage['source_id'] = report['sources'][1]['id']
+    elif change == 'page':
+        passage['location']['page'] = 2
+    elif change == 'semantic_claim':
+        report['semantic_validation'] = 'scientifically_verified'
+    else:
+        report['generation']['account_email'] = 'private@example.invalid'
+    with pytest.raises(ValueError):
+        content.validate(report)
+
+
+def test_source_aware_survey_decoding_is_bounded_and_rejects_duplicate_fields(source_aware_survey):
+    from paper_daily import survey_content as content
+
+    raw = content.encode(source_aware_survey)
+    with pytest.raises(ValueError, match='Duplicate'):
+        content.decode(raw.replace('"format":', '"format":"ambiguous","format":', 1))
+    with pytest.raises(ValueError, match='Nonfinite'):
+        content.decode(raw.replace('"page_count":1', '"page_count":NaN', 1))
+    with pytest.raises(ValueError, match='budget'):
+        content.decode(' ' * (content.MAX_BYTES + 1))
+    changed = dict(source_aware_survey, sections=[])
+    with pytest.raises(ValueError):
+        content.validate(changed)
