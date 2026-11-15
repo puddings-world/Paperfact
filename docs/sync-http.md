@@ -309,8 +309,9 @@ remain separate release gates. Never overwrite a running authority database.
 
 Source after candidate c1cbef2 connects durable history to the actual desktop
 SyncSession and authenticated bounded HTTP transport. The delivered c1cbef2 app
-and mobile v29 still use their earlier frontier/execution protocol. Mobile proof
-persistence and attachment/device mutation guards remain open. This is not durable
+and mobile v29 still use their earlier frontier/execution protocol. Current source
+adds mobile proof persistence and transaction-bound attachment guards below.
+Device-control guards remain open. This is not durable
 split-brain fencing, malicious-authority protection or installed/hosted acceptance.
 No new server or daemon is added; this is a version1 proof subprotocol alongside
 existing operation-envelope versions.
@@ -363,8 +364,9 @@ new scoped commitments; it does not copy old sessions or proof authority.
 These checks do not protect against a malicious authority, unchecked database
 replacement, forged metadata, an in-place restore or two active service forks.
 Desktop event/ack proof persistence and transaction-bound research pushes are
-implemented below. Mobile proof persistence, other mutation/attachment guards,
-durable authority identity/fencing and installed/hosted acceptance remain gates.
+implemented below, followed by mobile proof persistence and attachment guards.
+Device-control guards, durable authority identity/fencing and installed/hosted
+acceptance remain gates.
 
 ### Verified desktop flow and wire contract
 
@@ -457,5 +459,43 @@ Older importers must reject v3 instead of silently discarding proof metadata.
 
 Validated on isolated Windows Chromium and loopback Python fixtures. This does not
 establish physical Safari durability, native installed-device convergence, hosted
-access, durable authority fencing or history guards for attachment/device writes.
+access, durable authority fencing or history guards for device-control writes.
 The delivered c1cbef2/v29 candidate has not been rebuilt for this source.
+
+
+### Attachment history guards
+
+Actual desktop SyncSession uploads and mobile original-source uploads use these
+additional authenticated bearer/browser-cookie routes. No route fallback occurs
+when a verified endpoint is unsupported. They require the existing execution pin
+and the same closed checkpoint as verified research writes.
+
+| Route | Closed request fields |
+|---|---|
+| `POST /v1/history/blobs/begin` | sha256, size, checkpoint |
+| `POST /v1/history/blobs/append` | upload_id, offset, data (bounded base64), checkpoint |
+| `POST /v1/history/blobs/commit` | upload_id, checkpoint |
+| `POST /v1/history/blobs/cancel` | upload_id, checkpoint |
+
+Python HttpTransport and reference blob_begin/append/commit/cancel accept an
+optional keyword-only checkpoint. Supplying it selects the verified route and
+requires a matching retained prefix inside every authority mutation transaction.
+Concurrent valid suffix growth does not invalidate an existing prefix or require
+re-uploading immutable bytes. The direct legacy APIs remain experiment seams;
+the production desktop session supplies its current received/acknowledged point.
+
+Begin checks before namespace persistence and again before upload reservation.
+Append/cancel check before changing partial bytes/session state. Commit checks
+before physical finalization and again inside the final ownership transaction.
+If history changes during bounded verification, bytes may already exist privately,
+but they remain unowned/unreadable until a valid explicit retry completes ownership.
+History proof never replaces device authorization, quota, digest or file-identity
+checks; it does not retract bytes already transmitted.
+
+Mobile Engine.historyCheckpoint(generation) returns a copied higher retained point
+only after received-prefix preparation reaches the local cursor. Its original-source
+uploader receives that checkpoint explicitly and sends it on begin/append/commit.
+Unrelated downloads remain independently usable. Device-control mutation guards,
+durable authority fencing and installed/hosted acceptance remain separate gates.
+The delivered c1cbef2 candidate and the earlier local v30 static artifact are unchanged;
+these source changes require a matching future client/service/static deployment.

@@ -39,6 +39,9 @@ from paper_daily.sync_journal import (
 
 BLOB_CHUNK_BYTES = 256 * 1024
 _BLOB_ROUTES = {"/v1/blobs/" + name for name in ("begin", "append", "commit", "cancel", "read")}
+_HISTORY_BLOB_ROUTES = {
+    "/v1/history/blobs/" + name for name in ("begin", "append", "commit", "cancel")
+}
 MAX_REQUEST_BYTES = 512 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{1,4096}")
@@ -141,15 +144,21 @@ def _blob_data(value, *, empty=False):
 
 
 def _blob_request(service, path, token, value):
+    guard = {}
+    if path in _HISTORY_BLOB_ROUTES:
+        if "checkpoint" not in value or not isinstance(value["checkpoint"], dict):
+            raise ValueError("A retained history checkpoint is required")
+        value = dict(value)
+        guard["checkpoint"] = value.pop("checkpoint")
     name = path.rsplit("/", 1)[1]
     method = getattr(service, "blob_" + name, None)
     if method is None:
         raise BlobDisabledError("Blob transport is unavailable")
     if name == "begin":
-        return method(token, _manifest(value))
+        return method(token, _manifest(value), **guard)
     if name in ("commit", "cancel"):
         _closed(value, {"upload_id"})
-        return method(token, _upload_id(value["upload_id"]))
+        return method(token, _upload_id(value["upload_id"]), **guard)
     if name == "append":
         _closed(value, {"upload_id", "offset", "data"})
         return method(
@@ -157,6 +166,7 @@ def _blob_request(service, path, token, value):
             _upload_id(value["upload_id"]),
             _offset(value["offset"]),
             _blob_data(value["data"]),
+            **guard,
         )
     _closed(value, {"sha256", "size", "offset", "limit"})
     _manifest({"sha256": value["sha256"], "size": value["size"]})
@@ -270,7 +280,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
         def _request(self):
             allowed = ({"/v1/push", "/v1/pull", "/v1/session/info",
                         "/v1/history/pull", "/v1/history/push"}
-                       | _BLOB_ROUTES | devices.ROUTES)
+                       | _BLOB_ROUTES | _HISTORY_BLOB_ROUTES | devices.ROUTES)
             self._route = self.path
             self._browser_cookie = None
             if self.path.startswith("/v1/browser/"):
@@ -381,7 +391,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                     response = _encode(devices.request(service, route, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
-                elif route in _BLOB_ROUTES:
+                elif route in _BLOB_ROUTES | _HISTORY_BLOB_ROUTES:
                     response = _encode(_blob_request(service, route, token, value))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
@@ -528,9 +538,9 @@ class HttpTransport:
                     )
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
-                if response.status_code == 412 and path in {
-                    "/v1/pull", "/v1/history/pull", "/v1/history/push",
-                }:
+                if response.status_code == 412 and (
+                    path == "/v1/pull" or path.startswith("/v1/history/")
+                ):
                     raise SyncHistoryUnavailable("Shared sync history needs recovery review")
                 if response.status_code == 409:
                     raise BlobUnavailableError("Sync attachment bytes are unavailable; retry later")
@@ -538,7 +548,7 @@ class HttpTransport:
                     response.status_code == 404 and path in _BLOB_ROUTES
                 ):
                     raise BlobDisabledError("Sync attachment transport is unavailable")
-                if response.status_code == 413 and path in _BLOB_ROUTES:
+                if response.status_code == 413 and path in _BLOB_ROUTES | _HISTORY_BLOB_ROUTES:
                     raise BlobQuotaError("Sync attachment quota or transfer limit exceeded")
                 if (response.status_code == 404
                         and path in {devices.PAIR_CREATE, devices.PAIR_REDEEM}):
@@ -654,9 +664,14 @@ class HttpTransport:
         result = self._post("/v1/devices/revoke", token, {"device_id": target})
         return devices.revoked(result, target)
 
-    def blob_begin(self, token, manifest):
+    def blob_begin(self, token, manifest, *, checkpoint=None):
         manifest = dict(_manifest(manifest))
-        result = self._post("/v1/blobs/begin", token, manifest)
+        path = "/v1/history/blobs/begin" if checkpoint is not None else "/v1/blobs/begin"
+        result = self._post(
+            path, token, {
+                **manifest, **({"checkpoint": checkpoint} if checkpoint is not None else {}),
+            },
+        )
         _closed(result, {"upload_id", "sha256", "size", "offset", "complete"})
         if (
             _manifest({"sha256": result["sha256"], "size": result["size"]}) != manifest
@@ -671,15 +686,16 @@ class HttpTransport:
             _upload_id(result["upload_id"])
         return result
 
-    def blob_append(self, token, upload_id, offset, data):
+    def blob_append(self, token, upload_id, offset, data, *, checkpoint=None):
         _upload_id(upload_id)
         _offset(offset)
         if not isinstance(data, bytes) or not 0 < len(data) <= BLOB_CHUNK_BYTES:
             raise ValueError("Expected a nonempty bounded blob chunk")
         result = self._post(
-            "/v1/blobs/append",
+            ("/v1/history/blobs/append" if checkpoint is not None else "/v1/blobs/append"),
             token,
             {
+                **({"checkpoint": checkpoint} if checkpoint is not None else {}),
                 "upload_id": upload_id,
                 "offset": offset,
                 "data": base64.b64encode(data).decode("ascii"),
@@ -690,16 +706,24 @@ class HttpTransport:
             raise ValueError("Invalid blob append response offset")
         return result
 
-    def blob_commit(self, token, upload_id):
-        result = self._post("/v1/blobs/commit", token, {"upload_id": _upload_id(upload_id)})
+    def blob_commit(self, token, upload_id, *, checkpoint=None):
+        path = "/v1/history/blobs/commit" if checkpoint is not None else "/v1/blobs/commit"
+        result = self._post(path, token, {
+            "upload_id": _upload_id(upload_id),
+            **({"checkpoint": checkpoint} if checkpoint is not None else {}),
+        })
         _closed(result, {"sha256", "size", "complete"})
         _manifest({"sha256": result["sha256"], "size": result["size"]})
         if result["complete"] is not True:
             raise ValueError("Blob commit was not complete")
         return result
 
-    def blob_cancel(self, token, upload_id):
-        result = self._post("/v1/blobs/cancel", token, {"upload_id": _upload_id(upload_id)})
+    def blob_cancel(self, token, upload_id, *, checkpoint=None):
+        path = "/v1/history/blobs/cancel" if checkpoint is not None else "/v1/blobs/cancel"
+        result = self._post(path, token, {
+            "upload_id": _upload_id(upload_id),
+            **({"checkpoint": checkpoint} if checkpoint is not None else {}),
+        })
         _closed(result, {"cancelled"})
         if result["cancelled"] is not True:
             raise ValueError("Invalid blob cancellation response")

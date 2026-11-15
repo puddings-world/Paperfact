@@ -768,3 +768,23 @@ without changing product authentication or relaxing source/recovery checks.
 Limits: no malicious-authority defense, durable fencing, attachment/device write
 proofs, native legacy-ack review UI, live host or installed/physical device result.
 This extends the existing local transaction/recovery lesson, not a new global rule.
+
+
+## 2026-11-15: attachment prefix guards at physical and ownership boundaries
+
+Status: validated-local desktop/mobile/HTTP; device controls and durable fencing
+remain open. The actual desktop upload wrapper and mobile original-source uploader
+now pass their retained history point on explicit verified attachment routes.
+Check it in every authority mutation transaction, not only the earlier handshake.
+When verification runs outside a write transaction, check again before ownership
+publication: private physical bytes and authenticated ownership are separate facts.
+A failed final guard must leave ownership unavailable and permit a valid retry.
+A valid concurrent suffix alone need not invalidate an immutable-byte upload.
+
+Evidence: real HTTP test refuses begin/append/commit/cancel without database or
+physical-byte changes on a wrong prefix, changes history during verification,
+refuses ownership/read, repairs on valid retry and refuses old-route fallback.
+The actual desktop PDF/deck journeys and Chromium source-position/recovery journey
+pass with retained checkpoints on the upload routes. Existing digest, quota,
+authentication and source-lifetime assertions remain. No live host/device result,
+no retraction of sent bytes, and no new global rule, hook or installation.

@@ -105,8 +105,8 @@ class GuardedJournal(Journal):
 
 
 class GuardedTransport:
-    def __init__(self, transport, live):
-        self.transport, self.live = transport, live
+    def __init__(self, transport, live, *, history=None):
+        self.transport, self.live, self.history = transport, live, history
         self.base_url = transport.base_url
 
     def __getattr__(self, name):
@@ -130,6 +130,11 @@ class GuardedTransport:
 
         def invoke(*args, **kwargs):
             self.live()
+            if self.history is not None and name in {
+                "blob_begin", "blob_append", "blob_commit", "blob_cancel",
+            }:
+                kwargs["checkpoint"] = self.history()
+                self.live()
             result = getattr(self.transport, name)(*args, **kwargs)
             self.live()
             return result
@@ -313,6 +318,9 @@ class SyncSession:
             if bound != identity:
                 raise EnrollmentRequired("Use a new directory to join this workspace")
             client = self._client(identity, live)
+            transport = GuardedTransport(
+                transport, live, history=lambda: client.history_checkpoint(acknowledged=True),
+            )
             with self._state:
                 self.state = "syncing"
             deadline = time.monotonic() + seconds

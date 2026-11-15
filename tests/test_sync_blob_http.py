@@ -3,14 +3,18 @@
 import base64
 import hashlib
 import json
+import sqlite3
+from contextlib import closing
 
 import httpx
 import pytest
+from test_sync_blob_service import paper
 from test_sync_http import request, running
 
 from paper_daily.sync_blob_service import BlobDisabledError, BlobUnavailableError
 from paper_daily.sync_blobs import BlobQuotaError
 from paper_daily.sync_http import BLOB_CHUNK_BYTES, HttpTransport, make_server
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.sync_service import ReferenceService
 
 
@@ -220,6 +224,8 @@ def test_old_server_missing_blob_route_returns_explicit_disabled():
             pass
 
         def do_POST(self):
+            # Consume this bounded fixture request before closing the old connection.
+            self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 512 * 1024))
             self.send_response(404)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -301,3 +307,84 @@ def test_session_transport_rejects_noncanonical_identity_reply(monkeypatch, repl
         monkeypatch.setattr(transport, "_post", lambda *args: reply)
         with pytest.raises(ValueError):
             transport.session_info("synthetic-token")
+
+
+def test_verified_blob_writes_recheck_history_after_file_scan(endpoint, monkeypatch):
+    service, token, url = endpoint
+    paper(service, token)
+    checkpoint = service.history_page(token)["checkpoint"]
+    invalid = {**checkpoint, "sha256": "0" * 64}
+    description, data = manifest(b"private fixture"), b"private fixture"
+
+    def snapshot():
+        with closing(sqlite3.connect(service.path)) as conn:
+            return list(conn.iterdump())
+
+    def physical_snapshot():
+        return sorted(
+            (str(path.relative_to(service.blob_root)),
+             path.read_bytes() if path.is_file() else None)
+            for path in service.blob_root.rglob("*")
+        )
+
+    with HttpTransport(url) as transport:
+        before, physical = snapshot(), physical_snapshot()
+        with pytest.raises(SyncHistoryUnavailable):
+            transport.blob_begin(token, description, checkpoint=invalid)
+        assert snapshot() == before and physical_snapshot() == physical
+        started = transport.blob_begin(token, description, checkpoint=checkpoint)
+        identity = started["upload_id"]
+        before, physical = snapshot(), physical_snapshot()
+        for action in (
+            lambda: transport.blob_begin(token, description, checkpoint=invalid),
+            lambda: transport.blob_append(token, identity, 0, data, checkpoint=invalid),
+            lambda: transport.blob_commit(token, identity, checkpoint=invalid),
+            lambda: transport.blob_cancel(token, identity, checkpoint=invalid),
+        ):
+            for _ in range(2):
+                with pytest.raises(SyncHistoryUnavailable):
+                    action()
+                assert snapshot() == before and physical_snapshot() == physical
+        assert transport.blob_begin(token, description, checkpoint=checkpoint)["offset"] == 0
+        transport.blob_append(token, identity, 0, data, checkpoint=checkpoint)
+        compute = service._compute_integrity
+
+        def changed_during_scan(*args):
+            verified = compute(*args)
+            with service._transaction(write=True) as conn:
+                conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                             (invalid["sha256"], "workspace", checkpoint["sequence"]))
+            return verified
+
+        with monkeypatch.context() as patch:
+            patch.setattr(service, "_compute_integrity", changed_during_scan)
+            with pytest.raises(SyncHistoryUnavailable):
+                transport.blob_commit(token, identity, checkpoint=checkpoint)
+        with pytest.raises(PermissionError):
+            transport.blob_read(token, **description, offset=0)
+        with service._transaction(write=True) as conn:
+            assert conn.execute("SELECT state FROM sync_blob_uploads WHERE upload_id=?",
+                                (identity,)).fetchone()[0] == "open"
+            conn.execute("UPDATE sync_history SET sha256=? WHERE workspace=? AND sequence=?",
+                         (checkpoint["sha256"], "workspace", checkpoint["sequence"]))
+        assert transport.blob_commit(token, identity, checkpoint=checkpoint) == {
+            **description, "complete": True,
+        }
+        assert transport.blob_read(token, **description, offset=0) == data
+        assert transport.blob_begin(token, description, checkpoint=checkpoint)["complete"]
+        cancelled = transport.blob_begin(token, manifest(b"cancel me"), checkpoint=checkpoint)
+        assert transport.blob_cancel(token, cancelled["upload_id"], checkpoint=checkpoint) == {
+            "cancelled": True,
+        }
+
+        requested = []
+
+        def unsupported(request):
+            requested.append(request.url.path)
+            return httpx.Response(404)
+
+        transport._client.close()
+        transport._client = httpx.Client(transport=httpx.MockTransport(unsupported))
+        with pytest.raises(SyncHistoryUnavailable):
+            transport.blob_begin(token, description, checkpoint=checkpoint)
+        assert requested == ["/v1/history/blobs/begin"]

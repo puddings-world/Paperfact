@@ -398,6 +398,13 @@ export class Engine {
     const final=await this.store.read();this.check(generation);
     this.onChange(exhausted && !final.outbox.length?'synced':'more_pending');return final;
   }
+  async historyCheckpoint(generation=this.generation) {
+    const state=await this.store.read();this.check(generation);
+    const seed=await historySeed(state.workspace);this.check(generation);
+    const history=retainedHistory(state,seed);
+    requireThat(history.received.sequence===state.cursor,HISTORY_ERROR);
+    return copy(historyAnchor(history));
+  }
   download(paperId) {
     if(this.downloads.has(paperId)) return this.downloads.get(paperId);
     const generation = this.generation,

@@ -372,11 +372,13 @@ class BlobServiceMixin:
             payload = operation["payload"]
             self._blob_owned_path(conn, workspace, BlobManifest(payload["sha256"], payload["size"]))
 
-    def blob_begin(self, token, manifest):
+    def blob_begin(self, token, manifest, *, checkpoint=None):
         # Persist the opaque namespace before touching files; a failed begin cannot
         # strand physical reservations under an unrecorded random directory.
         with self._transaction(write=True) as conn:
             workspace, _ = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             self._blob_enabled()
             item = self._manifest(manifest)
             if item.size > self.blob_max_bytes:
@@ -387,6 +389,8 @@ class BlobServiceMixin:
             )
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             row = conn.execute(
                 "SELECT size,state FROM sync_workspace_blobs WHERE workspace=? AND digest=?",
                 (workspace, item.sha256),
@@ -437,7 +441,7 @@ class BlobServiceMixin:
             if not result["complete"]:
                 return {"upload_id": upload_id, "sha256": item.sha256, "size": item.size, **result}
         # Physical publication survived a previous interrupted ownership commit.
-        self.blob_commit(token, upload_id)
+        self.blob_commit(token, upload_id, checkpoint=checkpoint)
         return {
             "upload_id": None,
             "sha256": item.sha256,
@@ -446,9 +450,11 @@ class BlobServiceMixin:
             "complete": True,
         }
 
-    def blob_append(self, token, upload_id, offset, data):
+    def blob_append(self, token, upload_id, offset, data, *, checkpoint=None):
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             self._blob_enabled()
             session = self._blob_session(conn, workspace, device, upload_id)
             if session["state"] == "cancelled":
@@ -457,9 +463,11 @@ class BlobServiceMixin:
             result = self._blob_store(conn, workspace).append(item, offset, data)
             return {"offset": result}
 
-    def blob_commit(self, token, upload_id):
+    def blob_commit(self, token, upload_id, *, checkpoint=None):
         with self._transaction() as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             self._blob_enabled()
             session = self._blob_session(conn, workspace, device, upload_id)
             if session["state"] == "cancelled":
@@ -473,6 +481,8 @@ class BlobServiceMixin:
             verified = self._compute_integrity(path, item)
         with self._transaction(write=True) as conn:
             current_workspace, current_device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, current_workspace, checkpoint)
             session = self._blob_session(conn, current_workspace, current_device, upload_id)
             if session["state"] == "cancelled":
                 raise BlobError("Upload session was cancelled")
@@ -489,9 +499,11 @@ class BlobServiceMixin:
             self._blob_mark_committed(conn, workspace, item, upload_id)
             return {"sha256": item.sha256, "size": item.size, "complete": True}
 
-    def blob_cancel(self, token, upload_id):
+    def blob_cancel(self, token, upload_id, *, checkpoint=None):
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             self._blob_enabled()
             session = self._blob_session(conn, workspace, device, upload_id)
             if session["state"] == "committed":

@@ -100,3 +100,10 @@ The existing engine module also exposes the shared fixture/protocol primitives:
 | `historyStep(previous, record)` | Async next SHA-256 over the previous digest, length and exact bounded UTF-8 record. |
 
 These helpers do not authenticate a service or save research independently.
+
+
+Actual original-source uploads also pass Engine.historyCheckpoint(generation) to
+HttpTransport.uploadOriginalBody(token, payload, bytes, signal, checkpoint).
+The matching service validates the retained prefix at begin/append/commit, including
+its final ownership transaction. Unsupported verified routes preserve pending work;
+see [attachment guards and remaining gates](../docs/sync-http.md#attachment-history-guards).

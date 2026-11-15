@@ -37,12 +37,23 @@ def session(client, authority, token, endpoint):
     return result
 
 
-def test_actual_manual_sync_transfers_pdf_bytes_and_binds_correct_version(transfer_setup, tmp_path):
+def test_actual_manual_sync_transfers_pdf_bytes_and_binds_correct_version(
+    transfer_setup, tmp_path, monkeypatch,
+):
     a, b, authority, ta, tb, stores, _, _, identity = transfer_setup
     operation, manifest, data = attach(transfer_setup, tmp_path, large=True)
     sa = session(a, authority, ta, "http://127.0.0.1:1")
     sb = session(b, authority, tb, "http://127.0.0.1:1")
+    begin, checkpoints = authority.blob_begin, []
+
+    def verified_begin(*args, checkpoint=None):
+        assert checkpoint is not None
+        checkpoints.append(dict(checkpoint))
+        return begin(*args, checkpoint=checkpoint)
+
+    monkeypatch.setattr(authority, "blob_begin", verified_begin)
     uploaded = sa.sync(Ticket())
+    assert checkpoints and all(point["sequence"] > 0 for point in checkpoints)
     assert uploaded["pending"] == 0 and uploaded["attachments"]["failed"] == 0
     downloaded = sb.sync(Ticket())
     assert downloaded["attachments"]["pending"] == 0

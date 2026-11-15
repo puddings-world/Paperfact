@@ -93,7 +93,7 @@ const server = createServer(async(request, response) => {
       const result=await serviceMessage(command);
       response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end(JSON.stringify(result));return;
     }
-    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull','/v1/browser/history/pull','/v1/browser/history/push']:['/v1/session/info','/v1/pull','/v1/push','/v1/history/pull','/v1/history/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
+    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull','/v1/browser/history/pull','/v1/browser/history/push']:['/v1/session/info','/v1/pull','/v1/push','/v1/history/pull','/v1/history/push','/v1/history/blobs/begin','/v1/history/blobs/append','/v1/history/blobs/commit','/v1/history/blobs/cancel','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
       response.writeHead(404);response.end();return;
     }
     if(plainNoteMode||pairingMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});

@@ -222,7 +222,9 @@ export async function preparePositionPush(engine,operation,token,generation) {
     requireThat(stable(operation)===stable(entry.source_operation),'changed_primary_retention');
     const closure=await readPrimaryRetention(state,id);engine.check(generation);
     await engine.authenticated(generation);
-    await engine.transport.uploadOriginalBody(token,entry.manifest,closure.blobs.get(entry.manifest.body.sha256),engine.controller.signal);
+    const checkpoint=await engine.historyCheckpoint(generation);engine.check(generation);
+    await engine.transport.uploadOriginalBody(token,entry.manifest,closure.blobs.get(entry.manifest.body.sha256),
+      engine.controller.signal,checkpoint);
     engine.check(generation);
     const latest=await engine.store.read();engine.check(generation);
     validateRetention(latest,id,entry);

@@ -73,7 +73,10 @@ if(fixtureResponse.ok) {
   const fixture=await fixtureResponse.json(),uploads=[],pushed=[];let loseSourceResponse=true;
   const transport=new HttpTransport(location.origin,{fetch:async(url,options)=>{
     const route=new URL(url).pathname,body=JSON.parse(options.body);
-    if(route==='/v1/blobs/append'){const size=atob(body.data).length;assert(size<=1024,'A PDF was uploaded');uploads.push(size);}
+    if(route.startsWith('/v1/blobs/') && !route.endsWith('/read'))throw Error('Unverified attachment write');
+    if(route.startsWith('/v1/history/blobs/'))assert(body.checkpoint?.sequence>0 &&
+      /^[0-9a-f]{64}$/.test(body.checkpoint.sha256),'Attachment lacks retained history');
+    if(route==='/v1/history/blobs/append'){const size=atob(body.data).length;assert(size<=1024,'A PDF was uploaded');uploads.push(size);}
     if(route==='/v1/history/push')pushed.push(structuredClone(body.operation));
     const response=await fetch(url,options);
     if(route==='/v1/history/push' && body.operation.payload?.feature==='original_source' && loseSourceResponse) {

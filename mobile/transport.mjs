@@ -209,7 +209,7 @@ export class HttpTransport {
     requireThat(btoa(raw) === value.data && raw.length === Math.min(limit, size - offset), 'invalid_response');
     return Uint8Array.from(raw, c => c.charCodeAt(0));
   }
-  async uploadOriginalBody(token,payload,bytes,signal) {
+  async uploadOriginalBody(token,payload,bytes,signal,checkpoint=null) {
     validateArtifact(payload,sourceFileId(payload.paper_id,payload.slot));
     validateOriginalSource(bytes,payload);
     requireThat(bytes.length===payload.body.size,'invalid_original_body');
@@ -217,7 +217,9 @@ export class HttpTransport {
       .map(value=>value.toString(16).padStart(2,'0')).join('');
     requireThat(hash===payload.body.sha256,'invalid_original_body');
     const manifest={sha256:hash,size:bytes.length};
-    const started=await this.post('/v1/blobs/begin',manifest,token,signal);
+    const route=checkpoint===null?'/v1/blobs/':'/v1/history/blobs/';
+    const guard=checkpoint===null?{}:{checkpoint};
+    const started=await this.post(route+'begin',{...manifest,...guard},token,signal);
     closed(started,['upload_id','sha256','size','offset','complete']);integer(started.offset);
     requireThat(started.sha256===hash && started.size===bytes.length && typeof started.complete==='boolean' &&
       started.offset<=bytes.length,'invalid_response');
@@ -226,11 +228,11 @@ export class HttpTransport {
     }
     requireThat(typeof started.upload_id==='string' && /^[A-Za-z0-9_-]{32,64}$/.test(started.upload_id),'invalid_response');
     if(started.offset<bytes.length) {
-      const result=await this.post('/v1/blobs/append',{upload_id:started.upload_id,offset:started.offset,
+      const result=await this.post(route+'append',{...guard,upload_id:started.upload_id,offset:started.offset,
         data:btoa(String.fromCharCode(...bytes.subarray(started.offset)))},token,signal);
       closed(result,['offset']);requireThat(result.offset===bytes.length,'invalid_response');
     }
-    const committed=await this.post('/v1/blobs/commit',{upload_id:started.upload_id},token,signal);
+    const committed=await this.post(route+'commit',{...guard,upload_id:started.upload_id},token,signal);
     closed(committed,['sha256','size','complete']);
     requireThat(committed.complete===true && committed.sha256===hash && committed.size===bytes.length,'invalid_response');
   }

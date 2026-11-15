@@ -7229,3 +7229,49 @@ additional worktree was introduced.
 - Final integration gates: critical14 passed in4.74s/7.9s total; docs58 passed
   in1.93s/5.3s total. Privacy/Ruff passed in both. All executions sequential
   with at most two logical processors and the25-percent job CPU ceiling.
+
+
+## 2026-11-15: attachment mutation history guards
+
+- Continued from clean common89e89bc. Reused existing blob service/HTTP transport,
+  desktop guarded transport and mobile original-source uploader. No new runtime
+  module, worktree, daemon or task board. Device-control mutation guards remain
+  separate; source after the delivered candidate is not a released installer.
+- Added explicit history/blobs begin/append/commit/cancel routes with closed
+  checkpoint fields. Legacy direct experiment methods retain their prior shape;
+  actual desktop sync and mobile original-source upload always supply proofs.
+  Unsupported verified routes stop rather than falling back to old mutations.
+- Each authority write transaction verifies the retained prefix. Begin repeats
+  after namespace persistence; commit repeats after bounded physical verification
+  before ownership publication. A valid suffix advance can keep uploading; a
+  mismatched prefix cannot change partial bytes/reservations or grant ownership.
+- Native history/session30 passed in23.26s/26.3s total. First attachment selection
+  stopped at an old-server fixture returning404 without reading the request; it
+  now consumes the bounded body before the unchanged404 assertion. No production
+  error or authentication behavior was loosened. A new test initially expected
+  unavailable rather than the existing stricter authorization denial for unowned
+  bytes; corrected that new assertion to PermissionError.
+- Attachment HTTP plus actual desktop PDF/deck47 passed in13.01s/16.1s total.
+  Extended the new case to compare exact database and physical-file snapshots on
+  repeated refused mutations and to prove no legacy fallback. Final new HTTP plus
+  both actual desktop journeys3 passed in10.32s/13.4s total. The desktop PDF test
+  also requires nonzero retained checkpoints at actual blob admission.
+- Several style gates stopped before executing tests for overlong newly written
+  lines; corrected the source/tests and retained Ruff's existing limit. No check
+  timeout or broad historical run. All executions sequential under the existing
+  two-core/25-percent governor and isolated synthetic workspaces.
+- Actual mobile Chromium source-position/recovery17 passes in23.078s, explicitly
+  refusing legacy attachment writes and requiring the current proof on actual
+  begin/append/commit. Its original operation IDs, deterministic small-body-only
+  upload, independent desktop package/backup and offline source assertions remain.
+- Affected mobile engine/transport/retention/position/recovery67 passed in3.633s/
+  3.781s governed; real mobile/Python HTTP interoperability passes in2.016s.
+  No release/critical selector expansion. Earlier local v30 artifact83c4877 and
+  native/v29 candidatec1cbef2 are unchanged; source assets require a future matching
+  build/deployment. No real account, paid call, owner research, tag or release.
+- Canonical local-integration evidence extended; no new universal rule. Remaining:
+  device-control guards, durable authority fencing, native legacy-ack review,
+  remaining mapping/recovery/survey, hosting and installed/physical acceptance.
+- Integration gates: critical14 passed in7.90s/11.0s total; docs58 passed
+  in1.88s/5.0s total, with privacy/Ruff passed. Final whitespace review and
+  integration-parent checks follow; no full historical suite or packaging.
