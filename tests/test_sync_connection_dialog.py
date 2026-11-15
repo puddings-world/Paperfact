@@ -318,3 +318,98 @@ def test_join_picker_normal_and_cancel_paths(dialog, service, tmp_path, monkeypa
         assert view.created_destination.workspace_root == tmp_path / "chosen-workspace"
         assert view.open_created_button.isEnabled()
         assert service[0].workspace.path != view.created_destination.database_path
+
+
+def test_history_refusal_offers_read_only_review_and_default_no_adoption(
+    dialog, service, enrolled, monkeypatch,
+):
+    from contextlib import closing
+
+    from PySide6.QtWidgets import QMessageBox
+
+    app, view = dialog
+    _controller, authority, token, calls = service
+    for operation in enrolled[1].journal.pending():
+        event = authority.push(token, operation)
+        enrolled[1].journal.acknowledge(operation['operation_id'], event['sequence'])
+    connected(dialog, service)
+    assert view.history_review_button.isHidden() and view.history_adopt_button.isHidden()
+    view.sync_button.click()
+    wait(app, lambda: not view.busy)
+    assert not view.history_review_button.isHidden() and view.history_review_button.isEnabled()
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        before = list(conn.iterdump())
+    calls.clear()
+    view.history_review_button.click()
+    worker = view._worker
+    view.history_review_button.click()
+    assert view._worker is worker and not view.history_review_button.isEnabled()
+    wait(app, lambda: not view.busy)
+    assert not view.history_adopt_button.isHidden() and view.history_adopt_button.isEnabled()
+    assert 'Not saved yet' in view.status.text()
+    assert set(calls) <= {'session_info', 'history_page'}
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert list(conn.iterdump()) == before
+    prompts = []
+
+    def refuse(*args):
+        prompts.append(args[-1])
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, 'question', refuse)
+    view.history_adopt_button.click()
+    assert prompts == [QMessageBox.StandardButton.No] and not view.busy
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert list(conn.iterdump()) == before
+    monkeypatch.setattr(QMessageBox, 'question', lambda *args: QMessageBox.StandardButton.Yes)
+    view.history_adopt_button.click()
+    wait(app, lambda: not view.busy)
+    assert view.history_adopt_button.isHidden() and view.history_review_button.isHidden()
+    assert 'Sync now' in view.status.text() and 'push_verified' not in calls
+    view.sync_button.click()
+    wait(app, lambda: not view.busy)
+    assert 'More records' not in view.status.text() and len(authority.pull(token)) > 0
+
+
+@pytest.mark.parametrize('close', [False, True])
+def test_stop_or_close_during_history_review_keeps_journal_and_never_adopts(
+    dialog, service, enrolled, monkeypatch, close,
+):
+    from contextlib import closing
+
+    app, view = dialog
+    controller, authority, token, _calls = service
+    for operation in enrolled[1].journal.pending():
+        event = authority.push(token, operation)
+        enrolled[1].journal.acknowledge(operation['operation_id'], event['sequence'])
+    connected(dialog, service)
+    view.sync_button.click()
+    wait(app, lambda: not view.busy)
+    entered, release = threading.Event(), threading.Event()
+    read = authority.history_page
+
+    def held(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return read(*args, **kwargs)
+
+    monkeypatch.setattr(authority, 'history_page', held)
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        before = list(conn.iterdump())
+    view.history_review_button.click()
+    try:
+        wait(app, entered.is_set)
+        view.close() if close else view.cancel()
+        assert view.busy
+    finally:
+        release.set()
+    wait(app, lambda: not view.busy)
+    assert view.disposed == close and controller.history_review_summary() is None
+    if not close:
+        assert view.history_review_button.isEnabled()
+        monkeypatch.setattr(authority, 'history_page', read)
+        view.history_review_button.click()
+        wait(app, lambda: not view.busy)
+        assert view.history_adopt_button.isEnabled() and 'Not saved yet' in view.status.text()
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert list(conn.iterdump()) == before

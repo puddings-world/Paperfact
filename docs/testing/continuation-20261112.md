@@ -7446,3 +7446,57 @@ No source change or rebuild is needed for this evidence-only documentation updat
 Final evidence-doc gate: docs58 pass in1.91s/5.0s total, Privacy/Ruff pass.
 Earlier docs58 in1.78s/4.8s covered the interim live-run wording. Critical14
 evidence reused from unchanged355382c runtime; no unnecessary native rebuild.
+
+
+## 2026-11-15: explicit desktop legacy-history review/adoption
+
+Source after6940c26; delivered355382c candidate/run43705488673 remains unchanged.
+No rebuild/public release/deployment or research migration this checkpoint.
+
+Old acknowledged-but-unreceived operations can now be compared through bounded,
+resumable, read-only linked-history pages, matching every retained inbox event and
+receipt operation/sequence. New opaque in-memory review inputs are never exported
+or sent as a wire packet. Per-page progress uses actual sequence/receipt counts.
+Guarded Session retains it only within this connection generation; existing single-
+job admission, authenticated identity, live workspace and cancellation apply.
+
+Existing desktop dialog reveals Review saved sync history only after a history
+refusal. Completed review reveals Use verified history with default-No confirmation.
+Adoption rechecks the service prefix/current local proof inputs and writes only
+proof metadata; no research projection, cursor reset, outbox discard, attachment
+work or automatic upload. Explicit Sync now performs subsequent receive/push.
+A truly absent legacy proof table is created at adoption; corrupt existing evidence
+is not reset. Core exact retry is safe; local evidence changes require fresh review.
+
+Validation: initial4 new core cases passed1.09s/4.0s; strengthening missing-table
+retry exposed an OperationalError on the second adoption. Fixed product schema
+condition using current transaction observation; unchanged acceptance then7 passed
+in2.76s/5.9s total. Initial Qt2 passed3.14s/6.3s; added Stop/retry coverage and
+actual per-page progress. Full affected history/session/edge/dialog63 passed
+44.15s/47.2s total. Strengthened existing success case adds a real received prefix
+and compares every SQL row except intended proof metadata; all4 selected cases
+pass2.35s/5.4s total. Initial Ruff import/line-width failures corrected; no historical
+assertion weakened or skipped. Test additions protect distinct behavior boundaries,
+not a new suite-size target.
+
+Remaining: rebuilt native/Mac and physical/hosted acceptance for this source;
+durable authority/control history, anti-rollback/fencing, remaining research
+mapping/recovery/survey evaluation and complete installed multi-device journeys.
+A matched old receipt cannot prove an unrecorded old outcome or missing research.
+Cooperative capture/page budgets are not hard real-time OS cancellation. No new
+worktree, runtime module, daemon/board, provider call or owner-data test.
+
+Final resource review: retained proof inputs now store content fingerprints rather
+than raw operation/event bodies. The evidence fingerprint budget is16 MiB (Python
+metadata overhead is additional), with streamed per-record validation and the
+existing100,000-row/cancellation/deadline bounds. The injected one-byte budget
+refuses before writes;12 final core/session/Qt cases passed6.94s/10.1s before
+this compact-witness refinement. Final refinement evidence follows below.
+
+Final compact-fingerprint/budget core/session/Qt acceptance:12 pass in6.35s/9.4s
+total, including over-budget refusal without writes. Earlier affected63 evidence
+precedes the compact-witness refinement; no false exhaustive pass is claimed.
+
+Final compact-witness integration gates: critical14 pass in4.83s/8.1s total;
+docs58 pass in1.76s/5.3s total. Privacy/Ruff and whitespace pass. All checks
+sequential/two-core/25-percent CPU bounded; no full historical suite or rebuild.

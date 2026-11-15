@@ -12,7 +12,7 @@ from pathlib import Path
 from paper_daily.sync_capture import RESEARCH, trusted_connection
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_http import HttpTransport
-from paper_daily.sync_journal import Journal, _identifier
+from paper_daily.sync_journal import Journal, SyncHistoryUnavailable, _identifier
 from paper_daily.sync_research import (
     research_order_writer,
     research_projection_writer,
@@ -169,6 +169,7 @@ class SyncSession:
         self.identity = None
         self.state = "disconnected"
         self.last_success = None
+        self._history_review = None
 
     @property
     def busy(self):
@@ -194,12 +195,14 @@ class SyncSession:
     def disconnect(self):
         with self._state:
             self._generation += 1
+            self._history_review = None
             self._token = None
             self.state = "disconnected"
 
     def cancel(self):
         with self._state:
             self._generation += 1
+            self._history_review = None
             self.state = "connected" if self._token else "disconnected"
 
     def _live(self, generation, ticket=None):
@@ -308,6 +311,58 @@ class SyncSession:
             order_writer=research_order_writer,
             projection_writer=research_projection_writer,
         )
+
+    def history_review_summary(self):
+        with self._state:
+            saved = self._history_review
+            return saved[1].summary() if saved and saved[0] == self._generation else None
+
+    def review_history(self, ticket, progress=lambda _value: None, *, max_pages=25):
+        """Explicit read-only comparison; subsequent calls continue its bounded scan."""
+        with self._job(), self.authorized(ticket) as (transport, token, identity, live):
+            client = self._client(identity, live)
+            with self._state:
+                generation, saved = self._generation, self._history_review
+            previous = saved[1] if saved and saved[0] == generation else None
+            try:
+                review = client.review_legacy_history(
+                    transport, token, previous, max_pages=max_pages, check=live,
+                    progress=lambda value: progress(dict(stage="history_review", **value)))
+            except SyncHistoryUnavailable:
+                with self._state:
+                    self._history_review = None
+                raise
+            live()
+            with self._state:
+                if generation != self._generation:
+                    raise SyncStopped('The history review connection changed')
+                self._history_review = generation, review
+            summary = review.summary()
+            progress(dict(stage='history_review', **summary))
+            return summary
+
+    def adopt_history_review(self, ticket):
+        """User-confirmed proof adoption; no upload, projection or cursor reset."""
+        from paper_daily.sync_client import validate_history_page
+
+        with self._job(), self.authorized(ticket) as (transport, token, identity, live):
+            with self._state:
+                saved = self._history_review
+                if not saved or saved[0] != self._generation or not saved[1].complete:
+                    raise SyncHistoryUnavailable('Complete a current history review first')
+                review = saved[1]
+            point = dict(sequence=review.point[0], sha256=review.point[1])
+            page = transport.history_page(token, after=point['sequence'], limit=1,
+                                          checkpoint=point)
+            _events, start, _end, _points = validate_history_page(page, identity['workspace_id'])
+            if start != point:
+                raise SyncHistoryUnavailable('Reviewed service history changed')
+            live()
+            result = self._client(identity, live).adopt_legacy_history(review)
+            live()
+            with self._state:
+                self._history_review = None
+            return result
 
     def sync(self, ticket, progress=lambda _value: None, *, max_pages=100, seconds=20):
         if type(max_pages) is not int or not 1 <= max_pages <= 100 or not 0 < seconds <= 60:

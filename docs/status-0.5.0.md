@@ -54,8 +54,10 @@ carry the retained prefix into server mutation transactions, including a second
 check after physical verification and before ownership. Actual desktop device
 controls now require prepared proofs; fresh invitation claims recheck the original
 issuer prefix. Explicit sync initializes missing legacy proof tables without
-resetting damaged evidence. Native legacy-ack review/adoption UI and durable
-authority fencing remain open. Same-host listener exclusion now holds through
+resetting damaged evidence. Source after355382c adds explicit desktop legacy-ack review and default-No
+proof adoption, with read-only/resumable comparison and no automatic upload or
+cursor reset. Windows Qt/native fixtures pass; a rebuilt/installed Mac journey
+remains open. Durable authority fencing remains open. Same-host listener exclusion now holds through
 admitted-worker drain; initialized services refuse observed database replacement
 or removal without recreating missing files. This is not distributed fencing or
 durable control-history protection. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).

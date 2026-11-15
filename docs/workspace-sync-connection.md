@@ -125,3 +125,49 @@ masked in the manual form until explicit verification clears them. Pending parse
 blocks repeated activation, and cancel/close/workspace changes reject late
 results. Invalid records preserve existing fields and do not disconnect a
 verified route. A successful load stops the old route before replacing fields.
+
+
+## Explicit review of legacy acknowledgments
+
+Source after candidate355382c adds this desktop flow. That delivered native
+candidate has not been rebuilt for these controls.
+
+1. A history refusal reveals **Review saved sync history** below **Sync now**.
+   Normal connections keep this action hidden. It needs a verified connection to
+   this database's own capture-bound device; no AI or extra account is involved.
+2. Review reads bounded linked history and compares exact retained inbox events,
+   operation envelopes and acknowledgment sequences. Real per-page sequence and
+   receipt counts are shown, not an estimated time or completion percentage.
+   **Continue history check** resumes an incomplete in-memory scan.
+3. A completed review reveals **Use verified history**. Its confirmation defaults
+   to **No**. Acceptance rechecks the service prefix and current local evidence in
+   the guarded transaction, saving only proof metadata. It does not move/reset the
+   received cursor, clear queued edits, apply research, transfer files or start sync.
+4. Choose **Sync now** explicitly to receive the verified history and continue.
+   A different/missing history, damaged proof row, changed retained evidence or
+   unsupported protocol stays refused. Keep the old workspace; do not delete its
+   outbox or fabricate a fresh identity to bypass the warning.
+
+Stop/close/disconnect preserve committed research. Stop allows another explicit
+review; closing or a changed connection cannot deliver a stale adoption result.
+Partial reviews keep canonical-content fingerprints rather than raw note bodies.
+They are device-session memory, never exported, logged or persisted as
+research. Closing/reconnecting starts the read-only comparison again. New pending
+edits do not themselves authorize adoption or become part of the proof scan.
+
+| Internal API | Contract |
+|---|---|
+| `SyncClient.review_legacy_history(transport, token, review=None, *, limit=100, max_pages=25, seconds=20, check=..., progress=...) -> SyncHistoryReview` | Resumable bounded read-only observation; at most100,000 records per family and16 MiB of retained fingerprints; cancellation/deadline checks during capture and pages |
+| `SyncHistoryReview.summary() -> dict` | Counts/completeness only; the private in-memory evidence object is not a wire packet or diagnostic export |
+| `SyncClient.adopt_legacy_history(review) -> dict` | Explicit completed-review adoption; exact local evidence/native-file binding and atomic proof save, idempotent core retry |
+| `SyncSession.review_history(ticket, progress=..., *, max_pages=25) -> dict` | Existing single-job admission and identity checks; retains only this connection generation's partial review |
+| `SyncSession.history_review_summary() -> dict or None` | Credential/content-free current-generation progress |
+| `SyncSession.adopt_history_review(ticket) -> dict` | Explicit adoption with a fresh authenticated prefix check and guarded local commit |
+
+The deadline is cooperative: an admitted OS/network call is not hard real-time.
+Oversized/corrupt retained inputs stop rather than truncate into success. Matching
+an old receipt proves its operation/sequence, not an outcome the old device never
+recorded, full research completeness, durable authority control history or
+anti-rollback/distributed fencing. A normal fresh sync still performs the actual
+receive/conflict projection. No hosted, installed-Mac or physical-device result is
+implied by the Windows Qt/native fixtures.

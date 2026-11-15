@@ -837,3 +837,28 @@ socket.close prevents later buffered cleanup from closing a recycled descriptor;
 the actual incomplete-header test then passes. This observed file lifetime is not
 content authenticity, same-inode restore/ABA detection, a durable authority epoch,
 a distributed lease, or proof of every control change. No new global rule or hook.
+
+
+## 2026-11-15: explicit legacy acknowledgment proof adoption
+
+Status: validated-local Windows core/session/Qt. Old accepted-but-unreceived
+operations may lack a retained linked proof. Preserve the old journal/cursor and
+queued work; compare bounded remote history with exact retained receipts/inbox in
+an explicit read-only action. Carry immutable local evidence through resumable
+in-memory pages. Acceptance rechecks authenticated service history and local
+binding/evidence, writes only proof metadata atomically, and does not start sync.
+A missing old proof table may be created only at explicit adoption; a damaged
+existing row is refused. Core retry must use current transaction schema, not only
+the pre-adoption observation (the first missing-table retry test exposed this bug).
+
+Evidence: full affected63 in44.15s/47.2s total; strengthened retained-inbox/missing-
+schema and all-SQL-except-proof preservation4 in2.35s/5.4s total. Normal/partial/
+confirm-No/Yes, wrong remote receipt, changed local evidence, held read with
+repeated activation/disconnect, Stop/retry and Close are covered. In-memory
+progress is counts, not authority or diagnostic data. The delivered355382c native
+candidate is unchanged; no installed Mac/hosted/device or durable control-history
+claim, global skill installation, telemetry or new background service.
+
+Final compact-fingerprint/budget core/session/Qt acceptance:12 pass in6.35s/9.4s
+total, including over-budget refusal without writes. Earlier affected63 evidence
+precedes the compact-witness refinement; no false exhaustive pass is claimed.

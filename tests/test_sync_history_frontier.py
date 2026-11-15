@@ -463,3 +463,100 @@ def test_verified_receive_rejects_missing_or_changed_page_without_mutation(pair)
         local.sync_verified_once(authority, token)
     assert snapshot(local.journal.path) == before_legacy
     assert local.status()["awaiting_receipts"] == 1
+
+
+@pytest.mark.parametrize('missing_proof_table,received_prefix', [
+    (False, False), (True, False), (True, True),
+])
+def test_explicit_legacy_history_review_is_read_only_resumable_and_retry_safe(
+    pair, missing_proof_table, received_prefix,
+):
+    authority, local, _peer, token, _peer_token = pair
+    if received_prefix:
+        edit(local, 'Earlier received note', identity='earlier')
+        local.sync_once(authority, token)
+    initial_cursor = local.status()['cursor']
+    for index in range(3):
+        operation = edit(local, 'Retained accepted note', identity=f'legacy-{index}')
+        event = authority.push(token, operation)
+        local.journal.acknowledge(operation['operation_id'], event['sequence'])
+    edit(local, 'Unsent draft', identity='still-pending')
+    if missing_proof_table:
+        with closing(sqlite3.connect(local.journal.path)) as conn:
+            conn.execute('DROP TABLE paperfact_sync_history_checkpoint')
+            conn.commit()
+    before = snapshot(local.journal.path)
+    review = local.review_legacy_history(authority, token, limit=1, max_pages=1)
+    assert review.summary()['checked_sequence'] == 1 and not review.complete
+    assert snapshot(local.journal.path) == before
+    with pytest.raises(SyncHistoryUnavailable):
+        local.adopt_legacy_history(review)
+    for _ in range(2 + initial_cursor):
+        review = local.review_legacy_history(authority, token, review, limit=1, max_pages=1)
+        assert snapshot(local.journal.path) == before
+    assert review.complete and review.summary()['matched_receipts'] == 3 + initial_cursor
+    assert 'Retained accepted note' not in repr(review)
+    result = local.adopt_legacy_history(review)
+    assert local.adopt_legacy_history(review) == result
+    assert result['acknowledged_sequence'] == 3 + initial_cursor
+    assert not result['research_changed']
+    assert local.status()['cursor'] == initial_cursor and local.status()['pending'] == 1
+    assert saved(local, identity='still-pending')['body'] == 'Unsent draft'
+    assert [line for line in snapshot(local.journal.path)
+            if 'paperfact_sync_history_checkpoint' not in line] == [
+                line for line in before if 'paperfact_sync_history_checkpoint' not in line]
+
+    local.sync_verified_once(authority, token)
+    assert local.status()['cursor'] == 4 + initial_cursor and local.status()['pending'] == 0
+    assert len(authority.pull(token)) == 4 + initial_cursor
+
+
+@pytest.mark.parametrize('failure', [
+    'changed-receipt', 'changed-local', 'cancelled', 'over-budget',
+])
+def test_legacy_history_review_refuses_mismatch_or_stale_adoption_without_data_loss(
+    pair, failure, monkeypatch,
+):
+    authority, local, _peer, token, _peer_token = pair
+    operation = edit(local, 'Keep this local note')
+    event = authority.push(token, operation)
+    local.journal.acknowledge(operation['operation_id'], event['sequence'])
+    before = snapshot(local.journal.path)
+    if failure == 'changed-receipt':
+        from paper_daily.sync_journal import history_step
+        original = authority.history_page
+
+        class DifferentHistory:
+            def history_page(self, *args, **kwargs):
+                page = original(*args, **kwargs)
+                event = json.loads(page['events'][0])
+                event['operation']['payload']['body'] = 'Different remote note'
+                event['head']['operation'] = deepcopy(event['operation'])
+                raw = json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+                page['events'] = [raw]
+                page['checkpoint']['sha256'] = history_step(page['after']['sha256'], raw)
+                return page
+
+        with pytest.raises(SyncHistoryUnavailable, match='retained receipt'):
+            local.review_legacy_history(DifferentHistory(), token)
+    elif failure == 'over-budget':
+        monkeypatch.setattr('paper_daily.sync_client.HISTORY_REVIEW_MAX_BYTES', 1)
+        with pytest.raises(SyncHistoryUnavailable, match='byte bound'):
+            local.review_legacy_history(authority, token)
+    elif failure == 'cancelled':
+        def cancelled():
+            raise SyncStopped('cancelled fixture')
+
+        from paper_daily.workspace_sync import SyncStopped
+        with pytest.raises(SyncStopped):
+            local.review_legacy_history(authority, token, check=cancelled)
+    else:
+        review = local.review_legacy_history(authority, token)
+        next_operation = edit(local, 'A later accepted note', identity='later')
+        next_event = authority.push(token, next_operation)
+        local.journal.acknowledge(next_operation['operation_id'], next_event['sequence'])
+        before = snapshot(local.journal.path)
+        with pytest.raises(SyncHistoryUnavailable, match='review again'):
+            local.adopt_legacy_history(review)
+    assert snapshot(local.journal.path) == before
+    assert saved(local)['body'] == 'Keep this local note'

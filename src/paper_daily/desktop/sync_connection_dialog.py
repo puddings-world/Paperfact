@@ -281,6 +281,80 @@ COPY["zh-TW"]["history"] += (
 )
 
 
+HISTORY_REVIEW_COPY = {
+    'en': {
+        'review': (
+            'Review saved sync history'
+        ),
+        'more': (
+            'Continue history check'
+        ),
+        'adopt': (
+            'Use verified history'
+        ),
+        'confirm': (
+            'Save the checked history proof? This does not overwrite research, cl'
+            'ear pending edits or start syncing.'
+        ),
+        'summary': (
+            'Checked history {checked_sequence} / {target_sequence}; matched rece'
+            'ipts {matched_receipts} / {total_receipts}.'
+        ),
+        'ready': (
+            'Not saved yet. Confirm Use verified history to continue.'
+        ),
+        'pending': (
+            'Continue checking; pending edits remain queued.'
+        ),
+        'saved': (
+            'Verified history saved. Choose Sync now to continue.'
+        ),
+    },
+    'zh-TW': {
+        'review': (
+            '\u6838\u5c0d\u820a\u540c\u6b65\u6b77\u53f2'
+        ),
+        'more': (
+            '\u7e7c\u7e8c\u6838\u5c0d\u6b77\u53f2'
+        ),
+        'adopt': (
+            '\u63a1\u7d0d\u6838\u5c0d\u7d50\u679c'
+        ),
+        'confirm': (
+            '\u53ea\u5132\u5b58\u5df2\u6838\u5c0d\u7684\u6b77'
+            '\u53f2\u8b49\u660e\u3002\u4e0d\u6703\u8986\u5beb'
+            '\u7814\u7a76\u3001\u6e05\u9664\u5f85\u9001\u4fee'
+            '\u6539\u6216\u958b\u59cb\u540c\u6b65\u3002'
+        ),
+        'summary': (
+            '\u5df2\u6838\u5c0d\u6b77\u53f2 {c'
+            'hecked_s'
+            'equence}'
+            ' / {targ'
+            'et_seque'
+            'nce}\uff0c\u6536\u4ef6\u7d00'
+            '\u9304 {match'
+            'ed_recei'
+            'pts} / {'
+            'total_re'
+            'ceipts}\u3002'
+        ),
+        'ready': (
+            '\u5c1a\u672a\u5132\u5b58\uff0c\u8acb\u78ba\u8a8d'
+            '\u63a1\u7d0d\u3002'
+        ),
+        'pending': (
+            '\u8acb\u7e7c\u7e8c\u6838\u5c0d\uff1b\u5f85\u9001'
+            '\u4fee\u6539\u4fdd\u7559\u3002'
+        ),
+        'saved': (
+            '\u6b77\u53f2\u6838\u5c0d\u7d50\u679c\u5df2\u5132'
+            '\u5b58\uff1b\u8acb\u6309\u958b\u59cb\u540c\u6b65'
+            '\u7e7c\u7e8c\u3002'
+        ),
+    },
+}
+
 class SyncWorker(QThread):
     progress = Signal(object)
 
@@ -344,9 +418,11 @@ class SyncConnectionDialog(QDialog):
         self._startup_enabled = False
         self._remember_joined = False
         self._probed = False
+        self._history_review_needed = False
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
         self.v = VAULT_COPY.get(language, VAULT_COPY["en"])
+        self.h = HISTORY_REVIEW_COPY.get(language, HISTORY_REVIEW_COPY["en"])
         self._worker = None
         self._devices_dialog = None
         self._closing = self.disposed = self._invalid = self._setting = False
@@ -474,6 +550,13 @@ class SyncConnectionDialog(QDialog):
         self.sync_button = QPushButton(self.t["sync"])
         self.sync_button.clicked.connect(self.sync_now)
         layout.addWidget(self.sync_button)
+        self.history_review_button = QPushButton(self.h['review'])
+        self.history_review_button.clicked.connect(self.review_history)
+        self.history_adopt_button = QPushButton(self.h['adopt'])
+        self.history_adopt_button.clicked.connect(self.adopt_history)
+        layout.addWidget(self.history_review_button)
+        layout.addWidget(self.history_adopt_button)
+
         self.automatic_box = QCheckBox(
             "自動同步此工作區（本次開啟期間）"
             if self.zh
@@ -706,6 +789,13 @@ class SyncConnectionDialog(QDialog):
         self.sync_button.setEnabled(
             available and live and self.eligible and self.binding == summary["identity"]
         )
+        review = self.session.history_review_summary()
+        self.history_review_button.setVisible(self._history_review_needed or review is not None)
+        self.history_review_button.setEnabled(self.sync_button.isEnabled())
+        self.history_review_button.setText(
+            self.h['more'] if review and not review['complete'] else self.h['review'])
+        self.history_adopt_button.setVisible(bool(review and review['complete']))
+        self.history_adopt_button.setEnabled(self.sync_button.isEnabled())
         self.devices_button.setEnabled(
             available and live and self.eligible and self.binding == summary["identity"]
         )
@@ -775,6 +865,7 @@ class SyncConnectionDialog(QDialog):
             return False
         worker = SyncWorker(task, self)
         self._worker = worker
+        worker.history_generation = self.session.generation
         worker.progress.connect(self._progress)
         worker.finished.connect(lambda: self._finished(worker, kind))
         self.status.setText(self.t["checking"] if kind == "connect" else self.t["working"])
@@ -962,6 +1053,22 @@ class SyncConnectionDialog(QDialog):
             "forget_saved", lambda ticket, _progress: self._connection_vault().forget(ticket)
         )
 
+    def review_history(self):
+        if self.busy or not self.history_review_button.isEnabled():
+            return False
+        return self._start('history_review', self.session.review_history)
+
+    def adopt_history(self):
+        if self.busy or not self.history_adopt_button.isEnabled():
+            return False
+        answer = QMessageBox.question(self, self.t['title'], self.h['confirm'],
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        return self._start('history_adopt',
+                           lambda ticket, _progress: self.session.adopt_history_review(ticket))
+
     def sync_now(self):
         if self.busy or not self.sync_button.isEnabled():
             return False
@@ -1049,6 +1156,9 @@ class SyncConnectionDialog(QDialog):
                 f"Checking saved sync history; {remaining} records remain. New changes stay queued."
             )
             return
+        if value.get("stage") == "history_review":
+            self.status.setText(self.h['summary'].format(**value))
+            return
         if value.get("stage") == "pairing":
             self.status.setText(self.t["pair_" + value["phase"]])
             return
@@ -1099,6 +1209,11 @@ class SyncConnectionDialog(QDialog):
                      or worker.result["identity"] != self.session.summary()["identity"])):
             self._invalid = True
             self.status.setText(self.t["changed"])
+        if (kind in {'history_review', 'history_adopt'}
+                and not worker.ticket.cancelled and not self._closing
+                and worker.history_generation != self.session.generation):
+            self._invalid = True
+            self.status.setText(self.t['changed'])
         if not self._invalid and not self._closing:
             if kind in {"startup_enable", "startup_disable", "forget_saved"}:
                 self._startup_enabled = bool(self._connection_vault().startup_record())
@@ -1107,6 +1222,8 @@ class SyncConnectionDialog(QDialog):
                 key = "pair_bad" if worker.error == "incompatible" else "pair_denied"
                 self.status.setText(self.t[key])
             elif worker.error:
+                if worker.error == 'history':
+                    self._history_review_needed = True
                 self.status.setText(
                     (
                         "連線資料無法讀取；請確認來源及格式。"
@@ -1120,6 +1237,14 @@ class SyncConnectionDialog(QDialog):
                 )
             elif worker.ticket.cancelled:
                 self.status.setText(self.t["cancelled"])
+            elif kind == 'history_review':
+                result = worker.result
+                self._history_review_needed = True
+                self.status.setText(self.h['summary'].format(**result) + ' ' +
+                                    self.h['ready' if result['complete'] else 'pending'])
+            elif kind == 'history_adopt':
+                self._history_review_needed = False
+                self.status.setText(self.h['saved'])
             elif kind == "probe":
                 self._probed = True
                 self._startup_enabled = worker.result["startup"]

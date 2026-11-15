@@ -371,3 +371,10 @@ New candidate builds verify guarded-history sync and duplicate-listener refusal
 inside the packaged CLI, plus six source lifetime journeys per OS. See
 [the exact acceptance contract](docs/toolchain.md); physical device acceptance
 remains separate.
+
+
+After a legacy sync-history warning, the development desktop can **Review saved
+sync history**, then explicitly **Use verified history** with a default-No
+confirmation. Research, pending edits and the received cursor are preserved;
+[workflow and limits](docs/workspace-sync-connection.md#explicit-review-of-legacy-acknowledgments).
+This source-only UI is newer than the355382c native test candidate.

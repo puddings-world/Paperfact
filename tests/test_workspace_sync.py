@@ -257,3 +257,83 @@ def test_unknown_event_is_not_skipped_or_published(service, enrolled, tmp_path, 
     staged = next(tmp_path.glob(".paperfact-join-*/workspace/papers.db"))
     with sqlite3.connect(staged) as conn:
         assert conn.execute("SELECT sequence FROM paperfact_sync_cursor").fetchone()[0] == 0
+
+
+def test_guarded_session_explicit_history_review_preserves_research_and_pending(service, enrolled):
+    from contextlib import closing
+
+    from paper_daily.sync_journal import SyncHistoryUnavailable
+
+    controller, authority, token, calls = service
+    local = enrolled[1]
+    for operation in local.journal.pending():
+        event = authority.push(token, operation)
+        local.journal.acknowledge(operation['operation_id'], event['sequence'])
+    connect(service)
+    with pytest.raises(SyncHistoryUnavailable):
+        controller.sync(Ticket())
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        before = list(conn.iterdump())
+    calls.clear()
+    progress = []
+    reviewed = controller.review_history(Ticket(), progress.append)
+    assert reviewed['complete'] and reviewed['matched_receipts'] > 0
+    assert not reviewed['uploaded'] and not reviewed['research_changed']
+    assert controller.history_review_summary() == reviewed
+    assert progress[-1] == dict(stage='history_review', **reviewed)
+    assert all(value['stage'] == 'history_review' and not value['uploaded'] for value in progress)
+    assert [value['checked_sequence'] for value in progress] == sorted(
+        value['checked_sequence'] for value in progress)
+    assert set(calls) <= {'session_info', 'history_page'}
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert list(conn.iterdump()) == before
+    adopted = controller.adopt_history_review(Ticket())
+    assert not adopted['research_changed'] and not adopted['uploaded']
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert [line for line in conn.iterdump()
+                if 'paperfact_sync_history_checkpoint' not in line] == [
+                    line for line in before if 'paperfact_sync_history_checkpoint' not in line]
+
+    assert controller.history_review_summary() is None
+    assert controller.sync(Ticket())['caught_up']
+
+
+def test_history_review_disconnect_during_remote_read_cannot_adopt(service, enrolled, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import closing
+
+    from paper_daily.sync_journal import SyncHistoryUnavailable
+
+    controller, authority, token, _calls = service
+    local = enrolled[1]
+    for operation in local.journal.pending():
+        event = authority.push(token, operation)
+        local.journal.acknowledge(operation['operation_id'], event['sequence'])
+    connect(service)
+    entered, release = threading.Event(), threading.Event()
+    read = authority.history_page
+
+    def held(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return read(*args, **kwargs)
+
+    monkeypatch.setattr(authority, 'history_page', held)
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        before = list(conn.iterdump())
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(controller.review_history, Ticket())
+        try:
+            assert entered.wait(5)
+            with pytest.raises(SyncStopped):
+                controller.review_history(Ticket())
+            controller.disconnect()
+        finally:
+            release.set()
+        with pytest.raises(SyncStopped):
+            future.result(timeout=5)
+    assert not controller.busy and controller.history_review_summary() is None
+    with pytest.raises((PermissionError, SyncHistoryUnavailable)):
+        controller.adopt_history_review(Ticket())
+    with closing(sqlite3.connect(enrolled[0])) as conn:
+        assert list(conn.iterdump()) == before

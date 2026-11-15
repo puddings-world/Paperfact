@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
+import time
 from contextlib import closing
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -91,6 +94,41 @@ def validate_history_page(page, workspace):
     if end != {"sequence": sequence, "sha256": digest} or not events and not page["caught_up"]:
         raise SyncHistoryUnavailable("Verified history checkpoint is inconsistent")
     return events, before, end, points
+
+
+HISTORY_REVIEW_MAX_BYTES = 16 * 1024**2
+
+
+@dataclass(frozen=True)
+class _HistoryReviewInput:
+    path: str
+    file_identity: tuple
+    binding: tuple
+    proof_table: bool
+    received: tuple
+    acknowledged: tuple
+    cursor: int
+    receipts: tuple = field(repr=False)
+    inbox: tuple = field(repr=False)
+
+
+@dataclass(frozen=True)
+class SyncHistoryReview:
+    """Ephemeral read-only review; never serialize its private journal inputs."""
+
+    inputs: _HistoryReviewInput = field(repr=False)
+    point: tuple
+    cursor_point: tuple
+    receipts_matched: int = 0
+    complete: bool = False
+
+    def summary(self):
+        target = max(self.inputs.cursor, self.inputs.acknowledged[0],
+                     *(row[0] for row in self.inputs.receipts))
+        return dict(checked_sequence=self.point[0], target_sequence=target,
+                    matched_receipts=self.receipts_matched,
+                    total_receipts=len(self.inputs.receipts), complete=self.complete,
+                    research_changed=False, uploaded=False)
 
 
 class SyncClient:
@@ -1817,6 +1855,179 @@ class SyncClient:
         except sqlite3.DatabaseError as error:
             raise SyncHistoryUnavailable(
                 "Synchronize retained history before this action; keep local work") from error
+
+    def _history_review_inputs(self, conn, check=lambda: None):
+        try:
+            return self._capture_history_review_inputs(conn, check)
+        except (SyncHistoryUnavailable, TimeoutError):
+            raise
+        except (sqlite3.DatabaseError, ValueError, KeyError, TypeError, OSError) as error:
+            raise SyncHistoryUnavailable('Retained history cannot be reviewed safely') from error
+
+    def _capture_history_review_inputs(self, conn, check):
+        """Capture only the retained evidence needed to authorize proof adoption."""
+        self.journal._binding(conn)
+        path = self.journal.path.resolve(strict=True)
+        before = path.stat()
+        live = getattr(conn, "live", lambda: None)
+        proof_table = bool(conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='paperfact_sync_history_checkpoint'").fetchone())
+        seed = (0, history_seed(self.journal.workspace_id))
+        received, acknowledged = (self._history_in(conn) if proof_table else
+                                 (dict(sequence=0, sha256=seed[1]),
+                                  dict(sequence=0, sha256=seed[1])))
+        received = (received['sequence'], received['sha256'])
+        acknowledged = (acknowledged['sequence'], acknowledged['sha256'])
+        cursor = conn.execute('SELECT sequence FROM paperfact_sync_cursor WHERE id=1').fetchone()
+        if cursor is None or type(cursor[0]) is not int or not received[0] <= cursor[0]:
+            raise SyncHistoryUnavailable('Retained history cursor cannot be reviewed')
+        cursor = cursor[0]
+        if conn.execute("SELECT 1 FROM paperfact_sync_operations WHERE server_revision IS NOT NULL "
+                        "AND (typeof(server_revision)<>'integer' OR server_revision<=0) "
+                        "LIMIT 1").fetchone():
+            raise SyncHistoryUnavailable('Retained acknowledgment sequence is invalid')
+        spent = 0
+        receipts = []
+        for sequence, raw, fingerprint in conn.execute(
+                'SELECT server_revision, CASE WHEN length(CAST(envelope AS BLOB))<=? '
+                'THEN envelope END, fingerprint FROM paperfact_sync_operations '
+                'WHERE server_revision>? ORDER BY server_revision LIMIT 100001',
+                (MAX_BYTES, received[0])):
+            check()
+            live()
+            if type(sequence) is not int or raw is None or len(receipts) >= 100000:
+                raise SyncHistoryUnavailable('Retained receipts exceed the review bound')
+            operation = json.loads(raw)
+            canonical = canonical_operation(operation)
+            if (hashlib.sha256(canonical.encode()).hexdigest() != fingerprint
+                    or operation['workspace_id'] != self.journal.workspace_id
+                    or operation['device_id'] != self.journal.device_id
+                    or receipts and sequence == receipts[-1][0]):
+                raise SyncHistoryUnavailable('Retained acknowledgment is inconsistent')
+            spent += len(fingerprint)
+            if spent > HISTORY_REVIEW_MAX_BYTES:
+                raise SyncHistoryUnavailable('Retained evidence exceeds the review byte bound')
+            receipts.append((sequence, fingerprint))
+        inbox = []
+        for sequence, raw in conn.execute(
+                'SELECT sequence, CASE WHEN length(CAST(event AS BLOB))<=? THEN event END '
+                'FROM paperfact_sync_inbox WHERE sequence>? AND sequence<=? '
+                'ORDER BY sequence LIMIT 100001',
+                (2 * MAX_BYTES + 8192, received[0], cursor)):
+            check()
+            live()
+            if (raw is None or len(inbox) >= 100000
+                    or sequence != received[0] + len(inbox) + 1):
+                raise SyncHistoryUnavailable('Retained inbox is incomplete or oversized')
+            canonical = validate_event(json.loads(raw), self.journal.workspace_id)
+            if json.loads(canonical)['sequence'] != sequence:
+                raise SyncHistoryUnavailable('Retained inbox identity changed')
+            fingerprint = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+            spent += len(fingerprint)
+            if spent > HISTORY_REVIEW_MAX_BYTES:
+                raise SyncHistoryUnavailable('Retained evidence exceeds the review byte bound')
+            inbox.append((sequence, fingerprint))
+        after = path.stat()
+        if (len(inbox) != cursor - received[0]
+                or (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)):
+            raise SyncHistoryUnavailable('Retained history changed during review')
+        return _HistoryReviewInput(str(path), (before.st_dev, before.st_ino),
+            (self.journal.workspace_id, self.journal.device_id), proof_table,
+            received, acknowledged, cursor, tuple(receipts), tuple(inbox))
+
+    def review_legacy_history(self, transport, token, review=None, *, limit=100,
+                              max_pages=25, seconds=20, check=lambda: None,
+                              progress=lambda _value: None):
+        """Bounded resumable read-only comparison; no received data or proof is saved."""
+        if (type(limit) is not int or not 1 <= limit <= 1000
+                or type(max_pages) is not int or not 1 <= max_pages <= 100
+                or not 0 < seconds <= 60):
+            raise ValueError('Invalid history review budget')
+        deadline = time.monotonic() + seconds
+        def capture_check():
+            check()
+            if time.monotonic() >= deadline:
+                raise TimeoutError('History review capture exceeded its work budget')
+
+        check()
+        with closing(self.journal._connect()) as conn:
+            conn.execute('BEGIN')
+            observed = self._history_review_inputs(conn, capture_check)
+        if review is None:
+            review = SyncHistoryReview(observed, observed.received, observed.received)
+        if not isinstance(review, SyncHistoryReview) or review.inputs != observed:
+            raise SyncHistoryUnavailable('Saved history changed; review again')
+        target = review.summary()['target_sequence']
+        receipts, inbox = dict(observed.receipts), dict(observed.inbox)
+        point, cursor_point, matched = review.point, review.cursor_point, review.receipts_matched
+        for _ in range(max_pages):
+            check()
+            if point[0] >= target or time.monotonic() >= deadline:
+                break
+            requested = min(limit, target - point[0])
+            page = transport.history_page(token, after=point[0], limit=requested,
+                checkpoint=dict(sequence=point[0], sha256=point[1]))
+            check()
+            events, start, end, points = validate_history_page(page, self.journal.workspace_id)
+            if (start != dict(sequence=point[0], sha256=point[1]) or not events
+                    or len(events) > requested or end['sequence'] > target):
+                raise SyncHistoryUnavailable('Service history cannot prove retained receipts')
+            for event, raw in zip(events, page['events'], strict=True):
+                sequence = event['sequence']
+                if (sequence in inbox
+                        and hashlib.sha256(raw.encode('utf-8')).hexdigest() != inbox[sequence]):
+                    raise SyncHistoryUnavailable('Service history differs from retained inbox')
+                if sequence in receipts:
+                    if hashlib.sha256(canonical_operation(
+                            event['operation']).encode('utf-8')).hexdigest() != receipts[sequence]:
+                        raise SyncHistoryUnavailable(
+                            'Service history differs from retained receipt')
+                    matched += 1
+                if (sequence == observed.acknowledged[0]
+                        and points[sequence] != observed.acknowledged[1]):
+                    raise SyncHistoryUnavailable('Service history differs from retained proof')
+                if sequence == observed.cursor:
+                    cursor_point = (sequence, points[sequence])
+            point = (end['sequence'], end['sha256'])
+            progress(SyncHistoryReview(observed, point, cursor_point, matched,
+                point[0] == target and matched == len(receipts)
+                and cursor_point[0] == observed.cursor).summary())
+        check()
+        with closing(self.journal._connect()) as conn:
+            conn.execute('BEGIN')
+            if self._history_review_inputs(conn, capture_check) != observed:
+                raise SyncHistoryUnavailable('Saved history changed; review again')
+        complete = (point[0] == target and matched == len(receipts)
+                    and cursor_point[0] == observed.cursor)
+        return SyncHistoryReview(observed, point, cursor_point, matched, complete)
+
+    def adopt_legacy_history(self, review):
+        """Explicitly adopt a completed review without receiving research or moving cursor."""
+        if not isinstance(review, SyncHistoryReview) or not review.complete:
+            raise SyncHistoryUnavailable('Finish reviewing retained history before adoption')
+        with self.journal.transaction() as conn:
+            observed = self._history_review_inputs(conn)
+            adopted = replace(review.inputs, proof_table=True, received=review.cursor_point,
+                acknowledged=review.point,
+                receipts=tuple(row for row in review.inputs.receipts
+                               if row[0] > review.cursor_point[0]), inbox=())
+            if observed not in (review.inputs, adopted):
+                raise SyncHistoryUnavailable('Saved history changed; review again')
+            if not observed.proof_table:
+                conn.execute('CREATE TABLE paperfact_sync_history_checkpoint ('
+                    'id INTEGER PRIMARY KEY CHECK(id=1),sequence INTEGER NOT NULL,'
+                    'sha256 TEXT NOT NULL,ack_sequence INTEGER NOT NULL,ack_sha256 TEXT NOT NULL)')
+                conn.execute('INSERT INTO paperfact_sync_history_checkpoint VALUES(1,?,?,?,?)',
+                             (*review.cursor_point, *review.point))
+            else:
+                conn.execute('UPDATE paperfact_sync_history_checkpoint '
+                    'SET sequence=?,sha256=?,ack_sequence=?,ack_sha256=? WHERE id=1',
+                    (*review.cursor_point, *review.point))
+        return dict(state='history_reviewed', received_sequence=review.cursor_point[0],
+                    acknowledged_sequence=review.point[0],
+                    matched_receipts=review.receipts_matched, research_changed=False,
+                    uploaded=False)
 
     def _prepare_received_history(self, transport, token, limit):
         before = self.history_checkpoint()
