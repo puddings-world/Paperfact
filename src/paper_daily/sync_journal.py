@@ -19,6 +19,10 @@ class SyncHistoryUnavailable(ValueError):
     """The service cannot prove the device's retained synchronization frontier."""
 
 
+
+class SyncHistoryAdvanced(ConnectionError):
+    """Another valid writer advanced history; receive again without discarding work."""
+
 MAX_BYTES = 256 * 1024
 PREFIX = "paperfact_sync_"
 ID = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
@@ -91,6 +95,31 @@ def canonical_operation(value: dict) -> str:
     if len(encoded.encode("utf-8")) > MAX_BYTES:
         raise ValueError("Sync operation exceeds 256 KiB")
     return encoded
+
+
+
+def history_seed(workspace):
+    """Portable v1 seed; hashing never grants authentication or workspace ownership."""
+    if not isinstance(workspace, str) or not ID.fullmatch(workspace):
+        raise SyncHistoryUnavailable("Invalid history workspace")
+    seed = b"paperfact.sync-history.v1" + bytes([0]) + workspace.encode("utf-8")
+    return hashlib.sha256(seed).hexdigest()
+
+
+def history_step(previous, raw):
+    """Hash exact bounded UTF-8 event text, without runtime-specific reformatting."""
+    if (not isinstance(previous, str) or len(previous) != 64
+            or any(c not in "0123456789abcdef" for c in previous)
+            or not isinstance(raw, str) or len(raw) > 2 * MAX_BYTES + 8192):
+        raise SyncHistoryUnavailable("History commitment is invalid")
+    try:
+        encoded = raw.encode("utf-8")
+    except UnicodeError as error:
+        raise SyncHistoryUnavailable("History text is invalid") from error
+    if not 0 < len(encoded) <= 2 * MAX_BYTES + 8192:
+        raise SyncHistoryUnavailable("History event exceeds the verification bound")
+    return hashlib.sha256(bytes.fromhex(previous) + len(encoded).to_bytes(8, "big")
+                          + encoded).hexdigest()
 
 
 class Journal:
@@ -320,8 +349,10 @@ class Journal:
         finally:
             conn.close()
 
-    def acknowledge(self, operation_id: str, server_revision: int) -> None:
+    def acknowledge(self, operation_id: str, server_revision: int, *, after_write=None) -> None:
         """Persist a trusted transport acknowledgment; retain the replay receipt."""
+        if after_write is not None and not callable(after_write):
+            raise ValueError("Acknowledgment hook must be callable")
         if type(server_revision) is not int or server_revision <= 0:
             raise ValueError("Invalid server revision")
         conn = self._connect()
@@ -349,6 +380,13 @@ class Journal:
                 "UPDATE paperfact_sync_operations SET server_revision=? WHERE operation_id=?",
                 (server_revision, operation_id),
             )
+            if after_write is not None:
+                marker = "paperfact_ack_" + uuid4().hex
+                conn.execute(f"SAVEPOINT {marker}")
+                after_write(conn)
+                if not conn.in_transaction:
+                    raise RuntimeError("Acknowledgment hook ended its transaction")
+                conn.execute(f"RELEASE SAVEPOINT {marker}")
             conn.commit()
         except BaseException:
             conn.rollback()

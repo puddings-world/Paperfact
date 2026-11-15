@@ -209,7 +209,7 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 - Prepare existing CLI/MCP-created research for sync while archiving old import requests safely.
 - Preserve known reading-text caches privately in reviewed copies and backups, without treating them as verified originals.
 - Verify received and newer acknowledged history before uploading; pin the service execution during transfers and preserve local work if it changes. Desktop, mobile and service must support the same continuity handshake.
-- Backend development adds `ReferenceService.history_page(token, after=0, limit=100, *, checkpoint=None)` and `prepare_history(token, *, limit=100)` for bounded durable prefix proofs. These are not yet used by desktop/mobile transports; see [contract and limits](docs/sync-http.md#durable-authority-history-commitments-backend-foundation).
+- Development desktop sync now verifies durable received/acknowledged history, stores proofs with local transactions, and checks research pushes inside the authority write. Mobile and attachment guards remain pending; see [API, migration and limits](docs/sync-http.md#verified-desktop-flow-and-wire-contract).
 - Keep local use and personal AI accounts independent of optional sync.
 - Pair another desktop and optionally enable automatic sync for its new workspace in the same joining flow.
 - Give each list a reading goal, so its papers open with the depth and background

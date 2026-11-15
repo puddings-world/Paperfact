@@ -110,17 +110,30 @@ def test_excludes_credentials_unknown_kv_and_deleted_free_pages(research, tmp_pa
     assert archive_rows(package, "kv") == [{"key": "lists.order", "value": "[]"}]
 
 
-def test_retains_accepted_history_ack_gap_and_local_candidates(research, tmp_path):
+def test_retains_accepted_history_ack_gap_and_local_candidates(research, tmp_path, monkeypatch):
     source, current, result, _paper_id = research
     service = ReferenceService(tmp_path / "server.db")
     token = service.enroll("workspace", "origin-device")
-    current.sync_once(service, token)
+    current.sync_verified_once(service, token)
     operation = current.new_graph_operation(
         "list", result["list_id"], {"name": "Not yet received", "note": ""}
     )
     current.save(operation)
-    event = service.push(token, operation)
-    current.journal.acknowledge(operation["operation_id"], event["sequence"])
+    before_cursor = current.status()["cursor"]
+    original = service.history_page
+
+    def lost_delivery(*args, **kwargs):
+        if (kwargs.get("after") == before_cursor and kwargs.get("limit") == 100
+                and current.history_checkpoint(acknowledged=True)["sequence"] > before_cursor):
+            raise ConnectionError("Synthetic unreceived acknowledgment")
+        return original(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(service, "history_page", lost_delivery)
+        with pytest.raises(ConnectionError, match="Synthetic"):
+            current.sync_verified_once(service, token)
+    event = service.pull(token)[-1]
+
     candidate = {"observations": [], "mutations": [{"after_json": "retained unsent content"}]}
     with sqlite3.connect(source) as conn:
         conn.execute(
@@ -135,6 +148,18 @@ def test_retains_accepted_history_ack_gap_and_local_candidates(research, tmp_pat
     assert manifest["cursor"] < event["sequence"]
     rows = archive_rows(package, "paperfact_sync_operations")
     assert rows[-1]["server_revision"] == event["sequence"]
+    proof = archive_rows(package, "paperfact_sync_history_checkpoint")
+    assert proof[0]["ack_sequence"] == event["sequence"]
+    assert proof[0]["ack_sha256"] == current.history_checkpoint(acknowledged=True)["sha256"]
+    recovered = tmp_path / "proof-restored"
+    recovery.restore_detached(package, recovered)
+    with sqlite3.connect(recovered / "papers.db") as conn:
+        assert conn.execute("SELECT name FROM sqlite_master WHERE "
+                            "name='paperfact_sync_history_checkpoint'").fetchone() is None
+        retained = conn.execute("SELECT data FROM recovery_records WHERE "
+                                "table_name='paperfact_sync_history_checkpoint'").fetchone()[0]
+        assert json.loads(retained) == proof[0]
+
     assert archive_rows(package, "research_capture_candidates")[0]["content"] == json.dumps(
         candidate
     )

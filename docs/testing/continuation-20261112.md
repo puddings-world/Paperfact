@@ -7083,3 +7083,64 @@ additional worktree was introduced.
 - Final bounded history slice: 5 passed (35 unrelated service cases deselected) in
   1.19s / 1.922s total. No full/release rerun or package rebuild; delivered native
   candidate remains c1cbef2. The whole 0.5 goal remains active and incomplete.
+
+## 2026-11-15: actual desktop verified receive and acknowledgment protocol
+
+- Previous goal turn progressed: 51972ec retained backend commitments. Revalidated
+  clean branch/board before edits. Delivered native c1cbef2 is unchanged; this is
+  source after candidate, not a new package or completed 0.5 release.
+- Actual SyncSession uses sync_verified_once with required history HTTP endpoints;
+  legacy sync_once stays an explicit experiment API, never a fallback. Portable
+  seed/step helpers live in existing journal module; no dependency/module/daemon.
+  Bounded legacy replay matches real inbox records before persisting prefix and
+  never initializes a higher proof from an opaque remote digest.
+- HTTP history pull/push use existing identity/execution/body limits. Research
+  pushes check retained prefix and unchanged tip inside the authority write.
+  Genuine concurrent advance returns retryable425. Exact acknowledgment record
+  strings avoid Python/JS number reserialization. Client verifies the next digest
+  before acknowledging; wrong/unknown proof leaves intent pending. No mobile
+  engine or attachment/device mutation guard is claimed connected yet.
+- Receiver research/inbox/cursor/proof commit together. Matching own intents
+  already received are acknowledged there, repairing a lost push response without
+  trying to validate an obsolete reply. Unreceived acknowledgment/proof commit
+  together through an additive trusted journal hook. A proposed file-tail rewrite
+  was rejected by automatic review as potentially truncating uncommitted code;
+  it was not executed. Safer additive changes retain the original acknowledge body.
+- Initial four verified representatives passed (3.078s total). Affected native
+  client/HTTP/journal/desktop files: 143 passed/1 failed in37.64s because an old
+  assertion searched for push instead of push_verified; outcome/data assertions
+  already passed. Updated only that trace plus asserted no legacy push. New race
+  testing then exposed an already-received own intent still pending; fixed the
+  production receive/migration reconciliation, not the expected outcome.
+- Expanded verified cases: four passed in1.56s/2.281s; full continuity plus desktop
+  session30 passed in15.27s/16.156s. Forged ack, actual HTTP concurrent writer,
+  same-tail fork, no downgrade, malformed records and conflict retention are covered
+  without multiplying parameter matrices or adding critical/release selectors.
+- History progress now uses actual remaining counts in the existing connection
+  area; partial preparation keeps last-success and caught_up honest. Qt observer
+  initially assumed QLabel.textChanged, which does not exist; fixed the test to
+  observe real setText values during actual worker execution. Its single journey
+  then passed in2.48s/3.391s. No product workaround for this test error.
+- Recovery initially treated the proof cache as derived/excluded, but that would
+  lose an unreceived commitment not reconstructible from an operation/sequence.
+  Corrected before checkpoint: explicit protocol schema retains proofs as inactive
+  recovery_records; received points verify against inbox and unreceived points
+  retain matching outgoing acknowledgment. Detached restore does not activate
+  proof/device/connection authority. Existing recovery scenario now exercises a
+  real verified acknowledgment followed by failed delivery and exact retained proof.
+- Backend/recovery slice8 passed in3.50s/4.235s. Exact record-only acknowledgment
+  format: verified4 passed in1.72s/2.406s. Final affected continuity/actual desktop/
+  Qt/recovery/MainWindow-startup slice26 passed in18.87s/19.703s. All governed,
+  sequential, isolated fixtures; no real account/model/research workspace involved.
+- Canonical local-integration evidence records native-only applicability and
+  limits; maintained project copies synchronized without conflicts. No global
+  installation or new universal rule. Next: mobile proof persistence/routes,
+  attachment/device mutation guards, legacy-unreceived-ack review/adoption UI,
+  durable authority fencing, hosted and installed-device acceptance. No deployment,
+  tag, public release, full historical suite or candidate rebuild this checkpoint.
+
+- Final gates: critical14 passed in10.01s/16.6s total; docs58 in2.07s/8.6s.
+  Privacy/Ruff passed. Actual existing mobile/Python legacy protocol passed in
+  2.031s governed, preserving current mobile compatibility without claiming new
+  mobile proof protection. Final diff whitespace check passed. Integration HEAD
+  and origin were both51972ec with a clean integration tree before checkpoint.

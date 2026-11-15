@@ -14,6 +14,8 @@ from paper_daily.sync_journal import (
     Journal,
     SyncHistoryUnavailable,
     canonical_operation,
+    history_seed,
+    history_step,
 )
 
 
@@ -50,6 +52,46 @@ def validate_event(event, workspace_id):
     return json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _history_checkpoint(value):
+    if (not isinstance(value, dict) or set(value) != {"sequence", "sha256"}
+            or type(value.get("sequence")) is not int
+            or not 0 <= value["sequence"] <= 2**63 - 1
+            or not isinstance(value.get("sha256"), str) or len(value["sha256"]) != 64
+            or any(c not in "0123456789abcdef" for c in value["sha256"])):
+        raise SyncHistoryUnavailable("Invalid retained history checkpoint")
+    return dict(value)
+
+
+def validate_history_page(page, workspace):
+    """Validate bounded raw records and linked commitments before any local write."""
+    fields = {"version", "workspace_id", "after", "events", "checkpoint", "caught_up"}
+    if (not isinstance(page, dict) or set(page) != fields
+            or type(page.get("version")) is not int or page["version"] != 1
+            or page.get("workspace_id") != workspace or type(page.get("caught_up")) is not bool
+            or not isinstance(page.get("events"), list) or len(page["events"]) > 1000):
+        raise SyncHistoryUnavailable("Invalid verified history page")
+    before, end = _history_checkpoint(page["after"]), _history_checkpoint(page["checkpoint"])
+    digest, sequence, spent, events, points = before["sha256"], before["sequence"], 1024, [], {}
+    for raw in page["events"]:
+        digest = history_step(digest, raw)
+        spent += len(json.dumps(raw, ensure_ascii=False).encode("utf-8")) + 2
+        if spent > 2 * 1024**2:
+            raise SyncHistoryUnavailable("History page exceeds the verification bound")
+        try:
+            event = json.loads(raw)
+            encoded = validate_event(event, workspace)
+        except (ValueError, TypeError, RecursionError) as error:
+            raise SyncHistoryUnavailable("Invalid verified history event") from error
+        sequence += 1
+        if encoded != raw or event["sequence"] != sequence:
+            raise SyncHistoryUnavailable("Verified history has changed or is incomplete")
+        events.append(event)
+        points[sequence] = digest
+    if end != {"sequence": sequence, "sha256": digest} or not events and not page["caught_up"]:
+        raise SyncHistoryUnavailable("Verified history checkpoint is inconsistent")
+    return events, before, end, points
+
+
 class SyncClient:
     """Transactional receive/cursor and retryable push through a supplied transport.
 
@@ -74,6 +116,13 @@ class SyncClient:
                 "(id INTEGER PRIMARY KEY CHECK(id=1), sequence INTEGER NOT NULL)"
             )
             conn.execute("INSERT OR IGNORE INTO paperfact_sync_cursor VALUES(1,0)")
+            conn.execute("CREATE TABLE IF NOT EXISTS paperfact_sync_history_checkpoint ("
+                         "id INTEGER PRIMARY KEY CHECK(id=1),sequence INTEGER NOT NULL,"
+                         "sha256 TEXT NOT NULL,ack_sequence INTEGER NOT NULL,"
+                         "ack_sha256 TEXT NOT NULL)")
+            seed = history_seed(journal.workspace_id)
+            conn.execute("INSERT OR IGNORE INTO paperfact_sync_history_checkpoint "
+                         "VALUES(1,0,?,0,?)", (seed, seed))
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS paperfact_sync_inbox "
                 "(sequence INTEGER PRIMARY KEY, event TEXT NOT NULL, outcome TEXT NOT NULL)"
@@ -1143,13 +1192,20 @@ class SyncClient:
         finally:
             conn.close()
 
-    def receive(self, events):
+    def receive(self, events, *, history_page=None):
         """Persist a bounded contiguous batch and resulting research in one transaction.
 
         Local edits defer materialization until their acknowledgment is received in the
         contiguous inbox, including when upload succeeded but pull failed. All versions
         remain in history. UI draft/selection handling belongs to the desktop adapter.
         """
+        proof = None
+        if history_page is not None:
+            decoded, prior, checkpoint, points = validate_history_page(
+                history_page, self.journal.workspace_id)
+            if events is not None and events != decoded:
+                raise SyncHistoryUnavailable("History page differs from its event list")
+            events, proof = decoded, (prior, checkpoint, points)
         if not isinstance(events, list) or len(events) > 1000:
             raise ValueError("Invalid event batch")
         encoded = [validate_event(event, self.journal.workspace_id) for event in events]
@@ -1158,6 +1214,14 @@ class SyncClient:
             conn.execute("BEGIN IMMEDIATE")
             self.journal._binding(conn)
             cursor = conn.execute("SELECT sequence FROM paperfact_sync_cursor").fetchone()[0]
+            if proof is not None:
+                prior, checkpoint, points = proof
+                stored, acknowledged = self._history_in(conn)
+                if stored != prior or prior["sequence"] != cursor:
+                    raise SyncHistoryUnavailable("Retained history changed before receive")
+                if (prior["sequence"] < acknowledged["sequence"] <= checkpoint["sequence"]
+                        and points[acknowledged["sequence"]] != acknowledged["sha256"]):
+                    raise SyncHistoryUnavailable("Received history differs from acknowledgment")
             received = 0
             for data in encoded:
                 event = json.loads(data)
@@ -1171,6 +1235,8 @@ class SyncClient:
                     continue
                 if sequence != cursor + 1:
                     raise ValueError("Event stream has a gap")
+                if proof is not None:
+                    self._acknowledge_received_in(conn, event)
                 op, head = event["operation"], event["head"]
                 key = (op["entity_type"], op["entity_id"])
                 existing = conn.execute(
@@ -1214,6 +1280,9 @@ class SyncClient:
                 received += 1
             applied = self._materialize(conn, cursor)
             conn.execute("UPDATE paperfact_sync_cursor SET sequence=? WHERE id=1", (cursor,))
+            if proof is not None:
+                conn.execute("UPDATE paperfact_sync_history_checkpoint SET sequence=?,sha256=? "
+                             "WHERE id=1", (checkpoint["sequence"], checkpoint["sha256"]))
             conn.commit()
             return {"received": received, "applied": applied, "cursor": cursor}
         except BaseException:
@@ -1661,6 +1730,154 @@ class SyncClient:
         applied = self._materialize_legacy(conn, cursor) + self._materialize_graph(conn, cursor)
         return applied + self._materialize_orders(conn, cursor)
 
+    def _acknowledge_received_in(self, conn, event):
+        operation = event["operation"]
+        if operation["device_id"] != self.journal.device_id:
+            return
+        row = conn.execute(
+            "SELECT CASE WHEN length(CAST(envelope AS BLOB))<=? THEN envelope END,"
+            "server_revision FROM paperfact_sync_operations WHERE operation_id=?",
+            (MAX_BYTES, operation["operation_id"]),
+        ).fetchone()
+        if row is None:
+            return
+        if row[0] != canonical_operation(operation) or row[1] not in (None, event["sequence"]):
+            raise SyncHistoryUnavailable("Received operation differs from its retained intent")
+        predecessor = operation["depends_on"]
+        if predecessor:
+            parent = conn.execute(
+                "SELECT server_revision FROM paperfact_sync_operations WHERE operation_id=?",
+                (predecessor,),
+            ).fetchone()
+            if parent is None or parent[0] is None or parent[0] >= event["sequence"]:
+                raise SyncHistoryUnavailable("Received operation has an unverified predecessor")
+        conn.execute("UPDATE paperfact_sync_operations SET server_revision=? WHERE operation_id=?",
+                     (event["sequence"], operation["operation_id"]))
+
+    def _history_in(self, conn):
+        self.journal._binding(conn)
+        row = conn.execute(
+            "SELECT sequence,sha256,ack_sequence,ack_sha256 "
+            "FROM paperfact_sync_history_checkpoint WHERE id=1"
+        ).fetchone()
+        if row is None:
+            raise SyncHistoryUnavailable("Retained history proof is missing")
+        received = _history_checkpoint({"sequence": row[0], "sha256": row[1]})
+        acknowledged = _history_checkpoint({"sequence": row[2], "sha256": row[3]})
+        for point in (received, acknowledged):
+            if (point["sequence"] == 0
+                    and point["sha256"] != history_seed(self.journal.workspace_id)):
+                raise SyncHistoryUnavailable("Retained history proof has another workspace")
+        if received["sequence"] == acknowledged["sequence"] and received != acknowledged:
+            raise SyncHistoryUnavailable("Received and acknowledged history disagree")
+        return received, acknowledged
+
+    def history_checkpoint(self, *, acknowledged=False):
+        with closing(self.journal._connect()) as conn:
+            conn.execute("BEGIN")
+            received, accepted = self._history_in(conn)
+            return (accepted if accepted["sequence"] > received["sequence"] else received
+                    ) if acknowledged else received
+
+    def _prepare_received_history(self, transport, token, limit):
+        before = self.history_checkpoint()
+        cursor = self.status()["cursor"]
+        if before["sequence"] > cursor:
+            raise SyncHistoryUnavailable("History proof is ahead of the local inbox")
+        with closing(self.journal._connect()) as conn:
+            _received, acknowledged = self._history_in(conn)
+            row = conn.execute(
+                "SELECT COALESCE(MAX(server_revision),0) FROM paperfact_sync_operations"
+            ).fetchone()
+            if row[0] > max(cursor, acknowledged["sequence"]):
+                raise SyncHistoryUnavailable(
+                    "Legacy accepted operations need explicit history review")
+        requested = min(limit, cursor - before["sequence"]) if before["sequence"] < cursor else 1
+        page = transport.history_page(token, after=before["sequence"], limit=requested,
+                                      checkpoint=before)
+        events, start, end, _points = validate_history_page(page, self.journal.workspace_id)
+        if start != before or len(events) > requested:
+            raise SyncHistoryUnavailable("History preparation response changed its scope")
+        if before["sequence"] < cursor:
+            if not events or end["sequence"] > cursor:
+                raise SyncHistoryUnavailable("Retained inbox cannot be matched to service history")
+            with self.journal.transaction() as conn:
+                if self._history_in(conn)[0] != before or conn.execute(
+                    "SELECT sequence FROM paperfact_sync_cursor WHERE id=1"
+                ).fetchone()[0] != cursor:
+                    raise SyncHistoryUnavailable("Local history changed during preparation")
+                for event in events:
+                    row = conn.execute(
+                        "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+                        "FROM paperfact_sync_inbox WHERE sequence=?",
+                        (2 * MAX_BYTES + 8192, event["sequence"]),
+                    ).fetchone()
+                    if (row is None or row[0] is None or validate_event(
+                            json.loads(row[0]), self.journal.workspace_id) != validate_event(
+                                event, self.journal.workspace_id)):
+                        raise SyncHistoryUnavailable("Retained inbox differs from service history")
+                    self._acknowledge_received_in(conn, event)
+                conn.execute("UPDATE paperfact_sync_history_checkpoint SET sequence=?,sha256=? "
+                             "WHERE id=1", (end["sequence"], end["sha256"]))
+            return end["sequence"] == cursor
+        anchor = self.history_checkpoint(acknowledged=True)
+        if anchor["sequence"] > cursor:
+            checked = transport.history_page(token, after=anchor["sequence"], limit=1,
+                                             checkpoint=anchor)
+            _events, start, _end, _points = validate_history_page(
+                checked, self.journal.workspace_id)
+            if start != anchor:
+                raise SyncHistoryUnavailable("Acknowledged history could not be matched")
+        return True
+
+    def _acknowledge_history(self, operation, response, anchor):
+        if not isinstance(response, dict) or set(response) != {"record", "checkpoint"}:
+            raise SyncHistoryUnavailable("Invalid verified acknowledgment")
+        record = response["record"]
+        next_hash = history_step(anchor["sha256"], record)
+        try:
+            event = json.loads(record)
+            if validate_event(event, self.journal.workspace_id) != record:
+                raise ValueError("Noncanonical acknowledgment")
+        except (ValueError, TypeError, RecursionError) as error:
+            raise SyncHistoryUnavailable("Invalid verified acknowledgment record") from error
+        checkpoint = _history_checkpoint(response["checkpoint"])
+        if event["operation"] != operation or checkpoint["sequence"] != event["sequence"]:
+            raise SyncHistoryUnavailable("Acknowledgment belongs to another operation")
+
+        if checkpoint["sequence"] == anchor["sequence"] + 1:
+            if checkpoint["sha256"] != next_hash:
+                raise SyncHistoryUnavailable("Acknowledgment history proof is invalid")
+        elif checkpoint["sequence"] != anchor["sequence"] or checkpoint != anchor:
+            raise SyncHistoryUnavailable("Acknowledgment history is not a verified next event")
+        else:
+            with closing(self.journal._connect()) as conn:
+                self.journal._binding(conn)
+                previous = conn.execute("SELECT event FROM paperfact_sync_inbox WHERE sequence=?",
+                                        (checkpoint["sequence"],)).fetchone()
+                if previous is None or previous[0] != record:
+                    raise SyncHistoryUnavailable("Retry acknowledgment has no verified receipt")
+
+
+        def save_proof(conn):
+            received, accepted = self._history_in(conn)
+            current = accepted if accepted["sequence"] > received["sequence"] else received
+            if current != anchor:
+                raise SyncHistoryUnavailable("Local history changed during upload")
+            if checkpoint["sequence"] == current["sequence"] and checkpoint != current:
+                raise SyncHistoryUnavailable("Acknowledged history changed its proof")
+            if checkpoint["sequence"] > accepted["sequence"]:
+                conn.execute("UPDATE paperfact_sync_history_checkpoint "
+                             "SET ack_sequence=?,ack_sha256=? WHERE id=1",
+                             (checkpoint["sequence"], checkpoint["sha256"]))
+
+        self.journal.acknowledge(
+            operation["operation_id"], event["sequence"], after_write=save_proof)
+        return event
+
+    def receive_history(self, page):
+        return self.receive(None, history_page=page)
+
     def verify_frontier(self, transport, token):
         """Prove received and newer acknowledged history before sending work."""
         with closing(self.journal._connect()) as conn:
@@ -1708,6 +1925,16 @@ class SyncClient:
                 raise SyncHistoryUnavailable(message)
 
     def sync_once(self, transport, token, *, limit=100, prepare_push=None):
+        """Legacy experiment API; desktop synchronization requires verified history."""
+        return self._sync_once(transport, token, limit=limit, prepare_push=prepare_push,
+                               history_required=False)
+
+    def sync_verified_once(self, transport, token, *, limit=100, prepare_push=None):
+        """One proof-required pass; unsupported service support fails closed."""
+        return self._sync_once(transport, token, limit=limit, prepare_push=prepare_push,
+                               history_required=True)
+
+    def _sync_once(self, transport, token, *, limit, prepare_push, history_required):
         """One bounded pass, with no timer, hidden retries, login or network policy."""
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("Invalid sync batch limit")
@@ -1716,7 +1943,29 @@ class SyncClient:
         if not self._running.acquire(blocking=False):
             return {"busy": True}
         try:
+            if history_required and any(not callable(getattr(transport, name, None))
+                                        for name in ("history_page", "push_verified")):
+                raise SyncHistoryUnavailable("Sync service needs verified history support")
             self.verify_frontier(transport, token)
+            if history_required and not self._prepare_received_history(transport, token, limit):
+                status = self.status()
+                remaining = status["cursor"] - self.history_checkpoint()["sequence"]
+                return {"busy": False, "pushed": 0, "deferred_push": 0, "received": 0,
+                        "applied": 0, **status, "history_preparing": True,
+                        "history_remaining": remaining}
+            prefetched = {"received": 0}
+            if history_required:
+                checkpoint = self.history_checkpoint()
+                page = transport.history_page(token, after=checkpoint["sequence"], limit=limit,
+                                              checkpoint=checkpoint)
+                events, _prior, _end, _points = validate_history_page(
+                    page, self.journal.workspace_id)
+                if len(events) > limit:
+                    raise SyncHistoryUnavailable("Verified history exceeds the requested limit")
+                prefetched = self.receive_history(page)
+                if not page["caught_up"]:
+                    return {"busy": False, "pushed": 0, "deferred_push": 0,
+                            **prefetched, **self.status(), "history_pending": True}
             pushed, deferred_push = 0, 0
             skipped = set()
             for operation in self.journal.pending(limit):
@@ -1743,14 +1992,30 @@ class SyncClient:
                     skipped.add(operation["operation_id"])
                     deferred_push += 1
                     continue
-                event = transport.push(token, operation)
+                if history_required:
+                    anchor = self.history_checkpoint(acknowledged=True)
+                    response = transport.push_verified(token, operation, checkpoint=anchor)
+                    event = self._acknowledge_history(operation, response, anchor)
+                else:
+                    event = transport.push(token, operation)
                 validate_event(event, self.journal.workspace_id)
                 if event["operation"] != operation:
                     raise ValueError("Acknowledgment belongs to another operation")
-                self.journal.acknowledge(operation["operation_id"], event["sequence"])
+                if not history_required:
+                    self.journal.acknowledge(operation["operation_id"], event["sequence"])
                 pushed += 1
-            events = transport.pull(token, after=self.status()["cursor"], limit=limit)
-            received = self.receive(events)
+            if history_required:
+                checkpoint = self.history_checkpoint()
+                page = transport.history_page(token, after=checkpoint["sequence"], limit=limit,
+                                              checkpoint=checkpoint)
+                if (not isinstance(page, dict) or not isinstance(page.get("events"), list)
+                        or len(page["events"]) > limit):
+                    raise SyncHistoryUnavailable("Verified history exceeds the requested limit")
+                received = self.receive_history(page)
+                received["received"] += prefetched["received"]
+            else:
+                events = transport.pull(token, after=self.status()["cursor"], limit=limit)
+                received = self.receive(events)
             return {
                 "busy": False,
                 "pushed": pushed,

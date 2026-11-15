@@ -86,17 +86,45 @@ def test_wrong_device_handshake_rejects_before_any_research(service):
     assert calls == ["session_info"] and controller._token is None
 
 
-def test_manual_sync_acknowledges_and_replays_without_duplicate_operations(service, enrolled):
+def test_manual_sync_acknowledges_and_replays_without_duplicate_operations(
+    service, enrolled, monkeypatch
+):
     controller, authority, token, calls = service
     connect(service)
     expected = len(enrolled[1].journal.pending())
     result = controller.sync(Ticket())
     assert result["pushed"] == expected and result["received"] == expected
     assert result["caught_up"] and result["pending"] == result["awaiting_receipts"] == 0
-    assert calls.index("session_info") < calls.index("push")
+    assert calls.index("session_info") < calls.index("push_verified")
+    assert "push" not in calls and "history_page" in calls
     again = controller.sync(Ticket())
     assert again["pushed"] == again["received"] == 0
     assert len(authority.pull(token)) == expected
+    from paper_daily.sync_journal import history_seed
+
+    with sqlite3.connect(enrolled[0]) as conn:
+        seed = history_seed("workspace")
+        conn.execute("UPDATE paperfact_sync_history_checkpoint SET sequence=0,sha256=?,"
+                     "ack_sequence=0,ack_sha256=? WHERE id=1", (seed, seed))
+    original = authority.history_page
+
+    def one_record(token, after=0, limit=100, *, checkpoint):
+        return original(token, after=after, limit=min(limit, 1), checkpoint=checkpoint)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(authority, "history_page", one_record)
+        previous_success = controller.last_success
+        updates = []
+        partial = controller.sync(Ticket(), updates.append, max_pages=1)
+        assert partial["history_preparing"] and not partial["caught_up"]
+        assert partial["pushed"] == partial["received"] == 0
+        assert partial["history_remaining"] == expected - 1
+        assert any(item.get("history_preparing") and item["history_remaining"] == expected - 1
+                   for item in updates)
+        assert controller.last_success == previous_success
+    complete = controller.sync(Ticket())
+    assert complete["caught_up"] and complete["pending"] == 0
+
 
 
 def test_revocation_requires_reconnect_without_losing_outbox(service, enrolled):

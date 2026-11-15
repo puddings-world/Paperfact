@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 import time
 
@@ -53,7 +54,9 @@ def connected(dialog, service):
     assert view.sync_button.isEnabled()
 
 
-def test_actual_connect_then_manual_sync_uses_own_identity_and_clears_password(dialog, service):
+def test_actual_connect_then_manual_sync_uses_own_identity_and_clears_password(
+    dialog, service, monkeypatch
+):
     app, view = dialog
     assert service[3] == [] and not view.sync_button.isEnabled()
     assert view.workspace_id.text() == "workspace"
@@ -65,6 +68,33 @@ def test_actual_connect_then_manual_sync_uses_own_identity_and_clears_password(d
     assert "pending 0" in view.status.text()
     assert "Last manual sync" in view.identity_label.text()
     assert service[2] not in view.status.text()
+
+
+    from paper_daily.sync_journal import history_seed
+
+    authority = service[1]
+    with sqlite3.connect(service[0].workspace.path) as conn:
+        seed = history_seed("workspace")
+        conn.execute("UPDATE paperfact_sync_history_checkpoint SET sequence=0,sha256=?,"
+                     "ack_sequence=0,ack_sha256=? WHERE id=1", (seed, seed))
+    original = authority.history_page
+
+    def one_record(token, after=0, limit=100, *, checkpoint):
+        return original(token, after=after, limit=min(limit, 1), checkpoint=checkpoint)
+
+    visible = []
+    set_text = view.status.setText
+
+    def observe(text):
+        set_text(text)
+        visible.append(view.status.text())
+    with monkeypatch.context() as patch:
+        patch.setattr(authority, "history_page", one_record)
+        patch.setattr(view.status, "setText", observe)
+        view.sync_button.click()
+        wait(app, lambda: not view.busy)
+    assert any("Checking saved sync history" in text for text in visible)
+    assert "More records remain" not in view.status.text()
 
 
 def test_empty_connection_and_repeat_clicks_never_duplicate_handshake(dialog, service, monkeypatch):

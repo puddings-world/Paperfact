@@ -30,7 +30,12 @@ from paper_daily.sync_device_management import (
     _device_id,
     device_label,
 )
-from paper_daily.sync_journal import ID, SyncHistoryUnavailable, canonical_operation
+from paper_daily.sync_journal import (
+    ID,
+    SyncHistoryAdvanced,
+    SyncHistoryUnavailable,
+    canonical_operation,
+)
 
 BLOB_CHUNK_BYTES = 256 * 1024
 _BLOB_ROUTES = {"/v1/blobs/" + name for name in ("begin", "append", "commit", "cancel", "read")}
@@ -52,6 +57,7 @@ _ERRORS = {
     412: "sync_history_unavailable",
     413: "request_too_large",
     415: "unsupported_media_type",
+    425: "sync_history_advanced",
     428: "sync_session_changed",
     500: "service_unavailable",
     503: "blob_service_disabled",
@@ -262,7 +268,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
             self._reply(code, _encode({"error": _ERRORS[code]}))
 
         def _request(self):
-            allowed = ({"/v1/push", "/v1/pull", "/v1/session/info"}
+            allowed = ({"/v1/push", "/v1/pull", "/v1/session/info",
+                        "/v1/history/pull", "/v1/history/push"}
                        | _BLOB_ROUTES | devices.ROUTES)
             self._route = self.path
             self._browser_cookie = None
@@ -336,7 +343,24 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                         raise _RequestError(400)
                     if not secrets.compare_digest(guards[0], instance):
                         raise _RequestError(428)
-                if route == "/v1/push":
+                if route == "/v1/history/pull":
+                    _closed(value, {"after", "limit", "checkpoint"})
+                    if not isinstance(value["checkpoint"], dict):
+                        raise _RequestError(400)
+                    if type(value["limit"]) is not int or not 1 <= value["limit"] <= 1000:
+                        raise _RequestError(400)
+                    response = _encode(service.history_page(
+                        token, after=value["after"], limit=min(value["limit"], 4),
+                        checkpoint=value["checkpoint"]))
+                    if len(response) > MAX_RESPONSE_BYTES:
+                        raise _RequestError(500)
+                elif route == "/v1/history/push":
+                    _closed(value, {"operation", "checkpoint"})
+                    response = _encode(service.push_verified(
+                        token, value["operation"], checkpoint=value["checkpoint"]))
+                    if len(response) > MAX_RESPONSE_BYTES:
+                        raise _RequestError(500)
+                elif route == "/v1/push":
                     if set(value) != {"operation"}:
                         raise _RequestError(400)
                     response = _encode(service.push(token, value["operation"]))
@@ -385,6 +409,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                 self._reply(200, response)
             except _RequestError as exc:
                 self._error(exc.status)
+            except SyncHistoryAdvanced:
+                self._error(425)
             except SyncHistoryUnavailable:
                 self._error(412)
             except BlobUnavailableError:
@@ -492,13 +518,19 @@ class HttpTransport:
                     raise PermissionError("Sync authorization was rejected")
                 if response.status_code == 404 and path == "/v1/session/info":
                     raise SyncHistoryUnavailable("Sync service needs continuity support")
+                if response.status_code == 404 and path.startswith("/v1/history/"):
+                    raise SyncHistoryUnavailable("Sync service needs verified history support")
+                if response.status_code == 425 and path == "/v1/history/push":
+                    raise SyncHistoryAdvanced("History advanced; retry synchronization")
                 if response.status_code == 428:
                     raise SyncHistoryUnavailable(
                         "Sync service restarted; preserve work and reconnect",
                     )
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
-                if response.status_code == 412 and path == "/v1/pull":
+                if response.status_code == 412 and path in {
+                    "/v1/pull", "/v1/history/pull", "/v1/history/push",
+                }:
                     raise SyncHistoryUnavailable("Shared sync history needs recovery review")
                 if response.status_code == 409:
                     raise BlobUnavailableError("Sync attachment bytes are unavailable; retry later")
@@ -569,6 +601,28 @@ class HttpTransport:
         result = self._post("/v1/pull", token, {"after": after, "limit": limit})
         if not isinstance(result, list) or len(result) > limit:
             raise ValueError("Invalid sync pull response")
+        return result
+
+    def history_page(self, token, after=0, limit=100, *, checkpoint):
+        if type(after) is not int or not 0 <= after <= 2**63 - 1:
+            raise ValueError("Invalid history cursor")
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("Invalid history batch limit")
+        result = self._post("/v1/history/pull", token, {
+            "after": after, "limit": limit, "checkpoint": checkpoint,
+        })
+        if (not isinstance(result, dict) or not isinstance(result.get("events"), list)
+                or len(result["events"]) > limit):
+            raise SyncHistoryUnavailable("Invalid verified history response")
+        return result
+
+    def push_verified(self, token, operation, *, checkpoint):
+        canonical_operation(operation)
+        result = self._post("/v1/history/push", token, {
+            "operation": operation, "checkpoint": checkpoint,
+        })
+        if not isinstance(result, dict):
+            raise SyncHistoryUnavailable("Invalid verified push response")
         return result
 
     def session_info(self, token):

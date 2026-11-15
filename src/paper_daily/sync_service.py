@@ -16,7 +16,15 @@ from pathlib import Path
 from paper_daily.sync_blob_service import BlobServiceMixin
 from paper_daily.sync_device_management import DeviceManagementMixin
 from paper_daily.sync_graph import apply_accepted, check_preconditions
-from paper_daily.sync_journal import ID, MAX_BYTES, SyncHistoryUnavailable, canonical_operation
+from paper_daily.sync_journal import (
+    ID,
+    MAX_BYTES,
+    SyncHistoryAdvanced,
+    SyncHistoryUnavailable,
+    canonical_operation,
+    history_seed,
+    history_step,
+)
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
@@ -163,16 +171,20 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 raise PermissionError("Invalid or revoked sync credential")
             conn.execute("UPDATE sync_devices SET revoked=1 WHERE token_hash=?", (token_hash,))
 
-    def push(self, token: str, operation: dict) -> dict:
+    def push(self, token: str, operation: dict, *, checkpoint=None) -> dict:
         """Accept a causal edit or preserve it as a conflict; replay exactly once."""
         with self._transaction() as conn:
-            self._authenticate(conn, token)
+            workspace, _device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
         # Close the envelope before verification so caller mutation cannot race it.
         encoded = canonical_operation(operation)
         operation = json.loads(encoded)
         prepared = self._prepare_research_file(token, operation, encoded)
         with self._transaction(write=True) as conn:
             workspace, device = self._authenticate(conn, token)
+            if checkpoint is not None:
+                self._require_history(conn, workspace, checkpoint)
             encoded = canonical_operation(operation)
             value = json.loads(encoded)
             if (value["workspace_id"], value["device_id"]) != (workspace, device):
@@ -185,7 +197,12 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
             if previous:
                 if previous["fingerprint"] != fingerprint:
                     raise ValueError("Operation ID was reused with different content")
-                return json.loads(previous["event"])
+                return self._verified_result(
+                    conn, workspace, json.loads(previous["event"]), checkpoint)
+
+            if (checkpoint is not None
+                    and checkpoint["sequence"] != self._high_water(conn, workspace)):
+                raise SyncHistoryAdvanced("History advanced; receive before retrying this edit")
 
             self._require_document_blob(conn, workspace, value)
             self._require_prepared_file(conn, workspace, value, prepared)
@@ -304,7 +321,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 ),
             )
             self._append_history(conn, workspace, sequence, event)
-            return event
+            return self._verified_result(conn, workspace, event, checkpoint)
 
     def pull(self, token: str, after: int = 0, limit: int = 100) -> list[dict]:
         """Read bounded workspace events after a durable client cursor."""
@@ -323,38 +340,54 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
             )
             return [json.loads(row["event"]) for row in rows]
 
-    @staticmethod
-    def _history_seed(workspace):
-        if not isinstance(workspace, str) or not ID.fullmatch(workspace):
-            raise SyncHistoryUnavailable("Invalid history workspace")
-        seed = b"paperfact.sync-history.v1" + bytes([0]) + workspace.encode("utf-8")
-        return hashlib.sha256(seed).hexdigest()
+    _history_seed = staticmethod(history_seed)
 
     @staticmethod
     def _history_step(previous, raw, workspace, sequence):
         from paper_daily.sync_client import validate_event
 
-        if not isinstance(previous, str) or len(previous) != 64:
-            raise SyncHistoryUnavailable("History commitment is invalid")
-        try:
-            prior = bytes.fromhex(previous)
-        except ValueError as error:
-            raise SyncHistoryUnavailable("History commitment is invalid") from error
-        if len(prior) != 32 or not isinstance(raw, str):
-            raise SyncHistoryUnavailable("History commitment is invalid")
-        encoded = raw.encode("utf-8")
-        if not 0 < len(encoded) <= 2 * MAX_BYTES + 8192:
-            raise SyncHistoryUnavailable("History event exceeds the verification bound")
+        digest = history_step(previous, raw)
         try:
             event = json.loads(raw)
             validate_event(event, workspace)
             canonical = json.dumps(event, ensure_ascii=False, sort_keys=True,
                                    separators=(",", ":"), allow_nan=False)
-        except (ValueError, TypeError, OverflowError) as error:
+        except (ValueError, TypeError, OverflowError, RecursionError) as error:
             raise SyncHistoryUnavailable("History event is invalid") from error
         if canonical != raw or event["sequence"] != sequence:
             raise SyncHistoryUnavailable("History event identity is inconsistent")
-        return hashlib.sha256(prior + len(encoded).to_bytes(8, "big") + encoded).hexdigest()
+        return digest
+
+    @classmethod
+    def _require_history(cls, conn, workspace, checkpoint):
+        if (not isinstance(checkpoint, dict) or set(checkpoint) != {"sequence", "sha256"}
+                or type(checkpoint.get("sequence")) is not int
+                or not 0 <= checkpoint["sequence"] <= 2**63 - 1
+                or checkpoint["sha256"] != cls._history_prefix(
+                    conn, workspace, checkpoint["sequence"])):
+            raise SyncHistoryUnavailable("Retained history checkpoint does not match")
+
+    @classmethod
+    def _verified_result(cls, conn, workspace, event, checkpoint):
+        if checkpoint is None:
+            return event
+        sequence = event["sequence"]
+        row = conn.execute(
+            "SELECT CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+            "FROM sync_events WHERE workspace=? AND sequence=?",
+            (2 * MAX_BYTES + 8192, workspace, sequence),
+        ).fetchone()
+        if row is None or row[0] is None:
+            raise SyncHistoryUnavailable("Verified acknowledgment record is unavailable")
+        return {"record": row[0], "checkpoint": {
+            "sequence": sequence, "sha256": cls._history_prefix(conn, workspace, sequence),
+        }}
+
+    def push_verified(self, token, operation, *, checkpoint):
+        """Require continuity again inside the same transaction that accepts an edit."""
+        if checkpoint is None:
+            raise SyncHistoryUnavailable("A retained history checkpoint is required")
+        return self.push(token, operation, checkpoint=checkpoint)
 
     @classmethod
     def _history_prefix(cls, conn, workspace, sequence):

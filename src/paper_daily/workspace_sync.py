@@ -118,6 +118,8 @@ class GuardedTransport:
             "create_pairing",
             "push",
             "pull",
+            "history_page",
+            "push_verified",
             "blob_begin",
             "blob_append",
             "blob_commit",
@@ -322,7 +324,7 @@ class SyncSession:
                 result = client.status()
                 for _ in range(max_pages):
                     live()
-                    result = client.sync_once(
+                    result = client.sync_verified_once(
                         transport,
                         token,
                         limit=100,
@@ -330,9 +332,15 @@ class SyncSession:
                     )
                     totals["pushed"] += result["pushed"]
                     totals["received"] += result["received"]
-                    progress({**totals, "cursor": result["cursor"]})
+                    progress({**totals, "cursor": result["cursor"],
+                              "history_preparing": bool(result.get("history_preparing")),
+                              "history_remaining": result.get("history_remaining", 0)})
                     # HTTP byte/page caps can produce short pages. Only an empty
                     # response proves this observed prefix was exhausted.
+                    if result.get("history_preparing"):
+                        if time.monotonic() >= deadline:
+                            break
+                        continue
                     if result["received"] == 0:
                         totals["caught_up"] = True
                         break
@@ -347,15 +355,17 @@ class SyncSession:
                 remaining = deadline - time.monotonic()
                 history_status = (
                     history.drain(ticket, progress, max_steps=16, seconds=min(3, remaining))
-                    if remaining > 0 else history.status()
+                    if remaining > 0 and not result.get("history_preparing") else history.status()
                 )
-                files.download_pending()
+                if not result.get("history_preparing"):
+                    files.download_pending()
                 live()
                 file_status = files.status()
                 with self._state:
                     if self._generation != live.generation:
                         raise SyncStopped("The connection session changed")
-                    self.last_success = datetime.now(UTC).isoformat()
+                    if not result.get("history_preparing"):
+                        self.last_success = datetime.now(UTC).isoformat()
                     self.state = "connected"
                 return {
                     **result,

@@ -25,7 +25,7 @@ Included functionality beyond the older cb6ca66 candidate:
   new-folder automatic-sync permission remain included. Native credential-store
   and installed two-device journeys are still unrecorded.
 
-The coherent local release representatives pass: Python 52, frontend 24, mobile
+For frozen c1cbef2, the local release representatives passed: Python 52, frontend 24, mobile
 96 and actual JS/Python protocol in 129.5s, CPU bounded. CI passes critical 14 and
 one source first-sync representative per OS, plus frozen acceptance; Windows mobile
 artifact checks pass 5/5. A corrected delayed-tail fixture retains all original
@@ -40,12 +40,14 @@ Full runtime adoption, remaining source/recovery mapping, persistent authority/h
 survey audit, old-release upgrade and hosted/physical-device acceptance remain open.
 No tag, public release, production deployment or daily-workspace migration occurred.
 
-Source after this candidate now has a backend-only durable history-commitment
-primitive: linked event hashes are committed atomically, legacy preparation is
-bounded/resumable, and backup/fresh-workspace recovery validate scoped proofs.
-Desktop/mobile persistence, HTTP mutation preconditions and authority fencing are
-not yet wired; existing candidate guarantees have not expanded. See the
-[precise contract](sync-http.md#durable-authority-history-commitments-backend-foundation).
+Source after this candidate now uses verified history in the actual desktop sync
+entry and bounded HTTP. Received data/cursor/proof and acknowledgment/proof commit
+atomically. Inbox preparation is bounded and compared to actual local records;
+new writes verify the observed tip in the authority transaction. Concurrent advance
+retries, forged proofs stop, and inactive backup proof records remain preserved.
+Mobile and attachment/device mutation guards, legacy-ack review/adoption UI and
+durable authority fencing remain open. Candidate c1cbef2 has not been rebuilt for
+this source. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated
 candidates are listed in [workspace stabilization](workspace-stabilization-2026-11-14.md);

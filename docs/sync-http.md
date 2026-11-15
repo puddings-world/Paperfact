@@ -307,11 +307,13 @@ remain separate release gates. Never overwrite a running authority database.
 
 ## Durable authority history commitments (backend foundation)
 
-Source after candidate c1cbef2 adds the native authority primitive below. It is
-**not yet connected to HTTP transports, the desktop journal or mobile receipts**;
-the shipped clients still use their retained-event frontier and execution guard.
-Do not describe this primitive as end-to-end rollback/split-brain protection.
-No new server, daemon, remote route or wire-version change is enabled here.
+Source after candidate c1cbef2 connects durable history to the actual desktop
+SyncSession and authenticated bounded HTTP transport. The delivered c1cbef2 app
+and mobile v29 still use their earlier frontier/execution protocol. Mobile proof
+persistence and attachment/device mutation guards remain open. This is not durable
+split-brain fencing, malicious-authority protection or installed/hosted acceptance.
+No new server or daemon is added; this is a version1 proof subprotocol alongside
+existing operation-envelope versions.
 
 `ReferenceService` exposes:
 
@@ -319,6 +321,7 @@ No new server, daemon, remote route or wire-version change is enabled here.
 |---|---|
 | `history_page(token, after=0, limit=100, *, checkpoint=None)` | Version1, authenticated workspace, starting checkpoint, exact canonical event strings, ending checkpoint and caught_up. At most 1000 events and 2 MiB of compact UTF-8 response, with bounded individual records. |
 | `prepare_history(token, *, limit=100)` | Explicit legacy backfill; version1/workspace/checkpoint/ready/remaining_events. At most 1000 events and 2 MiB of raw event text per transaction. |
+| `push_verified(token, operation, *, checkpoint)` | Exact canonical acknowledgment `record` plus its `checkpoint`, committed with the accepted/conflicted event. Requires the observed tip for a new write; an identical retry remains idempotent. |
 
 A checkpoint is exactly `{sequence: nonnegative_integer, sha256: lowercase_hex64}`.
 Cursors are bounded by SQLite signed 64-bit integer range.
@@ -359,5 +362,59 @@ legacy/unprepared prefixes. Recovery into a new workspace replays events and bui
 new scoped commitments; it does not copy old sessions or proof authority.
 These checks do not protect against a malicious authority, unchecked database
 replacement, forged metadata, an in-place restore or two active service forks.
-End-to-end proof persistence, transactional mutation preconditions, durable authority
-identity/fencing and installed/hosted recovery acceptance remain explicit gates.
+Desktop event/ack proof persistence and transaction-bound research pushes are
+implemented below. Mobile proof persistence, other mutation/attachment guards,
+durable authority identity/fencing and installed/hosted acceptance remain gates.
+
+### Verified desktop flow and wire contract
+
+| Route | Closed request | Success |
+|---|---|---|
+| `POST /v1/history/pull` | `after`, `limit`, `checkpoint` | The closed history page above; at most four records and 2 MiB per HTTP response. |
+| `POST /v1/history/push` | `operation`, `checkpoint` | `{record: canonical_event_text, checkpoint: {sequence, sha256}}`. The record is an exact string, not a receiver-reserialized object. |
+
+Both bearer and same-origin browser route mappings use the existing authentication,
+execution pin, strict JSON and request/response caps. The browser engine has not
+adopted these routes yet. `HttpTransport.history_page(token, after=0, limit=100,
+*, checkpoint)` and `push_verified(token, operation, *, checkpoint)` never retry
+through legacy routes when support is missing. Missing support or an invalid
+prefix stops with `SyncHistoryUnavailable`. HTTP425 reports a genuine concurrent
+advance as `SyncHistoryAdvanced` (a retryable connection error), preserving work.
+
+`SyncClient.sync_verified_once(transport, token, *, limit=100, prepare_push=None)`
+is now used by the actual desktop SyncSession. The original `sync_once` remains
+an explicitly legacy experiment API and is not a production fallback. A verified
+pass performs bounded local-inbox proof preparation, receives remote records before
+pushing, then sends unchanged observed operations with the latest verified anchor.
+Remote reception does not rebase a pending edit. Competing edits retain conflicts.
+
+For a new write, the authority checks prefix equality and unchanged tip inside the
+same write transaction as event/head/graph/hash publication. A concurrent valid
+writer causes a retry before the second operation is accepted. Every new
+acknowledgment is then the next event, so the client can independently hash the
+exact record from its anchor before storing it. It refuses malformed, skipped or
+incorrect acknowledgment proofs instead of persisting an opaque higher digest.
+
+`paperfact_sync_history_checkpoint` retains both received and acknowledged prefixes.
+`receive_history(page)` validates all raw records and intermediate hashes, then
+stores research/inbox/cursor/received proof together. Received matching local
+intents are acknowledged in that same transaction, repairing a lost push response
+without another upload. Acknowledgment and its proof use one journal transaction;
+SQL/storage failure rolls back both. Binding/generation checks and existing single
+job guards remain. Missing/corrupt pages do not advance research or discard outbox.
+
+An existing inbox starts proof preparation at zero, compares every bounded page
+against actual retained local events and persists only the matched prefix. It
+never initializes a higher checkpoint from an unverified remote digest. Incomplete
+preparation returns history_preparing/history_remaining, keeps new work queued,
+leaves last-success unchanged and does not claim caught_up. The existing connection
+progress area shows remaining records, without a fabricated percentage or ETA.
+A legacy acknowledgment beyond the received cursor without a retained proof stops
+for explicit history review; that review/adoption UI is still a release gate.
+
+Recovery archives retain checkpoint rows as inactive protocol records. Received
+proofs are checked against the retained inbox; unreceived acknowledgment hashes
+remain retained observations with matching original outgoing receipts. Detached
+restore stores these in recovery_records, never as an active connection or device
+permission. Research, pending operations, original observed proofs and source data
+remain available for explicit recovery. No login, model call or upload is implied.

@@ -1040,6 +1040,15 @@ class SyncConnectionDialog(QDialog):
     def _progress(self, value):
         if self._closing or self._invalid or not self._worker or self._worker.ticket.cancelled:
             return
+        if value.get("history_preparing"):
+            remaining = value.get("history_remaining", 0)
+            self.status.setText(
+                f"\u6b63\u5728\u6838\u5c0d\u5df2\u5132\u5b58\u7684\u540c\u6b65"
+                f"\u6b77\u53f2\uff1b\u5269\u9918 {remaining} \u7b46\u3002"
+                if self.zh else
+                f"Checking saved sync history; {remaining} records remain. New changes stay queued."
+            )
+            return
         if value.get("stage") == "pairing":
             self.status.setText(self.t["pair_" + value["phase"]])
             return

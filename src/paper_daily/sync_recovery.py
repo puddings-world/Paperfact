@@ -103,6 +103,7 @@ PROTOCOL = {
         "sequence operation_id fingerprint entity_type entity_id envelope server_revision"
     ),
     "paperfact_sync_cursor": "id sequence",
+    "paperfact_sync_history_checkpoint": "id sequence sha256 ack_sequence ack_sha256",
     "paperfact_sync_inbox": "sequence event outcome",
     "paperfact_sync_heads": "entity_type entity_id revision operation applied_revision",
     "paperfact_sync_conflicts": "operation_id sequence resolved_by",
@@ -293,6 +294,7 @@ def _operation_refs(value, refs):
 class _Records:
     def __init__(self, workspace, cursor):
         self.workspace, self.cursor = workspace, cursor
+        self.history_checkpoint = None
         self.refs, self.events, self.receipts, self.pending = {}, {}, {}, []
         self.sequence = 0
         self.paper_map, self.applied_pdf, self.applied_files, self.artifacts = {}, {}, {}, {}
@@ -544,6 +546,29 @@ class _Records:
         }:
             if row["workspace"] != self.workspace or row["id"] != 1:
                 raise RecoveryError("Research binding differs from archive workspace")
+        elif name == "paperfact_sync_history_checkpoint":
+            from paper_daily.sync_client import _history_checkpoint
+            from paper_daily.sync_journal import history_seed
+
+            if self.history_checkpoint is not None or type(row["id"]) is not int or row["id"] != 1:
+                raise RecoveryError("Invalid retained history proof identity")
+            try:
+                received = _history_checkpoint({
+                    "sequence": row["sequence"], "sha256": row["sha256"],
+                })
+                acknowledged = _history_checkpoint({
+                    "sequence": row["ack_sequence"], "sha256": row["ack_sha256"],
+                })
+            except ValueError as error:
+                raise RecoveryError("Invalid retained history proof") from error
+            if received["sequence"] > self.cursor:
+                raise RecoveryError("Retained history proof exceeds the inbox")
+            for point in (received, acknowledged):
+                if point["sequence"] == 0 and point["sha256"] != history_seed(self.workspace):
+                    raise RecoveryError("Retained history proof has another workspace")
+            if received["sequence"] == acknowledged["sequence"] and received != acknowledged:
+                raise RecoveryError("Received and acknowledged history proofs disagree")
+            self.history_checkpoint = (received, acknowledged)
         elif name == "paperfact_sync_inbox":
             event = _load(row["event"])
             validate_event(event, self.workspace)
@@ -992,6 +1017,23 @@ class _Records:
         self.pdf_aliases()
         if self.sequence != self.cursor:
             raise RecoveryError("Cursor is not backed by complete retained history")
+        if self.history_checkpoint is not None:
+            from paper_daily.sync_journal import history_seed, history_step
+
+            received, acknowledged = self.history_checkpoint
+            targets = {point["sequence"]: point["sha256"] for point in (received, acknowledged)
+                       if point["sequence"] <= self.cursor}
+            digest = history_seed(self.workspace)
+            for sequence, raw, _version in sorted(self.events.values()):
+                if sequence > max(targets):
+                    break
+                digest = history_step(digest, raw)
+                if sequence in targets and targets[sequence] != digest:
+                    raise RecoveryError("Retained history proof differs from its inbox")
+            if acknowledged["sequence"] > self.cursor and not any(
+                revision == acknowledged["sequence"] for _identity, revision in self.pending
+            ):
+                raise RecoveryError("Unreceived history proof has no retained acknowledgment")
         expected = {key: value[1] for key, value in self.events.items() if value[2] == 2}
         if expected != self.receipts:
             raise RecoveryError("Historical graph receipt closure is incomplete")

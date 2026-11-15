@@ -719,3 +719,23 @@ claim and reading-link source plus selection/cancellation/download regressions:
 (overlap, not distinct requirements). CPU bounded, no real account/model/research.
 This reuses existing ownership/pin/guarded-plan patterns; it adds no wire protocol,
 new module, global rule or installed/cloud/mobile acceptance claim.
+
+## 2026-11-15: desktop received and unreceived acknowledgment prefixes
+
+Status: validated-local native/HTTP/Qt only; mobile/fencing not yet established.
+The actual desktop entry now saves bounded prefix proofs with receiver cursor and
+acknowledgments, hashes exact wire records rather than reformatted numbers, and
+checks research-write prefix/tip inside the authority transaction. A next-event
+acknowledgment is independently recomputed; a valid concurrent advance retries.
+A prefetch must reconcile a matching own intent in the same receive transaction:
+otherwise a lost acknowledgment remains pending and incorrectly needs an old proof.
+Legacy inboxes compare retained records before initializing proof; unreceived old
+acks without proof need explicit review. Recovery retains proof observations as
+inactive records instead of dropping them or granting a cloned device connection.
+Evidence: existing sync_history_frontier verified representatives cover real HTTP,
+restart/lost receive, forged acknowledgments, atomic rollback, same-tail forks,
+concurrent advance, malformed pages, no downgrade and conflicts. Actual desktop/
+Qt representatives show bounded preparation, retained last-success and visible
+remaining counts. Limits: no malicious-authority proof, durable fencing, mobile,
+other mutation guards, real host or installed device acceptance. This extends the
+existing transaction/ownership pattern; no new global rule or installation.
