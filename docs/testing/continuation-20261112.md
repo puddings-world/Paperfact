@@ -6169,3 +6169,26 @@ additional worktree was introduced.
   7.12s / 10.2s total. Privacy/Ruff/CRLF-aware whitespace passed; skill copies
   synchronized without conflict. Unchanged passing checks were not broadened to
   historical/stress or native builds. No global rule/installation was changed.
+
+
+### 2026-11-15: packaged sync execution verification
+
+- Previous turn changed authoritative source (1336991); the CPU-status turn then
+  verified no live test processes and matching clean integration/source HEADs.
+- Delivered d2689e8 predates execution pinning and private-profile preparation.
+  Rather than certify these from old packages, extend the existing native verifier
+  with one loopback `sync-protocol` stage through the actual packaged CLI.
+- Run synthetic init/issue/serve, authenticated pull, stop/restart, HTTP 428 for
+  the old execution and explicit handshake/pull. No research writes, real account,
+  cloud resource or public release. Private credentials/logs stay isolated.
+- Initial focused result: 17 passed, 1 failed in 2.83s / 6.0s total: verifier
+  assumed an object while existing pull API returns an array. Corrected the
+  verifier to the existing contract; production protocol was not changed.
+- Focused final: 20 passed in 5.33s / 8.3s total; includes actual isolated source
+  CLI and owned-child cleanup on normal, bad-header and stale-accepted outcomes.
+  Native evidence remains pending until a new clean candidate runs on each OS.
+- No new reusable global pattern: closed result reporting and owned-child cleanup
+  already have canonical skill coverage. No skill copies/global hooks changed.
+- Docs: 58 passed in 1.89s / 5.0s total. Default critical: 14 passed in
+  7.89s / 11.4s total; privacy, Ruff and CRLF-aware whitespace passed.
+  No historical-suite run. Candidate dispatch follows this clean checkpoint.

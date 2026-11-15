@@ -187,6 +187,12 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         assert "--paper" in command and "CODEX_HOME" not in env
         return dict(primary_ready=True, second_launch_handoff=True, primary_normal_exit=True)
 
+    monkeypatch.setitem(
+        sys.modules, "verify_sync_protocol", types.SimpleNamespace(
+            verify=lambda *args: dict(authenticated_pull=True, stale_execution_refused=True,
+                                      reconnected=True),
+        ),
+    )
     monkeypatch.setattr(verify, "_instance_handoff", handoff)
     monkeypatch.setattr(verify.subprocess, "run", fake)
     monkeypatch.setitem(
@@ -205,6 +211,7 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         "lineage-audit-result",
         "instance-handoff",
         "local-integration",
+        "sync-protocol",
     } <= set(first["completed_checks"])
     assert first["instance_handoff"] == dict(
         primary_ready=True, second_launch_handoff=True, primary_normal_exit=True,
@@ -342,3 +349,50 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
         if mode == "not-ready":
             assert "second" not in calls
     assert env == original and not (tmp_path / "synthetic").exists()
+
+
+@pytest.mark.parametrize("failure", [None, "stale_accepted", "bad_header"])
+def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, monkeypatch, failure):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import verify_sync_protocol
+    finally:
+        sys.path.pop(0)
+    children = []
+    spawn = verify_sync_protocol.subprocess.Popen
+
+    def tracked(*args, **kwargs):
+        child = spawn(*args, **kwargs)
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(verify_sync_protocol.subprocess, "Popen", tracked)
+    post = verify_sync_protocol._post
+
+    def altered(*args, **kwargs):
+        status, offered, body = post(*args, **kwargs)
+        if failure == "stale_accepted" and status == 428:
+            return 200, offered, []
+        return status, offered, body
+
+    if failure == "bad_header":
+        # Change the expected contract: actual service still offers its real header.
+        monkeypatch.setattr(verify_sync_protocol, "HEADER", "X-Unknown-Sync-Instance")
+    monkeypatch.setattr(verify_sync_protocol, "_post", altered)
+    try:
+        if failure:
+            with pytest.raises((ValueError, AssertionError)):
+                verify_sync_protocol.verify(
+                    [sys.executable, "-m", "paper_daily"], tmp_path / "protocol",
+                    verify.isolated_env(tmp_path / "isolated"),
+                )
+        else:
+            result = verify_sync_protocol.verify(
+                [sys.executable, "-m", "paper_daily"], tmp_path / "protocol",
+                verify.isolated_env(tmp_path / "isolated"),
+            )
+            assert result == dict(authenticated_pull=True, stale_execution_refused=True,
+                                  reconnected=True)
+            assert "token" not in json.dumps(result)
+    finally:
+        assert children and all(child.poll() is not None for child in children)

@@ -545,3 +545,10 @@ The existing release agent-import representative now includes a real update-cach
 write, with its exclusion asserted. Daily critical remains 14 and release remains
 38 selectors; no new test file or broad legacy stress matrix. Source/Qt-fixture
 results do not establish installed/hosted/device acceptance.
+
+The native verifier's `sync-protocol` stage runs the built CLI twice against one
+synthetic authority: authenticated read, listener restart, stale-execution refusal
+and explicit reconnection. The existing built-app verification test file also
+checks rejected/missing execution contracts and child cleanup after failure.
+Source CLI evidence is separate from the actual frozen result on each OS; neither
+substitutes for the installed Windows/Mac offline-edit journey or hosted HTTPS.

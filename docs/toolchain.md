@@ -250,3 +250,18 @@ primary/secondary logs stay private in the chosen output folder. Failure reaps
 only the verifier-owned primary; no unrelated app or data directory is stopped.
 This is a native packaged same-workspace check, not cross-version compatibility,
 first-use consent acceptance, a different-workspace check or a physical Mac result.
+
+The packaged verifier also runs `sync-protocol` through
+`scripts/verify_sync_protocol.py`: `verify(command, folder, env) -> dict` starts the
+provided CLI's `sync-admin init`, `issue` and two `serve --port 0` executions.
+It verifies authenticated empty pull, a fresh execution identity after restart,
+HTTP 428 for the stale identity, and a successful explicit handshake/pull. Each
+listener has a 20-second startup limit and only its owned process is terminated
+in `finally`, including failed assertions. Init/issue each have a 25-second limit;
+HTTP calls have a five-second limit. Readiness and response reads are bounded.
+
+`report.json` contains only `authenticated_pull`, `stale_execution_refused` and
+`reconnected` booleans under `sync_protocol`. Synthetic credentials and private
+command logs stay in the isolated acceptance output, never the public result.
+This proves the packaged service boundary, not the frozen GUI client's sync flow,
+proxy/HTTPS, physical devices, persistent authority epochs or production hosting.

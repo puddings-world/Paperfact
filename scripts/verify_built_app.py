@@ -40,6 +40,7 @@ STAGES = {
     "lineage-audit-result",
     "credential-isolation",
     "local-integration",
+    "sync-protocol",
     "appimage-integration",
     "mac-foreground",
     "windows-installer-preflight",
@@ -595,6 +596,11 @@ def _verify(built, out, acceptance, *, installer=None):
     integration = acceptance.call(
         "local-integration", lambda: integration_check([cli], out / "integration-workspace", empty)
     )
+    from verify_sync_protocol import verify as verify_sync
+
+    sync_protocol = acceptance.call(
+        "sync-protocol", lambda: verify_sync([cli], out / "sync-protocol", empty),
+    )
     if sys.platform.startswith("linux"):
         from paper_daily import __version__
 
@@ -620,6 +626,7 @@ def _verify(built, out, acceptance, *, installer=None):
         "research_files_preserved": files,
         "reader_launches_verified": reader_launches,
         "instance_handoff": handoff,
+        "sync_protocol": sync_protocol,
         "integration": integration,
         "checks": [
             "version",
@@ -633,6 +640,7 @@ def _verify(built, out, acceptance, *, installer=None):
             "file-fidelity",
             "lineage-corpus",
             "share-link-checksum",
+            "packaged-sync-execution-restart",
             "json-cli",
             "mcp-stdio",
             "mcp-retry",

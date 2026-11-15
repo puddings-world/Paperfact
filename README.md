@@ -325,3 +325,8 @@ See the [recovery workflow and API](docs/device-recovery-review.md),
 [deck provenance](docs/sync-files.md) and [saved-evidence audit](docs/deck-audit.md).
 Foreign-workspace/legacy mappings, remaining research groups, hosted HTTPS and
 installed-device acceptance remain explicit v0.5 gates.
+
+Candidate verification also starts the packaged loopback sync service, checks an
+authenticated pull, restarts it and verifies stale execution refusal plus explicit
+reconnection. This uses synthetic device state, not hosted or physical-device
+acceptance; see [the packaged check](docs/toolchain.md#packaged-local-acceptance).
