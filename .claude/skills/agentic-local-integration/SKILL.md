@@ -27,6 +27,10 @@ buttons serialize through a server just to share behavior.
   blocked. Preserve necessary migration markers as data, not permission for an
   already synchronized workspace to rerun legacy constructors. See the
   validated-local import-enrollment evidence reference.
+  A retained input checksum is not byte closure: complete private archives must
+  retain and independently verify the bounded input bytes too. Derive known local
+  cache names rather than following an observation's arbitrary path. Retained
+  derived text grants no current-original ownership or old-job replay authority.
 - If research and device controls share a key/value table, scope every capture,
   snapshot, import and projection by a closed research key family. A table-level
   permission must not expose credentials/settings. Resolve the feature's owner

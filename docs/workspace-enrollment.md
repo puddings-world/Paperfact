@@ -183,4 +183,6 @@ Validated citation, related-work, resource and manual-item histories use the
 [private compound archive adapter](initial-enrollment-history.md#citation-and-related-work-history).
 Current research rows remain shared; old requests and candidate outcomes remain
 inactive. Only exact accepted resource/fetch completion hints are redundant.
-Unmatched hints and nonempty legacy extracted-text inputs still require review.
+Known legacy text inputs now retain exact verified bytes through the
+[private text adapter](initial-enrollment-history.md#retained-legacy-text-inputs).
+Unmatched hints and unknown/missing/changed text layouts still require review.

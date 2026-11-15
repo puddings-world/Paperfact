@@ -346,4 +346,4 @@ The mobile overview includes collapsible saved reference analyses and citation
 passages, with explicit original-version scope; see [mobile reader](docs/mobile-0.5.md).
 
 First-sync preparation retains validated citation, related-work and resource history
-privately while publishing current research rows; see [enrollment history](docs/initial-enrollment-history.md).
+privately, including verified legacy text inputs, while publishing current research rows; see [enrollment history](docs/initial-enrollment-history.md).

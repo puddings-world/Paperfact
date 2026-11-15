@@ -203,7 +203,9 @@ def _database(conn, ticket, *, history=None):
                 from paper_daily.enrollment_history import redundant_compound_hint
                 from paper_daily.later_outcome_history import redundant_hint
 
-                if redundant_compound_hint(conn, value) or redundant_hint(conn, value):
+                if redundant_compound_hint(
+                    conn, value, text_snapshots=(history or {}).get("compound_text_snapshots")
+                ) or redundant_hint(conn, value):
                     excluded += 1
                     continue
                 if sync_recovery._kv_allowed(value["key"], set()):

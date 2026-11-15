@@ -270,3 +270,8 @@ CI uploads only the four named synthetic protocol logs (`init.log`, `issue.log`,
 It never uploads `device.json`, the authority database or the whole protocol folder.
 This proves the packaged service boundary, not the frozen GUI client's sync flow,
 proxy/HTTPS, physical devices, persistent authority epochs or production hosting.
+
+Native candidate CI additionally runs the existing first-sync preservation
+representative once per OS (three-minute cap). The Windows tag release selection
+already includes it and therefore does not repeat it. This exercises native
+file/version and private-text copy/restore behavior before packaging.

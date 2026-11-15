@@ -40,8 +40,9 @@ Source changes after candidate 15aae7e, not yet native packaged:
 - First-sync compound history: citation, related-work and resource producers retain
   current rows, exact inactive private history and PDFs across copy/backup/restore.
   Candidate/manual observations validate without becoming active jobs. Only exact
-  accepted resource/fetch hints are omitted. Unknown metadata and nonempty legacy
-  extracted-text inputs remain blocked; complete runtime adoption remains open.
+  accepted resource/fetch hints are omitted. Known legacy text inputs now retain
+  exact inactive bytes without PDF grants; unknown metadata or missing/changed
+  text still blocks. Complete runtime adoption remains open.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

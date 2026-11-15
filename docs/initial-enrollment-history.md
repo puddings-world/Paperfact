@@ -192,8 +192,8 @@ closed captured paper/authors, prior typed resource rows and generated mutations
 Unexpected model inputs are rejected; this phase is a recorded lookup, not an AI
 request. Captured paths remain text, never capabilities to open arbitrary files.
 Declared PDF hashes use the existing explicit owned-original closure verifier.
-Legacy extracted-text observations with actual text bytes still require an
-explicit adapter; an absent-text observation grants no original ownership.
+Legacy extracted-text observations use the verified private adapter below;
+an absent-text observation grants no original ownership.
 
 Current resource links enter the ordinary native graph. Complete original request,
 context, mutation and outcome strings stay in the private history archive and
@@ -247,3 +247,40 @@ restore for unbound workspaces. Already-bound producers retain their existing
 publication/retry tests. Stale-candidate and manual-edit fixtures validate exact
 private archive records without promoting their outputs. Complete manual/source
 lifetime adoption and installed-device journeys remain separate acceptance gates.
+
+
+## Retained legacy text inputs
+
+A compound request with a nonempty `text_source.sha256` now requires its exact
+input bytes. The reviewed first-copy collector accepts only the canonical
+`text/<safe-local-paper>.txt` or `pdf/<safe-local-paper>.txt` under the selected
+database directory. The observed path must match that known location; it never
+authorizes reading another path. Link traversal is refused, reads are capped at
+3 MiB, file versions are checked around the read, and actual SHA-256 must match
+before strict UTF-8 decoding. CRLF, BOM and Unicode are preserved through exact
+UTF-8 re-encoding, not normalized into new input.
+
+`compound_text_history_v1` is a self-contained private archive record with fields
+`protocol`, `request`, `text`. Origin is one of the two maintained compound receipt
+protocols. Its complete original request and text are jointly validated; unknown
+fields, mismatched bytes, invalid encoding and unsupported originals are refused.
+The existing 8 MiB row and 64 MiB history budgets still apply. No new live table,
+background producer or network payload is installed. Current links/analyses can
+sync; private input text and prompts do not join that outbox or list sharing.
+The marker deduplicator requires the same full request fingerprint and verified
+text snapshot, never just a reused request ID.
+
+Copies and independent backups retain these records; detached restore keeps them
+inactive in `recovery_records`. The text does not become a PDF, source ownership,
+verified quotation, active cache or permission to replay an old model job. It is
+retained research input, not a new current original. Missing, changed, external,
+linked or unknown cache layouts require explicit migration instead of omission.
+A raw legacy backup with declared but unretained compound text now refuses to
+claim completeness; prepare the reviewed copy first. Source data stays unchanged.
+
+These private archives require a build supporting this protocol. Candidate
+15aae7e predates it; upgrade the test app before inspecting/restoring such a new
+backup. This does not change the live sync wire format or provision a host.
+Actual copied/detached bytes, no-PDF-grant behavior, static-error redaction,
+external-path nonaccess and changed/corrupt input rejection have fixture coverage.
+Installed adoption and arbitrary derived-text layouts remain separate gates.

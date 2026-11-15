@@ -104,6 +104,12 @@ jobs:
         timeout-minutes: 10
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile ${{ matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v') && 'release' || 'critical' }}
 
+      # The Windows tag release selection already includes this representative.
+      - name: First-sync research preservation
+        if: ${{ !(matrix.name == 'windows' && startsWith(github.ref, 'refs/tags/v')) }}
+        timeout-minutes: 3
+        run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile focused --python tests/test_enrollment_integration_history.py::test_real_import_history_can_prepare_without_reactivating_receipts
+
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact
         if: matrix.name == 'windows'

@@ -17,7 +17,10 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS research_history_archive("
     "record_id TEXT PRIMARY KEY,protocol TEXT NOT NULL,body_json TEXT NOT NULL);"
 )
+COMPOUND_TEXT = "compound_text_history_v1"
+MAX_TEXT = 3 * 1024**2
 FORMATS = {
+    COMPOUND_TEXT: "protocol request text",
     "research_lineage_publications": "request_id candidate_id row_json sources_json",
     "research_lineage_imports": "request_id body_json",
     "research_lineage_actions": "request_id body_json",
@@ -215,6 +218,14 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol == COMPOUND_TEXT:
+        if not isinstance(record["request"], dict):
+            raise ValueError("Invalid extracted-text history request")
+        if not isinstance(record["protocol"], str) or record["protocol"] not in {
+            "research_compound_requests", "research_compound_recovery"
+        }:
+            raise ValueError("Unsupported extracted-text history origin")
+        return compound_sources(record["request"], text_snapshot=record["text"])
     if protocol in INTEGRATION_FORMATS:
         from paper_daily.enrollment_integration_history import validate_record as validate_import
 
@@ -442,6 +453,11 @@ def collect(conn, database, ticket):
     counts = {}
     sources = set()
     metadata = []
+    text_snapshots = {}
+    for archived_row in records.values():
+        if archived_row["protocol"] == COMPOUND_TEXT:
+            saved, _ = validate(archived_row)
+            text_snapshots[compound_text_key(saved["request"])] = saved["text"]
     keys = set()
     total = sum(len(row["body_json"].encode()) for row in records.values())
     if "research_parent_lifecycle" in names:
@@ -461,7 +477,13 @@ def collect(conn, database, ticket):
         for raw in conn.execute(f'SELECT {selected} FROM "{protocol}"'):
             ticket.check()
             value = dict(zip(columns, raw, strict=True))
-            wrapped = wrap(protocol, value)
+            if protocol in {"research_compound_requests", "research_compound_recovery"}:
+                wrapped, text_path = wrap_compound_input(protocol, value, database, ticket)
+                if text_path is not None:
+                    metadata.append(str(text_path))
+                    text_snapshots[compound_text_key(value)] = _value(wrapped["body_json"])["text"]
+            else:
+                wrapped = wrap(protocol, value)
             logical = (
                 (protocol, value["id"])
                 if protocol in INTEGRATION_FORMATS
@@ -514,7 +536,12 @@ def collect(conn, database, ticket):
 
     for value in compound.list_recovery_requests(database):
         ticket.check()
-        wrapped = wrap("research_compound_recovery", value)
+        wrapped, text_path = wrap_compound_input(
+            "research_compound_recovery", value, database, ticket
+        )
+        if text_path is not None:
+            metadata.append(str(text_path))
+            text_snapshots[compound_text_key(value)] = _value(wrapped["body_json"])["text"]
         if wrapped["record_id"] not in records:
             total += len(wrapped["body_json"].encode())
         records[wrapped["record_id"]] = wrapped
@@ -545,7 +572,8 @@ def collect(conn, database, ticket):
         "counts": counts,
         "archive_counts": coverage,
         "sources": sorted(sources),
-        "sidecars": sorted(metadata),
+        "sidecars": sorted(set(metadata)),
+        "compound_text_snapshots": text_snapshots,
         "known_deletions": sorted(deletions, key=lambda row: (row["paper_id"], row["feature"])),
     }
 
@@ -638,7 +666,7 @@ def canonical_membership_rows(rows):
             row["position"] = position
             canonical.append(row)
     return canonical_research_rows(canonical)
-def compound_sources(record):
+def compound_sources(record, *, text_snapshot=None):
     """Retain typed compound history without replaying its model or publication."""
     from paper_daily import research_compound as compound
     from paper_daily import sync_content
@@ -666,7 +694,16 @@ def compound_sources(record):
             sync_content._text(author, 4096, nullable=False)
     text = context["text_source"]
     if text is not None and text["sha256"] is not None:
-        raise ValueError("Extracted compound text needs an explicit archive adapter")
+        if not isinstance(text_snapshot, str):
+            raise ValueError("Extracted compound text requires retained verified bytes")
+        try:
+            raw_text = text_snapshot.encode("utf-8")
+        except UnicodeError:
+            raise ValueError("Invalid retained extracted-text encoding") from None
+        if len(raw_text) > MAX_TEXT or hashlib.sha256(raw_text).hexdigest() != text["sha256"]:
+            raise ValueError("Retained extracted-text bytes differ from the observation")
+    elif text_snapshot is not None:
+        raise ValueError("Unexpected retained text without its original observation")
     source = (context["document"] or {}).get("sha256")
     feature, column = compound.TABLES[compound.PHASES[phase]]
     for row in context["rows"]:
@@ -693,7 +730,7 @@ def resource_sources(record):
     return compound_sources(record)
 
 
-def redundant_compound_hint(conn, row):
+def redundant_compound_hint(conn, row, *, text_snapshots=None):
     """A completion hint is redundant only with its validated accepted archive input."""
     import sqlite3
 
@@ -758,9 +795,64 @@ def redundant_compound_hint(conn, row):
             context = _value(value["context_json"])
             if context.get("phase") != phase or context.get("owner_id") != owner:
                 continue
-            compound_sources(value)
+            retained = (text_snapshots or {}).get(compound_text_key(value))
+            compound_sources(value, text_snapshot=retained)
             if _value(value["mutations_json"])["completion"] == completion:
                 return True
     except (ValueError, TypeError, AttributeError, sqlite3.Error):
         return False
     return False
+
+
+def compound_text_key(record):
+    """Match a complete exact request, never just a reused request identifier."""
+    return hashlib.sha256(canonical_json(record)).hexdigest()
+
+
+def wrap_compound_input(protocol, record, database, ticket):
+    """Read only a known workspace cache name; observed paths are not capabilities."""
+    import os
+    from pathlib import Path
+
+    from paper_daily.fetch import _safe_name
+    from paper_daily.file_change import version
+    from paper_daily.sync_recovery import _path
+
+    context = _value(record["context_json"])
+    text = context.get("text_source") if isinstance(context, dict) else None
+    if not isinstance(text, dict) or text.get("sha256") is None:
+        return wrap(protocol, record), None
+    from paper_daily import research_compound as compound
+
+    compound.validate_request_record(record)
+    digest(text["sha256"])
+    root = Path(database).absolute().parent
+    filename = _safe_name(context["owner_id"]) + ".txt"
+    recorded = os.path.normcase(os.path.abspath(text["path"]))
+    candidates = [root / folder / filename for folder in ("text", "pdf")]
+    selected = next(
+        (path for path in candidates if os.path.normcase(str(path.absolute())) == recorded), None
+    )
+    if selected is None:
+        raise ValueError("Extracted input requires its known workspace cache location")
+    ticket.check()
+    try:
+        selected = _path(selected)
+        before = version(selected)
+        with selected.open("rb") as stream:
+            raw = stream.read(MAX_TEXT + 1)
+            opened = version(selected, stream=stream)
+        after = version(selected)
+    except OSError:
+        raise ValueError("Retained extracted text is missing or inaccessible") from None
+    ticket.check()
+    if before != opened or before != after:
+        raise ValueError("Extracted input changed during capture")
+    if len(raw) > MAX_TEXT or hashlib.sha256(raw).hexdigest() != text["sha256"]:
+        raise ValueError("Extracted input bytes differ from their recorded observation")
+    try:
+        retained = raw.decode("utf-8")
+    except UnicodeError:
+        raise ValueError("Invalid extracted-text encoding") from None
+    wrapped = wrap(COMPOUND_TEXT, dict(protocol=protocol, request=record, text=retained))
+    return wrapped, selected

@@ -598,3 +598,9 @@ at 38 selectors; the daily critical gate stays at 14.
 Candidate 15aae7e also proves exact citation-graph content, idempotent retry and
 persistence after packaged service restart on all three desktop platforms. This
 does not establish a frozen GUI-client or hosted/physical-device sync journey.
+
+The existing first-sync representative now also retains exact legacy text input
+through copy and detached restore. Native candidate CI runs this one focused
+representative per desktop OS unless the Windows tag release selection already
+ran it; its own three-minute cap preserves the overall candidate budget.
+No critical or release selector was added.

@@ -752,6 +752,8 @@ class _Records:
 
             validate_request_record(row)
             context = _load(row["context_json"])
+            if context["text_source"] is not None and context["text_source"]["sha256"] is not None:
+                raise RecoveryError("Extracted compound input requires reviewed archived bytes")
             if context["document"] is not None:
                 self.research_sources.add(context["document"]["sha256"])
             binding = context["binding"]

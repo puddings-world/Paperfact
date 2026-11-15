@@ -6590,3 +6590,42 @@ additional worktree was introduced.
   rebuild or historical full suite was run for this source checkpoint.
 - Final updated-map/docs consistency: 58 passed in 2.39s / 6.8s total.
   Privacy, Ruff and CRLF-aware whitespace passed. Reused unchanged source gate.
+
+
+## 2026-11-15: retained legacy compound text
+
+- Verified that the queried-empty later-outcome contract should remain empty-only;
+  no permissive change was made to it. The actual first-copy gap was nonempty
+  extracted-text provenance, which previously required a separate adapter.
+- Added one self-contained private archive protocol, compound_text_history_v1,
+  retaining the complete exact original request and UTF-8 input. No live table,
+  job, network endpoint or source/PDF grant. Strict joint request/text hash checks
+  retain CRLF/Unicode bytes; malformed origin/request/text and corruption refuse.
+- Collector reads only the two known workspace cache names derived from owner,
+  compares the observation lexically, rejects links, bounds reads to 3 MiB and
+  checks versions before/open/after plus actual hash. Observed external paths are
+  never opened. Changed/missing/unowned layouts still block rather than disappear.
+- Exact full-request fingerprints carry verified text to completion-hint matching.
+  The file is accounted for as an archived input; source SQL/bytes remain unchanged.
+  Raw legacy backup now refuses declared text that it cannot retain completely;
+  reviewed copies/backups carry the self-contained private evidence instead.
+- Focused legacy-text preserve/path/change plus prior PDF-backed resource test:
+  3 passed in 9.99s / 13.2s total. Enhanced existing release first-copy baseline,
+  corrupt/private text and prior resource rejection: 3 passed in 11.26s / 14.4s.
+  No new release/critical selectors; the baseline now preserves exact citation,
+  import receipt, citation graph, text and PDF through detached restore.
+- Native CI adds that same one focused first-copy representative per OS with a
+  three-minute cap; Windows tag release does not duplicate its existing selection.
+  This is necessary native file/version coverage, not a historical suite expansion.
+- Native candidate remains 15aae7e pending a new run. Its older app cannot inspect
+  the new private protocol. Live sync wire format is unchanged. Current text is
+  inactive evidence, not a verified original, rendered PDF or old-job authority.
+  Runtime adoption, arbitrary derivatives and hosted/device acceptance remain.
+- Source critical: 14 passed in 7.55s / 10.7s total; docs 58 passed in
+  1.97s / 5.2s. Harvested the validated-local checksum-versus-byte-closure boundary
+  into the existing canonical local-integration guide/reference; project copies
+  synchronize through the maintained script, without global installation.
+- Integration advanced independently to bd9a6bb with nightly UI work (34aee49).
+  Preserve it: checkpoint this work first, merge that integration head, then verify
+  affected combined behavior before fast-forwarding and pushing. Remote was still
+  2086a1a at inspection; no other session's working changes were present there.

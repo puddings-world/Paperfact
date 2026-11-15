@@ -665,3 +665,22 @@ settings; late provider results retain a candidate. Python/mobile share closed J
 fixtures; the actual JS/Python service transfers the graph without changing drafts.
 The v27 static artifact is verified locally, not deployed; no schema/credential
 migration, global installation or paid call. Other KV/legacy and physical gates stay.
+
+
+## 2026-11-15: a checksum-only input is not a complete private backup
+
+Status: validated-local in Paperfact with Windows synthetic workspaces; native
+cross-platform and installed-device acceptance remain separate.
+Legacy compound jobs retained an extracted-text checksum/path without the actual
+input. Reviewed first copies now retain a self-contained private request/text
+record, verify exact UTF-8 bytes and hash, and reject changed or unknown layouts.
+Only canonical workspace cache names are read; the observation never authorizes an
+external path. File versions around the bounded read catch source replacement.
+Private archives do not grant PDF ownership, revive a job or enter the live outbox.
+Raw backups refuse declared text they cannot retain rather than claim completeness.
+Evidence: tests/test_enrollment_history.py covers unchanged source, exact CRLF and
+Unicode preservation, copy/detached restore, corrupted proof, no PDF grant and
+external-path nonaccess. The existing release-selected agent-import enrollment
+representative now retains citation, text and PDF beside its original assertions.
+Two affected three-case slices passed in 13.2s and 14.4s (overlapping); no real
+account/model call, global installation, cloud upload or broad temporary cleanup.

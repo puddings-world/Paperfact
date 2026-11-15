@@ -80,6 +80,19 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     with closing(sqlite3.connect(source)) as conn:
         conn.row_factory = sqlite3.Row
         compound_record = dict(conn.execute("SELECT * FROM research_compound_requests").fetchone())
+    from paper_daily import resources
+    from paper_daily.fetch import _safe_name
+
+    text_file = source.parent / "text" / (_safe_name(first["paper_ids"][0]) + ".txt")
+    text_file.parent.mkdir()
+    text_bytes = b"Exact retained lookup input.\r\n"
+    text_file.write_bytes(text_bytes)
+    with monkeypatch.context() as patch:
+        patch.setattr(resources, "PDF_DIR", source.parent / "no-legacy-pdf")
+        patch.setattr(resources, "TEXT_DIR", text_file.parent)
+        patch.setattr(resources, "_collect", lambda *_: {})
+        with closing(generation._connect(source)) as conn:
+            assert resources.find(conn, first["paper_ids"][0]) == 0
     assert rows(source, "SELECT position FROM list_papers WHERE list_id='" + first["list_id"]
                 + "' ORDER BY position") == [(0,), (1,)]
     # Exercise a valid older/sparse ordinal layout without changing its reading order.
@@ -110,6 +123,11 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
         compound_archive = [row for row in enrollment_history.archived(conn)
                             if row["protocol"] == "research_compound_requests"]
         assert [json.loads(row["body_json"]) for row in compound_archive] == [compound_record]
+        text_archive = [row for row in enrollment_history.archived(conn)
+                        if row["protocol"] == enrollment_history.COMPOUND_TEXT]
+        assert len(text_archive) == 1
+        text_record, text_sources = enrollment_history.validate(text_archive[0])
+        assert text_record["text"].encode("utf-8") == text_bytes and not text_sources
     assert rows(destination, "SELECT title,purpose,gist,why FROM cites") == [
         ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]
     assert not rows(
@@ -147,6 +165,9 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
         "SELECT data FROM recovery_records WHERE table_name='research_history_archive'")]
     assert [row for row in restored_history
             if row["protocol"] == "research_compound_requests"] == compound_archive
+    assert [row for row in restored_history
+            if row["protocol"] == enrollment_history.COMPOUND_TEXT] == text_archive
+    assert text_file.read_bytes() == text_bytes
     assert rows(restored_database, "SELECT title,purpose,gist,why FROM cites") == [
         ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]
     for table in expected:
