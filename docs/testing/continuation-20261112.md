@@ -8358,3 +8358,24 @@ hosted deployment, durable authority and retained-result review still gate v0.5.
 Docs/skill consistency58 passes2.57s/22.6s stages (privacy17.9s).
 Privacy/Ruff/CRLF-aware whitespace pass. Installed native focus and provider
 authentication are not established by offscreen/simulated checks.
+
+## 2026-11-16: coherent three-platform preview delivered
+
+Run43754647228 completed successfully from clean88595d332eaf36d911e3d15521e8d3f07ae976ca.
+Windows7m44s, Mac arm64 5m48s, Linux2m25s. Three downloaded small provenance/
+acceptance reports identify the same clean beta-candidate source and pass.
+Mac checks three Cocoa reader starts/foreground. Windows checks installed version,
+reader/integration, reinstall and uninstall; research remains. Both retain
+packaged0.4.3 format initialization/export preservation and strict sync protocol.
+Linux includes AppImage integration. Actual old GUI-binary upgrade, physical
+devices, live providers and hosting are still separate gates.
+
+Artifacts: Mac14177314884, Windows14178142192, Linux14177398894; exact ZIP sizes/
+GitHub digests and Mac instructions are in the guide. Big installers were not
+downloaded or independently hashed locally. No public release/tag or auto-update
+was created (draft skipped). One TLS observation timeout and one early report
+file observation failed; the same run was re-polled/read, never restarted.
+Only delivery documentation changes after88595d3; no candidate rebuild for those.
+
+Delivery docs/consistency58 passes2.47s/6.5s stages; no runtime changes
+after the exact source candidate and no redundant installer rebuild.

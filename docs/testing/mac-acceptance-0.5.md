@@ -1,6 +1,43 @@
 # Mac v0.5 acceptance
 
-Updated 2026-11-15. Latest Apple Silicon candidate:
+## Current candidate: 88595d3
+
+Built from clean `88595d332eaf36d911e3d15521e8d3f07ae976ca`, version
+`0.5.0.dev`, beta-candidate channel:
+[all-platform run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
+Mac arm64 passed5m48s, Windows7m44s, Linux2m25s. All are the same source.
+
+- [Mac DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177314884):
+  279,577,751 bytes; GitHub ZIP SHA-256
+  `9180dfaf09dfbfc2e33777197ee938bfb294adcb81ac56e1cd296a3a975a5acf`.
+- [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14178077416).
+- [Mac provenance/report](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177654011).
+- [Windows installer ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14178142192).
+- [Linux AppImage ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177398894).
+
+The small provenance/reports were downloaded and inspected: clean commit matches,
+all pass. Mac includes three native reader launches and foreground activation;
+Windows includes isolated install/reinstall/uninstall with research preserved.
+Reported ZIP hashes are GitHub metadata, not independently downloaded installer
+payload hashes. No public release/tag was created; the draft job was skipped.
+
+This candidate includes the connected **Report & sources ? Generate with sources**
+desktop/private-CLI flow, captured research goal/model, retained completed output,
+read-only retained-result CLI and safe refresh/reopening. Its generation flow uses
+simulated model/IPC evidence; the standard frozen acceptance is not proof that
+your live provider account is authorized. Use a separate workspace/data copy and
+the steps below. Do not point development at the only copy of your research.
+
+Verify About/build info shows88595d3, import the synthetic fixture, read its PDF
+and notes offline, then explicitly select your own AI and try the report action.
+Confirm progress, one job after repeated clicks, source inspection and reopen.
+Report actual results with build ID, platform and the app's reviewed diagnostic
+export. Installed-device, physical-mobile, hosted sync and runtime-adoption gates
+remain open; downloading this app does not deploy a sync service.
+
+## Historical candidates
+
+Historical 2026-11-15 Apple Silicon candidate:
 [3b344c7 / run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158),
 clean `3b344c77cbea449f22767f35d5475b6ae2672bfc`, version `0.5.0.dev`.
 Mac passed in5m30s; Linux passed in2m55s. The original Windows attempt failed

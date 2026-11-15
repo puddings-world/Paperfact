@@ -1,5 +1,9 @@
 # v0.5.0 release readiness
 
+Latest same-source preview: [88595d3 / run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
+All three native builds/provenance reports pass; [downloads and device gates](testing/mac-acceptance-0.5.md).
+This is packaging evidence, not completion of the release gates below.
+
 Status: **development candidate, not release approval**, updated 2026-11-15.
 Source checks, native CI, installed-device journeys and hosted acceptance are
 separate boundaries. Keep the published maintenance app and research unchanged.

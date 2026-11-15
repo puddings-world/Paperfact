@@ -2,6 +2,21 @@
 
 Updated 2026-11-16. **Development, unreleased; no complete beta acceptance.**
 
+Latest common native candidate: clean
+[88595d3 / run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
+Mac arm64/Windows/Linux all pass source and frozen acceptance from the same
+`88595d332eaf36d911e3d15521e8d3f07ae976ca`, channel beta-candidate/version0.5.0.dev.
+Mac5m48s includes three native launches and foreground; Windows7m44s includes
+isolated install/reinstall/uninstall preserving research; Linux2m25s includes
+AppImage integration. All small provenance/reports were downloaded and checked
+for the clean exact commit and passing result. Source supports connected
+Report & sources generation, captured purpose/route and retained-result reading.
+Actual provider inference remains simulated; hosted/installed-device acceptance
+and full v0.5 gates remain open. No release/tag/daily auto-update was published.
+[Downloads and exact Mac instructions](testing/mac-acceptance-0.5.md).
+
+### Earlier delivery evidence
+
 Latest native delivery: Mac arm64/Linux use clean3b344c7
 ([run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158));
 Windows uses clean4ee3427
