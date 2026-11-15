@@ -3,6 +3,8 @@
 import json
 import sqlite3
 from contextlib import closing
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from test_research_generation import rows
@@ -140,7 +142,7 @@ def driver(workspace, monkeypatch):
 
 
 @pytest.mark.parametrize("phase", ["citations", "fetch", "judge", "resources"])
-def test_real_phase_accepts_complete_group_and_receipt(driver, phase):
+def test_real_phase_accepts_complete_group_and_receipt(driver, phase, tmp_path):
     path, client, document, calls, install, invoke = driver
     install(phase)
     before = len(client.journal.pending()) if client else 0
@@ -164,6 +166,76 @@ def test_real_phase_accepts_complete_group_and_receipt(driver, phase):
     if phase == "fetch":
         assert rows(path, "SELECT value FROM kv WHERE key='followups.checked.paper'")
 
+    from paper_daily import enrollment_history, sync_recovery
+    from paper_daily.workspace_enrollment import EnrollmentService
+
+    for receipt in receipts:
+        wrapped = enrollment_history.wrap("research_compound_requests", receipt)
+        assert json.loads(wrapped["body_json"]) == receipt
+    malformed = dict(latest)
+    for version in (True, 1.0):
+        captured = json.loads(latest["context_json"])
+        captured["version"] = version
+        malformed["context_json"] = json.dumps(captured)
+        with pytest.raises(ValueError, match="Unsupported archived compound version"):
+            enrollment_history.compound_sources(malformed)
+    captured = json.loads(latest["context_json"])
+    captured["paper"]["unknown_private_input"] = "not-promoted"
+    malformed["context_json"] = json.dumps(captured)
+    with pytest.raises(ValueError):
+        enrollment_history.compound_sources(malformed)
+    malformed["context_json"] = '{"phase":"' + phase + '",' + latest["context_json"][1:]
+    with pytest.raises(ValueError):
+        enrollment_history.compound_sources(malformed)
+    if client is not None:
+        return  # Already-bound migration is a separate contract.
+    source_bytes = path.read_bytes()
+    service = EnrollmentService(path)
+    plan = service.plan(pdfs={"paper": document.path})
+    assert plan["supported"], plan["blockers"]
+    request_id = str(uuid4())
+    result = service.prepare(
+        tmp_path.parent / ("first-copy-" + request_id),
+        backup_output=tmp_path.parent / ("first-copy-" + request_id + ".zip"),
+        request_id=request_id,
+        pdfs={"paper": document.path},
+    )
+    assert path.read_bytes() == source_bytes
+    copied = rows(Path(result["database"]), f"SELECT * FROM {table}")
+    assert enrollment_history.canonical_research_rows(
+        copied
+    ) == enrollment_history.canonical_research_rows(saved)
+    with closing(sqlite3.connect(result["database"])) as conn:
+        archived = enrollment_history.archived(conn)
+        actual = [
+            json.loads(row["body_json"])
+            for row in archived
+            if row["protocol"] == "research_compound_requests"
+        ]
+        assert sorted(actual, key=lambda row: row["request_id"]) == sorted(
+            receipts, key=lambda row: row["request_id"]
+        )
+        assert not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='research_compound_requests'"
+        ).fetchall()
+        wire = "\n".join(
+            row[0] for row in conn.execute("SELECT envelope FROM paperfact_sync_operations")
+        )
+        assert str(path) not in wire and "database_identity" not in wire and "prompts" not in wire
+    restored = tmp_path.parent / ("detached-" + request_id)
+    sync_recovery.restore_detached(result["backup"], restored)
+    with closing(sqlite3.connect(restored / "papers.db")) as conn:
+        history = [
+            json.loads(row[0])
+            for row in conn.execute(
+                "SELECT data FROM recovery_records WHERE table_name='research_history_archive'"
+            )
+        ]
+        assert [row for row in history if row["protocol"] == "research_compound_requests"] == [
+            row for row in archived if row["protocol"] == "research_compound_requests"
+        ]
+    assert (restored / "pdf/paper.pdf").read_bytes() == document.path.read_bytes()
+
 
 @pytest.mark.parametrize("phase", ["citations", "fetch", "judge", "resources"])
 def test_changed_inventory_retains_whole_group_without_partial_or_flag(driver, phase):
@@ -180,6 +252,10 @@ def test_changed_inventory_retains_whole_group_without_partial_or_flag(driver, p
         assert invoke(phase) == 0
     record = rows(path, "SELECT * FROM research_compound_requests WHERE status='candidate'")[0]
     assert len(json.loads(record["mutations_json"])["puts"]) == 2
+    from paper_daily import enrollment_history
+
+    wrapped = enrollment_history.wrap("research_compound_requests", record)
+    assert json.loads(wrapped["body_json"]) == record
     table = compound.PHASES[phase]
     current = rows(path, f"SELECT * FROM {table}")
     assert len(current) == (3 if phase == "judge" else 1)
@@ -291,6 +367,11 @@ def test_manual_items_keep_loaded_base_and_each_changed_stale_draft(driver, phas
             writer("paper", key, expected=expected, why=body)
         assert identifiers.setdefault(body, error.value.candidate_id) == error.value.candidate_id
     assert len(set(identifiers.values())) == 2
+    from paper_daily import enrollment_history
+
+    for record in rows(path, "SELECT * FROM research_compound_requests"):
+        wrapped = enrollment_history.wrap("research_compound_requests", record)
+        assert json.loads(wrapped["body_json"]) == record
     assert rows(
         path,
         f"SELECT why FROM {compound.PHASES[phase]} "

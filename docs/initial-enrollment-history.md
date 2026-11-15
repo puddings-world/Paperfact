@@ -185,8 +185,8 @@ in-place runtime adoption, service issuance or upload.
 ## Resource-discovery observations
 
 The existing `research_compound_requests` and owned recovery-sidecar protocols
-now accept the closed `resources` phase in addition to the previously supported
-empty-fetch history. `enrollment_history.resource_sources(record) -> set[str]`
+now accept the maintained compound phases described below.
+`enrollment_history.resource_sources(record) -> set[str]` remains resource-specific and
 validates the maintained compound envelope, strict duplicate-key-safe nested JSON,
 closed captured paper/authors, prior typed resource rows and generated mutations.
 Unexpected model inputs are rejected; this phase is a recorded lookup, not an AI
@@ -216,3 +216,34 @@ restore and unchanged source; no external lookup or model call. Unknown nested
 paper fields raise the existing static validation error; planning does not
 normalize them into supported data. This does not complete arbitrary legacy
 workspace adoption, resource source-lifetime mapping or installed-device acceptance.
+
+
+## Citation and related-work history
+
+`enrollment_history.compound_sources(record) -> set[str]` is the common private
+archive boundary for `citations`, `fetch`, `judge`, `resources`, `edit_reference`
+and `edit_followup`. Captured paper fields come from the same maintained
+`research_compound.PAPER_INPUT_COLUMNS` used by the producers. No second inferred
+paper schema is maintained by enrollment. Observed prior rows and output mutations
+use the existing typed content contract; citation-context JSON is decoded strictly.
+Unknown nested fields, duplicate keys, Boolean/float schema versions, invalid years
+and unsupported source inputs are refused rather than normalized.
+
+Exact model inputs from citation analysis and related-work judgment stay private
+with their original outcomes. Lookup and manual phases cannot invent model inputs.
+Both accepted and candidate receipts remain inactive archive evidence; copying
+history does not accept a candidate, restore an old job, or execute a model.
+Current shared rows remain separate from those original observations.
+
+Validated accepted `fetch` receipts can also explain an exact
+`followups.checked.<paper>` timestamp. Its duplicate KV hint is omitted only after
+the same owner/phase/completion checks as resource hints. The full mutation and
+original timestamp remain in the archive. This applies to first-sync copies;
+enrolled package import still refuses unsupported legacy KV scopes.
+
+The existing four real-producer journeys now verify first-copy/live-row preservation,
+private exact history, source-byte preservation, independent backup and detached
+restore for unbound workspaces. Already-bound producers retain their existing
+publication/retry tests. Stale-candidate and manual-edit fixtures validate exact
+private archive records without promoting their outputs. Complete manual/source
+lifetime adoption and installed-device journeys remain separate acceptance gates.

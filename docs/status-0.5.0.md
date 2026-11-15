@@ -33,17 +33,15 @@ validated citation-neighbour graphs through native sync, first copies/backups an
 enrolled package import, with private KV isolation and retained concurrent/late
 versions. The matching v27 PWA artifact is built, not deployed.
 
-Newer source adds offline mobile reference-analysis cards with collapsed recorded
-passages, bilingual source-version notices, keyboard/touch controls and long-title
-wrapping. Actual HTTP transfer, focused Chrome DOM/phone-width rendering and v28
-static packaging pass locally. This source change is not in candidate 15aae7e;
-v28 is built, not deployed. Physical Safari/phone acceptance remains open.
+Source changes after candidate 15aae7e, not yet native packaged:
 
-Newer source also prepares first-sync copies containing completed resource lookup
-history: live links are captured while exact old observations remain private and
-inactive in backups/recovery. Only validated matching completion hints are omitted;
-unknown metadata and legacy extracted-text bytes remain blocked. This is not in
-candidate 15aae7e and does not complete runtime enrollment/adoption.
+- v28 mobile citation cards: offline passages, bilingual original-version notices,
+  keyboard/touch controls and long-title wrapping; focused HTTP/Chrome/static checks pass.
+- First-sync compound history: citation, related-work and resource producers retain
+  current rows, exact inactive private history and PDFs across copy/backup/restore.
+  Candidate/manual observations validate without becoming active jobs. Only exact
+  accepted resource/fetch hints are omitted. Unknown metadata and nonempty legacy
+  extracted-text inputs remain blocked; complete runtime adoption remains open.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

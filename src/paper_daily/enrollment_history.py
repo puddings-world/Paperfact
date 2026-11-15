@@ -273,12 +273,7 @@ def validate_record(protocol, record):
 
         return validate_import_record(record)
     if protocol in {"research_compound_requests", "research_compound_recovery"}:
-        from paper_daily.later_outcome_history import query_sources
-
-        context = _value(record["context_json"])
-        if isinstance(context, dict) and context.get("phase") == "resources":
-            return resource_sources(record)
-        return query_sources(record)
+        return compound_sources(record)
     if protocol == "reading_position_import_v1":
         from paper_daily.reading_position_packages import validate_import_record
 
@@ -643,21 +638,27 @@ def canonical_membership_rows(rows):
             row["position"] = position
             canonical.append(row)
     return canonical_research_rows(canonical)
-def resource_sources(record):
-    """Archive exact resource observations; paths never grant read or replay rights."""
+def compound_sources(record):
+    """Retain typed compound history without replaying its model or publication."""
     from paper_daily import research_compound as compound
     from paper_daily import sync_content
 
     context = _value(record["context_json"])
     _value(record["mutations_json"])
     compound.validate_request_record(record)
-    if context["phase"] != "resources" or context["prompts"]:
-        raise ValueError("Unsupported resource history phase or model inputs")
+    if type(context["version"]) is not int:
+        raise ValueError("Unsupported archived compound version")
+    phase = context["phase"]
+    if phase not in ("citations", "judge") and context["prompts"]:
+        raise ValueError("Unexpected model inputs for archived lookup or manual work")
     paper = context["paper"]
-    closed(paper, {"id", "title", "arxiv_id", "authors_json"})
+    closed(paper, set(compound.PAPER_INPUT_COLUMNS[phase].split(",")))
     for key, value in paper.items():
-        sync_content._text(value, 32768, nullable=key != "id")
-    if paper["authors_json"] is not None:
+        if key == "year":
+            sync_content._integer(value, nullable=True)
+        else:
+            sync_content._text(value, 32768, nullable=key != "id")
+    if phase == "resources" and paper["authors_json"] is not None:
         authors = _value(paper["authors_json"])
         if not isinstance(authors, list) or len(authors) > 512:
             raise ValueError("Unsupported resource author snapshot")
@@ -665,32 +666,60 @@ def resource_sources(record):
             sync_content._text(author, 4096, nullable=False)
     text = context["text_source"]
     if text is not None and text["sha256"] is not None:
-        raise ValueError("Extracted resource text needs an explicit archive adapter")
+        raise ValueError("Extracted compound text needs an explicit archive adapter")
     source = (context["document"] or {}).get("sha256")
+    feature, column = compound.TABLES[compound.PHASES[phase]]
     for row in context["rows"]:
+        data = {key: row[key] for key in sync_content.FEATURES[feature][2].split()}
+        if data.get("contexts_json") is not None:
+            data["contexts_json"] = _value(data["contexts_json"])
         sync_content.validate_payload(
             dict(
                 scope={"kind": "paper", "id": "11111111-1111-4111-8111-111111111111"},
-                feature="resource",
-                key=row["url"],
-                data={key: row[key] for key in sync_content.FEATURES["resource"][2].split()},
+                feature=feature,
+                key=row[column],
+                data=data,
                 source_document_hash=source,
             )
         )
     return {source} if source is not None else set()
 
 
-def redundant_resource_hint(conn, row):
+def resource_sources(record):
+    """Keep the resource-specific validator closed to other compound phases."""
+    context = _value(record["context_json"])
+    if not isinstance(context, dict) or context.get("phase") != "resources":
+        raise ValueError("Select archived resource work")
+    return compound_sources(record)
+
+
+def redundant_compound_hint(conn, row):
     """A completion hint is redundant only with its validated accepted archive input."""
     import sqlite3
 
-    if not row["key"].startswith("resources:"):
+    scope = next(
+        (
+            (prefix, phase)
+            for prefix, phase in (("resources:", "resources"), ("followups.checked.", "fetch"))
+            if row["key"].startswith(prefix)
+        ),
+        None,
+    )
+    if scope is None:
         return False
-    owner = row["key"][len("resources:") :]
+    prefix, phase = scope
+    owner = row["key"][len(prefix) :]
     try:
         completion = _value(row["value"])
-        if completion not in ("text", "notext") or not owner:
+        if not owner:
             return False
+        if phase == "resources":
+            if completion not in ("text", "notext"):
+                return False
+        else:
+            from paper_daily.sync_content import _stamp
+
+            _stamp(completion)
         if not conn.execute("SELECT 1 FROM papers WHERE id=?", (owner,)).fetchone():
             return False
         protocol = "research_compound_requests"
@@ -727,9 +756,9 @@ def redundant_resource_hint(conn, row):
             if count > MAX_RECORDS or total > MAX_TOTAL:
                 return False
             context = _value(value["context_json"])
-            if context.get("phase") != "resources" or context.get("owner_id") != owner:
+            if context.get("phase") != phase or context.get("owner_id") != owner:
                 continue
-            resource_sources(value)
+            compound_sources(value)
             if _value(value["mutations_json"])["completion"] == completion:
                 return True
     except (ValueError, TypeError, AttributeError, sqlite3.Error):

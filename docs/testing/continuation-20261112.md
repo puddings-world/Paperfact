@@ -6548,3 +6548,45 @@ additional worktree was introduced.
 - Final docs consistency: 58 passed in 2.00s / 5.3s total. Critical: 14
   passed in 7.59s / 11.1s total. Privacy, Ruff and CRLF-aware whitespace passed.
   Existing native/device evidence was not rerun or broadened.
+
+
+## 2026-11-15: first-sync citation and related-work history
+
+- Extended the same private compound-history boundary to all maintained phases:
+  citation analysis, nonempty fetch, related-work judgment, resource lookup and
+  reference/followup manual edits. Producers and archive validation now share
+  PAPER_INPUT_COLUMNS; no second inferred paper schema, table or transport.
+- Strict nested JSON, exact typed captured rows, output validation and declared
+  source closure remain. Model inputs are retained privately only for the two
+  model phases. Unknown nested fields, duplicate keys and unsupported text-only
+  provenance still refuse. Boolean/float schema versions now explicitly refuse.
+- First-copy fetch completion hints can be omitted only with an exact validated
+  accepted owner/phase/completion record. Actual timestamp remains in the inactive
+  archive. Enrolled package import/unsupported legacy behavior is unchanged.
+- Strengthened the existing producer representative, without adding selectors:
+  actual mocked-network/model output, live-row equivalence, exact archived receipt
+  strings, no private inputs in the outbox, unchanged source and independent
+  backup/detached history/PDF restore. Initial new test placed output inside its
+  source; the existing isolation guard correctly refused. Corrected fixture paths
+  to independent owned siblings without changing the guard.
+- Four producer paths unbound/enrolled: 8 passed in 24.51s / 27.7s total. Expanded
+  producer, stale-candidate, both manual-edit phases and resource negative slice:
+  21 passed in 41.36s / 44.8s total. Candidate/manual records match exact original
+  archive bodies and keep existing visible-data/outbox assertions. These overlap;
+  they are not summed into distinct coverage or a release percentage.
+- Source-only checkpoint; candidate remains 15aae7e/v27. v28 is not deployed.
+  Runtime maintenance/adoption, remaining legacy/source mapping, unavailable
+  original bytes, full scientific audit and hosted/physical-device gates remain.
+  Existing private-archive skill guidance suffices; no new global rule or copy.
+- Final strict-version representative: 1 passed in 4.70s / 8.0s total. Source
+  critical gate: 14 passed in 8.46s / 12.2s total; docs consistency before the
+  final map addition: 58 passed in 2.16s / 6.0s total.
+- Strengthened the existing release-selected agent-import first-copy representative
+  with a real native citation publication, exact archived context/mutation, live
+  fields and detached history restore. The first fixture omitted mandatory basis;
+  storage correctly retained a candidate. Supplied explicit title-only basis,
+  preserving the accepted-outcome assertion. Final representative: 1 passed in
+  5.89s / 9.8s total. Daily 14/release 38 selectors remain unchanged. No native
+  rebuild or historical full suite was run for this source checkpoint.
+- Final updated-map/docs consistency: 58 passed in 2.39s / 6.8s total.
+  Privacy, Ruff and CRLF-aware whitespace passed. Reused unchanged source gate.

@@ -103,13 +103,18 @@ def _inventory(conn, table, owner, key=None):
     return [dict(row) for row in rows]
 
 
+PAPER_INPUT_COLUMNS = {
+    "citations": "id,title,venue,year,abstract,doi,s2_id",
+    "fetch": "id,title,doi,s2_id,arxiv_id",
+    "judge": "id,title,venue,year,abstract",
+    "resources": "id,title,arxiv_id,authors_json",
+    "edit_reference": "id",
+    "edit_followup": "id",
+}
+
+
 def _paper(conn, owner, phase):
-    columns = {
-        "citations": "id,title,venue,year,abstract,doi,s2_id",
-        "fetch": "id,title,doi,s2_id,arxiv_id",
-        "judge": "id,title,venue,year,abstract",
-        "resources": "id,title,arxiv_id,authors_json",
-    }.get(phase, "id")
+    columns = PAPER_INPUT_COLUMNS[phase]
     row = conn.execute(f"SELECT {columns} FROM papers WHERE id=?", (owner,)).fetchone()
     return dict(row) if row is not None else None
 
