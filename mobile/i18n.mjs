@@ -1,5 +1,7 @@
 export const messages = {
   en: {
+    survey_downloading: 'Downloading list report',
+    survey_ready: 'List report saved offline; PDFs download separately.',
     pinned: 'Pinned',
     brand: 'Paperfact',
     tagline: 'Your research, within reach.',
@@ -114,6 +116,8 @@ export const messages = {
     pairingGate: 'Account login and pairing are integration gates, not shipped features.'
   },
   'zh-TW': {
+    survey_downloading: '\u6b63\u5728\u4e0b\u8f09\u6e05\u55ae\u5831\u544a',
+    survey_ready: '\u5831\u544a\u5df2\u53ef\u96e2\u7dda\u95b1\u8b80\uff1bPDF \u9700\u53e6\u884c\u4e0b\u8f09\u3002',
     pinned: '\u5df2\u91d8\u9078',
     readingGoal: '研究目的',
     brand: 'Paperfact',

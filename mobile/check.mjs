@@ -99,3 +99,12 @@ if(pythonIndex >= 0) {
       ...(coreIndex>=0?[process.argv[coreIndex+1]]:[])],{cwd,stdio:'inherit'});
   if(notes.status!==0)process.exit(notes.status??1);
 }
+
+
+if(pythonIndex >= 0) {
+  const coreIndex=process.argv.indexOf('--core-root');
+  const survey=spawnSync(process.execPath,
+    ['survey-service-check.mjs',process.argv[pythonIndex+1],
+      ...(coreIndex>=0?[process.argv[coreIndex+1]]:[])],{cwd,stdio:'inherit'});
+  if(survey.status!==0)process.exit(survey.status??1);
+}

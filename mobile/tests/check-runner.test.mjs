@@ -16,7 +16,8 @@ child.spawnSync=(command,args,options)=>{
   seen.push({command,args,cwd:options.cwd});
   return {status:mode==='unit-fail'&&args[0]==='--test'?13:
     mode==='later-fail'&&args[0]==='later-outcome-service-check.mjs'?7:
-    mode==='note-fail'&&args[0]==='plain-note-service-check.mjs'?9:0};
+    mode==='note-fail'&&args[0]==='plain-note-service-check.mjs'?9:
+    mode==='survey-fail'&&args[0]==='survey-service-check.mjs'?11:0};
 };
 syncBuiltinESMExports();
 process.argv=[process.execPath,script,...(mode==='pure'?[]:
@@ -43,7 +44,7 @@ test('full mobile gate executes every existing HTTP journey and the later-outcom
   assert.equal(status,0);
   const programs=calls.filter(call=>call.args[0]!=='--test');
   assert.deepEqual(programs.map(call=>call.args[0]).sort(),
-    [...existing,'later-outcome-service-check.mjs','plain-note-service-check.mjs'].sort());
+    [...existing,'later-outcome-service-check.mjs','plain-note-service-check.mjs','survey-service-check.mjs'].sort());
   for(const call of programs){
     assert.equal(call.command,process.execPath);
     assert.deepEqual(call.args.slice(1),['fixture-python',root]);
@@ -74,4 +75,11 @@ test('plain-note HTTP failure fails the maintained mobile gate',()=>{
   const {status,calls}=execute('note-fail');
   assert.equal(status,9);
   assert.equal(calls.filter(call=>call.args[0]==='plain-note-service-check.mjs').length,1);
+});
+
+
+test('survey HTTP failure fails the maintained mobile gate',()=>{
+  const {status,calls}=execute('survey-fail');
+  assert.equal(status,11);
+  assert.equal(calls.filter(call=>call.args[0]==='survey-service-check.mjs').length,1);
 });

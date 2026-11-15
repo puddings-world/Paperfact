@@ -495,7 +495,8 @@ the report does not activate or claim availability of its PDF originals.
 The wire codec alone is not a trusted publisher. Callers must not build source
 bindings from untrusted model JSON or treat codec validation as source authority.
 The internal trusted native publisher below derives them from sealed captures.
-Bundle/recovery, mobile decoding and desktop/CLI/MCP/UI/AI integration remain open.
+Bundle/recovery and desktop/CLI/MCP/AI integration remain open. The saved-only
+mobile decoder/reader is implemented below.
 Native fixture transfer is not installed Mac, mobile or hosted acceptance.
 
 ### Trusted native survey publication (internal)
@@ -542,3 +543,31 @@ Full candidate recovery/UI and installed/hosted acceptance remain release gates.
   not a completed systematic review.
 - [PRISMA 2020](https://www.prisma-statement.org/prisma-2020): retain search,
   eligibility and exclusion decisions for any future systematic-review module.
+
+
+## Mobile saved-survey reader (source implementation)
+
+The mobile operation codec accepts the exact native list-owned manifest/retirement
+namespace and workspace-bound inputs. Accepted receipts must reference active
+paper/original lifetimes. Metadata advances before report bytes; missing PDFs do
+not block report reading. `projection(state).surveys` exposes active list metadata.
+
+| API | Contract |
+|---|---|
+| `Engine.survey(id)` | Read and verify an applied saved body; retain the older report with an update notice while a newer manifest awaits bytes |
+| `Engine.downloadArtifact(id)` | One shared authenticated bounded resumable job per report; partial bytes never activate |
+| `validateSurveyBody(raw, body, payload)` | Closed source-aware record, canonical integer JSON, exact prose/digest/source pairing and retained location bounds |
+| `renderSurveys(panel, collection, rows, el, options)` | Localized saved-only list cards, literal text, folded excerpts/source inventory, progress/retry/offline state and stale delivery guard |
+
+Whole-report SHA-256 is bounded and asynchronous; the existing220KiB synchronous
+claim-hash limit is unchanged. Return scope `report_bytes_and_record` proves
+record integrity. Retained `quote_location_only` locations and semantic validation
+`not_performed` are explicit. Report availability never means the PDFs are cached.
+The source inventory is populated only when expanded. Navigation, account changes
+and closure suppress delayed UI delivery. No model call creates a report here.
+
+Offline shell v32 includes the new modules, replacing stale view code while
+preserving research caches. Native publisher/HTTP fixture acceptance is not deployed
+PWA or real Safari/iOS/Android acceptance. AI/desktop/CLI/MCP dispatch, package/
+recovery mappings and durable stale-proposal review remain open. Legacy plain
+surveys are never silently assigned source provenance.

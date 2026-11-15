@@ -7858,3 +7858,56 @@ installed packages were touched; no public release/build or hosted resources.
 Final frozen gates: critical14 pass7.89s/13.6s stages; docs58 pass3.56s/8.3s.
 Privacy/Ruff/whitespace pass. Canonical evidence copies synchronized. No full
 historical suite, installed-device run, native build, public release or cloud change.
+
+
+## 2026-11-15: independent mobile saved-report reading
+
+Base1827493; existing stabilization/integration branches only. Added strict
+list-owned survey manifest/body support to the existing mobile domain and artifact
+cache. Receive checks active source lifetimes for accepted publication, without
+waiting for bytes. Bound metadata never claims original PDFs are cached. Complete
+body validation retains the existing1MiB report/200KiB prose and256KiB operation
+limits; whole-record asynchronous SHA-256 leaves synchronous claim hashing bounded
+at220KiB. Exact source/statement/report/prose IDs and canonical integer JSON agree
+with native output. Integrity scope is report_bytes_and_record; quote locations
+are retained producer evidence, with semantic validation explicitly not_performed.
+
+Engine.survey reads saved content offline; existing artifact downloads remain
+shared, authenticated, resumable and quota bounded. Projection exposes active
+list-owned surveys independently of decks and originals. List-overview cards read
+cached reports, offer download/progress/retry and separate PDF status, fold excerpts
+under statements and lazily populate source inventory. Research text stays literal.
+Current list/engine/render-generation guards suppress navigation/account/close
+results. Shell v32 includes both modules and replaces v31 code while preserving
+research caches. Existing shell version assertions were advanced with the intended
+cache change, adding v31 to stale-cache coverage rather than dropping prior checks.
+
+A synthetic actual native publisher creates a report above256KiB with located and
+explicitly unlocated excerpts. Independent HTTP mobile receive/download tests
+interrupt after one chunk, resume at the exact offset, verify the entire ledger,
+reopen without transport, keep original PDFs unavailable and hide cached access
+after owning-list retirement. No model/account/cloud/research upload is used.
+Fixture setup corrections aligned with existing journal/client initialization and
+required paper fields. The final method inventory includes existing local
+begin_session and authenticated history_page: neither writes research. All recorded
+requests are read/auth/history/ranges; the phone outbox remains empty.
+
+The explicit full mobile runner now includes the survey protocol check; its fixed
+program inventory and a failure-propagation assertion cover that addition. Curated
+critical14/release38 lists are unchanged. Ordinary focused CLI correctly rejects
+mobile/tests paths; selected Node commands use the existing Windows governor API,
+not a widened harness or an exhaustive run. One job at a time,2 logical CPUs/25%
+cap/90s command budget. First artifact/original/shell38 pass2.719s (3.062s governed).
+Final grouped reader/codec/old artifact/original/shell/build/runner52 pass15.073s
+(15.375s governed); actual native HTTP journey5.094s. Final Unicode native fixture
+(Chinese plus supplementary emoji) passes6.844s, app module syntax0.266s. Critical14
+pass12.27s/20.6s stages; final docs58 pass4.95s/11.3s. Privacy/Ruff/whitespace pass.
+Canonical evidence copies synchronized. No full historical/mobile sweep or native
+rebuild. Build-contract tests create and verify actual allowlisted assets locally.
+
+This is source and local fixture acceptance, not native browser visual acceptance,
+deployed shell, Safari/iOS/Android durability, real Mac/phone use, cloud authority
+fencing or a public release. Existing delivered packages stay unchanged. Plain
+legacy surveys remain source-unknown. Package/recovery mappings, durable stale
+proposal review and AI/desktop/common CLI/MCP creation are still open. Existing
+board/Git provide handoff; no new worktree, task board, daemon or cloud resource.

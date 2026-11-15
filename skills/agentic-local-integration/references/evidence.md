@@ -989,3 +989,15 @@ materialization reproduced unsafe activation (1 expected red in3.92s). Pinning t
 native database identity across the off-lock work rejects that delivery; final
 publisher/recovery7 passes18.66s/24.9s stages. This is a local replacement guard,
 not durable authority fencing, rollback detection or copied-host authentication.
+
+
+### Independent saved survey receiver (validated-local, 2026-11-15)
+
+Mobile reuses native list-owned manifests and exact original lifetime pins. Large
+reports use bounded asynchronous digest checks without lifting the synchronous
+claim-hash limit. Report integrity and retained quote locations imply neither
+downloaded original PDFs nor scientific support. Actual native publication and
+independent HTTP/mobile transfer prove above256KiB interruption/resumption, offline
+reopening and list retirement (5.094s). Related52 cases pass15.073s: literal localized
+cards, duplicate/retry/stale delivery, old deck/original behavior and public-shell
+assets. Local fixture evidence is not physical durability or hosted acceptance.

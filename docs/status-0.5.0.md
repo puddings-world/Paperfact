@@ -154,3 +154,13 @@ intent, including a no-network completion entry after reconnecting from disk.
 Completion rechecks native database identity before activation. Plain survey rows
 and installed builds are unchanged. Mobile/package/
 recovery mapping, durable stale-result review and UI/AI integration remain open.
+
+
+Source after1827493 adds mobile saved-report reading: strict native list-owned
+wire/body parity, authenticated resumable blobs, explicit PDF separation, offline
+reopening and localized list-overview cards. Shell v32 includes both new modules
+and preserves research caches. Real synthetic native publication sends a report
+over256KiB through independent HTTP ranges, with interruption/resumption and list
+retirement. This is not an updated deployed PWA or native installer. Physical
+Safari/iOS/Android, hosted authority and device durability gates remain open.
+AI/desktop/common dispatch, package/recovery and stale-proposal review are unfinished.

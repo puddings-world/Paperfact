@@ -6,6 +6,7 @@ import {readingPositionDialog} from './position-dialog.mjs';
 import {positionLabel} from './position-view.mjs';
 import {inboxLabel,researchInboxDialog} from './inbox-view.mjs';
 import {activityLabel,activityReport,researchActivityDialog,activateActivity,canOpenSavedNote} from './research-activity.mjs';
+import {renderSurveys} from './survey-view.mjs';
 import { renderLegacyWorkflow } from './legacy-view.mjs';
 import { laterOutcomeText } from './later-outcomes.mjs';
 import { renderLineage } from './lineage-view.mjs';
@@ -113,7 +114,7 @@ function announce(code, progress) {
   if(code === 'downloading') notice = 'downloading';
   const live = document.querySelector('#notice-text');
   if(live) live.textContent = noticeText(code,progress);
-  if(!['downloading', 'syncing','reading_preparing'].includes(code)) void refresh();
+  if(!['downloading','survey_downloading', 'syncing','reading_preparing'].includes(code)) void refresh();
 }
 async function openWorkspace(workspace, device, transport, {
   token = null,
@@ -376,6 +377,10 @@ function render() {
     }, collection?.note ?? t('tagline'))
     );
     renderReadingGoal(main, collection, el, t);
+    const surveyOwner=engine;
+    renderSurveys(main,collection,data.surveys,el,{language,canDownload:connected&&!busy,
+      read:id=>surveyOwner.survey(id),download:id=>surveyOwner.downloadArtifact(id),
+      current:()=>serial===renderSerial&&surveyOwner===engine&&view.list===collection?.id&&!view.paper});
     const selected = collection ? collection.members.map(m => data.papers.find(p => p.id === m.paper_id)).filter(Boolean): data.papers;
     if(! selected.length) main.append(el('div', {
       class: 'empty'

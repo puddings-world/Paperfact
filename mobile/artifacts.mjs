@@ -34,6 +34,10 @@ function array(value,max,min = 0) {
 }
 export const fileId = (paper,slot) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'deck',slot]));
 export const sourceFileId = (paper,sha) => uuid5Name('paperfact:research-file:' + asciiJSON([paper,'original_source',sha]));
+export function listFileId(list,feature='survey',slot='overview') {
+  id(list);requireArtifact(feature==='survey'&&slot==='overview');
+  return uuid5Name('paperfact:research-list-file:'+asciiJSON([list,feature,slot]));
+}
 export function validateInputVersions(value) {
   requireArtifact(value && [1,2].includes(value.schema_version));
   closed(value,['schema_version','complete','entities','documents','inputs_sha256',
@@ -61,7 +65,31 @@ export function validateInputVersions(value) {
   requireArtifact(enc.encode(JSON.stringify(value)).length <= 64 * 1024);
 }
 export function validateArtifact(payload, entityId, parents) {
-  closed(payload,['paper_id','feature','slot','format_version','source_document_hash','input_versions','body','assets']);
+  const survey=payload?.feature==='survey';
+  closed(payload,[...(survey?['list_id','source_bindings']:['paper_id']),
+    'feature','slot','format_version','source_document_hash','input_versions','body','assets']);
+  if(survey){
+    id(payload.list_id);requireArtifact(payload.slot==='overview'&&payload.format_version===1&&payload.source_document_hash===null);
+    requireArtifact(entityId===listFileId(payload.list_id));
+    if(parents)requireArtifact(parents.length===1&&parents[0].kind==='list'&&parents[0].id===payload.list_id);
+    validateInputVersions(payload.input_versions);
+    const v=payload.input_versions;requireArtifact(v.schema_version===2);hash(v.inputs_sha256);
+    const observed=new Map(v.entities.map(row=>[row.kind+'/'+row.id,row]));
+    const owner=observed.get('list/'+payload.list_id);requireArtifact(owner);
+    if(parents)requireArtifact(owner.incarnation===parents[0].incarnation);
+    closed(payload.body,['sha256','size','media_type']);hash(payload.body.sha256);
+    integer(payload.body.size,1024*1024+1024,1);requireArtifact(payload.body.media_type==='application/json');
+    array(payload.assets,0);array(payload.source_bindings,64);const sources=new Set(),papers=new Set();
+    for(const pin of payload.source_bindings){
+      closed(pin,['source_id','paper_id','paper_incarnation','document_hash','file_id','incarnation']);
+      hash(pin.source_id);hash(pin.document_hash);uuid(pin.paper_id);id(pin.paper_incarnation);id(pin.incarnation);
+      requireArtifact(!sources.has(pin.source_id)&&!papers.has(pin.paper_id)&&pin.file_id===sourceFileId(pin.paper_id,pin.document_hash));
+      sources.add(pin.source_id);papers.add(pin.paper_id);
+      requireArtifact(observed.get('paper/'+pin.paper_id)?.incarnation===pin.paper_incarnation&&
+        observed.get('research_file/'+pin.file_id)?.incarnation===pin.incarnation);
+    }
+    return payload;
+  }
   uuid(payload.paper_id);
   if(payload.feature==='legacy_brief') {
     validateInputVersions(payload.input_versions);

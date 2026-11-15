@@ -210,7 +210,8 @@ the [engine contract](docs/analysis-audit.md#source-aware-survey-engine-local-im
 The internal [list-owned report artifact seam](docs/analysis-audit.md#native-list-owned-report-artifacts-internal)
 now transfers verified report bytes between native peers. Its trusted internal
 publisher supports atomic original/report writes and retryable materialization;
-mobile/package adapters and the user workflow remain in development.
+the mobile saved-report reader is implemented in source. Package adapters and
+the AI creation workflow remain in development.
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.

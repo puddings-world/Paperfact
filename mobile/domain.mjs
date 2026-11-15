@@ -1,5 +1,6 @@
 import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
-import { validateArtifact } from './artifacts.mjs';
+import { validateArtifact,listFileId } from './artifacts.mjs';
+import {surveyReceived} from './survey-artifacts.mjs';
 import { inboxUUID, validateInbox, validateInboxProjection } from './inbox-schema.mjs';
 import {validatePositionProjection,positionReceived} from './reading-position-schema.mjs';
 import {validateLaterProjection} from './later-outcomes.mjs';
@@ -82,11 +83,15 @@ function parentShape(op) {
     return;
   }
   if(['research_content','research_file'].includes(op.entity_type)) {
-    requireThat(op.parents.length === 1 && (op.entity_type === 'research_file' ? ['paper'] : ['paper','list']).includes(op.parents[0].kind));
+    const listFile=op.entity_type==='research_file' && (op.payload?.feature==='survey'||
+      op.action==='delete'&&op.parents.length===1&&op.parents[0]?.kind==='list');
+    requireThat(op.parents.length===1&&(op.entity_type==='research_file'?
+      (listFile?['list']:['paper']):['paper','list']).includes(op.parents[0].kind));
+    if(listFile&&op.action==='delete')requireThat(op.entity_id===listFileId(op.parents[0].id));
     closed(op.parents[0], ['kind', 'id', 'incarnation']);
     identifier(op.parents[0].id);
     identifier(op.parents[0].incarnation);
-    if(op.entity_type === 'research_file') requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.parents[0].id));
+    if(op.entity_type==='research_file'&&op.parents[0].kind==='paper') requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.parents[0].id));
     requireThat(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(op.entity_id));
     return;
   }
@@ -164,6 +169,7 @@ export function validateOperation(op, workspace) {
     }
   } else if(op.entity_type === 'research_file') {
     validateArtifact(op.payload, op.entity_id, op.parents);
+    if(op.payload.feature==='survey')requireThat(op.payload.input_versions.workspace_id===op.workspace_id,'wrong_workspace');
   } else if(op.entity_type === 'research_content') {
     if(!lineageOperation(op))validateContent(op.payload, op.entity_id, op.parents);
   } else if(op.entity_type === 'list') {
@@ -355,6 +361,7 @@ export function receive(state, events) {
     if(local) requireThat(stable(local.operation) === stable(op), 'changed_retry');
     if(event.outcome==='accepted') {
       lineageReceived(state,op,active);
+      surveyReceived(state,op,active);
       positionReceived(state,op,active,stable);
       legacyReceived(state,op); inboxReceived(state,op);
     }
@@ -698,6 +705,8 @@ export function projection(state) {
     }))],
     highlights: [...contentHighlights, ...snapshotHighlights.live],
     imported_highlights: snapshotHighlights.archived,
+    surveys: rows('research_file').filter(({operation:op})=>op.payload.feature==='survey')
+      .map(({operation:op})=>({id:op.entity_id,list_id:op.payload.list_id,operation_id:op.operation_id,editable:false})),
     original_sources: rows('research_file').filter(({operation: op}) => op.payload.feature === 'original_source')
       .map(({operation: op}) => ({id:op.entity_id,paper_id:op.payload.paper_id,
         document_hash:op.payload.slot,operation_id:op.operation_id,editable:false})),

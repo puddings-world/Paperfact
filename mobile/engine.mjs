@@ -448,6 +448,7 @@ export class Engine {
   async deck(id) { return readArtifact(this,id,'deck'); }
   async originalSource(id) { return readArtifact(this,id,'original_source'); }
   async legacyBrief(id) { return readArtifact(this,id,'legacy_brief'); }
+  async survey(id) { return readArtifact(this,id,'survey'); }
   async exportLocal({drafts={}}={}) {
     const state = await this.store.read();
     state.drafts={...state.drafts,...drafts};

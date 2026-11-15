@@ -5,6 +5,7 @@ import {contentId} from './ids.mjs';
 import {validateLegacyBody,markdownText,requireLegacy} from './legacy-workflow.mjs';
 import {CHUNK} from './transport.mjs';
 import {artifactJSON,validateArtifact,validateDeck,validateEvidence,validatePNG,validateOriginalSource,validateOriginalPDF,requireArtifact} from './artifacts.mjs';
+import {validateSurveyBody,renderSurvey} from './survey-artifacts.mjs';
 export const ARTIFACT_CACHE_BYTES = 128 * 1024 ** 2;
 export const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))]
   .map(value=>value.toString(16).padStart(2,'0')).join('');
@@ -62,6 +63,12 @@ async function closure(state,target) {
     legacyOwner(state,target,body);
     return {body,blobs,text,verification_scope:'exact_bytes'};
   }
+  if(target.payload.feature==='survey'){
+    const raw=blobs.get(target.payload.body.sha256);
+    const body=await validateSurveyBody(raw,artifactJSON(raw),target.payload);
+    return {body,blobs,text:renderSurvey(body.report),verification_scope:'report_bytes_and_record',
+      source_check:'quote_location_only',semantic_validation:'not_performed'};
+  }
   const body=validateDeck(artifactJSON(blobs.get(target.payload.body.sha256)),target.payload);
   for (const asset of target.payload.assets) {
     if (asset.role==='figure') await validatePNG(blobs.get(asset.sha256));
@@ -107,7 +114,7 @@ export async function downloadArtifact(engine,id,token,generation) {
         requireArtifact(used+offset<=ARTIFACT_CACHE_BYTES,'storage_quota');
         put(next.artifactFiles,description.sha256,{size:description.size,chunks:copy(chunks),verified:false});
       });
-      engine.onChange('downloading',Math.floor((done+offset)/total*100));
+      engine.onChange(target.payload.feature==='survey'?'survey_downloading':'downloading',Math.floor((done+offset)/total*100));
     }
     const bytes=joined({size:description.size,chunks});
     if (await digest(bytes)!==description.sha256) {
@@ -129,10 +136,10 @@ export async function downloadArtifact(engine,id,token,generation) {
     if(target.payload.feature==='legacy_brief') legacyOwner(next,target,complete.body);
     put(next.appliedArtifacts,id,{operation:copy(target)});
   });
-  engine.onChange('file_ready'); return id;
+  engine.onChange(target.payload.feature==='survey'?'survey_ready':'file_ready'); return id;
 }
 export async function readArtifact(engine,id,feature = 'deck') {
-  requireArtifact(['deck','original_source','legacy_brief'].includes(feature));
+  requireArtifact(['deck','original_source','legacy_brief','survey'].includes(feature));
   const generation=engine.generation, state=await engine.store.read();
   const target=artifactTarget(state,id), applied=own(state.appliedArtifacts ?? {},id)?.operation;
   requireArtifact(target && target.payload.feature===feature && applied && applied.payload.feature===feature && target.incarnation===applied.incarnation && stable(target.parents)===stable(applied.parents),'artifact_unavailable');

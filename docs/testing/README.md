@@ -706,3 +706,22 @@ real PDF captures and local
 fixture services, never account login or model calls. Related source-capture checks
 cover missing originals, cancellation without SQL changes and managed-original
 precedence. This does not certify UI, mobile, bundle recovery or hosted deployment.
+
+
+### Mobile saved surveys: requirement map
+
+| Selected check | Protected behavior |
+|---|---|
+| `mobile/tests/survey-artifacts.test.mjs` (4 groups) | List/workspace/source lifetimes; report/prose/digest/semantic scope; offline report without PDF; corrupt bytes; duplicate download; forged accepted source pins and delayed list retirement |
+| `mobile/tests/survey-view.test.mjs` (3 groups) | Empty selection, both languages, literal content, visible progress, duplicate/failure/retry and stale navigation/account/close delivery |
+| Existing artifact/original/shell checks | Preserve deck/PDF behavior; replace shell v31 with v32 without touching research caches |
+| Existing build/runner checks | Public allowlist includes dependencies and excludes private/test files; explicit full mobile gate propagates survey protocol failure |
+| `mobile/survey-service-check.mjs` | Actual trusted Python publication to independent HTTP/mobile receiver: report over256KiB, interrupted/resumed ranges, complete ledger, located vs unlocated excerpts, offline reopening, separate PDF availability and list retirement |
+
+Related52 checks pass15.073s (15.375s governed); native/HTTP journey passes5.094s
+before adding Unicode fixture text. These are selected checks, not exhaustive
+mobile/release or real-device results. Fixed critical14/release38 selections stay
+unchanged. Use `scripts/check_bounded.py.execute` for explicit Node file selections:
+the ordinary focused CLI deliberately accepts root `tests/test_*` paths. Do not
+widen its selector or run the full suite to work around that limit. One governed
+job at a time,2 logical CPUs/25% cap/90s per selected command in this slice.
