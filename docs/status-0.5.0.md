@@ -40,6 +40,13 @@ Full runtime adoption, remaining source/recovery mapping, persistent authority/h
 survey audit, old-release upgrade and hosted/physical-device acceptance remain open.
 No tag, public release, production deployment or daily-workspace migration occurred.
 
+Source after this candidate now has a backend-only durable history-commitment
+primitive: linked event hashes are committed atomically, legacy preparation is
+bounded/resumable, and backup/fresh-workspace recovery validate scoped proofs.
+Desktop/mobile persistence, HTTP mutation preconditions and authority fencing are
+not yet wired; existing candidate guarantees have not expanded. See the
+[precise contract](sync-http.md#durable-authority-history-commitments-backend-foundation).
+
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated
 candidates are listed in [workspace stabilization](workspace-stabilization-2026-11-14.md);
 they are not automatically promoted into release evidence.

@@ -392,3 +392,29 @@ def test_actual_module_cli_never_initializes_a_research_workspace(state, tmp_pat
         assert json.loads(result.stdout)["state"] == expected
         assert token not in result.stdout + result.stderr
         assert not unused.exists()
+
+
+def test_backup_refuses_inconsistent_history_without_repairing_source(state, tmp_path):
+    root, service, token, *_ = state
+    with sqlite3.connect(service.path) as conn:
+        original = conn.execute("SELECT workspace,sequence,sha256 FROM sync_history").fetchall()
+    for mode in ("different", "gap", "orphan"):
+        with sqlite3.connect(service.path) as conn:
+            if mode == "different":
+                conn.execute("UPDATE sync_history SET sha256=? WHERE sequence=2", ("0" * 64,))
+            elif mode == "gap":
+                conn.execute("DELETE FROM sync_history WHERE sequence=2")
+            else:
+                conn.execute("INSERT INTO sync_history VALUES(?,?,?)",
+                             ("workspace-a", 99, "0" * 64))
+        before = dump(service.path)
+        target = tmp_path / ("bad-history-" + mode)
+        with pytest.raises(ValueError, match="history commitment"):
+            backup.export(root, target)
+        assert dump(service.path) == before
+        assert not (target / backup.MANIFEST).exists()
+        # Reset only this synthetic corruption before the next distinct invariant.
+        with sqlite3.connect(service.path) as conn:
+            conn.execute("DELETE FROM sync_history")
+            conn.executemany("INSERT INTO sync_history VALUES(?,?,?)", original)
+    assert service.history_page(token)["checkpoint"]["sequence"] == 3

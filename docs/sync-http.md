@@ -304,3 +304,60 @@ a live process. HTTP can already have transmitted buffered request bytes before
 a rejection; this is not a confidentiality guarantee. Private TLS deployment,
 operator restore policy, durable history proofs and physical-device acceptance
 remain separate release gates. Never overwrite a running authority database.
+
+## Durable authority history commitments (backend foundation)
+
+Source after candidate c1cbef2 adds the native authority primitive below. It is
+**not yet connected to HTTP transports, the desktop journal or mobile receipts**;
+the shipped clients still use their retained-event frontier and execution guard.
+Do not describe this primitive as end-to-end rollback/split-brain protection.
+No new server, daemon, remote route or wire-version change is enabled here.
+
+`ReferenceService` exposes:
+
+| Method | Result and bound |
+|---|---|
+| `history_page(token, after=0, limit=100, *, checkpoint=None)` | Version1, authenticated workspace, starting checkpoint, exact canonical event strings, ending checkpoint and caught_up. At most 1000 events and 2 MiB of compact UTF-8 response, with bounded individual records. |
+| `prepare_history(token, *, limit=100)` | Explicit legacy backfill; version1/workspace/checkpoint/ready/remaining_events. At most 1000 events and 2 MiB of raw event text per transaction. |
+
+A checkpoint is exactly `{sequence: nonnegative_integer, sha256: lowercase_hex64}`.
+Cursors are bounded by SQLite signed 64-bit integer range.
+The initial seed is SHA-256 of UTF-8 `paperfact.sync-history.v1`, one zero byte,
+then the authenticated workspace ID. For each exact canonical event text:
+
+```text
+next_hash = SHA256(previous_32_bytes + unsigned_8_byte_big_endian_UTF8_length + UTF8_event)
+```
+
+Event strings preserve the authority's original Unicode and number representation;
+a receiver must hash the supplied bytes, not parse/re-serialize through its own
+number formatter. It must separately validate event semantics. Each positive
+sequence commitment is retained in `sync_history`, in the same SQLite transaction
+as the accepted/conflicted event, head and graph. A commitment failure rolls back
+the write; identical retries create no second event or commitment. Workspace-scoped
+seeds prevent reusing a proof after an explicit fresh-workspace recovery.
+
+Continue with the exact preceding page's checkpoint. Nonzero cursors without a
+retained checkpoint, different proofs, missing records, corrupt event text and
+unprepared history fail closed. The page recomputes only its own bounded event
+range against stored commitments. It does not scan all preceding records per
+request. A proof is integrity/continuity metadata, never authentication or a grant
+to another workspace. Existing per-request device authentication remains required.
+
+Newly created histories receive commitments as they are written. For a pre-existing
+service, construction creates the optional table but does not scan old history.
+Its original API remains available until an operator explicitly starts preparing
+that workspace. Coordinate a maintenance window before the first preparation
+batch: partial preparation blocks new event writes until subsequent batches finish.
+Retries continue from the stored prefix without rewriting research events. Other
+workspaces have independent prefixes. This phase offers a Python operator seam;
+a reviewed CLI/admin flow and active client negotiation remain to be implemented.
+
+Authority backups verify every stored commitment against the retained event prefix,
+reject gaps/orphans/different hashes without repairing the source, and preserve
+legacy/unprepared prefixes. Recovery into a new workspace replays events and builds
+new scoped commitments; it does not copy old sessions or proof authority.
+These checks do not protect against a malicious authority, unchecked database
+replacement, forged metadata, an in-place restore or two active service forks.
+End-to-end proof persistence, transactional mutation preconditions, durable authority
+identity/fencing and installed/hosted recovery acceptance remain explicit gates.

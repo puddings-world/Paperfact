@@ -1,10 +1,13 @@
 """Reference authority checks with synthetic workspaces and no network."""
 
+import hashlib
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.sync_service import ReferenceService
 
 
@@ -116,6 +119,7 @@ def test_concurrent_retries_allocate_one_event(service):
         )
     assert all(event == results[0] for event in results)
     assert service.pull(token) == results[:1]
+    assert service.history_page(token)["checkpoint"]["sequence"] == 1
 
 
 def test_concurrent_edits_accept_one_and_keep_other(service):
@@ -281,3 +285,105 @@ def test_resolution_requires_existing_conflict_for_same_entity(service, target, 
     with pytest.raises(ValueError, match="Resolution"):
         service.push(token, resolution)
     assert len(service.pull(token)) == 2
+
+
+def test_history_commitment_detects_changed_prefix_even_with_identical_frontier(tmp_path):
+    first, fork = [ReferenceService(tmp_path / name) for name in ("first.db", "fork.db")]
+    tokens = [s.enroll("workspace-a", "device-a") for s in (first, fork)]
+    for s, token, text in zip((first, fork), tokens, ("Original", "Different past"), strict=True):
+        s.push(token, operation(body=text))
+        s.push(token, operation("tail", entity="independent-note", body="Identical last event"))
+    assert first.pull(tokens[0], after=1) == fork.pull(tokens[1], after=1)
+    pages = [s.history_page(token) for s, token in zip((first, fork), tokens, strict=True)]
+    assert pages[0]["checkpoint"] != pages[1]["checkpoint"]
+    before = fork.pull(tokens[1])
+    with pytest.raises(SyncHistoryUnavailable, match="checkpoint"):
+        fork.history_page(tokens[1], after=2, checkpoint=pages[0]["checkpoint"])
+    assert fork.pull(tokens[1]) == before
+
+
+def test_history_pages_restart_retry_and_workspace_scope_preserve_exact_records(service):
+    token = service.enroll("workspace-a", "device-a")
+    events = [service.push(token, operation("event-" + str(i), entity="note-" + str(i),
+                                          body="Exact " + chr(945) + " research"))
+              for i in range(3)]
+    page = service.history_page(token, limit=1)
+    seed = hashlib.sha256(b"paperfact.sync-history.v1" + bytes([0]) + b"workspace-a").hexdigest()
+    assert page["after"] == {"sequence": 0, "sha256": seed}
+    assert json.loads(page["events"][0]) == events[0] and not page["caught_up"]
+    raw = page["events"][0].encode("utf-8")
+    expected = hashlib.sha256(bytes.fromhex(seed) + len(raw).to_bytes(8, "big") + raw).hexdigest()
+    assert page["checkpoint"] == {"sequence": 1, "sha256": expected}
+    restarted = ReferenceService(service.path)
+    assert restarted.history_page(token, limit=1) == page
+    assert restarted.push(token, events[0]["operation"]) == events[0]
+    remaining = restarted.history_page(token, after=1, checkpoint=page["checkpoint"])
+    assert list(map(json.loads, remaining["events"])) == events[1:] and remaining["caught_up"]
+    end = restarted.history_page(token, after=3, checkpoint=remaining["checkpoint"])
+    assert end["events"] == []
+    other = restarted.enroll("workspace-b", "device-b")
+    with pytest.raises(SyncHistoryUnavailable):
+        restarted.history_page(other, checkpoint=page["after"])
+    restarted.revoke(token)
+    with pytest.raises(PermissionError):
+        restarted.history_page(token)
+
+
+def test_explicit_legacy_history_preparation_resumes_without_rewriting_events(service):
+    token = service.enroll("workspace-a", "device-a")
+    service.push(token, operation())
+    with sqlite3.connect(service.path) as conn:
+        conn.execute("DROP TABLE sync_history")  # Simulate the pre-commitment schema.
+    service = ReferenceService(service.path)
+    for index in range(2, 4):
+        service.push(token, operation("legacy-" + str(index), entity="note-" + str(index)))
+    before = service.pull(token)
+    with pytest.raises(SyncHistoryUnavailable, match="preparation"):
+        service.history_page(token)
+    partial = service.prepare_history(token, limit=1)
+    assert not partial["ready"] and partial["remaining_events"] == 2
+    with pytest.raises(SyncHistoryUnavailable, match="Finish"):
+        service.push(token, operation("blocked-during-preparation", entity="later"))
+    assert service.pull(token) == before
+    while not partial["ready"]:
+        partial = service.prepare_history(token, limit=1)
+    assert partial["checkpoint"]["sequence"] == 3 and partial["remaining_events"] == 0
+    assert service.prepare_history(token, limit=1) == partial
+    assert service.pull(token) == before
+    assert list(map(json.loads, service.history_page(token)["events"])) == before
+    service.push(token, operation("new-after-preparation", entity="new-note"))
+    assert service.history_page(token)["checkpoint"]["sequence"] == 4
+
+
+def test_history_append_failure_rolls_back_event_head_and_receipt(service, monkeypatch):
+    token = service.enroll("workspace-a", "device-a")
+    before = service.history_page(token)
+    with monkeypatch.context() as patch:
+        def fail(*args):
+            raise RuntimeError("Synthetic commitment failure")
+        patch.setattr(ReferenceService, "_history_step", staticmethod(fail))
+        with pytest.raises(RuntimeError, match="Synthetic"):
+            service.push(token, operation())
+    assert service.pull(token) == [] and service.history_page(token) == before
+    assert service.push(token, operation())["sequence"] == 1
+
+
+def test_history_pages_are_bounded_and_refuse_corrupt_stored_records(service):
+    token = service.enroll("workspace-a", "device-a")
+    for index in range(10):
+        service.push(token, operation("bounded-" + str(index), entity="bounded-" + str(index),
+                                      body='\\"' * 20_000))
+    page = service.history_page(token, limit=1000)
+    assert 0 < len(page["events"]) < 10 and not page["caught_up"]
+    assert len(json.dumps(page, ensure_ascii=False).encode("utf-8")) <= 2 * 1024**2
+    with sqlite3.connect(service.path) as conn:
+        conn.execute("UPDATE sync_events SET event='{}' WHERE workspace=? AND sequence=1",
+                     ("workspace-a",))
+    with pytest.raises(SyncHistoryUnavailable):
+        service.history_page(token)
+    for after in (-1, True, "1", 2**63):
+        with pytest.raises(ValueError):
+            service.history_page(token, after=after)
+    for checkpoint in ({}, {"sequence": True, "sha256": page["after"]["sha256"]}):
+        with pytest.raises(SyncHistoryUnavailable):
+            service.history_page(token, checkpoint=checkpoint)

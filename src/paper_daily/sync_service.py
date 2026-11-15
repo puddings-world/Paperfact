@@ -16,7 +16,7 @@ from pathlib import Path
 from paper_daily.sync_blob_service import BlobServiceMixin
 from paper_daily.sync_device_management import DeviceManagementMixin
 from paper_daily.sync_graph import apply_accepted, check_preconditions
-from paper_daily.sync_journal import ID, SyncHistoryUnavailable, canonical_operation
+from paper_daily.sync_journal import ID, MAX_BYTES, SyncHistoryUnavailable, canonical_operation
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
@@ -60,6 +60,13 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 "CREATE TABLE IF NOT EXISTS sync_graph ("
                 "workspace TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,"
                 "metadata TEXT NOT NULL,PRIMARY KEY(workspace,entity_type,entity_id))"
+            )
+
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS sync_history ("
+                "workspace TEXT NOT NULL,sequence INTEGER NOT NULL CHECK(sequence>0),"
+                "sha256 TEXT NOT NULL CHECK(length(sha256)=64),"
+                "PRIMARY KEY(workspace,sequence))"
             )
 
     @staticmethod
@@ -296,6 +303,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                     json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
                 ),
             )
+            self._append_history(conn, workspace, sequence, event)
             return event
 
     def pull(self, token: str, after: int = 0, limit: int = 100) -> list[dict]:
@@ -314,3 +322,147 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 (workspace, after, limit),
             )
             return [json.loads(row["event"]) for row in rows]
+
+    @staticmethod
+    def _history_seed(workspace):
+        if not isinstance(workspace, str) or not ID.fullmatch(workspace):
+            raise SyncHistoryUnavailable("Invalid history workspace")
+        seed = b"paperfact.sync-history.v1" + bytes([0]) + workspace.encode("utf-8")
+        return hashlib.sha256(seed).hexdigest()
+
+    @staticmethod
+    def _history_step(previous, raw, workspace, sequence):
+        from paper_daily.sync_client import validate_event
+
+        if not isinstance(previous, str) or len(previous) != 64:
+            raise SyncHistoryUnavailable("History commitment is invalid")
+        try:
+            prior = bytes.fromhex(previous)
+        except ValueError as error:
+            raise SyncHistoryUnavailable("History commitment is invalid") from error
+        if len(prior) != 32 or not isinstance(raw, str):
+            raise SyncHistoryUnavailable("History commitment is invalid")
+        encoded = raw.encode("utf-8")
+        if not 0 < len(encoded) <= 2 * MAX_BYTES + 8192:
+            raise SyncHistoryUnavailable("History event exceeds the verification bound")
+        try:
+            event = json.loads(raw)
+            validate_event(event, workspace)
+            canonical = json.dumps(event, ensure_ascii=False, sort_keys=True,
+                                   separators=(",", ":"), allow_nan=False)
+        except (ValueError, TypeError, OverflowError) as error:
+            raise SyncHistoryUnavailable("History event is invalid") from error
+        if canonical != raw or event["sequence"] != sequence:
+            raise SyncHistoryUnavailable("History event identity is inconsistent")
+        return hashlib.sha256(prior + len(encoded).to_bytes(8, "big") + encoded).hexdigest()
+
+    @classmethod
+    def _history_prefix(cls, conn, workspace, sequence):
+        if sequence == 0:
+            return cls._history_seed(workspace)
+        row = conn.execute(
+            "SELECT sha256 FROM sync_history WHERE workspace=? AND sequence=?",
+            (workspace, sequence),
+        ).fetchone()
+        value = row[0] if row else None
+        if (not isinstance(value, str) or len(value) != 64
+                or any(c not in "0123456789abcdef" for c in value)):
+            raise SyncHistoryUnavailable("History commitments need preparation or recovery review")
+        return value
+
+    @classmethod
+    def _append_history(cls, conn, workspace, sequence, event):
+        if sequence > 1 and conn.execute(
+            "SELECT 1 FROM sync_history WHERE workspace=? AND sequence=?",
+            (workspace, sequence - 1),
+        ).fetchone() is None:
+            # Old authorities keep their pre-existing API until explicit preparation.
+            # Once preparation starts, finish it before accepting further writes.
+            if conn.execute("SELECT 1 FROM sync_history WHERE workspace=? LIMIT 1",
+                            (workspace,)).fetchone():
+                raise SyncHistoryUnavailable("Finish preparing retained history before writing")
+            return
+        previous = cls._history_prefix(conn, workspace, sequence - 1)
+        raw = json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = cls._history_step(previous, raw, workspace, sequence)
+        conn.execute("INSERT INTO sync_history VALUES(?,?,?)", (workspace, sequence, digest))
+
+    def prepare_history(self, token: str, *, limit: int = 100) -> dict:
+        """Explicit bounded backfill of legacy commitments; no event/content rewrite."""
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("History batch size must be between 1 and 1000")
+        with self._transaction(write=True) as conn:
+            workspace, _device = self._authenticate(conn, token)
+            sequence = conn.execute(
+                "SELECT COALESCE(MAX(sequence),0) FROM sync_history WHERE workspace=?",
+                (workspace,),
+            ).fetchone()[0]
+            high = self._high_water(conn, workspace)
+            if sequence > high:
+                raise SyncHistoryUnavailable("History commitments exceed retained events")
+            digest = self._history_prefix(conn, workspace, sequence)
+            rows = conn.execute(
+                "SELECT sequence,CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+                "FROM sync_events WHERE workspace=? AND sequence>? ORDER BY sequence LIMIT ?",
+                (2 * MAX_BYTES + 8192, workspace, sequence, limit),
+            )
+            spent = 0
+            for next_sequence, raw in rows:
+                if raw is None or next_sequence != sequence + 1:
+                    raise SyncHistoryUnavailable("Retained history is incomplete or oversized")
+                size = len(raw.encode("utf-8"))
+                if spent + size > 2 * 1024**2:
+                    break
+                digest = self._history_step(digest, raw, workspace, next_sequence)
+                conn.execute("INSERT INTO sync_history VALUES(?,?,?)",
+                             (workspace, next_sequence, digest))
+                sequence, spent = next_sequence, spent + size
+            return {"version": 1, "workspace_id": workspace,
+                    "checkpoint": {"sequence": sequence, "sha256": digest},
+                    "ready": sequence == high, "remaining_events": high - sequence}
+
+    def history_page(self, token: str, after: int = 0, limit: int = 100, *,
+                     checkpoint: dict | None = None) -> dict:
+        """Bounded exact canonical event strings and their linked prefix commitment.
+
+        This local authority API does not upgrade or authorize any remote client.
+        Nonzero continuation must present the previous page's exact checkpoint.
+        """
+        if type(after) is not int or not 0 <= after <= 2**63 - 1:
+            raise ValueError("Invalid history cursor")
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("History batch size must be between 1 and 1000")
+        with self._transaction() as conn:
+            workspace, _device = self._authenticate(conn, token)
+            high = self._high_water(conn, workspace)
+            if after > high:
+                raise SyncHistoryUnavailable("History cursor is ahead of retained events")
+            digest = self._history_prefix(conn, workspace, after)
+            observed = {"sequence": after, "sha256": digest}
+            if checkpoint is not None:
+                if (not isinstance(checkpoint, dict) or set(checkpoint) != set(observed)
+                        or type(checkpoint.get("sequence")) is not int
+                        or checkpoint != observed):
+                    raise SyncHistoryUnavailable("Retained history checkpoint does not match")
+            elif after:
+                raise SyncHistoryUnavailable("Continue with an explicitly retained checkpoint")
+            events, sequence, spent = [], after, 1024
+            rows = conn.execute(
+                "SELECT sequence,CASE WHEN length(CAST(event AS BLOB))<=? THEN event END "
+                "FROM sync_events WHERE workspace=? AND sequence>? ORDER BY sequence LIMIT ?",
+                (2 * MAX_BYTES + 8192, workspace, after, limit),
+            )
+            for next_sequence, raw in rows:
+                if raw is None or next_sequence != sequence + 1:
+                    raise SyncHistoryUnavailable("Retained history is incomplete or oversized")
+                size = len(json.dumps(raw, ensure_ascii=False).encode("utf-8")) + 2
+                if spent + size > 2 * 1024**2:
+                    break
+                candidate = self._history_step(digest, raw, workspace, next_sequence)
+                if candidate != self._history_prefix(conn, workspace, next_sequence):
+                    raise SyncHistoryUnavailable("Retained event does not match its commitment")
+                sequence, digest, spent = next_sequence, candidate, spent + size
+                events.append(raw)
+            return {"version": 1, "workspace_id": workspace, "after": observed,
+                    "events": events, "checkpoint": {"sequence": sequence, "sha256": digest},
+                    "caught_up": sequence == high}

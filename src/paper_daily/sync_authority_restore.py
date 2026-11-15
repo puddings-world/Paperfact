@@ -56,8 +56,12 @@ def _event(raw, workspace):
 
 def _scope(conn, workspace, replacement):
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if tables not in (TABLES, TABLES | {"sync_pairings"}):
+    if tables - {"sync_pairings", "sync_history"} != TABLES:
         raise ValueError("Authority recovery requires the supported reference schema")
+    if "sync_history" in tables:
+        columns = tuple(row[1] for row in conn.execute("PRAGMA table_info(sync_history)"))
+        if columns != ("workspace", "sequence", "sha256"):
+            raise ValueError("Authority history schema is unsupported")
     if "sync_pairings" in tables:
         from paper_daily.sync_device_management import PAIRING_COLUMNS
 

@@ -68,6 +68,10 @@ def test_exact_science_conflict_and_bytes_recover_with_no_old_session(snapshot, 
         for item in previous.pull(old_token)
     ]
     assert service.pull(token) == expected
+    history = service.history_page(token)
+    assert history["caught_up"] and list(map(json.loads, history["events"])) == expected
+    assert history["checkpoint"] != previous.history_page(old_token)["checkpoint"]
+
     assert service.blob_read(token, manifest["sha256"], manifest["size"], 0) == data
     assert previous.pull(old_token)[2]["outcome"] == service.pull(token)[2]["outcome"] == "conflict"
     assert dump(previous.path) == original and saved_files(source) == before

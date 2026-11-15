@@ -101,7 +101,12 @@ def _references(conn, check):
     from paper_daily.sync_client import validate_event
     from paper_daily.sync_files import referenced_blobs
     from paper_daily.sync_journal import MAX_BYTES, canonical_operation
+    from paper_daily.sync_service import ReferenceService
 
+    commitments = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_history'"
+    ).fetchone() is not None
+    history, gaps = {}, set()
     previous = {}
     rows = conn.execute(
         "SELECT workspace,sequence,operation_id,fingerprint,"
@@ -123,6 +128,19 @@ def _references(conn, check):
             or hashlib.sha256(encoded).hexdigest() != fingerprint
         ):
             raise ValueError("Authority event receipt is inconsistent")
+        if commitments:
+            prefix = history.get(workspace) or ReferenceService._history_seed(workspace)
+            digest = ReferenceService._history_step(prefix, raw, workspace, sequence)
+            saved = conn.execute(
+                "SELECT CASE WHEN length(sha256)=64 THEN sha256 ELSE 'invalid' END "
+                "FROM sync_history WHERE workspace=? AND sequence=?", (workspace, sequence),
+            ).fetchone()
+            if saved is not None:
+                if workspace in gaps or saved[0] != digest:
+                    raise ValueError("Retained history commitment is inconsistent")
+            else:
+                gaps.add(workspace)
+            history[workspace] = digest
         previous[workspace] = sequence
         if operation["action"] == "delete":
             continue
@@ -139,6 +157,13 @@ def _references(conn, check):
             ).fetchone()
             if row != ("committed", reference["size"]):
                 raise ValueError("Retained event references uncommitted or missing bytes")
+
+    if commitments and conn.execute(
+        "SELECT 1 FROM sync_history h LEFT JOIN sync_events e "
+        "ON e.workspace=h.workspace AND e.sequence=h.sequence "
+        "WHERE e.sequence IS NULL LIMIT 1"
+    ).fetchone():
+        raise ValueError("Retained history commitment has no matching event")
 
 
 def _hash(path, check, target=None):

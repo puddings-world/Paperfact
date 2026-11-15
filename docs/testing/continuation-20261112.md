@@ -7040,3 +7040,46 @@ additional worktree was introduced.
 
 - Delivery documentation gate: 58 passed in 1.87s / 5.0s total, privacy/Ruff passed.
   This is docs after the frozen candidate, not a rebuild or another release-gate run.
+
+## 2026-11-15: durable history prefix authority primitive
+
+- Previous turn progressed: native c1cbef2 delivered; docs integrated as 8da477a.
+  Verified clean worktree first. Continue the full goal; hosting/physical gates
+  do not prevent this needed local continuity work. No agent/worktree/service added.
+- Existing frontier comparison cannot distinguish changed earlier events when the
+  last event is identical. New native history_page primitive demonstrably rejects
+  that fork using a linked canonical-event digest. It is not yet a desktop/mobile/
+  HTTP change and must not be claimed as full end-to-end authority protection.
+- Existing sync_service now retains sync_history in the same event/head/graph
+  transaction; duplicate/restart proofs remain stable. Explicit bounded legacy
+  prepare_history resumes a prefix without rewriting events. Partial preparation
+  refuses new event writes until complete. Reads use bounded ranges, not a full
+  history scan per ordinary action. Exact Unicode/number event strings hash with
+  a scoped seed and length-delimited bytes. No new runtime module or dependency.
+- Backups verify optional full/partial history prefixes and reject altered/gapped/
+  orphaned commitments without repairing source. Fresh-workspace recovery accepts
+  the optional table, replays exact science/conflicts/bytes, computes a new scoped
+  history and retains credential isolation. Original legacy backup compatibility
+  remains; no owner workspace or deployed authority was opened/migrated.
+- Formatting and one mixed-line-ending edit assertion were corrected before any
+  behavior run; no red behavior result was hidden. Initial service/backup/fresh-
+  recovery slice: 72 passed in 11.82s / 12.547s governed. Added explicit corrupt
+  commitment backup checks and source/fresh-scope proof comparisons: three scoped
+  representatives passed in 1.87s / 2.609s. Existing concurrent retry now also checks
+  the single committed proof. All historical assertions retained; critical/release
+  selector counts unchanged. No historical full suite or native rebuild.
+- Next implementation must persist/validate proofs with actual receiver cursor
+  transactions, carry them through bounded HTTP/browser/native transports and check
+  mutation preconditions at the authority's write transaction. Durable identity/
+  service fencing and recovery/adoption UX remain open. No new generic skill rule
+  is justified until the shared client boundary is implemented and verified.
+
+- Integration checks: critical14 passed in 7.98s / 11.4s total; strengthened
+  concurrent-proof representative1 in 0.51s / 1.140s; actual existing JS/Python
+  HTTP protocol passed in 2.063s; docs58 in 2.13s / 5.4s. Privacy/Ruff passed.
+  Cursor bounds and conservative encoded-page delimiter accounting were reviewed
+  before checkpoint; the relevant history slice is rerun for that final boundary.
+
+- Final bounded history slice: 5 passed (35 unrelated service cases deselected) in
+  1.19s / 1.922s total. No full/release rerun or package rebuild; delivered native
+  candidate remains c1cbef2. The whole 0.5 goal remains active and incomplete.
