@@ -239,7 +239,15 @@ def remove(conn: sqlite3.Connection, paper_id: str) -> bool:
 
 
 def add_companions(conn: sqlite3.Connection, paper_id: str, limit: int = 2) -> list[str]:
-    """Pull this paper's in-corpus references forward as companion reading."""
+    """Pull this paper's in-corpus references forward as companion reading.
+
+    A companion brings none of its own. Each delivery queued two more ahead of the
+    next ranked paper, so one new paper was followed by its references' references
+    for as many nights as the chain lasted, and the newest work never arrived.
+    """
+    parent = conn.execute("SELECT role FROM queue WHERE paper_id=?", (paper_id,)).fetchone()
+    if parent and parent["role"] == "companion":
+        return []
     rows = conn.execute(
         "SELECT r.ref_paper_id AS rid, p.title, p.score, r.influential "
         "FROM refs r JOIN papers p ON p.id=r.ref_paper_id "

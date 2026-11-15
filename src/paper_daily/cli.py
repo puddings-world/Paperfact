@@ -118,6 +118,9 @@ def cmd_today(args) -> int:
             print("queue is empty -- run: paperfact rank")
             return 1
         row, path = result
+        from paper_daily import tonight
+
+        tonight.record(conn, row["id"])
         conn.commit()
 
     companions = pipeline.expand_lineage(row["id"], log=_log)
@@ -524,8 +527,17 @@ def cmd_app(args) -> int:
     except ImportError as e:
         print(f"the desktop reader needs PySide6: run scripts/setup.ps1  ({e})")
         return 1
+    paper, open_next = args.paper, args.next
+    if args.tonight and not paper:
+        from paper_daily import tonight
+
+        init_db()
+        with connect() as conn:
+            paper = tonight.paper(conn)
+        # No delivery to open on (the run failed, or was long ago): the old behaviour.
+        open_next = open_next or not paper
     return run(
-        open_next=args.next, restart=args.restart, paper=args.paper, pdf=getattr(args, "pdf", None)
+        open_next=open_next, restart=args.restart, paper=paper, pdf=getattr(args, "pdf", None)
     )
 
 
@@ -1316,6 +1328,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("app", help="open the desktop reader")
     sp.add_argument("--next", action="store_true",
                     help="open straight onto the next unread paper")
+    sp.add_argument("--tonight", action="store_true",
+                    help="open the paper the nightly run just delivered, whatever list "
+                         "is on screen (falls back to --next when there is none)")
     sp.add_argument("--restart", action="store_true",
                     help="save drafts and safely restart the running reader")
     sp.add_argument("--paper", metavar="ID",

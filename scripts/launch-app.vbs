@@ -8,7 +8,8 @@
 ' WScript.Shell.Run with intWindowStyle 0 starts the process with its window hidden,
 ' which is the one approach that does not depend on how the launcher was built.
 '
-' Optional argument: --next, to open straight onto the next unread paper.
+' Optional argument: --next, to open straight onto the next unread paper, or
+' --tonight, to open the paper the nightly run just delivered.
 
 Option Explicit
 
@@ -30,6 +31,7 @@ End If
 args = ""
 If WScript.Arguments.Count > 0 Then
     If WScript.Arguments(0) = "--next" Then args = " --next"
+    If WScript.Arguments(0) = "--tonight" Then args = " --tonight"
 End If
 
 shell.CurrentDirectory = repo
