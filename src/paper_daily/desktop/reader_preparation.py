@@ -404,12 +404,19 @@ class ReaderPreparation(QObject):
 
     def _install_current(self, request, publication):
         try:
-            return (
+            if not (
                 self._published == request.token
                 and self._matches(request)
-                and (publication.settled or _fence(self.database) == publication.fence)
                 and (publication.preview is None or saved.preview_current(publication.preview))
-            )
+            ):
+                return False
+            if not publication.settled and _fence(self.database) != publication.fence:
+                # A delayed WebEngine callback can outlive the worker's delivery.
+                # Refuse its stale input, then reprepare only the same live reader.
+                if not self._retry_later():
+                    self._error()
+                return False
+            return True
         except (OSError, ValueError):
             return False
 

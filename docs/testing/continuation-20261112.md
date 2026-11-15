@@ -8590,3 +8590,27 @@ completion, blank image, missing/invalid callbacks and distinct false predicates
 This is diagnostic instrumentation, not a rendering fix or a Mac pass. A Mac-only
 CI run is required to obtain the previously missing page-state evidence. App
 runtime source remains5945820; no daily data, accounts or hosting changed.
+
+## 2026-11-16: recover deferred saved-text admission
+
+Instrumented Mac095e099/run43772814805 reports exact page/document/main/fonts
+ready but main text absent. A governed local synthetic WebEngine probe passes
+10.453s; it is not a Mac reproduction. Source inspection identifies an unhandled
+boundary: a database write after worker delivery but before deferred WebEngine
+admission correctly refuses old HTML, yet schedules no new read for the same
+live reader. A deterministic held-callback UI case fails before the correction
+on the missing busy/retry signal.
+
+The existing admission now schedules the existing finite retry only if publication
+token, reader context and preview still match; the original fence refusal remains.
+No delayed work is admitted for changed papers/workspaces or closed owners. The
+worker performs fresh saved-data validation; there is no AI call. A newly added
+answer-case assertion initially assumed a pending-only retry link still appeared
+after an answer; it now checks the saved exchange identity, question and actual
+new answer. Existing assertions were not weakened.
+
+Affected reader/rich-view31 pass15.51s pytest/19.4s stages, with two CPUs/25% cap.
+Coverage includes unrelated UI write and real answer between delivery/callback,
+old source and paper rejection, close/drain, bounded semantic rechecks and drafts.
+This proves the source gap and its recovery, not that it caused every Mac render
+failure. The original Mac screenshot gate must still pass before delivery.

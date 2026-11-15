@@ -887,3 +887,8 @@ closing cancels pending work and a fresh dialog can finish it later. A completed
 activation may already be saved if stopping races with completion. Changed intent,
 database or registered storage is refused: refresh Current report before retrying.
 No new report/source operation versions are created by this completion action.
+
+Saved-text rendering retries locally when the same open reader changes during
+a delayed rendering callback. This does not call AI. Switching papers/workspaces
+or closing still discards obsolete delivery; persistent interference stays bounded
+and asks you to reopen rather than publishing stale content.

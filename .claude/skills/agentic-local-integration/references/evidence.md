@@ -1193,3 +1193,17 @@ or installed-device acceptance. No global rule is promoted.
   pending. Do not silently complete a newly arrived operation for an older caller.
 - Limits: report files already accepted/stored locally; no original-download,
   scientific-support, installed-process/device or hosted acceptance claim.
+
+## Retry after deferred read admission expires (2026-11-16)
+
+- Status: validated-local. A held WebEngine callback reproduces a same-reader
+  database write after worker delivery; stale HTML is refused but previously
+  left the surface without a fresh preparation request.
+- Evidence: affected reader/rich-view31 pass19.4s stages after connecting this
+  refusal to the existing finite retry. Fresh UI-setting and actual-answer writes
+  are covered; existing changed-owner/source/close guards remain.
+- Lesson: asynchronous read delivery can have a second admission boundary after
+  the worker appears idle. Recover still-current readers through bounded fresh
+  observation; do not bypass the original stale-input guard.
+- Limits: synthetic/local Qt evidence; installed Mac rendering and live devices
+  remain separate. No paid call or new transport/authorization grant is involved.

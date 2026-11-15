@@ -428,3 +428,6 @@ of old databases without new optional research tables. [Exact upgrade scope](doc
 Sync listener shutdown interrupts incomplete network reads while keeping admitted
 backend work and its authority lock alive until completion. Fragmented requests
 retain the normal read timeout.
+
+Saved reading views reprepare boundedly if an asynchronous renderer callback
+finds intervening writes in the same live workspace; stale content stays refused.

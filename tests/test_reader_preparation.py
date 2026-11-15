@@ -591,3 +591,33 @@ def test_actual_reader_load_switches_to_empty_B_then_restores_A_draft(ready, mon
     assert view.ask_box.text() == "Draft A"
     assert "resumeqa:" in view.chat_view._body
     assert len(calls) == 3
+
+
+@pytest.mark.parametrize("interference", ["ui", "answer"])
+def test_delayed_rich_admission_reprepares_after_same_reader_write(
+    ready, monkeypatch, interference,
+):
+    app, _, reader = ready
+    turn = pending_turn()
+    web = HeldWeb()
+    monkeypatch.setattr(reader.chat_view, "view", web)
+    monkeypatch.setattr(reader.chat_view, "rich", True)
+    reader.chat_view._shown = ""
+    reader.chat_view._page_id = 1
+    activate(reader)
+    settle(app, lambda: not reader.preparation.busy)
+    assert len(web.callbacks) == 1 and not web.pages
+    if interference == "answer":
+        assert research_chat.publish_answer(turn, "ANSWER AFTER WEB HANDOFF").status == "accepted"
+    else:
+        with store.connect() as connection:
+            store.set_kv(connection, "ui.after-web-handoff", "changed")
+    web.callbacks.pop()(0.0)
+    assert not web.pages, "A stale asynchronous admission must still be refused"
+    assert reader.preparation.busy, "The same reader must schedule bounded fresh preparation"
+    settle(app, lambda: not reader.preparation.busy)
+    assert len(web.pages) == 1 and "Question" in web.pages[0]
+    assert reader._chat_snapshot["rows"][0]["row"]["exchange_id"] == turn.request_id
+    assert ("ANSWER AFTER WEB HANDOFF" in web.pages[0]) is (interference == "answer")
+    assert reader.ask_box.text() == "Question"
+    assert reader._chat_snapshot["rows"]
