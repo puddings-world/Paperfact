@@ -332,7 +332,8 @@ def publish(prepared, *, cancelled=lambda: False):
     return operation
 
 
-def complete_pending(client, list_id, *, cancelled=lambda: False):
+def complete_pending(client, list_id, *, expected=None, expected_database=None,
+                     cancelled=lambda: False):
     """Finish verified local bytes after restart, without proposal replay or network.
 
     Only an actual current persisted native report may activate. Unowned staged
@@ -346,6 +347,10 @@ def complete_pending(client, list_id, *, cancelled=lambda: False):
         database_identity = generation._identity(client.journal.path)
         operation = desired_file(conn, identity)
         configured = paths(conn)
+        if expected_database is not None and database_identity != expected_database:
+            raise ValueError("Pending survey database changed after selection")
+        if expected is not None and operation != expected:
+            raise ValueError("Pending survey changed after selection; refresh first")
         if operation is None or configured is None:
             raise ValueError("No owned pending survey report or registered artifact storage")
         if not sync_survey_files.active(
@@ -358,8 +363,10 @@ def complete_pending(client, list_id, *, cancelled=lambda: False):
     with client.journal.transaction() as conn:
         if generation._identity(client.journal.path) != database_identity:
             raise ValueError("Pending survey database identity changed during completion")
+        registered = paths(conn)
         if (
-            paths(conn) is None
+            registered is None
+            or (registered[0].root, registered[1]) != (store.root, root)
             or not sync_survey_files.active(
                 lambda kind, item: client._optimistic_graph(conn)[0].get((kind, item)), operation
             )

@@ -319,7 +319,9 @@ def apply(review, *, cancelled=lambda: False):
         if result["state"] != "preserved":
             from paper_daily.survey_publication import complete_pending
 
-            complete_pending(value.staged._client, list_id, cancelled=cancelled)
+            complete_pending(
+                value.staged._client, list_id, expected=result["operation"],
+                expected_database=value.origin["database_identity"], cancelled=cancelled)
         return result
     with closing(generation._connect(database)) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")

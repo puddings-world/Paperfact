@@ -407,5 +407,7 @@ def publish(prepared, *, cancelled=lambda: False):
     if result["state"] != "preserved":
         from paper_daily.survey_publication import complete_pending
 
-        complete_pending(prepared._client, data["list_id"], cancelled=cancelled)
+        complete_pending(
+            prepared._client, data["list_id"], expected=result["operation"],
+            expected_database=data["native"], cancelled=cancelled)
     return result

@@ -850,3 +850,21 @@ without claiming a completed write was rolled back; Current report reveals the
 saved state. No provider authorization or model invocation participates. Same-
 workspace direct adoption is supported; detached mapping, installed/frozen/device
 and hosted acceptance remain separate gates.
+
+
+### Observed pending-report completion
+
+SavedReport seals its exact desired native operation separately from the applied
+version used for reading. An absent applied operation is pending too. This adds no
+wire field and grants no authority to a retained archive. `survey_reader.complete_pending`
+accepts only a sealed pending native read. The receiver checks its selected operation
+and original database identity inside the first transaction; final activation also
+checks the captured storage roots and current native lifetimes. No global DB/WAL
+mtime is repurposed as a fresh report target. Existing import/review callers now
+pin the exact operation they saved when completing local activation.
+
+The desktop uses its existing executor and read-refresh path, with deduplication,
+stop/close, failure/retry and stale delivery checks. Pending reports cannot start
+AI authorization/regeneration. Original-source byte availability stays separate
+from report activation. This completes the source-level local finish entry; frozen,
+installed/offline-device and hosted acceptance remain open.

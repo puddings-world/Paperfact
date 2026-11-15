@@ -222,7 +222,8 @@ refusal, repeat/nonreactivation, cancellation and close/drain. The88595d3 native
 candidate predates this action; a passing old packaged report cannot certify it.
 
 Interrupted native activation has the existing complete_pending backend. The
-report reader exposes a pending version; a dedicated in-app finish-local-activation
-entry for this review action is not yet wired. Verify that recovery path before
-closing the offline restart gate. Detached owner remapping, frozen/installed
+report reader now exposes Finish saved report for both first publication and an
+updated pending version. Source fixtures prove close/reopen and local completion
+without new AI or operation versions. Frozen/installed/device verification remains
+required before closing the offline restart gate. Detached owner remapping, frozen/installed
 review flow, physical devices and hosted operation remain separate requirements.

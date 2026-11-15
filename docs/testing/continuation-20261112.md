@@ -8511,3 +8511,35 @@ including altered-read refusal without SQL writes. These overlap the earlier90.
 Final critical14 passes7.53s/11.1s; docs/skill consistency60 passes1.98s/5.2s.
 No runtime source changed after these passes. The pending in-app finish-activation
 entry is explicitly retained in the release-readiness gates.
+
+## 2026-11-16: pinned pending-report completion in the desktop
+
+SavedReport now seals its exact desired native operation, separately from the
+applied version used for display. Missing applied state is pending too. Finish
+saved report uses the existing executor and local completion backend, with no AI,
+authorization, network or new source/report operation versions. Expected operation
+and original database identity are checked inside admission; registered roots,
+owners and activation are checked after materialization. Import/review callers
+also complete only the exact operation they saved. No wire format changed.
+
+New first/update scenarios14 pass32.13s/35.6s stages. They cover close/reopen,
+failure/retry, repeat/direct activation, close/cancel, newer intent/forged read,
+workspace switch and storage/database replacement. One new static check stopped
+before tests on formatting; an initial run passed10 before a new storage-change
+fixture called registration incorrectly. The actual registration API refuses moves;
+the corrected fixture explicitly injects concurrent migration/restore metadata,
+without weakening production registration or expected activation refusal.
+
+Final affected reader/publication/import/review/widget selection88 passes185.66s
+pytest/189.7s stages, governed300s/two CPUs/25% CPU cap. These overlap the14 above;
+no exhaustive historical suite was run. Production source/owner/version guards
+remain and no research expectation was weakened. Only synthetic originals and
+isolated databases were used. Candidate88595d3 predates this source. Installed
+process restart, physical devices, hosting and detached adoption remain open;
+no daily app/data, real accounts, model billing, native build or release changed.
+
+Checkpoint gates: curated critical14 passed7.90s pytest/11.5s stages;
+previous docs selection passed5.624s stages (run50950ea23fea465695c1c7320beb88f9).
+The bounded reports retain the two-processor/25% cap; the historical suite was
+not run. The earlier check process is terminal, and no validation process remained
+at the checkpoint inspection. No production code changed after the88-case pass.

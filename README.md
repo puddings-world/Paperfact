@@ -218,6 +218,7 @@ call. **Current report** returns to the saved version; retained results are
 read-only until you choose **Use this report...** and confirm a prepared review.
 This preserves previous report versions and the list's current goal, without AI.
 **Open original** verifies the retained PDF, even if today's primary PDF changed.
+**Finish saved report** completes an interrupted local save without rerunning AI.
 
 List packages preserve saved reports and original bytes for enrolled and local-only
 receivers. First-enrollment copies use fresh source mappings and retain private

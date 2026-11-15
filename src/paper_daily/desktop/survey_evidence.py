@@ -39,6 +39,11 @@ TEXT = {
         result_scope=("Read-only retained result. Viewing it does not change the current list. "
                       "Open original checks the captured PDF, not today's replacement. "
                       "Use this report requires a separate confirmation."),
+        finish="Finish saved report",
+        finish_scope="Use report files already saved here. No AI call or download.",
+        finish_busy="Finishing the locally saved report...",
+        finish_failed=("Could not finish the saved report. Its pending version is kept. "
+                       "Refresh Current report and check required files before retrying."),
         apply="Use this report...",
         apply_title="Use this retained report?",
         apply_question=("Make this the current report? Previous versions are kept. "
@@ -65,7 +70,8 @@ TEXT = {
         cancelled="Stopped. Existing research is unchanged.",
         inventory="Source inventory",
         no_passage="No original passage is recorded for this statement.",
-        pending="An updated report is pending. Showing the retained version.",
+        pending=("Saved report files are waiting for local completion. "
+                 "Showing the available version."),
         failed=(
             "Could not read the report or original. Refresh to retry; "
             "existing research is unchanged."
@@ -83,6 +89,24 @@ TEXT = {
         not_selected="not selected",
     ),
     "zh-TW": {
+        "finish_scope": (
+            "\u4f7f\u7528\u5df2\u5132\u5b58\u65bc\u672c\u6a5f\u7684\u5831\u544a\u6a94"
+            "\u6848\uff0c\u4e0d\u547c\u53eb AI \u6216\u4e0b\u8f09\u3002"
+        ),
+        "finish": (
+            "\u5b8c\u6210\u5831\u544a\u8f09\u5165"
+        ),
+        "finish_busy": (
+            "\u6b63\u5728\u5b8c\u6210\u5df2\u5132\u5b58\u7684\u672c\u6a5f\u5831\u544a"
+            "..."
+        ),
+        "finish_failed": (
+            "\u672a\u80fd\u5b8c\u6210\u5831\u544a\u8f09\u5165\uff0c\u5f85\u5b8c\u6210"
+            "\u7248\u672c\u4ecd\u4fdd\u7559\u3002\u8acb\u91cd\u65b0\u6574\u7406\u76ee"
+            "\u524d\u5831\u544a\u4e26\u6aa2\u67e5\u6240\u9700\u6a94\u6848\u5f8c\u518d"
+            "\u91cd\u8a66\u3002"
+        ),
+
         "apply": (
             "\u5957\u7528\u9019\u4efd\u5831\u544a..."
         ),
@@ -150,8 +174,8 @@ TEXT = {
         ),
         "ready": "\u5df2\u5132\u5b58\u5831\u544a",
         "pending": (
-            "\u65b0\u7248\u5831\u544a\u5c1a\u672a\u5099\u59a5\uff0c\u76ee"
-            "\u524d\u986f\u793a\u4fdd\u7559\u7684\u7248\u672c\u3002"
+            "\u5831\u544a\u6a94\u6848\u7b49\u5f85\u5b8c\u6210\u672c\u6a5f\u8f09\u5165"
+            "\uff0c\u76ee\u524d\u986f\u793a\u53ef\u7528\u7248\u672c\u3002"
         ),
         "failed": (
             "\u7121\u6cd5\u8b80\u53d6\u5831\u544a\u6216\u539f\u6587\u3002"
@@ -281,6 +305,11 @@ class SavedSurveyPane(QWidget):
         self.refresh.clicked.connect(self.reload)
         top.addWidget(self.status, 1)
         top.addWidget(self.refresh)
+        self.finish = QPushButton(self.words["finish"])
+        self.finish.setAutoDefault(False)
+        self.finish.setToolTip(self.words["finish_scope"])
+        self.finish.clicked.connect(self.finish_pending)
+        top.addWidget(self.finish)
         self.results = QPushButton(self.words["results"])
         self.results.setAutoDefault(False)
         self.results.clicked.connect(self.load_results)
@@ -357,6 +386,10 @@ class SavedSurveyPane(QWidget):
         self.refresh.setEnabled(idle and self._review is None)
         self.results.setEnabled(idle and self._review is None)
         archive = self.saved is not None and self.saved.data["kind"] == "retained"
+        pending = (self.saved is not None and self.saved.data["kind"] == "native"
+                   and self.saved.data["update_pending"])
+        self.finish.setVisible(pending)
+        self.finish.setEnabled(idle and pending and self._review is None)
         self.apply_result.setVisible(archive)
         self.apply_result.setEnabled(idle and archive and self._review is None)
         self.result_selector.setEnabled(idle and self._review is None)
@@ -434,6 +467,18 @@ class SavedSurveyPane(QWidget):
         self.saved = result
         self.view.setHtml(render(result.data, self.words))
         self.status.setText(self.words["result_scope"])
+
+    def finish_pending(self):
+        if (self.future is not None or self._review is not None or self.saved is None
+                or not self.current() or self.saved.data["kind"] != "native"
+                or not self.saved.data["update_pending"]):
+            return
+        saved, cancel = self.saved, self.cancelled.is_set
+        self._start(lambda: survey_reader.complete_pending(saved, cancelled=cancel),
+                    self._finished_pending, self.words["finish_busy"])
+
+    def _finished_pending(self, _operation):
+        self.reload()
 
     def review_result(self):
         if (self.future is not None or self._review is not None or self.saved is None
@@ -591,7 +636,7 @@ class SavedSurveyPane(QWidget):
         future, callback = self.future
         self.future = None
         result, delivered = None, False
-        applying = callback == self._applied
+        applying = callback in (self._applied, self._finished_pending)
         try:
             result = future.result()
             if not self.closing and self.cancelled.is_set():
@@ -611,7 +656,9 @@ class SavedSurveyPane(QWidget):
                 self.status.setText(
                     self.words["apply_stopped" if applying else "cancelled"]
                     if self.cancelled.is_set() else self.words[
-                        "apply_failed" if applying or callback == self._review_ready else "failed"]
+                        "finish_failed" if callback == self._finished_pending
+                        else "apply_failed" if applying or callback == self._review_ready
+                        else "failed"]
                 )
         finally:
             if isinstance(result, survey_result_review.Review) and not delivered:

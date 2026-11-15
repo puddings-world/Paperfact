@@ -327,7 +327,8 @@ class SurveyDialog(QDialog):
             source and self._workspace_matches() and not self._running() and not self._waiting()
             and self.saved_report.future is None
             and (self.saved_report.saved is None
-                 or self.saved_report.saved.data["kind"] != "retained")
+                 or self.saved_report.saved.data["kind"] != "retained"
+                 and not self.saved_report.saved.data["update_pending"])
         )
 
     def _run_sources(self):
@@ -336,6 +337,9 @@ class SurveyDialog(QDialog):
         saved = self.saved_report.saved
         if saved is not None and saved.data["kind"] == "retained":
             self.saved_report.status.setText(self.saved_report.words["result_scope"])
+            return
+        if saved is not None and saved.data["update_pending"]:
+            self.saved_report.status.setText(self.saved_report.words["pending"])
             return
         from paper_daily.desktop.ai_access import requires_ai
 

@@ -894,3 +894,26 @@ A deterministic database mutation checks one fresh read; continuous changes stop
 after two attempts. The existing physical replacement case waits for Windows'
 read lease before replacement and keeps its original no-job/no-write assertions.
 No new case enters the curated critical/release selectors.
+
+
+## Saved-report interruption recovery
+
+The [pending-report scenarios](../../tests/test_survey_pending_ui.py) use real
+SQLite report/source intents and synthetic originals. Both first publication and
+an update over an existing applied version are covered. They do not call a model,
+request account login, download files or use a real research workspace.
+
+| Journey | Observable requirement |
+|---|---|
+| Close/reopen, then finish | The selected saved report becomes applied; no new source/report operation versions appear |
+| Failure and retry | A local activation error preserves the prior applied state and pending intent; retry completes that same intent |
+| Repeated activation | One worker starts; repeated clicks and direct reactivation cannot create duplicate work |
+| Close while running | Cancellation before write preserves pending state; a fresh dialog can finish later |
+| Newer report arrives | An old read cannot activate the newer intent or rewrite it as the old selection |
+| Workspace changes | Accepted work stays bound to the original database; stale UI delivery is dropped and no other database is created |
+| Storage/database changes | Rebinding during materialization or replacing the database refuses activation |
+
+These are source/widget scenarios. Dialog reopen is not an installed OS-process
+restart, a physical Mac/iPhone check, a hosted deployment or proof that every
+original PDF has downloaded. The completion action concerns accepted local report
+files; original availability remains independently verified when opened.

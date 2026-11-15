@@ -871,3 +871,19 @@ retrying: a completed save may already be present. Review staging uses the
 user-scoped OS temporary directory and closes its exact owned stage on cancel,
 completion or dialog drain. The88595d3 installers predate this source workflow.
 No sources are downloaded by this action, and an oversized input fails visibly.
+
+
+### Finish an interrupted saved report
+
+If Current report shows local completion pending, choose **Finish saved report**.
+This uses the accepted report files already stored on this device, without AI,
+account login or a download. It shows the available report while finishing and
+refreshes the saved version afterward. Original PDFs keep their independent
+availability checks; finishing a report does not declare all originals downloaded.
+
+The button also appears when the first report was saved but never activated.
+Repeated clicks start one worker. Failure keeps the pending intent for retry;
+closing cancels pending work and a fresh dialog can finish it later. A completed
+activation may already be saved if stopping races with completion. Changed intent,
+database or registered storage is refused: refresh Current report before retrying.
+No new report/source operation versions are created by this completion action.

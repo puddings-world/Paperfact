@@ -42,6 +42,7 @@ def _signature(value):
                 id(value._proof),
                 id(value._store),
                 value._archive,
+                value._desired,
             ]
         ),
         "sha256",
@@ -70,6 +71,7 @@ class SavedReport:
     _store: object = field(repr=False)
     _seal: object = field(repr=False)
     _archive: tuple | None = field(default=None, repr=False)
+    _desired: object = field(default=None, repr=False)
 
     @property
     def data(self):
@@ -99,7 +101,7 @@ def read(database, list_id, *, cancelled=lambda: False):
     database = Path(database).resolve(strict=True)
     before = _stamp(database)
     _cancel(cancelled)
-    operation = proof = store = None
+    operation = proof = store = desired = None
     data = None
     with closing(_readonly_connection(database)) as conn:
         conn.execute("BEGIN")
@@ -113,7 +115,8 @@ def read(database, list_id, *, cancelled=lambda: False):
                 if client is None:
                     raise ValueError("Saved report requires its enrolled workspace")
                 graph = client._optimistic_graph(conn)[0]
-                operation = applied_file(conn, desired["entity_id"]) or desired
+                applied = applied_file(conn, desired["entity_id"])
+                operation = applied or desired
                 if (
                     not owner_current(conn, operation)
                     or operation["parents"] != desired["parents"]
@@ -145,7 +148,7 @@ def read(database, list_id, *, cancelled=lambda: False):
                             operation=original,
                         )
                     )
-                data = dict(kind="native", sources=sources, update_pending=operation != desired)
+                data = dict(kind="native", sources=sources, update_pending=applied != desired)
         if data is None:
             if _binding(conn, tables):
                 data = dict(kind="none", sources=[], update_pending=False)
@@ -182,7 +185,8 @@ def read(database, list_id, *, cancelled=lambda: False):
         data["report"] = body["report"]
     data["list_id"] = list_id
     result = SavedReport(
-        database, before, canonical_json(data).decode(), proof, operation, store, ""
+        database, before, canonical_json(data).decode(), proof, operation, store, "",
+        _desired=desired,
     )
     object.__setattr__(result, "_seal", _signature(result))
     if not result.current():
@@ -190,6 +194,28 @@ def read(database, list_id, *, cancelled=lambda: False):
             "Saved report changed while reading; refresh to inspect its current version"
         )
     return result
+
+
+def complete_pending(saved, *, cancelled=lambda: False):
+    """Finish only the displayed owned pending intent, with no AI/network or new grant."""
+    from paper_daily import survey_publication
+
+    _cancel(cancelled)
+    if (not isinstance(saved, SavedReport) or saved._archive is not None
+            or not hmac.compare_digest(saved._seal, _signature(saved))
+            or saved.data["kind"] != "native" or not saved.data["update_pending"]
+            or saved._desired is None):
+        raise ValueError("Completion requires an observed pending native report")
+    expected = json.loads(canonical_json(saved._desired))
+    identity = list(saved._stamp[0][1][:2])
+    if identity[1] <= 0:
+        raise ValueError("Pending report has no stable database identity")
+    client = runtime(database=saved._database)
+    if client is None or client.journal.workspace_id != expected["workspace_id"]:
+        raise ValueError("Pending report workspace changed; refresh first")
+    return survey_publication.complete_pending(
+        client, saved.data["list_id"], expected=expected, expected_database=identity,
+        cancelled=cancelled)
 
 
 def _archive_stamp(path):

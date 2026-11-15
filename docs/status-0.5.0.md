@@ -240,3 +240,20 @@ The check runner now binds child Python imports to the selected checkout's src,
 preventing a shared editable virtualenv from silently validating another branch.
 Affected report UI/worker/check-runner selection:85 pass in103.0s total. These
 are source fixtures, not installed-device/provider or hosted acceptance.
+
+
+### Source after563b708: finish locally saved reports
+
+Finish saved report now handles first publication and later pending updates in
+the existing report pane. It completes accepted on-device report files without
+AI, login, download or new operation versions. The selected desired operation,
+original database identity, registered storage and native owners are pinned;
+changed targets are refused. Close/reopen, failure/retry, duplicate activation,
+workspace switch and storage/database replacement have source fixture coverage.
+Pending state no longer disappears merely because no older applied report exists.
+
+Affected saved readers, publishers/imports, review callers and widgets88 pass
+185.66s pytest/189.7s all stages under the existing two-CPU/25% governor. This is
+source validation;88595d3 remains the native candidate and predates this workflow.
+Frozen/installed Mac/Windows, physical mobile, hosted operation and detached
+mapping/runtime-adoption requirements remain open.

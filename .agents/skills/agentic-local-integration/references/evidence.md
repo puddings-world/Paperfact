@@ -1178,3 +1178,18 @@ or installed-device acceptance. No global rule is promoted.
   actual write transaction. A sealed archive read alone still cannot publish.
 - Limits: same original database/binding/lifetimes and retained members. Detached
   remapping and installed/frozen/device/provider/hosted acceptance remain open.
+
+
+## Finish the observed persisted report intent (2026-11-16)
+
+- Status: validated-local. Device-local materialization completes accepted report
+  metadata without replaying inference or creating new publication operations.
+- Evidence: first/update interruption14 pass35.6s stages; affected reader/import/
+  review/widget88 pass189.7s. Reopen, retry, duplicate activation, close/cancel,
+  stale intent, copied database and registered-root change are covered. Account
+  authorization/model calls are forbidden by the fixtures.
+- Lesson: pin the selected desired operation and original database in admission,
+  then recheck storage/owners after off-lock bytes. Missing applied state is still
+  pending. Do not silently complete a newly arrived operation for an older caller.
+- Limits: report files already accepted/stored locally; no original-download,
+  scientific-support, installed-process/device or hosted acceptance claim.
