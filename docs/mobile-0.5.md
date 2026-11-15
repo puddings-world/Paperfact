@@ -369,7 +369,7 @@ verified/total targets and `whole_workspace_offline_verified: false`. Cached-onl
 verification can run without a connected transport. Source context must still
 match at completion; byte equality alone cannot replace source ownership/lifetime.
 
-Shell v29 is built and verified locally, newer than the delivered cb6ca66
+Shell v29 is built and verified locally, included in the delivered c1cbef2
 native/mobile candidate, and has not been hosted. Windows synthetic core/protocol tests pass. Actual isolated
 Chrome preparation, repeated activation, EN/ZH phone-width rendering, a fresh
 service-worker-controlled offline document and transport-free PDF verification
@@ -385,13 +385,14 @@ that browser exits; no personal profile or account is reused.
 
 ```powershell
 $env:PAPERFACT_TEST_JOURNEY = 'offline-reading'
-$env:PAPERFACT_TEST_ARTIFACT = "$PWD/build/mobile-v29-reading-20261115"
-$env:PAPERFACT_TEST_ARTIFACT_ID = '900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284'
+$env:PAPERFACT_TEST_ARTIFACT = "$PWD/build/candidate-43688772032/mobile-web"
+$env:PAPERFACT_TEST_ARTIFACT_ID = '6573854331ecc52eebe3e10d63d3901dc3aa8e2c4fe34bdfebd36755745b41eb'
 $env:PAPERFACT_TEST_SCREENSHOTS = "$PWD/build/mobile-offline-reading-acceptance"
 node mobile/browser-check.mjs 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 ```
 
-First build the optional artifact with `node scripts/build_mobile.mjs --output
+The example uses the [CI mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43688772032/artifacts/14151596876).
+Alternatively, first build the optional artifact with `node scripts/build_mobile.mjs --output
 NEW_DIRECTORY`, then use its returned directory/ID above. Without `PAPERFACT_TEST_ARTIFACT`, the same journey exercises current source
 assets. `PAPERFACT_TEST_ARTIFACT_ID` is the optional expected content hash. On
 macOS/Linux set those variables with `export NAME=value` and pass the installed

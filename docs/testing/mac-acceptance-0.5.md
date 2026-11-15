@@ -1,8 +1,8 @@
 # v0.5 Apple Silicon acceptance
 
 Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43680889932](https://github.com/puddings-world/Paperfact/actions/runs/43680889932),
-clean commit `cb6ca667b0a95f6d0f49a802bcba6415260d0fd6` (`0.5.0.dev`).
+available from [run 43688772032](https://github.com/puddings-world/Paperfact/actions/runs/43688772032),
+clean commit `c1cbef20d48d29e2767bed60a6393298819389d4` (`0.5.0.dev`).
 The same run includes matching Windows/Linux installers and verified mobile web assets.
 Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
 `provenance-macos` for source identity, and `acceptance-macos` for the frozen
@@ -10,10 +10,10 @@ acceptance report.
 
 Exact Mac downloads (GitHub sign-in may be required for Actions artifacts):
 
-- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43680889932/artifacts/14147654648): DMG inside the 279,528,381-byte artifact archive.
-  Archive SHA-256: `35ef668cfba9375d00e8a9dc498b47b5ebda0b843299ca70ab0745d5f5c3a73a`.
-- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43680889932/artifacts/14148092535): synthetic `original.zip`, not private research.
-  Archive SHA-256: `3c0a0802743d19c88281b02ade314f522b5ab5615574b7d20c03cb65329dd17e`.
+- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43688772032/artifacts/14151871485): DMG inside the 279,275,526-byte artifact archive.
+  Archive SHA-256: `4a6c33e2ec5158a3d87498989360ec5c69b74b67850f54b5138d0fadc29a1a81`.
+- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43688772032/artifacts/14151756764): synthetic `original.zip`, not private research.
+  Archive SHA-256: `180bb10a10e223c86906fc46c9ea7b1f3b0bf2fb69747b1c9ad3e4576964749b`.
 
 These hashes identify the downloaded GitHub artifact ZIPs, not the contained DMG
 or research ZIP. All three native builds use the same commit above. This candidate
@@ -21,11 +21,14 @@ includes received-plus-acknowledged history guards, recorded deep/section readin
 retirement, physical workspace-window routing, known CLI/MCP import preparation,
 private control/account exclusions, HTTP execution pinning, context-summary
 retirement, overview evidence labels, HTTP-cache exclusion and scoped citation
-graphs, v28 offline citation cards and first-sync compound/private-text history.
+graphs, v29 offline citation cards and single-paper reading preparation and first-sync compound/private-text history.
 It also includes the nightly delivered-paper opener and analysis prompt; those
 banner controls remain local. This candidate also retains unreferenced canonical
 reading text privately and offers explicit, default-off automatic sync when
-joining another desktop. Installing it does not provision a shared service or
+joining another desktop. It also includes focal-only offline preparation of exact native annotation/Lineage
+originals, without activating unrelated primary PDFs. The matching mobile artifact
+passed actual Windows Chromium preparation and fresh offline reload; this does not
+certify physical Safari storage. Installing it does not provision a shared service or
 grant startup sync permission. The new join option still needs physical Keychain
 and two-device acceptance; source/Qt controller tests do not certify that gate.
 

@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered common native candidate cb6ca66/run 43680889932: v28 mobile citations, private referenced/unreferenced text, merged nightly controls and explicit new-folder startup sync. All three native reports and source first-sync representatives passed. New source extends focal-only offline preparation to exact annotation/Lineage originals with native pins; not yet packaged. Mobile source v29 adds single-paper offline preparation; core/protocol and actual Chromium artifact offline reload pass; physical device/hosted gates remain open. Exact downloads: Mac guide; evidence: continuation ledger. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, public release or deployment. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered common clean candidate c1cbef2/run 43688772032: selected native annotation/Lineage originals, mobile v29 single-paper offline reading, preserved private history/text and default-off join startup sync. Local curated release and all three native reports pass; actual CI mobile artifact passes Windows Chrome offline reload. Exact downloads and physical gates: Mac guide; evidence: continuation ledger. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, public release or deployment. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

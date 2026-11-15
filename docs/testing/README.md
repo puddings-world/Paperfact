@@ -90,13 +90,13 @@ The release workflow runs the common `release` selection once, on the Windows
 tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
 Manual candidate builds use `critical`, not the larger release selection. All
 build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
-Common candidate [run 43680889932](https://github.com/puddings-world/Paperfact/actions/runs/43680889932)
-passed critical and frozen acceptance on Windows/Mac/Linux for clean `cb6ca66`:
+Common candidate [run 43688772032](https://github.com/puddings-world/Paperfact/actions/runs/43688772032)
+passed critical and frozen acceptance on Windows/Mac/Linux for clean `c1cbef2`:
 14 critical cases plus one source first-sync representative per OS; four PDFs preserved; three-original/five-quote audit;
 CLI/MCP retry/restart and same-workspace handoff. The packaged sync service passed
 authenticated pull, restart/stale-execution refusal and explicit reconnection on
 each OS. Mac also passed three reader starts and native foreground/close; Linux
-passed AppImage CLI/MCP. Native jobs took 6m51s / 5m08s / 3m12s respectively.
+passed AppImage CLI/MCP. Native jobs took 6m45s / 4m37s / 3m09s respectively.
 Windows mobile-artifact tests passed 5/5 with zero failures under fail-fast Bash.
 Earlier failures and fixes remain in the dated ledger. No gate selectors added.
 Installed upgrades, long-running use, own-provider login, hosted sync and physical

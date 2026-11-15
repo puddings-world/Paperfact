@@ -6988,3 +6988,55 @@ additional worktree was introduced.
   This is automated source evidence, not installed/hosted/physical acceptance.
 - Native candidate dispatch/results and exact build identity will be recorded
   only after the workflow reports them. No tag, public release or deployment.
+
+## 2026-11-15: common native c1cbef2 candidate delivered
+
+- Exact clean source c1cbef20d48d29e2767bed60a6393298819389d4, 0.5.0.dev,
+  manual run https://github.com/puddings-world/Paperfact/actions/runs/43688772032.
+  All three build jobs succeeded; draft job skipped. No release/tag/deployment.
+  Existing run was observed throughout, not restarted on output delays.
+- Native job durations: Windows 132734753245, 405s; Mac arm64 132734753036, 277s;
+  Linux 132734753295, 189s. CI critical14: Windows 4.64s / 9.1s total;
+  Mac 4.76s / 8.0s (5 warnings); Linux 3.40s / 6.0s. First-sync representative1:
+  Windows 2.94s / 5.6s; Mac 1.79s / 4.0s (5 warnings); Linux 9.12s / 11.0s.
+  These source/native fixture checks overlap with the local curated selection.
+- Downloaded each acceptance/provenance report and checked actual JSON, not just
+  green jobs: exact clean source/version, passed packaged-acceptance.v1, four PDFs,
+  three handoff flags, six execution/restart/citation-graph flags and CLI/MCP38
+  with retry/restart. Linux AppImage checks also pass. Mac arm64 three reader starts
+  and mac-launch-services-foreground pass. An initial ad-hoc check wrongly expected
+  host.os=Darwin; actual schema says macOS. Inspected raw values, then verified the
+  exact macOS/arm64 contract without changing any product/test behavior.
+- Windows install/reinstall/uninstall and research preservation pass in acceptance
+  mode; older-release upgrade and registry/shortcuts checks explicitly remain false.
+  Inner Windows installer SHA-256:
+  a98fc54d353e4904ef0418e110ae2b609ed761f06dddcaa3b116b60aa65d7bad.
+- GitHub artifact archives (not inner installers), all same run/source:
+  Windows build 14151034252, 184240765 bytes,
+  9daaf27636d8611e54e547d6437f011804101135df7ed8ee761f290807f81717;
+  Mac build 14151871485, 279275526 bytes,
+  4a6c33e2ec5158a3d87498989360ec5c69b74b67850f54b5138d0fadc29a1a81;
+  Linux build 14150674932, 282204707 bytes,
+  1240dad09bdb1c93558d1e84eba2ea218fab5b0018cba93d5c572111dce7f001;
+  Mac synthetic research 14151756764, 7597 bytes,
+  180bb10a10e223c86906fc46c9ea7b1f3b0bf2fb69747b1c9ad3e4576964749b.
+- CI mobile archive 14151596876, 888231 bytes,
+  e15fca4ef32368bc679ecd2b907573289e492feec98886abb94d3286898ed05f.
+  Windows static-artifact tests5 passed0failed. Downloaded its real bytes and
+  independently verified v29: 50 files/3940356 bytes, content ID
+  6573854331ecc52eebe3e10d63d3901dc3aa8e2c4fe34bdfebd36755745b41eb.
+  It differs from the earlier local artifact; do not substitute the older hash.
+  Existing opt-in browser journey passed against this exact CI artifact in 2.953s
+  governed: actual repeated action, EN/ZH touch layout, fresh offline document,
+  transport-free cached PDF verification and unchanged research outbox.
+  Latest bounded browser result now points to CI bytes; earlier local result remains
+  described in preceding entries. No physical Safari/phone durability claim.
+- Mac guide/current status/board/testing index now identify this candidate. Older
+  cb6ca66 records remain historical evidence. Dev bundles require explicit replacement
+  with the same isolated test data, not auto-update or daily-data migration.
+  Remaining runtime/source mapping, persistent authority/history, survey audit,
+  installed upgrade/input/native vault, live providers, hosted and M01-M21 physical
+  journeys remain open. No new portable skill rule or global installation needed.
+
+- Delivery documentation gate: 58 passed in 1.87s / 5.0s total, privacy/Ruff passed.
+  This is docs after the frozen candidate, not a rebuild or another release-gate run.

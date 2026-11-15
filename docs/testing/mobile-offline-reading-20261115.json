@@ -1,7 +1,7 @@
 {
   "status": "passed",
   "journey": "offline-reading",
-  "artifact": "900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284",
+  "artifact": "6573854331ecc52eebe3e10d63d3901dc3aa8e2c4fe34bdfebd36755745b41eb",
   "before": {
     "files": 1,
     "outbox": 0
