@@ -239,3 +239,14 @@ output contains only the runtime allowlist, manifest and generated Nginx static
 map; the host does not need Node. [Flags/API/limits and operator handoff](sync-service-admin.md#build-and-verify-the-public-pwa-artifact).
 The Nginx example is a review artifact; Nginx/certificate provisioning and Linux
 validation are external operator gates, not part of ordinary desktop setup.
+
+
+Frozen acceptance also runs `instance-handoff`: the primary synthetic reader uses
+its ordinary 20-second smoke close, while a second launch must exit within 15
+seconds with the primary still alive. The second launch has a 60-second smoke
+limit, so a duplicate window cannot pass by closing itself before the check.
+The source-side Qt probe waits for the expected workspace instance endpoint;
+primary/secondary logs stay private in the chosen output folder. Failure reaps
+only the verifier-owned primary; no unrelated app or data directory is stopped.
+This is a native packaged same-workspace check, not cross-version compatibility,
+first-use consent acceptance, a different-workspace check or a physical Mac result.

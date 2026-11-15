@@ -6002,3 +6002,33 @@ additional worktree was introduced.
   14 passed in 7.97s / 11.5s total. Privacy/Ruff and CRLF-aware whitespace passed.
   The 17-case affected check took 12.5s; no historical test count or percentage
   is used as a completion measure, and no parallel test was launched.
+
+
+## 2026-11-15: require actual packaged same-workspace handoff
+
+- Previous turn made progress: workspace-window isolation 2e8a229 integrated and
+  pushed with short source/Qt evidence. Native behavior remained unproved.
+- Existing frozen acceptance only started readers sequentially. Added one actual
+  concurrent-launch stage to the same verifier and report: host Qt connects to
+  the expected fixture root's endpoint; a second frozen invocation must return
+  while its primary stays alive; primary must then exit normally. The second
+  smoke limit is 60s versus a 15s process timeout, so a duplicate window cannot
+  falsely pass via a short automatic close. Primary uses a 20s smoke close.
+- Only the isolated synthetic recipient and verifier-owned process are used.
+  Primary/secondary logs are private, abnormal exits/tracebacks/timeouts fail,
+  no retry masks a failure, and failure cleanup terminates only its owned child.
+  No old app, daily data, provider login or cloud service is touched.
+- Expanded existing orchestration tests with live-primary success, absent endpoint,
+  secondary error/timeout and primary loss. The fake-child suite passed 17 in
+  1.56s / 4.7s total before final assertion-only/report documentation updates;
+  this is not native acceptance evidence. Existing frozen checks are retained.
+- The old common b4ec451 packages do not contain this check or later source fixes.
+  A new coherent native build is planned after local gates, not one build per
+  small commit. Native report facts will be recorded separately after observation.
+  Cross-version coexistence, first-use consent, distinct-workspace process behavior,
+  physical Mac/phone, complete mapping/authority protocol and hosted gates remain.
+- Final local gates: docs 58 passed in 1.93s / 5.4s total; default critical
+  14 passed in 7.44s / 10.7s total; updated roundtrip report assertion 1 passed
+  in 0.80s / 3.8s total (overlap). Privacy/Ruff/whitespace passed. The new handoff
+  does not acknowledge first-use consent; it uses the already acknowledged
+  synthetic recipient. Native execution, not these mocks, must prove handoff.

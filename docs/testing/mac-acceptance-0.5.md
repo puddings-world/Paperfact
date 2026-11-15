@@ -163,9 +163,11 @@ The existing CI still captures its generated fixture logs separately.
 | `lineage-audit`, `lineage-audit-result` | Actual frozen JSON CLI checks the imported synthetic corpus: three originals, five located quotations; no semantic-support claim |
 | `file-fidelity`, `research-content` | Exact exported PDF/assets plus saved analysis and membership |
 | `local-integration`, `appimage-integration` | Frozen JSON CLI and actual MCP stdio retry/restart behavior; AppImage variant when present |
+| `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (new candidates only, not yet in the b4ec451 report) |
 | `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
 
-`timeout` means a child exceeded its 90-second limit; `missing_file` means a
+`timeout` means a child exceeded its bounded limit (normally 90 seconds; the
+second-instance launch has a 15-second limit); `missing_file` means a
 required executable/tool or generated input was unavailable. `process_failed`
 records a nonzero child exit; `background_traceback` or `app_traceback` detects
 an error despite apparent process success. Validation/assertion failures stop

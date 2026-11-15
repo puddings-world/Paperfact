@@ -292,3 +292,12 @@ rollback and HTTPS gates](sync-service-admin.md#build-and-verify-the-public-pwa-
 The step has a two-minute deadline within the existing 30-minute build job.
 GitHub Actions, signed publishing and external host/device validation remain
 unobserved for this checkpoint.
+
+
+The frozen report now includes `instance_handoff`: expected local endpoint ready,
+a second launch exits while the primary remains alive, and normal primary exit.
+A missing endpoint, duplicate-window timeout or abnormal exit fails acceptance;
+no automatic retry changes that result. The generated fixture alone is used.
+Existing import/export/PDF, audit, Mac three-start/foreground and Windows installer
+checks remain required. This stage does not certify old-release coexistence or
+physical-device/hosted sync; follow the separate Mac acceptance journey.

@@ -289,6 +289,8 @@ Prepared and restored workspaces open in separate windows without replacing
 current drafts. Workspace focus is bound to the exact destination database;
 case-distinct Mac/Linux data roots remain separate. Close older app processes
 before installing a test build; this is not an installed-upgrade guarantee.
+New candidate acceptance also checks that a second launch uses the existing
+workspace window, in addition to import/read/export and PDF preservation.
 
 The recovery review compares saved and current research before confirmation:
 

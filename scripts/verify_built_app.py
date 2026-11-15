@@ -32,6 +32,7 @@ STAGES = {
     "import-again",
     "fixture-ack",
     "reader",
+    "instance-handoff",
     "export",
     "file-fidelity",
     "research-content",
@@ -385,6 +386,74 @@ def check_process(result, label):
         )
 
 
+
+def _instance_probe():
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtNetwork import QLocalSocket
+
+    from paper_daily.workspace_open import instance_key
+
+    app = QCoreApplication.instance() or QCoreApplication([])
+
+    def ready(root):
+        app.processEvents()
+        socket = QLocalSocket()
+        socket.connectToServer(instance_key(root))
+        connected = socket.waitForConnected(100)
+        socket.abort()
+        return connected
+
+    return ready
+
+
+def _instance_handoff(command, env, out):
+    """Two real launches in one synthetic workspace; reap only the owned child."""
+    label = "instance-handoff"
+    ready = _instance_probe()
+    log = out / "instance-primary.log"
+    with log.open("wb") as stream:
+        primary = subprocess.Popen(
+            list(map(str, command)), cwd=ROOT,
+            env={**env, "PAPERFACT_SMOKE_SECONDS": "20"},
+            stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            while not ready(Path(env["PAPERFACT_DATA"])):
+                if primary.poll() is not None:
+                    raise CheckFailure(label, "instance_not_ready", primary.returncode)
+                if time.monotonic() >= deadline:
+                    raise CheckFailure(label, "instance_not_ready")
+                time.sleep(0.1)
+            try:
+                secondary = subprocess.run(
+                    list(map(str, command)), cwd=ROOT,
+                    env={**env, "PAPERFACT_SMOKE_SECONDS": "60"},
+                    stdin=subprocess.DEVNULL, capture_output=True, timeout=15,
+                )
+            except subprocess.TimeoutExpired as error:
+                (out / "instance-secondary.log").write_bytes(
+                    (error.stdout or b"") + (error.stderr or b""),
+                )
+                raise
+            (out / "instance-secondary.log").write_bytes(secondary.stdout + secondary.stderr)
+            check_process(secondary, label)
+            if primary.poll() is not None:
+                raise CheckFailure(label, "primary_closed_during_handoff", primary.returncode)
+            code = primary.wait(timeout=35)
+        finally:
+            if primary.poll() is None:
+                primary.terminate()
+                try:
+                    primary.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    primary.kill()
+                    primary.wait(timeout=5)
+    if log.stat().st_size > 4 * 1024**2:
+        raise CheckFailure(label, "output_too_large")
+    check_process(subprocess.CompletedProcess(command, code, log.read_bytes(), b""), label)
+    return dict(primary_ready=True, second_launch_handoff=True, primary_normal_exit=True)
+
 def _verify(built, out, acceptance, *, installer=None):
     installation = acceptance.call(
         "windows-installer-preflight", lambda: _installer_input(built, out, installer),
@@ -474,6 +543,11 @@ def _verify(built, out, acceptance, *, installer=None):
     reader_launches = 3 if sys.platform == "darwin" else 1
     for _ in range(reader_launches):
         run("reader", [gui, "--paper", "demo:paperfact"], recipient)
+    handoff = acceptance.call(
+        "instance-handoff", lambda: _instance_handoff(
+            [gui, "--paper", "demo:paperfact"], recipient, out,
+        ),
+    )
     run("export", [cli, "list-export", "demo", "-o", returned], recipient)
     files = acceptance.call("file-fidelity", lambda: compare_files(original, returned))
     workspace = Path(recipient["PAPERFACT_DATA"])
@@ -545,6 +619,7 @@ def _verify(built, out, acceptance, *, installer=None):
         "passed": True,
         "research_files_preserved": files,
         "reader_launches_verified": reader_launches,
+        "instance_handoff": handoff,
         "integration": integration,
         "checks": [
             "version",
@@ -553,6 +628,7 @@ def _verify(built, out, acceptance, *, installer=None):
             "import",
             "duplicate-import",
             "reader",
+            "same-workspace-instance-handoff",
             "export",
             "file-fidelity",
             "lineage-corpus",

@@ -181,6 +181,13 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         assert "CODEX_HOME" not in env and "ANTHROPIC_API_KEY" not in env
         return dict(retry_preserved=True, restart_recovery=True)
 
+    def handoff(command, env, output):
+        current = json.loads((output / "report.json").read_text(encoding="utf-8"))
+        assert current["active_check"] == "instance-handoff" and not current["passed"]
+        assert "--paper" in command and "CODEX_HOME" not in env
+        return dict(primary_ready=True, second_launch_handoff=True, primary_normal_exit=True)
+
+    monkeypatch.setattr(verify, "_instance_handoff", handoff)
     monkeypatch.setattr(verify.subprocess, "run", fake)
     monkeypatch.setitem(
         sys.modules, "verify_local_integration", types.SimpleNamespace(verify=integration)
@@ -196,8 +203,12 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         "research-content",
         "lineage-audit",
         "lineage-audit-result",
+        "instance-handoff",
         "local-integration",
     } <= set(first["completed_checks"])
+    assert first["instance_handoff"] == dict(
+        primary_ready=True, second_launch_handoff=True, primary_normal_exit=True,
+    )
     assert first["research_files_preserved"] == 1 and first["integration"]["retry_preserved"]
     assert first["build"] == dict(commit=None, dirty=None, version="0.5.0.dev")
     assert "hosted multi-device sync" in first["limitations"]
@@ -273,3 +284,61 @@ def test_actual_cli_missing_bundle_reports_failure_and_preserves_previous_run(tm
     result = subprocess.run(command, capture_output=True, timeout=30)
     assert result.returncode == 1 and b"earlier run" in result.stderr
     assert (out / "report.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "mode", ["success", "not-ready", "second-failed", "second-timeout", "primary-closed"],
+)
+def test_instance_handoff_requires_live_primary_and_clean_second_launch(
+    tmp_path, monkeypatch, mode,
+):
+    calls = []
+
+    class Primary:
+        returncode = None
+
+        def poll(self):
+            if mode == "not-ready" or mode == "primary-closed" and "second" in calls:
+                self.returncode = 0
+            return self.returncode
+
+        def wait(self, timeout):
+            self.returncode = 0
+            calls.append("wait")
+            return 0
+
+        def terminate(self):
+            calls.append("terminate")
+            self.returncode = -1
+
+    primary = Primary()
+
+    def launch(command, **options):
+        assert command == ["fixture-app"] and options["stdin"] == subprocess.DEVNULL
+        assert options["env"]["PAPERFACT_SMOKE_SECONDS"] == "20"
+        return primary
+
+    def second(command, **options):
+        calls.append("second")
+        assert options["timeout"] == 15
+        assert options["env"]["PAPERFACT_SMOKE_SECONDS"] == "60"
+        if mode == "second-timeout":
+            raise subprocess.TimeoutExpired(command, 15, output=b"duplicate-window")
+        return subprocess.CompletedProcess(command, 2 if mode == "second-failed" else 0, b"", b"")
+
+    monkeypatch.setattr(verify, "_instance_probe", lambda: lambda root: mode != "not-ready")
+    monkeypatch.setattr(verify.subprocess, "Popen", launch)
+    monkeypatch.setattr(verify.subprocess, "run", second)
+    env = {"PAPERFACT_DATA": str(tmp_path / "synthetic"), "PAPERFACT_SMOKE_SECONDS": "5"}
+    original = dict(env)
+    if mode == "success":
+        result = verify._instance_handoff(["fixture-app"], env, tmp_path)
+        assert all(result.values()) and calls == ["second", "wait"]
+    else:
+        error = subprocess.TimeoutExpired if mode == "second-timeout" else verify.CheckFailure
+        with pytest.raises(error):
+            verify._instance_handoff(["fixture-app"], env, tmp_path)
+        assert "terminate" in calls or primary.returncode == 0
+        if mode == "not-ready":
+            assert "second" not in calls
+    assert env == original and not (tmp_path / "synthetic").exists()

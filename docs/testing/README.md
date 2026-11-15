@@ -493,3 +493,15 @@ key lookup, and the existing Windows key format. These policies are simulated on
 Windows; native Mac/Linux and cross-version handoff are separate acceptance gates.
 The existing launch and restore/join UI files protect drafts, retries, credentials
 and one-click coalescing. No default/release selector or new test file was added.
+
+
+### Packaged same-workspace handoff
+
+The existing built-app verifier adds one native requirement, not a new source
+suite: wait for the fixture reader's actual expected local endpoint, launch again,
+require the second process to exit before its own smoke timeout while the first
+remains alive, then require a normal primary exit. Existing script tests check
+success, absent endpoint/early exit, secondary error/timeout and primary loss;
+those fake-process cases establish orchestration only. The native report must
+separately record `instance_handoff` as true before claiming the package passed.
+Critical remains 14 and release remains 37 selectors. No historical test matrix.
