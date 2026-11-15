@@ -747,3 +747,25 @@ safety refusal. It reproduces/fixes the old applied-artifact paper-owner assumpt
 Final package/recovery7 plus existing editable-deck recovery1 pass12.65s (16.9s
 stages). This is inactive archive preservation, not reviewed report reattachment
 or completed public list-package import/export.
+
+
+### Existing-owner survey receiver checks
+
+`tests/test_survey_package_import.py` has eight behavior groups. All use actual
+native publication and isolated ZIP/receiver fixtures, without models or accounts:
+
+| Group | Observable requirement |
+|---|---|
+| Import/retry/re-export | Explicit receiver identities, exact historical report, no preparation research writes, one publication on retry, independently valid re-export |
+| Independent peer | Receiver-owned originals/report reach a fresh receiver device; sender identity grants are not copied |
+| Failure/cancel/rollback | Failure after an actual source grant and caller rollback leave no partial report/source publication; retry succeeds |
+| Stale selection | A changed receiver list or replaced selected archive refuses publication without writes |
+| Mapping/proof | Missing/absent receiver selections and an unsealed dictionary cannot grant ownership |
+| Preserve/replace | Default keeps current report without research writes; explicit replacement keeps version history and preview states agree |
+| Request/context | Changed content cannot reuse a prior request; another database cannot apply the sealed receiver preparation |
+| Missing originals | All-unavailable report and omitted optional source inventory import without invented PDF grants or mappings |
+
+Final affected check passes in31.922s governed (28.476s selected tests). The
+300s/2-core/25% ceiling remains enabled; fixed critical14/release38 are unchanged.
+This is internal existing-owner acceptance, not new-root/unbound public bundle
+integration, installed-device testing or a completed sharing workflow.

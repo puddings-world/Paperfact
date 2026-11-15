@@ -1,6 +1,6 @@
 # v0.5.0 current status
 
-Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
+Updated 2026-11-16. **Development, unreleased; no complete beta acceptance.**
 
 Latest native delivery: Mac arm64/Linux use clean3b344c7
 ([run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158));
@@ -181,3 +181,12 @@ PDF objects and historical mappings as inactive data; no previous device/source
 authority is revived. The original archive remains required before reviewed
 re-export. Existing editable-deck recovery is also verified. This closes the
 restore crash, not the pending receiver/UI reattachment or public package adapters.
+
+
+Source after9c6dc9b adds the internal existing-owner survey receiver. Explicit
+receiver mappings mint native report/original ownership; default preserve,
+reviewed replacement, exact retry and same-transaction rollback are verified.
+Independent peer delivery and re-export pass; reports without available originals
+do not invent PDF grants. Eight affected groups pass under the governor in32s.
+Public whole-list/new-root and unbound import, reviewed reattachment, desktop/AI
+wiring and hosted/physical gates remain open. No new installer or deployment.

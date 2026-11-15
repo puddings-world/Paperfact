@@ -1016,3 +1016,18 @@ inactive; no fake paper or revived source/device is introduced. Final7 package/
 recovery plus existing deck recovery1 pass12.65s. Reviewed re-export remains gated.
 This validates local data preservation, not completed user import/export, receiver
 mapping or global scientific trust. No new global rule is promoted.
+
+
+### Portable data versus receiver authority (validated-local, 2026-11-16)
+
+Actual survey ZIP import uses explicit receiver paper mappings and current native
+lifetimes, never a synthetic AI generation context or sender sync grants. One
+savepoint covers original grants/report/outbox; failure after a real child grant
+leaves no partial ownership. Native exact retry, default preserve, explicit
+version-preserving replacement, independent peer receive and re-export are covered.
+Eight local groups pass31.922s governed. All-unavailable originals are valid and
+require no fabricated source map. This is an existing-owner component: prospective
+new-root and unbound public integration remain unverified. Reuse the compound
+caller's transaction/receipt rather than committing roots early to fit a helper.
+This evidence refines the existing transaction/authority pattern; no global rule
+or completed public workflow is claimed.

@@ -623,3 +623,34 @@ create a new current survey or reactivate an old device/source grant. Independen
 restore preserves exact bytes. Keep the original backup: the existing reviewed
 recovery gate still blocks direct detached re-export. Reviewed reattachment and
 the eventual unbound list-report reader/publisher remain separate required work.
+
+
+### Existing-owner survey receiver (internal)
+
+`survey_package_import` consumes actual independently validated ZIP data, not a
+synthetic generation context. It requires explicit existing enrolled receiver list
+and paper selections; historical report inputs remain unchanged data. Source
+owners and report operations are minted for the receiver's exact current lifetimes.
+
+| Internal API | Contract |
+|---|---|
+| `prepare(database, archive, *, target_list_id, paper_mapping, replace=False, request_id=None, cancelled=...)` | Validate/stage report and originals off-lock against the explicit database, registered blob store and native owners; no research SQL writes; return sealed preparation |
+| `PreparedSurveyImport.preview()` | Report incoming ID, source count and add/unchanged/preserve/replace decision; existing content is preserved by default |
+| `publish_in(conn, prepared, *, cancelled=...)` | Require the caller transaction, captured database/device/file and unchanged owners; savepoint covers original grants, report and outbox; leave unrelated caller work intact |
+| `publish(prepared, *, cancelled=...)` | Own one receiver transaction, then finish local materialization through the persisted pending report intent |
+
+Exact retries reuse the native publication; reused requests with different content
+fail. Explicit replacement preserves previous native versions. On `preserved`,
+`report_id` describes the incoming report and `operation` identifies the retained
+current receiver report. Preparation may stage verified private blobs; it grants
+no research ownership. Cancellation/failure rolls back research and source grants.
+Reports with all originals unavailable need neither invented PDF ownership nor a
+paper map. Imported native reports can synchronize to an independent receiver peer
+and be collected/revalidated for re-export without sender device authority.
+
+This component is not yet a public bundle adapter. The compound importer must
+create prospective new roots and source/report operations within its existing
+single transaction and action receipt. Do not create roots early in separate
+commits to reuse this existing-owner entry. Unbound report persistence, reviewed
+reattachment and common desktop/CLI/MCP wiring remain required. Current public
+bundle behavior and delivered installers are unchanged.

@@ -7956,3 +7956,43 @@ import/re-export with user-owned identities, reviewed survey recovery and stale
 proposal UI, common AI/desktop/CLI/MCP dispatch, hosted authority/fencing and
 physical Mac/phone/Safari acceptance. No installed app, owner database, credential,
 public release or cloud resource was changed. The full0.5 objective remains active.
+
+
+## 2026-11-16: explicit existing-owner survey receiver
+
+Base9c6dc9b; same stabilization tree and integration board. Internal
+survey_package_import validates the actual ZIP and seals explicit receiver
+list/paper identity observations, selected archive version, database identity and
+device binding. It stages verified private report/original blobs off-lock, creates
+fresh receiver native source pins, and publishes originals/report/outbox under a
+caller-owned savepoint. No fake AI proposal, implicit enrollment or sender device
+authority. Default preserves current content without research writes; explicit
+replacement retains native history. Retry reuses the exact native intent and
+post-commit materialization can use the existing durable pending completion.
+
+Eight behavior groups cover independent peer receive/re-export, failure after a
+real source grant, cancellation/caller rollback, changed targets/archive, invalid
+mapping/proof, preserve/replace previews, request reuse/foreign database refusal,
+and a report whose originals are all unavailable. The last case reproduced
+KeyError: survey_sources when the optional empty inventory was omitted; using its
+specified empty default fixes it without inventing original ownership. The peer
+fixture was corrected to use its actual registered version directory. No prior
+expectation or selector was weakened.
+
+Final focused run e9f3f994e3a7475a83c670466a48342a passes: selected tests28.476s,
+privacy2.903s, Ruff0.219s; total31.69s, governed31.922s, returncode0. Report selection
+is only tests/test_survey_package_import.py. Its terminal handle is gone and both
+matching run-ID reports confirm completion. This is not an exhaustive suite pass.
+One governed check at a time;300s/2 logical CPUs/25% hard cap/lower priority.
+
+Public PackageImporter new-list/new-paper planning still uses prospective graph
+roots before actual SQL rows exist; it cannot call this existing-owner preparer
+directly. Integrate validated portable data/native payload building within its
+single root/source/report transaction and existing action receipt; do not commit
+roots early. Unbound storage/re-export, public bundle capability wiring, reviewed
+reattachment and UI/AI/common dispatch remain unfinished. No native rebuild,
+production upload, real provider call, daily research write or new worktree.
+
+Integration critical14 passes8.19s (12.3s stages); documentation/skill consistency58
+passes2.25s (6.3s stages). Privacy/Ruff and whitespace pass. Selectors unchanged;
+no full historical suite or rebuilt installer. Tests remain sequential and bounded.
