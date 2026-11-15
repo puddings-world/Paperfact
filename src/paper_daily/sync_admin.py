@@ -12,7 +12,7 @@ from pathlib import Path
 
 from paper_daily.connection_vault import MAX_BYTES, Connection
 from paper_daily.sync_http import make_server
-from paper_daily.sync_service import ReferenceService
+from paper_daily.sync_service import AuthorityInUseError, ReferenceService
 
 MARKER = ".paperfact-sync-service.json"
 FORMAT = {"format": "paperfact-reference-service-v1"}
@@ -259,6 +259,11 @@ def run(args):
             return 0
         print(json.dumps(result), flush=True)
         return 0
+    except AuthorityInUseError:
+        print("Sync service already active for this authority. Stop the existing listener "
+              "and let its current requests finish before starting another. "
+              "Do not delete lock files or replace the database.", file=sys.stderr)
+        return 2
     except (ValueError, OSError, sqlite3.Error):
         if args.admin_action == "download-backup":
             print("GCS backup retrieval failed. Check the exact snapshot digest, private bucket, "

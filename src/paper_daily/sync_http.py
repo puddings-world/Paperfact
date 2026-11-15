@@ -16,6 +16,7 @@ import socket
 import socketserver
 import threading
 import time
+from contextlib import nullcontext, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -212,7 +213,72 @@ def _finish_rejection(connection, incoming, outgoing):
 
 
 class _Server(ThreadingHTTPServer):
-    daemon_threads = True
+    daemon_threads = False
+    block_on_close = True
+
+    def __init__(self, address, handler, *, authority_claim=None):
+        self._close_guard = threading.Lock()
+        self._request_state = threading.Condition()
+        self._requests = set()
+        self._closing = False
+        self._authority_claim = authority_claim if authority_claim is not None else nullcontext()
+        self._authority_owned = False
+        self._authority_claim.__enter__()
+        self._authority_owned = True
+        try:
+            super().__init__(address, handler)
+        except BaseException:
+            self.server_close()
+            raise
+
+    def process_request(self, request, address):
+        with self._request_state:
+            if not self._closing:
+                self._requests.add(request)
+                try:
+                    # Register/start the worker before close can snapshot requests.
+                    super().process_request(request, address)
+                except BaseException:
+                    self._requests.discard(request)
+                    self._request_state.notify_all()
+                    raise
+                return
+        self.shutdown_request(request)
+
+    def shutdown_request(self, request):
+        try:
+            super().shutdown_request(request)
+        finally:
+            with self._request_state:
+                self._requests.discard(request)
+                self._request_state.notify_all()
+
+    def server_close(self):
+        # Keep the ownership claim until every admitted backend worker has drained.
+        # Closing protocol sockets also interrupts partial/trickled HTTP headers.
+        with self._close_guard:
+            with self._request_state:
+                self._closing = True
+                requests = tuple(self._requests)
+            for request in requests:
+                with suppress(OSError):
+                    request.shutdown(socket.SHUT_RDWR)
+                # makefile readers retain the socket. Detach first so their later
+                # cleanup cannot close a recycled descriptor after forced close.
+                with suppress(OSError):
+                    descriptor = request.detach()
+                    if descriptor >= 0:
+                        socket.close(descriptor)
+            try:
+                if hasattr(self, "socket"):
+                    super().server_close()
+            finally:
+                with self._request_state:
+                    while self._requests:
+                        self._request_state.wait()
+                if self._authority_owned:
+                    self._authority_owned = False
+                    self._authority_claim.__exit__(None, None, None)
 
     def server_bind(self):
         # HTTPServer.server_bind asks DNS for the host's full name, which can take
@@ -240,6 +306,12 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
         "/v1/browser/pairing/complete": "complete",
         "/v1/browser/session/forget": "forget",
     }
+
+    claim = getattr(service, "listener_claim", None)
+    if claim is None and getattr(service, "path", None) is not None:
+        raise ValueError("Persistent authorities require a listener ownership claim")
+    if claim is not None and not callable(claim):
+        raise ValueError("Invalid authority listener claim")
 
     instance = secrets.token_hex(16)
 
@@ -453,8 +525,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
         class IPv6Server(_Server):
             address_family = socket.AF_INET6
 
-        return IPv6Server((host, port), Handler)
-    return _Server((host, port), Handler)
+        return IPv6Server((host, port), Handler, authority_claim=claim() if claim else None)
+    return _Server((host, port), Handler, authority_claim=claim() if claim else None)
 
 
 class HttpTransport:
@@ -539,9 +611,7 @@ class HttpTransport:
                     )
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
-                if response.status_code == 412 and (
-                    path in {"/v1/pull", devices.PAIR_REDEEM} or path.startswith("/v1/history/")
-                ):
+                if response.status_code == 412:
                     raise SyncHistoryUnavailable("Shared sync history needs recovery review")
                 if response.status_code == 409:
                     raise BlobUnavailableError("Sync attachment bytes are unavailable; retry later")

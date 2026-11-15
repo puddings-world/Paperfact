@@ -10,6 +10,7 @@ import hashlib
 import json
 import secrets
 import sqlite3
+import stat
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -28,6 +29,10 @@ from paper_daily.sync_journal import (
 from paper_daily.sync_ordering import ORDER_KINDS, validate_order
 
 
+class AuthorityInUseError(ValueError):
+    """Another cooperating listener still owns this local authority database."""
+
+
 class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
     """Serialize workspace changes and retain conflicting operations durably."""
 
@@ -41,8 +46,11 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
         blob_max_uploads: int = 16,
     ):
         self._configure_blobs(blob_root, blob_quota_bytes, blob_max_bytes, blob_max_uploads)
-        self.path = Path(path)
+        self.path = Path(path).absolute()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._database_identity = None
+        if self.path.exists() or self.path.is_symlink():
+            self._database_identity = self._database_file_identity()
         with self._transaction(write=True) as conn:
             self._blob_schema(conn)
             conn.execute(
@@ -77,6 +85,26 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 "PRIMARY KEY(workspace,sequence))"
             )
 
+    @contextmanager
+    def listener_claim(self):
+        """Own this local database until the listener and its request workers drain."""
+        from paper_daily.research_job_lock import claim
+        from paper_daily.sync_blobs import _no_link
+
+        self._require_database_identity()
+        candidate = self.path.absolute()
+        for part in (candidate, *candidate.parents):
+            _no_link(part)
+        database = candidate.resolve(strict=True)
+        if not database.is_file() or database.stat().st_nlink != 1:
+            raise ValueError("Serve a regular authority database without hard-link aliases")
+        _no_link(database.parent / ".research-jobs")
+        with claim(database, "sync-authority-listener", "authority") as acquired:
+            if not acquired:
+                raise AuthorityInUseError("This authority already has an active local listener")
+            self._require_database_identity()
+            yield
+
     @staticmethod
     def _graph_entity(conn, workspace, kind, identity):
         row = conn.execute(
@@ -93,14 +121,43 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
             (workspace, kind, identity, json.dumps(value, sort_keys=True, separators=(",", ":"))),
         )
 
+    def _database_file_identity(self):
+        try:
+            info = self.path.lstat()
+        except OSError as error:
+            raise SyncHistoryUnavailable("Authority database lifetime is unavailable") from error
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_ino <= 0:
+            raise SyncHistoryUnavailable("Authority database lifetime changed")
+        return info.st_dev, info.st_ino
+
+    def _require_database_identity(self):
+        if self._database_identity != self._database_file_identity():
+            raise SyncHistoryUnavailable(
+                "Authority database lifetime changed; stop and review recovery")
+
     @contextmanager
     def _transaction(self, *, write=False):
-        conn = sqlite3.connect(self.path, timeout=10)
+        existing = self._database_identity is not None
+        if existing:
+            self._require_database_identity()
+        try:
+            conn = (sqlite3.connect(self.path.as_uri() + "?mode=rw", uri=True, timeout=10)
+                    if existing else sqlite3.connect(self.path, timeout=10))
+        except sqlite3.Error:
+            if existing:
+                self._require_database_identity()
+            raise
         conn.row_factory = sqlite3.Row
         try:
+            if not existing:
+                self._database_identity = self._database_file_identity()
+            self._require_database_identity()
             conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            self._require_database_identity()
             yield conn
+            self._require_database_identity()
             conn.commit()
+            self._require_database_identity()
         except BaseException:
             conn.rollback()
             raise

@@ -386,3 +386,15 @@ A final source/output containment review also covered child names beginning with
 3.55s after that guard correction; unaffected mobile/browser evidence was reused.
 TEMP cleanup is limited to each exact test-owned allocation after real-path and
 file-identity checks, with no prefix enumeration or deletion of other sessions.
+
+
+## An authority is already being served
+
+A second `serve` for the same local authority exits with actionable guidance.
+Stop the existing listener and let admitted requests finish before starting another.
+Do not delete lock files or replace its database to force a restart. Shutdown may
+interrupt a reply after acceptance; the client retries its original operation ID.
+Online backup remains supported while the listener owns its local claim. Backups
+exclude `.research-jobs` process locks; use the supported restore-to-new-directory
+flow rather than replacing a running authority's database. See
+[listener ownership and limits](sync-http.md#local-listener-ownership-and-database-lifetime).

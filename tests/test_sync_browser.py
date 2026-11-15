@@ -26,9 +26,12 @@ def browser(tmp_path, monkeypatch):
     origin = "https://sync.example.org"
     sessions = BrowserSessions(service, origin, key, clock=lambda: now[0])
     packet = Invitation(origin, code=code, **grant).encoded()
-    with running(make_server(service, browser=sessions)) as url:
-        yield SimpleNamespace(service=service, owner=owner, now=now, key=key, origin=origin,
-                              sessions=sessions, packet=packet, url=url)
+    server = make_server(service, browser=sessions)
+    with running(server) as url:
+        yield SimpleNamespace(
+            server=server, service=service, owner=owner, now=now, key=key, origin=origin,
+            sessions=sessions, packet=packet, url=url,
+        )
 
 
 def post(fixture, path, value=None, cookie=None, headers=None):
@@ -96,6 +99,8 @@ def test_lost_complete_reply_restarts_after_invitation_expiry_and_issuer_revocat
     assert post(browser, "pairing/complete", cookie=pending).status_code == 200
     browser.now[0] += 601
     browser.service.revoke(browser.owner)
+    browser.server.shutdown()
+    browser.server.server_close()
     restarted = ReferenceService(browser.service.path)
     sessions = BrowserSessions(restarted, browser.origin, browser.key, clock=lambda: browser.now[0])
     with running(make_server(restarted, browser=sessions)) as url:
@@ -168,7 +173,8 @@ def test_revoke_and_explicit_forget_do_not_delete_research_or_reissue_device(bro
 
 
 def test_adapter_is_opt_in_and_refuses_cross_authority_configuration(browser, tmp_path):
-    with running(make_server(browser.service)) as url:
+    unadapted = ReferenceService(tmp_path / "without-browser.sqlite")
+    with running(make_server(unadapted)) as url:
         response = httpx.post(url + "/v1/browser/session/info", json={}, trust_env=False)
         assert response.status_code == 404
     with pytest.raises(ValueError):

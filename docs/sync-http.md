@@ -554,3 +554,34 @@ remain release gates. No deployment, installed device or physical-phone acceptan
 is implied by local bearer/cookie/Qt fixtures. New mobile shell v31 supplies matching
 bilingual history-refusal guidance and discards old static shells without touching
 research caches. The delivered native/v29 candidate remains unchanged.
+
+
+## Local listener ownership and database lifetime
+
+The reference HTTP service acquires an OS-backed local claim before binding its
+socket. A second cooperating listener for the same canonical database is refused.
+Failed bind releases the claim. Closing stops admission, interrupts protocol
+sockets, and retains the claim until admitted backend work has drained. An accepted
+write whose reply was interrupted remains retryable with the same operation ID.
+Incomplete HTTP headers cannot keep the listener alive solely by retaining a socket.
+The implementation uses documented [socket detach/close semantics](https://docs.python.org/3.11/library/socket.html#socket.socket.detach);
+prompt interruption is locally verified on Windows, not yet on installed Mac/Linux.
+
+The existing `.research-jobs` lock sidecar is process coordination, not replicated
+research or proof that a process is currently alive. Never unlink it to bypass an
+active service. Process exit releases OS ownership without deleting the sidecar.
+Trusted administration and online backups remain possible; this claim does not
+exclude every direct SQL writer.
+
+Each initialized reference service pins its absolute database path and positive
+native file identity, requires a regular single-link file, and rechecks the identity
+around connection, transaction and commit. Existing connections use SQLite URI
+`mode=rw`: a missing authority is refused rather than recreated as an empty database.
+Ordinary replacement/removal produces HTTP 412 and recovery guidance, including on
+session reads. Normal SQLite writes retain their file lifetime.
+
+These are same-host cooperating-listener and observed-file-lifetime safeguards.
+They do not authenticate database content, detect all same-inode SQL restores or
+filesystem ABA, fence another host/copy, or prove durable device-control history.
+Durable authority epochs, anti-rollback and distributed fencing remain release gates.
+No installed-device, hosted or physical-phone acceptance is implied.

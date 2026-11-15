@@ -215,3 +215,26 @@ def test_output_close_failure_does_not_leave_an_enrolled_device(tmp_path, monkey
     assert not output.exists()
     with sync_admin.authority(state)._transaction() as conn:
         assert conn.execute("SELECT COUNT(*) FROM sync_devices").fetchone()[0] == 0
+
+
+def test_second_serve_is_actionable_and_preserves_existing_authority(tmp_path, capsys):
+    from paper_daily.sync_http import make_server
+
+    state = tmp_path / "service"
+    sync_admin.initialize(state)
+    service = sync_admin.authority(state)
+    before = service.path.read_bytes()
+    with make_server(service):
+        assert sync_admin.main(["serve", "--state", str(state), "--port", "0"]) == 2
+        message = capsys.readouterr()
+        assert not message.out
+        assert "already active" in message.err and "Do not delete lock files" in message.err
+        from paper_daily import sync_authority_backup
+
+        backup = tmp_path / "online-backup"
+        assert sync_authority_backup.export(state, backup)["state"] == "backed_up"
+        sync_authority_backup.verify(backup)
+        assert {item.name for item in backup.iterdir()} == {"manifest.json", "authority.sqlite"}
+    assert service.path.read_bytes() == before
+    with make_server(service):
+        pass

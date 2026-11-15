@@ -359,3 +359,9 @@ passages, with explicit original-version scope; see [mobile reader](docs/mobile-
 
 First-sync preparation retains validated citation, related-work and resource history
 privately, including verified legacy text inputs, while publishing current research rows; see [enrollment history](docs/initial-enrollment-history.md).
+
+
+The development sync service refuses a second local listener for the same authority
+and pauses on observed database replacement/removal; see
+[ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
+These local safeguards do not yet provide distributed fencing or durable control-history proof.

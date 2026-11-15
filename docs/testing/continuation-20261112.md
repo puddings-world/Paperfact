@@ -7337,3 +7337,44 @@ additional worktree was introduced.
 - Final integration gates: critical14 passed in8.14s/11.4s total; docs58
   in1.90s/5.1s total. Privacy/Ruff passed. Final whitespace and clean-parent
   review precede checkpoint; no full historical suite or native rebuild.
+
+
+## 2026-11-15: local listener ownership and database-lifetime refusal
+
+Scoped continuation after2b3c17e; native candidate c1cbef2/run43688772032 remains
+unchanged. No public release, deployment, research migration or new worktree.
+
+- Reference HTTP listener acquires the existing OS-backed local job claim before
+  bind, refuses a second same-database listener, releases failed startup safely,
+  and retains ownership until admitted workers drain. Actual child exit releases
+  the OS claim without deleting sidecars. Independent authority remains available.
+- Closing interrupts incomplete HTTP headers. A held backend push still completes;
+  lost client reply is sanitized, and retry of its original operation returns the
+  one accepted event. Shutdown-only initially failed on the Windows makefile read;
+  final detach/socket.close is tested against the actual blocked read, not a sleep.
+- Initialized service pins an absolute database/native file lifetime and opens
+  `mode=rw`. Actual replacement/removal refuses session/write with HTTP412 and does
+  not recreate a missing database. Identity change before commit rolls back SQL;
+  hard-link and unknown-native-ID fixtures refuse unsafe continuity. No claim of
+  same-inode restore/ABA detection or distributed fencing.
+- Second CLI serve is actionable, preserves exact authority bytes, and normal
+  online backup verifies while the claim is held; only manifest/database are
+  exported in the empty-attachment fixture, with no process-lock sidecar.
+- Existing browser restart fixture now actually stops its old server before
+  rebinding; opt-in fixture uses a separate authority. Original cookie, expiry,
+  revocation and isolation assertions retained. All HTTP412 routes provide typed
+  history guidance in desktop/mobile; no downgrade to old writes.
+- Final affected Python122 pass in20.11s/23.2s total, selected mobile17 in3.281s,
+  actual JS/Python protocol2.047s. Sequential existing governor: two logical cores,
+  25-percent job CPU; no historical full suite. Initial harness `closing` misuse
+  and Ruff failures were corrected, not hidden; final affected selection is green.
+- No native installer rebuilt. Mobile v31 source changes transport semantics;
+  earlier content pin7bb89dcb is historical, not an exact pin for this change.
+  Windows local fixtures do not establish Mac/Linux shutdown or installed-device
+  acceptance. Durable authority/control-history, anti-rollback/distributed fencing,
+  legacy acknowledgment review, remaining recovery/mapping/survey and hosted/
+  physical-device acceptance remain open.
+
+- Final integration gates: critical14 pass in4.85s/8.2s total; docs58 pass
+  in2.13s/5.2s total. Privacy/Ruff and whitespace pass. Historical full suite
+  and native rebuild not run; installed/hosted acceptance remains open.

@@ -810,3 +810,30 @@ preservation. Static shell v31 upgrades old shells while keeping research caches
 Limits: a research-prefix proof does not version every device-control change or
 fence a restored service. No malicious-authority/physical-host guarantee, new
 universal rule, global skill installation or telemetry collection.
+
+
+## 2026-11-15: local authority listener ownership and worker drain
+
+Status: validated-local on Windows; installed Mac/Linux and distributed authority
+fencing remain unverified. Reuse the existing OS-backed process claim around the
+listener lifetime, not only socket creation. Acquire before bind, release after
+failed bind or admitted backend drain, and leave lock sidecars in place after exit.
+A stale file is not a live OS claim. Interrupt incomplete protocol reads during
+shutdown while retaining ownership until a held write finishes. Retry a lost reply
+using its original operation ID, preserving exactly one accepted result.
+
+Observed database lifetime uses native positive file identity and single-link
+regular files; initialized connections refuse implicit empty-file recreation.
+Evidence: duplicate/start-failure/repeated-close, held push and lost-reply retry,
+actual child termination, incomplete-header shutdown, actual replacement/removal,
+transaction rollback after identity change, hard-link/unknown-ID refusal, and online
+backup excluding process locks. Affected HTTP/device/browser/admin tests: 122 pass
+in20.11s (23.2s governed total). Selected mobile transport/session17 pass in3.281s;
+actual JS/Python protocol passes in2.047s. All synthetic, isolated and CPU-bounded.
+
+Initial shutdown-only failed to interrupt a Windows makefile header reader; the
+bounded failure stack identified the actual socket read. Documented detach plus
+socket.close prevents later buffered cleanup from closing a recycled descriptor;
+the actual incomplete-header test then passes. This observed file lifetime is not
+content authenticity, same-inode restore/ABA detection, a durable authority epoch,
+a distributed lease, or proof of every control change. No new global rule or hook.

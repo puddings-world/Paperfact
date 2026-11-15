@@ -54,7 +54,10 @@ check after physical verification and before ownership. Actual desktop device
 controls now require prepared proofs; fresh invitation claims recheck the original
 issuer prefix. Explicit sync initializes missing legacy proof tables without
 resetting damaged evidence. Native legacy-ack review/adoption UI and durable
-authority fencing remain open. Candidate c1cbef2 has not been rebuilt for
+authority fencing remain open. Same-host listener exclusion now holds through
+admitted-worker drain; initialized services refuse observed database replacement
+or removal without recreating missing files. This is not distributed fencing or
+durable control-history protection. Candidate c1cbef2 has not been rebuilt for
 this source. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated

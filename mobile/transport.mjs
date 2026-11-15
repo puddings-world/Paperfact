@@ -82,7 +82,7 @@ export class HttpTransport {
         403: 'session_denied',
         404: route.startsWith('/v1/history/') ? 'sync_history_unavailable' : 'unsupported_service',
         409: 'file_unavailable',
-        412: route === '/v1/pull' || route === '/v1/pairing/complete' || route.startsWith('/v1/history/') ? 'sync_history_unavailable' : 'request_rejected',
+        412: 'sync_history_unavailable',
         425: 'sync_history_advanced',
         428: 'sync_history_unavailable',
         429: 'rate_limited',

@@ -10,7 +10,8 @@ import pytest
 
 from paper_daily import sync_http
 from paper_daily.sync_http import HttpTransport, make_server
-from paper_daily.sync_service import ReferenceService
+from paper_daily.sync_journal import SyncHistoryUnavailable
+from paper_daily.sync_service import AuthorityInUseError, ReferenceService
 
 
 def operation(identity="operation-a", *, workspace="workspace", device="a", body="Observation"):
@@ -351,3 +352,270 @@ def test_starting_the_server_never_waits_on_a_dns_lookup(tmp_path, monkeypatch):
         assert server.server_name == "127.0.0.1" and server.server_port > 0
     finally:
         server.server_close()
+
+
+def test_listener_exclusion_failed_bind_and_repeated_close_preserve_authority(tmp_path):
+    import socket
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "a")
+    before = service.path.read_bytes()
+    first = make_server(service)
+    try:
+        with pytest.raises(AuthorityInUseError):
+            make_server(ReferenceService(service.path))
+        with make_server(ReferenceService(tmp_path / "other.sqlite")):
+            assert service.session_info(token) == {"workspace_id": "workspace", "device_id": "a"}
+    finally:
+        first.server_close()
+        first.server_close()
+    with socket.socket() as occupied:
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen()
+        with pytest.raises(OSError):
+            make_server(service, port=occupied.getsockname()[1])
+    with make_server(service) as restarted:
+        assert restarted.server_port > 0
+    assert service.path.read_bytes() == before
+
+
+def test_listener_claim_survives_close_until_active_requests_drain(tmp_path, monkeypatch):
+    import time
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "a")
+    entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+    original, result, errors = service.push, [], []
+
+    def held(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(service, "push", held)
+    server = make_server(service)
+    with running(server) as url:
+        def send():
+            try:
+                with HttpTransport(url) as transport:
+                    result.append(transport.push(token, operation()))
+            except Exception as error:
+                errors.append(error)
+
+        worker = threading.Thread(target=send)
+        worker.start()
+        assert entered.wait(5)
+        server.shutdown()
+
+        def close():
+            server.server_close()
+            closed.set()
+
+        closer = threading.Thread(target=close)
+        closer.start()
+        try:
+            deadline = time.monotonic() + 5
+            while server.socket.fileno() != -1 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert server.socket.fileno() == -1 and not closed.is_set()
+            with pytest.raises(AuthorityInUseError):
+                make_server(service)
+        finally:
+            release.set()
+            worker.join(5)
+            closer.join(5)
+        assert not worker.is_alive() and not closer.is_alive() and closed.is_set()
+        assert not result and len(errors) == 1 and isinstance(errors[0], ConnectionError)
+        accepted = service.pull(token)
+        assert len(accepted) == 1 and accepted[0]["outcome"] == "accepted"
+        with running(make_server(service)) as retry_url, HttpTransport(retry_url) as retry:
+            assert retry.push(token, operation()) == accepted[0]
+            assert service.pull(token) == accepted
+
+
+def test_listener_claim_is_released_by_process_exit_without_deleting_lock(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import time
+    service = ReferenceService(tmp_path / "service.sqlite")
+    ready = tmp_path / "ready.json"
+    script = (
+        "import json,sys;from pathlib import Path;"
+        "from paper_daily.sync_http import make_server;"
+        "from paper_daily.sync_service import ReferenceService;"
+        "server=make_server(ReferenceService(Path(sys.argv[1])));"
+        "ready=Path(sys.argv[2]);pending=ready.with_suffix('.pending');"
+        "pending.write_text(json.dumps({'port':server.server_port}),encoding='utf-8');"
+        "pending.replace(ready);sys.stdin.buffer.read(1)"
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script, str(service.path), str(ready)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+    try:
+        deadline = time.monotonic() + 8
+        while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if not ready.exists() or child.poll() is not None:
+            if child.poll() is None:
+                child.kill()
+            _out, error = child.communicate(timeout=5)
+            raise AssertionError("Fixture listener did not start: "
+                                 + error.decode("utf-8", errors="replace")[-2000:])
+        assert json.loads(ready.read_text(encoding="utf-8"))["port"] > 0
+        paths = list((service.path.parent / ".research-jobs").glob("*.lock"))
+        assert len(paths) == 1
+        identity = paths[0].stat()
+        with pytest.raises(AuthorityInUseError):
+            make_server(service)
+        child.terminate()
+        child.wait(timeout=5)
+        with make_server(service):
+            assert paths[0].is_file()
+            current = paths[0].stat()
+            assert (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino)
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.communicate(timeout=5)
+
+
+def test_live_listener_refuses_replaced_or_missing_database_without_recreating_it(tmp_path):
+    import os
+
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "a")
+    service.push(token, operation())
+    replacement = ReferenceService(tmp_path / "replacement.sqlite")
+    replacement.enroll("foreign-workspace", "other")
+    replacement_bytes = replacement.path.read_bytes()
+    server = make_server(service)
+    with running(server) as url, HttpTransport(url) as transport:
+        assert transport.session_info(token)["workspace_id"] == "workspace"
+        os.replace(replacement.path, service.path)
+        for _ in range(2):
+            with pytest.raises(SyncHistoryUnavailable):
+                transport.session_info(token)
+            with pytest.raises(SyncHistoryUnavailable):
+                transport.push(token, operation("do-not-send"))
+            assert service.path.read_bytes() == replacement_bytes
+        moved = tmp_path / "preserved-replacement.sqlite"
+        os.replace(service.path, moved)
+        with pytest.raises(SyncHistoryUnavailable):
+            transport.session_info(token)
+        assert not service.path.exists() and moved.read_bytes() == replacement_bytes
+    with pytest.raises(SyncHistoryUnavailable):
+        make_server(service)
+    restored = ReferenceService(moved)
+    assert restored.path.read_bytes() == replacement_bytes
+    assert len(restored.device_catalog(restored.enroll("foreign-workspace", "new"))["devices"]) == 2
+
+
+def test_database_lifetime_is_rechecked_before_commit_and_rejects_hardlink_aliases(
+    tmp_path, monkeypatch,
+):
+    import os
+    import sqlite3
+    from contextlib import closing
+
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "a")
+    service.enroll("workspace", "peer")
+    original, observe = service._authenticate, service._database_file_identity
+    changed = False
+
+    def identity():
+        device, inode = observe()
+        return (device, inode + 1) if changed else (device, inode)
+
+    def authenticate(*args):
+        nonlocal changed
+        result = original(*args)
+        changed = True
+        return result
+
+    with closing(sqlite3.connect(service.path)) as conn:
+        before = list(conn.iterdump())
+    with monkeypatch.context() as patch:
+        patch.setattr(service, "_database_file_identity", identity)
+        patch.setattr(service, "_authenticate", authenticate)
+        with pytest.raises(SyncHistoryUnavailable):
+            service.rename_device(token, "peer", "Must roll back")
+    with closing(sqlite3.connect(service.path)) as conn:
+        assert list(conn.iterdump()) == before
+    assert service.device_catalog(token)["devices"][1]["label"] is None
+    alias = tmp_path / "hardlinked.sqlite"
+    os.link(service.path, alias)
+    try:
+        with pytest.raises(SyncHistoryUnavailable):
+            service.session_info(token)
+        with pytest.raises(SyncHistoryUnavailable):
+            ReferenceService(alias)
+    finally:
+        alias.unlink()
+    assert service.session_info(token)["device_id"] == "a"
+
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    real_lstat = Path.lstat
+
+    def missing_identity(path, *args, **kwargs):
+        info = real_lstat(path, *args, **kwargs)
+        if path == service.path:
+            return SimpleNamespace(st_mode=info.st_mode, st_nlink=1, st_dev=info.st_dev, st_ino=0)
+        return info
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "lstat", missing_identity)
+        with pytest.raises(SyncHistoryUnavailable):
+            ReferenceService(service.path)
+    with closing(sqlite3.connect(service.path)) as conn:
+        assert list(conn.iterdump()) == before
+
+
+def test_listener_close_interrupts_incomplete_headers_without_waiting_for_client(
+    tmp_path, monkeypatch,
+):
+    import socket
+
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "a")
+    server = make_server(service)
+    entered, closed = threading.Event(), threading.Event()
+    finish = server.finish_request
+
+    def admitted(*args):
+        entered.set()
+        return finish(*args)
+
+    monkeypatch.setattr(server, "finish_request", admitted)
+    with running(server) as url:
+        port = int(url.rsplit(":", 1)[1])
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as client:
+            client.sendall(b"POST /v1/pull HTTP/1.1\r\nHost: localhost\r\n")
+            assert entered.wait(5)
+            server.shutdown()
+
+            def close():
+                server.server_close()
+                closed.set()
+
+            closer = threading.Thread(target=close)
+            closer.start()
+            try:
+                if not closed.wait(2):
+                    import sys
+                    import traceback
+
+                    stacks = "\n".join(
+                        "".join(traceback.format_stack(frame)[-8:])
+                        for frame in sys._current_frames().values()
+                    )
+                    raise AssertionError("Listener did not drain incomplete headers:\n" + stacks)
+            finally:
+                client.close()
+                closer.join(5)
+            assert not closer.is_alive() and service.pull(token) == []
+            with make_server(service):
+                pass
