@@ -285,7 +285,14 @@ try {
   assert.equal((await transport.push(ready.desktop_token,artifactOp)).outcome,'accepted');
   await engine.sync();
   assert.equal(projection(await store.read()).decks[0].id,artifactId);
-  await engine.downloadArtifact(artifactId); engine.disconnect();
+  await engine.downloadArtifact(artifactId);
+  const prepared = await engine.prepareOffline(PAPER);
+  assert.equal(prepared.paper_id,PAPER);
+  assert.equal(prepared.whole_workspace_offline_verified,false);
+  assert.equal(prepared.verified_targets,prepared.total_targets);
+  assert(prepared.total_targets >= 2);
+  assert.deepEqual((await engine.pdf(PAPER)).bytes,bytes);
+  engine.disconnect();
   const deck = await engine.deck(artifactId);
   assert.equal(deck.operation.payload.input_versions.schema_version,2);
   assert.equal(deck.operation.payload.input_versions.workspace_id,'earlier-workspace');

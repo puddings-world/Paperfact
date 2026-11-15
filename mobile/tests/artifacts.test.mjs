@@ -187,3 +187,19 @@ test('recorded deck input scope survives authenticated sync and offline reopen w
     assert.throws(()=>validateArtifact(bad,id));
   }
 });
+
+
+for(const source of ['current','unknown'])test('offline reading caches the primary and declared deck closure: '+source,async()=>{
+ const s=await setup(),entry=await fixture();
+ const state=await s.store.read(),doc=state.entities['paper_document/'+PAPER].operation;
+ if(source==='current')entry.payload.source_document_hash=doc.payload.sha256;
+ const id=await publish(s,entry),before=await s.store.read();
+ const result=await s.engine.prepareOffline(PAPER);
+ assert.equal(result.ready,source==='current');assert.equal(result.total_targets,2);
+ assert.equal(stable((await s.engine.deck(id)).body),stable(entry.body));
+ assert.deepEqual((await s.store.read()).entities,before.entities);
+ assert.deepEqual((await s.store.read()).outbox,before.outbox);
+ const offline=new Engine(s.store),calls=s.transport.calls.length;
+ assert.equal((await offline.prepareOffline(PAPER)).ready,source==='current');
+ assert.equal(s.transport.calls.length,calls);
+});

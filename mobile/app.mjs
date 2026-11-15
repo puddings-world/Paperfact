@@ -52,6 +52,7 @@ let deckURLs = [];
 function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
 let switchingWorkspace = false, connectionDialog = null;
 let language = navigator.language.toLowerCase().startsWith('zh') ? 'zh-TW': 'en', t = translator(language);
+let noticeProgress=null;
 let engine, store, state, view = new ReaderView(), notice = 'demoHelp', busy = false, isError = false,
 demo = true, connected = false, pdfURL = null, pdfHash = null, renderSerial = 0, draftTimer;
 const el =(tag, attributes = {}, ...children) => {
@@ -106,12 +107,13 @@ async function refresh() {
   render();
 }
 function announce(code, progress) {
+  noticeProgress=progress;
   notice = code;
   isError = false;
   if(code === 'downloading') notice = 'downloading';
   const live = document.querySelector('#notice-text');
-  if(live) live.textContent = t(code) +(progress !== undefined ? ` · ${progress}%`: '');
-  if(!['downloading', 'syncing'].includes(code)) void refresh();
+  if(live) live.textContent = noticeText(code,progress);
+  if(!['downloading', 'syncing','reading_preparing'].includes(code)) void refresh();
 }
 async function openWorkspace(workspace, device, transport, {
   token = null,
@@ -249,7 +251,7 @@ function render() {
   }),
   el('span', {
     id: 'notice-text'
-  }, t(notice))
+  }, noticeText(notice,noticeProgress))
   );
   const aside = el(
   'aside',
@@ -758,6 +760,27 @@ function confirmDelete(id) {
   document.body.append(dialog);
   dialog.showModal();
 }
+function noticeText(code,progress) {
+  if(code==='reading_preparing'&&progress&&Number.isInteger(progress.completed)&&
+      Number.isInteger(progress.total))return t(code)+` \u00b7 ${progress.completed}/${progress.total}`+
+      (Number.isInteger(progress.currentPercent)?` \u00b7 ${progress.currentPercent}% ${t('currentDownload')}`:'');
+  return t(code)+(typeof progress==='number'?` \u00b7 ${progress}%`:'');
+}
+function prepareReadingOffline(paperId) {
+  const owner=engine;
+  return attempt(async()=>{
+    try {await owner.prepareOffline(paperId,{
+      current:()=>owner===engine&&view.paper===paperId&&!switchingWorkspace,
+    });}
+    catch(error){
+      if(owner!==engine)return;
+      if(view.paper!==paperId||error.message==='cancelled'){
+        notice='reading_stopped';return;
+      }
+      throw error;
+    }
+  },{working:true});
+}
 function renderPdf(panel, paper) {
   const target = documentTarget(state, paper.id),
   file = target && state.files[target.payload.sha256];
@@ -768,18 +791,24 @@ function renderPdf(panel, paper) {
   },
   el('h2', {}, t(file?.verified ? 'localFile': 'missing')),
   text('pdfLimit'),
+  text('offlineReadingHelp'),
   el(
   'div',
   {
     class: 'toolbar'
   },
   button(
+  t('prepareReading'),
+  () => prepareReadingOffline(paper.id),
+  {id:'prepare-reading-offline',class:'primary',disabled:!connected||!target||busy?'':null}
+  ),
+  button(
   t('download'),
   () => attempt(() => engine.download(paper.id), {
     working: true
   }),
   {
-    class: 'primary',
+    class: 'quiet',
     disabled: ! connected || ! target || busy ? '': null
   }
   ),

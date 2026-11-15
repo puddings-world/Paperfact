@@ -1,5 +1,7 @@
 import {editableTextNote} from './content.mjs';
-import { downloadArtifact, readArtifact } from './artifact-engine.mjs';
+import { artifactTarget, ARTIFACT_CACHE_BYTES, downloadArtifact, readArtifact } from './artifact-engine.mjs';
+import {sourceFileId, validateArtifact} from './artifacts.mjs';
+import {validateLineageOperation} from './lineage-ops.mjs';
 import {preparePositionPush,reconcilePositionIntents} from './primary-source-retention.mjs';
 import {exportPositionRecovery} from './position-recovery.mjs';
 import {
@@ -18,6 +20,7 @@ import {
   receive,
   requireThat,
   stable,
+  validateOperation,
   validateEvent,
   validateProjection
 } from './domain.mjs';
@@ -282,65 +285,15 @@ export class Engine {
     return promise;
   }
   async downloadRun(paperId, generation) {
-    await this.authenticated(generation);
-    const state = await this.store.read(),
-    target = documentTarget(state, paperId);
-    requireThat(target, 'file_unavailable');
-    const {
-      sha256: hash,
-      size
-    } = target.payload;
-    requireThat(size <= MAX_LOCAL_PDF, 'file_too_large');
-    const existing = state.files[hash],
-    chunks = existing?.size === size ? copy(existing.chunks): [];
-    let offset = chunks.reduce((total, c) => total + c.byteLength, 0);
-    requireThat(offset <= size, 'invalid_file');
-    while(offset < size) {
-      this.check(generation);
-      const bytes = await this.transport.blob_read(this.#token, hash, size, offset, CHUNK, this.controller.signal);
-      this.check(generation);
-      requireThat(bytes instanceof Uint8Array && bytes.length === Math.min(CHUNK, size - offset), 'invalid_file');
-      chunks.push(bytes);
-      offset += bytes.length;
-      await this.store.update(next => {
-        this.check(generation);
-        requireThat(stable(documentTarget(next, paperId)) === stable(target), 'stale_document');
-        next.files[hash] = {
-          size,
-          chunks: copy(chunks),
-          verified: false
-        };
-      });
-      this.onChange('downloading', Math.floor(offset / size * 100));
-    }
-    const bytes = join(chunks, size);
-    if(await sha256(bytes) !== hash) {
-      await this.store.update(next => {
-        this.check(generation);
-        next.files[hash] = {
-          size,
-          chunks: [],
-          verified: false
-        };
-      });
-      throw new Error('corrupt_file');
-    }
-    requireThat(
-    new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-' && new TextDecoder().decode(bytes.slice(- 1024)).includes('%%EOF'),
-    'invalid_pdf'
-    );
-    this.check(generation);
-    await this.store.update(next => {
-      this.check(generation);
-      requireThat(stable(documentTarget(next, paperId)) === stable(target), 'stale_document');
-      next.files[hash] = {
-        size,
-        chunks: copy(chunks),
-        verified: true
-      };
-    });
-    this.onChange('file_ready');
-    return hash;
+    return downloadDocument(this,paperId,this.#token,generation);
+  }
+  prepareOffline(paperId,{current=()=>true,signal}={}) {
+    const key='reading:'+paperId;
+    if(this.downloads.has(key))return this.downloads.get(key);
+    const generation=this.generation;
+    const job=prepareReading(this,paperId,this.#token,generation,{current,signal})
+      .finally(()=>this.downloads.delete(key));
+    this.downloads.set(key,job);return job;
   }
   async pdf(paperId) {
     const state = await this.store.read(),
@@ -383,4 +336,204 @@ function join(chunks, size) {
   }
   requireThat(offset === size, 'invalid_file');
   return bytes;
+}
+
+async function downloadDocument(engine,paperId,token,generation) {
+    await engine.authenticated(generation);
+    const state = await engine.store.read(),
+    target = documentTarget(state, paperId);
+    requireThat(target, 'file_unavailable');
+    const {
+      sha256: hash,
+      size
+    } = target.payload;
+    requireThat(size <= MAX_LOCAL_PDF, 'file_too_large');
+    const existing = state.files[hash],
+    chunks = existing?.size === size ? copy(existing.chunks): [];
+    let offset = chunks.reduce((total, c) => total + c.byteLength, 0);
+    requireThat(offset <= size, 'invalid_file');
+    while(offset < size) {
+      engine.check(generation);
+      const bytes = await engine.transport.blob_read(token, hash, size, offset, CHUNK, engine.controller.signal);
+      engine.check(generation);
+      requireThat(bytes instanceof Uint8Array && bytes.length === Math.min(CHUNK, size - offset), 'invalid_file');
+      chunks.push(bytes);
+      offset += bytes.length;
+      await engine.store.update(next => {
+        engine.check(generation);
+        requireThat(stable(documentTarget(next, paperId)) === stable(target), 'stale_document');
+        next.files[hash] = {
+          size,
+          chunks: copy(chunks),
+          verified: false
+        };
+      });
+      engine.onChange('downloading', Math.floor(offset / size * 100));
+    }
+    const bytes = join(chunks, size);
+    if(await sha256(bytes) !== hash) {
+      await engine.store.update(next => {
+        engine.check(generation);
+        next.files[hash] = {
+          size,
+          chunks: [],
+          verified: false
+        };
+      });
+      throw new Error('corrupt_file');
+    }
+    requireThat(
+    new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-' && new TextDecoder().decode(bytes.slice(- 1024)).includes('%%EOF'),
+    'invalid_pdf'
+    );
+    engine.check(generation);
+    await engine.store.update(next => {
+      engine.check(generation);
+      requireThat(stable(documentTarget(next, paperId)) === stable(target), 'stale_document');
+      next.files[hash] = {
+        size,
+        chunks: copy(chunks),
+        verified: true
+      };
+    });
+    engine.onChange('file_ready');
+    return hash;
+  }
+
+const READING_METADATA_BYTES=64*1024**2;
+const READING_ARTIFACTS=258;
+function readingView(state) {
+  // Cache bytes and drafts are not graph input: never clone them to plan a transfer.
+  const outbox=state.outbox.filter(({operation:op})=>op.entity_type!=='reading_state' &&
+    (op.entity_type!=='note'||op.payload.anchor||
+      state.entities[keyOf('note',op.entity_id)]?.operation.payload.anchor));
+  const metadata={...state,outbox,files:{},artifactFiles:{},appliedArtifacts:{},
+    drafts:{},draftBases:{},readProjection:null};
+  return outbox.length?optimistic(metadata):metadata;
+}
+function readingRows(view,paper) {
+  return Object.values(view.entities).map(row=>row.operation).filter(op=>
+    op.action==='put' && active(view,op.entity_type,op.entity_id) &&
+    ((op.entity_type==='research_content'&&op.payload.scope?.kind==='paper'&&
+       op.payload.scope.id===paper) ||
+     (op.entity_type==='note'&&op.payload.paper_id===paper&&op.payload.anchor) ||
+     (op.entity_type==='research_file'&&op.payload.paper_id===paper&&op.payload.feature==='deck')))
+    .sort((a,b)=>keyOf(a.entity_type,a.entity_id).localeCompare(keyOf(b.entity_type,b.entity_id)));
+}
+export function readingTargets(state,paperId) {
+  const view=readingView(state),primary=documentTarget(view,paperId);
+  requireThat(active(view,'paper',paperId)&&primary,'file_unavailable');
+  validateOperation(primary,state.workspace);
+  requireThat(primary.payload.size<=MAX_LOCAL_PDF,'file_too_large');
+  requireThat(stable(documentTarget(state,paperId))===stable(primary),'stale_reading');
+  const rows=readingRows(view,paperId),artifacts=new Map(),references=new Map(),warnings=[];
+  let metadataBytes=0;
+  const warningKeys=new Set();
+  const warn=(id,reason)=>{const key=stable([id,reason]);
+    if(!warningKeys.has(key)){warningKeys.add(key);warnings.push({id,reason});}};
+  function source(owner,hash,pin=null,parent=null) {
+    const id=sourceFileId(owner,hash),target=artifactTarget(view,id);
+    references.set(id,target);
+    if(!target){warn(id,'missing_source');return;}
+    validateOperation(target,state.workspace);validateArtifact(target.payload,id,target.parents);
+    if(target.payload.feature!=='original_source'||target.payload.paper_id!==owner||
+      target.payload.slot!==hash||target.payload.source_document_hash!==hash ||
+      (pin&&(target.incarnation!==pin.incarnation||stable(target.parents)!==stable([parent])))) {
+      warn(id,'stale_source');return;
+    }
+    artifacts.set(id,target);
+  }
+  for(const op of rows) {
+    validateOperation(op,state.workspace);
+    metadataBytes+=new TextEncoder().encode(stable(op)).length;
+    requireThat(metadataBytes<=READING_METADATA_BYTES,'reading_too_large');
+    const payload=op.payload;
+    if(op.entity_type==='research_file') {
+      validateArtifact(payload,op.entity_id,op.parents);artifacts.set(op.entity_id,op);
+      if(payload.source_document_hash!==primary.payload.sha256)warn(op.entity_id,'unverified_deck_source');
+    } else if(op.entity_type==='research_content'&&payload.feature==='lineage') {
+      validateLineageOperation(op);
+      for(const declared of payload.data.body_json.report.sources) {
+        if(declared.availability!=='available'){warn(declared.id,'unavailable_source');continue;}
+        const pin=op.source_dependencies.find(item=>item.source_id===declared.id);
+        requireThat(pin,'reading_sources_unavailable');
+        source(pin.paper_id,declared.document_hash,pin,op.parents.find(item=>item.id===pin.paper_id));
+      }
+    } else {
+      const hash=op.entity_type==='note'?payload.anchor.document_hash:payload.source_document_hash;
+      if(hash&&hash!==primary.payload.sha256)source(paperId,hash);
+    }
+    requireThat(artifacts.size<=READING_ARTIFACTS&&references.size<=READING_ARTIFACTS,'reading_too_large');
+  }
+  // Read-only mirrors may be readable but cannot grant original-file access.
+  const snapshot=state.readProjection?.papers?.find(paper=>paper.id===paperId);
+  for(const row of snapshot?.lineage??[]) {
+    requireThat(typeof row?.body?.corpus_id==='string','reading_sources_unavailable');
+    if(!rows.some(op=>op.payload.feature==='lineage'&&op.payload.key===row.body.corpus_id))
+      warn(row.body.corpus_id,'unverified_snapshot_source');
+  }
+  for(const item of snapshot?.research_content??[]) {
+    const hash=item.source_document_hash??item.data?.document_hash;
+    if((hash&&hash!==primary.payload.sha256||
+        ['claims','highlight_analysis','reading_links','research_questions'].includes(item.feature))&&
+        !rows.some(op=>op.entity_type==='research_content'&&op.payload.feature===item.feature&&
+          op.payload.key===item.key))warn(item.feature+':'+item.key,'unverified_snapshot_source');
+  }
+  const sizes=new Map();
+  for(const op of artifacts.values())for(const item of [op.payload.body,...op.payload.assets]) {
+    const prior=sizes.get(item.sha256);
+    requireThat(prior===undefined||prior===item.size,'invalid_artifact');sizes.set(item.sha256,item.size);
+  }
+  requireThat([...sizes.values()].reduce((sum,size)=>sum+size,0)<=ARTIFACT_CACHE_BYTES,'storage_quota');
+  return {paper_id:paperId,primary,contexts:rows,artifacts:[...artifacts.values()]
+    .sort((a,b)=>a.entity_id.localeCompare(b.entity_id)),references:[...references.entries()]
+    .sort(([a],[b])=>a.localeCompare(b)),warnings};
+}
+async function prepareReading(engine,paperId,token,generation,{current,signal}) {
+  requireThat(typeof current==='function','stale_reading');
+  const live=()=>{engine.check(generation);requireThat(current()===true&&!signal?.aborted,'stale_reading');};
+  live();const initial=await engine.store.read();live();
+  const plan=readingTargets(initial,paperId),signature=stable(plan),total=1+plan.artifacts.length;
+  const keys=plan.contexts.map(op=>[keyOf(op.entity_type,op.entity_id),op.operation_id,op.incarnation]);
+  let completed=0;
+  const progress=()=>{live();engine.onChange('reading_preparing',{completed,total});};
+  function checkState(state) {
+    live();const view=readingView(state);
+    requireThat(stable(documentTarget(view,paperId))===stable(plan.primary),'stale_reading');
+    const now=readingRows(view,paperId).map(op=>[keyOf(op.entity_type,op.entity_id),op.operation_id,op.incarnation]);
+    requireThat(stable(now)===stable(keys),'stale_reading');
+    for(const op of plan.contexts)if(op.source_dependencies)requireThat(
+      stable(view.entities[keyOf(op.entity_type,op.entity_id)]?.operation.source_dependencies)===
+      stable(op.source_dependencies),'stale_reading');
+    for(const [id,target] of plan.references)requireThat(stable(artifactTarget(view,id))===stable(target),'stale_reading');
+    for(const target of plan.artifacts)requireThat(stable(artifactTarget(view,target.entity_id))===stable(target),'stale_reading');
+  }
+  const scope={transport:engine.transport,controller:engine.controller,
+    check:()=>live(),authenticated:async()=>{live();await engine.authenticated(generation);live();},
+    onChange:(code,percent)=>{live();engine.onChange('reading_preparing',{completed,total,
+      ...(code==='downloading'&&Number.isInteger(percent)?{currentPercent:percent}:{})});},store:{
+      read:async()=>{const state=await engine.store.read();checkState(state);return state;},
+      update:change=>engine.store.update(state=>{checkState(state);return change(state);})}};
+  progress();
+  try {const cached=await engine.pdf(paperId);live();
+    requireThat(cached.sha256===plan.primary.payload.sha256,'stale_reading');}
+  catch(error){live();if(error.message!=='file_unavailable')throw error;
+    await downloadDocument(scope,paperId,token,generation);}
+  checkState(await engine.store.read());completed++;progress();
+  for(const target of plan.artifacts) {
+    let cached;
+    try {cached=await readArtifact(scope,target.entity_id,target.payload.feature);}
+    catch(error){if(error.message!=='artifact_unavailable')throw error;}
+    if(!cached||cached.awaiting)await downloadArtifact(scope,target.entity_id,token,generation);
+    const verified=await readArtifact(scope,target.entity_id,target.payload.feature);
+    requireThat(!verified.awaiting&&stable(verified.operation)===stable(target),'stale_reading');
+    checkState(await engine.store.read());completed++;progress();
+  }
+  const final=await engine.store.read();checkState(final);
+  requireThat(stable(readingTargets(final,paperId))===signature,'stale_reading');
+  const ready=plan.warnings.length===0;
+  live();engine.onChange(ready?'reading_ready':'reading_partial',{completed,total});
+  return {scope:'selected_current_manifests',paper_id:paperId,ready,
+    verified_targets:completed,total_targets:total,warnings:copy(plan.warnings),
+    whole_workspace_offline_verified:false};
 }

@@ -346,6 +346,11 @@ Other saved analyses, notes and originals remain available; see the
 Packaged sync acceptance also verifies exact citation-graph content, idempotent
 retry and persistence across listener restart; see [toolchain](docs/toolchain.md).
 
+In the development mobile reader, **Original PDF > Prepare offline reading** saves
+this PDF, declared source originals and current slide decks together; incomplete
+source declarations remain partial. **Save PDF offline** is still available.
+See [scope and acceptance limits](docs/mobile-0.5.md#prepare-one-paper-for-offline-reading).
+
 The mobile overview includes collapsible saved reference analyses and citation
 passages, with explicit original-version scope; see [mobile reader](docs/mobile-0.5.md).
 

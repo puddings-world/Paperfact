@@ -344,3 +344,33 @@ and the verified v28 artifact; the web app is built, not deployed.
 ![Saved citation card at phone width, synthetic English fixture](images/mobile-citations-en.png)
 
 ![Saved citation card at phone width, synthetic Traditional Chinese fixture](images/mobile-citations-zh-TW.png)
+
+## Prepare one paper for offline reading
+
+In **Original PDF**, choose **Prepare offline reading** to verify and save the
+current PDF, declared original sources used by native annotations/Lineage, and
+that paper's current slide decks and images. **Save PDF offline** remains a
+separate smaller download. Research metadata must already be synchronized.
+
+The status reports verified items (for example, 1/3), with actual current-item
+transfer percentages when available. It does not estimate elapsed time or the
+percentage of the whole workspace. Repeated activation shares one job; changing
+paper/workspace, Stop, source revisions and cancellations prevent stale completion.
+Verified earlier items survive a failed later download and can be reused on retry.
+
+A partial result means available files were saved but some source declarations
+are missing, unavailable or cannot be verified. Read-only snapshots do not grant
+original-file access. This does not download arbitrary linked papers, historical
+versions or all workspace files. Existing PDF (32 MiB), artifact/cache and bounded
+metadata limits still apply. No AI call or research operation is generated.
+
+`Engine.prepareOffline(paperId, {current, signal})` returns readiness, warnings,
+verified/total targets and `whole_workspace_offline_verified: false`. Cached-only
+verification can run without a connected transport. Source context must still
+match at completion; byte equality alone cannot replace source ownership/lifetime.
+
+Shell v29 is built and verified locally, newer than the delivered cb6ca66
+native/mobile candidate, and has not been hosted. Windows synthetic core/protocol tests pass. Actual isolated
+Chrome preparation and EN/ZH phone-width rendering were observed, but the complete
+service-worker offline-reload diagnostic remains unaccepted because its repeated
+runs were not stable. Physical Safari/phone durability and quota remain open.

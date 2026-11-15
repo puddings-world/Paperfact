@@ -401,3 +401,29 @@ Object.assign(messages['zh-TW'],{
   citationSource_same:'\u8a18\u9304\u8207\u76ee\u524d\u539f\u6587\u7248\u672c\u76f8\u540c\uff0c\u4e0d\u4ee3\u8868\u5f15\u6587\u8207\u89e3\u8b80\u5df2\u6838\u5c0d\u3002',
   citationSource_different:'\u8a18\u9304\u5c6c\u65bc\u53e6\u4e00\u7248\u539f\u6587\uff0c\u8acb\u5148\u6838\u5c0d\u8a72\u7248\u672c\u7684\u6bb5\u843d\u3002'
 });
+
+Object.assign(messages["en"], {
+  "prepareReading": "Prepare offline reading",
+  "offlineReadingHelp": "Save this PDF, declared source originals and slide decks together.",
+  "currentDownload": "current item",
+  "reading_preparing": "Preparing offline reading",
+  "reading_ready": "Current reading files verified and saved offline",
+  "reading_partial": "Available files saved; some source versions still need review.",
+  "reading_stopped": "Preparation stopped; saved files retained.",
+  "stale_reading": "Reading sources changed. Prepare again; saved files are retained.",
+  "reading_sources_unavailable": "Valid source declarations are missing. Sync metadata and check the originals.",
+  "reading_too_large": "This reading selection exceeds the local preparation limit. Download needed files separately."
+});
+
+Object.assign(messages["zh-TW"], {
+  "prepareReading": "\u6e96\u5099\u96e2\u7dda\u95b1\u8b80",
+  "offlineReadingHelp": "\u4e00\u6b21\u5132\u5b58\u672c\u6587 PDF\u3001\u5df2\u5ba3\u544a\u7684\u4f86\u6e90\u539f\u6587\u8207\u7c21\u5831\u3002",
+  "currentDownload": "\u76ee\u524d\u9805\u76ee",
+  "reading_preparing": "\u6b63\u5728\u6e96\u5099\u96e2\u7dda\u95b1\u8b80",
+  "reading_ready": "\u672c\u7bc7\u5df2\u5ba3\u544a\u7684\u95b1\u8b80\u6a94\u6848\u5df2\u6838\u5c0d\u4e26\u5132\u5b58\u65bc\u672c\u6a5f\u3002",
+  "reading_partial": "\u53ef\u7528\u6a94\u6848\u5df2\u5132\u5b58\uff0c\u90e8\u5206\u4f86\u6e90\u7248\u672c\u4ecd\u5f85\u6838\u5c0d\u3002",
+  "reading_stopped": "\u5df2\u505c\u6b62\u6e96\u5099\uff0c\u5df2\u5132\u5b58\u7684\u6a94\u6848\u6703\u4fdd\u7559\u3002",
+  "stale_reading": "\u95b1\u8b80\u4f86\u6e90\u5df2\u8b8a\u66f4\uff0c\u8acb\u91cd\u65b0\u6e96\u5099\uff1b\u672c\u6a5f\u6a94\u6848\u4ecd\u4fdd\u7559\u3002",
+  "reading_sources_unavailable": "\u7f3a\u5c11\u6709\u6548\u4f86\u6e90\u8cc7\u6599\uff0c\u8acb\u5148\u540c\u6b65\u4e26\u6aa2\u67e5\u539f\u6587\u3002",
+  "reading_too_large": "\u6b64\u6b21\u95b1\u8b80\u8cc7\u6599\u8d85\u904e\u672c\u6a5f\u6e96\u5099\u7bc4\u570d\uff0c\u8acb\u5206\u5225\u4e0b\u8f09\u6240\u9700\u6a94\u6848\u3002"
+});

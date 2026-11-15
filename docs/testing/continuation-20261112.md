@@ -6868,3 +6868,40 @@ additional worktree was introduced.
   consistency 58 passed in 1.86s / 5.1s total. Privacy and Ruff passed in both.
   All local checks governed, one at a time. No historical full/release selection
   or native rebuild was repeated; existing candidate identity remains cb6ca66.
+
+## 2026-11-15: mobile reading preparation, source after cb6ca66
+
+- Existing engine/app now share one bounded single-paper plan: primary PDF,
+  current owned deck/image closure, native annotation originals and exact Lineage
+  source pins. Downloading never grants arbitrary URLs/snapshots; partial/unknown
+  source versions cannot produce a complete result. Generation, paper/account,
+  cancellation and metadata guards fence late delivery. Verified items survive
+  retry and cached-only verification needs no transport. No new runtime module.
+- Existing core engine/original/artifact checks: 56 passed, 0 failed, 1.1045s Node /
+  1.266s governed total. New fixture errors (operation-ID collision, missing import,
+  line-ending edit assertion and null-prototype comparison) were corrected before
+  this pass; earlier failures are not evidence of success. Original assertions stay.
+- Cache/component checks: 60 passed, 0 failed, 0.5108s Node / 0.641s governed total.
+  Shell v29 intentionally invalidates v28 and retains research caches. Two existing
+  fixed v19 expectations were updated to v29; no behavior assertion was removed.
+- Actual JS client/Python loopback authority passed in 2.0s governed total including
+  prepared target counts and retained PDF/deck bytes. Fixture accounts/data only.
+- Isolated Chrome: actual preparation, one cached PDF, zero new outbox entries and
+  EN/ZH 390px screenshots observed. Full end-to-end browser check did NOT pass:
+  first two runs searched English while native locale was Chinese (11.546/11.563s),
+  explicit user-agent experiment stopped at startup (11.0s), next reached screenshot
+  checks but incorrectly expected immediate worker control (12.062s); after reload
+  sequencing correction another run stopped at startup (11.421s). No product guard
+  was relaxed; stop repeated browser runs and retain offline-reload as an open gate.
+  Diagnostic files are isolated under build/offline-reading-browser-20261115.
+- Existing skill ownership/context patterns already cover this change; no new
+  portable rule or global skill installation is warranted. No owner research,
+  real login/model, deployment or public release. Native candidate remains cb6ca66.
+
+- Final critical gate: 14 passed in 7.05s / 10.3s total; docs consistency:
+  58 passed in 1.81s / 4.8s total. Privacy and Ruff passed. All checks one at a
+  time under max-two-processor/25% CPU governance; no exhaustive suite repeated.
+- Local static v29 artifact built then independently verified: 50 files,
+  3,932,964 bytes, ID 900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284.
+  Build 0.531s, verification 0.219s governed. It is not deployed and does not
+  update the previously delivered native/mobile candidate automatically.

@@ -131,4 +131,86 @@ test('a selected peer opens its own exact original, never the focal bytes',async
  await s.engine.sync();const lease=await openLineageSource(s.engine,PAPER,row,source.id,{download:true});
  const actual=await lineageSourceForDelivery(s.engine,lease);assert.deepEqual(actual,peerBytes);assert.notDeepEqual(actual,bytes);
  assert.equal(lease.sha256,hash);assert.deepEqual((await s.store.read()).files,{});assert.equal(projection(await s.store.read()).papers.find(p=>p.id===PAPER).lineage.length,2);
+ await primary(s);const prepared=await s.engine.prepareOffline(PAPER);
+ assert.equal(prepared.ready,true);assert.equal(prepared.total_targets,3);
+ const offline=new Engine(s.store),cached=await openLineageSource(offline,PAPER,row,source.id);
+ assert.deepEqual(await lineageSourceForDelivery(offline,cached),peerBytes);
+ assert.equal(Object.keys((await s.store.read()).files).length,1);
+});
+
+
+async function primary(s) {
+ const doc=operation('paper_document',PAPER,{paper_id:PAPER,sha256:await digest(bytes),
+  size:bytes.length,media_type:'application/pdf'},{operationId:'offline-reading-primary',parents:[ref('paper',PAPER)]});
+ assert.equal((await s.transport.push('fixture-token',{...doc,device_id:'demo-phone'})).outcome,'accepted');
+ await s.engine.sync();
+}
+test('one offline-reading action verifies primary and pinned originals, deduplicates and reopens offline',async()=>{
+ const s=await setup();await primary(s);const before=await s.store.read(),events=[];
+ s.engine.onChange=(code,value)=>events.push([code,value]);
+ const first=s.engine.prepareOffline(PAPER);
+ assert.equal(s.engine.prepareOffline(PAPER),first);
+ const result=await first;
+ assert.equal(result.ready,true);assert.equal(result.verified_targets,2);
+ assert.equal(result.total_targets,2);assert.equal(result.whole_workspace_offline_verified,false);
+ const after=await s.store.read();
+ assert.deepEqual(after.entities,before.entities);assert.deepEqual(after.outbox,before.outbox);
+ assert.deepEqual(after.receipts,before.receipts);assert.equal(after.cursor,before.cursor);
+ const lease=await openLineageSource(s.engine,PAPER,s.row,s.source.id);
+ assert.deepEqual(await lineageSourceForDelivery(s.engine,lease),bytes);
+ assert.equal(events.at(-1)[0],'reading_ready');
+ assert(events.filter(([code])=>code==='reading_preparing').every(([,p])=>p.completed<=p.total));
+ const calls=s.transport.calls.length,offline=new Engine(s.store);
+ assert.equal((await offline.prepareOffline(PAPER)).ready,true);
+ assert.equal(s.transport.calls.length,calls);
+});
+for(const change of ['paper','account','abort'])test('offline reading refuses a late result after '+change,async()=>{
+ const s=await setup();await primary(s);const before=await s.store.read(),events=[];
+ let release,started;const hold=new Promise(r=>release=r),admitted=new Promise(r=>started=r);
+ const read=s.transport.blob_read.bind(s.transport);let current=true;
+ s.transport.blob_read=async(...args)=>{const data=await read(...args);started();await hold;return data;};
+ s.engine.onChange=code=>events.push(code);const controller=new AbortController();
+ const pending=s.engine.prepareOffline(PAPER,{current:()=>current,signal:controller.signal});
+ await admitted;
+ if(change==='paper')current=false;if(change==='account')s.engine.disconnect();
+ if(change==='abort')controller.abort();release();
+ await assert.rejects(pending,/cancelled|stale_reading/);
+ assert.deepEqual((await s.store.read()).files,before.files);
+ assert(!events.includes('reading_ready'));
+});
+test('failed offline reading retains verified primary and retries sources without another PDF read',async()=>{
+ const s=await setup();await primary(s);const read=s.transport.blob_read.bind(s.transport);let calls=0;
+ s.transport.blob_read=async(...args)=>{if(++calls===2)throw Error('fixture_offline');return read(...args);};
+ await assert.rejects(s.engine.prepareOffline(PAPER),/fixture_offline/);
+ assert.deepEqual((await s.engine.pdf(PAPER)).bytes,bytes);
+ s.transport.blob_read=read;const start=s.transport.calls.length;
+ assert.equal((await s.engine.prepareOffline(PAPER)).ready,true);
+ const later=s.transport.calls.slice(start).filter(call=>call[0]==='blob');
+ assert(later.length>0);assert(later.length<3);
+});
+test('snapshot-only Lineage stays partial and cannot mint original access',async()=>{
+ const s=await setup();await primary(s);
+ await s.store.update(state=>{state.readProjection={papers:[{id:PAPER,lineage:[s.row]}]};
+  delete state.entities['research_content/'+s.science.entity_id];delete state.graph['research_content/'+s.science.entity_id];});
+ const result=await s.engine.prepareOffline(PAPER);
+ assert.equal(result.ready,false);assert.equal(result.total_targets,1);
+ assert(result.warnings.some(item=>item.reason==='unverified_snapshot_source'));
+ assert.deepEqual((await s.store.read()).artifactFiles,{});
+});
+
+
+for(const change of ['document','source','report'])test('metadata changes invalidate the complete offline-reading scope: '+change,async()=>{
+ const s=await setup();await primary(s);let release,started;
+ const hold=new Promise(r=>release=r),admitted=new Promise(r=>started=r),read=s.transport.blob_read.bind(s.transport);
+ s.transport.blob_read=async(...args)=>{const data=await read(...args);started();await hold;return data;};
+ const pending=s.engine.prepareOffline(PAPER);await admitted;
+ await s.store.update(state=>{
+  const old=change==='source'?s.file:change==='report'?s.science:state.entities['paper_document/'+PAPER].operation;
+  const changed={...structuredClone(old),operation_id:'reading-'+change+'-updated',
+    base_revision:change==='source'?2:change==='report'?3:4};
+  if(change==='report')changed.payload.data.written_at='2026-11-15T01:00:00+00:00';
+  receive(state,[event(changed,5)]);
+ });release();
+ await assert.rejects(pending,/stale_reading|stale_document|stale_artifact/);
+ assert.deepEqual((await s.store.read()).files,{});
 });
