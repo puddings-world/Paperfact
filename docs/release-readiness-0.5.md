@@ -1,6 +1,12 @@
 # v0.5.0 release readiness
 
-Latest same-source preview: [88595d3 / run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
+Latest Mac test package: [2fb6923 / run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806).
+Mac arm64 source/rendering/frozen acceptance passes6m03s; downloaded provenance
+matches clean source, and the actual reading screenshot has text. Exact downloads
+and remaining physical/hosted gates are in [Mac acceptance](testing/mac-acceptance-0.5.md).
+Windows/Linux are not rebuilt at this exact source. This is not release approval.
+
+Previous common same-source preview: [88595d3 / run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
 All three native builds/provenance reports pass; [downloads and device gates](testing/mac-acceptance-0.5.md).
 This is packaging evidence, not completion of the release gates below.
 

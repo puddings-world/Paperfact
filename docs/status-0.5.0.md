@@ -272,3 +272,14 @@ is blocked later by a reproducible screenshot rendered-page timeout in
 runs43771771878 and43772183133. Linux passes; Windows was still running when
 recorded. This is not an all-platform delivered candidate. See the Mac acceptance
 record; exact render-state diagnosis remains before another rebuild.
+
+### Delivered Mac preview2fb6923
+
+Mac43774457806 passes6m03s from clean2fb69238377a4a43d8cccae28eef78820494bf6a.
+Source, reading screenshot and frozen app gates pass. The small provenance/report
+and screenshots were downloaded, ZIP hashes matched and the actual reading text
+was visually inspected. Three native starts/foreground, four research files and
+all11 strict sync protocol checks pass; [download and test steps](testing/mac-acceptance-0.5.md).
+No new Windows/Linux build at this source, public release, hosted deployment or
+physical-device acceptance is claimed. New report dialogs remain source/widget
+verified rather than comprehensively covered by standard frozen acceptance.

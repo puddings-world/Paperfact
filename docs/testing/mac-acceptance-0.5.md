@@ -1,6 +1,40 @@
 # Mac v0.5 acceptance
 
-## Current candidate: 88595d3
+## Latest Apple Silicon test build: 2fb6923
+
+[Mac run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806)
+passes in6m03s, from clean `2fb69238377a4a43d8cccae28eef78820494bf6a`,
+version `0.5.0.dev`, beta-candidate channel. This is newer than the common-platform
+baseline below; Windows/Linux have not been rebuilt at this exact source.
+
+| Download | Purpose |
+|---|---|
+| [Mac DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14184844475) | Extract the ZIP, open the DMG, and copy the test app into a separate folder |
+| [Synthetic research package](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185583010) | Import `original.zip` into the isolated test workspace |
+| [Build identity and acceptance report](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185706911) | Match build2fb6923 when reporting a problem |
+| [Actual Mac screenshots](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185632796) | Compare the saved reading page, list, notes and slide layout |
+
+GitHub sign-in may be required. The DMG artifact ZIP is279,157,494bytes;
+GitHub-reported ZIP SHA-256 is
+`9d36a2e95a15b7383d2c8d28f8f9910480a3ca4ce62f3e57a1def2ca2ab23472`.
+This is not an independently downloaded DMG payload hash. The small provenance
+and screenshot ZIPs were downloaded and their hashes independently matched.
+The report confirms clean source, arm64, three reader launches, foreground
+activation, four research files preserved, CLI/MCP retry/restart and all11 packaged
+sync protocol checks. The reading screenshot was inspected: Chinese explanation,
+formula and pseudocode render with actual text, resolving the preceding blank-page
+gate. Empty-to-content now loads directly; populated views retain incremental
+updates. The screenshot tool keeps its exact-page, loaded-font and nonblank checks.
+
+Start with the separate-app commands below. Verify build2fb6923, import the
+synthetic package, read its PDF/explanation offline, save/reopen a note, then
+export/import the list package. Use your own AI only for explicit account checks.
+The new report review/completion flows have source/widget coverage; the standard
+frozen report does not automate every new dialog. Physical M01-M21, real accounts,
+old installed-binary upgrades, hosted sync and phone durability remain not run.
+No public release/tag or service deployment was created.
+
+## Previous common-platform candidate: 88595d3
 
 Built from clean `88595d332eaf36d911e3d15521e8d3f07ae976ca`, version
 `0.5.0.dev`, beta-candidate channel:

@@ -1217,5 +1217,8 @@ or installed-device acceptance. No global rule is promoted.
   regression with a missing callback, affected reader/rich-view32 pass18.3s stages.
 - Lesson: a requested placeholder is not a populated rendering surface. Load first
   content directly; optimize updates only after there is prior nonempty content.
-- Limits: Mac corrected-build/frozen acceptance remains pending; this does not
-  establish that every WebEngine navigation or later callback is reliable.
+- Mac follow-up: clean2fb6923/run43774457806 passes source/rendered screenshot
+  and frozen acceptance6m03s. Downloaded provenance and actual reading screenshot
+  were inspected; the latter contains explanation, formula and pseudocode.
+- Limits: physical-device and live-account checks remain; this does not establish
+  that every WebEngine navigation or later callback is reliable.

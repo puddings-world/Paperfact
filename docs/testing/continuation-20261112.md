@@ -8643,3 +8643,17 @@ it no longer asks the repaired blank transition to use the old behavior.
 Affected reader/rich-view32 pass14.77s pytest/18.3s stages, two CPUs/25% cap.
 No readiness predicate, deadline, stale-owner check or blank-image refusal is
 weakened. Mac source/frozen verification of the fix is still required.
+
+Mac2fb6923/run43774457806 passes6m03s. Downloaded provenance artifact14185706911
+ZIP SHA25665b2668d834d8cb306f7d72362f6c1e77e03acfe68281376b6234beefc5ae6e2
+and screenshots14185632796 SHA2566d7a501f2cce23f077d36e8ed65d28fcf67c310119df36b2702e4ff48893150c
+match independent hashes. Clean commit/arm64/pass true, three reader launches,
+four files,38MCP tools and11 sync protocol flags were read from the actual report.
+Actual dive.png visually contains Chinese explanation, formula and pseudocode.
+DMG artifact14184844475 is279157494bytes, GitHub ZIP digest
+9d36a2e95a15b7383d2c8d28f8f9910480a3ca4ce62f3e57a1def2ca2ab23472;
+the installer payload was not independently downloaded/installed here. Mac guide
+has direct downloads, isolated launch and short first checks. New report dialogs,
+physical devices, live accounts, old installed-binary upgrade and hosting remain
+separate gates. No public release or data migration. No Windows/Linux rebuild
+was started for this Mac delivery checkpoint.
