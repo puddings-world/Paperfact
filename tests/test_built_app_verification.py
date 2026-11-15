@@ -351,7 +351,7 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
     assert env == original and not (tmp_path / "synthetic").exists()
 
 
-@pytest.mark.parametrize("failure", [None, "stale_accepted", "bad_header"])
+@pytest.mark.parametrize("failure", [None, "stale_accepted", "bad_header", "graph_lost"])
 def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, monkeypatch, failure):
     sys.path.insert(0, str(ROOT / "scripts"))
     try:
@@ -373,6 +373,8 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
         status, offered, body = post(*args, **kwargs)
         if failure == "stale_accepted" and status == 428:
             return 200, offered, []
+        if failure == "graph_lost" and args[2] == "/v1/pull" and args[3].get("after") == 1:
+            return status, offered, []
         return status, offered, body
 
     if failure == "bad_header":
@@ -392,7 +394,20 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
                 verify.isolated_env(tmp_path / "isolated"),
             )
             assert result == dict(authenticated_pull=True, stale_execution_refused=True,
-                                  reconnected=True)
+                                  reconnected=True, citation_graph=True,
+                                  citation_graph_retry=True, citation_graph_restart=True)
             assert "token" not in json.dumps(result)
     finally:
         assert children and all(child.poll() is not None for child in children)
+
+
+def test_acceptance_upload_excludes_synthetic_credentials_and_authority():
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    block = workflow.split("name: acceptance-${{ matrix.name }}", 1)[1].split("- uses:", 1)[0]
+    paths = [line.strip() for line in block.split("path: |", 1)[1].splitlines() if line.strip()]
+    assert paths == [
+        "build/frozen-acceptance/*.log",
+        "build/frozen-acceptance/recipient/workspace/app-fault.log",
+        *[f"build/frozen-acceptance/sync-protocol/{name}.log"
+          for name in ("init", "issue", "first-listener", "second-listener")],
+    ]

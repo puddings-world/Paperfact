@@ -255,13 +255,18 @@ The packaged verifier also runs `sync-protocol` through
 `scripts/verify_sync_protocol.py`: `verify(command, folder, env) -> dict` starts the
 provided CLI's `sync-admin init`, `issue` and two `serve --port 0` executions.
 It verifies authenticated empty pull, a fresh execution identity after restart,
-HTTP 428 for the stale identity, and a successful explicit handshake/pull. Each
+HTTP 428 for the stale identity, and a successful explicit handshake/pull. It also
+pushes synthetic paper/citation-graph operations, checks exact graph content,
+idempotent retry without another event, and persistence after listener restart. Each
 listener has a 20-second startup limit and only its owned process is terminated
 in `finally`, including failed assertions. Init/issue each have a 25-second limit;
 HTTP calls have a five-second limit. Readiness and response reads are bounded.
 
 `report.json` contains only `authenticated_pull`, `stale_execution_refused` and
-`reconnected` booleans under `sync_protocol`. Synthetic credentials and private
-command logs stay in the isolated acceptance output, never the public result.
+`reconnected`, `citation_graph`, `citation_graph_retry` and `citation_graph_restart`
+booleans under `sync_protocol`. The result contains no research or credentials.
+CI uploads only the four named synthetic protocol logs (`init.log`, `issue.log`,
+`first-listener.log`, `second-listener.log`), alongside its existing exact log paths.
+It never uploads `device.json`, the authority database or the whole protocol folder.
 This proves the packaged service boundary, not the frozen GUI client's sync flow,
 proxy/HTTPS, physical devices, persistent authority epochs or production hosting.

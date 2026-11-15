@@ -338,3 +338,6 @@ Recorded recovery deletions also support a paper's context summary and backgroun
 reading suggestions, with explicit confirmation and exact current-content checks.
 Other saved analyses, notes and originals remain available; see the
 [recovery flow](docs/device-recovery-review.md#confirm-a-recorded-claim-analysis-removal).
+
+Packaged sync acceptance also verifies exact citation-graph content, idempotent
+retry and persistence across listener restart; see [toolchain](docs/toolchain.md).

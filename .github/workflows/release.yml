@@ -151,6 +151,10 @@ jobs:
           path: |
             build/frozen-acceptance/*.log
             build/frozen-acceptance/recipient/workspace/app-fault.log
+            build/frozen-acceptance/sync-protocol/init.log
+            build/frozen-acceptance/sync-protocol/issue.log
+            build/frozen-acceptance/sync-protocol/first-listener.log
+            build/frozen-acceptance/sync-protocol/second-listener.log
 
       - uses: actions/upload-artifact@v4
         if: always()

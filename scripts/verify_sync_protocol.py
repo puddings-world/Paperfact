@@ -12,6 +12,30 @@ from pathlib import Path
 HEADER = "X-Paperfact-Sync-Instance"
 
 
+def _graph_operations(identity):
+    from paper_daily.sync_content import content_id
+
+    paper_id = "11111111-1111-4111-8111-111111111111"
+    scope = {"kind": "paper", "id": paper_id}
+    def operation(kind, entity_id, op_id, payload, parents):
+        return dict(version=2, operation_id=op_id, **identity, entity_type=kind,
+                    entity_id=entity_id, action="put", base_revision=0, depends_on=None,
+                    incarnation=op_id, parents=parents, structure_revision=0, payload=payload)
+
+    paper = operation("paper", paper_id, "packaged-paper-created", dict(
+        title="Synthetic packaged research", authors=[], year=2026, venue=None,
+        abstract=None, doi=None, arxiv_id=None, s2_id=None, page_url=None,
+        pdf_url=None, source="fixture"), [])
+    raw = json.dumps(dict(checked="2026-11-15T00:00:00+00:00",
+                          edges=[["DOI:10.1/a", "S2:fixture"]],
+                          citations={"DOI:10.1/a": 3}, unplaced=1), indent=2)
+    graph = operation("research_content", content_id(scope, "citation_graph", "main"),
+                      "packaged-graph-created", dict(scope=scope, feature="citation_graph",
+                      key="main", data={"value": raw}, source_document_hash=None),
+                      [dict(kind="paper", id=paper_id, incarnation=paper["incarnation"])])
+    return paper, graph
+
+
 def _run(command, env, output):
     result = subprocess.run(
         list(map(str, command)), env=env, stdin=subprocess.DEVNULL,
@@ -96,6 +120,22 @@ def verify(command, folder, env):
         status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1}, first)
         if status != 200 or offered != first or body != []:
             raise AssertionError("Packaged sync initial pull failed")
+        paper, graph = _graph_operations(identity)
+        for sequence, operation in enumerate((paper, graph), start=1):
+            status, offered, event = _post(endpoint, token, "/v1/push",
+                                           {"operation": operation}, first)
+            if (status != 200 or offered != first or event.get("outcome") != "accepted"
+                    or event.get("sequence") != sequence or event.get("operation") != operation):
+                raise AssertionError("Packaged citation graph write failed")
+        status, offered, retry = _post(endpoint, token, "/v1/push", {"operation": graph}, first)
+        if status != 200 or offered != first or retry != event:
+            raise AssertionError("Packaged citation graph retry differs")
+        status, offered, tail = _post(endpoint, token, "/v1/pull", {"after": 2, "limit": 1}, first)
+        if status != 200 or offered != first or tail != []:
+            raise AssertionError("Packaged citation graph retry duplicated an event")
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1}, first)
+        if status != 200 or offered != first or body != [event]:
+            raise AssertionError("Packaged citation graph pull differs")
     with _listener(command, state, env, folder / "second-listener.log") as endpoint:
         status, second, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1}, first)
         if status != 428 or second == first or body != {"error": "sync_session_changed"}:
@@ -103,7 +143,8 @@ def verify(command, folder, env):
         status, offered, body = _post(endpoint, token, "/v1/session/info", {})
         if status != 200 or offered != second or body != identity:
             raise AssertionError("Packaged sync reconnect identity differs")
-        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1}, second)
-        if status != 200 or offered != second or body != []:
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1}, second)
+        if status != 200 or offered != second or body != [event]:
             raise AssertionError("Packaged sync reconnect failed")
-    return dict(authenticated_pull=True, stale_execution_refused=True, reconnected=True)
+    return dict(authenticated_pull=True, stale_execution_refused=True, reconnected=True,
+                citation_graph=True, citation_graph_retry=True, citation_graph_restart=True)

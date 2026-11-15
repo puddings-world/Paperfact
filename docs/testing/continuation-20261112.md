@@ -6388,3 +6388,23 @@ additional worktree was introduced.
 - Final docs/skill consistency: 58 passed in 2.01s / 5.4s total. Critical:
   14 passed in 8.29s / 11.5s total. Privacy, Ruff and CRLF-aware whitespace
   passed. No historical suite or native/hosted build was started for this checkpoint.
+
+
+## 2026-11-15: packaged citation-graph persistence gate
+
+- Extended the existing packaged loopback verifier rather than adding another
+  suite: actual CLI init/issue/serve, synthetic paper and scoped citation graph,
+  exact accepted envelope/content, idempotent retry and no extra event, then exact
+  graph recovery after listener restart and mandatory execution re-handshake.
+- The existing response bound, per-command/startup/HTTP timeouts and owned-child
+  cleanup remain. Public report adds three closed graph booleans; no identifiers,
+  raw graph, credential or authority database is included.
+- CI diagnostics now allow only four exact synthetic protocol log paths in
+  addition to existing logs. A contract test prevents a whole-folder upload.
+- Focused packaged-verifier file: 22 passed in 7.04s / 10.1s total, privacy and
+  Ruff passed. Actual isolated service covered; graph-loss, stale execution and
+  wrong-header failures reaped their children. No owner research or paid calls.
+- This extends already-established packaging/privacy methods; no new global
+  skill rule is inferred. Frozen candidate build, installed devices and hosted
+  acceptance remain separate gates. Candidate still 8bf00f9 until a new run passes.
+- Integration gate: 14 passed in 5.91s / 9.3s total, privacy and Ruff passed.
