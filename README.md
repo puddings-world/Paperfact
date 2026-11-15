@@ -341,3 +341,6 @@ Other saved analyses, notes and originals remain available; see the
 
 Packaged sync acceptance also verifies exact citation-graph content, idempotent
 retry and persistence across listener restart; see [toolchain](docs/toolchain.md).
+
+The mobile overview includes collapsible saved reference analyses and citation
+passages, with explicit original-version scope; see [mobile reader](docs/mobile-0.5.md).

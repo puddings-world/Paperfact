@@ -1,3 +1,5 @@
+import { renderAnnotations } from './annotations.mjs';
+import { translator } from './i18n.mjs';
 import { artifactFixture } from './artifact-fixture.mjs';
 import { fileId } from './artifacts.mjs';
 import { receive } from './domain.mjs';
@@ -273,11 +275,26 @@ await check('Lineage exact IndexedDB reopen, real read-only cards and source-lif
     await until(()=>frame.contentDocument.querySelector('.paper-card')||frame.contentDocument.querySelector('#tab-overview'));
     const doc=frame.contentDocument;doc.querySelector('.paper-card')?.click();doc.querySelector('#tab-overview').click();return doc;
   }
-  const doc=await overview();await until(()=>doc.querySelector('.lineage-card'));
+  const doc=await overview();
+  const {SOURCE_COPY}=await import('./lineage-source-view.mjs');
+  const beforeInspect=JSON.stringify(await store.read());
+  await until(()=>doc.querySelector('.lineage-card button:not([disabled])'));
   const card=doc.querySelector('.lineage-card'),summary=card.querySelector('.lineage-corpus>summary');
   assert(card.textContent.includes(row.body.report.statements[0].text),'actual overview omitted Lineage');
   assert(card.textContent.includes(row.body.report.statements[0].passages[0].quote),'actual overview omitted original quote');
-  assert(!card.querySelector('button,a,textarea'),'read-only cards exposed an unchecked action');
+  assert(!card.querySelector('a,textarea,input,[contenteditable]'),'read-only cards exposed editing or an unchecked link');
+  const sourceCopy=SOURCE_COPY[doc.documentElement.lang]??SOURCE_COPY.en;
+  const sourceButtons=[...card.querySelectorAll('button')];
+  assert(sourceButtons.length>0 && sourceButtons.every(button=>button.type==='button' &&
+    button.textContent===sourceCopy.open),'unexpected Lineage action');
+  sourceButtons.find(button=>!button.disabled).click();
+  await until(()=>doc.querySelector('.lineage-source-dialog[open]'));
+  const inspection=doc.querySelector('.lineage-source-dialog');
+  assert(inspection.textContent.includes(sourceCopy.scope),'source inspection omitted version scope');
+  const close=[...inspection.querySelectorAll('button')].find(button=>button.textContent===sourceCopy.close);
+  assert(close,'source inspection cannot close');close.click();
+  assert(!doc.querySelector('.lineage-source-dialog'),'source inspection remained open');
+  assert(JSON.stringify(await store.read())===beforeInspect,'read-only source inspection changed durable research');
   assert(card.scrollWidth<=card.clientWidth+1,'phone-width Lineage card overflowed');
   summary.focus();const open=summary.parentElement.open;summary.click();
   assert(summary.parentElement.open!==open,'native disclosure could not toggle');summary.click();
@@ -294,6 +311,42 @@ await check('Lineage exact IndexedDB reopen, real read-only cards and source-lif
   assert(doc.querySelector('#tab-overview'),'source update moved away from the paper reader');
   const reloaded=await overview();await until(()=>!reloaded.querySelector('.lineage-card'));
   store.close();authority.close();
+});
+
+await check('Offline citation cards: bilingual text, source scope and native disclosure',async()=>{
+  const el=(tag,attrs={},...children)=>{
+    const node=document.createElement(tag);
+    for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);
+    node.append(...children);return node;
+  };
+  for(const language of ['en','zh-TW']) {
+    const t=translator(language),panel=el('section',{'aria-label':t('research_citation')});
+    const row={feature:'citation',key:'ref-key',source_document_hash:'a'.repeat(64),data:{
+      title:'A saved reference',year:2026,venue:'Fixture',purpose:'Background',gist:'Method summary',
+      verdict:'Relevant',why:'Supports the design',basis:'original',
+      contexts_json:['Exact saved passage <img src=x onerror=alert(1)>']}};
+    renderAnnotations(panel,{research_content:[row]},el,t,{documentHash:'a'.repeat(64)});
+    document.body.append(panel);
+    try {
+      const card=panel.querySelector('.citation-analysis');
+      assert(card && !card.open,'citation must start collapsed');
+      assert(card.querySelector('summary').textContent==='A saved reference','missing title');
+      assert(panel.textContent.includes(t('citationSource_same')),'missing original version limit');
+      assert(panel.textContent.includes(row.data.why),'missing reasoning');
+      assert(!panel.querySelector('img,script,a,input,button'),'unexpected executable/action node');
+      card.open=true;
+      const contexts=card.querySelector('details');contexts.open=true;
+      assert(contexts.querySelector('blockquote').textContent===row.data.contexts_json[0],'passage changed');
+      card.querySelector('summary').focus();
+      assert(document.activeElement===card.querySelector('summary'),'native disclosure cannot receive focus');
+      panel.style.width='320px';row.data.title='unbroken-'+ 'x'.repeat(500);
+      panel.replaceChildren();
+      renderAnnotations(panel,{research_content:[row]},el,t,{documentHash:'b'.repeat(64)});
+      const long=panel.querySelector('.citation-analysis');long.open=true;
+      assert(long.scrollWidth<=long.clientWidth+1,'long reference overflowed phone width');
+      assert(long.textContent.includes(t('citationSource_different')),'changed original retained the old scope');
+    } finally {panel.remove();}
+  }
 });
 
 document.body.dataset.result = results.some(line => line.startsWith('FAIL')) ? 'fail': 'pass';

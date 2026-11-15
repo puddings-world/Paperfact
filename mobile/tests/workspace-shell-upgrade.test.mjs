@@ -4,8 +4,8 @@ import {SHELL} from '../sw-policy.mjs';
 
 test('activating a new offline shell replaces stale view code without touching research caches',async()=>{
   const names=['self','caches','fetch'],previous=new Map(names.map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
-  const listeners=new Map(),scope='https://paperfact.invalid/mobile/',current='paperfact-mobile-shell-v26';
-  const stored=new Map([['paperfact-mobile-shell-v25',new Map([['engine.mjs','old guard without execution continuity']])],['paperfact-mobile-shell-v21',new Map([['transport.mjs','old rate-limit handling']])],['paperfact-mobile-shell-v20',new Map([['app.mjs','old manual connection UI']])],['paperfact-mobile-shell-v19',new Map([['transport.mjs','stale bearer-only transport']])],['paperfact-mobile-shell-v18',new Map([['lineage-view.mjs','stale source UI']])],['paperfact-mobile-shell-v15',new Map([['view.mjs','stale view']])],['paperfact-mobile-shell-v16',new Map([['domain.mjs','stale domain']])],['research-protected',new Map([['note','private words']])]]);
+  const listeners=new Map(),scope='https://paperfact.invalid/mobile/',current='paperfact-mobile-shell-v28';
+  const stored=new Map([['paperfact-mobile-shell-v27',new Map([['annotations.mjs','old reader without citation cards']])],['paperfact-mobile-shell-v26',new Map([['content.mjs','old content without citation graphs']])],['paperfact-mobile-shell-v25',new Map([['engine.mjs','old guard without execution continuity']])],['paperfact-mobile-shell-v21',new Map([['transport.mjs','old rate-limit handling']])],['paperfact-mobile-shell-v20',new Map([['app.mjs','old manual connection UI']])],['paperfact-mobile-shell-v19',new Map([['transport.mjs','stale bearer-only transport']])],['paperfact-mobile-shell-v18',new Map([['lineage-view.mjs','stale source UI']])],['paperfact-mobile-shell-v15',new Map([['view.mjs','stale view']])],['paperfact-mobile-shell-v16',new Map([['domain.mjs','stale domain']])],['research-protected',new Map([['note','private words']])]]);
   let installed=[],network=0;
   try {
     Object.defineProperty(globalThis,'self',{configurable:true,value:{registration:{scope},addEventListener:(name,callback)=>listeners.set(name,callback)}});
@@ -27,6 +27,7 @@ test('activating a new offline shell replaces stale view code without touching r
     await run('activate');
     assert(!stored.has('paperfact-mobile-shell-v21'));assert(!stored.has('paperfact-mobile-shell-v20'));assert(!stored.has('paperfact-mobile-shell-v19'));assert(!stored.has('paperfact-mobile-shell-v18'));assert(!stored.has('paperfact-mobile-shell-v15'));assert(!stored.has('paperfact-mobile-shell-v16'));assert(stored.has(current));
     assert(!stored.has('paperfact-mobile-shell-v25'));
+    assert(!stored.has('paperfact-mobile-shell-v26'));assert(!stored.has('paperfact-mobile-shell-v27'));
     assert.deepEqual([...stored.get('research-protected')],[['note','private words']]);
     let response;
     listeners.get('fetch')({request:new Request(new URL('./view.mjs',scope)),respondWith:promise=>{response=promise;}});

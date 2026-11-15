@@ -437,7 +437,7 @@ function select(list, paper = null) {
 }
 function renderOverview(panel, paper, data) {
   renderChatCards(panel, paper, el, t);
-  renderAnnotations(panel, paper, el, t);
+  renderAnnotations(panel, paper, el, t, {documentHash:pdfURL?pdfHash:null});
   const serial=renderSerial,owner=engine;
   renderLegacyWorkflow(panel,paper,el,t,{
     briefs:data.legacy_briefs,

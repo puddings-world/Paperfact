@@ -322,3 +322,25 @@ the bounded lexical parser; normal reading-position ingress keeps its prior page
 checks. New content clients must update together; no old browser database is reset.
 The ordinary saved-research projection retains the graph; a dedicated interactive
 mobile graph view and physical-device display/refresh acceptance are not claimed.
+
+
+## Saved reference analyses
+
+The overview shows synchronized `citation` records as collapsed reference cards:
+title (or retained reference key), year/venue, role, summary, saved assessment,
+reasoning and evidence basis. Recorded citation passages have a separate native
+disclosure control. Open either with the keyboard or touch; no AI call, fetch,
+research mutation or automatic external link is attached to expanding a card.
+The display remains usable from the existing offline research store.
+
+Source notices distinguish an unrecorded original, an original that is not open,
+the same open original hash and a different hash. A matching hash does not verify
+the quotation or interpretation. Saved passages remain literal text; missing
+passages are stated, never synthesized. This is reference-analysis reading, not
+an interactive citation graph or a source-location/semantic audit. v28 refreshes
+the shell without clearing research caches; the delivered 15aae7e candidate has
+v27 and does not contain this newer source change.
+
+![Saved citation card at phone width, synthetic English fixture](images/mobile-citations-en.png)
+
+![Saved citation card at phone width, synthetic Traditional Chinese fixture](images/mobile-citations-zh-TW.png)

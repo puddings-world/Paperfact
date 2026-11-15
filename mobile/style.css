@@ -82,3 +82,9 @@ header button:active:not(:disabled) { background:var(--line); }
 .connection-advanced summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 .connection-dialog button:active { opacity: .75; }
 @media (max-width: 440px) { .connection-dialog { padding: 20px; } .browser-pairing .toolbar > button { flex: 1 1 160px; } }
+
+
+.citation-analysis { overflow-wrap: anywhere; }
+.citation-analysis summary { min-height: 44px; padding: 10px 0; cursor: pointer; font-weight: 600; }
+.citation-analysis summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 4px; }
+.citation-analysis blockquote { margin: 12px 0; padding-left: 12px; border-left: 3px solid var(--gold); white-space: pre-wrap; }

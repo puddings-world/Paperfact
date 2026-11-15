@@ -6452,3 +6452,53 @@ additional worktree was introduced.
   commitments remain incomplete. No claim of completed v0.5 or public readiness.
 - Documentation consistency: 58 passed in 2.21s / 5.5s total; privacy, Ruff
   and CRLF-aware whitespace passed. Reused unchanged code/native evidence.
+
+
+## 2026-11-15: offline mobile citation reading
+
+- Closed a real reader gap: canonical citation rows were retained by the receiver
+  but omitted from the mobile overview. The existing annotations/overview seam
+  now renders collapsed saved reference cards with title/key, year/venue, purpose,
+  gist, saved judgment/reasoning/basis and separately collapsed literal passages.
+  Missing passages are explicit. No fetch/model call, external URL or write action.
+- Source notices distinguish unknown, unopened, matching and different original
+  versions. Matching a hash is not quote/semantic verification. Existing current
+  verified PDF state is the only comparison input. Incoming changes continue
+  through the existing render/selection/draft model; no new worker or store.
+- Used existing CSS tokens; 44px native disclosures, visible keyboard focus,
+  whitespace-preserved passages and unbroken-title wrapping. English/Traditional
+  Chinese 390px previews actually inspected and retained as synthetic docs images.
+- Final affected Node files (annotations, content, shell upgrade): 59 passed,
+  zero failed in 0.423s / 0.579s governed. Initial shell test still expected v26
+  although source already used v27; updated its explicit v28 contract and added
+  v26/v27 eviction while preserving every research-cache/request assertion.
+- Strengthened existing JS/Python HTTP rich-content baseline with an exact full
+  citation record beside prior graph/analysis/draft/note/PDF/deck/conflict checks:
+  passed in 2.000s governed. No new release/critical selectors.
+- Final focused actual Chrome DOM scenario: bilingual disclosure/focus, literal
+  hostile-looking text with no executable nodes, long title within 320px, changed
+  original notice; passed in 2.109s governed including owned-browser shutdown and
+  exact temporary-profile cleanup. No owner browser profile or research used.
+- Browser diagnostics were not an exhaustive green gate: dump-dom stopped before
+  async IndexedDB completion. The broader old harness prohibited every Lineage
+  button, predating the exact-original viewer. Replaced that obsolete UI contract
+  with only the expected localized source action, actual modal open/close, no
+  edits/unchecked links and unchanged durable research. Waits now reacquire an
+  enabled live button after async reads rather than clicking an obsolete node.
+  One full body reported eight passing journeys but its helper cleanup failed;
+  a later whole-harness attempt stalled at startup. Do not claim a reliable full
+  browser pass. The final focused scenario avoids unrelated IndexedDB startup;
+  broader harness timing and physical-browser durability remain acceptance gaps.
+- The initial helper left only its own locked profile; no broad TEMP cleanup,
+  ACL change or unrelated process termination was attempted. Graceful owned
+  Browser.close plus process wait fixed cleanup in the focused helper.
+- v28 static build/verify: 0.609s / 0.250s; 50 files, 3920367 bytes, artifact ID
+  9542054449a159be40bc1b9d9a781eeddf037708b7e73a63092610021dc8fb28 under ignored
+  build/mobile-web-citation-cards-v28. Built locally, not deployed or native packaged.
+- Native candidate remains clean 15aae7e, v27. Do not rebuild it for a documentation
+  change or claim it contains these cards. No new architecture pattern was proved;
+  existing read-only/source/privacy/browser guidance suffices, so no skill copies
+  or global rules changed. Hosting/device/full mapping and recovery gates remain.
+- Final docs: 58 passed in 2.28s / 6.0s total. Critical: 14 passed in
+  7.54s / 11.0s total. Privacy, Ruff and CRLF-aware whitespace passed.
+  No owned citation-test Chrome process remained. No native rebuild was started.

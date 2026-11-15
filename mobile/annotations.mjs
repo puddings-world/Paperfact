@@ -60,7 +60,8 @@ export function validateAnnotations(feature, body) {
   return body;
 }
 
-export function renderAnnotations(panel, paper, el, t) {
+export function renderAnnotations(panel, paper, el, t, {documentHash=null}={}) {
+  renderCitationCards(panel,paper,el,t,{documentHash});
   for(const row of paper.research_content ?? []) {
     if(!ANNOTATION_FEATURES.includes(row.feature)) continue;
     if(row.feature === 'claims') { renderClaimSet(panel,row,el,t); continue; }
@@ -79,4 +80,37 @@ export function renderAnnotations(panel, paper, el, t) {
     }
     panel.append(card);
   }
+}
+
+
+/** Stored reference interpretations are readable offline; none certify a quote. */
+export function renderCitationCards(panel,paper,el,t,{documentHash=null}={}) {
+  const rows=(paper.research_content ?? []).filter(row=>row.feature==='citation');
+  if(!rows.length)return;
+  const group=el('section',{class:'citation-analyses'},
+    el('h2',{},`${t('research_citation')} (${rows.length})`));
+  for(const row of rows) {
+    const data=row.data;
+    const title=typeof data.title==='string' && data.title.trim() ? data.title : row.key;
+    const card=el('details',{class:'card citation-analysis'},
+      el('summary',{},title));
+    const metadata=[data.year,data.venue].filter(value=>value!==null && value!==undefined && value!=='');
+    if(metadata.length)card.append(el('p',{class:'muted'},metadata.join(' \u00b7 ')));
+    const state=!row.source_document_hash ? 'unknown' : !documentHash ? 'unavailable' :
+      row.source_document_hash===documentHash ? 'same' : 'different';
+    card.append(el('p',{class:'muted citation-source'},t('citationSource_'+state)));
+    for(const field of ['purpose','gist','verdict','why','basis']) {
+      const value=data[field];
+      if(typeof value==='string' && value.trim()) card.append(el('section',{},
+        el('h3',{},t('citation_'+field)),el('p',{class:'prose'},value)));
+    }
+    const contexts=data.contexts_json ?? [];
+    if(contexts.length) {
+      const quotes=el('details',{},el('summary',{},`${t('citationContexts')} (${contexts.length})`));
+      for(const value of contexts)quotes.append(el('blockquote',{},value));
+      card.append(quotes);
+    } else card.append(el('p',{class:'muted'},t('citationNoContexts')));
+    group.append(card);
+  }
+  panel.append(group);
 }

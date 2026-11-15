@@ -380,3 +380,24 @@ messages['zh-TW'].ipv6_same_origin_required = "\u4f7f\u7528 IPv6 \u672c\u6a5f\u6
 
 messages.en.rate_limited = 'The service is busy. Local work is kept; retry synchronization later.';
 messages['zh-TW'].rate_limited = '服務暫時忙碌，本機工作已保留，請稍後重試同步。';
+
+Object.assign(messages.en,{
+  research_citation:'Reference analyses', citation_purpose:'Role in this paper',
+  citation_gist:'Research summary', citation_verdict:'Saved assessment',
+  citation_why:'Reasoning', citation_basis:'Recorded evidence basis',
+  citationContexts:'Recorded citation passages', citationNoContexts:'No citation passages were saved.',
+  citationSource_unknown:'Original version was not recorded; these passages are not verified.',
+  citationSource_unavailable:'The recorded original is not open. These passages have not been checked here.',
+  citationSource_same:'Recorded for the open original version. This does not verify the quotation or interpretation.',
+  citationSource_different:'Recorded for a different original version. Check that version before relying on these passages.'
+});
+Object.assign(messages['zh-TW'],{
+  research_citation:'\u5f15\u7528\u5206\u6790', citation_purpose:'\u5728\u672c\u6587\u7684\u89d2\u8272',
+  citation_gist:'\u7814\u7a76\u6458\u8981', citation_verdict:'\u5df2\u5b58\u8a55\u4f30',
+  citation_why:'\u5224\u65b7\u7406\u7531', citation_basis:'\u8a18\u9304\u7684\u8b49\u64da\u4f9d\u64da',
+  citationContexts:'\u5df2\u5b58\u5f15\u7528\u6bb5\u843d', citationNoContexts:'\u6c92\u6709\u5df2\u5132\u5b58\u7684\u5f15\u7528\u6bb5\u843d\u3002',
+  citationSource_unknown:'\u672a\u8a18\u9304\u539f\u6587\u7248\u672c\uff1b\u9019\u4e9b\u6bb5\u843d\u5c1a\u672a\u6838\u5c0d\u3002',
+  citationSource_unavailable:'\u8a18\u9304\u7684\u539f\u6587\u5c1a\u672a\u958b\u555f\uff0c\u9019\u88e1\u5c1a\u672a\u6838\u5c0d\u6bb5\u843d\u3002',
+  citationSource_same:'\u8a18\u9304\u8207\u76ee\u524d\u539f\u6587\u7248\u672c\u76f8\u540c\uff0c\u4e0d\u4ee3\u8868\u5f15\u6587\u8207\u89e3\u8b80\u5df2\u6838\u5c0d\u3002',
+  citationSource_different:'\u8a18\u9304\u5c6c\u65bc\u53e6\u4e00\u7248\u539f\u6587\uff0c\u8acb\u5148\u6838\u5c0d\u8a72\u7248\u672c\u7684\u6bb5\u843d\u3002'
+});

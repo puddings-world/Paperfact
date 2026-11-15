@@ -33,6 +33,12 @@ validated citation-neighbour graphs through native sync, first copies/backups an
 enrolled package import, with private KV isolation and retained concurrent/late
 versions. The matching v27 PWA artifact is built, not deployed.
 
+Newer source adds offline mobile reference-analysis cards with collapsed recorded
+passages, bilingual source-version notices, keyboard/touch controls and long-title
+wrapping. Actual HTTP transfer, focused Chrome DOM/phone-width rendering and v28
+static packaging pass locally. This source change is not in candidate 15aae7e;
+v28 is built, not deployed. Physical Safari/phone acceptance remains open.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

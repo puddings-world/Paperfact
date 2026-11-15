@@ -169,6 +169,12 @@ try {
       }
     }
   }];
+  const citationData={title:'Transferred reference',s2_id:null,year:2026,venue:'Fixture',
+    citations:3,influential:0,purpose:'Background',gist:'Earlier method',verdict:'Relevant',
+    why:'Supports the comparison',contexts_json:['Exact citation passage'],doi:null,basis:'original',
+    spec:null,edited:0,written_at:'2026-01-01T00:00:00+00:00'};
+  richOps.push({entity_type:'research_content',entity_id:contentId(scope,'citation','fixture-reference'),
+    payload:{scope,feature:'citation',key:'fixture-reference',data:citationData,source_document_hash:target.sha256}});
   const graphRaw=JSON.stringify({checked:'2026-01-01T00:00:00+00:00',
     edges:[['DOI:10.1/a','S2:fixture']],citations:{'DOI:10.1/a':3},unplaced:1},null,2);
   richOps.push({entity_type:'research_content',entity_id:contentId(scope,'citation_graph','main'),
@@ -199,6 +205,7 @@ try {
   assert.deepEqual(richState.draftBases['demo-note'], observed);
   const richView = projection(richState);
   assert.equal(richView.papers[0].analysis_sections[0].body, 'Actual desktop analysis');
+  assert.deepEqual(richView.papers[0].research_content.find(row=>row.feature==='citation').data,citationData);
   assert.equal(richView.papers[0].research_content.find(row=>row.feature==='citation_graph').data.value,graphRaw);
   assert.equal(richView.papers[0].analysis_sections[0].source_document_hash, target.sha256);
   assert.equal(richView.notes.find(n => n.id === 'desktop-anchored').editable, false);

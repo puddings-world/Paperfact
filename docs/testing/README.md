@@ -93,7 +93,7 @@ passed critical and frozen acceptance on Windows/Mac/Linux for clean `15aae7e`:
 CLI/MCP retry/restart and same-workspace handoff. The packaged sync service passed
 authenticated pull, restart/stale-execution refusal and explicit reconnection on
 each OS. Mac also passed three reader starts and native foreground/close; Linux
-passed AppImage CLI/MCP. Native jobs took 7m44s / 4m34s / 3m09s respectively.
+passed AppImage CLI/MCP. Native jobs took 6m38s / 5m30s / 3m06s respectively.
 Windows mobile-artifact tests passed 5/5 with zero failures under fail-fast Bash.
 Earlier failures and fixes remain in the dated ledger. No gate selectors added.
 Installed upgrades, long-running use, own-provider login, hosted sync and physical
