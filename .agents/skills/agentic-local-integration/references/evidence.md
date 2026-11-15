@@ -968,3 +968,24 @@ The first coherent survey/source-ordering selection18 passes102.61s/109.7s stage
 This is evidence for the existing ownership/lifecycle and verified-byte methods,
 not a new global rule. Trusted proposal publication, package/mobile/recovery, UI
 and installed/hosted acceptance are still pending for the aggregate report.
+
+
+### Trusted aggregate publication transaction (validated-local, 2026-11-15)
+
+The survey publisher captures target absence/version before dispatch inside its
+sealed corpus, then derives portable originals from actual workspace mappings.
+Preparation retains/stages complete verified bytes outside the SQL write lock.
+Publication uses a savepoint inside the caller transaction: even a caught late
+failure removes its original/report writes while preserving the caller's observed
+note edit. Exact retries reuse the same intent; competing/retired reports and
+changed source availability refuse. Materialization interrupted after commit leaves
+a durable pending intent for exact completion. Initial6 publisher plus3 related
+source cases pass25.33s/33.8s stages. This records local reuse of the existing
+transaction/source-boundary methods, not a new global rule or mobile/UI/hosted gate.
+
+The final native completion path reattaches from disk without the old prepared
+object or any network request. A real same-binding SQLite file replacement after
+materialization reproduced unsafe activation (1 expected red in3.92s). Pinning the
+native database identity across the off-lock work rejects that delivery; final
+publisher/recovery7 passes18.66s/24.9s stages. This is a local replacement guard,
+not durable authority fencing, rollback detection or copied-host authentication.

@@ -7811,3 +7811,50 @@ desktop/CLI/MCP and AI workflow are still pending. No new UI action is enabled;
 installed Mac/Windows candidates are unchanged. Hosted authority/fencing, GCP
 deployment and physical cross-device gates remain open. Collaboration uses only
 the existing board/Git; no new worktrees, jobs or cloud resources.
+
+
+## 2026-11-15: trusted native survey publisher and offline completion
+
+Base245535c; no new worktree, store, daemon or user action. Native observations of
+report absence/version and captured source mappings now enter the process-sealed
+pre-dispatch corpus. Unenrolled read-only source captures still work; they cannot
+publish native artifacts. Preparation uses actual owned originals and their atomic
+archives, stages verified blobs off-lock and derives native bindings from SQL
+mappings. Model JSON cannot supply portable ownership. Existing paper original
+publication is reused. Selected retired originals/report require explicit review.
+
+Caller-owned publication rechecks actual context, report and original lifetimes.
+Its savepoint covers every original grant plus the report/outbox; an exception
+caught by the caller removes only those writes, preserving prior observed note
+edits. Exact retries reuse the same current operation, including after received
+service acknowledgements. A competing report or retirement is not an idempotent
+success. Local publish materializes after commit outside the SQL lock; interrupted
+materialization leaves a durable pending intent. Completion can reattach from disk
+and use verified local bytes without the old PreparedSurvey or network. It checks
+current desired report/list/source lifetimes and native database identity again
+before activation. Staged bytes or detached originals alone cannot grant authority.
+
+A new recovery-race test made an actual same-binding SQLite replacement during
+materialization:1 expected failure3.92s,9.1s stages. Before the guard the replacement
+received activation. Pinning/rechecking native database identity fixes that path.
+This local admission/delivery guard does not solve durable remote authority rollback
+or copied-host fencing; those existing release gates remain open.
+
+Initial publisher5 pass12.76s/20.2s stages; publisher6 plus directly affected
+missing/cancel/managed-source3 pass25.33s/33.8s stages. Exact acknowledgement retry
+6 pass22.96s/30.7s; disk-reattachment6 pass20.82s/26.2s. Final frozen publisher/
+recovery7 pass18.66s/24.9s stages. Earlier fixture correction used the existing
+observed-note edit contract; no guard or historical assertion was weakened.
+All via scripts/check_bounded.py --profile focused --python with explicit
+selectors, one check at a time,2 logical CPUs/25% job cap/300s budget. Critical14/
+release38 selectors unchanged. Final critical/docs and integration follow.
+
+The publisher stores the canonical list-owned artifact/reference, leaving legacy
+plain list_surveys unchanged. Trusted internal APIs are documented in analysis-audit.
+Durable stale-proposal review, bundle/recovery identity mapping, mobile artifacts,
+common CLI/MCP/UI and AI dispatch remain open. No owner research/credentials or
+installed packages were touched; no public release/build or hosted resources.
+
+Final frozen gates: critical14 pass7.89s/13.6s stages; docs58 pass3.56s/8.3s.
+Privacy/Ruff/whitespace pass. Canonical evidence copies synchronized. No full
+historical suite, installed-device run, native build, public release or cloud change.

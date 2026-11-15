@@ -162,7 +162,10 @@ def capture(context, *, legacy_root=None, selected_ids=None, cancelled=lambda: F
                             document_hash=digest, page_count=pages, state=state))
         snapshots.append(snapshot)
         documents.append(document)
-    encoded = survey_content._encode(dict(inputs=inputs, sources=sources))
+    from paper_daily.survey_publication import observe
+
+    native = observe(context, sources)
+    encoded = survey_content._encode(dict(inputs=inputs, sources=sources, native=native))
     snapshots, documents = tuple(snapshots), tuple(documents)
     result = SurveySources(context, encoded, snapshots, documents, reader,
                            _capture_seal(context, encoded, snapshots, documents, reader))

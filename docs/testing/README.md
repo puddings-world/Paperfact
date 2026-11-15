@@ -691,3 +691,18 @@ Report availability never means PDF activation or scientific support. The existi
 These use fixture databases, real local PDF/blob bytes and the reference service;
 no model/account/cloud calls. They do not certify the pending trusted publisher,
 package/mobile/installed-device workflow. Critical14/release38 remain unchanged.
+
+
+### Trusted survey publisher checks
+
+`tests/test_survey_publication.py` groups seven requirements: read-only staging and
+exact idempotent publication through an independent native peer; caught late failure
+rolling back originals/report while preserving an observed caller note edit; cancel
+and outer rollback without source grants; competing target/retired report refusal;
+foreign database/raw proposal/replaced original refusal; interrupted materialization
+recovering the same pending intent after reconnecting from disk without a proposal;
+and actual same-binding database replacement during completion. These use sealed
+real PDF captures and local
+fixture services, never account login or model calls. Related source-capture checks
+cover missing originals, cancellation without SQL changes and managed-original
+precedence. This does not certify UI, mobile, bundle recovery or hosted deployment.

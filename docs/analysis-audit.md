@@ -375,8 +375,9 @@ still pass. No extra model call, table, protocol or consent change was introduce
 
 The closed record, owned-original proposal engine and durable original/receipt
 pairs are implemented locally. Detached backup preserves those originals as inactive
-provenance. Canonical report publication, AI dispatch, UI, identity mapping, list
-package transport and report recovery are still required. Plain surveys are unchanged;
+provenance. Trusted native report publication is implemented internally below.
+AI dispatch, UI, package/recovery identity mapping and list transport are still
+required. Plain surveys are unchanged;
 no model call or PDF download happens from opening a list or importing this code.
 
 ```mermaid
@@ -388,7 +389,9 @@ flowchart LR
     C --> V
     V --> R[Sealed original-snapshot proposal]
     R --> A[Atomic private originals and receipts]
-    A -. Canonical report publication pending .-> S[Shared operations / packages / UI]
+    A --> N[Trusted native report publication]
+    N --> S[Verified native peer operations]
+    N -. Adapters pending .-> U[Packages / mobile / UI]
 ```
 
 Internal development interfaces (not CLI/MCP commands yet):
@@ -460,9 +463,9 @@ must use the existing verified artifact boundary with **explicit list ownership*
 - Extend desktop/CLI/MCP, mobile artifact validation, bundle mapping and recovery
   together; prove an independent peer/package roundtrip before enabling UI/AI jobs.
 
-The native list-owned artifact seam is now implemented below. A trusted canonical
-publisher and the end-to-end product workflow are still pending. Existing plain
-surveys and published maintenance data remain unchanged.
+The native list-owned artifact seam and trusted publisher are now implemented
+below. The end-to-end product adapters remain pending. Existing plain surveys
+and published maintenance data remain unchanged.
 
 ### Native list-owned report artifacts (internal)
 
@@ -489,12 +492,43 @@ rebasing. Download/materialization uses the existing bounded verified closure;
 activation rechecks the desired report and exact owning list incarnation. Reading
 the report does not activate or claim availability of its PDF originals.
 
-This is a wire/storage seam, not a trusted publisher. Callers must not build source
+The wire codec alone is not a trusted publisher. Callers must not build source
 bindings from untrusted model JSON or treat codec validation as source authority.
-The next work derives native mappings from the sealed proposal and retained
-originals, publishes the report reference atomically, and adds bundle/recovery,
-mobile decoding and desktop/CLI/MCP/UI/AI integration before exposing the workflow.
+The internal trusted native publisher below derives them from sealed captures.
+Bundle/recovery, mobile decoding and desktop/CLI/MCP/UI/AI integration remain open.
 Native fixture transfer is not installed Mac, mobile or hosted acceptance.
+
+### Trusted native survey publication (internal)
+
+Before model dispatch, `survey_sources.capture` also observes the actual native
+report version or absence and the selected originals' portable mappings/lifetimes.
+This observation is included in the process-sealed capture. Unenrolled captures
+remain usable by the read-only source engine but cannot publish native artifacts.
+No global workspace selection, implicit enrollment or credentials are used.
+
+| API | Contract |
+|---|---|
+| `survey_publication.observe(context, sources)` | Read-only native observation during trusted capture; not a model-supplied observation |
+| `survey_publication.prepare(proposal, *, cancelled=...)` | Require a sealed checked proposal and current captured inputs; retain complete original receipts, stage PDFs/report blobs and verify closure outside the SQL write lock; return a process-sealed `PreparedSurvey` |
+| `survey_publication.publish_in(conn, prepared, *, cancelled=...)` | Require the captured database/device and caller transaction; recheck report/source observations; publish source ownership and report/outbox within one savepoint; leave commit/rollback to the caller |
+| `survey_publication.publish(prepared, *, cancelled=...)` | Own the captured-workspace transaction, then materialize off-lock and activate only the unchanged exact list/report; retry the same durable pending intent after interrupted materialization |
+| `survey_publication.complete_pending(client, list_id, *, cancelled=...)` | Reattach an actual persisted owned report after restart, verify local bytes without network or proposal replay, and recheck native database identity, current desired list/report and exact source lifetimes before activation |
+
+Bindings come from actual native paper mappings and original proofs, never model
+JSON. Report and source requests derive from the original job identity. Identical
+retries return the original current publication; retirement or a competing result
+cannot be mistaken for success. A failure caught by the caller rolls back only this
+publisher's writes, preserving earlier caller edits and the outer transaction.
+Preparation/cancellation may retain verified inactive bytes, which grant no source
+ownership. An interruption after commit retains a durable pending intent rather
+than retracting committed research; retry completes it without another revision.
+
+Current local publication writes the list-owned artifact/reference only. It does
+not overwrite the legacy plain `list_surveys` row, invoke an AI provider or expose
+a new UI action. The next adapters must show source-aware and legacy content with
+their correct status, preserve stale staged proposals for review, map bundle and
+recovery identities, and decode mobile artifacts before enabling this workflow.
+Full candidate recovery/UI and installed/hosted acceptance remain release gates.
 
 ## Primary references informing the design
 

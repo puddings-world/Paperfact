@@ -143,3 +143,14 @@ received original outcomes and stale sources retain conflicts. A peer can receiv
 and materialize the exact report without activating its PDFs. Trusted proposal
 publication, bundle/recovery, mobile codec and UI/AI dispatch remain open. This
 source-only checkpoint does not replace the previously delivered Mac/Windows builds.
+
+
+Source after245535c adds trusted native survey preparation/publication. Pre-dispatch
+sealed observations include report absence/version and actual portable originals.
+The caller-owned savepoint publishes originals plus the report/outbox atomically;
+retries reuse the same intent, while newer/retired targets and changed originals
+fail closed. Local materialization is off-lock and can retry an interrupted pending
+intent, including a no-network completion entry after reconnecting from disk.
+Completion rechecks native database identity before activation. Plain survey rows
+and installed builds are unchanged. Mobile/package/
+recovery mapping, durable stale-result review and UI/AI integration remain open.
