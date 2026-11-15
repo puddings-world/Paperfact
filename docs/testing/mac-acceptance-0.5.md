@@ -1,27 +1,27 @@
 # v0.5 Apple Silicon acceptance
 
 Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43652950917](https://github.com/puddings-world/Paperfact/actions/runs/43652950917),
-clean commit `b4ec451505c6117837969600469962d89dac9d8b` (`0.5.0.dev`).
+available from [run 43656611701](https://github.com/puddings-world/Paperfact/actions/runs/43656611701),
+clean commit `d2689e8a27f6bdb444bcde7f4261254f9bacf02b` (`0.5.0.dev`).
 The same run includes matching Windows/Linux installers and verified mobile web assets.
 Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
 `provenance-macos` for source identity and the frozen acceptance report.
 
 Exact Mac downloads (GitHub sign-in may be required for Actions artifacts):
 
-- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43652950917/artifacts/14137420312): DMG inside the 279,807,783-byte artifact archive.
-  Archive SHA-256: `55c77273fa5670a5bf6a202617e9af137509ab94b73f6f9a93d178eac2ab1481`.
-- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43652950917/artifacts/14136663999): synthetic `original.zip`, not private research.
-  Archive SHA-256: `ee8b7211ad8646b99fd9dd0f76fd05a87d69364e75b3bc233fc9eff8435b0e96`.
+- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43656611701/artifacts/14138416028): DMG inside the 278,791,367-byte artifact archive.
+  Archive SHA-256: `570be6bb583982f251766f4a65a5451577469f39cb14f0dbf24a40f9589ca700`.
+- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43656611701/artifacts/14138241369): synthetic `original.zip`, not private research.
+  Archive SHA-256: `6db48cd58401448e30a4e49ff4cf44e4a3ea15f1c63303e9acc862a718ac481a`.
 
 These hashes identify the downloaded GitHub artifact ZIPs, not the contained DMG
 or research ZIP. All three native builds use the same commit above. This candidate
-includes the pre-upload retained-history guard and reviewed-copy preparation for
-known CLI/MCP imports; it does not provision a shared service or enable automatic
+includes received-plus-acknowledged history guards, recorded deep/section reading
+retirement, physical workspace-window routing and known CLI/MCP import preparation; it does not provision a shared service or enable automatic
 sync by installing it.
 
-CI passed three consecutive reader launches, import/export, original audit and
-Launch Services activation/close. Earlier reader crashes (-11) were reproduced
+CI passed three consecutive reader launches, actual same-workspace second-launch
+handoff, import/export, original audit and Launch Services activation/close. Earlier reader crashes (-11) were reproduced
 on the second launch. The remaining global Python file-open event filter was
 removed; OS file events now go directly through the application. Native three-launch
 acceptance passes after this fix; installed/longer-running stability remains untested.
@@ -163,7 +163,7 @@ The existing CI still captures its generated fixture logs separately.
 | `lineage-audit`, `lineage-audit-result` | Actual frozen JSON CLI checks the imported synthetic corpus: three originals, five located quotations; no semantic-support claim |
 | `file-fidelity`, `research-content` | Exact exported PDF/assets plus saved analysis and membership |
 | `local-integration`, `appimage-integration` | Frozen JSON CLI and actual MCP stdio retry/restart behavior; AppImage variant when present |
-| `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (new candidates only, not yet in the b4ec451 report) |
+| `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (passed for d2689e8) |
 | `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
 
 `timeout` means a child exceeded its bounded limit (normally 90 seconds; the

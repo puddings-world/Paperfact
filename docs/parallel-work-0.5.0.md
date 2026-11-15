@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Common native candidate b4ec451 remains the delivered test package. Subsequent source fixes cover newer acknowledgments after failed pulls, recorded deep/section reading retirement, and physical workspace-window isolation. Native same-workspace endpoint/handoff acceptance is now implemented and script-tested; new three-platform verification is next. Existing status/readiness/Mac guide track exact artifacts and limits. Complete mapping/recovery, authority generation, hosted issuance/backup and physical Windows/Mac/phone gates remain open. No new worktree or task board. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Common d2689e8 candidate passed actual Windows/Mac/Linux native reports and same-workspace handoff in run 43656611701 (7m20s / 3m33s / 2m18s). Includes acknowledged-history guards, recorded deep/section retirement and physical workspace-window routing. Windows installer lifecycle/data preservation, Mac three-start/foreground, Linux AppImage and mobile artifact 5/5 passed. Exact downloads/M01-M21 are in the existing Mac guide; status/readiness separate scoped source, native and physical evidence. Complete mapping/recovery, authority protocol, hosted issuance/backup and physical devices remain open. No new worktree or task board; no public release/deployment. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

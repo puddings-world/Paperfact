@@ -45,30 +45,31 @@ Historical full-suite execution is not an automatic release prerequisite.
 | Privacy | Sync excludes AI credentials/telemetry; logs redact secrets and research bodies | Payload/log fixtures and consent boundary tests |
 | Distribution | Source, binaries, version, license/notices and provenance match | Clean build info, source archive, checksums and three-platform artifacts |
 
-Current common candidate: [b4ec451 / run 43652950917](https://github.com/puddings-world/Paperfact/actions/runs/43652950917),
-full source `b4ec451505c6117837969600469962d89dac9d8b`, clean `0.5.0.dev`.
+Current common candidate: [d2689e8 / run 43656611701](https://github.com/puddings-world/Paperfact/actions/runs/43656611701),
+full source `d2689e8a27f6bdb444bcde7f4261254f9bacf02b`, clean `0.5.0.dev`.
 All three desktop native reports passed; source critical is 14 per OS, not 42
-unique journeys. Windows mobile artifact tests also passed 5/5 with 0 failures.
+unique journeys. All three also passed the actual same-workspace instance
+handoff, with a live primary, a returning second launch and normal primary exit. Windows mobile artifact tests also passed 5/5 with 0 failures.
 The earlier green-job/failed-mobile result is retained in the dated ledger;
 canonical TEMP allocation and fail-fast shells now have actual Windows CI evidence.
 Installed upgrades, real provider login, physical phones and hosted sync remain not run.
 The curated `release` selection has not been run for this manual candidate.
-Windows/Mac/Linux jobs took 6m19s / 4m33s / 2m00s respectively;
-critical pytest took 3.85s / 4.96s / 2.00s (Mac reported five warnings).
+Windows/Mac/Linux jobs took 7m20s / 3m33s / 2m18s respectively;
+critical pytest took 5.82s / 3.18s / 1.92s (Mac reported five warnings).
 Windows installer acceptance confirms clean install, installed reader/CLI/MCP,
 same-version reinstall/uninstall and byte-preserved synthetic research. It does
 not cover an older-release upgrade, registry/shortcuts or a physical Mac.
 The [Mac acceptance guide](testing/mac-acceptance-0.5.md) links exact downloads.
 Reports and artifact index are retained locally in ignored
-`build/candidate-43652950917/`; no release was created.
+`build/candidate-43656611701/`; no release was created.
 
 ## Platform acceptance
 
 | Target | Required v0.5.0 evidence | Current claim |
 |---|---|---|
-| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI b4ec451/run 43652950917: critical 14, frozen workflow, isolated install, installed reader/CLI/MCP, same-version reinstall/uninstall and research preservation passed; old-release upgrade, shortcut/registration integration and physical sync not run |
-| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `b4ec451`: critical 14, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
-| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `b4ec451`: critical 14, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
+| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI d2689e8/run 43656611701: critical 14, same-workspace handoff, frozen workflow, isolated install, installed reader/CLI/MCP, same-version reinstall/uninstall and research preservation passed; old-release upgrade, shortcut/registration integration and physical sync not run |
+| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `d2689e8`: critical 14, same-workspace handoff, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
+| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `d2689e8`: critical 14, same-workspace handoff, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
 | iPhone/Safari installed PWA | Offline launch, PDF/readability, note reload, foreground reconnect, storage/error recovery, touch/accessibility | Pending; simulation does not replace physical-device results |
 | Android/Chrome installed PWA | Same journey, including suspend/foreground and failed-network recovery | Pending; no physical-device result recorded here |
 

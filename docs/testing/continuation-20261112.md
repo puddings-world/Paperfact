@@ -6032,3 +6032,47 @@ additional worktree was introduced.
   in 0.80s / 3.8s total (overlap). Privacy/Ruff/whitespace passed. The new handoff
   does not acknowledge first-use consent; it uses the already acknowledged
   synthetic recipient. Native execution, not these mocks, must prove handoff.
+
+
+## 2026-11-15: common native d2689e8 candidate passed
+
+- Previous turn made progress: native-handoff verifier d2689e8 committed/integrated/
+  pushed and exactly one native candidate dispatched. This turn observed that same
+  live run 43656611701 to completion; no duplicate dispatch or local broad test.
+- [Run 43656611701](https://github.com/puddings-world/Paperfact/actions/runs/43656611701)
+  built clean `d2689e8a27f6bdb444bcde7f4261254f9bacf02b`, `0.5.0.dev` on all three
+  desktop platforms. Windows 7m20s, Mac arm64 3m33s, Linux x86-64 2m18s.
+  Tag-only draft job skipped as designed. No release or service deployment.
+- Inspected actual packaged-acceptance.v1 reports: passed with matching clean
+  identity, all three instance_handoff flags true, four exact preserved research
+  files, import/repeated import, reader/export, original audit, credential isolation,
+  CLI/MCP 38 tools with retry/restart. These are native same-workspace handoffs,
+  not only mocked process tests or sequential launches.
+- Critical: Windows 14 passed in 5.82s; Mac 14 passed with five warnings in 3.18s;
+  Linux 14 passed in 1.92s. Same 14 journeys across OSes, not 42 distinct cases.
+  Windows actual mobile artifact TAP: tests 5/pass 5/fail 0. Privacy/Ruff passed.
+  Curated release 37 selectors and historical full suite were not run here.
+- Mac three-start and Launch Services foreground/close passed. Linux AppImage
+  CLI/MCP/retry/restart passed. Windows actual install/installed reader+CLI+MCP/
+  same-version reinstall/uninstall and research_preserved all true. Installer
+  payload SHA-256 `8248fc50ae3958f45bc9182210db0b0662175b3bea94a59796210ebd761b9289`.
+  Old-release upgrade/coexistence and registry/shortcuts remain not checked.
+- GitHub artifact ZIP identities (not contained payload hashes):
+  Windows 14138891485, SHA-256 `5b60e7b5395de35c8140b70c00df28507705137cf02977fea1337a5c07993055`;
+  Mac 14138416028, `570be6bb583982f251766f4a65a5451577469f39cb14f0dbf24a40f9589ca700`;
+  Linux 14138640641, `f5bada40fadf7dec7368f88437c2461dd8d49af569a0b981a1a90be4ba8f624e`;
+  synthetic Mac fixture 14138241369, `6db48cd58401448e30a4e49ff4cf44e4a3ea15f1c63303e9acc862a718ac481a`;
+  mobile static 14137374460, `6fd2a0836d07c65b4367259ee8af6d03fb612eb672e7e64971c9982484ce2af0`.
+  Reports/index retained in ignored `build/candidate-43656611701/`.
+- Updated the existing Mac acceptance/readiness/status/board to this exact candidate.
+  Docs-only checkpoint does not require another native build. Earlier b4ec451
+  reports remain historical evidence, not current candidate proof.
+- Physical M01-M21, actual new report-removal UI, separate-workspace process cases,
+  real providers, complete writer/source mapping, full authority generation/reset
+  protection, private HTTPS issuance and hosted recovery/phone durability remain
+  open. Native artifact presence does not prove those features' installed journeys.
+  Existing support/evidence patterns suffice; no new skill or global rule promoted.
+- Documentation checkpoint: 58 passed in 2.34s / 6.1s total, privacy/Ruff passed.
+  The unchanged runtime reuses this exact source candidate's critical passes on
+  all three OSes above; no repeated local critical/exhaustive/native run for a
+  download-link update. CRLF-aware whitespace check passed.
