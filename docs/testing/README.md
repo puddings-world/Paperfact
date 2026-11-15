@@ -47,6 +47,27 @@ to multiple cases; the preview deliberately does not invent a case count.
 - Fixture checks do not certify live providers, installed Windows/Mac upgrades,
   physical phone behavior or a deployed sync service. Those are separate gates.
 
+## What the native candidate actually verifies
+
+A candidate is built once from a clean source commit. Windows, Apple Silicon Mac
+and Linux use the same frozen verifier. CI stage progress describes completed
+work, not a guessed percentage or remaining-time prediction.
+
+| Stage | Concrete behavior required | What a pass does not establish |
+|---|---|---|
+| Critical source journeys | Start the app; preserve list package/PDFs, saved notes and Q&A; isolate AI config; converge/retry offline edits; preview and restore backups | Every historical edge case or a real provider call |
+| First-sync preservation | Prepare existing research and private text/history without replaying old agent receipts or importing local controls | An installed old-release upgrade |
+| Authority lifetime (six selected journeys) | Refuse a duplicate listener; release failed bind/process exit; wait for admitted work; interrupt incomplete headers; refuse database replacement/removal; keep online backup available | Cross-host leases, same-inode SQL rollback or durable control-history proof |
+| Frozen research workflow | Run the packaged reader repeatedly; import/export synthetic research and exact originals; keep editable data and CLI/MCP retry/restart behavior; exercise platform-specific launch/installer checks | Physical keyboard/IME, long-running stability or every desktop editor |
+| Frozen sync protocol | Reject a second listener, authenticate the device, verify linked history acknowledgments, reject a bad proof, retry the exact graph once, restart and reconnect with the retained checkpoint | A deployed HTTPS proxy or two installed devices |
+| Exported mobile artifact | Verify every published static byte; use a fresh Chromium profile to prepare and reopen cached research offline | Safari/iOS/Android storage durability or deployment |
+| Installed/physical acceptance | Execute the Mac M01-M21 checklist and corresponding Windows/phone journeys with exact build IDs | Remains **not run** until the operator records actual device results |
+
+The six lifetime journeys reuse `tests/test_sync_http.py` and
+`tests/test_sync_admin.py`; packaged behavior uses `scripts/verify_sync_protocol.py`.
+The job retains a 30-minute cap; the small lifetime step has a three-minute cap.
+These are selected requirements, not permission to run every historical test.
+
 ## Keep the suite small by testing requirements
 
 The owner approved this reduction on 2026-11-14. The historical function count is

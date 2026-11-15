@@ -7401,3 +7401,48 @@ CI remains pending dispatch, not inferred from Windows source validation.
 Final pre-candidate gates: critical14 pass in4.63s/7.9s total; docs58 pass
 in1.90s/4.9s total; existing release workflow contract1 pass in0.32s/3.5s
 total. Privacy/Ruff pass. No historical full suite or installed-device claim.
+
+
+## 2026-11-15: inspected355382c native candidate (run43705488673)
+
+One dispatch for all platforms, clean355382c7557150c98aee08be7b6fd12ea8274791;
+no tag/public release or deployment. Mac arm64 job3m07s and Linux3m25s pass.
+Downloaded provenance reports have status=passed, passed=true, failure=null,
+clean matching source, four preserved PDFs, CLI/MCP38 retry/restart and all ten
+sync_protocol booleans true, including guarded history/wrong-proof/duplicate-listener
+refusal and checkpoint after restart. Mac records three reader starts/foreground;
+Linux records AppImage integration. Windows is live in Build at10:50:33UTC;
+not declared passed or restarted. Current Mac guide supplies exact artifact links
+and GitHub-reported archive digests, not a claim of local physical DMG execution.
+
+Exact downloaded CI mobile artifact:50 files/3953007 bytes, shellv31, content ID
+8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229.
+Independent verify0.218s; actual Windows Chromium offline preparation/repeated
+activation/EN-ZH touch/fresh offline-document/cached-only verification2.641s,
+under the existing governor. Prior7bb89dcb local pin and c1cbef2/v29 native run
+remain historical. Physical M01-M21, hosted HTTPS/two-device, native vault/upgrade,
+durable authority/control history and distributed fencing remain open.
+
+The existing test guide now maps stages to concrete protected behaviors and limits;
+counts are not a completion percentage. No new test harness, full historical run,
+owner research access or broad cleanup. Preserve the exact live Windows run for
+follow-up; a polling timeout is not permission to restart it.
+
+Final run state: completed/success at10:52:37UTC; no failed platform or retry.
+Windows job8m37s, source lifetime step passed, provenance clean355382c; downloaded
+report status=passed/passed=true/failure=null and all ten sync_protocol booleans
+true, four PDFs/CLI-MCP38. windows_installer records installed/reinstalled/
+uninstalled/research_preserved=true and exact installed integration; acceptance
+mode only, older_release_upgrade_checked=false and registry_shortcuts_checked=false.
+Installer-file SHA256=e1886109ace62984b2fa7051fe93af90d2e99f632a2e041b55372ea0ce418a61.
+Windows artifact14158518613; Mac14158073852; Linux14157614948; mobile14157644516.
+GitHub-reported native artifact ZIP digests: Windows5c6b4c22b3161bc077ea400e41b43e7bdc4dac71784e937cd6cf2d59ae90bdc1,
+Macd1631a62f180d7ef7ad066903dcf99c2ab546ebe9905b542f8c3c4adddb88641,
+Linuxaef052afc5240ffb05dfd77d38e9acbd31af4ab0b0520170266de6c86b819ff2.
+The small provenance reports and mobile assets were downloaded/inspected;
+native installer archives were not locally downloaded or run on physical devices.
+No source change or rebuild is needed for this evidence-only documentation update.
+
+Final evidence-doc gate: docs58 pass in1.91s/5.0s total, Privacy/Ruff pass.
+Earlier docs58 in1.78s/4.8s covered the interim live-run wording. Critical14
+evidence reused from unchanged355382c runtime; no unnecessary native rebuild.

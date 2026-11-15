@@ -1,58 +1,51 @@
 # v0.5 Apple Silicon acceptance
 
-Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43688772032](https://github.com/puddings-world/Paperfact/actions/runs/43688772032),
-clean commit `c1cbef20d48d29e2767bed60a6393298819389d4` (`0.5.0.dev`).
-The same run includes matching Windows/Linux installers and verified mobile web assets.
-Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
-`provenance-macos` for source identity, and `acceptance-macos` for the frozen
-acceptance report.
+Status: physical Mac execution not yet recorded. The latest CI-native arm64 test
+candidate is [run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
+clean commit `355382c7557150c98aee08be7b6fd12ea8274791` (`0.5.0.dev`).
+All three packaged reports pass from the same commit. Native jobs took 3m07s
+(Mac), 8m37s (Windows) and 3m25s (Linux); no public release was created.
 
 Exact Mac downloads (GitHub sign-in may be required for Actions artifacts):
 
-- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43688772032/artifacts/14151871485): DMG inside the 279,275,526-byte artifact archive.
-  Archive SHA-256: `4a6c33e2ec5158a3d87498989360ec5c69b74b67850f54b5138d0fadc29a1a81`.
-- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43688772032/artifacts/14151756764): synthetic `original.zip`, not private research.
-  Archive SHA-256: `180bb10a10e223c86906fc46c9ea7b1f3b0bf2fb69747b1c9ad3e4576964749b`.
+- [build-macos: DMG inside](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158073852),
+  artifact ZIP size 277,605,299 bytes. GitHub-reported ZIP SHA-256:
+  `d1631a62f180d7ef7ad066903dcf99c2ab546ebe9905b542f8c3c4adddb88641`.
+- [research-fixture-macos: synthetic original.zip](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14157963940),
+  GitHub-reported artifact ZIP SHA-256:
+  `218ed553098f64914e2344838971e16b0be3682c8783f42b8afc6d78da3a6d41`.
+- [provenance-macos: build identity and packaged report](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158557395).
+- [acceptance-macos: selected synthetic logs](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158392978).
 
-These hashes identify the downloaded GitHub artifact ZIPs, not the contained DMG
-or research ZIP. All three native builds use the same commit above. This candidate
-includes received-plus-acknowledged history guards, recorded deep/section reading
-retirement, physical workspace-window routing, known CLI/MCP import preparation,
-private control/account exclusions, HTTP execution pinning, context-summary
-retirement, overview evidence labels, HTTP-cache exclusion and scoped citation
-graphs, v29 offline citation cards and single-paper reading preparation and first-sync compound/private-text history.
-It also includes the nightly delivered-paper opener and analysis prompt; those
-banner controls remain local. This candidate also retains unreferenced canonical
-reading text privately and offers explicit, default-off automatic sync when
-joining another desktop. It also includes focal-only offline preparation of exact native annotation/Lineage
-originals, without activating unrelated primary PDFs. The matching mobile artifact
-passed actual Windows Chromium preparation and fresh offline reload; this does not
-certify physical Safari storage. Installing it does not provision a shared service or
-grant startup sync permission. The new join option still needs physical Keychain
-and two-device acceptance; source/Qt controller tests do not certify that gate.
+These hashes describe the GitHub artifact archives, not contained files. The
+provenance/report were downloaded and inspected; the DMG was not run on a physical
+Mac here. The previous c1cbef2/run43688772032 candidate remains historical evidence.
 
-All three native runners also passed the same source first-sync representative:
-agent receipts, citations, graph, exact referenced/unreferenced private text/PDF,
-backup/restore and local nightly-control isolation. This is source/native fixture evidence, not a frozen
-GUI adoption or installed two-device journey.
+This candidate includes verified received/acknowledged history in desktop/mobile,
+transaction-bound attachment/device guards, issuer-bound pairing, inactive recovery
+proof preservation, legacy proof preparation and same-host listener-lifetime guards.
+It retains native annotation/Lineage originals, offline reading preparation, private
+research history, scoped graphs and explicit default-off startup sync. None of
+these local safeguards constitutes durable control-history or distributed fencing.
 
-CI passed three consecutive reader launches, actual same-workspace second-launch
-handoff, import/export, original audit and Launch Services activation/close.
-The packaged sync service also passed authenticated pull, restart/stale-execution
-refusal, explicit reconnection, exact citation-graph write/retry and persistence
-after restart. This is local service evidence, not a real
-Windows/Mac offline-edit or hosted proxy journey. Earlier reader crashes (-11) were reproduced
-on the second launch. The remaining global Python file-open event filter was
-removed; OS file events now go directly through the application. Native three-launch
-acceptance passes after this fix; installed/longer-running stability remains untested.
-Treat this as an experimental test candidate, not a stable update or evidence that
-hosted synchronization is deployed. Keep the daily app and data unchanged.
-This `0.5.0.dev` test bundle does not auto-update. Obtain the next candidate
-explicitly, preserve the same separate test data folder, and record its new commit.
-Use an exact candidate build shared with the Windows tester. A published 0.4.x
-app cannot validate unshipped 0.5 synchronization. `0.5.0.dev` alone is not a
-unique build identity: record the commit and candidate artifact SHA-256.
+The Mac report records four PDFs preserved, three reader starts, same-workspace
+handoff, foreground activation, CLI/MCP retry/restart and packaged guarded-history
+sync. The service refuses a duplicate listener and bad history proof, accepts exact
+retry once, and preserves its checkpoint after restart. Six source OS-lifetime
+journeys also pass before packaging. These do not certify the frozen GUI client's
+installed two-device flow, Keychain prompts, physical input/IME or Safari storage.
+
+The matching mobile shell v31 content ID is
+`8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229`:
+50 public files/3,953,007 bytes. Its exact CI artifact passes independent Windows
+Chromium offline preparation/repeated activation/EN-ZH touch/reload checks; not hosted.
+
+Keep the daily app/data unchanged. This experimental `0.5.0.dev` bundle does not
+auto-update or provision a service. Preserve a separate test folder, record this
+commit, and use the [matching Windows build](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158518613)
+for two-device acceptance.
+Version text alone is not a unique build identity. Installed/physical M01-M21 gates
+below remain not run; no public release or cloud deployment occurred.
 
 ## Prepare a separate test app
 
