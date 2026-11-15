@@ -110,6 +110,18 @@ jobs:
         timeout-minutes: 3
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile focused --python tests/test_enrollment_integration_history.py::test_real_import_history_can_prepare_without_reactivating_receipts
 
+      # Small OS-specific socket/file-lifetime representatives, not historical stress.
+      - name: Sync authority lifetime acceptance
+        timeout-minutes: 3
+        run: >-
+          ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile focused --python
+          tests/test_sync_http.py::test_listener_exclusion_failed_bind_and_repeated_close_preserve_authority
+          tests/test_sync_http.py::test_listener_claim_survives_close_until_active_requests_drain
+          tests/test_sync_http.py::test_listener_claim_is_released_by_process_exit_without_deleting_lock
+          tests/test_sync_http.py::test_live_listener_refuses_replaced_or_missing_database_without_recreating_it
+          tests/test_sync_http.py::test_listener_close_interrupts_incomplete_headers_without_waiting_for_client
+          tests/test_sync_admin.py::test_second_serve_is_actionable_and_preserves_existing_authority
+
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact
         if: matrix.name == 'windows'

@@ -256,15 +256,19 @@ The packaged verifier also runs `sync-protocol` through
 provided CLI's `sync-admin init`, `issue` and two `serve --port 0` executions.
 It verifies authenticated empty pull, a fresh execution identity after restart,
 HTTP 428 for the stale identity, and a successful explicit handshake/pull. It also
-pushes synthetic paper/citation-graph operations, checks exact graph content,
-idempotent retry without another event, and persistence after listener restart. Each
+pushes synthetic paper/citation-graph operations through verified-history routes,
+independently checks acknowledgment hash steps, refuses an incorrect proof, checks
+exact graph content and idempotent retry, and verifies retained history after
+restart. A second same-authority listener must exit with code2 and guidance within
+15 seconds while the first remains available. Each
 listener has a 20-second startup limit and only its owned process is terminated
 in `finally`, including failed assertions. Init/issue each have a 25-second limit;
 HTTP calls have a five-second limit. Readiness and response reads are bounded.
 
 `report.json` contains only `authenticated_pull`, `stale_execution_refused` and
-`reconnected`, `citation_graph`, `citation_graph_retry` and `citation_graph_restart`
-booleans under `sync_protocol`. The result contains no research or credentials.
+`reconnected`, `citation_graph`, `citation_graph_retry`, `citation_graph_restart`,
+`duplicate_listener_refused`, `verified_history`, `wrong_history_refused` and
+`verified_history_restart` booleans under `sync_protocol`. The result contains no research or credentials.
 CI uploads only the four named synthetic protocol logs (`init.log`, `issue.log`,
 `first-listener.log`, `second-listener.log`), alongside its existing exact log paths.
 It never uploads `device.json`, the authority database or the whole protocol folder.
@@ -275,3 +279,10 @@ Native candidate CI additionally runs the existing first-sync preservation
 representative once per OS (three-minute cap). The Windows tag release selection
 already includes it and therefore does not repeat it. This exercises native
 file/version and private-text copy/restore behavior before packaging.
+
+
+Candidate CI also runs six explicit source lifetime journeys per OS, with a
+three-minute step cap: duplicate/bind-failure ownership, held-worker drain/lost
+reply retry, actual process exit, database replacement/removal, incomplete-header
+shutdown, and actionable CLI refusal with online backup. These share the existing
+behavior tests; they do not expand the daily critical or release selector lists.

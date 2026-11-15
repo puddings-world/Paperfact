@@ -351,7 +351,10 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
     assert env == original and not (tmp_path / "synthetic").exists()
 
 
-@pytest.mark.parametrize("failure", [None, "stale_accepted", "bad_header", "graph_lost"])
+@pytest.mark.parametrize("failure", [
+    None, "stale_accepted", "bad_header", "graph_lost", "wrong_history_accepted",
+    "duplicate_accepted",
+])
 def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, monkeypatch, failure):
     sys.path.insert(0, str(ROOT / "scripts"))
     try:
@@ -375,8 +378,20 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
             return 200, offered, []
         if failure == "graph_lost" and args[2] == "/v1/pull" and args[3].get("after") == 1:
             return status, offered, []
+        if failure == "wrong_history_accepted" and status == 412:
+            return 200, offered, body
         return status, offered, body
 
+    if failure == "duplicate_accepted":
+        run = verify_sync_protocol.subprocess.run
+
+        def accepted_duplicate(command, **kwargs):
+            result = run(command, **kwargs)
+            if "serve" in command and result.returncode == 2:
+                return subprocess.CompletedProcess(command, 0, result.stdout, result.stderr)
+            return result
+
+        monkeypatch.setattr(verify_sync_protocol.subprocess, "run", accepted_duplicate)
     if failure == "bad_header":
         # Change the expected contract: actual service still offers its real header.
         monkeypatch.setattr(verify_sync_protocol, "HEADER", "X-Unknown-Sync-Instance")
@@ -395,7 +410,9 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
             )
             assert result == dict(authenticated_pull=True, stale_execution_refused=True,
                                   reconnected=True, citation_graph=True,
-                                  citation_graph_retry=True, citation_graph_restart=True)
+                                  citation_graph_retry=True, citation_graph_restart=True,
+                                  duplicate_listener_refused=True, verified_history=True,
+                                  wrong_history_refused=True, verified_history_restart=True)
             assert "token" not in json.dumps(result)
     finally:
         assert children and all(child.poll() is not None for child in children)

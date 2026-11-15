@@ -365,3 +365,9 @@ The development sync service refuses a second local listener for the same author
 and pauses on observed database replacement/removal; see
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
 These local safeguards do not yet provide distributed fencing or durable control-history proof.
+
+
+New candidate builds verify guarded-history sync and duplicate-listener refusal
+inside the packaged CLI, plus six source lifetime journeys per OS. See
+[the exact acceptance contract](docs/toolchain.md); physical device acceptance
+remains separate.

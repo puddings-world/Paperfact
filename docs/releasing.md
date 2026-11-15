@@ -301,3 +301,10 @@ no automatic retry changes that result. The generated fixture alone is used.
 Existing import/export/PDF, audit, Mac three-start/foreground and Windows installer
 checks remain required. This stage does not certify old-release coexistence or
 physical-device/hosted sync; follow the separate Mac acceptance journey.
+
+
+Before packaging, each OS runs six selected sync authority-lifetime journeys
+(three-minute cap). Frozen `sync_protocol` now verifies guarded-history writes,
+incorrect-proof refusal, retained checkpoint after restart and duplicate-listener
+refusal, alongside exact citation graphs and retry. These are CI-native and packaged
+loopback checks; they do not certify two installed devices or a deployed host.

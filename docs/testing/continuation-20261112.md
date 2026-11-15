@@ -7378,3 +7378,26 @@ unchanged. No public release, deployment, research migration or new worktree.
 - Final integration gates: critical14 pass in4.85s/8.2s total; docs58 pass
   in2.13s/5.2s total. Privacy/Ruff and whitespace pass. Historical full suite
   and native rebuild not run; installed/hosted acceptance remains open.
+
+
+## 2026-11-15: candidate acceptance follows guarded sync
+
+After9891031, the existing frozen protocol verifier now writes the synthetic paper
+and exact citation graph through verified-history routes, independently checks
+linked acknowledgment hashes, rejects an incorrect proof before same-operation
+retry, and verifies the retained checkpoint after process restart. Existing exact
+legacy-read graph/persistence/execution assertions remain. A duplicate packaged
+listener must exit2 with guidance while the first still answers. No synthetic
+credential/database is added to uploads; existing four exact logs remain.
+
+Two negative verifier cases inject false acceptance of a bad proof/duplicate
+listener and must fail; existing stale-execution/bad-header/lost-graph cases remain.
+Affected verifier plus the six selected source lifetime journeys:30 pass in12.01s,
+15.2s governed total. Candidate workflow runs those six explicit OS-sensitive
+journeys with a three-minute cap before packaging. Daily critical14 and release38
+selectors unchanged; no new test system or historical stress run. Actual Mac/Linux
+CI remains pending dispatch, not inferred from Windows source validation.
+
+Final pre-candidate gates: critical14 pass in4.63s/7.9s total; docs58 pass
+in1.90s/4.9s total; existing release workflow contract1 pass in0.32s/3.5s
+total. Privacy/Ruff pass. No historical full suite or installed-device claim.
