@@ -306,6 +306,8 @@ This is a local cache observation, not proof of the PDF it came from. It grants
 no original, quotation verification, job authority, active reader cache or shared
 outbox data. The coverage preview labels these as history-only text snapshots.
 Unknown layouts, malformed encoding, oversized or changing bytes remain blockers.
-Use a compatible newer source build for this private archive format; native
-candidate f7616ae predates it. Current evidence is Windows source/Qt fixtures,
-not a new packaged candidate, physical Mac or hosted synchronization acceptance.
+Use candidate cb6ca66 or newer for this private archive format; f7616ae predates
+it. The same first-copy representative passed on Windows, Mac arm64 and Linux in
+run 43680889932 and all native packages passed their frozen checks. Those are
+source/native fixtures and packaging evidence, not frozen GUI adoption, physical
+Mac or hosted synchronization acceptance.

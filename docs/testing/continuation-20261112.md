@@ -6762,3 +6762,61 @@ additional worktree was introduced.
 - Final critical gate: 14 passed in 4.97s / 8.2s total; privacy scan and Ruff passed.
   No repeated historical/full run. Existing explicit-consent and generation-fence
   methods were reused; no new portable skill rule was manufactured.
+
+
+## 2026-11-15: new native candidate includes reading caches and join consent
+
+- Clean source cb6ca667b0a95f6d0f49a802bcba6415260d0fd6, 0.5.0.dev,
+  https://github.com/puddings-world/Paperfact/actions/runs/43680889932.
+  One all-platform manual dispatch; Windows/Mac/Linux jobs passed in 411/308/192
+  seconds. Draft skipped, no public release, no deployment or local packaging.
+- Downloaded all three actual paperfact.packaged-acceptance.v1 reports and checked exact
+  clean source/version, all six sync flags, all three instance-handoff flags,
+  four preserved PDF files and 38-tool retry/restart. Linux nested AppImage
+  integration passed too. Mac arm64 reports three reader launches plus native
+  Launch Services foreground/close. Windows install/reinstall/uninstall and
+  research preservation passed; old-release upgrade and registry/shortcut checks
+  remain explicitly false. A first ad-hoc Linux summary assertion omitted the
+  documented nested AppImage result; inspection confirmed it and the exact
+  per-platform expected report schema then passed. No product test was changed.
+- Actual source counts: critical Windows 14 in 5.16s / 9.8s total; Mac 14 with
+  five warnings in 4.86s / 9.6s; Linux 14 in 3.16s / 5.8s. Existing first-sync
+  representative: Windows 1 in 2.85s / 6.1s; Mac 1 with five warnings in
+  1.97s / 4.2s; Linux 1 in 1.88s / 3.9s. It now includes unreferenced private
+  text beside citation/compound/PDF/graph, backup/restore and local nightly state.
+  These overlap requirements and are source fixtures, not frozen GUI adoption.
+- Windows mobile artifact tests: 5 passed, zero failed. The unchanged v28 web
+  content identity is 49329abb66e39c5af92060436349a7b95afd57a78f90ac4a3c44df2183c6dea9,
+  50 files / 3927551 bytes; built, not deployed. ZIP hashes may differ from the
+  prior build while verified web content remains the same.
+- Public artifact ZIP IDs/bytes/SHA-256 (not contained installer hashes):
+  build-windows: 14148039099 / 184171385 /
+  4a3db3042bab8c570dccfc6046df148bf7eb84a7a842730720cccf608ecca6fa;
+  build-macos: 14147654648 / 279528381 /
+  35ef668cfba9375d00e8a9dc498b47b5ebda0b843299ca70ab0745d5f5c3a73a;
+  build-linux: 14148422443 / 282196771 /
+  e576bc1f31a85c84650c8cbe2448446590734eb8fa31934a5ea25a3eb22fabe6;
+  research-fixture-macos: 14148092535 / 7591 /
+  3c0a0802743d19c88281b02ade314f522b5ab5615574b7d20c03cb65329dd17e;
+  mobile-web-cb6ca667b0a95f6d0f49a802bcba6415260d0fd6: 14147853585 / 884735 /
+  7373cf56f1b44f551a1f2f37d2e6613d3646db5c46408f48c30d52482de69c1b;
+  Contained Windows setup SHA-256:
+  6376ee6a080a2e0c22b30249d0cdee7f534c0015cc1147accbc9de3c56b8882f.
+- Small provenance/acceptance reports, exact three completed job logs and artifact
+  index are retained under ignored build/candidate-43680889932. A request for the
+  Linux log while the workflow was still active correctly reported unavailable;
+  the same run completed and the logs were retrieved afterward, without restart.
+- Latest remote master checked at 1b44466a2aaf5a3ea17a3eba16f27777f0507a36 is an
+  ancestor of this candidate (merge-base --is-ancestor exit 0). No maintenance
+  merge is pending at that observed checkpoint.
+- New packages contain private standalone reading-cache preservation and explicit
+  default-off new-folder startup sync. Native packaging is not proof of the new
+  GUI/Keychain journey on physical Mac; Windows source/Qt evidence stays scoped.
+  Existing Mac guide M16 now distinguishes session-only and startup permission.
+  M01-M21 physical acceptance, hosted issuance/backup/TLS, mobile durability,
+  remaining adoption/mapping, survey audit and persistent history remain open.
+  Curated release selection not run; no complete v0.5 beta acceptance claimed.
+
+- Documentation-only checkpoint: governed docs profile 58 passed in 3.76s /
+  7.1s total, privacy and Ruff passed. No runtime source changed after the
+  candidate; critical/native evidence is reused rather than rebuilding.

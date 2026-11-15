@@ -2,8 +2,8 @@
 
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
-Common native candidate [f7616ae / run 43677890610](https://github.com/puddings-world/Paperfact/actions/runs/43677890610),
-clean source `f7616aede7154d16e1c017c102b7706f2b49ed97`, version `0.5.0.dev`.
+Common native candidate [cb6ca66 / run 43680889932](https://github.com/puddings-world/Paperfact/actions/runs/43680889932),
+clean source `cb6ca667b0a95f6d0f49a802bcba6415260d0fd6`, version `0.5.0.dev`.
 Windows/Mac arm64/Linux passed critical 14, the source first-sync representative,
 frozen research/CLI/MCP, same-workspace handoff and packaged sync execution/graph
 retry/restart. Windows installer lifecycle, Mac three-start/foreground and Linux
@@ -20,12 +20,12 @@ Included source functionality:
 - Nightly reader opens the delivered paper and asks before analysis. Its delivery
   and banner-answer state stays local rather than replaying on another device.
 
-Source after the delivered candidate additionally retains unreferenced canonical
-reading-text caches as private history, with bounded bytes, collision refusal and
-a history-only preview count. These source changes are not in candidate f7616ae.
-Joining another desktop now also offers default-off, explicit automatic-sync
-permission for the exact new folder, avoiding another manual reconnect sequence;
-source/Qt startup and cancellation evidence is recorded in the continuation ledger.
+The candidate also retains unreferenced canonical reading-text caches as private
+history, with bounded bytes, collision refusal and a history-only preview count.
+Joining another desktop offers default-off explicit automatic-sync permission
+for the exact new folder, avoiding another manual reconnect sequence. Windows
+source/Qt startup and cancellation checks pass; physical native-store acceptance
+remains open.
 
 The matching v28 PWA artifact is built, not deployed. Update client/service/assets
 together; old headerless peers are refused. Close older app processes before
@@ -46,7 +46,7 @@ they are not automatically promoted into release evidence.
 | Scientific audit and recovery UI | Desktop current-corpus action uses the shared sealed worker with per-quotation findings, honest source-count progress and existing activity reporting; CLI/MCP use `corpus_key`, with independent generated/imported/bound originals and stable passage indices; owner-aware source-checks.v3 refuses equal-byte foreign-paper attribution through deterministic audit, retrieval, appraisal and fact binding; native alias and bilingual GUI checks pass. Confirmed atomic explanation-link and native Lineage groups (including fresh multi-paper original dependencies), with exact historical context; explicit original-source restoration/retirement preserves cache and later decisions; restored-original Lineage rebinding rechecks retained native originals/quotes and publishes fresh source pins without silently reviving the old report; confirmed native Lineage retirement reaches an independent peer while preserving exact report history, originals and notes; explicit historical source inspection shared by note/claim/highlight/explanation/deck recovery, with current target-source access unchanged; confirmed manual-highlight removal and source-verified original-identity restore, with native creation/projection checks, sealed owned-PDF witnesses, atomic receipts, peer delivery and later-decision-safe retries; typed metadata/note/manual-mark copies, exact-original highlight analysis/marks, complete native deck (including verified related-paper originals) and portable claim-group recovery; exact historical input pins from local/accepted history, original passage checks, atomic receipts and independent peer delivery verified locally | Other scientific deletion choices and legacy manual/source-lifetime mapping, foreign-workspace deck mapping, legacy/source-lifetime mapping, unavailable originals, installed corpus-action acceptance, historical/legacy corpus mapping, list-survey audit and scholarly evaluation |
 | Metadata recovery | Recorded parent decisions preserve metadata, reading/order and note copies; positioned notes can atomically include verified post-backup originals, with native peer delivery verified locally; confirmed plain/positioned note deletion uses exact native history/projection checks, one atomic receipt/outbox transaction, independent peer delivery and later-restore-safe retries; confirmed claim-analysis deletion now preserves its original/deep/section research, with exact creation/projection guards, atomic decision/outbox, independent peer delivery and default-No desktop confirmation; known CLI/MCP import control records can now be archived privately during first enrollment while live research/PDFs/order are retained, with old preview/retry authority left inactive | Remaining scientific deletion/audit integration, legacy source mapping, unavailable originals and unproved parent migrations |
 | Tests and resource use | Affected HTTP/blob/device/browser requirements: 149 passed in 22.2s total; mobile transport/engine/cache 31 in 3.594s; actual JS/Python HTTP 2.344s; four real headless Chromium cookie/reload/reconnect/forget journeys in 14.39s. Daily critical remains 14; release 38 selectors includes one real execution-restart representative | Frozen GUI-client/installed sync acceptance, historical deduplication and native resource cap on Mac/Linux |
-| Release | Common clean candidate `f7616ae` in [run 43677890610](https://github.com/puddings-world/Paperfact/actions/runs/43677890610): critical 14 plus source first-sync representative per OS, actual frozen research/CLI/MCP and same-workspace handoff passed; Windows installer lifecycle, Mac three-start/foreground, Linux AppImage and Windows mobile artifact 5/5. Jobs: 8m08s / 5m28s / 3m00s. Packaged sync execution/restart and citation-graph persistence passed on all three. Matching installers, provenance and synthetic ZIP available | Old-release upgrade/coexistence, shortcut/registration/input/long-running/corpus/recovery UI, real-provider, hosted/two-device and phone journeys remain open; curated release selection not run; no public release/deployment |
+| Release | Common clean candidate `cb6ca66` in [run 43680889932](https://github.com/puddings-world/Paperfact/actions/runs/43680889932): critical 14 plus source first-sync representative per OS, actual frozen research/CLI/MCP and same-workspace handoff passed; Windows installer lifecycle, Mac three-start/foreground, Linux AppImage and Windows mobile artifact 5/5. Jobs: 6m51s / 5m08s / 3m12s. Packaged sync execution/restart and citation-graph persistence passed on all three. Matching installers, provenance and synthetic ZIP available | Old-release upgrade/coexistence, shortcut/registration/input/long-running/corpus/recovery UI, real-provider, hosted/two-device and phone journeys remain open; curated release selection not run; no public release/deployment |
 
 The preserved checkpoint is integrated locally. Immediate priority is completing recovery
 UX and durable private pairing/hosting, then installed-device acceptance. Existing
