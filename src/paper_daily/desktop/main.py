@@ -3077,6 +3077,11 @@ class MainWindow(QWidget):
         self.ready_banner = ReadyBanner(self.pal, owner=self._workspace_owner)
         self.ready_banner.open_paper.connect(self.open_anywhere)
         outer.addWidget(self.ready_banner)
+        from paper_daily.desktop.analysis_settings import TonightBanner
+
+        self.tonight_banner = TonightBanner(self.pal, owner=self._workspace_owner)
+        self.tonight_banner.analyse.connect(self.analyse_tonight)
+        outer.addWidget(self.tonight_banner)
         from paper_daily.desktop.update_banner import UpdateBanner
 
         self.update_banner = UpdateBanner(
@@ -3516,6 +3521,7 @@ class MainWindow(QWidget):
         if not current_for(self):
             return
 
+        self.ask_about_tonight()
         with connect(path=self._workspace_owner.database) as conn:
             ids = analysis_schedule.unseen(conn)
             titles = {
@@ -3533,6 +3539,26 @@ class MainWindow(QWidget):
         if self.ready_banner.isHidden():
             QApplication.alert(self)
         self.ready_banner.show_batch(ids, titles)
+
+    def ask_about_tonight(self) -> None:
+        """Offer 深入分析 for the paper the nightly run delivered, until answered."""
+        from paper_daily import tonight
+
+        with connect(path=self._workspace_owner.database) as conn:
+            paper_id = tonight.offer(conn)
+            row = conn.execute(
+                "SELECT title, venue, year FROM papers WHERE id=?", (paper_id,)
+            ).fetchone() if paper_id else None
+        if not current_for(self):
+            return
+        if not row:
+            self.tonight_banner.hide()
+            return
+        self.tonight_banner.ask(paper_id, row["title"], f"{row['venue']} {row['year']}")
+
+    def analyse_tonight(self, paper_id: str) -> None:
+        if self.open_anywhere(paper_id):
+            self.reader_page.start_analysis()
 
     def _ai_settings(self) -> None:
         from paper_daily import feedback
@@ -5054,6 +5080,8 @@ def run(
                 window.open_next_unread()
             elif command.startswith(b"open:"):
                 window.open_anywhere(command[5:].decode(errors="replace"))
+                # The nightly run opens its paper this way; its question comes with it.
+                window.ask_about_tonight()
             elif command.startswith(b"pdf:"):
                 window.open_pdfs([Path(command[4:].decode(errors="replace"))])
             conn.disconnectFromServer()

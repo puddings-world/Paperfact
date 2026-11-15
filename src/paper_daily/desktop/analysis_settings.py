@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from paper_daily import analysis_schedule
+from paper_daily import analysis_schedule, tonight
 from paper_daily.desktop.window_workspace import WindowWorkspace
 from paper_daily.store import connect, get_kv, set_kv
 
@@ -203,3 +203,63 @@ class ReadyBanner(QFrame):
         with connect(path=self._workspace_owner.database) as conn:
             analysis_schedule.mark_seen(conn)
         self.hide()
+
+
+class TonightBanner(QFrame):
+    """「今晚送來《…》，要現在深入分析嗎？」: the nightly run asks instead of spending
+    model calls on a paper there may be no time to read."""
+
+    analyse = Signal(str)
+
+    def __init__(self, palette: dict[str, str], *, owner=None):
+        super().__init__()
+        self._workspace_owner = owner if owner is not None else WindowWorkspace.capture()
+        self.paper_id: str | None = None
+        self.setObjectName("tonightBanner")
+        self.setStyleSheet(
+            f"#tonightBanner{{background:{palette['aiSoft']};"
+            f"border-bottom:1px solid {palette['ai']};}}"
+        )
+        row = QHBoxLayout(self)
+        row.setContentsMargins(16, 6, 12, 6)
+        row.setSpacing(10)
+        self.label = QLabel()
+        self.label.setWordWrap(True)
+        self.label.setTextFormat(Qt.TextFormat.PlainText)
+        self.label.setStyleSheet(f"color:{palette['ink']};font-size:12px;")
+        row.addWidget(self.label, 1)
+        self.yes = QPushButton("深入分析")
+        self.yes.setToolTip("約 3–6 分鐘，會用到目前「深入分析」所選的 AI。")
+        self.yes.setStyleSheet(
+            f"QPushButton{{background:{palette['ai']};color:{palette['onAi']};"
+            f"border:1px solid {palette['ai']};border-radius:4px;padding:4px 12px;"
+            f"font-weight:600;}}"
+        )
+        self.yes.clicked.connect(self._analyse)
+        row.addWidget(self.yes)
+        self.no = QPushButton("今晚不用")
+        self.no.clicked.connect(self._answered)
+        row.addWidget(self.no)
+        self.hide()
+
+    def ask(self, paper_id: str, title: str, where: str) -> None:
+        if not self._workspace_owner.current():
+            return
+        self.paper_id = paper_id
+        self.label.setText(
+            f"今晚送來《{title[:72]}》（{where}），還沒有深入分析。要現在產生嗎？"
+        )
+        self.show()
+
+    def _analyse(self) -> None:
+        paper_id = self.paper_id
+        self._answered()
+        if paper_id and self._workspace_owner.current():
+            self.analyse.emit(paper_id)
+
+    def _answered(self) -> None:
+        self.hide()
+        if not self._workspace_owner.current():
+            return
+        with connect(path=self._workspace_owner.database) as conn:
+            tonight.answer(conn)

@@ -80,9 +80,11 @@ Log "dive-ahead --rewrite"
 # /paper-today remains available manually in Claude Code for agent-driven discussion.
 
 # Through the .vbs so no console window is left behind; it also raises the window
-# if the reader is already open rather than stacking a second one.
+# if the reader is already open rather than stacking a second one. --tonight opens
+# the paper delivered above: --next took the next unread of whatever list happened
+# to be on screen, so a reader left on a reading list never saw tonight's paper.
 Log "opening the reader"
 Start-Process -WindowStyle Hidden -FilePath "$env:SystemRoot\System32\wscript.exe" `
-              -ArgumentList "`"$(Join-Path (Get-Location) 'scripts\launch-app.vbs')`"", "--next"
+              -ArgumentList "`"$(Join-Path (Get-Location) 'scripts\launch-app.vbs')`"", "--tonight"
 
 Log "=== nightly done ==="

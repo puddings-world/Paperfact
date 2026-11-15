@@ -72,7 +72,7 @@ available; `paper-daily` remains a compatibility alias.
 
 | Command | What it does |
 |---|---|
-| `app [PDF] [--next] [--paper ID] [--restart]` | Open the desktop reader (`--next` jumps straight to the next unread; `--paper` opens one paper, in the running window if there is one, switching to the queue or a list that holds it; `--restart` saves drafts and restarts the running reader; a `PDF` path offers that file to the open reading list, in the running window if there is one, which is what an "open with" association passes) |
+| `app [PDF] [--next] [--tonight] [--paper ID] [--restart]` | Open the desktop reader (`--next` jumps straight to the next unread; `--tonight` opens the paper the nightly run delivered within the last day, whatever list is on screen, and falls back to `--next` when there is none; `--paper` opens one paper, in the running window if there is one, switching to the queue or a list that holds it; `--restart` saves drafts and restarts the running reader; a `PDF` path offers that file to the open reading list, in the running window if there is one, which is what an "open with" association passes) |
 | `import-list <name> --file F [--slug S]` | Import a bibliography as a switchable reading list |
 | `lists` | Show the reading lists and how far through each one is |
 | `list-add <list> "<citation>" [--file F] [--doi DOI] [--pdf PDF]` | Resolve a title, citation, arXiv ID/URL or DOI and add the paper to the named list. `--pdf` reads the paper from that file; without a citation it takes the arXiv id, DOI and title printed on the file's first page. |

@@ -60,7 +60,10 @@ Two deliberate distortions sit on top of the score:
 - **Lineage expansion**: a paper's references that are already in the corpus are
   pulled forward as companion reading. This is what makes the queue a path through
   an idea rather than a ranked list, and the reader shows it directly — see the
-  research context at the top of 引用 below. `lineage` walks ahead of the reading to
+  research context at the top of 引用 below. Only a ranked, canon or hand-added
+  paper brings companions: a companion that is delivered queues none of its own,
+  because each one put two more ahead of the next new paper and the chain held the
+  newest work back for as long as it lasted. `lineage` walks ahead of the reading to
   build the graph; leaving it to grow one paper at a time on delivery meant it was
   empty exactly when it was needed.
 
@@ -137,6 +140,14 @@ default), every two days, weekly, or only on request; how many queue papers (4) 
 list papers (3); and whether the window says which papers are ready. The task itself
 still fires every night and the run decides whether it is due, so changing the
 setting never needs the task re-registered.
+
+The run ends with `app --tonight`, which opens the paper it delivered whatever list
+the reader was left on. When that paper has no deep dive (the schedule is set to
+"only on request", or it was not due), a bar above the page asks once whether to
+analyse it now: **深入分析** starts the analysis, **今晚不用** dismisses it, and
+either answer holds until the next delivery. Nothing is generated without that
+click. The nightly task is optional as a whole: the reader works without it, and
+`Unregister-ScheduledTask` (below) turns it off.
 
 `-StartWhenAvailable` is set, so a night the machine spent asleep runs when it wakes
 rather than being skipped. Nothing is ever served twice: a delivered paper keeps its
