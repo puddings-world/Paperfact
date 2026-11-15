@@ -1202,3 +1202,43 @@ including CLI/MCP. These overlap. Full audit adapters/fact sheets/consistency,
 scientific evaluation, remaining history gaps, maintenance ancestry reconciliation
 and real-device acceptance remain required. Do not add these partial counts to
 infer whole-project completion or a progress percentage.
+
+### Captured source-aware survey generation (2026-11-16)
+
+The internal `survey_jobs.SurveyJob` worker now captures a real
+`list_surveys` generation observation, the selected task route and the selected
+original PDFs. It calls the existing completion facade once per completed job,
+checks a bounded closed JSON response, and locates proposed quotations against
+those captured bytes. Missing originals and unmatched quotations remain explicit.
+This is an implemented generation boundary, not an enabled desktop feature.
+
+Internal interface (run capture and generation on a worker):
+
+- `SurveyJob.capture(database, list_id, *, legacy_root=None, selected_ids=None,
+  connections=None, force=False, cancelled=lambda: False) -> SurveyJob`.
+  The database is explicit. `selected_ids=None` selects all list members;
+  `[]` selects none. The existing survey task override/global route is resolved
+  once. Missing/invalid selections do not silently fall back. Edited legacy
+  surveys/roadmaps require explicit replacement intent.
+- `job.selection -> dict`: effective backend, account ID and requested model;
+  no key or endpoint. This is next-call intent, not historical entitlement.
+- `job.generate(*, cancelled=lambda: False) -> SurveyProposal`: sealed checked
+  proposal, separate requested/reported model identities, and verified private
+  original/receipt retention. No current report, sync operation, enrollment or
+  original-PDF activation is written by this method.
+
+The shared database/list producer lock also excludes the existing legacy survey
+producer. Pre-call source/input changes refuse the call. A completed checked
+proposal survives a late cancellation or original-retention interruption in the
+same job object; retry does not call AI again, and rechecks retained bytes.
+Publication remains a separate observed operation: the native publisher accepts
+these proposals, and its saved reader displays the same report and exact page.
+A newer native report refuses an older proposal.
+
+Remaining work is required: captured per-list goal context, unbound generation
+publication, durable completed proposal/review recovery across process exit,
+and common desktop/CLI/MCP dispatch.
+The current desktop button still uses the legacy text flow. Do not claim that
+private PDF retention alone durably stores the model response, that quote matching
+validates scientific meaning, or that this internal seam replaces device/hosted
+acceptance. No live account or paid model call was used in the ten affected cases.

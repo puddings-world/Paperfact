@@ -8199,3 +8199,42 @@ Final integration critical14 passes10.26s (16.7s stages); docs/skill consistency
 passes2.67s (8.9s stages). Privacy/Ruff/whitespace pass. No exhaustive historical
 suite or native build; the candidate/backup and independent peer tests do not
 replace installed-device, runtime-adoption or hosted-service acceptance.
+
+## 2026-11-16: captured-account source-aware survey generation boundary
+
+Implemented `survey_jobs.SurveyJob.capture/generate` over actual generation
+observations and sealed original snapshots. The new worker uses the survey task
+route/global selection once, passes the frozen settings to the existing facade,
+accepts only a bounded closed sections/statements/passages response, and records
+requested versus actually reported model identity. It never accepts model-supplied
+checked locations. Private original/receipt retention is reused and checked on
+retry; no canonical SQL publication occurs in the generation method.
+
+Ten affected behavior tests cover: captured route/byte input/provenance and cached
+retry; duplicate activation plus provider failure/retry; pre-call cancellation and
+late cancellation without another completion; pre-call/during-call input changes;
+malformed/duplicate/extra-key/oversized JSON and invented checked locations; empty,
+edited and over-budget inputs without inference; interrupted original retention;
+actual native publication/read/exact-page inspection and older-proposal refusal;
+explicit unselected originals/unmatched quotations; and corruption refusal on a
+completed retry. All model completions are simulated and PDFs are synthetic.
+
+Initial static checks exposed overlong new fixture strings. The first behavioral
+run exposed a new-test mistake: semantic_validation belongs to the report, not
+the statement. The new assertion now reads the existing report field; no existing
+assertion, codec, selector or verification rule was weakened. Final affected check:
+10 passed15.17s,21.9s stages, governed300s/two logical CPUs/25% job cap. Earlier
+eight-case run passed12.18s/16.8s before the evidence-gap/corruption cases were added.
+Counts overlap. No concurrent test job or exhaustive historical run.
+
+This internal boundary does not yet replace desktop/CLI/MCP legacy dispatch.
+Unbound publication and durable stale-proposal/review recovery remain unfinished.
+An in-memory checked response plus durable PDFs is not a durably saved response.
+Installed Mac/Windows, physical phones, native credential stores and hosted gates
+remain open. No native build, release, owner-data change or real AI call.
+
+Integration critical14 passes10.78s (16.1s stages), including package/PDF
+preservation, notes/Q&A, configuration isolation, offline conflicts and recovery.
+Per-list reading-goal context is another required generation input not yet captured
+by this internal survey seam; it must be added with stale-goal publication guards.
+Docs/skill consistency58 passes2.68s (7.6s stages); privacy/Ruff pass.

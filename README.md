@@ -263,6 +263,10 @@ is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 [Current development status](docs/status-0.5.0.md) |
 [Test explanations](docs/testing/README.md)
 
+Internal source-aware survey generation and its remaining dispatch/recovery gaps
+are documented in the implementation plan; this is not yet the desktop default.
+
+
 ## Go further
 
 [Installation](docs/install.md) · [Handbook](docs/handbook.md) · [Reader](docs/reader-guide.md) ·

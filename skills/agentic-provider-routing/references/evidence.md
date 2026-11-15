@@ -96,3 +96,21 @@
 - Privacy/promotion: synthetic budgets and repository-relative code paths only;
   no prompts, research content, credentials or account identifiers. No new
   provider auth flow, global skill installation or universal scientific claim.
+
+## Source-aware survey generation uses the captured route (2026-11-16)
+
+- Status: validated-local; another use of the existing captured-selection pattern,
+  not a new global rule or provider authentication flow.
+- Boundary: survey_jobs resolves the survey task route once during capture and
+  sends the resulting immutable Settings to complete_result. Changed global
+  settings do not retarget the captured request. Credentials remain private;
+  requested and reported models are distinct in the checked report.
+- Evidence: test_survey_jobs.py, ten behavior cases,15.17s pytest/21.9s governed
+  stages. A real sealed native publication and original-page reader use the
+  simulated completion's report; later native content refuses old proposals.
+  Busy/failed/cancelled calls, unchanged retry, original corruption and invalid
+  response contracts are included. These are affected checks, not release proof.
+- Limits: original bytes are durably retained, but the checked model response is
+  cached only in the live job object. Durable review/recovery, unbound generated
+  publication and desktop/CLI/MCP dispatch are still required. No live login,
+  entitlement claim, paid inference, original research or global installation.
