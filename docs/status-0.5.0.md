@@ -43,6 +43,8 @@ Source changes after candidate 15aae7e, not yet native packaged:
   accepted resource/fetch hints are omitted. Known legacy text inputs now retain
   exact inactive bytes without PDF grants; unknown metadata or missing/changed
   text still blocks. Complete runtime adoption remains open.
+- Merged nightly reader work opens the delivered paper and asks before analysis;
+  its two delivery/banner flags stay local to the originating device.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

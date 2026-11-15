@@ -210,3 +210,6 @@ tell whether a year is genuinely done.
   paper that actually gets delivered.
 - Pre-2018 ICLR has no virtual site and no open proceedings, so those years use a
   looser Semantic Scholar roster that admits some workshop papers.
+
+Nightly delivery and banner-answer flags stay on the originating device. A reviewed
+first-sync copy starts with fresh banner state while retaining its research.

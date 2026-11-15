@@ -104,6 +104,12 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
                             citations={"DOI:10.1/a": 3}, unplaced=1), indent=2)
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("INSERT INTO kv VALUES(?,?)", ("citegraph." + first["paper_ids"][0], graph))
+    from paper_daily import tonight
+
+    with closing(generation._connect(source)) as conn:
+        tonight.record(conn, first["paper_ids"][0])
+        tonight.answer(conn)
+        conn.commit()
     expected = {key: records(source, key) for key in (
         "integration_operations", "integration_previews", "integration_changes",
     )}
@@ -134,6 +140,9 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
         destination, "SELECT 1 FROM sqlite_master WHERE name='research_compound_requests'"
     )
     assert not rows(destination, "SELECT 1 FROM kv WHERE key LIKE 'update.cache.%'")
+    with closing(sqlite3.connect(destination)) as conn:
+        assert not conn.execute("SELECT key FROM kv WHERE key IN (?,?)",
+                                (tonight.KEY, tonight.ANSWERED)).fetchall()
     assert rows(destination, "SELECT value FROM kv WHERE key GLOB 'citegraph.*'") == [(graph,)]
     assert rows(destination, "SELECT feature FROM research_content_projection "
                 "WHERE feature='citation_graph'") == [("citation_graph",)]

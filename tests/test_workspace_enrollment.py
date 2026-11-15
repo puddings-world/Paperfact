@@ -589,7 +589,12 @@ def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
 
 
 @pytest.mark.parametrize(
-    "key", ["analysis.future_research", "update.research", "drive.shared_notes"],
+    "key", [
+        "analysis.future_research",
+        "update.research",
+        "drive.shared_notes",
+        "nightly.research_notes",
+    ],
 )
 def test_unknown_setting_scopes_still_require_review(source, key):
     with closing(sqlite3.connect(source)) as conn, conn:

@@ -50,6 +50,7 @@ PRIVATE_DIRECTORIES = {"ai-accounts", "usage-changes", "diagnostics", "httpcache
 PRIVATE_KV_KEYS = frozenset({
     "analysis.schedule", "analysis.schedule.last_run", "analysis.batch", "analysis.batch.seen",
     "update.last_check", "update.found", "update.snoozed", "pocket.url",
+    "nightly.tonight", "nightly.tonight.answered",
 })
 PRIVATE_KV_PREFIXES = (
     "ui.", "ai.", "provider.", "account.", "usage.", "auth.", "update.cache.",

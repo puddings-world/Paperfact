@@ -6629,3 +6629,17 @@ additional worktree was introduced.
   Preserve it: checkpoint this work first, merge that integration head, then verify
   affected combined behavior before fast-forwarding and pushing. Remote was still
   2086a1a at inspection; no other session's working changes were present there.
+- Merged independent nightly work without conflicts (8f191bf). Combined nightly
+  and first-copy focused check: 10 passed in 6.66s / 9.9s; integration critical
+  14 passed in 7.20s / 10.5s. Source interfaces and GUI/nightly behavior retained.
+- Cross-feature inspection found the two new nightly banner flags were unknown to
+  first-copy inventory. Reproduced through the existing release representative:
+  unsupported KV scope, 1 failed before the fix (5.4s total). Classify only the two
+  exact device-control keys; do not grant the nightly namespace. The same test now
+  asserts no copied flag, unchanged original research and complete private history.
+  Added an unknown nightly research key to the existing scope-rejection matrix.
+- Final nightly-control/first-copy/unknown-scope slice: 5 passed in 9.66s /
+  12.9s total. Final merged source critical: 14 passed in 8.66s / 12.2s total.
+  Both retain the CPU governor and existing selector counts. No source data moved.
+- Final combined docs/skills: 58 passed in 1.91s / 5.2s total; privacy, Ruff
+  and CRLF-aware whitespace passed. Native builds must use this merged clean source.
