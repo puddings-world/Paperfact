@@ -195,3 +195,19 @@ paid model calls, destructive real-workspace testing or publication.
 Source-only screenshot readiness waits for saved/rendered content and refuses
 blank PNGs. Local plain/WebEngine capture checks pass; native Mac screenshot
 changes await the next coherent candidate. App runtime is unchanged.
+
+### Source-aware report acceptance gap (candidate88595d3)
+
+The three-platform run43754647228 proves its named packaged checks, not every
+new workflow. Source-aware generation has simulated source/IPC coverage; the
+frozen new-report model path has not been exercised. Before closing this gate,
+verify an isolated frozen CLI with a loopback synthetic provider: saved report,
+exact original quotation/location, captured requested/returned model identity,
+retained output and cached retry without another completion. Separately verify
+the packaged desktop private handoff and installed-device focus/account behavior.
+A direct CLI pass cannot establish that desktop transport.
+
+A bounded local download stopped after45s with an incomplete ZIP; it supplies no
+additional runtime evidence. Preserve the successful CI candidate rather than
+rebuild unchanged source to work around a download. Physical devices, deployment,
+runtime adoption and remaining recovery/authority gates are still open.

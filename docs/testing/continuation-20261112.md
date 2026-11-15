@@ -8379,3 +8379,27 @@ Only delivery documentation changes after88595d3; no candidate rebuild for those
 
 Delivery docs/consistency58 passes2.47s/6.5s stages; no runtime changes
 after the exact source candidate and no redundant installer rebuild.
+
+## 2026-11-16: bounded candidate evidence audit
+
+Re-read all three downloaded build-info.json and frozen-acceptance/report.json
+files for run43754647228. Each records clean commit88595d3 and passed=true.
+The report files are nested under frozen-acceptance; their absence at the
+provenance directory root does not mean the evidence was lost.
+
+These checks do not exercise source-aware report generation through a frozen
+CLI against a model endpoint. Source fixtures cover that behavior, but the
+installed/frozen new-report path remains an explicit acceptance gap.
+
+An authenticated API download of Windows artifact14178142192 was stopped by
+a45-second subprocess deadline after703,470 bytes of the184,546,969-byte ZIP.
+The incomplete ignored download is not an installer and has not been hashed,
+extracted or executed. No network cause is established. No build or test was
+restarted, no real account/model was invoked, and no daily install/data changed.
+
+Next frozen report check: extract the complete verified candidate into an
+isolated folder without installing it; use synthetic research and a loopback
+model response. Require a saved report, located original quote, captured versus
+returned model identity, retained-result reading and cached retry without a
+second model call. Keep the private desktop handoff check separate from a direct
+CLI invocation. Until these run, do not claim frozen new-report acceptance.
