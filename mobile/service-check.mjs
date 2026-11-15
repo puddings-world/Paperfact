@@ -169,6 +169,10 @@ try {
       }
     }
   }];
+  const graphRaw=JSON.stringify({checked:'2026-01-01T00:00:00+00:00',
+    edges:[['DOI:10.1/a','S2:fixture']],citations:{'DOI:10.1/a':3},unplaced:1},null,2);
+  richOps.push({entity_type:'research_content',entity_id:contentId(scope,'citation_graph','main'),
+    payload:{scope,feature:'citation_graph',key:'main',data:{value:graphRaw},source_document_hash:null}});
   for(const [index, value] of richOps.entries()) {
     const op = {
       version: 2,
@@ -195,6 +199,7 @@ try {
   assert.deepEqual(richState.draftBases['demo-note'], observed);
   const richView = projection(richState);
   assert.equal(richView.papers[0].analysis_sections[0].body, 'Actual desktop analysis');
+  assert.equal(richView.papers[0].research_content.find(row=>row.feature==='citation_graph').data.value,graphRaw);
   assert.equal(richView.papers[0].analysis_sections[0].source_document_hash, target.sha256);
   assert.equal(richView.notes.find(n => n.id === 'desktop-anchored').editable, false);
   await assert.rejects(

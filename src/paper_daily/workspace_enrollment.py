@@ -189,6 +189,16 @@ def _database(conn, ticket, *, history=None):
                 except (ValueError, TypeError, RecursionError):
                     blockers.append("legacy queue marker requires a bounded list identity")
                     continue
+            if table == "kv" and value["key"].startswith("citegraph."):
+                from paper_daily.citation_graph_content import validate_local
+
+                try:
+                    validate_local(conn, value)
+                except ValueError:
+                    blockers.append("citation graph requires its exact paper and bounded data")
+                    continue
+                selected.append(value)
+                continue
             if table == "kv" and value["key"] not in {"lists.order", "lists.legacy_queue"}:
                 from paper_daily.later_outcome_history import redundant_hint
 

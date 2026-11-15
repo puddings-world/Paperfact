@@ -45,6 +45,10 @@ citations, followups, resources, chat and database highlights). The staged copy
 preserves every represented research row exactly: a serializer normalization that
 would change the source row is rejected rather than silently accepted. Saved
 `lists.order` is retained; a new order can be generated when none was saved.
+Validated `citegraph.<local-paper-id>` rows now produce a paper-scoped
+`citation_graph/main` operation while preserving their original JSON in the copy
+and independent backup. Orphan owners, malformed values and unsupported research
+KV still block. This does not open arbitrary KV replication.
 Author enrichment tables are preserved locally, explicitly not represented as
 portable edits. The workspace invalidation counter is rebuilt locally.
 

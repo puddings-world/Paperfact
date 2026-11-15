@@ -33,6 +33,7 @@ FEATURES = {
         "relation contexts_json arxiv_id edited fetched_at",
     ),
     "context": ("paper_context", None, "summary reading_json written_at edited"),
+    "citation_graph": ("kv", None, "value"),
     "later_outcome": ("paper_later_outcomes", None, "body_json document_hash written_at"),
     "resource": (
         "resources",
@@ -268,6 +269,11 @@ def validate_payload(payload, *, entity_id=None, parents=None):
     if feature in ("manual_highlight", "ai_highlight"):
         _hash(payload["source_document_hash"])
     data = payload["data"]
+    if feature == "citation_graph":
+        from paper_daily.citation_graph_content import validate_wire
+
+        validate_wire(payload)
+        return
     if feature == "later_outcome":
         from paper_daily.later_outcomes import validate_wire
 
@@ -460,6 +466,10 @@ def _row_key(conn, table, row):
 
 
 def content_payload(conn, table, row):
+    if table == "kv":
+        from paper_daily.citation_graph_content import payload
+
+        return payload(conn, dict(row))
     if table not in CONTENT_TABLES:
         raise ValueError("Unsupported research content table")
     row = dict(row)
@@ -575,7 +585,10 @@ def snapshot_content(conn, *, tables=None):
     existing = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     output = {}
     for table in sorted(selected & existing):
-        cursor = conn.execute(f"SELECT * FROM {table}")
+        cursor = conn.execute(
+            "SELECT key,value FROM kv WHERE key GLOB 'citegraph.*'"
+            if table == "kv" else f"SELECT * FROM {table}"
+        )
         names = [column[0] for column in cursor.description]
         for values in cursor:
             row = dict(zip(names, values, strict=True))
@@ -636,6 +649,13 @@ def write_content(conn, operation):
         raise ValueError("Content projection cannot move to another parent")
     local = _local_scope(conn, scope, required=not deleting)
     table, natural, _fields = FEATURES[feature]
+    if feature == "citation_graph":
+        from paper_daily.citation_graph_content import write_in
+
+        write_in(conn, operation, local, deleting=deleting)
+        if not deleting:
+            _record_projection(conn, operation, feature, scope, key, source_hash)
+        return
     if feature in {"queue_entry", "reading_event"}:
         from paper_daily.legacy_workflow import write_in
 

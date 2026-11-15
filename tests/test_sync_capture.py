@@ -424,3 +424,145 @@ def test_replace_cannot_silently_rebind_integer_note_identity(bound):
         )
     assert rows("SELECT body,created_at FROM notes") == [("first", STAMP)]
     assert len(bound.journal.pending()) == count
+
+
+def test_citation_graph_capture_maps_owner_retries_deletes_and_keeps_private_kv(bound, tmp_path):
+    import json
+
+    seed()
+    value = dict(checked=STAMP, edges=[["DOI:10.1/a", "S2:fixture"]],
+                 citations={"DOI:10.1/a": 3}, unplaced=1)
+    raw = json.dumps(value, indent=2)
+    with store.connect() as conn:
+        store.set_kv(conn, "auth.secret", "private-marker")
+        conn.execute("INSERT INTO kv VALUES(?,?)", ("citegraph.local-paper", raw))
+    graphs = [op for op in bound.journal.pending() if
+              op["payload"].get("feature") == "citation_graph"]
+    assert len(graphs) == 1 and graphs[0]["payload"]["data"] == {"value": raw}
+    assert graphs[0]["payload"]["source_document_hash"] is None
+    assert "private-marker" not in repr(bound.journal.pending())
+    service = ReferenceService(tmp_path / "graph-authority.sqlite")
+    token = service.enroll("workspace", "a")
+    assert bound.sync_once(service, token)["pending"] == 0
+    other = make(tmp_path / "graph-peer.sqlite", "graph-peer")
+    peer_token = service.enroll("workspace", "graph-peer")
+    other.receive(service.pull(peer_token))
+    with other.journal._connect() as conn:
+        local = conn.execute("SELECT local_id FROM research_paper_identity WHERE sync_id=?",
+                             (graphs[0]["payload"]["scope"]["id"],)).fetchone()[0]
+        stored = conn.execute("SELECT value FROM kv WHERE key=?",
+                              ("citegraph." + local,)).fetchone()
+        assert stored[0] == raw
+        conn.execute("INSERT INTO kv VALUES('ui.theme','peer-private')")
+    assert other.journal.pending() == []
+    before = rows("SELECT value FROM kv WHERE key='citegraph.local-paper'")
+    pending = bound.journal.pending()
+    with pytest.raises((ValueError, sqlite3.Error)), store.connect() as conn:
+        store.set_kv(conn, "citegraph.local-paper", {**value, "unplaced": True})
+    assert rows("SELECT value FROM kv WHERE key='citegraph.local-paper'") == before
+    assert bound.journal.pending() == pending
+    with store.connect() as conn:
+        token_before = observe_content(conn, "kv", {"key": "citegraph.local-paper", "value": raw})
+        with expecting(conn, [token_before]):
+            conn.execute("DELETE FROM kv WHERE key='citegraph.local-paper'")
+            conn.commit()
+    assert bound.sync_once(service, token)["pending"] == 0
+    other.receive(service.pull(peer_token))
+    other.receive(service.pull(peer_token))
+    with other.journal._connect() as conn:
+        assert conn.execute("SELECT value FROM kv WHERE key=?",
+                            ("citegraph." + local,)).fetchone() is None
+        setting = conn.execute("SELECT value FROM kv WHERE key='ui.theme'").fetchone()
+        assert setting[0] == "peer-private"
+        assert conn.execute("SELECT body FROM notes").fetchone()[0] == "first"
+    assert rows("SELECT value FROM kv WHERE key='auth.secret'") == [('"private-marker"',)]
+
+
+def test_citation_graph_closed_fixture_contract_and_private_snapshot(bound):
+    import json
+    from pathlib import Path
+
+    from paper_daily.citation_graph_content import decode, local_id
+    from paper_daily.sync_content import snapshot_content
+
+    path = Path(__file__).parent / "fixtures/citation-graphs.json"
+    fixtures = json.loads(path.read_text(encoding="utf-8"))
+    for row in (None, ["key", "value"], {}):
+        with pytest.raises(ValueError, match="Invalid bounded citation graph"):
+            local_id(row)
+    for fixture in fixtures:
+        if fixture["valid"]:
+            assert isinstance(decode(fixture["value"]), dict)
+        else:
+            with pytest.raises(ValueError, match="Invalid bounded citation graph"):
+                decode(fixture["value"])
+    seed()
+    with store.connect() as conn:
+        store.set_kv(conn, "auth.secret", "private-marker")
+        conn.execute("INSERT INTO kv VALUES(?,?)", ("citegraph.local-paper", fixtures[0]["value"]))
+        values = snapshot_content(conn, tables={"kv"})
+    assert len(values) == 1
+    assert "private-marker" not in repr(values) and "auth.secret" not in repr(values)
+
+
+def test_citation_graph_fetch_retains_newer_result_during_provider_wait(bound, monkeypatch):
+    from types import SimpleNamespace
+
+    from paper_daily import citegraph
+    from paper_daily.sync_capture import observe_target
+
+    seed()
+    newer = dict(checked=STAMP, edges=[], citations={"S2:a": 8}, unplaced=0)
+    monkeypatch.setattr(citegraph, "neighbours", lambda *a: (
+        [SimpleNamespace(lookup="S2:a"), SimpleNamespace(lookup="S2:b")], 0,
+    ))
+
+    def response(*args, **kwargs):
+        with store.connect() as conn:
+            token = observe_target(conn, "paper", "local-paper", "citation_graph")
+            with expecting(conn, [token]):
+                store.set_kv(conn, "citegraph.local-paper", newer)
+                conn.commit()
+        return [dict(paperId="a", citationCount=1, references=[]),
+                dict(paperId="b", citationCount=1, references=[dict(paperId="a")])]
+
+    monkeypatch.setattr(citegraph, "post_json", response)
+    with pytest.raises(StaleCaptureError):
+        citegraph.links("local-paper")
+    with store.connect() as conn:
+        assert store.get_kv(conn, "citegraph.local-paper") == newer
+    graphs = [op for op in bound.journal.pending() if
+              op["payload"].get("feature") == "citation_graph"]
+    assert len(graphs) == 1 and '"S2:a": 8' in graphs[0]["payload"]["data"]["value"]
+
+
+def test_citation_graph_concurrent_edits_retain_both_versions(bound, tmp_path):
+    import json
+    from copy import deepcopy
+
+    seed()
+    base = dict(checked=STAMP, edges=[], citations={"S2:a": 1}, unplaced=0)
+    with store.connect() as conn:
+        store.set_kv(conn, "citegraph.local-paper", base)
+    graph = next(op for op in bound.journal.pending()
+                 if op["payload"].get("feature") == "citation_graph")
+    server = ReferenceService(tmp_path / "concurrent-graphs.sqlite")
+    token = server.enroll("workspace", "a")
+    bound.sync_once(server, token)
+    other = make(tmp_path / "concurrent-peer.sqlite", "graph-peer")
+    peer_token = server.enroll("workspace", "graph-peer")
+    other.receive(server.pull(peer_token))
+    for side, count in ((bound, 8), (other, 9)):
+        payload = deepcopy(graph["payload"])
+        payload["data"]["value"] = json.dumps({**base, "citations": {"S2:a": count}})
+        side.save(side.new_graph_operation("research_content", graph["entity_id"], payload))
+    bound.sync_once(server, token)
+    other.sync_once(server, peer_token)
+    bound.sync_once(server, token)
+    for side in (bound, other):
+        conflict = side.history(conflicts_only=True)
+        assert len(conflict) == 1 and side.status()["pending"] == 0
+        incoming = json.loads(conflict[0]["operation"]["payload"]["data"]["value"])
+        assert incoming["citations"] == {"S2:a": 9}
+        accepted = json.loads(conflict[0]["head"]["operation"]["payload"]["data"]["value"])
+        assert accepted["citations"] == {"S2:a": 8}

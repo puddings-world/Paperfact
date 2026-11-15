@@ -110,6 +110,10 @@ def _keys(conn, table, row):
             ("list_order", row["list_id"]),
         ]
     if table == "kv":
+        from paper_daily.citation_graph_content import selected
+
+        if selected(row):
+            return [_content().content_identity(conn, table, row)]
         return [("workspace_list_order", "workspace-lists")]
     content = _content()
     if content and table in content.CONTENT_TABLES:
@@ -412,7 +416,10 @@ class CaptureConnection(sqlite3.Connection):
         if old and new and "paper_id" in row and old["paper_id"] != new["paper_id"]:
             raise CaptureError("Research content cannot be reparented by an UPDATE")
         if table == "kv" and row["key"] != "lists.order":
-            return 0
+            from paper_daily.citation_graph_content import selected
+
+            if not selected(row):
+                return 0
         if table == "papers" and old and new and all(old[k] == new[k] for k in PAPER_COLUMNS):
             return 0
         self._capture_trusted = True
@@ -747,7 +754,7 @@ def _flush(conn):
         new = json.loads(entry["after_json"]) if entry["after_json"] else None
         row = new or old
         keys = _keys(conn, table, row)
-        if table == "kv":
+        if table == "kv" and row["key"] == "lists.order":
             orders.add(keys[0])
             continue
         key = keys[0]

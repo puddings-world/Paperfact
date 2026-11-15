@@ -892,3 +892,45 @@ def test_archive_native_revision_survives_prepared_json_round_trip(
             assert conn.execute("SELECT body FROM dives").fetchone()[0] == (
                 "Complete original explanation"
             )
+
+
+def test_citation_graph_import_maps_owner_preserves_receiver_and_exact_retry(
+    package, importer, tmp_path,
+):
+    from paper_daily.sync_capture import expecting, observe_target
+
+    service, client = importer
+    raw = json.dumps(dict(checked=STAMP, edges=[["DOI:10.1/a", "S2:fixture"]],
+                          citations={"DOI:10.1/a": 3}, unplaced=1), indent=2)
+
+    def transform(manifest, tables, values):
+        tables["kv"] = [{"key": "citegraph.ref:example", "value": raw}]
+
+    archive = rewrite_package(package[0], tmp_path / "with-graph.zip", transform=transform)
+    first = service.apply(service.prepare(archive, request_id="graph-first"))
+    mapping = first["identity_mapping"]["ref:example"]
+    key = "citegraph." + mapping["local_id"]
+    with client.journal.transaction() as conn:
+        assert conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()[0] == raw
+    pending = client.journal.pending()
+    graphs = [op for op in pending if op["payload"].get("feature") == "citation_graph"]
+    assert len(graphs) == 1
+    assert graphs[0]["payload"]["scope"]["id"] == mapping["portable_id"]
+    assert graphs[0]["payload"]["data"]["value"] == raw
+    assert service.apply(service.prepare(archive, request_id="graph-first"))["replayed"]
+    assert client.journal.pending() == pending
+    newer = raw.replace(': 3', ': 8')
+    with closing(sqlite3.connect(service.database, factory=CaptureConnection)) as conn:
+        token = observe_target(conn, "paper", mapping["local_id"], "citation_graph")
+        with conn, expecting(conn, [token]):
+            conn.execute("UPDATE kv SET value=? WHERE key=?", (newer, key))
+            conn.commit()
+    assert service.apply(service.prepare(archive, request_id="graph-first"))["replayed"]
+    service.apply(service.prepare(archive, request_id="graph-keep"))
+    with client.journal.transaction() as conn:
+        assert conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()[0] == newer
+    replaced = service.apply(service.prepare(archive, request_id="graph-replace", replace=True,
+                                             confirmed_mapping=True))
+    with client.journal.transaction() as conn:
+        assert conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()[0] == raw
+    assert replaced["state"] == "applied_locally"

@@ -298,7 +298,7 @@ pass before outbox upload or reading-position reconciliation; drafts, local note
 receipts and cursor remain intact. The message asks for service-backup review,
 not browser storage deletion. Reconnecting cannot bypass that comparison.
 
-The v26 static shell adds mandatory service-execution continuity to the received-plus-acknowledged history guard while retaining
+The v27 static shell retains mandatory service-execution continuity to the received-plus-acknowledged history guard while retaining
 research storage. This is local source/artifact behavior; an installed PWA must
 receive the updated shell and service before pilot acceptance. This frontier
 check does not replace full authority-generation negotiation, private HTTPS
@@ -310,6 +310,15 @@ validation. A changed listener pauses research delivery without acknowledging or
 removing local notes. Reconnect explicitly after checking matching app/service
 versions; this clears only the ephemeral pin, and normal history checks still
 precede upload. An old in-flight identity response cannot replace the new pin.
-The service and v26 assets must be updated together; an older static client is
-refused by the new service. This source contract is not yet in the d2689e8 native
-candidate or a hosted PWA. See [the HTTP boundary](sync-http.md#execution-continuity-during-a-transfer).
+The service and current assets must be updated together; an older static client is
+refused by the new service. Execution continuity is in native candidate 8bf00f9. New v27 citation-graph
+content support is source/artifact-only; no hosted PWA is deployed. See [the HTTP boundary](sync-http.md#execution-continuity-during-a-transfer).
+
+
+The v27 shell also validates/retains paper-scoped citation-neighbour graph content
+without changing its paper owner or normalizing its saved JSON. Shared Python/JS
+fixtures enforce byte, shape, duplicate-key and integer boundaries. This reuses
+the bounded lexical parser; normal reading-position ingress keeps its prior page
+checks. New content clients must update together; no old browser database is reset.
+The ordinary saved-research projection retains the graph; a dedicated interactive
+mobile graph view and physical-device display/refresh acceptance are not claimed.

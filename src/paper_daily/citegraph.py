@@ -315,7 +315,10 @@ def build(conn, paper_id: str) -> Graph:
 
 def links(paper_id: str, log: Log = lambda _m: None) -> int:
     """Find which neighbours cite which, and keep it. Returns the number of links."""
+    from paper_daily.sync_capture import expecting, observe_target
+
     with connect() as conn:
+        observation = observe_target(conn, "paper", paper_id, "citation_graph")
         nodes, _unconfirmed = neighbours(conn, paper_id)
     named = [n.lookup for n in nodes if n.lookup]
     ids = list(dict.fromkeys(named))
@@ -349,7 +352,7 @@ def links(paper_id: str, log: Log = lambda _m: None) -> int:
         }
     )
     unplaced = len(nodes) - 1 - sum(1 for n in nodes[1:] if n.lookup in cites_of)
-    with connect() as conn:
+    with connect() as conn, expecting(conn, [observation]):
         set_kv(
             conn,
             f"citegraph.{paper_id}",

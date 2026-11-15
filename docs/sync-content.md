@@ -19,6 +19,7 @@ prevent an old-incarnation retirement from erasing a restored local row.
 | `citation` | `cites` | `ref_key` |
 | `followup` | `followups` | `work_id` |
 | `context` | `paper_context` | `main` |
+| `citation_graph` | only `kv["citegraph." + local_paper_id]` | `main` |
 | `resource` | `resources` | credential-free HTTP(S) URL |
 | `manual_highlight` | `pdf_highlights` | stable mapped UUID |
 | `ai_highlight` | `pdf_ai_highlights` | document hash + `source_key` |
@@ -97,3 +98,35 @@ For notes originating in the legacy two-field protocol, creation time was local
 receiver metadata rather than shared identity. Reconciliation uses the verified
 birth receipt to handle those old timestamps; native rich-note creation metadata
 remains protected. Stable note IDs and parent bindings are preserved.
+
+
+## Citation-neighbour graph
+
+`citation_graph` is a paper-scoped singleton with `data={"value": raw_json}` and
+`source_document_hash=null`. The value is the exact existing stored JSON text;
+whitespace/lookup IDs remain data, not SQL, paths or source grants. The receiver
+constructs only `citegraph.<mapped-local-paper-id>` through its native paper mapping.
+No wire key can choose another KV entry. Snapshot/capture/import selectors admit
+this exact namespace; account/settings and other KV families are excluded or
+explicitly unsupported. The existing graph reader continues to use the same key.
+
+`citation_graph_content.decode` validates closed `checked`, `edges`, `citations`
+and `unplaced` fields: aware timestamp, at most 4,096 distinct non-self edges,
+512 citation counts, bounded lookup strings, integer counts and 200 KiB raw text.
+The usual 240 KiB payload/256 KiB operation limits also apply. Duplicate JSON keys,
+nonfinite/fractional/exponent counts and unknown fields refuse. Python and mobile
+share fixture verdicts, including Unicode and escaped duplicate names.
+
+The existing external lookup producer observes the graph/paper lifetime before
+fetching and carries that observation through its explicit commit. A newer result
+retains the late candidate instead of being overwritten. Sync reception itself
+makes no lookup, paid call or PDF claim. Concurrent graph edits preserve both
+versions; delete/retry semantics use the ordinary research-content protocol.
+First-enrollment copies/backups retain supported graphs exactly. Enrolled package
+imports map their paper owner, preserve receiver content by default, and require
+an explicit replacement to overwrite it. Other legacy completion KV remains gated.
+
+These are retrieved citation relations/counts, not verified quotation support or
+Lineage judgments. Native installed visual/refresh, hosted and physical-device
+acceptance remain separate. New desktop/service/v27 clients must be deployed
+together; an older client may refuse the new feature without dropping its research.

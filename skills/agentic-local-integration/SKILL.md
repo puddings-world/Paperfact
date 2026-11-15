@@ -27,6 +27,13 @@ buttons serialize through a server just to share behavior.
   blocked. Preserve necessary migration markers as data, not permission for an
   already synchronized workspace to rerun legacy constructors. See the
   validated-local import-enrollment evidence reference.
+- If research and device controls share a key/value table, scope every capture,
+  snapshot, import and projection by a closed research key family. A table-level
+  permission must not expose credentials/settings. Resolve the feature's owner
+  through the receiver's identity map and construct the local key there; never
+  accept a wire-chosen arbitrary key. Retain lossless bounded business text while
+  validating its structure, and test private-key isolation across every adapter.
+  This applies to mixed storage, not a requirement to replace ordinary typed tables.
 - When extending local operations into replication, distinguish remote acceptance
   from local application. An acknowledged write not yet received in a contiguous
   event stream remains a causal predecessor; older pages must not replace its newer

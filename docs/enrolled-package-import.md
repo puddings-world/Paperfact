@@ -80,7 +80,7 @@ other device. `previously_applied` is a historical receipt, with
   separate verified download step supplies their bytes. Missing declared PDFs do
   not become a complete result. Papers explicitly lacking a PDF are reported in
   `pdf_needed`; their hashless research remains unknown.
-- Nonempty legacy research KV caches, nonempty historical ML module metadata,
+- Nonempty legacy research KV other than validated paper-scoped citation graphs, nonempty historical ML module metadata,
   edited material-position files, cache-only semantic annotations, unknown tables
   or fields, and annotation deletions without portable history are rejected before
   research writes. They need reviewed typed adapters, not a generic raw-SQL bypass.
@@ -166,3 +166,12 @@ protected; this dialog does not bypass separate adoption or restoration.
 Run inspection/search/preparation/application/discard on the owned worker. The
 desktop dialog serializes these tasks and rechecks receiver identity at GUI
 delivery. See [concrete behavior cases](testing/package-review-scenarios.md).
+
+
+Validated citation-neighbour graphs use the existing package KV representation.
+Each key must belong to a paper declared in the package and contain the closed
+citation-graph schema. Preparation maps that source paper to the exact receiver
+paper before constructing the singleton operation. The operation cannot write an
+arbitrary KV key. Existing receiver graphs are kept unless replacement was chosen;
+request replay preserves later edits. The graph is PDF-independent metadata and
+never grants access to another original. Other legacy KV still refuses explicitly.

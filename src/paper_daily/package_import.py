@@ -247,7 +247,15 @@ class PackageImporter:
                 if not any(row["paper_id"] == marker["paper_id"] for row in tables.get(table, [])):
                     unsupported.append("annotation deletion without portable history")
             if tables.get("kv"):
-                unsupported.append("legacy research KV caches")
+                from paper_daily.citation_graph_content import local_id
+
+                paper_ids = {row["id"] for row in tables.get("papers", [])
+                             + tables.get("cited_papers", [])}
+                try:
+                    if any(local_id(row) not in paper_ids for row in tables["kv"]):
+                        raise ValueError("Unknown graph owner")
+                except ValueError:
+                    unsupported.append("unsupported or invalid research KV")
             if unsupported:
                 raise UnsupportedPackage(
                     "This package contains unsupported research scopes", unsupported
@@ -271,6 +279,8 @@ class PackageImporter:
                             "Legacy paper module metadata requires a reviewed portable adapter",
                             sorted(nonempty),
                         )
+                elif table == "kv":
+                    allowed = {"key", "value"}
                 elif table == "notes":
                     allowed = sync_content.RICH_NOTE_FIELDS | {"id"}
                 elif table == "paper_annotation_known":
@@ -854,9 +864,14 @@ class PackageImporter:
             feature = sync_content.TABLE_FEATURES[table]
             _table, natural, field_names = sync_content.FEATURES[feature]
             for index, row in enumerate(rows):
-                old = row.get("paper_id")
+                if feature == "citation_graph":
+                    from paper_daily.citation_graph_content import local_id
+
+                    old = local_id(row)
+                else:
+                    old = row.get("paper_id")
                 if (old in report["pdf_conflicts"]
-                        and feature not in {"reading_position", "later_outcome"}):
+                        and feature not in {"reading_position", "later_outcome", "citation_graph"}):
                     continue
                 if feature in {"list_survey", "reading_goal", "list_pin"}:
                     scope = {"kind": "list", "id": list_id}

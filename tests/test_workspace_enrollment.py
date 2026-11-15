@@ -91,6 +91,10 @@ def test_plan_has_no_side_effects_and_supports_paper_scoped_queue_pins(source, t
 
 
 def test_supported_copy_preserves_research_and_excludes_credentials(source, tmp_path):
+    graph = json.dumps(dict(checked=STAMP, edges=[["DOI:10.1/a", "S2:fixture"]],
+                            citations={"DOI:10.1/a": 3}, unplaced=1), indent=2)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO kv VALUES('citegraph.paper',?)", (graph,))
     before = source.read_bytes()
     result = prepare(source, tmp_path)
     assert result["status"] == "prepared_for_review"
@@ -99,6 +103,9 @@ def test_supported_copy_preserves_research_and_excludes_credentials(source, tmp_
     destination = Path(result["database"])
     binding = local_binding(destination)
     assert binding["workspace_id"] == result["workspace_id"]
+    assert rows(destination, "SELECT value FROM kv WHERE key='citegraph.paper'") == [(graph,)]
+    assert rows(destination, "SELECT feature FROM research_content_projection "
+                "WHERE feature='citation_graph'") == [("citation_graph",)]
     assert rows(destination, "SELECT body FROM notes") == [("A research note",)]
     assert rows(destination, "SELECT name,note FROM lists") == [("Reading route", "Curated")]
     assert rows(destination, "SELECT id FROM papers") == [("paper",)]
@@ -114,6 +121,8 @@ def test_supported_copy_preserves_research_and_excludes_credentials(source, tmp_
     restored = sync_recovery.restore_detached(result["backup"], tmp_path / "restored")
     assert restored["detached"]
     assert rows(tmp_path / "restored/papers.db", "SELECT body FROM notes") == [("A research note",)]
+    assert rows(tmp_path / "restored/papers.db", "SELECT value FROM kv "
+                "WHERE key='citegraph.paper'") == [(graph,)]
 
 
 def test_explicit_pdf_is_verified_bound_and_in_independent_backup(source, tmp_path):

@@ -17,6 +17,7 @@ test('actual HTTP rejects float/exponent position pages before cursor or data, e
   const accepted=(operation,sequence)=>({sequence,outcome:'accepted',operation,head:{revision:sequence,operation}});
   const events=[accepted(position,before.cursor+1),accepted(note,before.cursor+2)];
   let token='1.0';
+  const instance='a'.repeat(32);
   const server=createServer(async(request,response)=>{
     assert.equal(request.headers.authorization,'Bearer fixture-token');
     const parts=[];for await(const part of request)parts.push(part);
@@ -25,10 +26,12 @@ test('actual HTTP rejects float/exponent position pages before cursor or data, e
     if(request.url==='/v1/session/info')value=JSON.stringify({workspace_id:'demo-workspace',device_id:'demo-phone'});
     else {
       assert.equal(request.url,'/v1/pull');
-      value=body.after>=before.cursor+2?'[]':JSON.stringify(events)
+      assert.equal(request.headers['x-paperfact-sync-instance'],instance);
+      const selected=[...initial.events,...events].filter(event=>event.sequence>body.after).slice(0,body.limit);
+      value=JSON.stringify(selected)
         .replaceAll('"page":1,','"p\\u0061ge" : '+token+' ,');
     }
-    response.writeHead(200,{'Content-Type':'application/json'});response.end(value);
+    response.writeHead(200,{'Content-Type':'application/json','X-Paperfact-Sync-Instance':instance});response.end(value);
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try {

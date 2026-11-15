@@ -1,4 +1,5 @@
 /** Read-only mirror of the closed SQL content contract. No model or file access. */
+import {parsePositionJSON} from './position-json.mjs';
 import { contentId, uuid5Name, asciiJSON } from './ids.mjs';
 import { ANNOTATION_FEATURES, validateAnnotations } from './annotations.mjs';
 import { validateClaims } from './claims.mjs';
@@ -16,6 +17,7 @@ export const CONTENT_FIELDS = {
   citation: 'title s2_id year venue citations influential purpose gist verdict why contexts_json doi basis spec edited written_at',
   followup: 'title year venue doi citations abstract verdict why relation contexts_json arxiv_id edited fetched_at',
   context: 'summary reading_json written_at edited',
+  citation_graph: 'value',
   resource: 'kind own source context stars license pushed_at note alive checked_at',
   manual_highlight: 'anchor quote created_at',
   ai_highlight: 'analysis_hash anchor quote reason hidden',
@@ -129,6 +131,31 @@ export function validateRichNote(payload) {
   validateNoteAnchor(payload.anchor);
   if(payload.anchor !== null) expect(payload.page === null || payload.page === payload.anchor.p0 + 1);
 }
+
+const pythonJSON = value => Array.isArray(value) ? '[' + value.map(pythonJSON).join(', ') + ']': value && typeof value === 'object' ? '{' + Object.entries(value).map(([k,
+  v]) => JSON.stringify(k) + ': ' + pythonJSON(v)).join(', ') + '}': JSON.stringify(value);
+function validateCitationGraph(data,source,payload) {
+  closed(data,['value']);expect(source===null);
+  const graph=parsePositionJSON(data.value,{maxBytes:200*1024,strict:true,integerNumbers:true});
+  closed(graph,['checked','edges','citations','unplaced']);stamp(graph.checked);
+  const lookup=value=>{
+    expect(typeof value==='string' && value.length>0 && bytes(value)<=4096 &&
+      [...value].every(char=>{const code=char.codePointAt(0);return code>=32 && !(code>=0xd800 && code<=0xdfff);}));
+  };
+  const number=(value,max)=>expect(Number.isSafeInteger(value) && value>=0 && value<=max);
+  expect(Array.isArray(graph.edges) && graph.edges.length<=4096);
+  const seen=new Set();
+  for(const edge of graph.edges) {
+    expect(Array.isArray(edge) && edge.length===2);edge.forEach(lookup);
+    const key=JSON.stringify(edge);expect(edge[0]!==edge[1] && !seen.has(key));seen.add(key);
+  }
+  expect(graph.citations && typeof graph.citations==='object' && !Array.isArray(graph.citations));
+  expect(Object.keys(graph.citations).length<=512);
+  for(const [id,count] of Object.entries(graph.citations)){lookup(id);number(count,2**31-1);}
+  number(graph.unplaced,1000000);
+  expect(bytes(pythonJSON(payload))<=240*1024);
+}
+
 export function validateContent(payload, id, parents) {
   closed(payload, ['scope', 'feature', 'key', 'data', 'source_document_hash']);
   const {
@@ -151,7 +178,7 @@ export function validateContent(payload, id, parents) {
     nullable: false,
     nonempty: true
   });
-  if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal', 'queue_entry', 'queue_pin', 'later_outcome', ...ANNOTATION_FEATURES].includes(feature)) expect(key === 'main');
+  if(['dive', 'close_reading', 'context', 'list_survey', 'reading_goal', 'queue_entry', 'queue_pin', 'later_outcome', 'citation_graph', ...ANNOTATION_FEATURES].includes(feature)) expect(key === 'main');
   if(['manual_highlight', 'chat', 'reading_event'].includes(feature)) expect(UUID.test(key));
   if(feature === 'resource') {
     expect(/^https?:\/\//i.test(key));
@@ -183,6 +210,7 @@ export function validateContent(payload, id, parents) {
   hash(source, !['manual_highlight', 'ai_highlight'].includes(feature));
   if(Object.hasOwn(LEGACY_FIELDS,feature)) { validateWorkflow(payload,stamp); return; }
   if(feature==='later_outcome') { validateLaterData(data,source,stamp); return; }
+  if(feature==='citation_graph') { validateCitationGraph(data,source,payload); return; }
   closed(data, CONTENT_FIELDS[feature].split(' '), feature === 'chat' ? ['exchange_id', 'reply_to']: []);
   if(feature === 'chat') {
     const linked = Object.hasOwn(data, 'exchange_id');
@@ -244,8 +272,7 @@ export function validateContent(payload, id, parents) {
   if(feature === 'chat') expect(['user', 'assistant', 'system'].includes(data.role));
   if(feature === 'ai_highlight') expect(key.startsWith(source + ':'));
   // Python's payload bound uses its default separator spaces, not compact JSON.
-  const pythonJSON = value => Array.isArray(value) ? '[' + value.map(pythonJSON).join(', ') + ']': value && typeof value === 'object' ? '{' + Object.entries(value).map(([k,
-  v]) => JSON.stringify(k) + ': ' + pythonJSON(v)).join(', ') + '}': JSON.stringify(value);
+
   expect(bytes(pythonJSON(payload)) <= 240 * 1024);
 }
 export function projectContent(papers, lists, rows) {

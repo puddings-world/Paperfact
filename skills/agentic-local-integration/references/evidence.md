@@ -650,3 +650,18 @@ without that marker; repeated refresh preserves its entire SQL dump. Unbound
 conversion still behaves normally. No old job, schedule or account authority is
 installed. This is an explicit registry, not permission to ignore unknown files,
 all JSON or every future setting prefix; declared originals remain verified.
+
+
+## 2026-11-15: a research key family inside a mixed KV table
+
+Status: validated-local in Paperfact; not arbitrary KV permission or installed acceptance.
+Citation-neighbour graphs were research stored alongside private controls. Native
+capture and snapshots now select only the closed citegraph paper namespace, validate
+its bounded body and reconstruct the receiver-local key from the exact paper map.
+Initial copies retain raw JSON and independent backups; package import uses the
+same owner mapping, default preservation, explicit replacement and retry identity.
+Two native clients retain concurrent versions, no-echo/delete behavior and private
+settings; late provider results retain a candidate. Python/mobile share closed JSON
+fixtures; the actual JS/Python service transfers the graph without changing drafts.
+The v27 static artifact is verified locally, not deployed; no schema/credential
+migration, global installation or paid call. Other KV/legacy and physical gates stay.

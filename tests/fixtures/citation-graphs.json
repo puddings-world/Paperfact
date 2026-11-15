@@ -1,0 +1,67 @@
+[
+  {
+    "name": "normal",
+    "valid": true,
+    "value": "{\n  \"checked\": \"2026-10-26T00:00:00+00:00\",\n  \"edges\": [\n    [\n      \"DOI:10.1/a\",\n      \"S2:fixture\"\n    ]\n  ],\n  \"citations\": {\n    \"DOI:10.1/a\": 3\n  },\n  \"unplaced\": 1\n}"
+  },
+  {
+    "name": "empty",
+    "valid": true,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [], \"citations\": {}, \"unplaced\": 0}"
+  },
+  {
+    "name": "self-edge",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"S2:a\", \"S2:a\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1}"
+  },
+  {
+    "name": "duplicate-edge",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"], [\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1}"
+  },
+  {
+    "name": "boolean-count",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": true}"
+  },
+  {
+    "name": "negative-count",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": -1}"
+  },
+  {
+    "name": "fraction-count",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"S2:a\": 1.0}, \"unplaced\": 1}"
+  },
+  {
+    "name": "unknown-field",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1, \"credential\": \"private-marker\"}"
+  },
+  {
+    "name": "invalid-time",
+    "valid": false,
+    "value": "{\"checked\": \"yesterday\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1}"
+  },
+  {
+    "name": "duplicate-json-key",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1,\"unplaced\":2}"
+  },
+  {
+    "name": "unicode-lookups",
+    "valid": true,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:\\u7814\\u7a76\", \"S2:\\ud83e\\uddea\"]], \"citations\": {\"S2:\\ud83e\\uddea\": 9}, \"unplaced\": 1}"
+  },
+  {
+    "name": "exponent-count",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1e0}"
+  },
+  {
+    "name": "escaped-duplicate-key",
+    "valid": false,
+    "value": "{\"checked\": \"2026-10-26T00:00:00+00:00\", \"edges\": [[\"DOI:10.1/a\", \"S2:fixture\"]], \"citations\": {\"DOI:10.1/a\": 3}, \"unplaced\": 1,\"unpl\\u0061ced\":2}"
+  }
+]

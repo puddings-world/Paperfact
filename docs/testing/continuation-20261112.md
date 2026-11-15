@@ -6328,3 +6328,63 @@ additional worktree was introduced.
 - Final docs: 58 passed in 1.98s / 5.0s total. Default critical: 14 passed
   in 8.69s / 11.7s total. Privacy, Ruff and CRLF-aware whitespace passed.
   Source checkpoint only; no historical sweep, native rebuild or deployment.
+
+
+### 2026-11-15: paper-scoped citation graphs across native sync and packages
+
+- Previous turn progressed in 08759f7 (owned HTTP-cache exclusion). Worktrees began
+  clean there. Citation graph KV contains actual retrieved relations/counts, so it
+  cannot be omitted like a response cache. Scope remains the complete v0.5 roadmap.
+- Added closed citation_graph/main content over only citegraph.<local-paper-id>.
+  Existing storage/readers stay intact; no schema/private-KV migration or arbitrary
+  table replication. Every selector/projection uses the closed namespace and exact
+  paper mapping. Raw validated JSON remains byte-for-byte lossless in local KV.
+  Receivers construct their key; no wire-chosen setting key/source grant is allowed.
+- Closed four-field body: aware retrieval time, bounded distinct non-self edges,
+  integer counts and 200 KiB raw value, with normal payload/operation caps. Python
+  and mobile share Unicode, duplicate/escaped-key, boolean/fraction/exponent and
+  shape verdicts. Lookup IDs remain inert data; no DOI/title identity inference.
+- Producer now observes its native graph/parent before external work and carries
+  the base through commit. Initial deletion test hit the existing observation
+  requirement; fixed its explicit observation, not the protection. Actual late
+  provider response retains a candidate and preserves the newer graph. Concurrent
+  independent graph edits retain both incoming/head versions and acknowledge safely.
+- Capture/snapshot/graph peer/delete/private KV plus copy/backup baseline: initial
+  3 passed in 7.90s / 11.1s total. Existing affected capture/content/citegraph files
+  plus copy representative: 63 passed in 74.05s / 77.3s total. Later stale-provider
+  and contract checks: 2 passed in 3.81s / 11.1s. Final concurrent/peer/Unicode/copy
+  slice: 4 passed in 11.67s / 14.7s total. Counts overlap, not an aggregate score.
+- Enrolled package importer now accepts only validated graph KV for a declared
+  package paper, maps its receiver owner, preserves existing graph by default and
+  supports explicit replacement. Exact retry preserves a later edit. Other legacy
+  KV remains refused. Initial new test assumed imported; real API is applied_locally;
+  fixed that new expectation without changing production semantics. Graph import
+  and old unsupported-KV check: 2 passed in 5.46s / 8.5s total.
+- Final existing release-selected agent-import baseline now also preserves graph
+  raw JSON/capture/independent backup/detached restore, alongside request-authority
+  isolation. No selector added: critical 14, release 38. Final baseline/closed-row/
+  package-later-retry slice: 3 passed in 10.17s / 13.4s total. No new test file.
+- Mobile validates/retains the graph as ordinary saved research. The existing bounded
+  position tokenizer has opt-in whole-JSON duplicate/integer-token checks; normal
+  position ingress remains intact. Its old HTTP stub lacked execution headers and
+  ignored after/limit, so it failed before its target numeric assertion. Repaired
+  only those pre-existing fixture contract gaps; every float/exponent rejection
+  and unchanged store/cursor assertion remains. Final three-file Node set: 59/59
+  in 0.735s governed. Final expanded content fixtures: 32/32 in 0.359s (overlap).
+- An edit script had failed parsing before its mobile mutations; the prior 63-case
+  result covered only already-written Python source. Reapplied mobile edits and
+  verified them independently; no mobile success was inferred from that old check.
+- Actual JS-to-Python HTTP with a graph beside existing pairing/revocation, drafts,
+  rich analysis, notes, PDF/deck/offline/conflict checks: passed in 1.953s governed.
+  v27 static build/verify: 0.532s/0.218s; 50 files, 3916230 bytes, artifact ID
+  0e7ddb34524afc62a97bbf5c3d005fc946d73f7a3d07bc87582857b96926c710 under ignored
+  build/mobile-web-citation-graph-v27. Built locally, not deployed or native packaged.
+- Harvested one validated-local mixed-storage boundary into the existing canonical
+  local-integration skill and synchronized only project .agents/.claude copies.
+  No global installation/rule, real model/account call, owner database, release or
+  cloud resource changed. Native candidate remains 8bf00f9. Old clients require a
+  coordinated update for the new feature; installed graph refresh, hosted/physical
+  devices, remaining KV/legacy/source/recovery and full survey audit remain gates.
+- Final docs/skill consistency: 58 passed in 2.01s / 5.4s total. Critical:
+  14 passed in 8.29s / 11.5s total. Privacy, Ruff and CRLF-aware whitespace
+  passed. No historical suite or native/hosted build was started for this checkpoint.

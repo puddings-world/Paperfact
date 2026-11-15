@@ -290,7 +290,8 @@ Preview the named requirements and exact selection without running tests:
 Prepared and restored workspaces open in separate windows without replacing
 current drafts. Reviewed copies leave personal accounts, schedules, usage and
 sharing controls and HTTP response caches on the source; refreshing a
-synchronized copy does not create extra lists from old queue history. Workspace focus is bound to the exact destination database;
+synchronized copy does not create extra lists from old queue history. Supported citation-neighbour graphs now
+retain their paper mapping through sync, research packages and reviewed backups. Workspace focus is bound to the exact destination database;
 case-distinct Mac/Linux data roots remain separate. Close older app processes
 before installing a test build; this is not an installed-upgrade guarantee.
 New candidate acceptance also checks that a second launch uses the existing

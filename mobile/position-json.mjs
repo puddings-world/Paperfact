@@ -1,5 +1,5 @@
 /** Preserve Python's integer boundary for position pages before JSON erases 1.0. */
-export function parsePositionJSON(source,{maxBytes=8*1024**2}={}) {
+export function parsePositionJSON(source,{maxBytes=8*1024**2,strict=false,integerNumbers=false}={}) {
   if(!Number.isSafeInteger(maxBytes) || maxBytes<1 || maxBytes>64*1024**2 || typeof source!=='string' ||
     new TextEncoder().encode(source).length>maxBytes)throw Error('invalid_position_json');
   const value=JSON.parse(source),targets=new WeakSet(),todo=[value];let found=false;
@@ -15,7 +15,7 @@ export function parsePositionJSON(source,{maxBytes=8*1024**2}={}) {
     }
     for(const child of Object.values(node))todo.push(child);
   }
-  if(!found)return value;
+  if(!found && !strict)return value;
   let at=0;
   const expect=value=>{if(!value)throw Error('invalid_position_json');};
   const space=()=>{while(/[ \t\r\n]/.test(source[at]??'!'))at++;};
@@ -52,6 +52,7 @@ export function parsePositionJSON(source,{maxBytes=8*1024**2}={}) {
     const number=source.slice(at).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
     expect(number && Number(number[0])===node);
     if(page)expect(/^[1-9]\d*$/.test(number[0]));
+    else if(integerNumbers)expect(/^-?(?:0|[1-9][0-9]*)$/.test(number[0]));
     at+=number[0].length;
   };
   walk(value,0);space();expect(at===source.length);return value;

@@ -570,3 +570,24 @@ in that focused file, not coverage of claim-level survey source verification.
 The [remaining source contract](../analysis-audit.md#list-overviews-current-status-and-remaining-source-contract)
 is still planned. Local offscreen rendering uses the current source and the app's
 bundled fonts/style; installed cross-platform visual acceptance stays separate.
+
+
+### Citation-neighbour graphs across devices
+
+The existing capture/content/citegraph files protect exact paper mapping, private
+KV isolation, initial-copy/backup/restore, no-echo retry and deletion. Two independent
+native edits retain both graph versions. A provider response arriving after a newer
+graph produces a retained candidate. The package-import case checks owner mapping,
+receiver-preserving default, explicit replacement and exact retry. Other legacy KV
+still refuses. No new test file or gate selector was introduced.
+
+`tests/fixtures/citation-graphs.json` is shared by Python and the mobile content
+validator: shape, Unicode, duplicate/escaped keys, integer/exponent counts and source
+ownership. The actual JS/Python HTTP program now transfers a graph alongside its
+existing draft/analysis/PDF/deck checks. The earlier position-ingress stub now
+provides the existing mandatory execution header and real after/limit pagination;
+its float/exponent rejection and atomic store/cursor assertions remain intact.
+These are local scoped checks, not native installed graph/hosted/phone acceptance.
+The existing release-selected agent-import enrollment scenario now also carries
+a graph through capture, independent backup and detached restore. Release stays
+at 38 selectors; the daily critical gate stays at 14.

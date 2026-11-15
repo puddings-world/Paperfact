@@ -30,6 +30,7 @@ import {
   receive,
   validateOperation
 } from '../domain.mjs';
+const citationGraphs = JSON.parse(readFileSync(new URL('../../tests/fixtures/citation-graphs.json', import.meta.url)));
 const hash = 'a'.repeat(64), stamp = '2026-01-01T00:00:00+00:00';
 function payload(feature) {
   const scope = {
@@ -50,6 +51,7 @@ function payload(feature) {
     : field === 'analysis_hash' ? hash: field === 'role' ? 'assistant': ['body', 'quote', 'kind', 'source',
     'reason'].includes(field) ? 'Fixture research': null;
   }
+  if(feature === 'citation_graph') data.value=citationGraphs.find(row=>row.valid).value;
   if(feature === 'queue_entry') Object.assign(data,{rank:-2.75,state:'pending',role:'manual',parent_id:null,
     reason:'Fixture reason',queued_at:stamp,delivered_at:null,read_at:null});
   if(feature === 'reading_event') Object.assign(data,{delivered_at:stamp,role:null,note:'Original note',brief:null});
@@ -70,7 +72,7 @@ function payload(feature) {
     feature,
     key,
     data,
-    source_document_hash: feature === 'claims' ? data.document_hash : ['reading_goal','reference_edge','list_pin','queue_entry','queue_pin','reading_event'].includes(feature) ? null : hash
+    source_document_hash: feature === 'claims' ? data.document_hash : ['reading_goal','reference_edge','list_pin','queue_entry','queue_pin','reading_event','citation_graph'].includes(feature) ? null : hash
   };
 }
 test(
@@ -330,4 +332,17 @@ test('canonical deletion hides historical and snapshot AI marks without hiding m
   assert.deepEqual(projectContent(papers,[],[row(automatic),row(manual)]).map(mark=>mark.origin),['manual']);
   assert.equal(papers[0].research_content.some(item=>item.feature==='highlight_analysis'),false);
   assert.deepEqual(projectContent([{id:PAPER}],[],[row(automatic)]).map(mark=>mark.origin),['ai']);
+});
+
+
+test('citation graph uses shared strict JSON fixtures and exact paper ownership',()=>{
+  const item=payload('citation_graph'),id=contentId(item.scope,item.feature,item.key);
+  for(const row of citationGraphs) {
+    const value={...item,data:{value:row.value}};
+    if(row.valid)validateContent(value,id,[ref('paper',PAPER)]);
+    else assert.throws(()=>validateContent(value,id,[ref('paper',PAPER)]),undefined,row.name);
+  }
+  assert.throws(()=>validateContent({...item,source_document_hash:hash},id,[ref('paper',PAPER)]));
+  assert.throws(()=>validateContent(item,id,[ref('paper','11111111-1111-4111-8111-111111111111')]));
+  assert.throws(()=>validateContent({...item,data:{value:'x'.repeat(200*1024+1)}},id,[ref('paper',PAPER)]));
 });

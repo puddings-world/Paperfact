@@ -29,7 +29,10 @@ also display their recorded workflow/manual edits and unverified source status;
 complete source-aware survey generation/audit/transfer remains planned. Reviewed
 copies also now exclude the reserved HTTP response cache without traversing it;
 cache-only updates do not invalidate the saved research snapshot. These source
-changes remain outside the delivered 8bf00f9 candidate.
+changes remain outside the delivered 8bf00f9 candidate. Source also now maps
+validated citation-neighbour graphs through native sync, first copies/backups and
+enrolled package import, with private KV isolation and retained concurrent/late
+versions. The matching v27 PWA artifact is built, not deployed.
 
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323

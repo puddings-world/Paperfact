@@ -73,6 +73,11 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("UPDATE list_papers SET position=(position+1)*10 WHERE list_id=?",
                      (first["list_id"],))
+    graph = json.dumps(dict(checked="2026-11-15T00:00:00+00:00",
+                            edges=[["DOI:10.1/a", "S2:fixture"]],
+                            citations={"DOI:10.1/a": 3}, unplaced=1), indent=2)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO kv VALUES(?,?)", ("citegraph." + first["paper_ids"][0], graph))
     expected = {key: records(source, key) for key in (
         "integration_operations", "integration_previews", "integration_changes",
     )}
@@ -89,6 +94,9 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     destination = Path(result["database"])
     assert archives(destination) == expected
     assert not rows(destination, "SELECT 1 FROM kv WHERE key LIKE 'update.cache.%'")
+    assert rows(destination, "SELECT value FROM kv WHERE key GLOB 'citegraph.*'") == [(graph,)]
+    assert rows(destination, "SELECT feature FROM research_content_projection "
+                "WHERE feature='citation_graph'") == [("citation_graph",)]
     for table in expected:
         assert rows(destination, "SELECT COUNT(*) FROM " + table) == [(0,)]
     for table in ("papers", "lists", "notes"):
@@ -111,6 +119,8 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     restored = sync_recovery.restore_detached(result["backup"], tmp_path / "restored")
     restored_database = tmp_path / "restored/papers.db"
     assert restored["detached"] and archives(restored_database, detached=True) == expected
+    restored_graph = rows(restored_database, "SELECT value FROM kv WHERE key GLOB 'citegraph.*'")
+    assert restored_graph == [(graph,)]
     for table in expected:
         assert rows(restored_database, "SELECT COUNT(*) FROM " + table) == [(0,)]
     with monkeypatch.context() as patch:
