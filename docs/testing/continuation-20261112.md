@@ -7594,3 +7594,29 @@ in0.98s (4.2s stages); fixed critical14 pass7.22s (10.6s stages). The existing
 docs gate passed5.168s stages/5.391s governed total. All are partial curated checks,
 not the historical suite; CPU governor remained2 logical processors/25 percent.
 No live test processes remained during the owner-requested CPU investigation.
+
+
+## 2026-11-15: checkpoint3b344c7 native delivery and Windows archive failure
+
+Committed/integrated/pushed3b344c77cbea449f22767f35d5475b6ae2672bfc, clean.
+Run43714643158: Mac arm64 passes5m30s, Linux passes2m55s; Windows fails6m45s
+at legacy-source-preflight after prior packaged research/protocol checks pass.
+Downloaded actual Mac/Linux reports show passedtrue, failurenull, original0.4.3
+research preserved before/after real initialization, seven old table families,
+PDF/deck bytes unchanged and eleven sync protocol booleans true. Old binary/GUI
+upgrade remains false. The Mac guide records exact new artifacts/hashes; no public
+release/deployment or physical-device acceptance was performed.
+
+Windows synthetic failure-detail.log identifies exact source-byte mismatch.
+Reproduced in memory: git archive with core.autocrlf=true converts source LF to
+CRLF; false preserves original Git blobs. Fix archive preparation with explicit
+-c core.autocrlf=false; do not normalize accepted source or weaken hash checking.
+Regression executes the actual workflow recipe under inherited autocrlf=true,
+then verifies the complete pinned source closure; modified-source refusal stays.
+Two affected cases pass3.12s/6.2s stages after a reported Ruff line-length fix.
+No broad suite or successful-platform rebuild. A Windows-only candidate follows.
+
+Downloaded mobile artifact has the same8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229
+content ID as the earlier offline-accepted v31. Existing byte verifier passes
+50files/3,953,007bytes in0.219s governed. Initial shell quoting failed before
+verification; corrected with stdin script, not a different acceptance rule.

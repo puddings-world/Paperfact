@@ -1,51 +1,51 @@
-# v0.5 Apple Silicon acceptance
+# Mac v0.5 acceptance
 
-Status: physical Mac execution not yet recorded. The latest CI-native arm64 test
-candidate is [run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
-clean commit `355382c7557150c98aee08be7b6fd12ea8274791` (`0.5.0.dev`).
-All three packaged reports pass from the same commit. Native jobs took 3m07s
-(Mac), 8m37s (Windows) and 3m25s (Linux); no public release was created.
+Updated 2026-11-15. Latest Apple Silicon candidate:
+[3b344c7 / run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158),
+clean `3b344c77cbea449f22767f35d5475b6ae2672bfc`, version `0.5.0.dev`.
+Mac passed in5m30s; Linux passed in2m55s. Windows failed the pinned old-source
+preflight because Git converted archive line endings. A Windows-only packaging
+follow-up is required; this run is not an all-platform pass or public release.
 
-Exact Mac downloads (GitHub sign-in may be required for Actions artifacts):
+Exact Mac downloads (GitHub sign-in may be required):
 
-- [build-macos: DMG inside](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158073852),
-  artifact ZIP size 277,605,299 bytes. GitHub-reported ZIP SHA-256:
-  `d1631a62f180d7ef7ad066903dcf99c2ab546ebe9905b542f8c3c4adddb88641`.
-- [research-fixture-macos: synthetic original.zip](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14157963940),
-  GitHub-reported artifact ZIP SHA-256:
-  `218ed553098f64914e2344838971e16b0be3682c8783f42b8afc6d78da3a6d41`.
-- [provenance-macos: build identity and packaged report](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158557395).
-- [acceptance-macos: selected synthetic logs](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158392978).
+- [build-macos: DMG inside](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14162371150),
+  artifact ZIP279,874,743 bytes; GitHub-reported ZIP SHA-256
+  `86b49f3cf499329141a581778dc4c2e4a5ba71ff77a09201836951dbad76eaa8`.
+- [research-fixture-macos: synthetic original.zip](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14161729979),
+  GitHub-reported artifact ZIP SHA-256
+  `cc42e04352baf05ca8786028e6b93077d64f07c4c0ddd7c5b235ab86c1aa516a`.
+- [provenance-macos: build identity/report](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14162615645).
+- [acceptance-macos: synthetic logs](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14161744952).
 
-These hashes describe the GitHub artifact archives, not contained files. The
-provenance/report were downloaded and inspected; the DMG was not run on a physical
-Mac here. The previous c1cbef2/run43688772032 candidate remains historical evidence.
+The provenance/report were downloaded and inspected; the DMG was not installed
+on a physical Mac here. Archive hashes are not hashes of contained installers.
+The prior355382c/run43705488673 remains the last all-platform passing candidate.
+Its Windows installer is not the matching build for this new Mac candidate.
 
-This candidate includes verified received/acknowledged history in desktop/mobile,
-transaction-bound attachment/device guards, issuer-bound pairing, inactive recovery
-proof preservation, legacy proof preparation and same-host listener-lifetime guards.
-It retains native annotation/Lineage originals, offline reading preparation, private
-research history, scoped graphs and explicit default-off startup sync. None of
-these local safeguards constitutes durable control-history or distributed fencing.
+Packaged acceptance preserves four PDFs, verifies three reader starts/foreground,
+same-workspace handoff and38 CLI/MCP tools with retry/restart. Eleven sync protocol
+checks pass, including official-service refusal of unverified mutations, exact
+retry and retained verified history after restart. This bundle includes explicit
+legacy-history review and default-No adoption in the existing desktop dialog;
+that dialog's physical Mac interaction remains untested.
 
-The Mac report records four PDFs preserved, three reader starts, same-workspace
-handoff, foreground activation, CLI/MCP retry/restart and packaged guarded-history
-sync. The service refuses a duplicate listener and bad history proof, accepts exact
-retry once, and preserves its checkpoint after restart. Six source OS-lifetime
-journeys also pass before packaging. These do not certify the frozen GUI client's
-installed two-device flow, Keychain prompts, physical input/IME or Safari storage.
+The new old-source probe uses pinned0.4.3 writers to create synthetic research,
+then the actual frozen CLI exports before/after schema initialization. All seven
+old table families, PDF/deck bytes, positioned Unicode note, Q&A, highlight and
+hand-edited deck survive. This is source-format preservation, **not old-installer
+or GUI upgrade acceptance**. No live research or credentials were used.
 
-The matching mobile shell v31 content ID is
-`8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229`:
-50 public files/3,953,007 bytes. Its exact CI artifact passes independent Windows
-Chromium offline preparation/repeated activation/EN-ZH touch/reload checks; not hosted.
+Matching mobile shell v31 content ID:
+`8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229`.
+The downloaded50-file artifact passes its existing hash verifier in0.219s; its
+content ID matches the previously accepted offline Chromium artifact. This run
+does not establish new Safari/physical-phone acceptance or deploy the PWA.
 
-Keep the daily app/data unchanged. This experimental `0.5.0.dev` bundle does not
-auto-update or provision a service. Preserve a separate test folder, record this
-commit, and use the [matching Windows build](https://github.com/puddings-world/Paperfact/actions/runs/43705488673/artifacts/14158518613)
-for two-device acceptance.
-Version text alone is not a unique build identity. Installed/physical M01-M21 gates
-below remain not run; no public release or cloud deployment occurred.
+Keep the daily app/data unchanged. This experimental bundle does not auto-update
+or provision a service. Use the separate test folder below. Physical M01-M21,
+native credential prompts, input/IME, installed upgrade, hosted sync and durable
+control-history/distributed fencing remain open. No public release was created.
 
 ## Prepare a separate test app
 

@@ -106,7 +106,7 @@ jobs:
           git fetch --no-tags --depth=1 origin 3abdf434555583ca4a6827892d54b487e9e40671
           mkdir -p build
           mkdir build/upgrade-baseline-0.4.3
-          git archive --format=tar --output=build/upgrade-baseline-0.4.3.tar 3abdf434555583ca4a6827892d54b487e9e40671 src scripts/demo_workspace.py
+          git -c core.autocrlf=false archive --format=tar --output=build/upgrade-baseline-0.4.3.tar 3abdf434555583ca4a6827892d54b487e9e40671 src scripts/demo_workspace.py
           tar -xf build/upgrade-baseline-0.4.3.tar -C build/upgrade-baseline-0.4.3
 
       # Common release risks run once; every OS retains critical native journeys.

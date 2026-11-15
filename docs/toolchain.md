@@ -335,3 +335,10 @@ This probe exposed bundle export querying absent0.5 optional tables in0.4 data.
 Known absent extensions now export as empty; an existing view or malformed table
 is still refused rather than hidden. Export does not initialize or rewrite the
 source merely to make a snapshot shareable.
+
+
+Pinned source archives must use `git -c core.autocrlf=false archive ...`, even on
+Windows. Git's archive conversion otherwise changes LF to CRLF and invalidates
+exact blob provenance. The acceptance verifier deliberately refuses converted
+bytes; never normalize its input to make a changed baseline pass. The workflow
+recipe has a regression under inherited Windows autocrlf settings.

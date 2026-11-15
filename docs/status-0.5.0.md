@@ -2,6 +2,15 @@
 
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
+Latest platform attempt: [3b344c7/run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158).
+Mac arm64 (5m30s) and Linux (2m55s) pass actual packaged backward export/schema
+initialization with pinned0.4.3 data, plus all11 strict sync protocol checks.
+Windows passes prior packaged journeys but fails old-source preflight: Git archive
+converted LF to CRLF. Exact hash checking remains unchanged; a Windows-only
+archive recipe follow-up is required. This is not an all-platform passing run.
+The [Mac guide](testing/mac-acceptance-0.5.md) now links the new usable Mac package.
+The following355382c results remain the last common all-platform baseline.
+
 Current native candidate [355382c / run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
 clean source `355382c7557150c98aee08be7b6fd12ea8274791`, version `0.5.0.dev`.
 All three packaged reports pass: four PDFs, CLI/MCP retry/restart, reader/handoff,
@@ -62,10 +71,10 @@ admitted-worker drain; initialized services refuse observed database replacement
 or removal without recreating missing files. This is not distributed fencing or
 durable control-history protection. Source after897cd7a also makes official
 serve reject unverified mutation routes and unbound new pairing claims; actual
-Chrome accepts the existing v31 artifact against that strict service. No new
-native installer has been built for these source changes. Source also adds pinned
-old-source backward-export/schema-initialization preservation; the next CI uses
-it on each native package. Known absent0.5 export extensions now preserve old
+Chrome accepts the existing v31 artifact against that strict service. Mac/Linux3b344c7 now package these changes; Windows acceptance remains blocked
+at the old-source preflight. Source also adds pinned
+old-source backward-export/schema-initialization preservation, passing on both
+Mac/Linux packages in that run. Known absent0.5 export extensions now preserve old
 workspace sharing; malformed present extensions still fail. This is not an
 installed old-binary or GUI upgrade pass. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 

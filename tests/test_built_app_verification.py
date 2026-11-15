@@ -1,10 +1,13 @@
 import hashlib
 import importlib.util
 import json
+import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
 import sys
+import tarfile
 import types
 import zipfile
 from contextlib import closing
@@ -443,7 +446,8 @@ def legacy_upgrade_source(tmp_path_factory):
 
     source = tmp_path_factory.mktemp('legacy-upgrade-source')
     result = subprocess.run(
-        ['git', 'archive', '--format=zip', verify.LEGACY_BASELINE, 'src',
+        ['git', '-c', 'core.autocrlf=false', 'archive', '--format=zip', verify.LEGACY_BASELINE,
+         'src',
          'scripts/demo_workspace.py'], cwd=ROOT, capture_output=True, check=True, timeout=15)
     with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
         # This archive is created from the exact local Git object, not user input.
@@ -533,3 +537,19 @@ def test_legacy_upgrade_refuses_modified_old_source_before_executing(
         verify._legacy_upgrade(['must-not-launch'], source, tmp_path,
                                lambda *args: calls.append(args))
     assert not calls and not (tmp_path / 'legacy-upgrade').exists()
+
+
+def test_ci_legacy_archive_preserves_git_blobs_with_windows_line_endings(tmp_path):
+    workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+    recipe = next(line.strip() for line in workflow.splitlines()
+                  if ' archive --format=tar --output=build/upgrade-baseline-0.4.3.tar ' in line)
+    archive = tmp_path / 'old-source.tar'
+    command = [('--output=' + str(archive)) if arg.startswith('--output=') else arg
+               for arg in shlex.split(recipe)]
+    env = dict(os.environ, GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='core.autocrlf',
+               GIT_CONFIG_VALUE_0='true')
+    subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, timeout=15)
+    source = tmp_path / 'source'
+    with tarfile.open(archive) as data:
+        data.extractall(source, filter='data')
+    assert verify._legacy_source_check(source)
