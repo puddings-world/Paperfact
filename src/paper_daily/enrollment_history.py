@@ -18,9 +18,11 @@ SCHEMA = (
     "record_id TEXT PRIMARY KEY,protocol TEXT NOT NULL,body_json TEXT NOT NULL);"
 )
 COMPOUND_TEXT = "compound_text_history_v1"
+LEGACY_TEXT = "legacy_text_cache_v1"
 MAX_TEXT = 3 * 1024**2
 FORMATS = {
     COMPOUND_TEXT: "protocol request text",
+    LEGACY_TEXT: "paper_id cache sha256 text",
     "research_lineage_publications": "request_id candidate_id row_json sources_json",
     "research_lineage_imports": "request_id body_json",
     "research_lineage_actions": "request_id body_json",
@@ -218,6 +220,22 @@ def validate_record(protocol, record):
     if not isinstance(protocol, str) or protocol not in FORMATS:
         raise ValueError("Unsupported archived history protocol")
     closed(record, FORMATS[protocol].split())
+    if protocol == LEGACY_TEXT:
+        from paper_daily.sync_files import text
+
+        text(record["paper_id"], 512)
+        if record["cache"] not in ("text", "pdf"):
+            raise ValueError("Unsupported legacy text cache")
+        digest(record["sha256"])
+        if not isinstance(record["text"], str):
+            raise ValueError("Invalid retained legacy text")
+        try:
+            raw = record["text"].encode("utf-8")
+        except UnicodeError:
+            raise ValueError("Invalid retained legacy text encoding") from None
+        if len(raw) > MAX_TEXT or hashlib.sha256(raw).hexdigest() != record["sha256"]:
+            raise ValueError("Retained legacy text bytes differ from their observation")
+        return set()  # Retained cache bytes are not an original or replay authority.
     if protocol == COMPOUND_TEXT:
         if not isinstance(record["request"], dict):
             raise ValueError("Invalid extracted-text history request")
@@ -551,6 +569,13 @@ def collect(conn, database, ticket):
             raise ValueError("Owned empty-query sidecar is outside selected workspace")
         metadata.append(str(location))
         counts["research_compound_recovery"] = counts.get("research_compound_recovery", 0) + 1
+    for wrapped, location in legacy_text_caches(conn, database, ticket, consumed=metadata):
+        if wrapped["record_id"] not in records:
+            total += len(wrapped["body_json"].encode())
+        records[wrapped["record_id"]] = wrapped
+        metadata.append(str(location))
+        if len(records) > MAX_RECORDS or total > MAX_TOTAL:
+            raise ValueError("Private history exceeds its inventory bound")
     if len(records) > MAX_RECORDS or total > MAX_TOTAL:
         raise ValueError("Private history exceeds its inventory bound")
     for value in records.values():
@@ -815,8 +840,6 @@ def wrap_compound_input(protocol, record, database, ticket):
     from pathlib import Path
 
     from paper_daily.fetch import _safe_name
-    from paper_daily.file_change import version
-    from paper_daily.sync_recovery import _path
 
     context = _value(record["context_json"])
     text = context.get("text_source") if isinstance(context, dict) else None
@@ -835,6 +858,18 @@ def wrap_compound_input(protocol, record, database, ticket):
     )
     if selected is None:
         raise ValueError("Extracted input requires its known workspace cache location")
+    retained = _read_legacy_text(selected, ticket)
+    if hashlib.sha256(retained.encode("utf-8")).hexdigest() != text["sha256"]:
+        raise ValueError("Extracted input bytes differ from their recorded observation")
+    wrapped = wrap(COMPOUND_TEXT, dict(protocol=protocol, request=record, text=retained))
+    return wrapped, selected
+
+
+def _read_legacy_text(selected, ticket):
+    """Capture exact bounded UTF-8 bytes without following a recorded path."""
+    from paper_daily.file_change import version
+    from paper_daily.sync_recovery import _path
+
     ticket.check()
     try:
         selected = _path(selected)
@@ -848,11 +883,39 @@ def wrap_compound_input(protocol, record, database, ticket):
     ticket.check()
     if before != opened or before != after:
         raise ValueError("Extracted input changed during capture")
-    if len(raw) > MAX_TEXT or hashlib.sha256(raw).hexdigest() != text["sha256"]:
-        raise ValueError("Extracted input bytes differ from their recorded observation")
+    if len(raw) > MAX_TEXT:
+        raise ValueError("Retained extracted text exceeds its byte bound")
     try:
-        retained = raw.decode("utf-8")
+        return raw.decode("utf-8")
     except UnicodeError:
         raise ValueError("Invalid extracted-text encoding") from None
-    wrapped = wrap(COMPOUND_TEXT, dict(protocol=protocol, request=record, text=retained))
-    return wrapped, selected
+
+
+def legacy_text_caches(conn, database, ticket, *, consumed=()):
+    """Retain known current-paper cache names without granting source provenance."""
+    from pathlib import Path
+
+    from paper_daily.fetch import _safe_name
+    from paper_daily.sync_recovery import _path
+
+    root = Path(database).absolute().parent
+    owners = {}
+    for (owner,) in conn.execute("SELECT id FROM papers"):
+        ticket.check()
+        owners.setdefault(_safe_name(owner) + ".txt", []).append(owner)
+    consumed = {Path(path).absolute() for path in consumed}
+    for filename, matches in owners.items():
+        for cache in ("text", "pdf"):
+            ticket.check()
+            path = _path(root / cache / filename)
+            if not path.exists():
+                continue
+            if len(matches) != 1:
+                raise ValueError("Legacy text cache has ambiguous paper ownership")
+            if path in consumed:
+                continue
+            text = _read_legacy_text(path, ticket)
+            yield wrap(LEGACY_TEXT, dict(
+                paper_id=matches[0], cache=cache,
+                sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(), text=text,
+            )), path

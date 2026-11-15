@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered common native candidate f7616ae/run 43677890610, including v28 mobile citations, first-sync compound/private-text retention and merged nightly controls. All three native source first-sync and frozen reports passed. Details: existing continuation ledger and Mac guide. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, public release or deployment. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered common native candidate f7616ae/run 43677890610, including v28 mobile citations, first-sync compound/private-text retention and merged nightly controls. All three native source first-sync and frozen reports passed. New source retains unreferenced canonical reading text privately with a history-only preview; not in that candidate. Details: existing continuation ledger and Mac guide. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, public release or deployment. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task

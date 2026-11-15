@@ -171,10 +171,12 @@ COPY = {
 COPY["en"].update(
     agent_imports="Completed agent imports (history only)",
     agent_previews="Reference previews (history only)",
+    retained_text="Retained text snapshots (history only)",
 )
 COPY["zh-TW"].update(
     agent_imports="\u5df2\u5b8c\u6210\u532f\u5165\u7d00\u9304\uff08\u50c5\u5c01\u5b58\uff09",
     agent_previews="\u5019\u9078\u53c3\u8003\u6587\u737b\uff08\u50c5\u5c01\u5b58\uff09",
+    retained_text="\u4fdd\u7559\u6587\u5b57\u5feb\u7167\uff08\u50c5\u5c01\u5b58\uff09",
 )
 
 
@@ -507,6 +509,11 @@ class EnrollmentDialog(QDialog):
             f"{self.t['excluded']}: {plan.get('excluded_private_kv', 0):,}",
         ]
         archived = plan.get("archived_history_by_protocol", {})
+        text_count = sum(archived.get(key, 0) for key in (
+            "compound_text_history_v1", "legacy_text_cache_v1",
+        ))
+        if text_count:
+            lines.append(f"{self.t['retained_text']}: {text_count:,}")
         for label, protocol in (
             ("manual_decks", "research_observed_current_deck_recovery"),
             ("retained_decks", "research_common_deck_proposal_recovery"),

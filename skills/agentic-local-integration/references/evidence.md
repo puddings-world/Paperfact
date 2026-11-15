@@ -688,3 +688,15 @@ account/model call, global installation, cloud upload or broad temporary cleanup
 Native follow-up: the same first-sync representative passed on Windows, Mac arm64
 and Linux in run 43677890610 at clean f7616ae. These are source/native fixtures;
 physical-device and frozen GUI-adoption evidence remains separate.
+
+
+Follow-up source evidence: first-copy coverage also retains canonical unreferenced
+reading caches under existing unambiguous paper owners, without original grants,
+active cache installation or outbox text. Sanitized-name collisions, invalid UTF-8,
+oversize, concurrent replacement and aggregate bounds refuse the copy. Unknown
+filenames remain blockers. The normal private-copy/detached-restore and existing
+release-selected agent-import journey passed with exact bytes; the existing Qt
+preview/prepare/open test displays the history-only snapshot count. Affected
+checks: five in 18.5s total, then two in 8.8s after the bound/UI changes (overlap).
+This is Windows source/Qt evidence after f7616ae, not native packaging or physical
+acceptance. No new global rule or skill installation is inferred.

@@ -284,3 +284,28 @@ backup. This does not change the live sync wire format or provision a host.
 Actual copied/detached bytes, no-PDF-grant behavior, static-error redaction,
 external-path nonaccess and changed/corrupt input rejection have fixture coverage.
 Installed adoption and arbitrary derived-text layouts remain separate gates.
+
+
+## Unreferenced reading text
+
+A reading-only session can create `text/<safe-local-paper>.txt` before any saved
+analysis refers to it. Reviewed first-copy preparation now also retains that
+known cache name (and the older `pdf/` form) for an existing, unambiguous paper.
+It derives names from current SQL owners; it never follows an observed arbitrary
+path or accepts unknown filenames. Name collisions after sanitization block the
+copy rather than assigning bytes to one paper by guesswork.
+
+`legacy_text_cache_v1` retains the closed fields `paper_id`, `cache`, `sha256`,
+`text`. Exact UTF-8 bytes, including BOM and CRLF, survive through the private
+archive and detached backup restore. Each read has the same link refusal,
+file-version checks and 3 MiB limit as captured compound text; the collector
+checks the existing aggregate record/64 MiB budget after each addition.
+Compound inputs already retained for that exact path are not copied again.
+
+This is a local cache observation, not proof of the PDF it came from. It grants
+no original, quotation verification, job authority, active reader cache or shared
+outbox data. The coverage preview labels these as history-only text snapshots.
+Unknown layouts, malformed encoding, oversized or changing bytes remain blockers.
+Use a compatible newer source build for this private archive format; native
+candidate f7616ae predates it. Current evidence is Windows source/Qt fixtures,
+not a new packaged candidate, physical Mac or hosted synchronization acceptance.

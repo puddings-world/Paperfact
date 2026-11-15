@@ -121,8 +121,10 @@ ambiguous/negative ordering still blocks preparation.
 
 Custom tables, unrecognized schema writers/views, unsupported integration
 receipts/KV scopes, missing original bytes and any remaining unmapped research
-file still block. Unknown annotations, extracted text or sidecars are not silently
-dropped. The inventory and returned `plan["blockers"]` are authoritative for the
+file still block. Unknown annotations, extracted-text layouts or sidecars are not silently
+dropped. Known current-paper text cache names are retained as private history
+without becoming current originals or executable caches; see
+[unreferenced reading text](initial-enrollment-history.md#unreferenced-reading-text). The inventory and returned `plan["blockers"]` are authoritative for the
 particular workspace; this is not a claim of arbitrary legacy-directory coverage.
 
 ## Consistency, backup and adoption

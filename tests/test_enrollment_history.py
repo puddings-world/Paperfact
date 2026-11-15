@@ -466,3 +466,106 @@ def test_retained_text_refuses_observed_external_path_and_changed_bytes(
     with pytest.raises(ValueError, match="bytes differ from their recorded observation"):
         EnrollmentService(source).plan()
     assert source.read_bytes() == before
+
+
+def test_unreferenced_reading_cache_survives_private_backup_without_source_grants(
+    source, tmp_path,
+):
+    import hashlib
+
+    import pytest
+
+    from paper_daily import sync_recovery
+
+    path = source.parent / "text" / "paper.txt"
+    path.parent.mkdir()
+    raw = b"\xef\xbb\xbfUnreferenced reading text.\r\n\xe8\xab\x96\xe6\x96\x87"
+    path.write_bytes(raw)
+    before = source.read_bytes()
+    plan = EnrollmentService(source).plan()
+    assert plan["supported"] and plan["pdf_count"] == 0
+    assert plan["archived_history_by_protocol"][enrollment_history.LEGACY_TEXT] == 1
+    assert "Unreferenced reading text" not in repr(plan)
+    result = EnrollmentService(source).prepare(
+        tmp_path / "candidate", backup_output=tmp_path / "complete.zip", request_id=str(uuid4())
+    )
+    with closing(sqlite3.connect(result["database"])) as conn:
+        extra = [r for r in enrollment_history.archived(conn)
+                 if r["protocol"] == enrollment_history.LEGACY_TEXT]
+        assert len(extra) == 1
+        saved, sources = enrollment_history.validate(extra[0])
+        assert saved == dict(paper_id="paper", cache="text",
+                             sha256=hashlib.sha256(raw).hexdigest(), text=raw.decode("utf-8"))
+        assert not sources
+        for bad in ({**saved, "sha256": "0" * 64},
+                    {**saved, "text": []}, {**saved, "cache": "unknown"}):
+            with pytest.raises(ValueError):
+                enrollment_history.wrap(enrollment_history.LEGACY_TEXT, bad)
+        operations = [json.loads(row[0]) for row in conn.execute(
+            "SELECT envelope FROM paperfact_sync_operations")]
+        assert all(op["entity_type"] not in {"paper_document", "research_file"}
+                   for op in operations)
+        assert all("Unreferenced reading text" not in json.dumps(op) for op in operations)
+    assert not (Path(result["database"]).parent / "text" / "paper.txt").exists()
+    sync_recovery.restore_detached(result["backup"], tmp_path / "restored")
+    with closing(sqlite3.connect(tmp_path / "restored" / "papers.db")) as conn:
+        history = [json.loads(row[0]) for row in conn.execute(
+            "SELECT data FROM recovery_records WHERE table_name='research_history_archive'")]
+        assert [r for r in history if r["protocol"] == enrollment_history.LEGACY_TEXT] == extra
+    assert source.read_bytes() == before and path.read_bytes() == raw
+
+
+def test_unreferenced_reading_cache_rejects_invalid_ambiguous_and_unknown_inputs(
+    source, monkeypatch,
+):
+    import pytest
+
+    folder = source.parent / "text"
+    folder.mkdir()
+    path = folder / "paper.txt"
+    original = source.read_bytes()
+    for invalid, message in ((b"\xff", "encoding"),
+                             (b"x" * (enrollment_history.MAX_TEXT + 1), "byte bound")):
+        path.write_bytes(invalid)
+        with pytest.raises(ValueError, match=message):
+            EnrollmentService(source).plan()
+        assert source.read_bytes() == original
+    path.write_bytes(b"")
+    plan = EnrollmentService(source).plan()
+    assert plan["supported"] and plan["pdf_count"] == 0
+    assert plan["archived_history_by_protocol"][enrollment_history.LEGACY_TEXT] == 1
+    with monkeypatch.context() as patch:
+        patch.setattr(enrollment_history, "MAX_TOTAL", 10)
+        with pytest.raises(ValueError, match="inventory bound"):
+            EnrollmentService(source).plan()
+    from paper_daily import file_change
+    from paper_daily.workspace_service import Ticket
+
+    version = file_change.version
+    calls = []
+
+    def replaced(*args, **kwargs):
+        value = version(*args, **kwargs)
+        calls.append(value)
+        return (*value, "changed") if len(calls) == 3 else value
+
+    with monkeypatch.context() as patch:
+        patch.setattr(file_change, "version", replaced)
+        with pytest.raises(ValueError, match="changed during capture"):
+            enrollment_history._read_legacy_text(path, Ticket())
+    assert source.read_bytes() == original
+    path.rename(folder / "unknown.txt")
+    plan = EnrollmentService(source).plan()
+    assert not plan["supported"]
+    assert "unsupported or unmapped file: text/unknown.txt" in plan["blockers"]
+    (folder / "unknown.txt").unlink()
+    (folder / "paper_.txt").write_bytes(b"Uncertain owner")
+    with closing(sqlite3.connect(source)) as conn, conn:
+        for owner in ("paper:", "paper/"):
+            conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source) "
+                         "SELECT ?,?,?,venue,year,source FROM papers WHERE id='paper'",
+                         (owner, owner, owner))
+    changed = source.read_bytes()
+    with pytest.raises(ValueError, match="ambiguous paper ownership"):
+        EnrollmentService(source).plan()
+    assert source.read_bytes() == changed

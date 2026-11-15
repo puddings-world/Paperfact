@@ -6694,3 +6694,36 @@ additional worktree was introduced.
 - Documentation checkpoint validation: governed docs profile 58 passed in 2.04s
   (5.3s total), with privacy scan and Ruff passed. No runtime source changed after
   the verified candidate; critical/native packaging evidence is reused, not rerun.
+
+
+## 2026-11-15: retain reading-only legacy text before first sync
+
+- Found a maintained producer gap: fetch.extract_text writes canonical text files
+  even when no compound analysis receipt exists. The first-copy inventory rejected
+  those files. Existing enrollment_history now retains a closed private
+  legacy_text_cache_v1 record for known unambiguous current-paper text/pdf names.
+- Uses the shared bounded UTF-8/version/link-safe reader, preserves exact BOM/CRLF
+  and hashes, skips paths already retained by compound history and enforces the
+  existing aggregate budget at every addition. No new module, live table, daemon,
+  active reader cache, original grant or shared text payload. Unknown paths and
+  sanitized-owner collisions remain blocked. Desktop preview shows history-only
+  text snapshots; preparation and source preservation use the existing worker.
+- New normal/rejection behavior coverage plus strengthened existing release and
+  desktop representatives: five passed in 15.36s / 18.5s total. After adding the
+  per-addition bound and UI count: two passed in 5.35s / 8.8s total. Includes private
+  copy/detached restore, no PDF/file grants or outbox text, invalid UTF-8, oversize,
+  empty bytes, corrupt proof, source changes, ambiguous names and unknown files.
+  Existing compound external-path and changed-byte guards remained green.
+- Initial test-edit scripts stopped on mixed-line-ending assertions; no product
+  test result was claimed. A new rejection fixture then omitted required paper
+  fields, failed after one passing case, and was corrected by cloning the trusted
+  fixture columns. No assertion was removed or weakened.
+- Final critical: 14 passed in 7.58s / 10.8s total, privacy scan and Ruff passed.
+  All checks governed: one at a time, max two logical CPUs, 25% job CPU, 300s budget.
+  Historical full/release selections not run; no real account/model/research use.
+- Source after f7616ae only. The delivered native candidate is unchanged and does
+  not support this additional private protocol; native/physical acceptance and
+  full runtime adoption, remaining mapping, hosting and history guarantees stay open.
+
+- Documentation/skill consistency: 58 passed in 1.89s / 5.0s total; privacy and
+  Ruff passed. Project copies synchronized without conflicts; no global install.

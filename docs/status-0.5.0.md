@@ -20,6 +20,10 @@ Included source functionality:
 - Nightly reader opens the delivered paper and asks before analysis. Its delivery
   and banner-answer state stays local rather than replaying on another device.
 
+Source after the delivered candidate additionally retains unreferenced canonical
+reading-text caches as private history, with bounded bytes, collision refusal and
+a history-only preview count. This change is not in candidate f7616ae.
+
 The matching v28 PWA artifact is built, not deployed. Update client/service/assets
 together; old headerless peers are refused. Close older app processes before
 manual test-bundle replacement. Full runtime adoption, remaining legacy/source

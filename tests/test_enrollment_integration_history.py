@@ -87,6 +87,8 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     text_file.parent.mkdir()
     text_bytes = b"Exact retained lookup input.\r\n"
     text_file.write_bytes(text_bytes)
+    spare = source.parent / "text" / (_safe_name(first["paper_ids"][1]) + ".txt")
+    spare.write_bytes(b"Reading cache without a model request.\r\n")
     with monkeypatch.context() as patch:
         patch.setattr(resources, "PDF_DIR", source.parent / "no-legacy-pdf")
         patch.setattr(resources, "TEXT_DIR", text_file.parent)
@@ -134,6 +136,11 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
         assert len(text_archive) == 1
         text_record, text_sources = enrollment_history.validate(text_archive[0])
         assert text_record["text"].encode("utf-8") == text_bytes and not text_sources
+        spare_archive = [row for row in enrollment_history.archived(conn)
+                         if row["protocol"] == enrollment_history.LEGACY_TEXT]
+        assert len(spare_archive) == 1
+        spare_record, spare_sources = enrollment_history.validate(spare_archive[0])
+        assert spare_record["text"].encode("utf-8") == spare.read_bytes() and not spare_sources
     assert rows(destination, "SELECT title,purpose,gist,why FROM cites") == [
         ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]
     assert not rows(
@@ -176,6 +183,8 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
             if row["protocol"] == "research_compound_requests"] == compound_archive
     assert [row for row in restored_history
             if row["protocol"] == enrollment_history.COMPOUND_TEXT] == text_archive
+    assert [row for row in restored_history
+            if row["protocol"] == enrollment_history.LEGACY_TEXT] == spare_archive
     assert text_file.read_bytes() == text_bytes
     assert rows(restored_database, "SELECT title,purpose,gist,why FROM cites") == [
         ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]

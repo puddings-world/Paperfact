@@ -66,6 +66,9 @@ def test_actual_preview_prepare_open_preserves_source_and_verified_pdf(
     dialog, app, source, tmp_path
 ):
     primary = pdf(source)
+    text = source.parent / "text" / "paper.txt"
+    text.parent.mkdir()
+    text.write_bytes(b"Previously extracted reading text.\r\n")
     cache = source.parent / "httpcache" / "fixture" / "response.bin"
     cache.parent.mkdir(parents=True)
     cache.write_bytes(b"private cached response")
@@ -74,6 +77,7 @@ def test_actual_preview_prepare_open_preserves_source_and_verified_pdf(
     plan = check(dialog, app)
     assert plan["supported"] and plan["pdf_count"] == 1
     assert "Papers: 1" in dialog.coverage.toPlainText()
+    assert "Retained text snapshots (history only): 1" in dialog.coverage.toPlainText()
     assert "paper: paper.pdf" in dialog.coverage.toPlainText()
     assert not dialog.opened
     output, backup = paths(dialog, tmp_path)
