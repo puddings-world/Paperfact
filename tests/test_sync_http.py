@@ -619,3 +619,59 @@ def test_listener_close_interrupts_incomplete_headers_without_waiting_for_client
             assert not closer.is_alive() and service.pull(token) == []
             with make_server(service):
                 pass
+
+
+def test_strict_service_refuses_prototype_writes_but_keeps_verified_retry_and_reads(tmp_path):
+    import secrets
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily.sync_journal import history_seed
+
+    service = ReferenceService(tmp_path / 'authority.sqlite', blob_root=tmp_path / 'blobs')
+    token = service.enroll('workspace', 'a')
+    service.enroll('workspace', 'peer')
+    code = secrets.token_urlsafe(32)
+    service.create_pairing(token, code)
+    with running(make_server(service, allow_unverified_mutations=False)) as url:
+        with closing(sqlite3.connect(service.path)) as conn:
+            before = list(conn.iterdump())
+        bodies = {
+            '/v1/push': {'operation': operation()},
+            '/v1/devices/rename': {'device_id': 'peer', 'label': 'Unverified rename'},
+            '/v1/devices/revoke': {'device_id': 'peer'},
+            '/v1/devices/pairing/create': {'code': secrets.token_urlsafe(32)},
+            **{f'/v1/blobs/{name}': {} for name in ('begin', 'append', 'commit', 'cancel')},
+        }
+        for route, body in bodies.items():
+            for _ in range(2):
+                status, _, result = request(url, token, path=route, body=json.dumps(body).encode())
+                assert status == 412 and result == b'{"error":"sync_history_unavailable"}'
+        credential = secrets.token_urlsafe(32)
+        claim = dict(workspace_id='workspace', device_id='new', credential=credential, label=None)
+        status, _, _ = request(url, code, path='/v1/devices/pairing/redeem',
+                               body=json.dumps(claim).encode())
+        assert status == 412
+        with closing(sqlite3.connect(service.path)) as conn:
+            assert list(conn.iterdump()) == before
+        assert not list((tmp_path / 'blobs').rglob('*.part'))
+        with HttpTransport(url) as transport:
+            assert transport.pull(token) == []
+            assert len(transport.device_catalog(token)['devices']) == 2
+            point = dict(sequence=0, sha256=history_seed('workspace'))
+            receipt = transport.push_verified(token, operation(), checkpoint=point)
+            assert json.loads(receipt['record'])['operation'] == operation()
+            assert transport.push_verified(
+                token, operation(), checkpoint=receipt['checkpoint']) == receipt
+            assert len(transport.pull(token)) == 1
+            assert transport.rename_device(token, 'peer', 'Verified rename',
+                                           checkpoint=receipt['checkpoint'])['changed']
+            fresh = secrets.token_urlsafe(32)
+            transport.create_pairing(token, fresh, checkpoint=receipt['checkpoint'])
+        for _ in range(2):
+            status, _, result = request(url, fresh, path='/v1/devices/pairing/redeem',
+                                       body=json.dumps(claim).encode())
+            assert status == 200
+            assert json.loads(result) == {'workspace_id': 'workspace', 'device_id': 'new'}
+        assert service.session_info(credential) == {'workspace_id': 'workspace', 'device_id': 'new'}
+        assert len(service.device_catalog(token)['devices']) == 3

@@ -169,9 +169,11 @@ class DeviceManagementMixin:
     def _pair_now():
         return int(time.time())
 
-    def _pairing_history(self, conn, invitation):
+    def _pairing_history(self, conn, invitation, *, require_history=False):
         raw = invitation["history_checkpoint"]
         if raw is None:
+            if require_history:
+                raise SyncHistoryUnavailable("Create a fresh history-bound pairing invitation")
             return
         try:
             if not isinstance(raw, str) or len(raw) > 256:
@@ -222,7 +224,8 @@ class DeviceManagementMixin:
                 )
             return {"workspace_id": workspace, "issuer_device_id": device, "expires_at": expires}
 
-    def redeem_pairing(self, code, workspace_id, device_id, credential, label=None):
+    def redeem_pairing(self, code, workspace_id, device_id, credential, label=None, *,
+                       require_history=False):
         """Atomically bind one invite to one fresh credential; exact retries do not rotate it."""
         try:
             pairing_secret(code)
@@ -240,7 +243,7 @@ class DeviceManagementMixin:
                     or issuer["workspace"] != invitation["workspace"]
                     or workspace_id != invitation["workspace"]):
                 raise PermissionError("Pairing is unavailable or expired")
-            self._pairing_history(conn, invitation)
+            self._pairing_history(conn, invitation, require_history=require_history)
             _device_id(workspace_id)
             _device_id(device_id)
             pairing_secret(credential)

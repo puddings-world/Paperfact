@@ -862,3 +862,28 @@ claim, global skill installation, telemetry or new background service.
 Final compact-fingerprint/budget core/session/Qt acceptance:12 pass in6.35s/9.4s
 total, including over-budget refusal without writes. Earlier affected63 evidence
 precedes the compact-witness refinement; no false exhaustive pass is claimed.
+
+
+## 2026-11-15: official verified-only service and test-child provenance
+
+Status: validated-local bearer/cookie/CLI/Chromium; no native rebuild or host.
+Keep low-level trusted prototype APIs separate from the official service entry.
+Official serve rejects old unverified research/blob/device mutation routes after
+identity/execution checks; browser aliases normalize through the same policy.
+Fresh grant redemption must check issuer-bound proof in the enrollment transaction;
+unbound old invitations are refused without creating credentials. Existing reads
+and authenticated-device resume remain usable, with no client downgrade.
+
+Actual package-protocol testing exposed a source identity mismatch: isolated_env
+properly stripped inherited PYTHONPATH, so a shared editable venv loaded the
+integration checkout instead. A read-only subprocess printed its actual module
+path/signature; source-only test children now pin the intended src explicitly.
+Frozen acceptance remains source-isolated and asserts the actual packaged service.
+A negative verifier injection for prototype-write success must fail.
+
+Evidence: affected HTTP/browser/key/device/admin/verifier145 pass30.07s/33.3s;
+actual delivered v31-artifact Chromium pairing/offline-note/reload/reconnect/forget
+four journeys pass9.031s against strict Python service. Exact native355382c
+candidate remains unchanged. Supported restore's fresh identity is distinct from
+external anti-rollback/control history, which is still unimplemented. No new
+universal rule, account/resource access, deployment, hook or global installation.

@@ -245,7 +245,8 @@ def run(args):
             else:
                 service = authority(args.state)
             server = make_server(
-                service, port=args.port, **({"browser": browser} if browser else {}))
+                service, port=args.port, allow_unverified_mutations=False,
+                **({"browser": browser} if browser else {}))
             try:
                 receipt = {"state": "serving", "url": f"http://127.0.0.1:{server.server_port}"}
                 if browser is not None:

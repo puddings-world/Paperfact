@@ -2,7 +2,12 @@
 
 Status: local v0.5 integration boundary, not a public hosting solution.
 
-`make_server(service, host="127.0.0.1", port=0, *, browser=None)` returns a `ThreadingHTTPServer`.
+`make_server(service, host="127.0.0.1", port=0, *, browser=None,
+allow_unverified_mutations=True)` returns a `ThreadingHTTPServer`.
+This low-level reference API retains local prototype compatibility. The official
+`sync-admin serve` entry always passes `allow_unverified_mutations=False`; hosted
+integrators must do the same. There is no CLI bypass flag. See
+[verified-only service policy](#verified-only-service-policy).
 The caller starts `serve_forever` and stops `shutdown`/`server_close`. Only literal
 `127.0.0.1` and `::1` bindings are accepted. This standard-library server must not
 be exposed as the production sync service.
@@ -585,3 +590,46 @@ They do not authenticate database content, detect all same-inode SQL restores or
 filesystem ABA, fence another host/copy, or prove durable device-control history.
 Durable authority epochs, anti-rollback and distributed fencing remain release gates.
 No installed-device, hosted or physical-phone acceptance is implied.
+
+
+## Verified-only service policy
+
+Source after897cd7a hardens the official `sync-admin serve` entry. Authentication,
+workspace/device ownership and execution checks still run before mutation policy.
+The following unverified POST routes return sanitized HTTP412 without invoking
+the mutation, changing SQL or allocating transfer state:
+
+- `/v1/push`;
+- `/v1/blobs/begin`, `/append`, `/commit`, `/cancel`;
+- `/v1/devices/rename`, `/revoke`, `/pairing/create`.
+
+Use the existing `/v1/history/...` equivalents with a retained checkpoint.
+The policy applies equally to `/v1/browser/...` cookie routes after normalization.
+Authenticated session info, device catalog, legacy contiguous-event reads,
+verified-history reads and blob reads remain available for preservation/review.
+Successful guarded retry still returns the original result once.
+
+Native pairing redemption and fresh browser completion also require the stored
+invitation's issuer-history checkpoint in the enrollment transaction. An old
+unbound invitation is refused without claiming it or creating a credential;
+issue a new code through the verified route. An already authenticated browser
+credential can resume without minting a new device. This does not restore a
+revoked credential. Bootstrap, CSRF/origin, tab identity and cookie-storage rules
+remain unchanged; no JavaScript credential or proof payload is added to cookies.
+
+The low-level local reference factory's compatibility default remains for existing
+explicit experiments; it is not the official service policy. Historical fixtures
+may request `allow_unverified_mutations=True`. It does not turn the reference
+server into a public TLS host or authorize production prototype writers.
+Guarded desktop/PWA clients do not downgrade when a required route is missing.
+
+These checks close official unverified-mutation entry points; they are not a
+durable authority/control-state journal, independent anti-rollback anchor or
+cross-host fencing lease. Supported backup restore still uses a fresh workspace
+identity and new grants. Raw database/disk rollback remains unsupported.
+
+The trusted adapter policy parameters are
+`sync_device_protocol.request(service, path, token, value, *, require_history=False)`,
+`BrowserSessions.complete(value, cookie, *, require_history=False)` and
+`redeem_pairing(code, workspace_id, device_id, credential, label=None, *, require_history=False)`.
+Strict HTTP selects them internally; JSON bodies cannot override receiver policy.

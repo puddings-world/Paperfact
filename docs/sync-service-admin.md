@@ -398,3 +398,15 @@ Online backup remains supported while the listener owns its local claim. Backups
 exclude `.research-jobs` process locks; use the supported restore-to-new-directory
 flow rather than replacing a running authority's database. See
 [listener ownership and limits](sync-http.md#local-listener-ownership-and-database-lifetime).
+
+
+## Verified writes are required
+
+`serve` always refuses prototype writes without retained history proofs, including
+cookie-backed writes. It exposes no compatibility bypass option. Current desktop
+and mobile flows use the verified routes. After upgrading a service, preserve old
+client data and update the client; use explicit legacy-history review when needed.
+Existing unbound pairing invitations require a freshly issued verified invitation.
+Authenticated reads and old-device recovery comparison remain available. See
+[route policy](sync-http.md#verified-only-service-policy) and
+[review flow](workspace-sync-connection.md#explicit-review-of-legacy-acknowledgments).

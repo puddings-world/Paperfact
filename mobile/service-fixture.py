@@ -107,7 +107,8 @@ def main():
         service = ReferenceService(root / "authority.sqlite", blob_root=root / "blobs")
         token = service.enroll("demo-workspace", "demo-phone")
         desktop_token = service.enroll("demo-workspace", "demo-desktop")
-        server = make_server(service)
+        # Historical transport scenarios deliberately retain the local prototype API.
+        server = make_server(service, allow_unverified_mutations=True)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         print(

@@ -228,7 +228,10 @@ def test_actual_cli_restart_reuses_pending_cookie_and_private_key_without_new_de
     with console(state, key, tmp_path / "unused-research") as url:
         with HttpTransport(url) as transport:
             code = secrets.token_urlsafe(32)
-            grant = transport.create_pairing(record.token, code)
+            from paper_daily.sync_journal import history_seed
+
+            grant = transport.create_pairing(record.token, code,
+                checkpoint=dict(sequence=0, sha256=history_seed('workspace')))
         invitation = Invitation("https://sync.example.org", code=code, **grant).encoded()
         response = request(url, "pairing/prepare", body={"invitation": invitation})
         assert response.status_code == 200

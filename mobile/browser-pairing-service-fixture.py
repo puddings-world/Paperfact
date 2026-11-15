@@ -78,7 +78,7 @@ def main():
             token, code, checkpoint=service.history_page(token)["checkpoint"],
         )
         packet = Invitation(origin, code=code, **grant).encoded()
-        server = make_server(service, browser=sessions)
+        server = make_server(service, browser=sessions, allow_unverified_mutations=False)
         thread = threading.Thread(
             target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True
         )

@@ -378,3 +378,8 @@ sync history**, then explicitly **Use verified history** with a default-No
 confirmation. Research, pending edits and the received cursor are preserved;
 [workflow and limits](docs/workspace-sync-connection.md#explicit-review-of-legacy-acknowledgments).
 This source-only UI is newer than the355382c native test candidate.
+
+
+The official development sync service now accepts only history-verified mutations
+and new pairing grants; existing research reads remain available. Low-level local
+prototype compatibility is separate. [Service policy and limits](docs/sync-http.md#verified-only-service-policy).

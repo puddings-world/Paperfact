@@ -43,6 +43,8 @@ _BLOB_ROUTES = {"/v1/blobs/" + name for name in ("begin", "append", "commit", "c
 _HISTORY_BLOB_ROUTES = {
     "/v1/history/blobs/" + name for name in ("begin", "append", "commit", "cancel")
 }
+_PROTOTYPE_MUTATIONS = ({"/v1/push"} | (_BLOB_ROUTES - {"/v1/blobs/read"})
+                        | (devices.ROUTES - {"/v1/devices/list", devices.PAIR_REDEEM}))
 MAX_REQUEST_BYTES = 512 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{1,4096}")
@@ -292,8 +294,11 @@ class _Server(ThreadingHTTPServer):
         pass
 
 
-def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> ThreadingHTTPServer:
+def make_server(service, host="127.0.0.1", port=0, *, browser=None,
+                allow_unverified_mutations=True) -> ThreadingHTTPServer:
     """Bind a loopback-only reference server; the caller starts/stops its thread."""
+    if type(allow_unverified_mutations) is not bool:
+        raise ValueError("Invalid prototype mutation policy")
     if host not in _LOOPBACK:
         raise ValueError("Reference sync HTTP binds only literal loopback addresses")
     if type(port) is not int or not 0 <= port <= 65535:
@@ -409,7 +414,10 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                             self.headers, self._browser_cookie, required=False)
                     method = getattr(browser, browser_actions[self.path])
                     result, cookie = (method(value) if self.path.endswith("/forget")
-                                      else method(value, self._browser_cookie))
+                                      else method(value, self._browser_cookie,
+                                          **({"require_history": True}
+                                             if not allow_unverified_mutations
+                                             and self.path.endswith("/complete") else {})))
                     self._reply(200, _encode(result), cookie)
                     return
                 route = self._route
@@ -426,6 +434,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                         raise _RequestError(400)
                     if not secrets.compare_digest(guards[0], instance):
                         raise _RequestError(428)
+                if not allow_unverified_mutations and route in _PROTOTYPE_MUTATIONS:
+                    raise SyncHistoryUnavailable("Use verified history mutation routes")
                 if route == "/v1/history/pull":
                     _closed(value, {"after", "limit", "checkpoint"})
                     if not isinstance(value["checkpoint"], dict):
@@ -461,7 +471,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                         raise RuntimeError("Invalid session identity response") from None
                     response = _encode(identity)
                 elif route in devices.ROUTES | devices.HISTORY_ROUTES:
-                    response = _encode(devices.request(service, route, token, value))
+                    response = _encode(devices.request(service, route, token, value,
+                        require_history=not allow_unverified_mutations))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
                 elif route in _BLOB_ROUTES | _HISTORY_BLOB_ROUTES:

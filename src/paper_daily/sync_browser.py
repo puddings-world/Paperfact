@@ -150,7 +150,7 @@ class BrowserSessions:
         return ({"workspace_id": record["workspace_id"], "device_id": record["device_id"]},
                 self._header(self._seal(record), max(0, int(record["expires_at"] - self._clock()))))
 
-    def complete(self, value, cookie):
+    def complete(self, value, cookie, *, require_history=False):
         """Exact retry verifies an admitted device before using an expiring grant."""
         _closed(value, set())
         record = self._open(cookie)
@@ -161,7 +161,8 @@ class BrowserSessions:
                 raise
             invitation = Invitation.decoded(record["invitation"])
             identity = self.service.redeem_pairing(
-                invitation.code, record["workspace_id"], record["device_id"], record["credential"])
+                invitation.code, record["workspace_id"], record["device_id"], record["credential"],
+                **({"require_history": True} if require_history else {}))
         _session_identity(identity)
         if identity != {"workspace_id": record["workspace_id"], "device_id": record["device_id"]}:
             raise PermissionError("Browser device identity changed")

@@ -268,7 +268,7 @@ HTTP calls have a five-second limit. Readiness and response reads are bounded.
 `report.json` contains only `authenticated_pull`, `stale_execution_refused` and
 `reconnected`, `citation_graph`, `citation_graph_retry`, `citation_graph_restart`,
 `duplicate_listener_refused`, `verified_history`, `wrong_history_refused` and
-`verified_history_restart` booleans under `sync_protocol`. The result contains no research or credentials.
+`verified_history_restart` and `prototype_writes_refused` booleans under `sync_protocol`. The result contains no research or credentials.
 CI uploads only the four named synthetic protocol logs (`init.log`, `issue.log`,
 `first-listener.log`, `second-listener.log`), alongside its existing exact log paths.
 It never uploads `device.json`, the authority database or the whole protocol folder.
@@ -286,3 +286,12 @@ three-minute step cap: duplicate/bind-failure ownership, held-worker drain/lost
 reply retry, actual process exit, database replacement/removal, incomplete-header
 shutdown, and actionable CLI refusal with online backup. These share the existing
 behavior tests; they do not expand the daily critical or release selector lists.
+
+
+Frozen protocol acceptance additionally sends one valid operation to the old
+unverified write route and requires HTTP412 before guarded admission/retry. The
+negative verifier case injects false legacy-write success and must fail. Source-
+only `python -m paper_daily` fixtures explicitly pin this checkout's `src`, because
+the isolated environment intentionally drops inherited PYTHONPATH. A shared venv's
+editable install may point at another worktree. The frozen binary verifier keeps
+its clean environment and receives no source override.

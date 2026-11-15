@@ -131,6 +131,10 @@ def verify(command, folder, env):
         if status != 200 or offered != first or body != []:
             raise AssertionError("Packaged sync initial pull failed")
         paper, graph = _graph_operations(identity)
+        status, offered, body = _post(endpoint, token, "/v1/push", {"operation": paper}, first)
+        if (status != 412 or offered != first
+                or body != {"error": "sync_history_unavailable"}):
+            raise AssertionError("Packaged sync accepted a prototype write without proof")
         checkpoint = {"sequence": 0, "sha256": history_seed(identity["workspace_id"])}
         for sequence, operation in enumerate((paper, graph), start=1):
             status, offered, receipt = _post(endpoint, token, "/v1/history/push",
@@ -177,4 +181,5 @@ def verify(command, folder, env):
     return dict(authenticated_pull=True, stale_execution_refused=True, reconnected=True,
                 citation_graph=True, citation_graph_retry=True, citation_graph_restart=True,
                 duplicate_listener_refused=True, verified_history=True,
-                wrong_history_refused=True, verified_history_restart=True)
+                wrong_history_refused=True, verified_history_restart=True,
+                prototype_writes_refused=True)

@@ -2,6 +2,7 @@
 
 import json
 import secrets
+import sqlite3
 from types import SimpleNamespace
 
 import httpx
@@ -257,3 +258,40 @@ def test_browser_pairing_refuses_changed_issuer_history_before_device_admission(
     repeated = post(browser, "pairing/complete", cookie=pending)
     assert repeated.status_code == 200 and repeated.json() == identity
     assert len(browser.service.device_catalog(browser.owner)["devices"]) == 2
+
+
+def test_strict_browser_requires_bound_invitation_and_guarded_mutations(browser):
+    from contextlib import closing
+
+    from test_sync_http import operation
+
+    from paper_daily.sync_journal import history_seed
+
+    browser.server.shutdown()
+    browser.server.server_close()
+    server = make_server(browser.service, browser=browser.sessions,
+                         allow_unverified_mutations=False)
+    with running(server) as url:
+        browser.url = url
+        _identity, pending = prepared(browser)
+        with closing(sqlite3.connect(browser.service.path)) as conn:
+            before = list(conn.iterdump())
+        assert post(browser, 'pairing/complete', {}, pending).status_code == 412
+        with closing(sqlite3.connect(browser.service.path)) as conn:
+            assert list(conn.iterdump()) == before
+        point = dict(sequence=0, sha256=history_seed('workspace'))
+        code = secrets.token_urlsafe(32)
+        grant = browser.service.create_pairing(browser.owner, code, checkpoint=point)
+        browser.packet = Invitation(browser.origin, code=code, **grant).encoded()
+        identity, pending = prepared(browser)
+        active = cookie(post(browser, 'pairing/complete', {}, pending))
+        note = operation('browser-strict', device=identity['device_id'])
+        denied = post(browser, 'push', {'operation': note}, active)
+        assert denied.status_code == 412 and denied.json() == {'error': 'sync_history_unavailable'}
+        assert browser.service.pull(browser.owner) == []
+        receipt = post(browser, 'history/push', {'operation': note, 'checkpoint': point}, active)
+        assert receipt.status_code == 200
+        assert json.loads(receipt.json()['record'])['operation'] == note
+        retry = post(browser, 'history/push',
+                     {'operation': note, 'checkpoint': receipt.json()['checkpoint']}, active)
+        assert retry.json() == receipt.json() and len(browser.service.pull(browser.owner)) == 1

@@ -109,12 +109,13 @@ def revoked(value, device_id):
     return value
 
 
-def request(service, path, token, value):
+def request(service, path, token, value, *, require_history=False):
     # Authenticate before validating target/shape. Every core method authenticates
     # again within its own read/write transaction; this is no mutation authority.
     if path == PAIR_REDEEM:
         closed(value, {"workspace_id", "device_id", "credential", "label"})
-        result = service.redeem_pairing(token, **value)
+        result = service.redeem_pairing(token, **value,
+            **({"require_history": True} if require_history else {}))
         return pairing_claimed(result, value["workspace_id"], value["device_id"])
     identity = service.session_info(token)
     guard = {}

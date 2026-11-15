@@ -60,7 +60,10 @@ cursor reset. Windows Qt/native fixtures pass; a rebuilt/installed Mac journey
 remains open. Durable authority fencing remains open. Same-host listener exclusion now holds through
 admitted-worker drain; initialized services refuse observed database replacement
 or removal without recreating missing files. This is not distributed fencing or
-durable control-history protection. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
+durable control-history protection. Source after897cd7a also makes official
+serve reject unverified mutation routes and unbound new pairing claims; actual
+Chrome accepts the existing v31 artifact against that strict service. No new
+native installer has been built for these source changes. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 
 The integration line is `develop/0.5`. Preserved snapshots and unintegrated
 candidates are listed in [workspace stabilization](workspace-stabilization-2026-11-14.md);

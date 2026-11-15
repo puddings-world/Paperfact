@@ -353,7 +353,7 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
 
 @pytest.mark.parametrize("failure", [
     None, "stale_accepted", "bad_header", "graph_lost", "wrong_history_accepted",
-    "duplicate_accepted",
+    "duplicate_accepted", "prototype_accepted",
 ])
 def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, monkeypatch, failure):
     sys.path.insert(0, str(ROOT / "scripts"))
@@ -361,6 +361,7 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
         import verify_sync_protocol
     finally:
         sys.path.pop(0)
+    # Source-only children use this checkout, not the venv editable install.
     children = []
     spawn = verify_sync_protocol.subprocess.Popen
 
@@ -378,7 +379,10 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
             return 200, offered, []
         if failure == "graph_lost" and args[2] == "/v1/pull" and args[3].get("after") == 1:
             return status, offered, []
-        if failure == "wrong_history_accepted" and status == 412:
+        if (failure == "wrong_history_accepted" and status == 412
+                and args[2] == "/v1/history/push"):
+            return 200, offered, body
+        if failure == "prototype_accepted" and status == 412 and args[2] == "/v1/push":
             return 200, offered, body
         return status, offered, body
 
@@ -401,18 +405,21 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
             with pytest.raises((ValueError, AssertionError)):
                 verify_sync_protocol.verify(
                     [sys.executable, "-m", "paper_daily"], tmp_path / "protocol",
-                    verify.isolated_env(tmp_path / "isolated"),
+                    {**verify.isolated_env(tmp_path / "isolated"),
+                     "PYTHONPATH": str(ROOT / "src")},
                 )
         else:
             result = verify_sync_protocol.verify(
                 [sys.executable, "-m", "paper_daily"], tmp_path / "protocol",
-                verify.isolated_env(tmp_path / "isolated"),
+                {**verify.isolated_env(tmp_path / "isolated"),
+                 "PYTHONPATH": str(ROOT / "src")},
             )
             assert result == dict(authenticated_pull=True, stale_execution_refused=True,
                                   reconnected=True, citation_graph=True,
                                   citation_graph_retry=True, citation_graph_restart=True,
                                   duplicate_listener_refused=True, verified_history=True,
-                                  wrong_history_refused=True, verified_history_restart=True)
+                                  wrong_history_refused=True, verified_history_restart=True,
+                                  prototype_writes_refused=True)
             assert "token" not in json.dumps(result)
     finally:
         assert children and all(child.poll() is not None for child in children)

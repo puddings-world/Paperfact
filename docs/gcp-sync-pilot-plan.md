@@ -269,3 +269,33 @@ real GCS fetch/restore, TLS/VM operations and installed-device gates remain open
 ### Local retrieval preparation
 
 The operator can now retrieve an exact private GCS snapshot into a new directory, with generation-pinned SHA/CRC verification and normal authority closure checks before completion. [Workflow](gcp-backup-retrieval.md). This closes the local download implementation gap; live cloud recovery, retention, scheduling, target configuration and installed-device gates remain open.
+
+
+## Recovery and rollback boundary (2026-11-15)
+
+Implemented locally: official `serve` requires guarded mutation routes and
+issuer-bound new pairing claims. Supported `restore-backup` constructs a fresh
+workspace and discards live grants. Process/listener ownership and observed file
+lifetime stop ordinary live replacement; client research-prefix proofs retain
+known received/acknowledged history. These mechanisms do not prove every device
+control change survived an in-place SQL restore or an entire disk rollback.
+
+Still proposed before same-identity rollback/split-brain support:
+
+1. Version authority identity and control mutations (issuance, revocation, label
+   and invitation state) with a durable, transactional control history.
+2. Define a monotonic external anchor outside the restored authority/database
+   failure domain, admission/fencing rules and ambiguous-commit recovery. A SQL
+   row or a second file copied with the same disk is insufficient as that anchor.
+3. Carry retained control knowledge in desktop/mobile connections and verify it
+   before private work. Test a revoked token against older control state, a copied
+   authority, stale writers and interruption at every anchor/commit boundary.
+4. Run an isolated hosted restore/revocation rehearsal with synthetic research,
+   followed by the installed Windows/Mac/phone journey. No fixture result stands
+   in for that operational evidence.
+
+These are unimplemented requirements, not an invented working lease or permission
+to deploy. The exact project, region/hostname, cost envelope, retention and operator
+remain unconfirmed as recorded above. No GCP resources/credentials were inspected
+or changed for this checkpoint. The one-VM pilot proposal remains unchanged;
+Cloud Run/database redesign and high availability have not been implemented.

@@ -7500,3 +7500,48 @@ precedes the compact-witness refinement; no false exhaustive pass is claimed.
 Final compact-witness integration gates: critical14 pass in4.83s/8.1s total;
 docs58 pass in1.76s/5.3s total. Privacy/Ruff and whitespace pass. All checks
 sequential/two-core/25-percent CPU bounded; no full historical suite or rebuild.
+
+
+## 2026-11-15: official service closes unverified prototype mutations
+
+Source after897cd7a. Official sync-admin serve always passes the strict policy;
+no new CLI bypass flag or user setup. Old research/blob/device write routes return
+sanitized412 after authentication/execution guard, including browser aliases.
+Verified routes, session/catalog/event/blob reads and legacy-history review stay
+available. Repeated denied writes change no SQL or partial transfers; guarded
+writes/rename/retry remain accepted once. The low-level local reference factory
+retains its documented experimental compatibility default; dedicated historical
+mobile transport fixtures mark that mode explicitly.
+
+Strict native new-device redemption/browser completion require invitation issuer
+proof in the enrollment transaction. Legacy unbound invitation refusal creates no
+device/claim; fresh verified issuance/retry succeeds. An authenticated browser can
+resume without extra grants; revocation and cookie/tab/origin controls remain.
+The real CLI/key restart fixture now issues its invitation through the guarded
+route; original restart/device-count/key-isolation assertions are preserved.
+
+Frozen verifier now requires a valid prototype push to be rejected before normal
+guarded graph admission and adds prototype_writes_refused. A deliberate false-
+acceptance case must fail. The initial source CLI test did fail: isolation removed
+PYTHONPATH and the shared venv loaded Paperfact-develop, confirmed by an actual
+child module path/signature. Source-only test children now explicitly select this
+checkout, without changing frozen env filtering or global Python config. Initial
+Ruff test imports/width fixed; the strict acceptance assertion was never weakened.
+
+Final affected six files:145 passed30.07s/33.3s total. Exact delivered mobile v31
+artifact8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229
+passes four actual Chromium UI journeys in9.031s against strict Python fixture:
+singleton keyboard-ready connection, cookie pairing without JS secret storage,
+offline note/reload/reconnect same device, ZH forget/cancel preserving research.
+Native355382c/run43705488673 stays the delivered candidate; no installer rebuild,
+public release, production deployment, paid call, owner research or account access.
+
+GCP plan now distinguishes supported fresh-identity recovery from unsupported
+same-identity SQL/disk rollback and sets the still-proposed control-journal/external-
+anchor/client-fencing/crash-recovery acceptance requirements. Project/region/
+hostname/budget/retention/operator and hosted/physical acceptance remain gates;
+no independent anchor or durable control history is claimed implemented.
+
+Final integration gates: critical14 pass7.47s/10.8s total; docs58 pass1.92s/5.4s
+total. Privacy/Ruff/whitespace pass. No full historical suite or native rebuild;
+all checks sequential under the existing CPU/time governor.
