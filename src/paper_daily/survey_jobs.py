@@ -111,6 +111,9 @@ class SurveyJob:
             selected_ids=selected_ids,
             cancelled=cancelled,
         )
+        observed = survey_sources._checked(corpus)
+        if observed.get("native") is None and observed.get("local") is None:
+            raise ValueError("Load the registered writer before generating a survey report")
         digest, _count = survey.build_input_from_snapshot(context.inputs, list_id)
         prompt = survey_content._encode(
             {

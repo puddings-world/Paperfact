@@ -814,3 +814,18 @@ required original stops preparation before any copy or backup is published.
 Review/open/adopt the prepared copy and connect it explicitly. Preparing it does
 not issue service credentials, connect, upload, enable automatic sync or switch the
 current reader. Installed-device and hosted acceptance still apply.
+
+### Which research goal did this report use?
+
+The saved **Report & sources** reader shows **Research goal for this report**.
+It is the goal captured when that report was produced. Editing the list's current
+goal does not rewrite the saved report. Generate a new version to use a new goal.
+
+An older report that did not record its goal says so; Paperfact does not guess
+its purpose from your current settings. Goal text is displayed literally and
+travels with the report through supported packages/sync. It is research intent,
+not evidence that a scientific statement is supported.
+
+In current development source, the existing survey command includes the list's
+captured goal. Structured source-aware generation/persistence remains an internal
+worker API pending desktop/CLI/MCP dispatch and completed-result recovery.

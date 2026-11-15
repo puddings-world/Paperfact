@@ -38,6 +38,9 @@ TEXT = {
             "Scientific support has not been assessed."
         ),
         ready="Saved report",
+        goal="Research goal for this report",
+        goal_empty="No research goal was provided.",
+        goal_unknown="This older report did not record a research goal.",
         checked="Original checked | page {page} of {pages}",
         cancel="Cancel",
         cancelled="Stopped. Existing research is unchanged.",
@@ -61,6 +64,12 @@ TEXT = {
         not_selected="not selected",
     ),
     "zh-TW": {
+        "goal": "\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19",
+        "goal_empty": "\u7576\u6642\u672a\u63d0\u4f9b\u7814\u7a76\u76ee\u6a19\u3002",
+        "goal_unknown": (
+            "\u9019\u4efd\u820a\u5831\u544a\u672a\u8a18\u9304\u7576\u6642"
+            "\u7684\u7814\u7a76\u76ee\u6a19\u3002"
+        ),
         "checked": "\u539f\u6587\u5df2\u6838\u5c0d | {page} / {pages} \u9801",
         "cancel": "\u53d6\u6d88",
         "cancelled": (
@@ -133,7 +142,9 @@ def render(data, words):
     def escape(value):
         return html.escape(value).replace("\n", "<br>")
 
-    parts = []
+    inputs = report["inputs"]
+    goal = (inputs["goal"] or words["goal_empty"]) if "goal" in inputs else words["goal_unknown"]
+    parts = ["<h3>" + escape(words["goal"]) + "</h3><p>" + escape(goal) + "</p>"]
     for si, section in enumerate(report["sections"]):
         parts.append("<h2>" + escape(section["heading"]) + "</h2>")
         for ti, statement in enumerate(section["statements"]):

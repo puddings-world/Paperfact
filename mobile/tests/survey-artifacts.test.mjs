@@ -109,3 +109,24 @@ test('accepted stale-source forgery and delayed download after list retirement c
   await assert.rejects(job,/stale_artifact/);assert.deepEqual((await s.store.read()).appliedArtifacts,{});
   assert.deepEqual(projection(await s.store.read()).surveys,[]);
 });
+
+test('goal-aware recipe retains exact Unicode purpose and refuses silent v1 extension',async()=>{
+  const item=await fixture();
+  for(const goal of [null,'','Compare assumptions <script>literal goal</script>','\u{1f9ea}'.repeat(2000)]){
+    const body=structuredClone(item.body),payload=structuredClone(item.payload);
+    body.report.recipe='list-survey-sources.v2';body.report.inputs.goal=goal;
+    delete body.report.id;body.report.id=await digest(bytes(body.report));
+    await validateSurveyBody(bytes(body),body,payload);
+    for(const invalid of [42,[],{},'x'.repeat(2001)]){
+      const bad=structuredClone(body);bad.report.inputs.goal=invalid;delete bad.report.id;
+      bad.report.id=await digest(bytes(bad.report));
+      await assert.rejects(validateSurveyBody(bytes(bad),bad,payload));
+    }
+    const old=structuredClone(body);old.report.recipe='list-survey-sources.v1';delete old.report.id;
+    old.report.id=await digest(bytes(old.report));
+    await assert.rejects(validateSurveyBody(bytes(old),old,payload));
+    const missing=structuredClone(body);delete missing.report.inputs.goal;delete missing.report.id;
+    missing.report.id=await digest(bytes(missing.report));
+    await assert.rejects(validateSurveyBody(bytes(missing),missing,payload));
+  }
+});

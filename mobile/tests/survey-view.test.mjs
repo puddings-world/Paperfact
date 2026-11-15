@@ -41,3 +41,17 @@ test('navigation, account switching or close suppresses stale reads and late dow
     assert(!panel.text.includes('literal research'));
   }
 });
+
+test('historical goals render literally and old unknown goals are never backfilled',async()=>{
+  for(const language of ['en','zh-TW']){
+    const words=SURVEY_COPY[language];
+    for(const goal of [undefined,null,'','<script>literal goal</script>']){
+      const value=structuredClone(result);
+      if(goal!==undefined)value.body.report.inputs.goal=goal;
+      const panel=el('div');
+      renderSurveys(panel,collection,rows,el,{language,read:async()=>value});await tick();
+      assert(panel.text.includes(words.goal));
+      assert(panel.text.includes(goal===undefined?words.goalUnknown:goal||words.goalEmpty));
+    }
+  }
+});

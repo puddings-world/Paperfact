@@ -27,10 +27,14 @@ export async function validateSurveyBody(raw,body,payload){
   closed(report,['format','recipe','inputs','generation','sources','sections','source_check',
     'semantic_validation','body_hash','id']);
   ok(enc.encode(canonical(report)).length<=SURVEY_MAX_BYTES);
-  ok(report.format==='paperfact.survey-evidence.v1'&&report.recipe==='list-survey-sources.v1'&&
+  ok(report.format==='paperfact.survey-evidence.v1'&&['list-survey-sources.v1','list-survey-sources.v2'].includes(report.recipe)&&
     report.source_check==='quote_location_only'&&report.semantic_validation==='not_performed');
   const inputs=report.inputs;
-  closed(inputs,['list_id','list_name','list_lifecycle','prompt_hash','members']);
+  const fields=['list_id','list_name','list_lifecycle','prompt_hash','members'];
+  if(report.recipe==='list-survey-sources.v2')fields.push('goal');
+  closed(inputs,fields);
+  if(report.recipe==='list-survey-sources.v2')
+    ok(inputs.goal===null||typeof inputs.goal==='string'&&[...inputs.goal].length<=2000);
   validateEvidenceText(inputs.list_id,4096);validateEvidenceText(inputs.list_name,2000);
   life(inputs.list_lifecycle);hash(inputs.prompt_hash);
   ok(inputs.prompt_hash===payload.input_versions.inputs_sha256);

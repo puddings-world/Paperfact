@@ -1111,3 +1111,25 @@ or installed-device acceptance. No global rule is promoted.
   Desktop/CLI/MCP dispatch and durable completed-response recovery remain open,
   as do per-list goal capture, runtime adoption, installed devices and hosting.
   No owner research, credentials, paid calls, native build or deployment changed.
+
+## Reader availability does not grant publication (2026-11-16)
+
+- Status: validated-local in Paperfact; no global installation.
+- Trigger: unbound generated-report observation treated missing native adapter
+  as proof of no workspace binding, breaking an existing managed-original reader.
+- Decision: distinguish registered binding, available reader and loaded writer.
+  Keep managed source snapshots readable. Record no local write eligibility for
+  a bound workspace without its native writer, and refuse AI preflight/publication
+  rather than acquiring fallback authority. Capture goal text/version alongside
+  scientific inputs; a later goal is not a historical report's purpose.
+- Evidence: existing test_survey_sources_use_registered_managed_original_not_legacy_alias
+  now also checks both publisher refusals, generation preflight and unchanged SQL.
+  Goal/generation/publication/observation62 pass51.22s/56.6s governed stages.
+  Named real Qt/enrollment5 pass21.64s/22.625s; mobile10 and actual Unicode
+  HTTP/offline fixture pass1.016s/5.578s governed. Counts describe related selections,
+  not new-test totals or full release acceptance.
+- Limits: synthetic original bytes and simulated models. Native installers,
+  physical devices, hosted rollout, runtime adoption and durable completed-result
+  review remain separate gates. A recipe extension is versioned, not inferred;
+  old source-aware reports do not gain current goal metadata. No owner research,
+  accounts, paid calls or deployment were used.

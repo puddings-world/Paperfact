@@ -35,6 +35,10 @@ def observe(context, sources):
         conn.execute("BEGIN")
         if generation._stale(conn, context) is not None:
             raise ValueError("Survey inputs changed before local report observation")
+        # A registered managed reader may exist without a loaded native writer.
+        # It remains readable; neither publisher gains local fallback authority.
+        if local._binding(conn, local._tables(conn)) or generation._binding(conn):
+            return None
         return observe_in(conn, context, sources)
 
 

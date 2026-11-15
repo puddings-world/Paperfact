@@ -16,6 +16,7 @@ from paper_daily import claim_content as content
 
 FORMAT = "paperfact.survey-evidence.v1"
 RECIPE = "list-survey-sources.v1"
+GOAL_RECIPE = "list-survey-sources.v2"
 MAX_BYTES = 1024 * 1024
 MAX_BODY_BYTES = 200 * 1024
 MAX_MEMBERS = 2000
@@ -72,12 +73,19 @@ def validate(report):
     _encode(report)
     content.closed(report, {'format', 'recipe', 'inputs', 'generation', 'sources',
                            'sections', 'source_check', 'semantic_validation', 'body_hash', 'id'})
-    if (report['format'] != FORMAT or report['recipe'] != RECIPE
+    if (report['format'] != FORMAT or report['recipe'] not in (RECIPE, GOAL_RECIPE)
             or report['source_check'] != 'quote_location_only'
             or report['semantic_validation'] != 'not_performed'):
         raise ValueError('Unsupported survey evidence contract')
     inputs = report['inputs']
-    content.closed(inputs, {'list_id', 'list_name', 'list_lifecycle', 'prompt_hash', 'members'})
+    fields = {'list_id', 'list_name', 'list_lifecycle', 'prompt_hash', 'members'}
+    if report['recipe'] == GOAL_RECIPE:
+        fields.add('goal')
+    content.closed(inputs, fields)
+    if report['recipe'] == GOAL_RECIPE:
+        goal = inputs['goal']
+        if goal is not None and (not isinstance(goal, str) or len(goal) > 2000):
+            raise ValueError('Invalid captured survey research goal')
     content.text(inputs['list_id'], 4096)
     content.text(inputs['list_name'], 2000)
     content.digest(inputs['prompt_hash'])
@@ -181,7 +189,8 @@ def validate(report):
 
 def assemble(*, inputs, generation, sources, sections):
     """Copy explicit producer inputs; assign content IDs without inventing evidence."""
-    report = deepcopy(dict(format=FORMAT, recipe=RECIPE, inputs=inputs, generation=generation,
+    recipe = GOAL_RECIPE if 'goal' in inputs else RECIPE
+    report = deepcopy(dict(format=FORMAT, recipe=recipe, inputs=inputs, generation=generation,
                            sources=sources, sections=sections, source_check='quote_location_only',
                            semantic_validation='not_performed'))
     for section_index, section in enumerate(report['sections']):

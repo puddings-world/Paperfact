@@ -608,7 +608,7 @@ def test_survey_sources_cancellation_selection_and_checks_do_not_write_research(
     assert '\n'.join(conn.iterdump()) == before
 
 
-def test_survey_sources_use_registered_managed_original_not_legacy_alias(tmp_path):
+def test_survey_sources_use_registered_managed_original_not_legacy_alias(tmp_path, monkeypatch):
     import hashlib
     from contextlib import closing
 
@@ -645,6 +645,20 @@ def test_survey_sources_use_registered_managed_original_not_legacy_alias(tmp_pat
     assert owner['source_owner_id'] == corpus._documents[0].paper_id
     assert survey_sources.retained_originals(proposal, receipts)[0][0].read_bytes() == raw
     assert survey_sources.current(corpus)
+    assert survey_sources._checked(corpus)['local'] is None
+    from paper_daily import survey_jobs, survey_local_generated, survey_publication
+    from paper_daily.ai_types import Settings
+
+    with closing(research_generation._connect(path)) as db:
+        before = list(db.iterdump())
+    for publisher in (survey_local_generated, survey_publication):
+        with pytest.raises(ValueError):
+            publisher.prepare(proposal)
+    monkeypatch.setattr(survey_jobs.llm, 'settings', lambda **_: Settings('codex', model='fixture'))
+    with pytest.raises(ValueError, match='registered writer'):
+        survey_jobs.SurveyJob.capture(path, 'survey', legacy_root=reader.legacy_root)
+    with closing(research_generation._connect(path)) as db:
+        assert list(db.iterdump()) == before
 
 
 def test_survey_original_pairs_survive_primary_replacement_and_exact_retry(

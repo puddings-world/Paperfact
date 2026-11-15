@@ -39,6 +39,8 @@ try{
   calls.length=0;await engine.downloadArtifact(ready.id);
   assert.equal(calls.find(row=>row[0]==='blob_read')[2],CHUNK);
   const report=await engine.survey(ready.id);assert.equal(report.body.report.id,ready.report_id);
+  assert.equal(report.body.report.recipe,'list-survey-sources.v2');
+  assert.equal(report.body.report.inputs.goal,ready.goal);
   assert.equal(report.semantic_validation,'not_performed');
   assert.equal(report.verification_scope,'report_bytes_and_record');
   assert.equal(report.body.report.sections[0].statements[0].passages.at(-1).location.state,'located');
@@ -48,6 +50,7 @@ try{
   const offline=new Engine(new MemoryStore('survey-workspace','phone',snapshot),
     {transport:new Proxy({}, {get(){throw Error('Offline report tried network');}})});
   assert.equal((await offline.survey(ready.id)).body.report.id,ready.report_id);
+  assert.equal((await offline.survey(ready.id)).body.report.inputs.goal,ready.goal);
   assert.deepEqual((await store.read()).files,{});
   console.log('PASS trusted native report >256KiB, exact resumed ranges, full source ledger and offline restart without PDF activation');
   await engine.connect(ready.token);child.stdin.write('retire\n');const retired=await next();

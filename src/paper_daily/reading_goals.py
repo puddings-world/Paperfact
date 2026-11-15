@@ -11,6 +11,22 @@ TABLE = 'list_reading_goals'
 MAX_GOAL = 2000
 
 
+def _snapshot_in(conn, list_id):
+    """Bounded real input observation; absence and an explicitly cleared goal differ."""
+    row = conn.execute(
+        "SELECT list_id,CASE WHEN length(CAST(body AS BLOB))<=? THEN body END AS body,"
+        "CASE WHEN length(CAST(written_at AS BLOB))<=128 THEN written_at END AS written_at "
+        "FROM list_reading_goals WHERE list_id=?", (MAX_GOAL * 4, list_id),
+    ).fetchone()
+    if row is None:
+        return None
+    row = dict(row)
+    if (not isinstance(row['body'], str) or len(row['body']) > MAX_GOAL
+            or not isinstance(row['written_at'], str)):
+        raise ValueError('Reading goal input exceeds its supported text/version bounds')
+    return row
+
+
 def load(database, list_id):
     """Capture an editable goal and exact list/target state; absence is observed too."""
     with closing(generation._connect(Path(database).resolve())) as conn:

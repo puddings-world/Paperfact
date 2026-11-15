@@ -1235,8 +1235,8 @@ Publication remains a separate observed operation: the native publisher accepts
 these proposals, and its saved reader displays the same report and exact page.
 A newer native report refuses an older proposal.
 
-Remaining work is required: captured per-list goal context, durable completed
-proposal/review recovery across process exit, and common desktop/CLI/MCP dispatch.
+Remaining work is required: durable completed proposal/review recovery across
+process exit and common desktop/CLI/MCP dispatch.
 Unbound generated publication is implemented in the following section.
 The current desktop button still uses the legacy text flow. Do not claim that
 private PDF retention alone durably stores the model response, that quote matching
@@ -1273,4 +1273,37 @@ report ID. Invalid/stale/cancelled operations raise and leave canonical data
 unchanged. A generic local original receipt is reused; this does not assert a
 foreign package import or mint sync writer authority. Runtime enrollment remains
 explicit. Shared desktop/CLI/MCP dispatch, durable completed-response/review
-recovery, captured goal context and installed/hosted/device acceptance remain.
+recovery and installed/hosted/device acceptance remain.
+
+### Captured survey purpose and read/write eligibility
+
+Survey generation now observes `list_reading_goals` together with list/paper
+inputs, including goal absence, explicit clearing and the stored version field.
+The bounded snapshot rejects malformed/oversized rows before inference. Both the
+existing plain-text survey command and structured worker include a nonempty
+captured goal in their prompt. A goal changed before inference refuses the call;
+a goal changed during inference prevents automatic native/local publication.
+Existing saved reports retain their historical purpose when today's goal changes.
+
+The outer report format remains `paperfact.survey-evidence.v1`. Recipe
+`list-survey-sources.v2` has the exact previous input fields plus required
+`inputs.goal`: null for an absent goal, an empty string for a previously cleared
+goal, or text of at most2,000 Unicode code points. Recipe v1 retains its exact
+old closed fields and means the goal was not recorded; it is never retroactively
+filled from current state. Goal text participates in the report identity and
+prompt digest, independently of rendered scientific prose. Stored version
+metadata stays in the private generation observation, not portable authority.
+
+Desktop and mobile saved readers display the recorded purpose as literal text.
+Unknown old purpose and an explicitly empty purpose are distinct from recorded
+text. Mobile shell v33 supports both recipes; its cache-upgrade check removes old
+v32/v31 shell code while keeping research caches. Deploy matching client/service/
+mobile assets together. No new shell or native installer has been deployed.
+
+A managed reader without a loaded native writer remains eligible for read-only
+source capture; absence of an adapter does not make a bound workspace unbound.
+Both publishers refuse such an unobserved write. Structured generation fails
+preflight before inference until its registered writer is available. This fixes
+the local-publication checkpoint's accidental rejection of managed source reads.
+Common structured desktop/CLI/MCP dispatch and durable completed-result recovery
+remain open, as do runtime/device, hosting and installed-package acceptance.

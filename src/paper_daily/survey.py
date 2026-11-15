@@ -139,6 +139,9 @@ def build_input_from_snapshot(inputs: dict, list_id: str) -> tuple[str, int]:
     item = inputs["list"]
     title = item["name"] if item else list_id
     text = f"# 閱讀清單:{title}({len(rows)} 篇,依年份排列)\n\n" + "\n\n".join(cards)
+    goal = inputs.get("reading_goal")
+    if goal is not None and goal["body"]:
+        text += "\n\n## Research goal for this survey\n\n" + goal["body"]
     return text, len(rows)
 
 
@@ -154,7 +157,11 @@ def build_input(conn, list_id: str) -> tuple[str, int]:
         (list_id,),
     ).fetchall()
     item = conn.execute("SELECT * FROM lists WHERE id=?", (list_id,)).fetchone()
-    return build_input_from_snapshot({"list": item, "papers": rows}, list_id)
+    from paper_daily.reading_goals import _snapshot_in
+
+    return build_input_from_snapshot(
+        {"list": item, "papers": rows, "reading_goal": _snapshot_in(conn, list_id)}, list_id,
+    )
 
 
 def write(list_id: str, force: bool = False, log: Log = lambda _m: None) -> tuple[bool, str]:
@@ -275,6 +282,10 @@ def evidence_inputs(context):
                            input_hash=survey_content.body_hash(
                                digest(row, row['dive'], row['context'], row['later'], limit))))
     prompt, _count = build_input_from_snapshot(inputs, context.owner_id)
-    return dict(list_id=context.owner_id, list_name=inputs['list']['name'],
-                list_lifecycle=data['parent_lifecycle'],
-                prompt_hash=survey_content.body_hash(prompt), members=values)
+    result = dict(list_id=context.owner_id, list_name=inputs['list']['name'],
+                  list_lifecycle=data['parent_lifecycle'],
+                  prompt_hash=survey_content.body_hash(prompt), members=values)
+    if 'reading_goal' in inputs:
+        goal = inputs['reading_goal']
+        result['goal'] = goal['body'] if goal is not None else None
+    return result

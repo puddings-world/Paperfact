@@ -1,5 +1,10 @@
 /** Saved-only list overview. All research strings become literal text nodes. */
 export const SURVEY_COPY={"en":{"title":"List research overview","notSaved":"Report not downloaded.","download":"Save report offline","working":"Downloading report...","ready":"Report saved offline","update":"Saved report - update available","retry":"Could not load the report. Retry when connected.","sourceNote":"Retained excerpts; original PDFs download separately.","sources":"Source records","passages":"Source excerpts","captured":"Original captured for this report","unavailable":"Original unavailable","not_selected":"Original not selected","located":"Retained location","missing":"Location unresolved"},"zh-TW":{"title":"??????","notSaved":"???????","download":"?????????","working":"???????","ready":"????????","update":"?????????????","retry":"????????????????","sourceNote":"?????????PDF ??????","sources":"????","passages":"????","captured":"??????????","unavailable":"???????","not_selected":"?????","located":"???????","missing":"?????"}};
+Object.assign(SURVEY_COPY.en,{goal:'Research goal for this report',
+  goalEmpty:'No research goal was provided.',goalUnknown:'This older report did not record a research goal.'});
+Object.assign(SURVEY_COPY['zh-TW'],{goal:'\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19',
+  goalEmpty:'\u7576\u6642\u672a\u63d0\u4f9b\u7814\u7a76\u76ee\u6a19\u3002',
+  goalUnknown:'\u820a\u5831\u544a\u672a\u8a18\u9304\u7576\u6642\u7684\u7814\u7a76\u76ee\u6a19\u3002'});
 export function renderSurveys(panel,collection,rows,el,options={}){
   if(!collection)return;
   const selected=(rows??[]).filter(row=>row.list_id===collection.id);
@@ -16,7 +21,8 @@ export function renderSurveys(panel,collection,rows,el,options={}){
       if(!current())return;
       const report=result.body.report,names=new Map(report.inputs.members.map(member=>[member.paper_id,member.title]));
       status.replaceChildren(result.awaiting?t.update:t.ready);button.hidden=!result.awaiting;
-      const contents=[el('p',{class:'muted'},t.sourceNote)];
+      const goal=Object.hasOwn(report.inputs,'goal')?(report.inputs.goal||t.goalEmpty):t.goalUnknown;
+      const contents=[el('h3',{},t.goal),el('p',{class:'prose'},goal),el('p',{class:'muted'},t.sourceNote)];
       for(const section of report.sections){
         const block=el('article',{},el('h3',{},section.heading));
         for(const item of section.statements){

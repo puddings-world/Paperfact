@@ -78,6 +78,9 @@ def main():
                 "VALUES('field','local-input',0,?)",
                 (store.now(),),
             )
+        goal = "Compare assumptions: \u7814\u7a76 \U0001f9ea"
+        with store.connect() as conn:
+            conn.execute("INSERT INTO list_reading_goals VALUES('field',?,?)", (goal, store.now()))
         desktop = runtime(database=database)
         authority = ReferenceService(root / "authority.sqlite", blob_root=root / "remote-blobs")
         token = authority.enroll("survey-workspace", "desktop")
@@ -150,6 +153,7 @@ def main():
                     body_size=operation["payload"]["body"]["size"],
                     source_id=binding["file_id"],
                     report_id=proposal.report["id"],
+                    goal=goal,
                     events=len(authority.pull(phone_token)),
                 )
             ),

@@ -863,3 +863,21 @@ boundary, not installed UI buttons or live provider/hosting behavior. Related
 `test_survey_package_local.py` covers package sharing and inactive backup.
 Run the affected selection with the focused profile; these files were not added
 to the curated critical/release selectors.
+
+### Research goal captured for a survey
+
+`test_survey_goals.py` adds six cases protecting: the exact goal supplied to
+plain/structured prompts and retained in an exported/saved report; absent/cleared
+goal and version changes before inference; changed goals during local/native
+inference without overwriting today's goal; bounded/Unicode inputs; and strict
+old/new report compatibility. Literal EN/ZH rendering is checked in these cases.
+
+The existing managed-original observation case is stronger: it still proves that
+the registered PDF wins over a conflicting legacy alias, and now proves that
+neither publisher nor AI-generation preflight acquires write authority merely
+because the native writer is not loaded. Source reading remains possible.
+
+Mobile's related ten codec/view/shell cases include two new goal cases. A real
+Python native publisher/HTTP/mobile fixture verifies Unicode goal preservation,
+interrupted range resume and offline restart. These are local fixture checks;
+they do not replace physical iOS/Android or installed Mac acceptance.

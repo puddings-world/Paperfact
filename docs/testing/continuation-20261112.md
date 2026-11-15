@@ -8275,3 +8275,48 @@ paid AI call, owner-data mutation, hosted deployment or installed-device accepta
 
 Integration critical14 passes9.07s/13.5s stages; docs/skill consistency58
 passes2.52s/6.8s stages. Privacy/Ruff/whitespace pass. No exhaustive run.
+
+## 2026-11-16: capture and retain each survey's research goal
+
+Actual goal rows now join survey input observations, with bounded text/version
+reads. Existing plain-text prompts and the structured worker use captured goal
+text. Recipe v2 adds required goal metadata; closed v1 reports stay readable
+without invented historical purpose. Native/local stale guards reject changed
+goals. Saved readers show literal historical purpose; package export retains it.
+
+The first new behavioral run passed1/failed1: clearing an unset goal is an
+existing no-op, so the new fixture now performs a real set-then-clear sequence.
+No existing goal behavior/assertion changed. The expanded run passed57/failed1
+in74.19s (79.6s stages), exposing the prior checkpoint's incorrect assumption
+that no loaded native adapter meant an unbound workspace. Local observation now
+returns no writer eligibility when binding is registered; read-only managed
+capture still works, and generation/publication refuse unobserved writes. The
+existing real managed-PDF test now additionally asserts both publisher refusals,
+generation preflight and unchanged SQL. No old assertion was weakened.
+
+Final affected selection (new goal6, existing jobs10/local publisher8/
+observations38):62 pass51.22s,56.6s stages, governed300s/two CPUs/25% hard cap.
+The new file's first static check caught an overlong SQL string and stopped before
+tests. Mobile codec/view/shell10 pass in1.016s governed; actual native Python ->
+authenticated HTTP/mobile report check passes5.578s, including a real Unicode
+goal in a >256KiB report, exact resume and offline restart. These ran sequentially
+inside one180s budget. A source inspection corrected double-escaped Unicode in
+the new fixture before this run; the passing fixture uses actual Unicode text.
+
+Named Qt report/source reading (native/local, EN/ZH) plus first-enrollment with
+independent peer:5 pass21.64s/22.625s governed120s. No source changed after these
+passes. Shell changes deliberately advance v32 to v33; the existing upgrade test
+now explicitly requires old v32/v31 shell removal and unchanged research caches.
+
+Installed Mac/Windows, physical phones, service/mobile hosting, runtime adoption,
+durable control authority and completed-result review remain open. The saved
+goal is historical metadata, not semantic evidence or a new source/write grant.
+Structured desktop/CLI/MCP dispatch remains pending; the existing plain-text
+survey flow already consumes captured goal text. No release, owner-data mutation,
+paid inference, credential change, or deployment.
+
+Integration critical14 passes8.46s/16.1s stages. Docs/skill consistency58
+passes3.55s/32.5s stages; privacy scan accounts for26.4s of the latter.
+Privacy/Ruff and CRLF-aware whitespace checks pass. No exhaustive run or build.
+Owner feedback: finish this bounded checkpoint; prioritize connecting existing
+end-to-end user flows and a coherent candidate over adding further isolated seams.

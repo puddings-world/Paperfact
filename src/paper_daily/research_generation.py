@@ -153,6 +153,7 @@ def _inputs(conn, reader, owner_id):
 
         return overview_inputs(conn, owner_id, limit=MAX_ROWS)
     if reader == "survey":
+        from paper_daily.reading_goals import _snapshot_in as reading_goal
         from paper_daily.research_lifecycle import parent_lifecycle
 
         rows = conn.execute(
@@ -175,6 +176,7 @@ def _inputs(conn, reader, owner_id):
             "list": _dict(conn.execute("SELECT * FROM lists WHERE id=?", (owner_id,)).fetchone()),
             "papers": [dict(row) for row in rows],
             "_members": [dict(row) for row in members],
+            "reading_goal": reading_goal(conn, owner_id),
             # Equal restored rows are not the same input paper lifetime.
             "_paper_lifetimes": [
                 {"paper_id": row["paper_id"],

@@ -408,7 +408,14 @@ Internal development interfaces (not CLI/MCP commands yet):
 | `survey_sources.retained_originals(proposal, receipts, *, cancelled=...)` | Read/check the complete exact association and file bytes; wrong receipts, corrupt bytes and fallback substitution fail |
 | `survey_content.assemble / validate / encode / decode / render / validate_pair` | Closed versioned report, exact prose/digest pairing, source states and bounded strict JSON; no filesystem, AI or ownership grant |
 
-The record is `paperfact.survey-evidence.v1`, recipe `list-survey-sources.v1`.
+The record is `paperfact.survey-evidence.v1`. Recipe `list-survey-sources.v1`
+keeps its closed original inputs and does not record a historical research goal.
+Recipe `list-survey-sources.v2` additionally requires `inputs.goal`: null (absent),
+empty text (explicitly cleared), or at most2,000 Unicode code points. Current
+generation captures goal/version with inputs; older reports are never backfilled.
+The recorded goal travels with saved reports and is displayed as literal metadata,
+not evidence or authority. Both recipes remain readable; deploy matching readers
+and service/mobile code together (mobile shell v33 is not yet hosted).
 It records actual generation provider/requested/returned model fields without
 credentials or account identifiers. Source identity includes its selected input
 paper/lifetime and original hash, so equal bytes from different owners stay

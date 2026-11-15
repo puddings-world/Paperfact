@@ -266,6 +266,8 @@ is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 Source-aware survey generation can now save local report versions and exact
 original-source associations through its internal worker API. Desktop/CLI/MCP
 dispatch and recovery remain in development; see the implementation plan.
+Survey prompts now use the captured list research goal. Saved source-aware reports
+retain that historical goal; old reports show when it was not recorded.
 
 
 ## Go further
