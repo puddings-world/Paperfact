@@ -6964,3 +6964,27 @@ additional worktree was introduced.
 - Final integration gates: critical 14 passed; docs 58 passed in 2.06s / 5.5s
   total. Privacy and Ruff passed in both. One governed check at a time; no
   historical/release run, application rebuild or source behavior change required.
+
+## 2026-11-15: freeze the next common native candidate
+
+- Previous turn progressed: 8751ff6 integrated guarded no-write fixture reuse and
+  current development guidance. No running check was restarted. The next common
+  candidate will include selected annotation/Lineage originals and mobile v29,
+  beyond delivered cb6ca66. A manual workflow dispatch creates test artifacts only.
+- First curated release attempt failed honestly in 121.1s: Python 52 and frontend
+  24 passed; mobile 95/96 passed, with the acknowledged-but-unreceived note fixture
+  replacing *all* pull responses with an empty list. That now also erased the
+  retained-frontier proof, which correctly stopped before upload. No product
+  history guard was removed or changed.
+- Corrected that existing fixture to delay only new tail delivery while serving
+  the previously received prefix. All old content/dependency/reconnect assertions
+  remain; new checks pin unchanged cursor, actual acknowledgment beyond it and the
+  exact delayed request. Existing missing/different-history rejection still runs.
+  Domain/engine 32 passed in 0.4096s / 0.546s governed total.
+- Coherent curated release rerun passed: Python 52 (119.487s stage), frontend 24
+  (0.402s), mobile 96 (4.860s), actual JS/Python protocol (2.016s), privacy/Ruff.
+  Total 129.464s / 129.672s governed. Run ID d37894a58b804cafa0c99f38ebe04813,
+  max two processors/25% job CPU, 1800s release ceiling. No full historical suite.
+  This is automated source evidence, not installed/hosted/physical acceptance.
+- Native candidate dispatch/results and exact build identity will be recorded
+  only after the workflow reports them. No tag, public release or deployment.

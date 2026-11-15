@@ -282,10 +282,19 @@ async() => {
     operationId: 'ack'
   });
   const originalPull = transport.pull.bind(transport);
-  transport.pull = async() =>[];
+  const cursor = (await store.read()).cursor;
+  const delayed = [];
+  // Preserve retained history; only newly accepted tail delivery is delayed.
+  transport.pull = async(token, after, limit, signal) => {
+    if(after >= cursor) {delayed.push({after, limit});return [];}
+    return originalPull(token, after, limit, signal);
+  };
   await engine.sync();
   let state = await store.read();
   assert.equal(statusFor(state, 'note', 'demo-note'), 'awaiting');
+  assert.equal(state.cursor, cursor);
+  assert(state.outbox.find(item => item.operation.operation_id === 'ack').acknowledged.sequence > cursor);
+  assert.deepEqual(delayed, [{after: cursor, limit: 100}]);
   assert.equal(projection(state).notes.find(n => n.id === 'demo-note').body, 'Local edit');
   const next = await saveCurrent(engine, 'demo-note', PAPER, 'Another edit', {
     operationId: 'after-ack'
