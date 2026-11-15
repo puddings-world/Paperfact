@@ -684,3 +684,7 @@ external-path nonaccess. The existing release-selected agent-import enrollment
 representative now retains citation, text and PDF beside its original assertions.
 Two affected three-case slices passed in 13.2s and 14.4s (overlapping); no real
 account/model call, global installation, cloud upload or broad temporary cleanup.
+
+Native follow-up: the same first-sync representative passed on Windows, Mac arm64
+and Linux in run 43677890610 at clean f7616ae. These are source/native fixtures;
+physical-device and frozen GUI-adoption evidence remains separate.

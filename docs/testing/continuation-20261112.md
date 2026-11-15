@@ -6643,3 +6643,54 @@ additional worktree was introduced.
   Both retain the CPU governor and existing selector counts. No source data moved.
 - Final combined docs/skills: 58 passed in 1.91s / 5.2s total; privacy, Ruff
   and CRLF-aware whitespace passed. Native builds must use this merged clean source.
+
+
+## 2026-11-15: merged v28 native candidate delivered
+
+- Clean f7616aede7154d16e1c017c102b7706f2b49ed97, 0.5.0.dev, run
+  https://github.com/puddings-world/Paperfact/actions/runs/43677890610.
+  One manual all-platform dispatch. Jobs Windows/Mac/Linux: 488/328/180 seconds.
+  Draft skipped; no public release, cloud deployment or local packaging CPU.
+- Downloaded and checked all three actual paperfact.packaged-acceptance.v1 reports
+  against clean source identity, exact six sync flags, same-workspace handoff and
+  38-tool CLI/MCP retry/restart. Mac arm64 verifies three reader starts; native
+  foreground/close passes. Linux AppImage passes. Windows clean install, same-version
+  reinstall/uninstall and research preservation pass; older-release upgrade and
+  registry/shortcut checks remain explicitly false.
+- Critical per OS: Windows 14 in 6.16s / 10.8s total; Mac 14 plus five warnings in
+  5.06s / 8.6s; Linux 14 in 3.53s / 6.1s. First-sync representative: Windows 1 in
+  2.72s / 5.3s; Mac 1 plus five warnings in 2.09s / 4.7s; Linux 1 in 2.39s / 4.2s.
+  These are overlapping requirements, not 45 unique journeys. First-copy checks
+  are source/native fixture evidence, not frozen GUI adoption or physical sync.
+- Windows mobile artifact tests: 5 passed, zero failed. v28 artifact verified:
+  50 files, 3927551 bytes, content ID
+  49329abb66e39c5af92060436349a7b95afd57a78f90ac4a3c44df2183c6dea9.
+  Built, not deployed. CI content identity is distinct from prior local checkouts.
+- Artifact ZIP IDs/bytes/SHA-256 (not contained installer hashes):
+  Windows 14147456214 / 184177049 /
+  6b47030f3275036a6cb7cc5233833d551652943b35698a89c57f8a0e9c1f6c3a;
+  Mac 14147686143 / 281483108 /
+  362815127dd2cef026993d02fa2a29088a0b64638d31fcd671ddcb5415bc6b5b;
+  Linux 14147710748 / 282190838 /
+  de74aad78a524e4ed646f0df4386c32f15496f23195abe99634ee0b8e68b4db5;
+  Mac synthetic fixture 14146878113 / 7617 /
+  975dc2c46ae8465ed3708b9d4470a2535f40581551df33ae2d4a71e49e23f08c;
+  mobile web 14147205901 / 884735 /
+  9cabf3a629fa2bd6b8c19bb8ce9fdaf134dcaa327ccebe2365b16a71e8cf51b1.
+  Contained Windows setup hash:
+  2f362c68a83d11a426691a9a1f430ddf3ab0c2ad13dbb7fa15e9b9ebdb4f3d67.
+- Small reports, artifact index and exact three job logs retained under ignored
+  build/candidate-43677890610. Download guides/status/readiness/test map and the
+  existing skill reference updated from actual evidence; documentation-only
+  checkpoint reuses this candidate rather than rebuilding unchanged source.
+- Candidate includes v28 mobile citations, context/graph work, first-sync complete
+  compound/private-text history and independently merged nightly opener/banner,
+  with its exact device-control isolation fix. Dev bundles do not auto-update.
+  M01-M21, native vault/input/upgrade/coexistence, hosted HTTPS/device issuance/
+  revoke/backup and phone durability remain not run. Full legacy/source mapping,
+  runtime adoption, scientific/survey audit and persistent history guarantees stay
+  incomplete. Curated release selection not run; no v0.5 release approval claimed.
+
+- Documentation checkpoint validation: governed docs profile 58 passed in 2.04s
+  (5.3s total), with privacy scan and Ruff passed. No runtime source changed after
+  the verified candidate; critical/native packaging evidence is reused, not rerun.

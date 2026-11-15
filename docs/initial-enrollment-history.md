@@ -278,8 +278,8 @@ linked or unknown cache layouts require explicit migration instead of omission.
 A raw legacy backup with declared but unretained compound text now refuses to
 claim completeness; prepare the reviewed copy first. Source data stays unchanged.
 
-These private archives require a build supporting this protocol. Candidate
-15aae7e predates it; upgrade the test app before inspecting/restoring such a new
+Use candidate f7616ae or a newer compatible build for this private protocol.
+The earlier 15aae7e app predates it; upgrade before inspecting/restoring a new
 backup. This does not change the live sync wire format or provision a host.
 Actual copied/detached bytes, no-PDF-grant behavior, static-error redaction,
 external-path nonaccess and changed/corrupt input rejection have fixture coverage.

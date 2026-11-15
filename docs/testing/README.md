@@ -90,13 +90,13 @@ The release workflow runs the common `release` selection once, on the Windows
 tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
 Manual candidate builds use `critical`, not the larger release selection. All
 build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
-Common candidate [run 43671331418](https://github.com/puddings-world/Paperfact/actions/runs/43671331418)
-passed critical and frozen acceptance on Windows/Mac/Linux for clean `15aae7e`:
-14 critical cases per OS; four PDFs preserved; three-original/five-quote audit;
+Common candidate [run 43677890610](https://github.com/puddings-world/Paperfact/actions/runs/43677890610)
+passed critical and frozen acceptance on Windows/Mac/Linux for clean `f7616ae`:
+14 critical cases plus one source first-sync representative per OS; four PDFs preserved; three-original/five-quote audit;
 CLI/MCP retry/restart and same-workspace handoff. The packaged sync service passed
 authenticated pull, restart/stale-execution refusal and explicit reconnection on
 each OS. Mac also passed three reader starts and native foreground/close; Linux
-passed AppImage CLI/MCP. Native jobs took 6m38s / 5m30s / 3m06s respectively.
+passed AppImage CLI/MCP. Native jobs took 8m08s / 5m28s / 3m00s respectively.
 Windows mobile-artifact tests passed 5/5 with zero failures under fail-fast Bash.
 Earlier failures and fixes remain in the dated ledger. No gate selectors added.
 Installed upgrades, long-running use, own-provider login, hosted sync and physical
@@ -595,7 +595,7 @@ The existing release-selected agent-import enrollment scenario now also carries
 a graph through capture, independent backup and detached restore. Release stays
 at 38 selectors; the daily critical gate stays at 14.
 
-Candidate 15aae7e also proves exact citation-graph content, idempotent retry and
+Candidate f7616ae also proves exact citation-graph content, idempotent retry and
 persistence after packaged service restart on all three desktop platforms. This
 does not establish a frozen GUI-client or hosted/physical-device sync journey.
 

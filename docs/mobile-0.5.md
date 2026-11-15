@@ -338,8 +338,8 @@ the same open original hash and a different hash. A matching hash does not verif
 the quotation or interpretation. Saved passages remain literal text; missing
 passages are stated, never synthesized. This is reference-analysis reading, not
 an interactive citation graph or a source-location/semantic audit. v28 refreshes
-the shell without clearing research caches; the delivered 15aae7e candidate has
-v27 and does not contain this newer source change.
+the shell without clearing research caches. Candidate f7616ae includes these cards
+and the verified v28 artifact; the web app is built, not deployed.
 
 ![Saved citation card at phone width, synthetic English fixture](images/mobile-citations-en.png)
 

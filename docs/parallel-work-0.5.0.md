@@ -6,7 +6,7 @@ features or more worktrees.
 
 | Owner | Existing folder / branch | Scope |
 |---|---|---|
-| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered native candidate 15aae7e/run 43671331418. New source: v28 offline citation cards and first-sync compound-history retention with exact redundant hints, verified private text inputs, backup/restore and candidate/manual guards. Detailed evidence: existing continuation ledger. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, release or deployment. |
+| Codex | `Paperfact-stabilize` / `feature/0.5-workspace-stabilization` | Delivered common native candidate f7616ae/run 43677890610, including v28 mobile citations, first-sync compound/private-text retention and merged nightly controls. All three native source first-sync and frozen reports passed. Details: existing continuation ledger and Mac guide. Open: remaining mapping/recovery, survey audit, persistent authority/history, hosting and physical-device acceptance. No new worktree, public release or deployment. |
 
 Existing v0.5 work has been checkpointed and integrated. Next complete the
 remaining release scope in [the roadmap](roadmap-0.5.0.md). Do not open more task
