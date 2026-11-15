@@ -266,3 +266,9 @@ candidate. A source correction uses cancellation-aware reads while retaining
 reader descriptor ownership and backend/authority draining. Affected HTTP/admin
 76 pass11.9s stages locally; the next native build must validate Mac separately.
 No public release or change to daily research was made.
+
+Candidate5945820 now passes the Mac authority lifetime gate. Its Mac packaging
+is blocked later by a reproducible screenshot rendered-page timeout in
+runs43771771878 and43772183133. Linux passes; Windows was still running when
+recorded. This is not an all-platform delivered candidate. See the Mac acceptance
+record; exact render-state diagnosis remains before another rebuild.

@@ -295,3 +295,21 @@ expected/actual behavior and a redacted screenshot if useful. Review generated
 acceptance logs before sharing. Do not publish the whole research workspace,
 raw app log, credentials, or private PDFs. Logs can contain earlier failures;
 an empty diagnostics report does not prove a frozen UI is healthy.
+
+## Newer source5945820: Mac package not yet available
+
+[Run43771771878](https://github.com/puddings-world/Paperfact/actions/runs/43771771878)
+builds source5945820f802bac8462d43dbb56719393b0792088. The Mac authority lifetime
+gate now passes, but Screenshots times out on rendered reading page before
+packaging. A single Mac-only retry at the identical source,
+[run43772183133](https://github.com/puddings-world/Paperfact/actions/runs/43772183133),
+fails at the same predicate. This is reproducible CI failure, not an accepted Mac
+installer. The screenshot/rich-view/rich-HTML/demo inputs are unchanged from88595d3;
+that comparison does not identify the cause. Do not skip rendering acceptance,
+extend the timeout without evidence, or label88595d3 as containing newer source.
+
+Local affected HTTP/admin76 and critical14 pass; those results do not certify
+Mac rendering. Linux packaging passes; Windows is still running at this record.
+The next step is to capture the exact rendered-page identity/readiness/font state
+on failure before another retry. No new public release or research-data migration
+was performed.

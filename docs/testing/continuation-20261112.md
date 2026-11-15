@@ -8568,3 +8568,12 @@ new fragmented request waits250ms, succeeds and leaves research unchanged.
 The active-worker case additionally checks that its reader descriptor stays owned
 until worker exit. Mac validation of this correction is pending the next candidate;
 Windows offscreen/local evidence is not a physical Mac or hosted-service pass.
+
+Candidate5945820/run43771771878: Mac now passes authority lifetime checks, then
+fails Screenshots with TimeoutError(rendered reading page), before packaging.
+The single Mac-only retry43772183133 reproduces the same failure. Screenshot,
+rich-view/HTML and demo inputs match the preceding88595d3 candidate; that is not
+a root-cause diagnosis. No third blind retry was started. Linux succeeds; Windows
+was still in frozen acceptance when recorded. Mac render-state observation is the
+next diagnostic action; no test was skipped and no Mac package pass is claimed.
+Local final critical14 pass7.62s pytest; docs60 pass2.08s pytest/5.4s stages.
