@@ -310,3 +310,20 @@ The check runner prepends this checkout's `src` to each child process's
 not silently test that other branch. Existing extra import paths remain after
 the checkout path. Direct ad hoc Python commands still need the intended source
 binding; this does not change a global environment or reinstall the package.
+
+
+### Qt worker waits and fixture connection lifetimes
+
+Report UI tests pump Qt events and yield with a short Python sleep while retaining
+the original eight-second predicate deadline. On the measured governed Windows
+runtime, QTest.qWait starved worker-side native file observations: forty checks
+were0.860s versus0.015s with event pumping/yield after native warmup (yield/Qt/yield
+order), with the same exact file checks. This diagnoses this runtime, not every
+Qt/Python version. Do not increase a deadline or remove source guards to hide it.
+
+Use closing(sqlite3.connect(...)) together with the transaction context in fixture
+builders. A Connection context commits/rolls back but does not close. Deferred GC
+can otherwise close a last writer later and checkpoint/delete WAL, invalidating a
+correctly conservative saved-read observation. The native saved-reader regression
+now forces GC after capture; the shared sync fixture closes its connections before
+observation. This changes resource lifetime, not research expectations.

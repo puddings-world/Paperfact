@@ -41,7 +41,13 @@ def test_read_checks_saved_report_without_pdf_parsing_network_or_sql_changes(sav
     monkeypatch.setattr(local_source_owners, "_read_pdf", forbidden)
     monkeypatch.setattr(llm, "complete_result", forbidden)
     result = survey_reader.read(database, list_id)
-    assert result.data["report"] == report and result.current()
+    import gc
+
+    gc.collect()
+    assert result.data["report"] == report and result.current(), (
+        result._stamp, survey_reader._stamp(database),
+        result._proof.matches(result._operation) if result._proof else None,
+    )
     assert result.data["sources"][0]["title"]
     with closing(generation._connect(database)) as conn:
         assert list(conn.iterdump()) == before

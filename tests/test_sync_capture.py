@@ -1,6 +1,7 @@
 """Existing store callers capture atomically without opting into a new facade."""
 
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -23,7 +24,7 @@ STAMP = "2026-10-26T00:00:00+00:00"
 
 
 def make(path, device="a"):
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(store.SCHEMA)
     prepare(path, workspace_id="workspace", device_id=device)
     return SyncClient(
@@ -71,7 +72,7 @@ def seed():
 
 
 def rows(sql):
-    with sqlite3.connect(store.DB_PATH) as conn:
+    with closing(sqlite3.connect(store.DB_PATH)) as conn, conn:
         return conn.execute(sql).fetchall()
 
 

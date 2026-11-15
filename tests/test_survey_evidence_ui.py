@@ -41,7 +41,10 @@ def app():
 def wait_until(predicate):
     deadline = time.monotonic() + 8
     while not predicate() and time.monotonic() < deadline:
-        QTest.qWait(10)
+        # Pump Qt, then yield Python execution for worker-side native file checks.
+        # qWait retained enough interpreter time to starve them on Windows.
+        QApplication.processEvents()
+        time.sleep(0.005)
     assert predicate()
 
 
