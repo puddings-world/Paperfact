@@ -8614,3 +8614,12 @@ Coverage includes unrelated UI write and real answer between delivery/callback,
 old source and paper rejection, close/drain, bounded semantic rechecks and drafts.
 This proves the source gap and its recovery, not that it caused every Mac render
 failure. The original Mac screenshot gate must still pass before delivery.
+
+Macd81e828/run43773596071 still fails rendered-page acceptance with matching
+page/document/main/fonts but no main text. The deferred-admission gap is verified
+locally, but is not established as the sole cause of this CI failure. The screenshot
+tool now retains at most24 lifecycle state events (load/patch/content-present and
+shown-state booleans), preserving call arguments/results and excluding HTML.
+Focused screenshot9 pass0.81s pytest/4.0s stages. Critical evidence for unchanged
+app runtime is reused fromd81e828; this diagnostic changes only the screenshot
+tool and its regressions. No further app repair is claimed before the trace.

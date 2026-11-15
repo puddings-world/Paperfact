@@ -359,3 +359,8 @@ Screenshot rendering failures report only readiness booleans (page identity,
 document completion, main element/text presence and loaded fonts), or a missing/
 invalid callback category. The ten-second rendering gate and blank-surface refusal
 remain unchanged; no research text is included in this diagnostic.
+
+The screenshot-only render trace retains at most24 load/patch state events, with
+content-presence booleans rather than HTML or text. It records whether Python
+still considers the requested body shown, distinguishing refused delivery from
+an accepted patch without weakening readiness or publishing a blank image.

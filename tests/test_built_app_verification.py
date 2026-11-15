@@ -657,7 +657,42 @@ def test_screenshot_timeout_reports_readiness_without_content(screenshot_tool, t
                                           reader, target, seconds=0)
     message = str(caught.value)
     assert not target.exists() and view._body not in message
+    observed = json.loads(message.split("render state: ", 1)[1])
+    assert observed["requested_body_present"] and observed["shown_missing"]
+    assert observed["render_trace"] == []
     if failure in fields:
-        assert json.loads(message.split("render state: ", 1)[1]) == fields
+        assert {key: observed[key] for key in fields} == fields
     else:
-        assert json.loads(message.split("render state: ", 1)[1]) == {"callback": failure}
+        assert observed["callback"] == failure
+
+
+def test_screenshot_trace_preserves_calls_without_recording_html(screenshot_tool):
+    class View:
+        _body = ""
+        _shown = None
+        _page_id = 0
+
+        def setHtml(self, body):  # noqa: N802
+            self._body = body
+            return self._load(body)
+
+        def _load(self, body):
+            self._page_id += 1
+            self._shown = body
+            return "unchanged return"
+
+        def _patched(self, done):
+            return done
+
+    view = View()
+    screenshot_tool.observe_rendering(view)
+    assert view.setHtml("private research text") == "unchanged return"
+    assert view._patched(True) is True
+    assert [event["method"] for event in view._screenshot_render_trace] == [
+        "_load", "setHtml", "_patched",
+    ]
+    assert view._screenshot_render_trace[-1]["patch_accepted"]
+    for _ in range(30):
+        view.setHtml("other private content")
+    assert len(view._screenshot_render_trace) == 24
+    assert "private" not in json.dumps(view._screenshot_render_trace)

@@ -32,6 +32,27 @@ def wait_until(app, ready, *, label, seconds=10):
         time.sleep(0.02)
 
 
+def observe_rendering(view):
+    """Retain a small state-only trace; do not record supplied research HTML."""
+    events = view._screenshot_render_trace = []
+    for method in ('setHtml', '_load', '_patched'):
+        original = getattr(view, method)
+
+        def observed(*args, _method=method, _original=original, **kwargs):
+            before = view._page_id
+            result = _original(*args, **kwargs)
+            events.append(dict(
+                method=_method, page_advanced=view._page_id != before,
+                body_present=bool(view._body.strip()), shown_missing=view._shown is None,
+                shown_matches=view._shown == view._body,
+                patch_accepted=_method == '_patched' and args[0] is True,
+            ))
+            del events[:-24]
+            return result
+
+        setattr(view, method, observed)
+
+
 def save_reading_view(app, reader, target, *, seconds=10):
     """Wait for saved text and its exact rendered page; never publish a blank PNG."""
     view = reader.dive_view
@@ -79,6 +100,12 @@ def save_reading_view(app, reader, target, *, seconds=10):
         try:
             wait_until(app, rendered, label='rendered reading page', seconds=seconds)
         except TimeoutError as error:
+            state['observed'].update(
+                requested_body_present=bool(view._body.strip()),
+                shown_matches=getattr(view, '_shown', None) == view._body,
+                shown_missing=getattr(view, '_shown', None) is None,
+                render_trace=getattr(view, '_screenshot_render_trace', []),
+            )
             raise TimeoutError(f"{error}; render state: {json.dumps(state['observed'])}") from error
         from PySide6.QtTest import QTest
 
@@ -158,6 +185,7 @@ def main(argv=None):
     pump(20)
     w.grab().save(str(out / "list.png"))
 
+    observe_rendering(w.reader_page.dive_view)
     w.open_paper(args.paper)
     pump(30)
     r = w.reader_page
