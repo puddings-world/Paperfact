@@ -6192,3 +6192,30 @@ additional worktree was introduced.
 - Docs: 58 passed in 1.89s / 5.0s total. Default critical: 14 passed in
   7.89s / 11.4s total; privacy, Ruff and CRLF-aware whitespace passed.
   No historical-suite run. Candidate dispatch follows this clean checkpoint.
+- Clean source 8bf00f999bb25acf20de4df94a697fa06323dd4e was integrated/pushed,
+  then manual all-platform run 43663374908 completed successfully. No draft/public
+  release. Windows/Mac/Linux jobs: 464/274/189 seconds (7m44s/4m34s/3m09s).
+- Downloaded/inspected all three actual provenance reports, not just job badges:
+  exact clean SHA/version; sync_protocol authenticated_pull, stale_execution_refused
+  and reconnected all true; same-workspace handoff all true. Mac reader launches=3
+  and mac-foreground completed. Existing research/CLI/MCP/original audit retained.
+- Windows actual installed/reinstalled/uninstalled/research_preserved all true,
+  installed CLI/MCP tools=38 and retry/restart passed. acceptance_mode=true;
+  older_release_upgrade_checked=false, registry_shortcuts_checked=false.
+  Contained setup SHA256: 88e1836c050538e6e59d3875ecffeaa408efe03b02c96c2d6ab748572285f5a3.
+- Per-OS source critical: Windows 14 in 5.75s (10.7s total), Mac 14 with five
+  warnings in 4.07s (7.2s total), Linux 14 in 3.11s (5.8s total). Same 14 journeys,
+  not 42 unique cases. Windows mobile artifact TAP tests=5/pass=5/fail=0.
+- Small reports and full artifact index retained privately under ignored
+  build/candidate-43663374908/. Mac build archive 14140619840, 278776354 bytes,
+  SHA256 b6a7663f3935fc4fbcc668800973d1baa0ef7eddf5711174e3487063e15a3603.
+  Mac synthetic research archive 14140824453,
+  SHA256 93a34e8f7f58a80714fb43401ee95aebd11a19bc8b401098a08dbb638ad91549.
+  These are GitHub archive hashes, not the contained DMG or research ZIP hash.
+- Updated existing status/readiness/Mac/test-map/board to this common candidate.
+  No native rebuild for these documentation-only changes; source/critical/native
+  evidence belongs to 8bf00f9. Hosted, physical devices, full source/runtime mapping,
+  persistent authority protocol, scholarly evaluation and release gate remain open.
+- Final documentation-only check: 58 passed in 1.79s / 4.9s total, privacy
+  and Ruff passed. Reused unchanged source-critical/native evidence rather than
+  rebuilding or running the historical suite for download/status edits.
