@@ -820,3 +820,24 @@ tab. Final13 pass30.03s (35.4s stages). Synthetic EN/ZH screenshots are visually
 the first bare fixture's missing-font squares were corrected by using the app's
 actual Fusion/font initialization. This is not an installed Mac or real-provider
 journey. Fixed critical14/release38 selections are unchanged.
+
+
+### Saved surveys at first enrollment
+
+`tests/test_survey_enrollment.py` contains nine selected cases:
+
+| Cases | Protected user outcome |
+|---|---|
+| Current report and independent peer | Source stays byte-identical; copied report is native/readable; source/list/paper lifetimes are fresh; old local rows are archived; credentials stay out of operations; exact report/PDF reaches another device |
+| Multiple local versions | Two versions retain distinct archive identities; only the current report becomes a native publication |
+| Late failure/cancel (2) | Failure after actual private report publication exposes neither candidate nor backup; retry succeeds and source stays unchanged |
+| Changed original | Damaged required bytes cannot be granted or published; repaired bytes allow planning |
+| Foreign context/raw export | Another workspace/request and unsealed or mutable source captures cannot authorize native publication |
+| Preview (2 languages) | Actual desktop coverage includes saved reports and retained-original counts |
+| Explicit missing originals | A newer report stays unavailable with no original grant even when an old version's PDF survives privately |
+
+Final affected selection uses those9 plus six named existing enrollment journeys:
+normal research/credential exclusion, verified primary PDF/backup, empty workspace,
+imported claim originals, Lineage and actual desktop preview/prepare/open. All15
+pass79.96s (81.171s governed). No historical selector is broadened, skipped or
+weakened. This is not a full-suite, hosted-service or installed-device result.

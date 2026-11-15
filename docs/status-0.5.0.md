@@ -195,8 +195,9 @@ and explicit replacement retain native history. Normal list export now includes
 the extension, and a local-only receiver can import/re-export without enrollment.
 Local version history and exact source associations are stored in the same import
 transaction; detached backups preserve reports/PDFs as inactive data. Reviewed
-reattachment, first-enrollment mapping, AI creation and hosted/physical gates
-remain open. No new installer or deployment.
+reattachment, AI creation and hosted/physical gates remain open. First-enrollment
+candidate preparation now maps current local reports to fresh native owners while
+archiving previous local versions; explicit runtime adoption/connection gates remain. No new installer or deployment.
 
 Desktop source now includes the separate Report & sources tab for native/local
 saved reports. It verifies report bytes off-thread and inspects exact original

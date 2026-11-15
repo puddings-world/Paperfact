@@ -106,6 +106,7 @@ COPY = {
         "review_decisions": "Review decision history",
         "pdfs": "Current PDFs",
         "originals": "Retained original PDFs",
+        "surveys": "Saved source-aware reports",
         "receipts": "Archived source receipts",
         "excluded": "Private settings excluded",
         "mapping": "PDFs found by the current reader",
@@ -114,6 +115,7 @@ COPY = {
         "review": "Preparation rechecks the current saved data; this is a coverage preview.",
     },
     "zh-TW": {
+        "surveys": "\u5df2\u5132\u5b58\u7684\u9644\u4f86\u6e90\u5831\u544a",
         "title": "準備工作區副本",
         "intro": "先檢查哪些資料能完整移轉，再建立獨立副本與備份。目前工作區與未存草稿會保留。",
         "scope": "這個流程只準備本機檔案供檢視，不會連線、上傳、核發服務憑證或切換目前閱讀視窗。",
@@ -508,6 +510,8 @@ class EnrollmentDialog(QDialog):
             f"{self.t['receipts']}: {plan.get('archived_source_receipts', 0):,}",
             f"{self.t['excluded']}: {plan.get('excluded_private_kv', 0):,}",
         ]
+        if plan.get("saved_survey_reports"):
+            lines.append(f"{self.t['surveys']}: {plan['saved_survey_reports']:,}")
         archived = plan.get("archived_history_by_protocol", {})
         text_count = sum(archived.get(key, 0) for key in (
             "compound_text_history_v1", "legacy_text_cache_v1",

@@ -8151,3 +8151,51 @@ Final integration critical14 passes8.00s (12.2s stages); docs/skill/link consist
 passes3.58s (7.7s stages). Privacy/Ruff/whitespace pass. Critical14/release38 selectors
 stay unchanged. No exhaustive historical suite, native rebuild, daily-app restart,
 installed Mac/device or hosted-service acceptance is claimed.
+
+
+## 2026-11-16: first-enrollment saved-survey preservation
+
+Basec47b522; same tree/board. Source inspection found local surveys were archive-
+only during enrollment and history identity fell back to absent request_id, so
+multiple versions shared None. Existing history now keys local rows by version_id.
+The current local report is captured through an actual sealed owner export and
+converted into the maintained portable frame without a fake AI context. Native
+candidate publication derives fresh list/paper/original lifetimes. Old rows and
+source receipts stay private archived data, not sender/device authority.
+
+The new inventory compares stable report content/digests rather than process-local
+proof IDs; existing SQL/file inventories still guard source changes. Shared source
+bytes remain immutable/deduplicated with existing bounded limits. Only current
+reports gain native heads. Report staging is off-lock; metadata/outbox/activation
+share one checked transaction within the isolated candidate. Original source grants
+were already made in that private candidate. Existing final directory/backup
+publication owns all-or-nothing exposure. No source database rewrite or automatic
+adoption/connection/upload occurs.
+
+New8 initially pass43.00s/52.0s stages, including actual reference peer and EN/ZH
+coverage. The first peer fixture passed an operation dict to download instead of
+its required entity ID; this was corrected without wire/API changes. Adding an
+all-unavailable source case first exposed fixture use of the strict artifact JSON
+decoder on ordinary pretty package metadata; it now uses ordinary metadata JSON,
+retaining strict canonical report/body validation. The single missing-original
+case passes7.77s (9.266s governed), with old bytes archived but no new native grant.
+No existing assertion or supported source policy was weakened.
+
+Final selection: new9 plus six named old journeys (normal research/private controls,
+primary PDF/backup, empty workspace, imported claim originals, Lineage and real Qt
+preview/prepare/open).15 pass79.96s (81.171s governed),300s/two logical CPUs/25% cap.
+Existing check_bounded.execute runs the explicit pytest nodes; critical14/release38
+selectors are unchanged. No job overlaps another. Source and candidate byte/quote
+checks, source/backup rollback and independent peer data are actual fixture evidence,
+not just callback dispatch. Native paths, private credentials and old local epochs
+are not promoted into wire authority.
+
+Runtime adoption/connection, real native key stores, installed Mac/Windows and
+physical phone/hosted acceptance remain separate gates. Source-aware AI generation,
+stale-result review and reviewed report reattachment remain unfinished. No native
+rebuild, release, real AI/model call, cloud resource or daily-research change.
+
+Final integration critical14 passes10.26s (16.7s stages); docs/skill consistency58
+passes2.67s (8.9s stages). Privacy/Ruff/whitespace pass. No exhaustive historical
+suite or native build; the candidate/backup and independent peer tests do not
+replace installed-device, runtime-adoption or hosted-service acceptance.

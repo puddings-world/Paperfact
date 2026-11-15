@@ -798,3 +798,19 @@ Report integrity and quotation positions do not establish that a scientific clai
 is supported. Inspection does not invoke AI, download originals, activate a primary
 PDF or modify research. This source implementation has native/local Windows Qt
 fixture evidence; installed Mac and physical-device acceptance remain open.
+
+
+### Keep saved reports when preparing a synchronized workspace
+
+The existing **Prepare a workspace copy** flow now lists **Saved source-aware
+reports** in its coverage preview. Current local reports receive fresh native
+list/paper/original associations in the separate prepared copy. Previous local
+versions stay in its private history, and the independent backup includes their
+exact retained original bytes. The source workspace and open drafts stay here.
+
+A report with explicitly unavailable originals remains readable with that state;
+old archived PDF bytes do not silently become current source grants. A damaged
+required original stops preparation before any copy or backup is published.
+Review/open/adopt the prepared copy and connect it explicitly. Preparing it does
+not issue service credentials, connect, upload, enable automatic sync or switch the
+current reader. Installed-device and hosted acceptance still apply.

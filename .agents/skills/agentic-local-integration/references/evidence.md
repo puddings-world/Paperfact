@@ -1076,3 +1076,19 @@ switching and legacy-result reopening. Bare test fonts produced squares; actual
 production font/style initialization made EN/ZH captures readable and visually
 reviewed. First-enrollment/AI creation and installed physical devices remain open;
 these observations refine existing local/delivery methods, not global rules.
+
+
+### Current research versus initial archive authority (validated-local, 2026-11-16)
+
+First enrollment maps actual current local survey reports to new native roots and
+original grants, while retaining all old versions/receipts privately. Use a sealed
+owner export, not reconstructed AI provenance. Distinct local versions need their
+real version key; absent request IDs otherwise collide. Repeated source inventories
+compare stable scientific content/digests, not ephemeral process proof identities.
+The private candidate contains staged writes, but only its outer reviewed operation
+can expose candidate plus backup. Late failure/cancel leaves source unchanged and
+neither output published. Missing current originals remain missing even if old bytes
+survive in archive; no source grant follows from byte equality alone. New9 and named
+existing6 pass79.96s, including independent peer quote/PDF and actual Qt coverage.
+This validates local candidate preparation, not hosted credentials, runtime adoption
+or installed-device acceptance. No global rule is promoted.

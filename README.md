@@ -217,7 +217,9 @@ now validates exact report/PDF content. List-package export includes saved nativ
 or local reports and exact originals; import supports both enrolled and local-only
 receivers, preserving existing reports by default. The desktop **Report & sources**
 tab reads these reports and opens their exact original pages without AI calls.
-AI creation and first-enrollment mapping remain in development.
+Reviewed first-enrollment copies now preserve these reports with fresh native
+source mappings and archived history. AI creation and installed-device acceptance
+remain in development.
 
 ![Saved report with its exact original page, using a synthetic fixture](docs/images/saved-survey-sources.png)
 

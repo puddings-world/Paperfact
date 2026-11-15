@@ -578,6 +578,10 @@ class EnrollmentService:
         from paper_daily.later_outcome_packages import add_enrollment_sources as add_later_sources
 
         add_later_sources(conn, rows.get("paper_later_outcomes", []), sources, ticket=ticket)
+        from paper_daily import survey_enrollment
+
+        surveys = survey_enrollment.inventory(self.database, conn, ticket)
+        sources.update(dict(surveys.sources))
         from paper_daily.lineage_enrollment import sources as lineage_sources
 
         sources.update(lineage_sources(self.database, rows.get("paper_lineage_sets", []), ticket))
@@ -632,6 +636,7 @@ class EnrollmentService:
         return {
             "rows": rows,
             "manual_current": manual,
+            "saved_surveys": surveys,
             "legacy_workflow": workflow,
             "live_chat": live_chat,
             "history": history,
@@ -665,6 +670,7 @@ class EnrollmentService:
             },
             "pdf_count": len(inventory["pdfs"]),
             "original_source_count": len(inventory["original_sources"]),
+            "saved_survey_reports": len(inventory["saved_surveys"].reports),
             "archived_source_receipts": len(inventory["source_provenance"]),
             "imported_source_receipts": inventory["imported_source_receipts"],
             "archived_history_records": len(inventory["history"]["records"]),
@@ -905,6 +911,10 @@ class EnrollmentService:
                             version_root=stage / "research-versions",
                             request_id="enroll-source:" + portable + ":" + digest[:32],
                         )
+                    from paper_daily import survey_enrollment
+                    survey_enrollment.publish(
+                        client, blobs, stage / "research-versions", before["saved_surveys"],
+                        request_id=request_id, ticket=ticket)
                     from paper_daily.lineage_enrollment import publish_in as enroll_lineage
 
                     with client.journal.transaction() as conn:

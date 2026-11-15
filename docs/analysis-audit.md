@@ -762,3 +762,37 @@ its editable overview. EN/ZH screenshots use actual startup fonts/style.
 This adds saved reading, not structured AI creation, manual rewriting with renewed
 evidence, first-enrollment mapping, or reviewed detached reattachment. Physical
 Mac/Windows installed, hosted and mobile acceptance gates are unchanged.
+
+
+### First-enrollment survey candidates
+
+`survey_enrollment.inventory(database, conn, ticket)` captures only actual current
+unbound reports via the sealed owner export. Historical versions are retained as
+private data through enrollment_history, keyed by their actual `version_id` rather
+than an absent legacy request ID. Content fingerprints make repeated source
+inventories comparable without treating process-local proof identities as data.
+Shared source bytes stay immutable and deduplicated by verified digest, within
+256-current-report/512MiB source bounds and the existing global metadata/file limits.
+
+`survey_package_native.from_export(value, *, shared_bytes=None)` accepts an actual
+sealed native/local export; raw dictionaries and mutable shared bytes fail. It
+produces the existing checked portable frame, not a synthetic AI generation context.
+`LocalSurveyExport.captured_record` returns the exact defensive local version row
+for comparison with the enrollment source snapshot.
+
+`survey_enrollment.publish(client, store, version_root, inventory, *, request_id,
+ticket)` requires the workspace/device derived by the existing explicit enrollment
+request. It maps paper IDs through the new candidate, derives actual native source
+lifetimes, stages report bytes off-lock, and applies report metadata/outbox plus
+local activation in one checked transaction. Exact retry requires the same current
+publication; later versions cannot be overwritten. Original grants were already
+published in the isolated candidate by the shared enrollment flow. The outer flow
+owns final candidate/backup publication, so failure or cancellation leaves neither
+partial output exposed and never modifies the source workspace.
+
+Only current reports gain native operations; old reports/receipts remain archival.
+All-unavailable originals produce no invented source grant, even if an older
+version's same PDF survives in archive bytes. Such reports can still synchronize
+and be read. A reference-service independent peer receives actual report/original
+bytes and opens the exact quotation. These are local candidate/peer fixtures, not
+hosted enrollment, installed Mac acceptance, or automatic runtime adoption.

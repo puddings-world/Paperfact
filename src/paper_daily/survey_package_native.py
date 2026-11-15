@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from paper_daily import survey_packages, sync_survey_files
 from paper_daily.sync_artifacts import desired_file
-from paper_daily.sync_files import canonical_json, file_id, list_file_id
+from paper_daily.sync_files import canonical_json, file_id, list_file_id, read_json
 
 _KEY = secrets.token_bytes(32)
 
@@ -146,3 +146,24 @@ def rebuild_in(conn, client, frame, list_id, identities, operation):
         payload,
         operation_id=operation["operation_id"],
     )
+
+
+def from_export(value, *, shared_bytes=None):
+    """Accept an actual sealed owner export, not raw model or historical JSON."""
+    if value is None:
+        raise ValueError("Survey enrollment requires an actual saved owner export")
+    survey_packages.check_export(value)
+    records = value.sources
+    available = {path.as_posix(): raw for path, raw in value.files}
+    portable = read_json(available[value.record["path"]])
+    pool = shared_bytes if shared_bytes is not None else {}
+    files = []
+    for source in records:
+        raw = available[source["path"]]
+        prior = pool.setdefault(source["sha256"], raw)
+        if type(prior) is not bytes or prior != raw:
+            raise ValueError("Survey export original bytes conflict with the shared digest")
+        files.append((source["path"], prior))
+    content = canonical_json(dict(portable=portable, sources=records)).decode()
+    frame = ValidatedSurvey(content, tuple(files), "")
+    return ValidatedSurvey(content, tuple(files), _signature(frame))

@@ -509,7 +509,9 @@ def collect(conn, database, ticket):
             else:
                 wrapped = wrap(protocol, value)
             logical = (
-                (protocol, value["id"])
+                (protocol, value["version_id"])
+                if protocol == "research_local_surveys"
+                else (protocol, value["id"])
                 if protocol in INTEGRATION_FORMATS
                 else (protocol, value["draft_id"])
                 if protocol == "research_review_drafts"

@@ -412,6 +412,11 @@ class LocalSurveyExport:
     _seal: str = field(repr=False)
 
     @property
+    def captured_record(self):
+        """Defensive exact local version observed by this sealed export capture."""
+        return json.loads(self._json)["observed"]["current"]
+
+    @property
     def record(self):
         return json.loads(self._json)["record"]
 
