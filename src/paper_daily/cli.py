@@ -1105,6 +1105,36 @@ def cmd_survey(args) -> int:
     """Read a whole reading list as one field: history, lines of work, open problems."""
     from paper_daily import survey
 
+    if getattr(args, "retained", None):
+        from paper_daily import survey_jobs
+        from paper_daily.store import DB_PATH
+
+        if (getattr(args, "sources", False) or args.force or getattr(args, "source_paper", None)
+                or getattr(args, "expected_report", None)):
+            print("--retained is read-only; do not combine it with generation options")
+            return 2
+        print(json.dumps(survey_jobs.read_retained(DB_PATH, args.list_id, args.retained),
+                         ensure_ascii=False, indent=2))
+        return 0
+    if (getattr(args, "source_paper", None) or getattr(args, "expected_report", None)
+            ) and not getattr(args, "sources", False):
+        print("--source-paper and --expected-report require --sources")
+        return 2
+    if getattr(args, "sources", False):
+        from paper_daily import survey_jobs
+        from paper_daily.store import DB_PATH
+
+        result = survey_jobs.execute(
+            DB_PATH, args.list_id, legacy_root=PDF_DIR,
+            force=args.force, selected_ids=getattr(args, "source_paper", None),
+            expected_report=getattr(args, "expected_report", None),
+        )
+        print("Source-aware survey: " + result["state"])
+        if result["state"] == "retained":
+            print("Completed report retained for review: " + result["request_id"])
+            print(result["reason"])
+            return 2
+        return 0
     written, reason = survey.write(args.list_id, force=args.force, log=_log)
     print("survey written" if written else f"not written: {reason}")
     return 0 if written else 1
@@ -1442,6 +1472,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("survey", help="a survey of the field a reading list covers")
     sp.add_argument("list_id")
+    sp.add_argument("--sources", action="store_true", help="report with original excerpts")
+    sp.add_argument("--source-paper", action="append", help="original paper ID (repeatable)")
+    sp.add_argument("--expected-report", help="require this saved report ID, or none, before AI")
+    sp.add_argument("--retained", metavar="REQUEST", help="read retained report; no AI or writes")
     sp.add_argument("--force", action="store_true", help="replace a survey that was edited by hand")
     sp.set_defaults(func=cmd_survey)
 

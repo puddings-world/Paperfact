@@ -8320,3 +8320,41 @@ passes3.55s/32.5s stages; privacy scan accounts for26.4s of the latter.
 Privacy/Ruff and CRLF-aware whitespace checks pass. No exhaustive run or build.
 Owner feedback: finish this bounded checkpoint; prioritize connecting existing
 end-to-end user flows and a coherent candidate over adding further isolated seams.
+
+## 2026-11-16: desktop/CLI source-aware report workflow
+
+Report & sources now starts the existing private queued CLI handoff with captured
+Survey route, expected report ID and confirmation. The shared execute worker
+retains checked scientific output and exact original receipts before native/local
+publication. The existing recovery namespace recognizes archive-only survey
+contexts; --retained returns report JSON without AI/write. Cooperative completed
+cancellation retains without another completion call. In-app reapplication and
+hard-termination/exactly-once billing guarantees remain open.
+
+Parent initialization now precedes reader work; a lost read version permits one
+fresh snapshot, then stops under continuing changes. Existing byte/owner guards
+remain. UI14 cases passed before the next file's Windows replacement fixture
+failed: an open startup lease blocked physical replacement before its handler.
+That fixture now waits at most5s, keeping all no-job/no-write assertions.
+Remaining selection passed22 before the new enrollment fixture failed; canonical
+PDF/settings layout plus explicit PDF mapping preserve the original unknown-file
+refusal. Worker13 pass18.66s/21.9s stages; its corrected final cancel/enrollment
+case passes1 in1.95s/2.625s governed. Read-only retained CLI case passes1
+in1.75s/2.532s. These selections overlap, not one whole-suite pass.
+
+New desktop native/local flow passes2 in9.88s/10.813s governed, covering cancel,
+duplicate activation, captured private route/args, close, actual publication and
+result reopening (only child IPC completion is simulated). Deterministic
+mutation/continuous-change cases passed in UI14. A temporary diagnostic observer
+collided with the instance QTimer name and failed after24.734s; no repository code
+came from that observer. Other stopped anchor/static runs were not passes.
+No existing assertion was weakened or historical test removed.
+
+Critical14 passes8.20s/12.2s stages. All runs use isolated/synthetic data and
+two CPUs/25% cap, without real inference or owner-workspace changes. A coherent
+preview build is next; installed Mac/Windows, physical phones, runtime adoption,
+hosted deployment, durable authority and retained-result review still gate v0.5.
+
+Docs/skill consistency58 passes2.57s/22.6s stages (privacy17.9s).
+Privacy/Ruff/CRLF-aware whitespace pass. Installed native focus and provider
+authentication are not established by offscreen/simulated checks.

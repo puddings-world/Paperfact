@@ -140,6 +140,16 @@ def test_reopening_tracks_existing_job_and_completion(ready, monkeypatch):
 def test_native_database_replacement_rejects_old_dialog(ready, monkeypatch):
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
     dialog = ready.open()
+    # Windows cannot replace SQLite while the startup reader owns a file lease.
+    # This case guards rejection after replacement, not bypassing OS file locks.
+    import time
+
+    from PySide6.QtTest import QTest
+
+    deadline = time.monotonic() + 5
+    while dialog.saved_report.future is not None and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert dialog.saved_report.future is None
     replacement = ready.database.with_name("replacement.db")
     shutil.copyfile(ready.database, replacement)
     replacement.replace(ready.database)

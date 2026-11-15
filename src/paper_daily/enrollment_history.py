@@ -142,6 +142,10 @@ def generation_sources(row):
         from paper_daily.lineage_candidates import originals
 
         return {r["sha256"] for r in originals(row)}
+    if context.get("format") == "paperfact.survey-proposal-context.v1":
+        from paper_daily.survey_jobs import retained_originals
+
+        return {r["sha256"] for r in retained_originals(row)}
     owner = context["owner_id"]
     reader = context["input_reader"]
     inputs = context["inputs"]
@@ -203,7 +207,29 @@ def generation_sources(row):
 
         generation_inputs(inputs)
     elif reader == "survey":
-        closed(inputs, {"list", "papers", "_members"})
+        fields = {"list", "papers", "_members"}
+        for optional in ("_paper_lifetimes", "reading_goal"):
+            if optional in inputs:
+                fields.add(optional)
+        closed(inputs, fields)
+        if "_paper_lifetimes" in inputs:
+            from paper_daily.survey_content import _lifetime
+
+            lifetimes = inputs["_paper_lifetimes"]
+            if (not isinstance(lifetimes, list) or len(lifetimes) != len(inputs["_members"])
+                    or {r["paper_id"] for r in lifetimes}
+                    != {r["paper_id"] for r in inputs["_members"]}):
+                raise ValueError("Archived survey paper lifetimes differ")
+            for item in lifetimes:
+                closed(item, {"paper_id", "lifecycle"})
+                _lifetime(item["lifecycle"])
+        if "reading_goal" in inputs and inputs["reading_goal"] is not None:
+            goal = inputs["reading_goal"]
+            closed(goal, {"list_id", "body", "written_at"})
+            if (goal["list_id"] != owner or not isinstance(goal["body"], str)
+                    or len(goal["body"]) > 2000 or not isinstance(goal["written_at"], str)
+                    or len(goal["written_at"].encode()) > 128):
+                raise ValueError("Invalid archived survey goal")
         _snapshot("lists", inputs["list"], owner)
         for key in ("papers", "_members"):
             if not isinstance(inputs[key], list) or len(inputs[key]) > generation.MAX_ROWS:

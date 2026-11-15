@@ -201,25 +201,26 @@ Click the bottom-right version label to copy build details, check for updates,
 or preview a diagnostic report. Reports stay local until you choose to share them.
 See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenance-0.4.4.md).
 
-## Next milestone: v0.5.0 (planned)
+## Next milestone: v0.5.0 (in development)
 
-Internal source-aware list-survey records and original-quote checks have local
-fixture coverage. Exact originals now survive retry and detached backup. Canonical
-report publication, sync/sharing and UI remain in development; see
-the [engine contract](docs/analysis-audit.md#source-aware-survey-engine-local-implementation-not-a-shipped-workflow).
-The internal [list-owned report artifact seam](docs/analysis-audit.md#native-list-owned-report-artifacts-internal)
-now transfers verified report bytes between native peers. Its trusted internal
-publisher supports atomic original/report writes and retryable materialization;
-the mobile saved-report reader is implemented in source. Package adapters and
-the AI creation workflow remain in development. The internal portable
-[survey package contract](docs/analysis-audit.md#portable-survey-package-contract-internal-product-adapters-pending)
-now validates exact report/PDF content. List-package export includes saved native
-or local reports and exact originals; import supports both enrolled and local-only
-receivers, preserving existing reports by default. The desktop **Report & sources**
-tab reads these reports and opens their exact original pages without AI calls.
-Reviewed first-enrollment copies now preserve these reports with fresh native
-source mappings and archived history. AI creation and installed-device acceptance
-remain in development.
+In current development source, open a list's **Report & sources** tab and choose
+**Generate with sources**. It uses your selected Survey AI account/model, the
+captured research goal and available originals. Progress appears in the existing
+activity area; repeated clicks do not start another job.
+
+Reports retain source excerpts and their exact original versions. Opening a saved
+report does not call AI. Regeneration asks for confirmation and keeps prior versions
+and the separately editable overview. Completed output is retained before
+publication; a changed target stays untouched. The [CLI reference](docs/cli-reference.md#source-aware-list-reports)
+also explains how to read a retained result without AI.
+
+List packages preserve saved reports and original bytes for enrolled and local-only
+receivers. First-enrollment copies use fresh source mappings and retain private
+history. [Reader guide](docs/reader-guide.md) ? [Evidence and limits](docs/analysis-audit.md).
+
+This is source preview functionality. Installed Mac/Windows, physical mobile,
+hosted synchronization, reviewed result reapplication and runtime adoption remain
+acceptance gates; it is not a public v0.5 release.
 
 ![Saved report with its exact original page, using a synthetic fixture](docs/images/saved-survey-sources.png)
 
@@ -263,9 +264,9 @@ is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 [Current development status](docs/status-0.5.0.md) |
 [Test explanations](docs/testing/README.md)
 
-Source-aware survey generation can now save local report versions and exact
-original-source associations through its internal worker API. Desktop/CLI/MCP
-dispatch and recovery remain in development; see the implementation plan.
+Desktop and CLI now share source-aware generation, checked local/native saving
+and retained-result reading. In-app retained-result reapplication and full
+cross-device acceptance remain in development; see the implementation plan.
 Survey prompts now use the captured list research goal. Saved source-aware reports
 retain that historical goal; old reports show when it was not recorded.
 

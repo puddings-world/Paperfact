@@ -194,7 +194,8 @@ class SavedSurveyPane(QWidget):
     available = Signal()
     drained = Signal()
 
-    def __init__(self, database, list_id, palette, *, current, language="en", parent=None):
+    def __init__(self, database, list_id, palette, *, current, language="en", parent=None,
+                 autoload=True):
         super().__init__(parent)
         self.database, self.list_id, self.current = database, list_id, current
         self.words = TEXT.get(language, TEXT["en"])
@@ -204,6 +205,9 @@ class SavedSurveyPane(QWidget):
         self.saved = self.selection = None
         self.closing = self.disposed = False
         self._refresh_available = False
+        self._reload_queued = False
+        self._read_retries = 0
+        self._read_retry_pending = False
         layout = QVBoxLayout(self)
         top = QHBoxLayout()
         self.status = QLabel(self.words["loading"])
@@ -272,7 +276,8 @@ class SavedSurveyPane(QWidget):
         self.destroyed.connect(
             lambda: (cancelled.set(), executor.shutdown(wait=False, cancel_futures=True))
         )
-        self.reload()
+        if autoload:
+            self.reload()
 
     def _controls(self):
         idle = self.future is None and not self.closing and not self.disposed and self.current()
@@ -289,7 +294,17 @@ class SavedSurveyPane(QWidget):
         self.future = (self.executor.submit(call), callback)
         self._controls()
 
-    def reload(self):
+    def reload_after_job(self):
+        if self.closing or self.disposed or not self.current():
+            return
+        if self.future is not None:
+            self._reload_queued = True
+        else:
+            self.reload()
+
+    def reload(self, _retry=False):
+        if not _retry:
+            self._read_retries = 0
         if not self.current():
             self._stale()
             return
@@ -305,9 +320,15 @@ class SavedSurveyPane(QWidget):
             self.words["loading"],
         )
 
+    def _queue_read_retry(self):
+        if self._read_retries < 1 and not self.closing and self.current():
+            self._read_retries += 1
+            self._read_retry_pending = True
+
     def _loaded(self, result):
         if not result.current():
             self.status.setText(self.words["stale"])
+            self._queue_read_retry()
             return
         self.saved = result
         data = result.data
@@ -386,6 +407,11 @@ class SavedSurveyPane(QWidget):
                 callback(result)
             elif not self.closing:
                 self._stale()
+        except survey_reader.ReadChanged:
+            if not self.closing:
+                self.status.setText(self.words["stale"])
+                if callback == self._loaded:
+                    self._queue_read_retry()
         except Exception:
             if not self.closing:
                 self.status.setText(
@@ -394,6 +420,13 @@ class SavedSurveyPane(QWidget):
         if not self.closing:
             self.cancelled.clear()
         self._controls()
+        retry = self._read_retry_pending
+        self._read_retry_pending = False
+        if self._reload_queued and not self.closing and self.current():
+            self._reload_queued = False
+            self.reload()
+        elif retry and not self.closing and self.current():
+            self.reload(_retry=True)
         if self.closing:
             self.dispose()
             self.drained.emit()

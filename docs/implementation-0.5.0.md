@@ -1307,3 +1307,38 @@ preflight before inference until its registered writer is available. This fixes
 the local-publication checkpoint's accidental rejection of managed source reads.
 Common structured desktop/CLI/MCP dispatch and durable completed-result recovery
 remain open, as do runtime/device, hosting and installed-package acceptance.
+
+### Connected desktop/CLI survey workflow
+
+The existing Report & sources tab now starts the existing queued/private CLI
+handoff with `survey LIST --sources --expected-report ID [--force]`. It captures
+the same Survey route, shares duplicate exclusion with other list jobs, confirms
+regeneration, and safely reloads completed data. Closing the dialog does not kill
+the window-owned process. The separately editable overview is not overwritten.
+
+`survey_jobs.execute(database, list_id, *, legacy_root=None, force=False,
+selected_ids=None, expected_report=None, cancelled=lambda: False)` is the shared
+worker action. It reuses cached results without inference, refuses an unexpected
+or pending report, captures inputs/account once, generates and verifies excerpts,
+then retains the checked result before native/local publication. Cooperative
+cancellation after completion finishes private retention without another model
+call. Hard process termination before that retention point is not an exactly-once
+billing or completed-response guarantee.
+
+Retained context format `paperfact.survey-proposal-context.v1` lives in the
+existing atomic private generation recovery namespace. Strict decoding matches
+the report to its original input observation and exact original receipts; it
+does not restore a process-owned publication proof. Backup/enrollment source
+references recognize these records. `read_retained(database, list_id, request_id)`
+returns only scientific report data; the CLI `--retained` entry performs no AI or
+write. Reviewed adoption/reapplication, including original target observations,
+remains required before automatic cross-process publication can be offered.
+
+Reader startup now follows parent database initialization. `ReadChanged` signals
+a lost read version; the pane may obtain one fresh snapshot, stopping on continued
+changes. Existing workspace/list/close guards and original-byte checks remain.
+
+This delivery connects existing UI/CLI pieces. MCP retains its existing no-AI
+contract; no new background model/tool endpoint is introduced. A coherent source
+candidate is the next deliverable. Runtime adoption, durable authority, hosted
+and installed/physical-device acceptance still gate the complete v0.5 release.

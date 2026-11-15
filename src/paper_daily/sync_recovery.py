@@ -839,6 +839,12 @@ class _Records:
                 for descriptor in originals(row):
                     _add_blob(self.refs, descriptor)
                     self.research_sources.add(descriptor["sha256"])
+            if context.get("format") == "paperfact.survey-proposal-context.v1":
+                from paper_daily.survey_jobs import retained_originals
+
+                for descriptor in retained_originals(row):
+                    _add_blob(self.refs, descriptor)
+                    self.research_sources.add(descriptor["sha256"])
             if context["document"] is not None:
                 self.research_sources.add(context["document"]["sha256"])
             binding = context["binding"]

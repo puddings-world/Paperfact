@@ -881,3 +881,16 @@ Mobile's related ten codec/view/shell cases include two new goal cases. A real
 Python native publisher/HTTP/mobile fixture verifies Unicode goal preservation,
 interrupted range resume and offline restart. These are local fixture checks;
 they do not replace physical iOS/Android or installed Mac acceptance.
+
+### Desktop-to-CLI source-aware reports
+
+The new worker cases check actual CLI save/read, cache reuse, retained JSON and
+original references, stale goals, duplicate/expected-target refusal and completed
+cancellation with explicit-PDF enrollment. Native/local widget cases check
+confirmation cancel, one captured private handoff, close, actual publication and
+result reopening. Only child IPC completion and model responses are simulated.
+
+A deterministic database mutation checks one fresh read; continuous changes stop
+after two attempts. The existing physical replacement case waits for Windows'
+read lease before replacement and keeps its original no-job/no-write assertions.
+No new case enters the curated critical/release selectors.

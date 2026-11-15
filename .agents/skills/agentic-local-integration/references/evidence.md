@@ -1133,3 +1133,19 @@ or installed-device acceptance. No global rule is promoted.
   review remain separate gates. A recipe extension is versioned, not inferred;
   old source-aware reports do not gain current goal metadata. No owner research,
   accounts, paid calls or deployment were used.
+
+## Queued report action and read leases (2026-11-16)
+
+- Status: validated-local. Desktop/private handoff and CLI share one captured
+  report action. Checked scientific output/original receipts enter the existing
+  recovery namespace before publication; archive decoding grants no write proof.
+- Evidence: native/local widget cases pass2 in9.88s/10.813s governed. They cover
+  cancel, repeated activation, private route/args, close, real publication and
+  reopening. UI14 includes a real mutation/fresh-read and bounded-change case.
+  Related selections and fixture corrections are in the continuation ledger.
+- Lesson: finish parent initialization before version-pinned reads; bound read
+  refresh separately from AI retries. Release a Windows read lease before testing
+  post-replacement rejection, preserving all ownership/byte checks.
+- Limits: simulated models/IPC, no owner research, real accounts or deployment.
+  In-app retained-result review and installed/physical-device acceptance remain;
+  hard termination before retention has no exactly-once billing guarantee.

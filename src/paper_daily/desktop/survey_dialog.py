@@ -99,6 +99,25 @@ def _evidence_notice(stored, language):
 
 
 
+SOURCE_TEXT = {
+    "en": dict(
+        generate="Generate with sources", confirm_title="Generate a new report?",
+        confirm=("Use the current research goal and originals to create a new report version. "
+                 "Previous versions and your editable overview are kept."),
+        busy="Generating a report from original sources...",
+    ),
+    "zh-TW": dict(
+        generate="\u6839\u64da\u539f\u6587\u7522\u751f\u5831\u544a",
+        confirm_title="\u7522\u751f\u65b0\u7248\u5831\u544a\uff1f",
+        confirm=("\u6839\u64da\u76ee\u524d\u7814\u7a76\u76ee\u6a19\u8207"
+                 "\u539f\u6587\u5efa\u7acb\u65b0\u7248\u5831\u544a\u3002"
+                 "\u820a\u7248\u8207\u53ef\u7de8\u8f2f\u6458\u8981\u6703"
+                 "\u4fdd\u7559\u3002"),
+        busy="\u6b63\u5728\u6839\u64da\u539f\u6587\u7522\u751f\u5831\u544a...",
+    ),
+}
+
+
 class SurveyDialog(QDialog):
     def __init__(
         self, list_id: str, list_name: str, palette: dict[str, str], parent=None,
@@ -110,6 +129,8 @@ class SurveyDialog(QDialog):
         self._language = language
         self._edit_text = SURVEY_EDIT_TEXT.get(language, SURVEY_EDIT_TEXT["en"])
         self._stored = None
+        self._source_job = False
+        self._source_text = SOURCE_TEXT.get(language, SOURCE_TEXT["en"])
         self._editing = False
         self.pal = palette
         self.job: QProcess | None = None
@@ -140,6 +161,11 @@ class SurveyDialog(QDialog):
         ai_style.mark(self.run_btn, palette, primary=True)
         self.run_btn.clicked.connect(self._run)
         top.addWidget(self.run_btn)
+        self.source_btn = QPushButton(self._source_text["generate"])
+        self.source_btn.setAutoDefault(False)
+        self.source_btn.clicked.connect(self._run_sources)
+        ai_style.mark(self.source_btn, palette, primary=True)
+        top.addWidget(self.source_btn)
         layout.addLayout(top)
         self.evidence_notice = QLabel()
         self.evidence_notice.setWordWrap(True)
@@ -160,7 +186,7 @@ class SurveyDialog(QDialog):
         self.saved_report = SavedSurveyPane(
             self._database, list_id, palette,
             current=lambda: self._workspace_matches() and self.list_id == list_id,
-            language=language, parent=self)
+            language=language, parent=self, autoload=False)
         self.report_tabs.addTab(self.saved_report, words["tab"].replace("&", "&&"))
         self._report_tab_touched = False
         self.report_tabs.currentChanged.connect(self._report_tab_changed)
@@ -172,6 +198,7 @@ class SurveyDialog(QDialog):
         if self._hub is not None:
             self._hub.changed.connect(self._hub_changed)
         self._load()
+        self.saved_report.reload()
 
     def _report_available(self):
         if (not self._report_tab_touched and not self._editing and self._workspace_matches()
@@ -179,6 +206,7 @@ class SurveyDialog(QDialog):
             self.report_tabs.setCurrentIndex(1)
 
     def _report_tab_changed(self, _index):
+        self._sync_source_button()
         self._report_tab_touched = True
         legacy = self.report_tabs.currentIndex() == 0
         self.status.setVisible(legacy)
@@ -224,6 +252,7 @@ class SurveyDialog(QDialog):
             self._load()
 
     def _load(self) -> None:
+        self._sync_source_button()
         if not self._workspace_matches():
             self.saved_report._stale()
             self.evidence_notice.clear()
@@ -288,6 +317,60 @@ class SurveyDialog(QDialog):
             self.evidence_notice.hide()
         if running:
             self.status.setText("正在撰寫綜覽…一次讀完整份清單,約五到十分鐘。")
+
+
+    def _sync_source_button(self):
+        source = self.report_tabs.currentIndex() == 1
+        self.source_btn.setVisible(source)
+        self.source_btn.setEnabled(
+            source and self._workspace_matches() and not self._running() and not self._waiting()
+        )
+
+    def _run_sources(self):
+        if self.report_tabs.currentIndex() != 1:
+            return
+        from paper_daily.desktop.ai_access import requires_ai
+
+        requires_ai("survey")(type(self)._run_sources_ready)(self)
+
+    def _run_sources_ready(self):
+        if (self.report_tabs.currentIndex() != 1 or not self._workspace_matches()
+                or self._running() or self._waiting()):
+            return
+        pane = self.saved_report
+        saved = pane.saved
+        if saved is None or pane.future is not None:
+            pane.status.setText(pane.words["loading"])
+            return
+        if not saved.current():
+            pane._stale()
+            return
+        data = saved.data
+        if data.get("update_pending"):
+            pane.status.setText(pane.words["pending"])
+            return
+        identity = data["report"]["id"] if data["kind"] != "none" else "none"
+        args = ["survey", self.list_id, "--sources", "--expected-report", identity]
+        if identity != "none":
+            if QMessageBox.question(
+                self, self._source_text["confirm_title"], self._source_text["confirm"]
+            ) != QMessageBox.StandardButton.Yes:
+                return
+            if not saved.current():
+                pane._stale()
+                return
+            args.append("--force")
+        from paper_daily.desktop.activity import begin, when_ready
+
+        handle = begin(self, self._source_text["generate"], key=f"survey:{self.list_id}",
+                       result=self._show_result, cancel=self._stop,
+                       retry=self._run_sources_ready, queued=True)
+        self._activity = handle
+        if not handle.accepted:
+            return
+        pane.status.setText(self._source_text["busy"])
+        self._sync_source_button()
+        when_ready(handle, lambda: self._launch(handle, args))
 
     def _run(self) -> None:
         if self.report_tabs.currentIndex() != 0:
@@ -366,6 +449,7 @@ class SurveyDialog(QDialog):
         from paper_daily.desktop.activity import process_environment
 
         self._activity = handle
+        self._source_job = "--sources" in args
         self._stopping = False
         self._activity_pending = self._output_tail = ""
         # Owned by the window behind the dialog, so closing the dialog does not kill
@@ -407,12 +491,14 @@ class SurveyDialog(QDialog):
             self.job.kill()
 
     def _show_result(self):
-        self.saved_report.reopen()
-        self.report_tabs.setCurrentIndex(0)
+        self.report_tabs.setCurrentIndex(1 if self._source_job else 0)
         self._load()
+        self.saved_report.reopen()
+        if self._source_job:
+            self.saved_report.reload_after_job()
         self.show()
         self.raise_()
-        self.view.setFocus()
+        (self.saved_report.view if self._source_job else self.view).setFocus()
 
     def _output(self, *, expected=None):
         if self.job is None or expected is not None and self.job is not expected:
@@ -447,6 +533,13 @@ class SurveyDialog(QDialog):
         if not self.isVisible():
             return
         self._load()
+        if self._source_job:
+            if self._workspace_matches():
+                if code == 0:
+                    self.saved_report.reload_after_job()
+                else:
+                    self.saved_report.status.setText(output[-800:] or "Report generation failed.")
+            return
         if code:
             self.status.setText(f"沒有寫成:{output.splitlines()[-1] if output else code}")
 

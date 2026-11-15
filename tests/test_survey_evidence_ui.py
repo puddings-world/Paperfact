@@ -57,7 +57,9 @@ def test_saved_report_tab_and_exact_original_page_work_without_legacy_editing(
     pane = dialog.saved_report
     try:
         wait_until(lambda: pane.future is None)
-        assert pane.saved and pane.saved.data["report"] == report
+        assert pane.saved and pane.saved.data["report"] == report, (
+            pane.status.text(), pane.current()
+        )
         assert dialog.report_tabs.currentIndex() == 1
         assert dialog.run_btn.isHidden() and dialog.edit_btn.isHidden()
         assert report["sections"][0]["statements"][0]["text"] in pane.view.toPlainText()
@@ -265,3 +267,130 @@ def test_saved_report_arrival_does_not_switch_tabs_during_existing_overview_job(
         dialog.deleteLater()
         owner.close()
         owner.deleteLater()
+
+
+def test_source_button_uses_captured_child_action_and_reopens_completed_report(
+    saved, app, monkeypatch, tmp_path,
+):
+    import json
+
+    from PySide6.QtCore import QProcess
+    from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
+
+    import paper_daily.desktop.survey_dialog as dialogs
+    from paper_daily import llm, survey_jobs
+    from paper_daily.ai_types import Completion, Settings
+    from paper_daily.cli_job_protocol import decode_frame
+    from paper_daily.desktop import activity
+
+    database, list_id, old_report = saved
+    monkeypatch.setattr(store, "DB_PATH", database)
+    monkeypatch.setattr(llm, "SETTINGS_PATH", tmp_path / "private-ai.json")
+    llm.save_settings(profile="fixture", backend="openai", model="original-model",
+                      api_key="synthetic-key", isolated=True)
+    llm.use_profile("fixture", desktop=True)
+    calls = []
+    class Process(QProcess):
+        def start(self, program, arguments):
+            calls.append((program, list(arguments)))
+    monkeypatch.setattr(dialogs, "QProcess", Process)
+    monkeypatch.setattr(dialogs.runtime, "cli_command", lambda *args: ["fixture", *args])
+    monkeypatch.setattr(activity, "process_environment", lambda process: None)
+    owner = QWidget()
+    owner.pal = LIGHT
+    QVBoxLayout(owner)
+    owner.activity_hub = activity.ActivityHub(owner)
+    dialog = SurveyDialog(list_id, "Research", LIGHT, owner, language="en")
+    dialog.show()
+    pane = dialog.saved_report
+    try:
+        wait_until(lambda: pane.future is None)
+        dialog.report_tabs.setCurrentIndex(1)
+        assert dialog.source_btn.isVisible() and dialog.source_btn.isEnabled()
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No)
+        dialog._run_sources_ready()
+        assert not calls and pane.saved.data["report"] == old_report
+        monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
+        dialog._run_sources_ready()
+        for _ in range(5):
+            dialog._run_sources_ready()
+        assert len(calls) == 1 and not dialog.source_btn.isEnabled()
+        argv = calls[0][1]
+        assert argv[2:] == ["survey", list_id, "--sources", "--expected-report",
+                           old_report["id"], "--force"]
+        process = dialog.job
+        handoff = process._ai_job_handoff
+        frame = decode_frame(handoff._frame, expected_request_id=argv[1],
+                             expected_command=argv[2:])
+        assert frame.routes.settings("survey").model == "original-model"
+        dialog.reject()
+        wait_until(lambda: pane.disposed)
+        assert dialog.job is process
+
+        reply = {"sections": [{"heading": "A newly saved report", "statements": [{
+            "text": "A new interpretation awaits scientific review.",
+            "interpretation": "inference", "passages": [],
+        }]}]}
+        monkeypatch.setattr(llm, "settings", lambda **kwargs: Settings("codex", model="fixture"))
+        monkeypatch.setattr(llm, "complete_result",
+                            lambda *args, **kwargs: Completion(json.dumps(reply)))
+        result = survey_jobs.execute(
+            database, list_id, force=True, expected_report=old_report["id"]
+        )
+        assert result["state"] == "saved"
+        # The worker/persistence action above is real; only child IPC completion is simulated.
+        monkeypatch.setattr(handoff, "complete", lambda code: code)
+        process.finished.emit(0, QProcess.ExitStatus.NormalExit)
+        assert dialog.job is None
+        dialog._show_result()
+        wait_until(lambda: pane.future is None and pane.saved is not None
+                   and pane.saved.data["report"]["id"] == result["report_id"])
+        assert dialog.report_tabs.currentIndex() == 1 and dialog.source_btn.isEnabled()
+        assert "A new interpretation" in pane.view.toPlainText()
+    finally:
+        if dialog.job is not None:
+            dialog.job.finished.emit(1, QProcess.ExitStatus.NormalExit)
+        dialog.close()
+        wait_until(lambda: pane.disposed)
+        owner.activity_hub._poll.stop()
+        dialog.deleteLater()
+        owner.close()
+        owner.deleteLater()
+
+def test_report_read_retries_fresh_snapshot_but_bounds_continuous_changes(saved, app, monkeypatch):
+    from contextlib import closing
+
+    from paper_daily import research_generation as generation
+
+    database, list_id, report = saved
+    monkeypatch.setattr(store, "DB_PATH", database)
+    actual = survey_reader.read
+    calls = []
+    keep_changing = False
+
+    def racing(*args, **kwargs):
+        value = actual(*args, **kwargs)
+        calls.append(1)
+        if len(calls) == 1 or keep_changing:
+            with closing(generation._connect(database)) as conn, conn:
+                conn.execute("UPDATE lists SET name=name||' changed' WHERE id=?", (list_id,))
+        return value
+
+    monkeypatch.setattr(survey_reader, "read", racing)
+    dialog = SurveyDialog(list_id, "Research", LIGHT, language="en")
+    pane = dialog.saved_report
+    try:
+        wait_until(lambda: pane.future is None and pane.saved is not None)
+        assert len(calls) == 2 and pane.saved.data["report"] == report
+        assert report["sections"][0]["statements"][0]["text"] in pane.view.toPlainText()
+        keep_changing = True
+        calls.clear()
+        pane.reload()
+        wait_until(lambda: pane.future is None and len(calls) == 2)
+        assert pane.saved is None and pane.status.text() == pane.words["stale"]
+        QTest.qWait(100)
+        assert len(calls) == 2
+    finally:
+        dialog.close()
+        wait_until(lambda: pane.disposed)
+        dialog.deleteLater()

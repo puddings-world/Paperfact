@@ -547,6 +547,10 @@ def validate_request_record(record):
         from paper_daily.lineage_candidates import validate
 
         return validate(record)
+    if isinstance(data, dict) and data.get("format") == "paperfact.survey-proposal-context.v1":
+        from paper_daily.survey_jobs import validate_retained
+
+        return validate_retained(record)
     fields = {
         "version",
         "started_at",

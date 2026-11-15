@@ -7,6 +7,7 @@ enroll a workspace. Its checked proposal is consumed by an observed publisher.
 from __future__ import annotations
 
 import json
+import sqlite3
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -182,3 +183,223 @@ class SurveyJob:
             )
             survey_sources._cancel(cancelled)
             return self._proposal
+
+
+RETAINED_FORMAT = "paperfact.survey-proposal-context.v1"
+_CONTEXT_FIELDS = set(
+    [
+        "version",
+        "started_at",
+        "request_id",
+        "db_path",
+        "database_identity",
+        "binding",
+        "table",
+        "owner_id",
+        "key",
+        "input_reader",
+        "target",
+        "parent_created_at",
+        "parent_lifecycle",
+        "observation",
+        "inputs",
+        "document",
+    ]
+)
+
+
+def validate_retained(record):
+    """Archive data only; decoding never reconstructs a publication capability."""
+    from pathlib import PurePosixPath, PureWindowsPath
+
+    from paper_daily import source_snapshots
+    from paper_daily.sync_content import _stamp
+    from paper_daily.sync_files import read_json
+
+    survey_content.content.closed(record, generation.REQUEST_FIELDS)
+    data = read_json(record["context_json"].encode())
+    report = survey_content.decode(record["row_json"])
+    survey_content.content.closed(data, _CONTEXT_FIELDS | {"format", "originals"})
+    if (
+        data["format"] != RETAINED_FORMAT
+        or record["status"] != "candidate"
+        or data["version"] != 1
+        or data["table"] != "list_surveys"
+        or data["input_reader"] != "survey"
+        or data["document"] is not None
+        or record["reason"] != "survey_result_retained"
+        or data["request_id"] != record["request_id"]
+        or not isinstance(data["db_path"], str)
+        or not (
+            PurePosixPath(data["db_path"]).is_absolute()
+            or PureWindowsPath(data["db_path"]).is_absolute()
+        )
+    ):
+        raise ValueError("Invalid retained survey context")
+    _stamp(data["started_at"])
+    survey_content.content.text(data["request_id"], 128)
+    native = data["database_identity"]
+    if (
+        not isinstance(native, list)
+        or len(native) != 2
+        or any(type(n) is not int or n < 0 for n in native)
+    ):
+        raise ValueError("Invalid retained survey database identity")
+    if data["binding"] is not None:
+        survey_content.content.closed(data["binding"], {"workspace_id", "device_id"})
+        for value in data["binding"].values():
+            survey_content.content.text(value, 4096)
+    original = {k: v for k, v in data.items() if k in _CONTEXT_FIELDS}
+    context = generation.GenerationContext(generation._context_json(original))
+    if report["inputs"] != survey.evidence_inputs(context):
+        raise ValueError("Retained survey differs from its actual generation inputs")
+    rows = data["originals"]
+    captured = [s for s in report["sources"] if s["state"] == "captured"]
+    if not isinstance(rows, list) or len(rows) != len(captured):
+        raise ValueError("Retained survey needs its complete original receipts")
+    for row, source in zip(rows, captured, strict=True):
+        source_snapshots.validate(row)
+        owner = json.loads(row["owner_json"])
+        if (
+            row["sha256"] != source["document_hash"]
+            or owner.get("source_id") != source["id"]
+            or owner.get("generation_request_id") != data["request_id"]
+            or owner.get("database_identity") != native
+            or owner.get("binding") != data["binding"]
+            or owner.get("list_id") != data["owner_id"]
+            or owner.get("paper_id") != source["paper_id"]
+            or owner.get("parent_lifecycle") != source["paper_lifecycle"]
+            or owner.get("list_lifecycle") != data["parent_lifecycle"]
+        ):
+            raise ValueError("Retained survey original belongs to another capture")
+    if sum(r["size"] for r in rows) > survey_sources.MAX_ORIGINAL_BYTES:
+        raise ValueError("Retained survey originals exceed their budget")
+    if record["candidate_id"] != generation._digest({"context": data, "row": report}):
+        raise ValueError("Retained survey identity differs")
+    return record
+
+
+def retained_originals(record):
+    validate_retained(record)
+    return json.loads(record["context_json"])["originals"]
+
+
+def retain(job, proposal):
+    """Write an atomic owned recovery record before attempting canonical publication."""
+    report = survey_sources.checked_proposal(proposal)
+    context = proposal._capture._context
+    if proposal._capture is not job.corpus or job._receipts is None:
+        raise ValueError("Survey retention requires its completed job and originals")
+    data = dict(context.data, format=RETAINED_FORMAT, originals=list(job._receipts))
+    archive = generation.GenerationContext(generation._context_json(data))
+    record = dict(
+        request_id=archive.request_id,
+        context_json=archive._json,
+        row_json=survey_content.encode(report),
+        status="candidate",
+        candidate_id=generation._digest({"context": data, "row": report}),
+        reason="survey_result_retained",
+    )
+    validate_retained(record)
+    return generation._retain_outside_database(archive, report, record["reason"])
+
+
+def execute(
+    database,
+    list_id,
+    *,
+    legacy_root=None,
+    force=False,
+    selected_ids=None,
+    expected_report=None,
+    cancelled=lambda: False,
+):
+    """Shared worker action for source-aware desktop/CLI generation and publication."""
+    from paper_daily import survey_local_generated, survey_publication, survey_reader
+
+    if type(force) is not bool:
+        raise ValueError("Survey replacement intent must be explicit")
+    survey_sources._cancel(cancelled)
+    if expected_report not in (None, "none"):
+        survey_content.content.digest(expected_report)
+    database = Path(database).resolve(strict=True)
+    with research_job_lock.claim(database, "survey-run", list_id) as owned:
+        if not owned:
+            raise ValueError("Survey generation is already running for this list")
+        saved = survey_reader.read(database, list_id)
+        data = saved.data
+        current_id = data["report"]["id"] if data["kind"] != "none" else "none"
+        if expected_report is not None and current_id != expected_report:
+            raise ValueError("The selected report changed before generation")
+        if data.get("update_pending"):
+            raise ValueError(
+                "An updated report is pending; finish receiving it before replacing it"
+            )
+        if current_id != "none" and not force:
+            return dict(state="cached", report_id=current_id)
+        if not saved.current():
+            raise ValueError("The report changed before generation")
+        # This action preserves the separately editable legacy overview.
+        job = SurveyJob.capture(
+            database,
+            list_id,
+            legacy_root=legacy_root,
+            selected_ids=selected_ids,
+            force=True,
+            cancelled=cancelled,
+        )
+        latest = survey_reader.read(database, list_id).data
+        latest_id = latest["report"]["id"] if latest["kind"] != "none" else "none"
+        if latest_id != current_id or latest.get("update_pending"):
+            raise ValueError("The selected report changed before AI")
+        try:
+            proposal = job.generate(cancelled=cancelled)
+        except ValueError as exc:
+            if job._proposal is None or not cancelled():
+                raise
+            # Finish only private byte retention after a completed/cancelled
+            # response. This cannot make another model call or publish a report.
+            proposal = job.generate()
+            retained = retain(job, proposal)
+            return dict(
+                state="retained",
+                request_id=retained.request_id,
+                report_id=proposal.report["id"],
+                reason=str(exc),
+            )
+        retained = retain(job, proposal)
+        try:
+            survey_sources._cancel(cancelled)
+            if survey_sources._checked(job.corpus)["native"] is None:
+                operation = survey_local_generated.publish(
+                    survey_local_generated.prepare(proposal, replace=force, cancelled=cancelled),
+                    cancelled=cancelled,
+                )
+            else:
+                operation = survey_publication.publish(
+                    survey_publication.prepare(proposal, cancelled=cancelled),
+                    cancelled=cancelled,
+                )
+        except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+            return dict(
+                state="retained",
+                request_id=retained.request_id,
+                report_id=proposal.report["id"],
+                reason=str(exc),
+            )
+        return dict(state="saved", report_id=proposal.report["id"], operation=operation)
+
+
+def read_retained(database, list_id, request_id):
+    """Read complete retained scientific data; never apply or call a model."""
+    survey_content.content.text(request_id, 128)
+    for record in generation.list_recovery_requests(database):
+        context = json.loads(record["context_json"])
+        if (
+            record["request_id"] == request_id
+            and context.get("owner_id") == list_id
+            and context.get("format") == RETAINED_FORMAT
+        ):
+            validate_retained(record)
+            return survey_content.decode(record["row_json"])
+    raise ValueError("No retained survey matches this workspace, list and request")

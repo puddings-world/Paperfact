@@ -82,7 +82,7 @@ available; `paper-daily` remains a compatibility alias.
 | `notes-export [--paper ID]... [--list LIST] [-o folder]` | Write each paper's own highlights, AI highlights (labelled as AI, hidden ones left out) and notes as one Markdown file per paper, named after its title (default folder `<data>/notes/<list>`). Re-exporting replaces only the block between the `paperfact:begin` and `paperfact:end` comments, so text written around it is kept. A file whose markers were removed is left alone and the new export is written beside it as `.new.md` |
 | `list-export <list> [-o file.zip] [--no-notes] [--without-pdfs]` | Pack a reading list with every locally available PDF, analysis, survey, figure, extracted text, slide deck, highlight and saved research question, plus the citation-graph metadata and optional notes/Q&A. Default export is offline. `--without-pdfs` creates a smaller URL-based package and verifies remote PDF versions; `--with-pdfs` remains accepted for compatibility |
 | `list-import <file.zip> [--replace] [--no-pdfs]` | Validate and import a research bundle. Existing papers, analyses and files are kept unless `--replace`; different local PDFs retain their matching analyses. New list members arrive unread. Packed PDFs work offline; for legacy/link-only packages, verified URLs may be downloaded. `--no-pdfs` disables those downloads, not extraction of packed files |
-| `survey <list> [--force]` | Read a whole reading list as one field: history, lines of work, datasets, progress, challenges, open research topics and a reading order (the 清單綜覽 dialog); `--force` replaces a hand-edited survey |
+| `survey <list> [--sources] [--force]` | Read a whole reading list as one field: history, lines of work, datasets, progress, challenges, open research topics and a reading order (the 清單綜覽 dialog); `--force` replaces a hand-edited survey |
 | `doctor` | Check local prerequisites, fonts/web assets and configuration. No network/model calls; an empty workspace and no AI login are valid. `--ai` explicitly makes a model test call (may use quota); `--sources` checks the optional scholarly services. |
 
 <details>
@@ -218,3 +218,39 @@ Node 22+ is needed only on the build machine. `--output NEW_DIRECTORY` builds,
 verification, and `--help` prints usage. Success prints a `verified` JSON receipt;
 invalid options/files/pins return 2. Existing output is never overwritten.
 [Format/API, limits, private-file boundary and deployment gates](sync-service-admin.md#build-and-verify-the-public-pwa-artifact).
+
+## Source-aware list reports
+
+```sh
+python -m paper_daily survey LIST_ID --sources
+```
+
+Success prints `Source-aware survey: saved`; an existing report is reused with
+`cached`. In the desktop, use **Report & sources ? Generate with sources**.
+Both entries use the same worker and publishers, preserving the editable overview.
+
+| Option | Meaning |
+|---|---|
+| `--sources` | Explicitly generate a report with an original-source ledger; uses the Survey task's selected account/model. |
+| `--force` | In source mode, explicitly regenerate the saved report and keep old versions. Without source mode, the existing editable-overview behavior is unchanged. |
+| `--source-paper PAPER_ID` | Repeat to select original PDFs from actual list members; omitted means all. Requires `--sources`. |
+| `--expected-report ID` | Refuse inference if the saved report no longer has this ID; use `none` to require absence. Desktop supplies this guard. Requires `--sources`. |
+| `--retained REQUEST` | Read the complete retained report as JSON. No AI, download, write or automatic adoption. Cannot be combined with generation options. |
+
+Example with selected originals:
+
+```sh
+python -m paper_daily survey LIST_ID --sources --source-paper PAPER_A --source-paper PAPER_B --force
+python -m paper_daily survey LIST_ID --retained REQUEST_ID
+```
+
+A stale/cancelled completed report prints `Source-aware survey: retained` and its
+request ID, returning2. Read it with the second command; its saved excerpts and
+historical purpose remain data, not permission to apply an old result. No model
+is called to read it. Reviewed reapplication in the desktop is still pending.
+
+Input is bounded: selected original bytes at most64MiB and combined prompt at
+most240KiB. Missing originals are explicit, not downloaded implicitly. If a large
+list exceeds the prompt budget, select fewer originals through the CLI or use a
+smaller list; the desktop source picker is not yet implemented. New generation
+is an explicit quota-consuming action; opening saved or retained reports is not.

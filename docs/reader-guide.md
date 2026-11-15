@@ -829,3 +829,20 @@ not evidence that a scientific statement is supported.
 In current development source, the existing survey command includes the list's
 captured goal. Structured source-aware generation/persistence remains an internal
 worker API pending desktop/CLI/MCP dispatch and completed-result recovery.
+
+### Generate a list report with original sources
+
+Open **Report & sources**, then **Generate with sources**. The app uses your
+Survey AI selection and shows progress through its existing activity panel.
+A saved report requires confirmation before regeneration. Previous versions and
+the editable overview remain separate.
+
+You may close the dialog while the queued/background job runs. Use the activity
+result to reopen it after completion. Report reading finishes its startup setup
+before capturing a snapshot; a version change can trigger one fresh read, then
+stops if changes continue. It never relaxes source checks or calls AI on refresh.
+
+A completed result that cannot safely publish is retained privately. The activity
+details include its request ID; the CLI's `survey LIST --retained REQUEST` reads
+its full scientific data without AI. In-app review/reapplication remains pending.
+No sources are downloaded by this action, and an oversized input fails visibly.

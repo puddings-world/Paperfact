@@ -18,12 +18,12 @@ QUOTE = "A selected method improves measurement."
 
 @pytest.fixture
 def ready(conn, tmp_path, monkeypatch):
-    root = tmp_path / "originals"
+    root = tmp_path / "pdf"
     root.mkdir()
     with pymupdf.open() as pdf:
         pdf.new_page().insert_text((72, 72), QUOTE)
         (root / "a.pdf").write_bytes(pdf.tobytes())
-    monkeypatch.setattr(llm, "SETTINGS_PATH", tmp_path / "private-ai" / "llm.json")
+    monkeypatch.setattr(llm, "SETTINGS_PATH", tmp_path / "llm.json")
     llm.save_settings(
         profile="selected",
         backend="openai",
@@ -351,3 +351,95 @@ def test_completed_retry_refuses_corrupt_retained_original_without_recalling_ai(
     with pytest.raises(ValueError):
         job.generate()
     assert len(ready[2]) == 1
+
+
+def test_source_cli_saves_readable_report_and_retains_exact_completed_result(
+    ready, monkeypatch, capsys,
+):
+    from types import SimpleNamespace
+
+    from paper_daily import cli, enrollment_history, survey_reader
+
+    monkeypatch.setattr(cli, "PDF_DIR", ready[1])
+    args = SimpleNamespace(
+        list_id="cat", sources=True, force=False, source_paper=None, expected_report="none"
+    )
+    assert cli.cmd_survey(args) == 0
+    saved = survey_reader.read(ready[0], "cat").data
+    assert saved["kind"] == "local" and len(ready[2]) == 1
+    args.expected_report = saved["report"]["id"]
+    assert cli.cmd_survey(args) == 0 and len(ready[2]) == 1
+    records = generation.list_recovery_requests(ready[0])
+    assert len(records) == 1
+    assert json.loads(records[0]["row_json"]) == saved["report"]
+    assert survey_jobs.validate_retained(records[0]) == records[0]
+    originals = survey_jobs.retained_originals(records[0])
+    assert enrollment_history.generation_sources(records[0]) == {originals[0]["sha256"]}
+    args.sources, args.expected_report = False, None
+    args.retained = records[0]["request_id"]
+    capsys.readouterr()
+    assert cli.cmd_survey(args) == 0
+    assert json.loads(capsys.readouterr().out) == saved["report"]
+    args.force = True
+    assert cli.cmd_survey(args) == 2 and len(ready[2]) == 1
+
+
+def test_source_action_retains_changed_goal_result_without_overwriting_research(ready, monkeypatch):
+    from paper_daily import reading_goals, survey_reader
+
+    assert reading_goals.save(reading_goals.load(ready[0], "cat"), "Original goal")
+    complete = llm.complete_result
+
+    def change(*args, **kwargs):
+        response = complete(*args, **kwargs)
+        reading_goals.save(reading_goals.load(ready[0], "cat"), "A newer goal")
+        return response
+
+    monkeypatch.setattr(llm, "complete_result", change)
+    outcome = survey_jobs.execute(ready[0], "cat", legacy_root=ready[1], expected_report="none")
+    assert outcome["state"] == "retained"
+    assert survey_reader.read(ready[0], "cat").data["kind"] == "none"
+    (record,) = generation.list_recovery_requests(ready[0])
+    assert record["request_id"] == outcome["request_id"]
+    assert json.loads(record["row_json"])["inputs"]["goal"] == "Original goal"
+    assert reading_goals.text(reading_goals.load(ready[0], "cat")) == "A newer goal"
+    assert len(ready[2]) == 1
+
+
+def test_source_action_duplicate_and_expected_target_guards_do_not_spend_twice(ready, monkeypatch):
+    complete = llm.complete_result
+
+    def running(*args, **kwargs):
+        with pytest.raises(ValueError, match="already running"):
+            survey_jobs.execute(ready[0], "cat", legacy_root=ready[1])
+        return complete(*args, **kwargs)
+
+    monkeypatch.setattr(llm, "complete_result", running)
+    with pytest.raises(ValueError, match="selected report changed"):
+        survey_jobs.execute(ready[0], "cat", legacy_root=ready[1], expected_report="f" * 64)
+    assert not ready[2]
+    assert survey_jobs.execute(ready[0], "cat", legacy_root=ready[1])["state"] == "saved"
+    assert len(ready[2]) == 1
+
+
+def test_completed_cancel_retains_readable_result_and_enrollment_history(ready, monkeypatch):
+    from paper_daily.workspace_enrollment import EnrollmentService
+
+    complete = llm.complete_result
+    cancelled = False
+
+    def finished(*args, **kwargs):
+        nonlocal cancelled
+        result = complete(*args, **kwargs)
+        cancelled = True
+        return result
+
+    monkeypatch.setattr(llm, "complete_result", finished)
+    result = survey_jobs.execute(ready[0], "cat", legacy_root=ready[1], cancelled=lambda: cancelled)
+    assert result["state"] == "retained"
+    report = survey_jobs.read_retained(ready[0], "cat", result["request_id"])
+    assert report["id"] == result["report_id"] and len(ready[2]) == 1
+    with pytest.raises(ValueError, match="No retained"):
+        survey_jobs.read_retained(ready[0], "another-list", result["request_id"])
+    plan = EnrollmentService(ready[0]).plan(pdfs={"a": ready[1] / "a.pdf"})
+    assert plan["supported"], plan["blockers"]

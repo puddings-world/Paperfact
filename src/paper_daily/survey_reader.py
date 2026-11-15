@@ -26,6 +26,10 @@ from paper_daily.workspace_service import _binding, _tables
 _KEY = secrets.token_bytes(32)
 
 
+class ReadChanged(ValueError):
+    """A saved read lost its version observation; retry may capture a fresh one."""
+
+
 def _signature(value):
     return hmac.new(
         _KEY,
@@ -178,7 +182,7 @@ def read(database, list_id, *, cancelled=lambda: False):
     )
     object.__setattr__(result, "_seal", _signature(result))
     if not result.current():
-        raise ValueError(
+        raise ReadChanged(
             "Saved report changed while reading; refresh to inspect its current version"
         )
     return result
