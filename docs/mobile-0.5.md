@@ -371,6 +371,45 @@ match at completion; byte equality alone cannot replace source ownership/lifetim
 
 Shell v29 is built and verified locally, newer than the delivered cb6ca66
 native/mobile candidate, and has not been hosted. Windows synthetic core/protocol tests pass. Actual isolated
-Chrome preparation and EN/ZH phone-width rendering were observed, but the complete
-service-worker offline-reload diagnostic remains unaccepted because its repeated
-runs were not stable. Physical Safari/phone durability and quota remain open.
+Chrome preparation, repeated activation, EN/ZH phone-width rendering, a fresh
+service-worker-controlled offline document and transport-free PDF verification
+passed against the exact v29 artifact. Physical Safari/phone durability, quota and
+installed-device acceptance remain open.
+
+### Reproduce the focused offline-reading browser journey
+
+This opt-in journey uses the existing runner; it is not added to every development
+check. Pass an explicit Chromium executable and optionally an already verified
+artifact. A fresh profile contains only synthetic research and is removed after
+that browser exits; no personal profile or account is reused.
+
+```powershell
+$env:PAPERFACT_TEST_JOURNEY = 'offline-reading'
+$env:PAPERFACT_TEST_ARTIFACT = "$PWD/build/mobile-v29-reading-20261115"
+$env:PAPERFACT_TEST_ARTIFACT_ID = '900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284'
+$env:PAPERFACT_TEST_SCREENSHOTS = "$PWD/build/mobile-offline-reading-acceptance"
+node mobile/browser-check.mjs 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+```
+
+First build the optional artifact with `node scripts/build_mobile.mjs --output
+NEW_DIRECTORY`, then use its returned directory/ID above. Without `PAPERFACT_TEST_ARTIFACT`, the same journey exercises current source
+assets. `PAPERFACT_TEST_ARTIFACT_ID` is the optional expected content hash. On
+macOS/Linux set those variables with `export NAME=value` and pass the installed
+Chromium executable; this record proves Windows Chrome only. Run under the existing
+resource governor on Windows. Clear `PAPERFACT_TEST_JOURNEY` before running another
+fixture. `fixture` remains its default; unsupported journey names fail explicitly.
+This mode does not combine provider-service fixtures or the positional screenshot
+tour. `PAPERFACT_TEST_SCREENSHOTS` optionally writes two screenshots and the bounded
+`offline-reading-result.json` containing counts, viewport metrics and artifact ID.
+
+Success prints `PASS actual offline reading UI` followed by the verified boundaries.
+The journey checks the actual button twice, one saved PDF, zero research outbox
+writes, both languages at 390px with no horizontal overflow and 44px touch targets,
+a fresh offline document and cached-only verification with no transport. It is a
+representative; native source/deck closure and source-change/cancel cases have
+separate engine/protocol evidence. It does not certify physical browser storage
+retention, every source, or a deployed host. [Recorded result](testing/mobile-offline-reading-20261115.json).
+
+![English offline-reading action, actual synthetic Chrome capture](images/mobile-offline-reading-en.png)
+
+![Chinese offline-reading action, actual synthetic Chrome capture](images/mobile-offline-reading-zh-TW.png)

@@ -6905,3 +6905,33 @@ additional worktree was introduced.
   3,932,964 bytes, ID 900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284.
   Build 0.531s, verification 0.219s governed. It is not deployed and does not
   update the previously delivered native/mobile candidate automatically.
+
+## 2026-11-15: actual v29 artifact offline browser acceptance
+
+- Previous turn made authoritative progress: ddd12cd implemented and integrated the
+  offline-reading action. The repeated isolated Python-static-server diagnostic
+  was not a pass. Changed diagnostic approach to Node static serving of the exact
+  verified artifact, retained network/error output and localized label matching.
+  Actual preparation, EN/ZH screenshots, fresh offline shell and transport-free
+  verification then passed in 2.781s governed. This does not prove the sole cause
+  of the earlier startup failures, which stay recorded above.
+- Kept the reusable check inside existing mobile/browser-check.mjs, opt-in via
+  PAPERFACT_TEST_JOURNEY=offline-reading. Existing fixture mode is unchanged.
+  It checks rapid activation, one cached PDF, zero research outbox writes, actual
+  language switching, no viewport overflow, 44px action height, distinct offline
+  document identity and transport-free cached verification. No new default gate
+  selector/test module, external service, account or research data.
+- The maintained runner passed against v29 artifact
+  900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284 in 2.953s;
+  existing workspace-startup fixture also passed its eight named behaviors in
+  2.813s. Both CPU bounded. Runner removes only the exact mkdtemp profile it owns,
+  after browser exit; no prefix enumeration, other-session deletion or ACL change.
+- Reviewed actual EN/ZH 390px screenshots; bounded results/screenshots retained in
+  docs. Native/source provenance and device gates remain separate. No full suite
+  or native rebuild needed for a test-runner/docs checkpoint; native candidate
+  stays cb6ca66. No deployment or physical Safari/phone acceptance implied.
+
+- Checkpoint gates after maintaining the runner: critical 14 passed in 7.89s /
+  11.3s total; docs 58 passed in 2.01s / 5.2s total. Privacy and Ruff passed.
+  Existing ownership/context and diagnostic-evidence skills cover the change;
+  there is no new portable lesson to promote. No historical/full suite rerun.

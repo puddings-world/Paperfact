@@ -35,8 +35,8 @@ primary PDFs remain unbound. This newer source is not in the delivered candidate
 Source after that candidate also adds mobile **Prepare offline reading** for the
 current PDF, native declared originals and current decks. It deduplicates jobs,
 retains verified items for retry and refuses stale/unknown provenance as complete.
-Shell v29 is built/verified locally, not deployed. Browser offline-reload
-acceptance remains open; see [mobile scope](mobile-0.5.md#prepare-one-paper-for-offline-reading).
+Shell v29 is built/verified locally, not deployed. Actual Chromium artifact offline-reload
+acceptance passes; physical browser/device gates remain open. See [mobile scope](mobile-0.5.md#prepare-one-paper-for-offline-reading).
 
 The matching v28 PWA artifact is built, not deployed. Update client/service/assets
 together; old headerless peers are refused. Close older app processes before

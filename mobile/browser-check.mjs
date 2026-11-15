@@ -6,7 +6,8 @@ import {
   mkdtemp,
   readFile,
   writeFile,
-  mkdir
+  mkdir,
+  rm
 } from 'node:fs/promises';
 import {
   tmpdir
@@ -27,6 +28,10 @@ import {
 import {createInterface} from 'node:readline';
 import {verifyMobile} from '../scripts/build_mobile.mjs';
 const executable = process.argv[2] ?? process.env.PAPERFACT_TEST_BROWSER;
+const journey=process.env.PAPERFACT_TEST_JOURNEY??'fixture';
+if(!['fixture','offline-reading'].includes(journey))throw Error('Unknown browser journey.');
+const offlineReadingMode=journey==='offline-reading';
+if(offlineReadingMode&&[process.env.PAPERFACT_NOTE_SERVICE_PYTHON,process.env.PAPERFACT_POSITION_SERVICE_PYTHON,process.env.PAPERFACT_PAIRING_SERVICE_PYTHON,process.argv[3]].some(Boolean))throw Error('Offline reading is an independent bounded journey.');
 const testPage=process.env.PAPERFACT_TEST_PAGE??'browser-test.html';
 if(!['browser-test.html','position-browser-test.html','position-ui-browser-test.html','workspace-startup-browser-test.html','browser-pairing-browser-test.html'].includes(testPage))throw Error('Unknown fixture page.');
 if(! executable) throw new Error('Pass an explicit Chromium/Edge executable path.');
@@ -150,6 +155,7 @@ executable,
 }
 );
 let socket;
+const browserErrors=[];
 const pending = new Map();
 let nextId = 0, session;
 const send =(method, params = {}, sessionId = session) => new Promise((resolve, reject) => {
@@ -181,6 +187,60 @@ const send =(method, params = {}, sessionId = session) => new Promise((resolve, 
     : {})
   }));
 });
+async function offlineReadingMainHook() {
+  const evaluate=async expression=>{
+    const value=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});
+    if(value.exceptionDetails)throw Error('Offline reading evaluation failed: '+value.exceptionDetails.text);
+    return value.result.value;
+  };
+  const wait=async(expression,label)=>{
+    for(let tick=0;tick<100;tick++){
+      if(await evaluate(expression))return;
+      await new Promise(resolve=>setTimeout(resolve,80));
+    }
+    const status=await evaluate('document.querySelector("#notice-text")?.textContent');
+    throw Error('Offline reading timed out: '+label+'; status='+status);
+  };
+  const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');try{const v=await s.read();return {files:Object.keys(v.files).length,outbox:v.outbox.length};}finally{s.close();}})()`;
+  await send('Network.enable');
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/index.html`});
+  await wait('!!document.querySelector(".paper-card")','demo startup');
+  await evaluate('document.querySelector(".paper-card").click();document.querySelector("#tab-pdf").click()');
+  await wait('!!document.querySelector("#prepare-reading-offline:not(:disabled)")','preparation enabled');
+  await evaluate('document.querySelector("#prepare-reading-offline").click();document.querySelector("#prepare-reading-offline").click()');
+  await wait(`(async()=>{const {translator}=await import('./i18n.mjs');return document.querySelector('[role=status]')?.textContent===translator(document.documentElement.lang)('reading_ready');})()`,'verified completion');
+  const before=await evaluate(stateExpression);
+  if(before.files!==1||before.outbox!==0)throw Error('Preparation changed research or omitted the PDF');
+  const viewports=[];
+  const output=process.env.PAPERFACT_TEST_SCREENSHOTS;
+  if(output)await mkdir(output,{recursive:true});
+  for(const language of ['en','zh-TW']){
+    await evaluate(`(async()=>{const {translator}=await import('./i18n.mjs');[...document.querySelectorAll('header button')].find(n=>n.textContent===translator(document.documentElement.lang)('settings')).click();const select=document.querySelector('dialog select');select.value='${language}';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await evaluate('window.scrollTo(0,0)');
+    const metrics=await evaluate(`({language:document.documentElement.lang,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,prepareHeight:document.querySelector('#prepare-reading-offline').getBoundingClientRect().height})`);
+    if(metrics.language!==language||metrics.scrollWidth>metrics.width||metrics.prepareHeight<44)throw Error('Offline controls overflow or miss the touch target');
+    viewports.push(metrics);
+    if(output){const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'offline-reading-'+language+'.png'),Buffer.from(shot.data,'base64'));}
+  }
+  await evaluate('navigator.serviceWorker.ready.then(()=>true)');
+  // A new worker controls the next document; do not force-claim a live reader.
+  await send('Page.reload');
+  await wait('!!navigator.serviceWorker.controller && !!document.querySelector("#tab-pdf")','activated shell control');
+  const previousDocument=await evaluate('performance.timeOrigin');
+  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+  await send('Page.reload');
+  await wait(`performance.timeOrigin!==${previousDocument} && !!document.querySelector('#tab-pdf')`,'new offline document');
+  await evaluate('document.querySelector("#tab-pdf").click()');
+  await wait(`(async()=>{const {translator}=await import('./i18n.mjs');return document.body.textContent.includes(translator(document.documentElement.lang)('localFile'));})()`,'cached PDF card');
+  const persisted=await evaluate(`(async()=>{const {IndexedStore}=await import('./store.mjs');const {Engine}=await import('./engine.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');const e=new Engine(s,{});try{const v=await s.read();const id=Object.values(v.entities).find(x=>x.operation.entity_type==='paper').operation.entity_id;const r=await e.prepareOffline(id);return {ready:r.ready,verified:r.verified_targets};}finally{e.disconnect();s.close();}})()`);
+  const after=await evaluate(stateExpression);
+  if(!persisted.ready||persisted.verified!==1||after.files!==1||after.outbox!==0||browserErrors.length)throw Error('Offline verification failed or changed research');
+  const result={status:'passed',journey:'offline-reading',artifact:process.env.PAPERFACT_TEST_ARTIFACT_ID??null,before,persisted,after,viewports,errors:browserErrors,physical_device_verified:false};
+  if(output)await writeFile(join(output,'offline-reading-result.json'),JSON.stringify(result,null,2)+'\n');
+  console.log('PASS actual offline reading UI, repeated activation, EN/ZH touch layout, new offline document and transport-free cached PDF verification');
+}
+
 async function plainNoteMainHook() {
   const evaluate=async(expression,awaitPromise=false)=>{
     const value=await send('Runtime.evaluate',{expression,awaitPromise,returnByValue:true});
@@ -404,7 +464,7 @@ try {
       pending.delete(value.id);
       if(value.error) promise.reject(new Error(value.error.message));
       else promise.resolve(value.result);
-    } else if(value.method === 'Runtime.exceptionThrown') process.stderr.write('Browser exception: ' + JSON.stringify(value.params.exceptionDetails) + '\n');
+    } else if(value.method === 'Runtime.exceptionThrown') {browserErrors.push(value.params.exceptionDetails.text);process.stderr.write('Browser exception: ' + JSON.stringify(value.params.exceptionDetails) + '\n');}
   };
   const target = await send('Target.createTarget', {
     url: 'about:blank'
@@ -415,6 +475,7 @@ try {
   }, null)).sessionId;
   await send('Runtime.enable');
   await send('Page.enable');
+  if(offlineReadingMode) {await offlineReadingMainHook();} else {
   await send('Page.navigate', {
     url: `http://127.0.0.1:${server.address().port}/${testPage}`
   });
@@ -534,17 +595,27 @@ try {
       await writeFile(join(process.argv[3], name + '.png'), Buffer.from(shot.data, 'base64'));
     }
   }
+  }
 } finally {
   if(socket?.readyState === WebSocket.OPEN) {
     await send('Browser.close', {}, null).catch(() => {});
     socket.close();
   }
-  browser.kill();
-  server.close();
+  if(browser.exitCode===null&&browser.signalCode===null){
+    await new Promise(resolve=>{
+      const timer=setTimeout(()=>{browser.kill();resolve();},3000);
+      browser.once('exit',()=>{clearTimeout(timer);resolve();});
+    });
+  }
+  server.closeAllConnections();server.close();
   if(positionService) {
     positionService.stdin.end(plainNoteMode ? JSON.stringify({command:'quit'})+'\n' : 'quit\n');
     const code=await new Promise(resolve=>{if(positionService.exitCode!==null){resolve(positionService.exitCode);return;}
       positionService.once('exit',resolve);setTimeout(()=>{positionService.kill();resolve(null);},5000).unref();});
     if(code!==0){process.exitCode=1;console.error('Position service cleanup failed: '+positionErrors);}
   }
+  // This exact directory was created by mkdtemp above; never enumerate TEMP.
+  const owned=relative(resolve(tmpdir()),resolve(profile));
+  if(!owned.startsWith('paperfact-mobile-fixture-')||owned.includes('/')||owned.includes('\\')||isAbsolute(owned))throw Error('Unexpected owned browser profile path');
+  await rm(profile,{recursive:true,force:true,maxRetries:3,retryDelay:100});
 }

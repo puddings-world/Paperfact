@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "journey": "offline-reading",
+  "artifact": "900fd28c8b5650f518116a794172c7a8f2ffafec5896e41c467711ed4df1a284",
+  "before": {
+    "files": 1,
+    "outbox": 0
+  },
+  "persisted": {
+    "ready": true,
+    "verified": 1
+  },
+  "after": {
+    "files": 1,
+    "outbox": 0
+  },
+  "viewports": [
+    {
+      "language": "en",
+      "width": 390,
+      "scrollWidth": 390,
+      "prepareHeight": 45.59375
+    },
+    {
+      "language": "zh-TW",
+      "width": 390,
+      "scrollWidth": 390,
+      "prepareHeight": 45.59375
+    }
+  ],
+  "errors": [],
+  "physical_device_verified": false
+}

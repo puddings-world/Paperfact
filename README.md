@@ -350,6 +350,8 @@ In the development mobile reader, **Original PDF > Prepare offline reading** sav
 this PDF, declared source originals and current slide decks together; incomplete
 source declarations remain partial. **Save PDF offline** is still available.
 See [scope and acceptance limits](docs/mobile-0.5.md#prepare-one-paper-for-offline-reading).
+A focused browser journey is available through `PAPERFACT_TEST_JOURNEY=offline-reading`;
+see [reproducible options](docs/mobile-0.5.md#reproduce-the-focused-offline-reading-browser-journey).
 
 The mobile overview includes collapsible saved reference analyses and citation
 passages, with explicit original-version scope; see [mobile reader](docs/mobile-0.5.md).
