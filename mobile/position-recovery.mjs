@@ -85,8 +85,18 @@ function row(value,sources,workspace) {
   }
 }
 function archive(value) {
-  closed(value,archiveKeys);requireThat(HASH.test(value.id),'invalid_position_recovery');
+  closed(value,archiveKeys,['history']);requireThat(HASH.test(value.id),'invalid_position_recovery');
   identifier(value.workspace);identifier(value.device);integer(value.cursor);
+  if(Object.hasOwn(value,'history')) {
+    closed(value.history,['received','acknowledged']);
+    for(const point of Object.values(value.history)) {
+      closed(point,['sequence','sha256']);integer(point.sequence);
+      requireThat(HASH.test(point.sha256),'invalid_position_recovery');
+    }
+    requireThat(value.history.received.sequence<=value.cursor &&
+      (value.history.received.sequence!==value.history.acknowledged.sequence ||
+        value.history.received.sha256===value.history.acknowledged.sha256),'invalid_position_recovery');
+  }
   requireThat(Array.isArray(value.outbox) && value.outbox.length<=1000,'invalid_position_recovery');
   for(const item of value.outbox) {
     closed(item,['operation','acknowledged']);validateOperation(item.operation,value.workspace);
@@ -153,7 +163,7 @@ function currentArchive(state) {
       page_text:draft.pageText,recorded_at:draft.recordedAt,observed:copy(draft.observed),operation:null,resolved_by:null,reason:null},draft.primary_document);
   }
   const {format,version,...base}=old;
-  return {id:'0'.repeat(64),...base,positions,sources};
+  return {id:'0'.repeat(64),...base,positions,sources,...(state.history?{history:copy(state.history)}:{})};
 }
 function base64(bytes) {
   let result='';for(let at=0;at<bytes.length;at+=12288)result+=btoa(String.fromCharCode(...bytes.subarray(at,at+12288)));
@@ -175,7 +185,7 @@ function target(declared,workspace) {
 export async function exportPositionRecovery(state) {
   const current=currentArchive(state),archives=[];
   const retained=Object.keys(state.positionRecoveries??{}).length>0;
-  if(current.positions.length || (retained && (current.outbox.length || Object.keys(current.conflicts).length ||
+  if(current.history || current.positions.length || (retained && (current.outbox.length || Object.keys(current.conflicts).length ||
     Object.keys(current.drafts).length || Object.keys(current.draftBases).length))) {
     current.id=await archiveId(current);archives.push(current);
   }
@@ -199,7 +209,9 @@ export async function exportPositionRecovery(state) {
       }
     }
   }
-  const result={format:'paperfact-mobile-recovery',version:2,required_capabilities:['reading_position'],archives,blobs:[...blobs.values()]};
+  const proof=archives.some(item=>Object.hasOwn(item,'history'));
+  const result={format:'paperfact-mobile-recovery',version:proof?3:2,
+    required_capabilities:proof?['reading_position','sync_history']:['reading_position'],archives,blobs:[...blobs.values()]};
   requireThat(encoder.encode(stable({...result,blobs:[]})).length<=2*1024**2,'position_recovery_limit');
   requireThat(encoder.encode(JSON.stringify(result)).length<=MAX_RECOVERY_BYTES,'position_recovery_size_limit');return result;
 }
@@ -208,21 +220,24 @@ export async function preparePositionRecovery(engine,text,{signal,current=()=>tr
   requireThat(typeof text==='string' && text.length<=MAX_RECOVERY_BYTES && encoder.encode(text).length<=MAX_RECOVERY_BYTES,'position_recovery_size_limit');
   const value=parsePositionJSON(text,{maxBytes:MAX_RECOVERY_BYTES});
   closed(value,['format','version','required_capabilities','archives','blobs']);
-  requireThat(value.format==='paperfact-mobile-recovery' && value.version===2 &&
-    stable(value.required_capabilities)===stable(['reading_position']),'unsupported_recovery_capability');
+  requireThat(value.format==='paperfact-mobile-recovery' && [2,3].includes(value.version) &&
+    stable(value.required_capabilities)===stable(value.version===3?['reading_position','sync_history']:['reading_position']),
+  'unsupported_recovery_capability');
   requireThat(Array.isArray(value.archives) && value.archives.length>0 && value.archives.length<=16 &&
     Array.isArray(value.blobs) && value.blobs.length<=1000,'position_recovery_limit');
   const metadata={...value,blobs:[]};requireThat(encoder.encode(stable(metadata)).length<=2*1024**2,'position_recovery_limit');
   const descriptors=new Map(),ids=new Set();
   for(const item of value.archives) {
     archive(item);requireThat(item.workspace===initial.workspace,'wrong_recovery_workspace');
+    requireThat(value.version===3 || !Object.hasOwn(item,'history'),'unsupported_recovery_capability');
     requireThat(!ids.has(item.id) && await archiveId(item)===item.id,'invalid_recovery_archive');ids.add(item.id);
     for(const declared of item.sources)for(const descriptor of [declared.manifest.body,...declared.manifest.assets]) {
       const previous=descriptors.get(descriptor.sha256);
       requireThat(!previous || previous.size===descriptor.size,'conflicting_recovery_source');descriptors.set(descriptor.sha256,descriptor);
     }
   }
-  requireThat(value.archives.some(item=>item.positions.length>0),'unsupported_recovery_capability');
+  requireThat(value.archives.some(item=>item.positions.length>0 ||
+    (value.version===3 && Object.hasOwn(item,'history'))),'unsupported_recovery_capability');
   const files={},proofs=new Map();let used=0;
   for(const item of value.blobs) {
     requireThat(!Object.hasOwn(files,item.sha256),'duplicate_recovery_blob');

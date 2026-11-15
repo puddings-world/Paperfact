@@ -126,3 +126,43 @@ test('re-export of private recovery also preserves newly typed ordinary note dra
   assert(value.archives.some(item=>item.drafts.fresh==='New note draft'));
   assert.equal(value.blobs.length,2);
 });
+
+
+test('v3 recovery retains unreceived proof observations without activating sync or replaying archived writes',async()=>{
+  const transport=await demoTransport(),store=new MemoryStore('demo-workspace','demo-phone'),engine=new Engine(store,{transport});
+  await engine.connect('fixture-token');await engine.sync();
+  await engine.saveNote('unreceived',PAPER,'Accepted but not yet received',{
+    observed:await engine.observeNote('unreceived',PAPER),operationId:'unreceived-write',
+  });
+  const page=transport.history_page.bind(transport);
+  transport.history_page=async(...args)=>{
+    const state=await store.read();
+    if(state.history.acknowledged.sequence>state.cursor)throw Error('connection_failed');
+    return page(...args);
+  };
+  await assert.rejects(engine.sync(),/connection_failed/);
+  const before=await store.read(),value=await engine.exportLocal();
+  assert.equal(value.version,3);assert.deepEqual(value.required_capabilities,['reading_position','sync_history']);
+  assert.deepEqual(value.archives[0].history,before.history);
+  assert(value.archives[0].history.acknowledged.sequence>value.archives[0].cursor);
+  assert.equal(value.archives[0].outbox[0].acknowledged.operation.operation_id,'unreceived-write');
+  const destination=new MemoryStore('demo-workspace','other-phone'),reader=new Engine(destination);
+  const prepared=await preparePositionRecovery(reader,JSON.stringify(value));
+  await importPositionRecovery(reader,prepared);
+  const imported=await destination.read();
+  assert.equal(imported.cursor,0);assert.equal(imported.history,undefined);
+  assert.equal(imported.outbox.length,0);assert.equal(Object.keys(imported.entities).length,0);
+  assert.deepEqual(Object.values(imported.positionRecoveries)[0].archive.history,before.history);
+  assert.deepEqual((await reader.exportLocal()).archives,value.archives);
+  assert.deepEqual(await store.read(),before);
+  transport.history_page=async(...args)=>{
+    const result=await page(...args);
+    if(args[1]===before.cursor && args[2]===100)
+      return {...result,events:[],checkpoint:result.after,caught_up:true};
+    return result;
+  };
+  await assert.rejects(engine.sync(),/sync_history_unavailable/);assert.deepEqual(await store.read(),before);
+  transport.history_page=page;await engine.sync();
+  assert.equal((await store.read()).outbox.length,0);
+  assert.equal((await store.read()).entities['note/unreceived'].operation.payload.body,'Accepted but not yet received');
+});

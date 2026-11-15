@@ -270,3 +270,23 @@ test('late identity response after reconnect cannot pin the old server execution
   await assert.rejects(old,/cancelled/);
   await transport.session_info('fixture');assert.equal(transport.instance,'b'.repeat(32));
 });
+
+
+test('verified history routes preserve checkpoint and pin execution; refusal never falls back to legacy writes',async()=>{
+  for(const status of [404,412,425]) {
+    const seen=[],checkpoint={sequence:0,sha256:'a'.repeat(64)};
+    const transport=new HttpTransport('https://example.org',{fetch:async(url,options)=>{
+      seen.push([url,options]);
+      return url.endsWith('/info')?json({workspace_id:'work',device_id:'phone'}):new Response('',{status});
+    }});
+    const expected=status===425?'sync_history_advanced':'sync_history_unavailable';
+    await assert.rejects(transport.history_page('private-token',0,100,checkpoint),error=>error.code===expected);
+    await assert.rejects(transport.push_verified('private-token',{operation_id:'pending'},checkpoint),error=>error.code===expected);
+    assert.deepEqual(seen.map(([url])=>new URL(url).pathname),['/v1/session/info','/v1/history/pull','/v1/history/push']);
+    for(const [,request] of seen.slice(1)) {
+      assert.deepEqual(JSON.parse(request.body).checkpoint,checkpoint);
+      assert.equal(request.headers['X-Paperfact-Sync-Instance'],'a'.repeat(32));
+      assert.equal(request.body.includes('private-token'),false);
+    }
+  }
+});

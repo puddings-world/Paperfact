@@ -71,7 +71,7 @@ async() => {
 }
 );
 test(
-'lost push response retries identical operation, without duplicate note or event',
+'lost push response receives the accepted operation without duplicate note or upload',
 async() => {
   const {
     engine,
@@ -87,7 +87,7 @@ async() => {
   await engine.sync();
   assert.equal(transport.events.length, 7);
   assert.equal((await store.read()).outbox.length, 0);
-  assert.equal(transport.calls.filter(c => c[0] === 'push' && c[1] === 'lost').length, 2);
+  assert.equal(transport.calls.filter(c => c[0] === 'push' && c[1] === 'lost').length, 1);
 }
 );
 test(
@@ -286,10 +286,12 @@ async() => {
   const delayed = [];
   // Preserve retained history; only newly accepted tail delivery is delayed.
   transport.pull = async(token, after, limit, signal) => {
-    if(after >= cursor) {delayed.push({after, limit});return [];}
+    if(after >= cursor && (await store.read()).outbox.some(item=>item.acknowledged)) {
+      delayed.push({after,limit});throw new Error('connection_failed');
+    }
     return originalPull(token, after, limit, signal);
   };
-  await engine.sync();
+  await assert.rejects(engine.sync(),/connection_failed/);
   let state = await store.read();
   assert.equal(statusFor(state, 'note', 'demo-note'), 'awaiting');
   assert.equal(state.cursor, cursor);

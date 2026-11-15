@@ -122,7 +122,7 @@ async() => {
     transport
   });
   await assert.rejects(reader.saveNote('demo-note', PAPER, 'Retain after reload'), /stale_draft/);
-  assert.equal((await reader.exportLocal()).draftBases['demo-note'].note_operation_id, observed.note_operation_id);
+  assert.equal((await reader.exportLocal()).archives[0].draftBases['demo-note'].note_operation_id, observed.note_operation_id);
 }
 );
 test(

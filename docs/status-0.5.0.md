@@ -40,14 +40,16 @@ Full runtime adoption, remaining source/recovery mapping, persistent authority/h
 survey audit, old-release upgrade and hosted/physical-device acceptance remain open.
 No tag, public release, production deployment or daily-workspace migration occurred.
 
-Source after this candidate now uses verified history in the actual desktop sync
-entry and bounded HTTP. Received data/cursor/proof and acknowledgment/proof commit
+Source after this candidate now uses verified history in the actual desktop and
+mobile sync entries and bounded HTTP. Received data/cursor/proof and acknowledgment/proof commit
 atomically. A completed receive tail older than a retained acknowledgment is
 refused before writes, preserving the note and pending receipt for retry.
 Inbox preparation is bounded and compared to actual local records;
 new writes verify the observed tip in the authority transaction. Concurrent advance
 retries, forged proofs stop, and inactive backup proof records remain preserved.
-Mobile and attachment/device mutation guards, legacy-ack review/adoption UI and
+Mobile v30 saves received/acknowledged proofs with the local transaction and retains
+inactive v3 recovery observations. Attachment/device mutation guards, native
+legacy-ack review/adoption UI and
 durable authority fencing remain open. Candidate c1cbef2 has not been rebuilt for
 this source. See the [contract and limits](sync-http.md#verified-desktop-flow-and-wire-contract).
 

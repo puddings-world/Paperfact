@@ -739,3 +739,32 @@ Qt representatives show bounded preparation, retained last-success and visible
 remaining counts. Limits: no malicious-authority proof, durable fencing, mobile,
 other mutation guards, real host or installed device acceptance. This extends the
 existing transaction/ownership pattern; no new global rule or installation.
+
+## 2026-11-15: mobile proof reception and inactive recovery observations
+
+Status: validated-local mobile/Python/Windows Chromium; no physical-device or
+hosted acceptance. The same exact-record prefix contract now reaches the actual
+mobile Engine.sync entry and existing bearer/cookie transports. Compute hashes
+outside IndexedDB's synchronous update callback; recheck scope, generation and
+retained anchor at the actual content/cursor/proof commit. Keep an initial seed
+virtual until a verified transaction commits, so cancelling an initial held read
+cannot mutate even protocol state. Receive before pushing; a lost reply can settle
+from the contiguous stream without another upload or rebase of pending content.
+
+Private recovery must preserve an unreceived commitment even though the content
+cursor cannot reconstruct it. An explicit version/capability distinguishes the
+archive extension; imports retain proofs and old receipts only as inactive history,
+never a live cursor, connection or queued command. Legacy numeric receipts are
+compared semantically; new commitments retain exact wire float/Unicode spelling.
+
+Evidence: engine/recovery cases exercise same-tail forks, forged acknowledgments,
+transaction failures, held delivery/local reads, migration and old-service refusal.
+The actual Python HTTP fixture and Chromium IndexedDB reopen, source-position,
+private recovery and cookie-pairing workflows pass. The position fixture proxy
+initially blocked new routes; actual source/view assertions were retained while
+adding only the required routes and moving lost-response injection to the real
+push. Stale cache names and primary-button assumptions were fixed in the fixture,
+without changing product authentication or relaxing source/recovery checks.
+Limits: no malicious-authority defense, durable fencing, attachment/device write
+proofs, native legacy-ack review UI, live host or installed/physical device result.
+This extends the existing local transaction/recovery lesson, not a new global rule.

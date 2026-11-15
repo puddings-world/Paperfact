@@ -82,8 +82,13 @@ async() => {
   const peer = await IndexedStore.open('other-workspace', device);
   assert((await peer.read()).cursor === 0, 'cross-workspace data');
   peer.close();
-  engine.disconnect();
-  store.close();
+  const committed=await store.read();
+  assert(committed.history.received.sequence===committed.cursor,'proof and cursor differ');
+  engine.disconnect();store.close();
+  const reopened=await IndexedStore.open('demo-workspace',device),durable=await reopened.read();
+  assert(JSON.stringify(durable.history)===JSON.stringify(committed.history),'IndexedDB reopen lost proof');
+  assert(durable.entities['note/browser-note'].operation.payload.body==='Browser durable note','IndexedDB reopen lost note');
+  reopened.close();
 }
 );
 await check(

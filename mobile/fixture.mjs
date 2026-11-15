@@ -12,7 +12,7 @@ import {
   validateOperation
 } from './domain.mjs';
 import {
-  sha256
+  sha256,historySeed,historyStep,historyPoint
 } from './engine.mjs';
 export const PAPER = '00000000-0000-4000-8000-000000000001';
 export const MEMBER = 'ffc29204-612e-5b34-adb4-ce4a690d9e5c';
@@ -146,6 +146,39 @@ export class FixtureTransport {
     requireThat(after <= this.events.length, 'event_gap');
     this.calls.push(['pull', after]);
     return copy(this.events.slice(after, after + Math.min(limit, 4)));
+  }
+  async historySnapshot() {
+    const records=this.events.map(event=>stable(event));
+    let cached=this.historyCache;
+    if(!cached || cached.workspace!==this.workspace)
+      cached={workspace:this.workspace,records:[],points:[{sequence:0,sha256:await historySeed(this.workspace)}]};
+    let shared=0;
+    while(shared<records.length && shared<cached.records.length && records[shared]===cached.records[shared])shared++;
+    const points=cached.points.slice(0,shared+1);
+    for(let at=shared;at<records.length;at++)
+      points.push({sequence:at+1,sha256:await historyStep(points.at(-1).sha256,records[at])});
+    const result={workspace:this.workspace,records,points};
+    requireThat(stable(this.events.map(event=>stable(event)))===stable(records),'sync_history_advanced');
+    this.historyCache=result;return result;
+  }
+  async history_page(token,after=0,limit=100,checkpoint,signal) {
+    this.check(token,signal);historyPoint(checkpoint);
+    const snapshot=await this.historySnapshot();this.check(token,signal);
+    requireThat(checkpoint.sequence===after && stable(snapshot.points[after])===stable(checkpoint),'sync_history_unavailable');
+    const events=await this.pull(token,after,limit,signal);this.check(token,signal);
+    const end=after+events.length;
+    requireThat(end<snapshot.points.length,'sync_history_unavailable');
+    return {version:1,workspace_id:this.workspace,after:copy(checkpoint),
+      events:events.map(event=>stable(event)),checkpoint:copy(snapshot.points[end]),
+      caught_up:end===snapshot.records.length};
+  }
+  async push_verified(token,op,checkpoint,signal) {
+    this.check(token,signal);historyPoint(checkpoint);
+    const snapshot=await this.historySnapshot();this.check(token,signal);
+    requireThat(stable(snapshot.points[checkpoint.sequence])===stable(checkpoint),'sync_history_unavailable');
+    requireThat(checkpoint.sequence===this.events.length,'sync_history_advanced');
+    const event=await this.push(token,op,signal),record=stable(event);
+    return {record,checkpoint:{sequence:event.sequence,sha256:await historyStep(checkpoint.sha256,record)}};
   }
   async blob_read(token, hash, size, offset, limit, signal) {
     this.check(token, signal);

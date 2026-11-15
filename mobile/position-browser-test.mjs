@@ -74,9 +74,9 @@ if(fixtureResponse.ok) {
   const transport=new HttpTransport(location.origin,{fetch:async(url,options)=>{
     const route=new URL(url).pathname,body=JSON.parse(options.body);
     if(route==='/v1/blobs/append'){const size=atob(body.data).length;assert(size<=1024,'A PDF was uploaded');uploads.push(size);}
-    if(route==='/v1/push')pushed.push(structuredClone(body.operation));
+    if(route==='/v1/history/push')pushed.push(structuredClone(body.operation));
     const response=await fetch(url,options);
-    if(route==='/v1/push' && body.operation.payload?.feature==='original_source' && loseSourceResponse) {
+    if(route==='/v1/history/push' && body.operation.payload?.feature==='original_source' && loseSourceResponse) {
       loseSourceResponse=false;await response.body.cancel();throw Error('fixture_lost_source_response');
     }
     return response;
@@ -99,7 +99,7 @@ if(fixtureResponse.ok) {
     assert(state.outbox[0].operation.payload.feature==='original_source' && state.outbox[1].operation.payload.feature==='reading_position','Wrong dependency ordering');
     assert(state.artifactFiles[B].verified && state.positionRetentions[sourceFileId(fixture.paper,B)],'Missing exact B preservation');
     assert(state.outbox[1].operation.payload.data.method==='entered','Invented native observation');
-    recoveryText=JSON.stringify(await engine.exportLocal());assert(JSON.parse(recoveryText).version===2,'Pending source pair was not exported');
+    recoveryText=JSON.stringify(await engine.exportLocal());assert(JSON.parse(recoveryText).version===3,'Pending source pair was not exported');
     assert(!JSON.stringify(state).includes(fixture.token),'Credential persisted');
     engine.disconnect();store.close();store=await IndexedStore.open(fixture.workspace,'phone');engine=new Engine(store,{transport});
     assert((await store.read()).outbox.length===2,'IndexedDB restart lost dependent intents');
@@ -109,7 +109,8 @@ if(fixtureResponse.ok) {
     assert(pushed.length===1 && pushed[0].payload.feature==='original_source','Position sent before source acceptance');
     assert((await store.read()).outbox.length===2,'Lost source response lost pending pair');
     await engine.sync();const state=await store.read();assert(state.outbox.length===0,'Pair did not settle');
-    assert(pushed.length===3 && pushed[0].operation_id===pushed[1].operation_id && pushed[2].payload.feature==='reading_position','Retry IDs/order changed');
+    assert(pushed.length===2 && pushed[0].payload.feature==='original_source' && pushed[1].payload.feature==='reading_position' &&
+      pushed.every((item,index)=>item.operation_id===JSON.parse(recoveryText).archives[0].outbox[index].operation.operation_id),'Retry IDs/order changed');
     assert(uploads.length===1 && uploads[0]<1024,'Uploaded more than the deterministic body');
     const actual=await command('inspect');assert(actual.all_positions.some(row=>row[0]===B&&row[1]===2&&row[2]==='entered'),'Desktop did not receive B page');
     assert(positionReport(state,fixture.paper).positions.some(row=>row.document_hash===B&&row.page===2),'Phone canonical B position missing');
@@ -131,7 +132,7 @@ if(fixtureResponse.ok) {
     assert(peer.peer && peer.package_positions===2 && peer.backup_positions===2 && peer.detached_no_active_identity &&
       peer.fresh_package_source_owner && peer.retained_B===B && peer.current_C!==B,'Independent preservation failed');
   });
-  await check('unsent v2 independently reparses B, imports privately on a fresh device, and survives repeat/restart/export without replay',async()=>{
+  await check('unsent v3 independently reparses B, imports privately on a fresh device, and survives repeat/restart/export without replay',async()=>{
     let stage='open';try {
     store=await IndexedStore.open(fixture.workspace,'recovery-phone');engine=new Engine(store,{transport:new HttpTransport(location.origin)});
     stage='authenticate';await engine.connect(fixture.recovery_token);stage='receive';await engine.sync();const before=await store.read();
@@ -141,7 +142,9 @@ if(fixtureResponse.ok) {
     for(const key of ['workspace','device','cursor','graph','entities','receipts','outbox','conflicts','drafts'])
       assert(stable(state[key])===stable(before[key]),'Import changed live '+key);
     assert(recoveryReport(state).length===1 && state.artifactFiles[B].verified,'Retained source/candidate missing');
-    stage='re-export';const again=await engine.exportLocal();assert(again.version===2 && again.archives.length===1 && again.blobs.length===2,'Re-export dropped or duplicated archive');
+    stage='re-export';const again=await engine.exportLocal();assert(again.version===3 && again.archives.length===2 && again.blobs.length===2 &&
+      again.archives.some(item=>item.id===JSON.parse(recoveryText).archives[0].id) &&
+      again.archives.some(item=>stable(item.history)===stable(before.history)),'Re-export dropped or duplicated archive');
     engine.disconnect();store.close();store=await IndexedStore.open(fixture.workspace,'recovery-phone');engine=new Engine(store,{transport:new HttpTransport(location.origin)});
     assert(recoveryReport(await store.read()).length===1 && (await store.read()).outbox.length===0,'Restart revived old jobs');
     } catch(error){
@@ -198,7 +201,7 @@ if(fixtureResponse.ok) {
     assert(pending.outbox.length===2 && !pending.receipts[pending.outbox[0].operation.operation_id],'Source was already accepted');
     producer.disconnect();producerStore.close();
     const freshStore=await IndexedStore.open(fixture.workspace,'unsent-receiver'),sent=[],freshTransport=new HttpTransport(location.origin,{fetch:async(url,options)=>{
-      const body=JSON.parse(options.body);if(new URL(url).pathname==='/v1/push')sent.push(structuredClone(body.operation));
+      const body=JSON.parse(options.body);if(new URL(url).pathname==='/v1/history/push')sent.push(structuredClone(body.operation));
       return fetch(url,options);
     }}),fresh=new Engine(freshStore,{transport:freshTransport});
     await fresh.connect(fixture.unsent_receiver_token);await fresh.sync();
@@ -220,7 +223,7 @@ if(fixtureResponse.ok) {
 }
 await check('all parser/worker/license shell assets installed before offline continuation',async()=>{
   await navigator.serviceWorker.register('./sw.mjs',{type:'module'});await navigator.serviceWorker.ready;
-  const cache=await caches.open('paperfact-mobile-shell-v12');
+  const cache=await caches.open('paperfact-mobile-shell-v30');
   for(const name of ['pdf.mjs','pdf.worker.mjs','LICENSE','provenance.json'])assert(await cache.match('./vendor/pdfjs-6.4.299/'+name),'Missing offline '+name);
 });
 globalThis.runOfflinePositionChecks=async()=>{

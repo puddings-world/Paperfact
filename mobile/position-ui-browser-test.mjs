@@ -71,7 +71,7 @@ await check('actual English phone dialog checks real B; current C arrival preser
   assert(kept.drafts.reader===before.drafts.reader&&stable(kept.selection)===stable(before.selection),'Reader draft/selection changed');
   engine.disconnect();store.close();store=await IndexedStore.open(fixture.workspace,'phone');engine=new Engine(store,{transport:new HttpTransport(location.origin)});
   await engine.connect(fixture.token);const reopened=await open();assert(reopened.controls.select.value===B&&reopened.controls.page.value==='2','Draft reopened as C');
-  reopened.controls.export.click();await until(()=>!!exported);assert(JSON.parse(exported).version===2,'UI export dropped private source/page draft');
+  reopened.controls.export.click();await until(()=>!!exported);assert(JSON.parse(exported).version===3,'UI export dropped private source/page draft');
   for(let i=0;i<20;i++)reopened.controls.save.click();await until(()=>reopened.disposed);
   const pending=await store.read();assert(pending.outbox.length===2&&pending.outbox[0].operation.payload.feature==='original_source'&&
     pending.outbox[1].operation.payload.key===B&&pending.outbox[1].operation.payload.data.method==='entered','Remember did not admit exact one B pair');
@@ -165,7 +165,7 @@ await check('read-only snapshot dialog has no editable page or count authority b
 });
 await check('shell contains both position UI modules with exact parser assets before offline reopen',async()=>{
   await navigator.serviceWorker.register('./sw.mjs',{type:'module'});await navigator.serviceWorker.ready;
-  const cache=await caches.open('paperfact-mobile-shell-v12');for(const path of ['position-view.mjs','position-dialog.mjs','vendor/pdfjs-6.4.299/pdf.worker.mjs'])
+  const cache=await caches.open('paperfact-mobile-shell-v30');for(const path of ['position-view.mjs','position-dialog.mjs','vendor/pdfjs-6.4.299/pdf.worker.mjs'])
     assert(await cache.match('./'+path),'Missing UI shell asset');
 });
 globalThis.runOfflinePositionChecks=async()=>{

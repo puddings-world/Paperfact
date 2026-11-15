@@ -6,7 +6,7 @@ import {
 import {
   Engine,
   documentTarget,
-  sha256
+  sha256,historySeed,historyStep
 } from '../engine.mjs';
 import {
   demoTransport,
@@ -282,8 +282,10 @@ async() => {
   await saveCurrent(engine, 'mine', PAPER, 'Pending');
   await engine.download(PAPER);
   const result = await engine.exportLocal();
-  assert.equal(result.drafts.unsaved, 'Need to retain');
-  assert.equal(result.outbox.length, 1);
+  assert.equal(result.version,3);
+  assert.equal(result.archives[0].drafts.unsaved, 'Need to retain');
+  assert.equal(result.archives[0].outbox.length, 1);
+  assert.deepEqual(result.archives[0].history,(await store.read()).history);
   assert.equal(JSON.stringify(result).includes('fixture-token'), false);
   assert.equal(Object.hasOwn(result, 'files'), false);
   assert.ok((await store.read()).files);
@@ -316,7 +318,8 @@ test('retained history is verified before mobile upload and preserves offline wo
       await saveCurrent(engine,'acknowledged-note',PAPER,'Accepted before disconnection');
       const cursor=(await store.read()).cursor,pull=transport.pull.bind(transport);
       transport.pull=async(...args)=>{
-        if(args[1]===cursor)throw new Error('Disconnected after acknowledgment');
+        if(args[1]===cursor && (await store.read()).outbox.some(item=>item.acknowledged))
+          throw new Error('Disconnected after acknowledgment');
         return pull(...args);
       };
       await assert.rejects(engine.sync(),/Disconnected after acknowledgment/);
@@ -357,4 +360,117 @@ test('retained history is verified before mobile upload and preserves offline wo
       assert.deepEqual(checks,[...expected,...expected]);
     }
   }
+});
+
+
+test('verified mobile history rejects a different prefix with an identical final event before upload',async()=>{
+  const {engine,store,transport}=await setup();
+  await saveCurrent(engine,'private-pending',PAPER,'Keep offline research');
+  const before=await store.read(),original=structuredClone(transport.events[0]);
+  const last=structuredClone(transport.events.at(-1));
+  transport.events[0].operation.payload.name='A different retained past';
+  transport.events[0].head.operation=structuredClone(transport.events[0].operation);
+  assert.deepEqual(transport.events.at(-1),last);
+  transport.calls.length=0;
+  for(let repeat=0;repeat<2;repeat++) {
+    await assert.rejects(engine.sync(),/sync_history_unavailable/);
+    assert.deepEqual(await store.read(),before);
+  }
+  assert(!transport.calls.some(call=>call[0]==='push'));
+  transport.events[0]=original;
+  await engine.sync();
+  const state=await store.read();
+  assert.equal(state.outbox.length,0);
+  assert.equal(state.history.received.sequence,state.cursor);
+  assert.equal(state.entities['note/private-pending'].operation.payload.body,'Keep offline research');
+});
+
+test('forged push proof never acknowledges locally; restart repairs a lost reply without reupload',async()=>{
+  const {engine,store,transport}=await setup();
+  await saveCurrent(engine,'proof-note',PAPER,'Retain accepted content',{operationId:'proof-write'});
+  const push=transport.push_verified.bind(transport),before=await store.read();
+  transport.push_verified=async(...args)=>{
+    const reply=await push(...args);reply.checkpoint.sha256='0'.repeat(64);return reply;
+  };
+  await assert.rejects(engine.sync(),/sync_history_unavailable/);
+  assert.deepEqual(await store.read(),before);
+  transport.push_verified=push;
+  const restarted=new Engine(new MemoryStore(before.workspace,before.device,await store.read()),{transport});
+  await restarted.connect('fixture-token');await restarted.sync();
+  const final=await restarted.store.read();
+  assert.equal(final.outbox.length,0);
+  assert.equal(final.entities['note/proof-note'].operation.payload.body,'Retain accepted content');
+  assert.equal(transport.calls.filter(call=>call[0]==='push' && call[1]==='proof-write').length,1);
+  assert.deepEqual(final.history.received,(await transport.historySnapshot()).points.at(-1));
+});
+
+test('verified receive commits content cursor and proof together and refuses stale delivery',async()=>{
+  const {engine,store,transport}=await setup();
+  await saveCurrent(engine,'atomic-note',PAPER,'Do not lose accepted content',{operationId:'atomic-write'});
+  const update=store.update.bind(store),before=await store.read();
+  store.update=change=>update(state=>{
+    const result=change(state);
+    if(state.history.acknowledged.sequence>before.history.acknowledged.sequence)
+      throw Error('synthetic_proof_storage_failure');
+    return result;
+  });
+  await assert.rejects(engine.sync(),/synthetic_proof_storage_failure/);
+  assert.deepEqual(await store.read(),before);
+  store.update=change=>update(state=>{
+    const result=change(state);
+    if(state.cursor>before.cursor)throw Error('synthetic_receive_storage_failure');
+    return result;
+  });
+  await assert.rejects(engine.sync(),/synthetic_receive_storage_failure/);
+  assert.deepEqual(await store.read(),before);
+  store.update=update;
+  const history=transport.history_page.bind(transport),gate=deferred(),entered=deferred();
+  transport.history_page=async(...args)=>{const page=await history(...args);entered.resolve();await gate.promise;return page;};
+  const pending=engine.sync();await entered.promise;engine.disconnect();gate.resolve();
+  await assert.rejects(pending,/cancelled/);assert.deepEqual(await store.read(),before);
+  transport.history_page=history;
+  await engine.connect('fixture-token');await engine.sync();
+  const final=await store.read();
+  assert.equal(final.outbox.length,0);assert.equal(final.cursor,final.history.received.sequence);
+  assert.equal(final.entities['note/atomic-note'].operation.payload.body,'Do not lose accepted content');
+});
+
+test('legacy mobile inbox proves actual retained records and an old service cannot downgrade writes',async()=>{
+  const {engine,store,transport}=await setup(),expected=(await store.read()).history.received;
+  await store.update(state=>{delete state.history;});
+  await engine.sync();assert.deepEqual((await store.read()).history.received,expected);
+  await store.update(state=>{delete state.history;});
+  const legacy=await store.read(),first=structuredClone(transport.events[0]);
+  transport.events[0].operation.payload.name='Changed old history';
+  transport.events[0].head.operation=structuredClone(transport.events[0].operation);
+  await assert.rejects(engine.sync(),/sync_history_unavailable/);
+  assert.deepEqual(await store.read(),legacy);
+  transport.events[0]=first;await engine.sync();
+  await saveCurrent(engine,'unsupported-note',PAPER,'Keep pending');
+  const before=await store.read();transport.history_page=null;
+  await assert.rejects(engine.sync(),/sync_history_unavailable/);
+  assert.deepEqual(await store.read(),before);
+  assert(!transport.calls.some(call=>call[0]==='push' && call[1]===before.outbox[0].operation.operation_id));
+});
+
+
+test('disconnect during a local read cannot send a later request with another session',async()=>{
+  const {engine,store,transport}=await setup();
+  await saveCurrent(engine,'held-local',PAPER,'Retain local intent');
+  const before=await store.read(),read=store.read.bind(store),gate=deferred(),entered=deferred();
+  let count=0;
+  store.read=async()=>{const value=await read();if(++count===2){entered.resolve();await gate.promise;}return value;};
+  transport.calls.length=0;
+  const pending=engine.sync();await entered.promise;engine.disconnect();gate.resolve();
+  await assert.rejects(pending,/cancelled/);
+  assert.equal(transport.calls.length,0);assert.deepEqual(await read(),before);
+});
+
+
+test('mobile history matches native exact UTF-8 float and Unicode commitments',async()=>{
+  const seed=await historySeed('history-vector');
+  assert.equal(seed,'50e81e1dfc4adc065f8b1cd406567d157d1eb7fc9bc821db67331fcb324df643');
+  const record='{"float":200.0,"negative":-0.0,"unicode":"\u{1f600}"}';
+  assert.equal(await historyStep(seed,record),'164404784c52470482a1760d499915c6ce3d92b3799269fb1232868220205406');
+  assert.notEqual(await historyStep(seed,JSON.stringify(JSON.parse(record))),await historyStep(seed,record));
 });

@@ -80,9 +80,10 @@ export class HttpTransport {
       throw new TransportError(({
         401: 'session_denied',
         403: 'session_denied',
-        404: 'unsupported_service',
+        404: route.startsWith('/v1/history/') ? 'sync_history_unavailable' : 'unsupported_service',
         409: 'file_unavailable',
-        412: route === '/v1/pull' ? 'sync_history_unavailable' : 'request_rejected',
+        412: route === '/v1/pull' || route.startsWith('/v1/history/') ? 'sync_history_unavailable' : 'request_rejected',
+        425: 'sync_history_advanced',
         428: 'sync_history_unavailable',
         429: 'rate_limited',
         413: 'quota_exceeded',
@@ -120,7 +121,7 @@ export class HttpTransport {
     }
     let value;
     try {
-      value=parsePositionJSON(new TextDecoder('utf-8', {fatal:true}).decode(bytes));
+      value=parsePositionJSON(new TextDecoder('utf-8', {fatal:true}).decode(bytes),{strict:route.startsWith('/v1/history/')});
     } catch {
       throw new TransportError('invalid_response');
     }
@@ -162,6 +163,13 @@ export class HttpTransport {
     identifier(value.workspace_id);
     identifier(value.device_id);
     return value;
+  }
+  async history_page(token,after=0,limit=100,checkpoint,signal) {
+    integer(after);requireThat(Number.isInteger(limit) && limit>=1 && limit<=1000);
+    return this.post('/v1/history/pull',{after,limit,checkpoint},token,signal);
+  }
+  async push_verified(token,operation,checkpoint,signal) {
+    return this.post('/v1/history/push',{operation,checkpoint},token,signal);
   }
   async push(token, operation, signal) {
     const event = await this.post('/v1/push', {

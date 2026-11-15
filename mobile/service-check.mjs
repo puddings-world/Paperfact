@@ -299,6 +299,10 @@ try {
   assert.equal(deck.body.deck.title,'研究 🧪');
   assert.equal(deck.body.deck.slides[0].elements[1].x,200);
   assert.equal(deck.body.deck.slides[0].speaker_notes,'原文引用與講稿');
+  const verified=await engine.store.read();
+  assert.equal(verified.history.received.sequence,verified.cursor);
+  const proof=await transport.history_page(ready.token,verified.cursor,1,verified.history.received);
+  assert.deepEqual(proof.checkpoint,verified.history.received);
   console.log('PASS actual Python HTTP authority: session, seed history, rich analysis + anchored note without draft loss, offline note chain, reading state, retry, verified PDF, conflict resolution, edit-delete and verified Python float/Unicode deck+PNG offline closure');
 } finally {
   child.stdin.end('\n');

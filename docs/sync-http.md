@@ -374,8 +374,8 @@ durable authority identity/fencing and installed/hosted acceptance remain gates.
 | `POST /v1/history/push` | `operation`, `checkpoint` | `{record: canonical_event_text, checkpoint: {sequence, sha256}}`. The record is an exact string, not a receiver-reserialized object. |
 
 Both bearer and same-origin browser route mappings use the existing authentication,
-execution pin, strict JSON and request/response caps. The browser engine has not
-adopted these routes yet. `HttpTransport.history_page(token, after=0, limit=100,
+execution pin, strict JSON and request/response caps. The mobile engine now
+requires these routes too. `HttpTransport.history_page(token, after=0, limit=100,
 *, checkpoint)` and `push_verified(token, operation, *, checkpoint)` never retry
 through legacy routes when support is missing. Missing support or an invalid
 prefix stops with `SyncHistoryUnavailable`. HTTP425 reports a genuine concurrent
@@ -422,3 +422,40 @@ remain retained observations with matching original outgoing receipts. Detached
 restore stores these in recovery_records, never as an active connection or device
 permission. Research, pending operations, original observed proofs and source data
 remain available for explicit recovery. No login, model call or upload is implied.
+
+### Mobile verified flow and private recovery
+
+Shell v30 uses `HttpTransport.history_page(token, after, limit, checkpoint, signal)`
+and `push_verified(token, operation, checkpoint, signal)`, inherited by the existing
+browser-cookie adapters. Unsupported proof routes stop synchronization; no legacy
+write fallback is attempted. Existing single-event frontier checks are additional
+semantic guards, not a substitute for the linked prefix proof.
+
+`Engine.sync()` keeps the zero seed virtual until a verified transaction commits.
+Legacy inbox preparation compares each bounded page to actual retained full event
+receipts; it never installs an opaque higher remote hash. Legacy receipts retained
+JavaScript numbers, not original numeric lexemes; their migration comparison is
+semantic. New proofs always hash the exact canonical UTF-8 event strings, including
+Python float spelling. Unsafe integer sequences are refused, never rounded.
+
+The foreground pass shares a 25-page budget across preparation and reception,
+receives before uploading, and reports remaining work instead of false completion.
+Every new acknowledgment must be the next independently hashed event from the
+observed anchor. A concurrent writer returns sync_history_advanced and leaves local
+work available for retry. Received notes/receipts/cursor/proof and acknowledged
+outbox/proof each commit atomically in the same workspace/device IndexedDB record.
+A failed storage write or a late signed-out response cannot partially apply them.
+
+Private recovery exports with proof observations use format version3 and required
+capabilities reading_position/sync_history. They retain both received and newer
+unreceived acknowledgment points and the original acknowledged outgoing event.
+Imports keep these only inside inactive positionRecoveries archives; they cannot
+set an active cursor/proof, enqueue old operations or connect an archived device.
+Re-export also retains the current device's proof observations. Historical v1/v2
+exports remain unchanged when no proof observations exist; v2 import remains valid.
+Older importers must reject v3 instead of silently discarding proof metadata.
+
+Validated on isolated Windows Chromium and loopback Python fixtures. This does not
+establish physical Safari durability, native installed-device convergence, hosted
+access, durable authority fencing or history guards for attachment/device writes.
+The delivered c1cbef2/v29 candidate has not been rebuilt for this source.

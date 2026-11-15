@@ -1,6 +1,7 @@
 import {editableTextNote} from './content.mjs';
 import { artifactTarget, ARTIFACT_CACHE_BYTES, downloadArtifact, readArtifact } from './artifact-engine.mjs';
-import {sourceFileId, validateArtifact} from './artifacts.mjs';
+import {artifactJSON,sourceFileId, validateArtifact} from './artifacts.mjs';
+import {parsePositionJSON} from './position-json.mjs';
 import {validateLineageOperation} from './lineage-ops.mjs';
 import {preparePositionPush,reconcilePositionIntents} from './primary-source-retention.mjs';
 import {exportPositionRecovery} from './position-recovery.mjs';
@@ -32,6 +33,71 @@ export async function sha256(bytes) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2,
   '0')).join('');
 }
+
+const historyEncoder=new TextEncoder(), HISTORY_ERROR='sync_history_unavailable';
+export function historyPoint(value) {
+  requireThat(value && typeof value==='object' && !Array.isArray(value) &&
+    Object.keys(value).sort().join(',')==='sequence,sha256' && Number.isSafeInteger(value.sequence) &&
+    value.sequence>=0 && typeof value.sha256==='string' && /^[0-9a-f]{64}$/.test(value.sha256),HISTORY_ERROR);
+  return value;
+}
+export async function historySeed(workspace) {
+  return sha256(historyEncoder.encode('paperfact.sync-history.v1\0'+workspace));
+}
+export async function historyStep(previous,record) {
+  historyPoint({sequence:0,sha256:previous});
+  requireThat(typeof record==='string' && record.length<=2*256*1024+8192,HISTORY_ERROR);
+  const bytes=historyEncoder.encode(record);
+  requireThat(bytes.length<=2*256*1024+8192,HISTORY_ERROR);
+  const linked=new Uint8Array(40+bytes.length);
+  for(let at=0;at<32;at++)linked[at]=Number.parseInt(previous.slice(at*2,at*2+2),16);
+  new DataView(linked.buffer).setUint32(36,bytes.length,false);
+  linked.set(bytes,40);return sha256(linked);
+}
+function historyRecord(record,workspace) {
+  try {
+    const bytes=historyEncoder.encode(record),event=artifactJSON(bytes);
+    parsePositionJSON(record,{strict:true,maxBytes:2*256*1024+8192});
+    validateEvent(event,workspace);return event;
+  } catch {throw new Error(HISTORY_ERROR);}
+}
+async function historyPage(page,workspace,before,limit=100) {
+  requireThat(page && typeof page==='object' && !Array.isArray(page) &&
+    Object.keys(page).sort().join(',')==='after,caught_up,checkpoint,events,version,workspace_id' &&
+    page.version===1 && page.workspace_id===workspace && typeof page.caught_up==='boolean' &&
+    Array.isArray(page.events) && page.events.length<=limit && page.events.length<=1000 &&
+    historyEncoder.encode(JSON.stringify(page)).length<=2*1024**2,HISTORY_ERROR);
+  historyPoint(page.after);historyPoint(page.checkpoint);
+  requireThat(stable(page.after)===stable(before),HISTORY_ERROR);
+  let sequence=before.sequence,digest=before.sha256;
+  const events=[],points=new Map();
+  for(const record of page.events) {
+    requireThat(typeof record==='string' && record.length<=2*256*1024+8192,HISTORY_ERROR);
+    const event=historyRecord(record,workspace);
+    requireThat(Number.isSafeInteger(event.sequence) && event.sequence===sequence+1,HISTORY_ERROR);
+    digest=await historyStep(digest,record);sequence=event.sequence;
+    events.push(event);points.set(sequence,digest);
+  }
+  const checkpoint={sequence,sha256:digest};
+  requireThat(stable(checkpoint)===stable(page.checkpoint) && (events.length>0 || page.caught_up),HISTORY_ERROR);
+  return {events,points,before:copy(before),checkpoint,caught_up:page.caught_up};
+}
+function retainedHistory(state,seed) {
+  const value=state.history??{received:{sequence:0,sha256:seed},acknowledged:{sequence:0,sha256:seed}};
+  requireThat(value && typeof value==='object' && !Array.isArray(value) &&
+    Object.keys(value).sort().join(',')==='acknowledged,received',HISTORY_ERROR);
+  for(const point of [value.received,value.acknowledged]) {
+    historyPoint(point);requireThat(point.sequence!==0 || point.sha256===seed,HISTORY_ERROR);
+  }
+  requireThat(value.received.sequence<=state.cursor &&
+    (value.received.sequence!==value.acknowledged.sequence ||
+      value.received.sha256===value.acknowledged.sha256),HISTORY_ERROR);
+  return value;
+}
+function historyAnchor(history) {
+  return history.acknowledged.sequence>history.received.sequence?history.acknowledged:history.received;
+}
+
 export function documentTarget(state, paperId) {
   const item = state.entities[keyOf('paper_document', paperId)];
   return item && active(state, 'paper_document', paperId) ? copy(item.operation): null;
@@ -212,7 +278,7 @@ export class Engine {
     await this.authenticated(generation);
     this.onChange('syncing');
     // Validate the retained frontier before upload or local reconciliation.
-    const retained = await this.store.read();
+    const retained = await this.store.read();this.check(generation);
     const proofs=[];
     if(retained.cursor) {
       proofs.push({sequence:retained.cursor});
@@ -229,6 +295,7 @@ export class Engine {
     }
     if(acknowledged && acknowledged.sequence>retained.cursor)proofs.push(acknowledged);
     for(const proof of proofs) {
+      this.check(generation);
       const frontier = await this.transport.pull(this.#token, proof.sequence - 1, 1,
         this.controller.signal);
       this.check(generation);
@@ -238,44 +305,98 @@ export class Engine {
       const previous=proof.operation?proof:own(retained.receipts,frontier[0].operation.operation_id);
       requireThat(previous?.sequence===proof.sequence && stable(previous) === stable(frontier[0]), 'sync_history_unavailable');
     }
-    if((await this.store.read()).positionIntents || (await this.store.read()).positionRetentions)
-      await this.store.update(state=>{this.check(generation);reconcilePositionIntents(state);});
-    const queued =(await this.store.read()).outbox.slice(0, 100);
+    requireThat(typeof this.transport.history_page==='function' &&
+      typeof this.transport.push_verified==='function',HISTORY_ERROR);
+    const seed=await historySeed(retained.workspace);this.check(generation);
+    let remaining=25;
+    const fetchPage=async(state,limit=100)=>{
+      this.check(generation);
+      requireThat(state.workspace===retained.workspace && state.device===retained.device,HISTORY_ERROR);
+      const before=copy(retainedHistory(state,seed).received);
+      const raw=await this.transport.history_page(this.#token,before.sequence,limit,before,this.controller.signal);
+      this.check(generation);
+      const page=await historyPage(raw,retained.workspace,before,limit);this.check(generation);
+      return page;
+    };
+    // Replay retained inbox records before adopting a proof. Never seed a higher remote digest.
+    for(;;) {
+      const state=await this.store.read(),history=retainedHistory(state,seed);this.check(generation);
+      if(history.received.sequence===state.cursor)break;
+      if(!remaining--) {this.onChange('more_pending');return state;}
+      const page=await fetchPage(state,Math.min(100,state.cursor-history.received.sequence));
+      await this.store.update(next=>{
+        this.check(generation);
+        const current=retainedHistory(next,seed);
+        requireThat(next.workspace===retained.workspace && next.device===retained.device &&
+          next.cursor===state.cursor && stable(current)===stable(history),HISTORY_ERROR);
+        requireThat(page.events.length>0,HISTORY_ERROR);
+        for(const event of page.events) {
+          const previous=own(next.receipts,event.operation.operation_id);
+          requireThat(previous?.sequence===event.sequence && stable(previous)===stable(event),HISTORY_ERROR);
+        }
+        requireThat(page.checkpoint.sequence<=next.cursor,HISTORY_ERROR);
+        current.received=copy(page.checkpoint);next.history=current;
+      });
+    }
+    const applyPage=async(state,page)=>this.store.update(next=>{
+      this.check(generation);
+      const history=retainedHistory(next,seed),prior=retainedHistory(state,seed);
+      requireThat(next.workspace===retained.workspace && next.device===retained.device &&
+        next.cursor===state.cursor && stable(history)===stable(prior) &&
+        next.cursor===page.before.sequence,HISTORY_ERROR);
+      const ack=history.acknowledged;
+      requireThat(!page.caught_up || page.checkpoint.sequence>=ack.sequence,HISTORY_ERROR);
+      if(page.before.sequence<ack.sequence && ack.sequence<=page.checkpoint.sequence)
+        requireThat(page.points.get(ack.sequence)===ack.sha256,HISTORY_ERROR);
+      for(const event of page.events) {
+        const pending=next.outbox.find(item=>item.operation.operation_id===event.operation.operation_id);
+        if(pending?.acknowledged)requireThat(stable(pending.acknowledged)===stable(event),HISTORY_ERROR);
+      }
+      receive(next,page.events);reconcilePositionIntents(next);
+      history.received=copy(page.checkpoint);next.history=history;
+    });
+    const catchUp=async()=>{
+      while(remaining>0) {
+        remaining--;
+        const state=await this.store.read(),page=await fetchPage(state);
+        await applyPage(state,page);
+        if(page.caught_up)return true;
+      }
+      return false;
+    };
+    // Receive first: uploads require the complete observed prefix and an unchanged authority tip.
+    if(!await catchUp()) {const state=await this.store.read();this.check(generation);this.onChange('more_pending');return state;}
+    const queued=(await this.store.read()).outbox.slice(0,100);
     for(const item of queued) {
       this.check(generation);
-      if(item.acknowledged) continue;
+      if(item.acknowledged)continue;
       if(!await preparePositionPush(this,item.operation,this.#token,generation))continue;
-      const event = await this.transport.push(this.#token, copy(item.operation), this.controller.signal);
+      const state=await this.store.read(),anchor=copy(historyAnchor(retainedHistory(state,seed)));
       this.check(generation);
-      validateEvent(event, item.operation.workspace_id);
-      requireThat(stable(event.operation) === stable(item.operation), 'changed_retry');
-      await this.store.update(state => {
+      requireThat(state.workspace===retained.workspace && state.device===retained.device,HISTORY_ERROR);
+      const response=await this.transport.push_verified(this.#token,copy(item.operation),anchor,this.controller.signal);
+      this.check(generation);
+      requireThat(response && typeof response==='object' && !Array.isArray(response) &&
+        Object.keys(response).sort().join(',')==='checkpoint,record',HISTORY_ERROR);
+      historyPoint(response.checkpoint);
+      const event=historyRecord(response.record,retained.workspace);
+      requireThat(stable(event.operation)===stable(item.operation) && event.sequence===anchor.sequence+1 &&
+        response.checkpoint.sequence===event.sequence,HISTORY_ERROR);
+      const digest=await historyStep(anchor.sha256,response.record);this.check(generation);
+      requireThat(digest===response.checkpoint.sha256,HISTORY_ERROR);
+      await this.store.update(next=>{
         this.check(generation);
-        const pending = state.outbox.find(x => x.operation.operation_id === item.operation.operation_id);
-        if(pending) pending.acknowledged = copy(event);
+        const history=retainedHistory(next,seed);
+        requireThat(next.workspace===retained.workspace && next.device===retained.device &&
+          stable(historyAnchor(history))===stable(anchor),HISTORY_ERROR);
+        const pending=next.outbox.find(x=>x.operation.operation_id===item.operation.operation_id);
+        requireThat(pending && !pending.acknowledged && stable(pending.operation)===stable(item.operation),HISTORY_ERROR);
+        pending.acknowledged=copy(event);history.acknowledged=copy(response.checkpoint);
       });
     }
-    // Bound a foreground run; another foreground/retry continues from durable cursor.
-    let exhausted = false;
-    for(let page = 0; page < 25; page++) {
-      const state = await this.store.read();
-      this.check(generation);
-      const events = await this.transport.pull(this.#token, state.cursor, 100, this.controller.signal);
-      this.check(generation);
-      if(! events.length) {
-        exhausted = true;
-        break;
-      }
-      await this.store.update(next => {
-        this.check(generation);
-        receive(next, events);
-        reconcilePositionIntents(next);
-      });
-    }
-    this.check(generation);
-    const final = await this.store.read();
-    this.onChange(exhausted && ! final.outbox.length ? 'synced': 'more_pending');
-    return final;
+    const exhausted=await catchUp();this.check(generation);
+    const final=await this.store.read();this.check(generation);
+    this.onChange(exhausted && !final.outbox.length?'synced':'more_pending');return final;
   }
   download(paperId) {
     if(this.downloads.has(paperId)) return this.downloads.get(paperId);

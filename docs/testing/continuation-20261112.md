@@ -7166,3 +7166,66 @@ additional worktree was introduced.
   passed in 2.11s (5.4s total). Privacy/Ruff passed in both. All checks
   ran sequentially with the same CPU governor; no full historical suite,
   packaging, paid call, account login or owner research access.
+
+
+## 2026-11-15: mobile verified history and private recovery v3
+
+- Started from clean common 8f017f1 in the existing stabilization worktree. The
+  actual mobile Engine.sync now requires history_page/push_verified. Existing
+  frontier checks remain additional semantic evidence; no legacy write fallback.
+  Bounded local-inbox replay compares actual retained records; never seed a higher
+  remote digest. A single 25-page foreground budget includes reception/preparation.
+- Receive before upload; independently verify each next acknowledgment and retain
+  newer accepted points across failed delivery/restart. Exact raw UTF-8 strings
+  preserve native float/Unicode hashing. Safe-integer checkpoints reject rounding.
+  Content/receipts/cursor/proof and acknowledged outbox/proof each save atomically.
+  Generation/scope are rechecked after async reads and before requests/commits.
+- First focused run: 41/44 passed. Three expectations still described the previous
+  push-first flow: moved delayed-tail failures after actual acceptance and tightened
+  the lost-response upload count from two to one. Original saved-content, causal,
+  conflict, no-duplicate and retry assertions retained. The next affected set61
+  passed in3.719s governed; expanded proof/recovery/transport47 passed in3.859s.
+- Broader affected consumers initially153/154: initial seed persistence changed
+  state during a cancelled held initial receive. Fixed the product by retaining
+  the zero seed virtually until verified commit, rather than weakening the exact
+  state assertion. Corrected engine/Lineage52 passed in0.735s governed.
+- Private proof observations export under closed recovery v3/capability sync_history;
+  v1/v2 shapes remain unchanged without proofs. Import/re-export keeps current and
+  archived received/acknowledged observations inactive, with original outgoing full
+  events. No active cursor/device/connection permission or old job is installed.
+- Actual generic Chromium8 journeys pass in3.125s, including IndexedDB note/proof
+  reopen, scope isolation, drafts/focus and linked saved research. Source-position
+  browser initially failed because its proxy allowed only old routes. Added only
+  history pull/push routes, retained authorization/instance headers and moved fault
+  injection to verified push. IDs remain exact; retry receives accepted source
+  without another upload. Added bounded partial-result diagnostics on fixture exit.
+- Source-position journey then16/17: obsolete v12 cache name failed offline asset
+  checks. Both position fixtures now inspect actual v30. Dialog journey11 cases
+  passed but actual-app hook selected pairing's first primary button; fixed it to
+  open Advanced manual connection and activate that fieldset's actual button.
+  No product authentication shortcut or acceptance assertion was removed.
+- Final actual position journey17 passed in23.125s governed, including real PDF
+  workers, source-first/lost-reply behavior, independent native package/backup
+  preservation, inactive recovery/review, offline fresh worker and scope bounds.
+  Actual position dialog11 plus full-app PDF-card hook pass in14.906s. Cookie
+  pairing/reconnect/forget4 pass in8.391s without browser credential exposure.
+- Final explicit nine-file mobile selection156 passed in5.636s/5.796s governed;
+  actual Python HTTP interoperability passes in1.969s, including equality between
+  independently retained mobile prefix and authority checkpoint. Native exact-byte
+  float/Unicode vector also matches; forged proofs, same-tail divergent prefixes,
+  storage rollback, legacy mismatch, unsupported service, stale local reads and
+  held responses retain actual notes/outbox. No critical/release selector expansion.
+- One local v30 static artifact built/verified in0.562s:50 files/3944491 bytes,
+  ID83c4877d149a6f54e2153a407c4065b6cbc1a1fd2cd3f1263f69a9e44d9e9382.
+  Maintained exact-artifact offline-reading journey passes in2.547s: repeated
+  activation, EN/ZH narrow touch layout, new offline document and cached-only PDF
+  verification. Local evidence stays under build/mobile-history-v30-*; not hosted.
+- Canonical local-integration evidence extended and maintained copies synchronized
+  without conflicts. No global skill, daemon, task board, owner database, account
+  login, paid call, native rebuild, tag, public release or deployment this checkpoint.
+  c1cbef2/run43688772032 remains the delivered v29/native candidate. Attachment/device
+  proof guards, durable authority fencing, native legacy-ack adoption/review, remaining
+  mapping/recovery/survey and hosted/installed/physical acceptance remain open.
+- Final integration gates: critical14 passed in4.74s/7.9s total; docs58 passed
+  in1.93s/5.3s total. Privacy/Ruff passed in both. All executions sequential
+  with at most two logical processors and the25-percent job CPU ceiling.

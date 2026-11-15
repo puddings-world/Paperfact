@@ -81,3 +81,22 @@ not a recursive copy of this development directory. CI prepares one shared artif
 it does not configure a host. The actual app pairing/offline checks can load
 `public/` from that artifact using `PAPERFACT_TEST_ARTIFACT` and its trusted
 `PAPERFACT_TEST_ARTIFACT_ID`. Shell v22 also makes HTTP 429 a busy/retry state.
+
+
+Source after candidate c1cbef2 uses shell v30 and requires verified history on the
+actual sync entry. The local IndexedDB transaction retains received and accepted
+prefixes; private recovery v3 preserves them as inactive observations on import.
+See [wire contract, migration and limits](../docs/sync-http.md#mobile-verified-flow-and-private-recovery).
+The v29 delivered candidate is unchanged. Hosting and physical-device acceptance
+remain pending; a successful loopback fixture is not a production deployment.
+
+
+The existing engine module also exposes the shared fixture/protocol primitives:
+
+| Function | Result |
+|---|---|
+| `historyPoint(value)` | Validate a closed safe-integer sequence/lowercase SHA-256 checkpoint; return it or throw. |
+| `historySeed(workspace)` | Async native-compatible zero-prefix SHA-256 string. |
+| `historyStep(previous, record)` | Async next SHA-256 over the previous digest, length and exact bounded UTF-8 record. |
+
+These helpers do not authenticate a service or save research independently.

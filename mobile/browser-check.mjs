@@ -45,7 +45,7 @@ const plainNoteMode=!!process.env.PAPERFACT_NOTE_SERVICE_PYTHON;
 const pairingMode=testPage==='browser-pairing-browser-test.html';
 if(pairingMode&&!process.env.PAPERFACT_PAIRING_SERVICE_PYTHON)throw Error('Pairing fixture needs an explicit Python interpreter.');
 const fixtureResearchRequests=[];
-let positionService,positionReady,positionErrors='';
+let positionService,positionReady,positionErrors='',lastFixtureText='';
 const serviceLines=[],serviceWaiting=[];
 async function serviceMessage(command) {
   if(command)positionService.stdin.write((plainNoteMode?JSON.stringify(command):command)+'\n');
@@ -53,7 +53,7 @@ async function serviceMessage(command) {
     if(serviceLines.length){resolve(serviceLines.shift());return;}
     const timer=setTimeout(()=>reject(Error('Isolated position service timed out: '+positionErrors)),30000);
     serviceWaiting.push(line=>{clearTimeout(timer);resolve(line);});
-    positionService.once('exit',code=>{clearTimeout(timer);reject(Error('Position service exited '+code+': '+positionErrors));});
+    positionService.once('exit',code=>{clearTimeout(timer);reject(Error('Position service exited '+code+': '+positionErrors+'\nLast browser results:\n'+lastFixtureText.slice(-8000)));});
   }));
 }
 if(plainNoteMode) {
@@ -93,7 +93,7 @@ const server = createServer(async(request, response) => {
       const result=await serviceMessage(command);
       response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end(JSON.stringify(result));return;
     }
-    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull']:['/v1/session/info','/v1/pull','/v1/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
+    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull','/v1/browser/history/pull','/v1/browser/history/push']:['/v1/session/info','/v1/pull','/v1/push','/v1/history/pull','/v1/history/push','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
       response.writeHead(404);response.end();return;
     }
     if(plainNoteMode||pairingMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
@@ -260,7 +260,7 @@ async function plainNoteMainHook() {
   const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs'),s=await IndexedStore.open(${JSON.stringify(config.workspace)},${JSON.stringify(config.device)});try{return await s.read();}finally{s.close();}})()`;
   const connect=async(token)=>{
     await evaluate('[...document.querySelectorAll("header button")].find(b=>["Connection","連線"].includes(b.textContent)).click()');
-    await evaluate(`(()=>{const c=${JSON.stringify({...config,token})},d=document.querySelector('dialog'),inputs=d.querySelectorAll('.fields input');[c.workspace,c.device,c.origin,c.token].forEach((v,i)=>inputs[i].value=v);d.querySelector('button.primary').click();})()`);
+    await evaluate(`(()=>{const c=${JSON.stringify({...config,token})},d=document.querySelector('dialog'),inputs=d.querySelectorAll('.fields input');[c.workspace,c.device,c.origin,c.token].forEach((v,i)=>inputs[i].value=v);d.querySelector('.connection-fields').closest('details').open=true;d.querySelector('.connection-fields button.primary').click();})()`);
     await wait(`document.querySelector('.workspace')?.textContent===${JSON.stringify(config.workspace)} && !document.querySelector('.status[data-busy="true"]') && !!(document.querySelector('.paper-card') || document.querySelector('#tab-notes'))`,'open fixture workspace');
     await evaluate('document.querySelector(".paper-card")?.click();document.querySelector("#tab-notes").click()');
     await wait('!!document.querySelector("#note-editor") && !document.querySelector("#note-editor").disabled','editable unpositioned desktop text');
@@ -391,7 +391,7 @@ async function positionMainHook() {
     token:positionReady.unsent_receiver_token};
   const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs'),s=await IndexedStore.open(${JSON.stringify(config.workspace)},${JSON.stringify(config.device)});try{return await s.read();}finally{s.close();}})()`;
   await evaluate(`(()=>{const c=${JSON.stringify(config)},d=document.querySelector('dialog'),inputs=d.querySelectorAll('.fields input');
-    [c.workspace,c.device,c.origin,c.token].forEach((value,i)=>inputs[i].value=value);d.querySelector('button.primary').click();return true;})()`);
+    [c.workspace,c.device,c.origin,c.token].forEach((value,i)=>inputs[i].value=value);d.querySelector('.connection-fields').closest('details').open=true;d.querySelector('.connection-fields button.primary').click();return true;})()`);
   await wait(`document.querySelector('.workspace')?.textContent===${JSON.stringify(positionReady.workspace)} &&
     !document.querySelector('header button')?.disabled && !!document.querySelector('.paper-card')`,'private fake connection');
   await evaluate('document.querySelector(".paper-card").click();document.querySelector("#tab-pdf").click()');
@@ -491,6 +491,7 @@ try {
     }
     );
     const value = JSON.parse(result.result.value ?? '{}');
+    if(typeof value.text==='string')lastFixtureText=value.text;
     if(['position-ui-browser-test.html','browser-pairing-browser-test.html'].includes(testPage)) {
       if(value.metrics&&!metricSeen.has(value.metrics)) {
         const sizes={'phone-en':[390,844,true],'phone-zh':[360,780,true],'laptop-en':[1280,900,false]},size=sizes[value.metrics];

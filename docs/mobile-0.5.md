@@ -414,3 +414,13 @@ retention, every source, or a deployed host. [Recorded result](testing/mobile-of
 ![English offline-reading action, actual synthetic Chrome capture](images/mobile-offline-reading-en.png)
 
 ![Chinese offline-reading action, actual synthetic Chrome capture](images/mobile-offline-reading-zh-TW.png)
+
+
+## Source after the v29 candidate: verified history
+
+Shell v30 requires bounded linked history proofs for actual mobile sync, commits
+received content and cursor with their proof, and retains acknowledgments even
+when later delivery fails. Unsupported services stop with local work preserved.
+Private recovery v3 retains these observations without activating archived devices
+or old operations. The prior delivered v29 candidate remains unchanged.
+See [migration, API and acceptance limits](sync-http.md#mobile-verified-flow-and-private-recovery).

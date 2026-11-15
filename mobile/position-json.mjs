@@ -3,7 +3,7 @@ export function parsePositionJSON(source,{maxBytes=8*1024**2,strict=false,intege
   if(!Number.isSafeInteger(maxBytes) || maxBytes<1 || maxBytes>64*1024**2 || typeof source!=='string' ||
     new TextEncoder().encode(source).length>maxBytes)throw Error('invalid_position_json');
   const value=JSON.parse(source),targets=new WeakSet(),todo=[value];let found=false;
-  if(value?.format==='paperfact-mobile-recovery' && value.version===2 && Array.isArray(value.archives))
+  if(value?.format==='paperfact-mobile-recovery' && [2,3].includes(value.version) && Array.isArray(value.archives))
     for(const archive of value.archives)if(Array.isArray(archive?.positions))for(const row of archive.positions)
       if(row?.data && typeof row.data==='object'){targets.add(row.data);found=true;}
   while(todo.length) {
