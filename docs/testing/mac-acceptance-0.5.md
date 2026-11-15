@@ -3,9 +3,10 @@
 Updated 2026-11-15. Latest Apple Silicon candidate:
 [3b344c7 / run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158),
 clean `3b344c77cbea449f22767f35d5475b6ae2672bfc`, version `0.5.0.dev`.
-Mac passed in5m30s; Linux passed in2m55s. Windows failed the pinned old-source
-preflight because Git converted archive line endings. A Windows-only packaging
-follow-up is required; this run is not an all-platform pass or public release.
+Mac passed in5m30s; Linux passed in2m55s. The original Windows attempt failed
+Git archive line-ending preflight; the corrected Windows-only follow-up below
+passes. These are separate exact source commits, not a single all-platform run.
+No public release was created.
 
 Exact Mac downloads (GitHub sign-in may be required):
 
@@ -21,7 +22,15 @@ Exact Mac downloads (GitHub sign-in may be required):
 The provenance/report were downloaded and inspected; the DMG was not installed
 on a physical Mac here. Archive hashes are not hashes of contained installers.
 The prior355382c/run43705488673 remains the last all-platform passing candidate.
-Its Windows installer is not the matching build for this new Mac candidate.
+The new [Windows setup artifact](https://github.com/puddings-world/Paperfact/actions/runs/43715636579/artifacts/14163025642)
+is clean4ee34278c463a25f6b40fc64e01b2286187c3c5e from
+[run43715636579](https://github.com/puddings-world/Paperfact/actions/runs/43715636579),
+passing7m34s. It has the same app runtime as3b344c7 plus the archive recipe,
+regression and delivery-doc corrections. GitHub artifact ZIP184,308,740 bytes,
+SHA-256 `ccedd3f1135bdfa5ecc42aca43bf0282c2698f45e671a3ce43d475eac86e5e08`.
+Its separate setup payload SHA-256 is
+`15c308826c35e64bc990d3d1541cd473864088d7a36cf5b00bf65376a27f6595`.
+Both provenance reports were inspected. Use these exact identities in reports.
 
 Packaged acceptance preserves four PDFs, verifies three reader starts/foreground,
 same-workspace handoff and38 CLI/MCP tools with retry/restart. Eleven sync protocol

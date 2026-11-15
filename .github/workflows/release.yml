@@ -150,6 +150,11 @@ jobs:
           if-no-files-found: error
 
       - name: Screenshots
+        env:
+          # Rendering acceptance needs a real Mac surface, not an offscreen placeholder.
+          QT_QPA_PLATFORM: ${{ matrix.name == 'macos' && 'cocoa' || matrix.name == 'linux' && 'xcb' || 'offscreen' }}
+          # Scoped to synthetic screenshots; installed apps retain normal graphics settings.
+          QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/screenshots.py shots --demo
 
       - name: Build

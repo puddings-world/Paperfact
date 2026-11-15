@@ -342,3 +342,15 @@ Windows. Git's archive conversion otherwise changes LF to CRLF and invalidates
 exact blob provenance. The acceptance verifier deliberately refuses converted
 bytes; never normalize its input to make a changed baseline pass. The workflow
 recipe has a regression under inherited Windows autocrlf settings.
+
+
+### Screenshot readiness
+
+`scripts/screenshots.py OUT --demo` waits for saved reading preparation and the
+exact WebEngine page/fonts, with a10-second deadline per stage. It refuses a
+blank reading PNG instead of treating a widget grab as content acceptance. This
+is diagnostic output, not an installed two-device UI test. CI screenshots use
+Cocoa on macOS; the software `--disable-gpu` flag is scoped to that step only
+([Qt diagnostic arguments](https://doc.qt.io/qt-6/qtwebengine-debugging.html)).
+The daily app's graphics settings are unchanged. Local source captures with no
+web assets use the plain view and must not be reported as typeset acceptance.

@@ -2,16 +2,21 @@
 
 Updated 2026-11-15. **Development, unreleased; no complete beta acceptance.**
 
-Latest platform attempt: [3b344c7/run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158).
-Mac arm64 (5m30s) and Linux (2m55s) pass actual packaged backward export/schema
-initialization with pinned0.4.3 data, plus all11 strict sync protocol checks.
-Windows passes prior packaged journeys but fails old-source preflight: Git archive
-converted LF to CRLF. Exact hash checking remains unchanged; a Windows-only
-archive recipe follow-up is required. This is not an all-platform passing run.
-The [Mac guide](testing/mac-acceptance-0.5.md) now links the new usable Mac package.
-The following355382c results remain the last common all-platform baseline.
+Latest native delivery: Mac arm64/Linux use clean3b344c7
+([run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158));
+Windows uses clean4ee3427
+([run43715636579](https://github.com/puddings-world/Paperfact/actions/runs/43715636579)).
+Mac5m30s/Linux2m55s/Windows7m34s pass packaged0.4.3 format initialization/export
+preservation and all11 strict sync protocol checks. Windows additionally passes
+isolated install/reinstall/uninstall with research preserved. Its first archive
+preflight failed because Git changed line endings; the corrected follow-up passes
+without changing verification. App runtime is unchanged between the two commits.
+The [Mac guide](testing/mac-acceptance-0.5.md) records exact artifacts/hashes.
+These are separate source commits, not one common build. Installed old-binary,
+physical-device and hosted acceptance remain open; no public release was created.
+The following355382c evidence is the previous common all-platform baseline.
 
-Current native candidate [355382c / run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
+Previous common native baseline [355382c / run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
 clean source `355382c7557150c98aee08be7b6fd12ea8274791`, version `0.5.0.dev`.
 All three packaged reports pass: four PDFs, CLI/MCP retry/restart, reader/handoff,
 verified-history service restart and citation graphs. Mac arm64 passes three starts
@@ -101,3 +106,8 @@ The exact inventory, preservation scope and migration prerequisites are in
 [workspace stabilization](workspace-stabilization-2026-11-14.md).
 The [execution board](parallel-work-0.5.0.md) records actual claims and current scope. Detailed older evidence remains in the development/continuation
 ledgers; overlapping case counts are not summed into a completion percentage.
+
+
+Source-only screenshot readiness waits for saved/rendered content and refuses
+blank PNGs. Local plain/WebEngine capture checks pass; native Mac screenshot
+changes await the next coherent candidate. App runtime is unchanged.

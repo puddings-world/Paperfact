@@ -7620,3 +7620,38 @@ Downloaded mobile artifact has the same8b6f4eac84eeedabd025cfa2237cc18c3312a1683
 content ID as the earlier offline-accepted v31. Existing byte verifier passes
 50files/3,953,007bytes in0.219s governed. Initial shell quoting failed before
 verification; corrected with stdin script, not a different acceptance rule.
+
+
+## 2026-11-15: Windows follow-up accepted and screenshot evidence corrected
+
+Clean4ee34278c463a25f6b40fc64e01b2286187c3c5e/run43715636579 passes7m34s.
+Downloaded provenance records pinned0.4.3 old-format preservation true, actual
+schema initialization, both exports and edited deck bytes unchanged. All11 strict
+sync flags pass. Isolated installer install/reinstall/uninstall and research
+preservation pass; old-binary upgrade and registry/shortcuts remain false.
+Setup payload SHA25615c308826c35e64bc990d3d1541cd473864088d7a36cf5b00bf65376a27f6595;
+GitHub artifact ZIP SHA256ccedd3f1135bdfa5ecc42aca43bf0282c2698f45e671a3ce43d475eac86e5e08.
+The Mac guide distinguishes3b344c7 Mac/Linux from4ee3427 Windows; app runtime is
+unchanged between them. No common-build, installed Mac, hosted or release claim.
+
+Inspected actual Mac screenshot artifact: dive.png was uniform/blank. Existing
+script pumped events a fixed number of times despite asynchronous saved-content
+preparation and WebEngine rendering. Made the existing command import-safe and
+wait for preparation idle, nonempty saved body and the exact rendered page with
+fonts ready; timeouts are finite and a blank pixel surface is refused before save.
+Screenshot CI alone now uses native Cocoa on Mac and documented --disable-gpu;
+normal app graphics and runtime code remain unchanged. New helper cases cover
+queued completion, timeout, blank refusal, saved image bytes and stale-page callbacks.
+Initial Ruff spacing failure corrected; initial3 cases pass0.49s/3.4s stages.
+
+Actual isolated Windows plain capture passes2.688s and was visually inspected.
+Real WebEngine initially reports GPU context loss and the new blank guard refuses
+its empty surface in10.016s. With documented software flag, real typeset capture
+passes5.328s, visually showing saved explanation, formula and code blocks. Uses
+existing public web assets only, isolated synthetic data/home and dead proxies;
+no owner app, research, account login, model call or download. Native Mac screenshot
+change remains unexecuted until a later coherent candidate. No new native build.
+
+Final screenshot/workflow selection5 pass0.75s/3.9s stages; critical14 pass7.54s/10.8s
+stages; docs58 pass1.80s/5.1s stages. Privacy/Ruff and whitespace pass. All local
+checks sequential and governed; no historical full suite or additional native run.

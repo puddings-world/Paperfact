@@ -45,16 +45,21 @@ Historical full-suite execution is not an automatic release prerequisite.
 | Privacy | Sync excludes AI credentials/telemetry; logs redact secrets and research bodies | Payload/log fixtures and consent boundary tests |
 | Distribution | Source, binaries, version, license/notices and provenance match | Clean build info, source archive, checksums and three-platform artifacts |
 
-Latest platform attempt: [3b344c7/run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158).
-Mac arm64 (5m30s) and Linux (2m55s) pass actual packaged backward export/schema
-initialization with pinned0.4.3 data, plus all11 strict sync protocol checks.
-Windows passes prior packaged journeys but fails old-source preflight: Git archive
-converted LF to CRLF. Exact hash checking remains unchanged; a Windows-only
-archive recipe follow-up is required. This is not an all-platform passing run.
-The [Mac guide](testing/mac-acceptance-0.5.md) now links the new usable Mac package.
-The following355382c results remain the last common all-platform baseline.
+Latest native delivery: Mac arm64/Linux use clean3b344c7
+([run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158));
+Windows uses clean4ee3427
+([run43715636579](https://github.com/puddings-world/Paperfact/actions/runs/43715636579)).
+Mac5m30s/Linux2m55s/Windows7m34s pass packaged0.4.3 format initialization/export
+preservation and all11 strict sync protocol checks. Windows additionally passes
+isolated install/reinstall/uninstall with research preserved. Its first archive
+preflight failed because Git changed line endings; the corrected follow-up passes
+without changing verification. App runtime is unchanged between the two commits.
+The [Mac guide](testing/mac-acceptance-0.5.md) records exact artifacts/hashes.
+These are separate source commits, not one common build. Installed old-binary,
+physical-device and hosted acceptance remain open; no public release was created.
+The following355382c evidence is the previous common all-platform baseline.
 
-Current common candidate: [355382c / run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
+Previous common native baseline: [355382c / run43705488673](https://github.com/puddings-world/Paperfact/actions/runs/43705488673),
 clean `355382c7557150c98aee08be7b6fd12ea8274791`, version `0.5.0.dev`.
 All three native reports pass critical14, first-sync preservation, six source
 lifetime journeys and frozen research/service acceptance. Four PDFs, CLI/MCP
@@ -181,3 +186,8 @@ Limitations, unresolved failures and responsible owner:
 
 This plan does not authorize cloud deployment, telemetry upload, credential changes,
 paid model calls, destructive real-workspace testing or publication.
+
+
+Source-only screenshot readiness waits for saved/rendered content and refuses
+blank PNGs. Local plain/WebEngine capture checks pass; native Mac screenshot
+changes await the next coherent candidate. App runtime is unchanged.

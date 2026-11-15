@@ -553,3 +553,79 @@ def test_ci_legacy_archive_preserves_git_blobs_with_windows_line_endings(tmp_pat
     with tarfile.open(archive) as data:
         data.extractall(source, filter='data')
     assert verify._legacy_source_check(source)
+
+
+@pytest.fixture
+def screenshot_tool():
+    spec = importlib.util.spec_from_file_location('screenshots', ROOT / 'scripts/screenshots.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_screenshots_wait_for_observed_queued_work_and_timeout(screenshot_tool, monkeypatch):
+    calls = []
+    app = types.SimpleNamespace(processEvents=lambda: calls.append('event'))
+    monkeypatch.setattr(screenshot_tool.time, 'sleep', lambda _seconds: None)
+    screenshot_tool.wait_until(app, lambda: len(calls) == 3, label='content')
+    assert calls == ['event'] * 3
+    with pytest.raises(TimeoutError, match='saved text'):
+        screenshot_tool.wait_until(app, lambda: False, label='saved text', seconds=0)
+
+
+@pytest.mark.parametrize('blank', [False, True])
+def test_screenshots_reject_blank_surface_instead_of_publishing_it(
+    screenshot_tool, tmp_path, blank,
+):
+    from PySide6.QtGui import QColor, QImage
+
+    image = QImage(4, 4, QImage.Format.Format_RGBA8888)
+    image.fill(QColor('white'))
+    if not blank:
+        image.setPixelColor(1, 1, QColor('black'))
+    target = tmp_path / 'reading.png'
+    class Pixmap:
+        def toImage(self):  # noqa: N802
+            return image
+
+        def save(self, filename):
+            return image.save(filename)
+
+    view = types.SimpleNamespace(_body='<p>Saved research</p>', rich=False,
+                                 grab_page=lambda: Pixmap())
+    reader = types.SimpleNamespace(dive_view=view, preparation=types.SimpleNamespace(busy=True))
+    app = types.SimpleNamespace(processEvents=lambda: setattr(reader.preparation, 'busy', False))
+    if blank:
+        with pytest.raises(RuntimeError, match='surface is blank'):
+            screenshot_tool.save_reading_view(app, reader, target)
+        assert not target.exists()
+    else:
+        screenshot_tool.save_reading_view(app, reader, target)
+        assert target.exists() and not QImage(str(target)).isNull()
+
+
+def test_screenshots_ignore_render_completion_for_an_older_page(screenshot_tool, tmp_path):
+    from PySide6.QtGui import QColor, QImage
+
+    image = QImage(4, 4, QImage.Format.Format_RGBA8888)
+    image.fill(QColor('white'))
+    image.setPixelColor(1, 1, QColor('black'))
+    scripts = []
+    class Page:
+        def runJavaScript(self, script, world, callback):  # noqa: N802
+            scripts.append(script)
+            if len(scripts) == 1:
+                view._page_id = 2
+            callback(True)
+
+    pixmap = types.SimpleNamespace(toImage=lambda: image, save=lambda name: image.save(name))
+    view = types.SimpleNamespace(_body='Saved text', rich=True, _page_id=1,
+                                 view=types.SimpleNamespace(page=lambda: Page()),
+                                 grab_page=lambda: pixmap)
+    reader = types.SimpleNamespace(dive_view=view, preparation=types.SimpleNamespace(busy=False))
+    target = tmp_path / 'reading.png'
+    screenshot_tool.save_reading_view(types.SimpleNamespace(processEvents=lambda: None),
+                                      reader, target)
+    assert len(scripts) == 2
+    assert 'PAGE_ID === 1' in scripts[0] and 'PAGE_ID === 2' in scripts[1]
+    assert QImage(str(target)).pixelColor(1, 1) == QColor('black')
