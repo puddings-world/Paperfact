@@ -30,7 +30,8 @@ _DEFAULT_POLICY = object()
 POSITION_FORMATS = {"paperfact.position-source-owner.v1", "paperfact.position-source-owner.v2"}
 NOTE_FORMAT = "paperfact.note-source-owner.v1"
 LINEAGE_FORMAT = "paperfact.lineage-source-observation.v1"
-ATOMIC_FORMATS = {"paperfact.position-source-owner.v2", NOTE_FORMAT, LINEAGE_FORMAT}
+SURVEY_FORMAT = "paperfact.survey-source-observation.v1"
+ATOMIC_FORMATS = {"paperfact.position-source-owner.v2", NOTE_FORMAT, LINEAGE_FORMAT, SURVEY_FORMAT}
 
 
 def _owner(context, snapshot):
@@ -81,11 +82,14 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
         owner = _decode(row["owner_json"])
     except (ValueError, TypeError):
         raise ValueError("Invalid source snapshot owner") from None
+    if not isinstance(owner, dict) or not isinstance(owner.get("format"), str):
+        raise ValueError("Unsupported source snapshot owner")
     position = (
         isinstance(owner, dict) and owner.get("format") in POSITION_FORMATS
     )
     note = isinstance(owner, dict) and owner.get("format") == NOTE_FORMAT
     lineage = isinstance(owner, dict) and owner.get("format") == LINEAGE_FORMAT
+    survey = isinstance(owner, dict) and owner.get("format") == SURVEY_FORMAT
     lineage_fields = (
         {"corpus_id", "generation_request_id", "source_id", "source_identity",
          "focal_paper_id", "focal_lifecycle"}
@@ -101,10 +105,12 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
             "parent_lifecycle",
             "source_owner_id",
         } | ({"position_key"} if position else set())
-        | ({"draft_key"} if note else set()) | lineage_fields,
+        | ({"draft_key"} if note else set()) | lineage_fields
+        | ({"list_id", "list_lifecycle", "generation_request_id", "source_id"}
+           if survey else set()),
     )
     if owner["format"] not in {
-        "paperfact.source-owner.v1", NOTE_FORMAT, LINEAGE_FORMAT, *POSITION_FORMATS
+        "paperfact.source-owner.v1", NOTE_FORMAT, LINEAGE_FORMAT, SURVEY_FORMAT, *POSITION_FORMATS
     }:
         raise ValueError("Unsupported source snapshot owner")
     identity = owner["database_identity"]
@@ -135,6 +141,10 @@ def validate(row, *, max_pdf_bytes=_DEFAULT_POLICY):
         from paper_daily.lineage_source_snapshots import validate_owner
 
         validate_owner(owner, row)
+    if survey:
+        from paper_daily.survey_content import validate_source_owner
+
+        validate_source_owner(owner, row)
     if position and (
         owner["position_key"] != row["sha256"] or owner["source_owner_id"] != owner["paper_id"]
     ):

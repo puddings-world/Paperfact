@@ -636,6 +636,147 @@ def test_survey_sources_use_registered_managed_original_not_legacy_alias(tmp_pat
              passages=[dict(source_id=corpus.sources[0]['id'], quote='Research',
                             page=1, anchor=None)]),
     ])]
-    report = survey_sources.verify(corpus, sections, provenance=SURVEY_PROVENANCE).report
+    proposal = survey_sources.verify(corpus, sections, provenance=SURVEY_PROVENANCE)
+    report = proposal.report
     assert report['sections'][0]['statements'][0]['passages'][0]['location']['state'] == 'located'
+    receipts = survey_sources.retain_originals(proposal)
+    owner = json.loads(receipts[0]['owner_json'])
+    assert owner['paper_id'] == LOCAL
+    assert owner['source_owner_id'] == corpus._documents[0].paper_id
+    assert survey_sources.retained_originals(proposal, receipts)[0][0].read_bytes() == raw
     assert survey_sources.current(corpus)
+
+
+def test_survey_original_pairs_survive_primary_replacement_and_exact_retry(
+    conn, survey_original_context,
+):
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily import local_source_owners, source_snapshots, survey_sources
+    from paper_daily.manual_highlight_ops import capture_owner
+
+    context, root, raw = survey_original_context
+    corpus = survey_sources.capture(context, legacy_root=root)
+    proposal = survey_sources.verify(corpus, survey_source_sections(corpus),
+                                     provenance=SURVEY_PROVENANCE)
+    before = '\n'.join(conn.iterdump())
+    receipts = survey_sources.retain_originals(proposal)
+    assert len(receipts) == 1
+    owner = json.loads(receipts[0]['owner_json'])
+    assert owner['format'] == source_snapshots.SURVEY_FORMAT
+    assert owner['list_id'] == 'cat' and owner['list_lifecycle'] == context.data['parent_lifecycle']
+    assert owner['generation_request_id'] == context.request_id
+    assert owner['paper_id'] == 'a' and owner['source_id'] == corpus.sources[0]['id']
+    assert source_snapshots.list_owned(context.db_path) == receipts
+    files = survey_sources.retained_originals(proposal, receipts)
+    assert len(files) == 1 and files[0][0].read_bytes() == raw
+    assert {item.name for item in files[0][0].parent.iterdir()} == {'receipt.json', 'original.pdf'}
+    (root / 'a.pdf').write_bytes(b'New current source bytes')
+    assert not survey_sources.current(corpus)
+    assert survey_sources.retain_originals(proposal) == receipts
+    assert survey_sources.retained_originals(proposal, receipts)[0][0].read_bytes() == raw
+    claim_owner = capture_owner(context.db_path, 'a')
+    with closing(sqlite3.connect(context.db_path)) as db:
+        assert not local_source_owners._owner_matches(db, claim_owner, receipts[0], generated=True)
+        assert not local_source_owners._owner_matches(db, claim_owner, receipts[0])
+    assert '\n'.join(conn.iterdump()) == before
+
+
+def test_cancelled_survey_original_group_reuses_only_complete_pairs(
+    conn, survey_original_context,
+):
+    from paper_daily import source_snapshots, survey_sources
+
+    context, root, raw = survey_original_context
+    (root / 'b.pdf').write_bytes(raw)
+    corpus = survey_sources.capture(context, legacy_root=root)
+    proposal = survey_sources.verify(corpus, survey_source_sections(corpus),
+                                     provenance=SURVEY_PROVENANCE)
+    checks = []
+
+    def cancelled():
+        checks.append(True)
+        return len(checks) >= 3
+
+    before = '\n'.join(conn.iterdump())
+    with pytest.raises(ValueError, match='cancelled'):
+        survey_sources.retain_originals(proposal, cancelled=cancelled)
+    partial = source_snapshots.list_owned(context.db_path)
+    assert len(partial) == 1
+    assert source_snapshots.source_path(context.db_path, partial[0]).read_bytes() == raw
+    receipts = survey_sources.retain_originals(proposal)
+    assert len(receipts) == 2
+    assert len(source_snapshots.list_owned(context.db_path)) == 2
+    assert {r['request_id'] for r in partial}.issubset({r['request_id'] for r in receipts})
+    assert all(path.read_bytes() == raw for path, _version in
+               survey_sources.retained_originals(proposal, receipts))
+    assert survey_sources.retain_originals(proposal) == receipts
+    assert '\n'.join(conn.iterdump()) == before
+
+
+def test_survey_original_receipt_or_byte_corruption_cannot_gain_association(
+    survey_original_context,
+):
+    from copy import deepcopy
+
+    from paper_daily import source_snapshots, survey_sources
+
+    context, root, _raw = survey_original_context
+    corpus = survey_sources.capture(context, legacy_root=root)
+    proposal = survey_sources.verify(corpus, survey_source_sections(corpus),
+                                     provenance=SURVEY_PROVENANCE)
+    receipts = survey_sources.retain_originals(proposal)
+    changed = deepcopy(receipts)
+    owner = json.loads(changed[0]['owner_json'])
+    owner['list_lifecycle'] = '0' * 32
+    changed[0]['owner_json'] = json.dumps(owner)
+    with pytest.raises(ValueError, match='exact input observation'):
+        source_snapshots.validate(changed[0])
+    with pytest.raises(ValueError, match='association differs'):
+        survey_sources.retained_originals(proposal, changed)
+    malformed = deepcopy(receipts[0])
+    invalid_owner = json.loads(malformed['owner_json'])
+    invalid_owner['format'] = []
+    malformed['owner_json'] = json.dumps(invalid_owner)
+    with pytest.raises(ValueError, match='Unsupported source snapshot owner'):
+        source_snapshots.validate(malformed)
+    with pytest.raises(ValueError, match='checked proposal'):
+        survey_sources.retain_originals(proposal.report)
+    original = survey_sources.retained_originals(proposal, receipts)[0][0]
+    original.write_bytes(b'Corrupted archived original')
+    with pytest.raises(ValueError):
+        survey_sources.retained_originals(proposal, receipts)
+    with pytest.raises(ValueError):
+        survey_sources.retain_originals(proposal)
+    assert original.read_bytes() == b'Corrupted archived original'
+    assert context.target is None
+
+
+def test_detached_backup_keeps_survey_original_as_inactive_provenance(survey_original_context):
+    import sqlite3
+    import zipfile
+    from contextlib import closing
+
+    from paper_daily import source_snapshots, survey_sources, sync_recovery
+
+    context, root, raw = survey_original_context
+    corpus = survey_sources.capture(context, legacy_root=root)
+    proposal = survey_sources.verify(corpus, survey_source_sections(corpus),
+                                     provenance=SURVEY_PROVENANCE)
+    receipts = survey_sources.retain_originals(proposal)
+    (root / 'a.pdf').unlink()
+    archive = context.db_path.parent / 'survey-originals.zip'
+    sync_recovery.create(context.db_path, archive, legacy_root=root)
+    with zipfile.ZipFile(archive) as zipped:
+        assert zipped.read('objects/' + receipts[0]['sha256']) == raw
+    destination = context.db_path.parent / 'detached-survey'
+    sync_recovery.restore_detached(archive, destination)
+    assert source_snapshots.list_owned(destination / 'papers.db') == []
+    with closing(sqlite3.connect(destination / 'papers.db')) as db:
+        kept = [json.loads(r[0]) for r in db.execute(
+            'SELECT data FROM recovery_records WHERE table_name=?', (source_snapshots.TABLE,))]
+        assert not db.execute("SELECT 1 FROM sqlite_master "
+                              "WHERE name='paperfact_sync_identity'").fetchone()
+    assert kept == receipts
+    assert (destination / 'objects' / receipts[0]['sha256']).read_bytes() == raw

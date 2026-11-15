@@ -126,3 +126,11 @@ quote checks, explicit missing states and currentness are locally verified, incl
 registered managed originals and foreign equal-byte refusal. No UI/AI dispatch,
 canonical storage, sync/package/recovery integration or new native build is claimed.
 See the [engine contract](analysis-audit.md#source-aware-survey-engine-local-implementation-not-a-shipped-workflow).
+
+
+Source aftera705cea retains actual survey originals as atomic private PDF/receipt
+pairs, with exact retry/cancel/corruption handling and explicit exclusion from
+claim-original grants. Independent detached backup/restore preserves those bytes
+as inactive provenance. It does not save or synchronize a canonical survey report.
+The next report publisher must use a list-owned verified artifact (256KiB operation
+limit versus1MiB report), followed by peer/package/mobile/recovery and UI integration.

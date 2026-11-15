@@ -283,3 +283,65 @@ def pages(corpus, *, max_bytes=240 * 1024, cancelled=lambda: False):
                 raise ValueError('Selected survey original text exceeds the prompt budget')
     _cancel(cancelled)
     return result
+
+
+def _original_rows(proposal):
+    from paper_daily import source_snapshots
+
+    checked_proposal(proposal)
+    corpus = proposal._capture
+    data = _checked(corpus)
+    context = corpus._context.data
+    result = []
+    for source, snapshot in zip(data['sources'], corpus._snapshots, strict=True):
+        if snapshot is None:
+            continue
+        original, raw = evidence._checked_snapshot(snapshot)
+        owner = dict(format=source_snapshots.SURVEY_FORMAT,
+                     database_identity=context['database_identity'], binding=context['binding'],
+                     paper_id=source['paper_id'], parent_lifecycle=source['paper_lifecycle'],
+                     source_owner_id=original['paper_id'], list_id=corpus._context.owner_id,
+                     list_lifecycle=context['parent_lifecycle'],
+                     generation_request_id=corpus._context.request_id, source_id=source['id'])
+        row = dict(request_id='survey-original:' + survey_content.content.hashed(owner),
+                   owner_json=generation._json(owner), sha256=source['document_hash'],
+                   size=len(raw), media_type='application/pdf')
+        source_snapshots.validate(row)
+        result.append((row, raw))
+    return result
+
+
+def retain_originals(proposal, *, cancelled=lambda: False):
+    """Durably archive complete original/receipt pairs before any canonical SQL write.
+
+    A cancelled group may leave complete private pairs; retry reuses their exact
+    bytes. No active original, survey row, outbox operation or ownership mapping
+    is created. A later accepted publication must associate every returned row.
+    """
+    from paper_daily import position_source_snapshots as atomic_sources
+
+    _cancel(cancelled)
+    rows = _original_rows(proposal)
+    for row, raw in rows:
+        _cancel(cancelled)
+        atomic_sources.publish(proposal._capture._context.db_path, row, data=raw)
+    _cancel(cancelled)
+    return [row for row, _raw in rows]
+
+
+def retained_originals(proposal, receipts, *, cancelled=lambda: False):
+    """Read/check the complete exact archive; no re-download or replacement on failure."""
+    from paper_daily import position_source_snapshots as atomic_sources
+
+    _cancel(cancelled)
+    expected = [row for row, _raw in _original_rows(proposal)]
+    if (not isinstance(receipts, list)
+            or generation._json(receipts) != generation._json(expected)):
+        raise ValueError('Survey original association differs from its checked proposal')
+    files = []
+    for row in expected:
+        _cancel(cancelled)
+        path, version = atomic_sources.verify(proposal._capture._context.db_path, row)
+        files.append((path, version))
+    _cancel(cancelled)
+    return tuple(files)

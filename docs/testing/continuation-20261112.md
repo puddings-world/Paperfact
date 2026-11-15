@@ -7728,3 +7728,46 @@ evidence follows. No full historical or real-provider/installed-device acceptanc
 Final integration gates: critical14 pass8.13s/11.7s stages; docs58 pass2.01s/5.7s
 stages. Privacy/Ruff/whitespace pass. Source-only checkpoint; no exhaustive suite
 or native build. Canonical source-engine evidence copies synchronized normally.
+
+
+## 2026-11-15: durable survey originals through existing atomic archives
+
+Source aftera705cea. Added the closed private survey source-observation owner kind
+to the existing atomic source-pair storage; no second file warehouse or research
+schema was created. Each record hashes its paper/lifetime/hash plus list/lifetime
+and generation request. Validation stays in survey_content, so archive metadata
+does not import the AI dispatcher. Malformed owner-format types fail ValueError.
+
+survey_sources.retain_originals requires an actual sealed checked proposal. Each
+PDF/receipt is published together using the maintained fsync/stage/rename seam.
+Group cancellation can leave complete unassociated pairs; retry reuses exact
+records/bytes without duplicate observations. retained_originals requires the
+complete expected association and verifies actual stored files. Wrong list tokens,
+forged receipt data, raw report dictionaries and corrupt archived files fail;
+corruption is never overwritten as a retry shortcut. Canonical SQL/outbox and
+active reader state remain untouched. Survey receipt cannot authorize a claim
+original even with an otherwise matching paper owner; added explicit exclusion
+alongside the existing Lineage corpus guard.
+
+Actual managed original (with a different legacy alias) is retained correctly.
+Replacing/removing current a.pdf cannot lose its captured original. Independent
+detached backup includes exact bytes and owner record, restores them as inactive
+recovery provenance, and creates neither active source nor sync identity. Source
+receipt consumers (enrollment, outcome packaging and claim staging) were inspected;
+actual focused existing receipt/Lineage/claim regression13 passes22.50s/26.8s stages.
+New retained-original cases3 pass5.79s/12.5s; initial native/detached2 pass4.98s/8.5s.
+Final coherent retained/native/detached5 pass9.04s/12.3s after pure-validator and
+malformed-owner handling. SQL dump remains unchanged in archive-only actions.
+
+Publication sizing decision: operation limit256KiB is below report limit1MiB.
+Do not force inline report JSON into ordinary survey rows. Next extend the
+existing verified artifact path with explicit list ownership, keeping prose and
+source ledger in one body, selected paper lifetimes and receiver bindings explicit.
+Original assets must precede canonical publication; body/original availability
+remain distinct. Canonical report persistence, typed peer/bundle/recovery, AI
+workflow and UI remain open. No native rebuild, real accounts, paid call, public
+release or cloud resource change. Final critical/docs evidence follows.
+
+Final checkpoint gates: critical14 pass8.34s/12.2s stages; docs58 pass2.05s/5.8s
+stages. Privacy/Ruff/whitespace pass. Canonical evidence copies synchronized;
+critical/release selectors unchanged. No full historical suite or native rebuild.

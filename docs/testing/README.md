@@ -666,3 +666,15 @@ selection, cancellation and byte budgets cannot mutate research. These are inter
 read-only engine checks, not source-ledger saving, peer/package, UI or hosted passes.
 Critical14/release38 selections are unchanged; no historical suite is required to
 iterate on this slice. The exact checkpoint is in the continuation ledger.
+
+
+### Survey original retention and independent backup
+
+The5 final cases (9.04s;12.3s stages) check actual durable original/receipt pairs,
+current-PDF replacement, cancellation between two originals, exact retry without
+duplicate history, receipt/byte corruption and managed-original ownership. They
+also create a real detached backup, restore into another directory, compare exact
+original bytes and confirm no active sync identity or source grant is revived.
+The shared receipt/Lineage/claim regression selection13 passes22.50s/26.8s stages.
+These cover archive storage and isolation, not a canonical survey report or its
+list-package/peer transport. Critical14/release38 selections remain unchanged.

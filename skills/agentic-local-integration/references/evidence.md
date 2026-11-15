@@ -941,3 +941,16 @@ and refusal of model-supplied checked locations. Immutable original quote locati
 is separate from scientific support and from later canonical publication. Native
 binding, durable source retention, bundle/peer/recovery and UI remain pending for
 this aggregate feature. Do not infer those gates from this local engine checkpoint.
+
+
+### Aggregate original retention (validated-local, 2026-11-15)
+
+Survey originals reuse complete fsync/stage/rename receipt pairs. Input paper and
+list lifetimes plus generation request are part of the owner hash; no raw receipt
+is a claim-publication grant. Cancellation between originals retains complete
+unassociated pairs for exact retry. Actual detached backup/restore keeps the bytes
+and metadata inactive, without replaying identity. New5 cases pass9.04s; affected
+existing receipt/Lineage/claim13 pass22.50s. This verifies original archives only;
+canonical report, peer/package/mobile and UI are pending. A256KiB operation cannot
+carry an arbitrary1MiB inline report: the planned next boundary is a scoped verified
+artifact, not a weakened wire limit or synthetic paper owner. No new global rule.

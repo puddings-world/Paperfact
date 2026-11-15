@@ -231,3 +231,16 @@ def validate_pair(report, body):
     if body_hash(body) != report['body_hash']:
         raise ValueError('Survey prose changed; its previous sources require review')
     return report
+
+
+def validate_source_owner(owner, row):
+    """Validate archive metadata only; a receipt is not a publication capability."""
+    content.text(owner['list_id'], 4096)
+    _lifetime(owner['list_lifecycle'])
+    content.text(owner['generation_request_id'], 128)
+    content.digest(owner['source_id'])
+    expected = source_id(owner['paper_id'], owner['parent_lifecycle'], row['sha256'])
+    if (owner['source_id'] != expected
+            or row['request_id'] != 'survey-original:' + content.hashed(owner)):
+        raise ValueError('Survey original receipt differs from its exact input observation')
+    return owner

@@ -373,9 +373,10 @@ still pass. No extra model call, table, protocol or consent change was introduce
 
 ## Source-aware survey engine: local implementation, not a shipped workflow
 
-The closed record and owned-original proposal engine are implemented locally.
-Canonical saving, original retention, AI dispatch, UI, identity mapping, bundle
-transport and recovery are still required. Existing plain surveys are unchanged;
+The closed record, owned-original proposal engine and durable original/receipt
+pairs are implemented locally. Detached backup preserves those originals as inactive
+provenance. Canonical report publication, AI dispatch, UI, identity mapping, list
+package transport and report recovery are still required. Plain surveys are unchanged;
 no model call or PDF download happens from opening a list or importing this code.
 
 ```mermaid
@@ -386,7 +387,8 @@ flowchart LR
     M --> V[Deterministic quote checks]
     C --> V
     V --> R[Sealed original-snapshot proposal]
-    R -. Persistence and source retention pending .-> S[Shared operations / packages / UI]
+    R --> A[Atomic private originals and receipts]
+    A -. Canonical report publication pending .-> S[Shared operations / packages / UI]
 ```
 
 Internal development interfaces (not CLI/MCP commands yet):
@@ -399,6 +401,8 @@ Internal development interfaces (not CLI/MCP commands yet):
 | `survey_sources.verify(corpus, sections, *, provenance, cancelled=...)` | Quotes located against sealed originals; model-supplied checked locations are rejected; scientific support remains unperformed |
 | `survey_sources.current(corpus)` | Current input/desired-original readiness for a future publisher; stale original proposals remain inspectable without becoming current again |
 | `survey_sources.checked_proposal(proposal)` | Defensive report copy only from the in-process checked proposal; decoding JSON alone cannot recreate publication authority |
+| `survey_sources.retain_originals(proposal, *, cancelled=...)` | Reuse atomic PDF/receipt pairs; interrupted groups retain complete pairs for exact retry; no canonical row, outbox or active mapping |
+| `survey_sources.retained_originals(proposal, receipts, *, cancelled=...)` | Read/check the complete exact association and file bytes; wrong receipts, corrupt bytes and fallback substitution fail |
 | `survey_content.assemble / validate / encode / decode / render / validate_pair` | Closed versioned report, exact prose/digest pairing, source states and bounded strict JSON; no filesystem, AI or ownership grant |
 
 The record is `paperfact.survey-evidence.v1`, recipe `list-survey-sources.v1`.
@@ -424,8 +428,41 @@ and model locations, strict JSON/private-field denial and unchanged model prompt
 A source record's old captured status is not current availability. The normal
 reader must use actual mapped ownership and retained originals after persistence;
 coincident IDs/titles/hashes in another workspace cannot substitute for that step.
-Independent package/native-peer/source recovery and desktop/mobile UX remain open.
-No new table, public protocol field, feature switch or provider call is enabled.
+Independent list-package/native-peer/report recovery and desktop/mobile UX remain
+open. Detached original-only recovery is verified separately. No new canonical
+table, public protocol field, feature switch or provider call is enabled.
+
+### Durable originals and the next publication boundary
+
+The existing atomic source archive accepts the closed private owner format
+`paperfact.survey-source-observation.v1`. It binds the input paper/lifetime,
+original hash, list/lifetime and generation request. Its request ID hashes the
+whole owner. Receipt validation stays in the pure codec. As with Lineage corpus
+observations, a survey receipt cannot authorize a claim original, create a device
+grant or activate a document. Generic backup may archive it as inactive provenance.
+Partial cancellation leaves only complete PDF/receipt pairs. Retry checks those
+exact bytes; corruption is reported, never silently overwritten.
+
+The current operation ceiling is256KiB (`sync_journal.MAX_BYTES`), smaller than
+the1MiB report ceiling. Do not put the full report in an optional inline survey
+field or serialize private original receipts onto the wire. The next implementation
+must use the existing verified artifact boundary with **explicit list ownership**:
+
+- Keep the existing paper-owned artifact contract unchanged. A list-owned survey
+  variant needs a distinct owner namespace; never invent a fake paper ID.
+- Keep canonical prose and its source ledger in one verified report body. Publish
+  the report's metadata/reference atomically, with its actual list and selected
+  source-paper lifetimes and explicit receiver-owned identity mappings.
+- Stage immutable original assets before canonical acceptance. Blob hashes may
+  deduplicate bytes, while distinct source-owner proof/bindings remain distinct.
+- Distinguish received metadata, verified report text and available exact originals.
+  Missing bytes cannot mean complete offline evidence or trigger a substitute PDF.
+- Extend desktop/CLI/MCP, mobile artifact validation, bundle mapping and recovery
+  together; prove an independent peer/package roundtrip before enabling UI/AI jobs.
+
+This is the agreed next storage boundary, not a claim that list-owned artifacts
+or a durable canonical survey report are implemented. Existing plain surveys and
+published maintenance data remain unchanged.
 
 ## Primary references informing the design
 
