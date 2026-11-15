@@ -215,8 +215,11 @@ the AI creation workflow remain in development. The internal portable
 [survey package contract](docs/analysis-audit.md#portable-survey-package-contract-internal-product-adapters-pending)
 now validates exact report/PDF content. List-package export includes saved native
 or local reports and exact originals; import supports both enrolled and local-only
-receivers, preserving existing reports by default. Source-aware desktop reading,
+receivers, preserving existing reports by default. The desktop **Report & sources**
+tab reads these reports and opens their exact original pages without AI calls.
 AI creation and first-enrollment mapping remain in development.
+
+![Saved report with its exact original page, using a synthetic fixture](docs/images/saved-survey-sources.png)
 
 - Continue research across desktop, Mac, and a private mobile reader.
 - Work offline; synchronize changes with recoverable conflicts and version history.

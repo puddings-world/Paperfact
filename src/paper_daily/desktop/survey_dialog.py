@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QTabWidget,
     QTextBrowser,
     QVBoxLayout,
 )
@@ -151,10 +152,51 @@ class SurveyDialog(QDialog):
             f"QTextBrowser{{background:{palette['surface']};color:{palette['ink']};"
             f"border:1px solid {palette['border']};padding:18px;font-size:14px;}}"
         )
-        layout.addWidget(self.view, 1)
+        from paper_daily.desktop.survey_evidence import TEXT, SavedSurveyPane
+
+        words = TEXT.get(language, TEXT["en"])
+        self.report_tabs = QTabWidget()
+        self.report_tabs.addTab(self.view, words["legacy"])
+        self.saved_report = SavedSurveyPane(
+            self._database, list_id, palette,
+            current=lambda: self._workspace_matches() and self.list_id == list_id,
+            language=language, parent=self)
+        self.report_tabs.addTab(self.saved_report, words["tab"].replace("&", "&&"))
+        self._report_tab_touched = False
+        self.report_tabs.currentChanged.connect(self._report_tab_changed)
+        self.report_tabs.tabBarClicked.connect(
+            lambda _index: setattr(self, "_report_tab_touched", True))
+        self.saved_report.available.connect(self._report_available)
+        self.saved_report.drained.connect(self.reject)
+        layout.addWidget(self.report_tabs, 1)
         if self._hub is not None:
             self._hub.changed.connect(self._hub_changed)
         self._load()
+
+    def _report_available(self):
+        if (not self._report_tab_touched and not self._editing and self._workspace_matches()
+                and not self._running() and not self._waiting()):
+            self.report_tabs.setCurrentIndex(1)
+
+    def _report_tab_changed(self, _index):
+        self._report_tab_touched = True
+        legacy = self.report_tabs.currentIndex() == 0
+        self.status.setVisible(legacy)
+        self.run_btn.setVisible(legacy)
+        self.run_btn.setEnabled(legacy and not self._running() and self._workspace_matches())
+        self.edit_btn.setVisible(legacy and bool(self._stored) and not self._running())
+        self.evidence_notice.setVisible(legacy and self._stored is not None)
+
+    def reject(self):
+        pane = getattr(self, "saved_report", None)
+        if pane is None or pane.request_close():
+            super().reject()
+
+    def closeEvent(self, event):
+        if self.saved_report.request_close():
+            super().closeEvent(event)
+        else:
+            event.ignore()
 
     def _workspace_matches(self) -> bool:
         return self._workspace_owner.current() and Path(store.DB_PATH).resolve() == self._database
@@ -183,6 +225,7 @@ class SurveyDialog(QDialog):
 
     def _load(self) -> None:
         if not self._workspace_matches():
+            self.saved_report._stale()
             self.evidence_notice.clear()
             self.evidence_notice.hide()
             self.status.setText(self._edit_text["workspace"])
@@ -239,15 +282,23 @@ class SurveyDialog(QDialog):
                     self.pal,
                 )
             )
+        if self.report_tabs.currentIndex() != 0:
+            self.run_btn.setEnabled(False)
+            self.edit_btn.hide()
+            self.evidence_notice.hide()
         if running:
             self.status.setText("正在撰寫綜覽…一次讀完整份清單,約五到十分鐘。")
 
     def _run(self) -> None:
+        if self.report_tabs.currentIndex() != 0:
+            return
         from paper_daily.desktop.ai_access import requires_ai
 
         requires_ai("survey")(type(self)._run_ready)(self)
 
     def _run_ready(self) -> None:
+        if self.report_tabs.currentIndex() != 0:
+            return
         if not self._workspace_matches():
             self.status.setText(self._edit_text["workspace"])
             return
@@ -356,6 +407,8 @@ class SurveyDialog(QDialog):
             self.job.kill()
 
     def _show_result(self):
+        self.saved_report.reopen()
+        self.report_tabs.setCurrentIndex(0)
         self._load()
         self.show()
         self.raise_()
@@ -408,7 +461,7 @@ class SurveyDialog(QDialog):
             self.status.setText("無法啟動清單綜覽；請確認安裝後重試。")
 
     def _edit(self) -> None:
-        if self._editing or self._running():
+        if self._editing or self._running() or self.report_tabs.currentIndex() != 0:
             return
         if not self._workspace_matches():
             self.status.setText(self._edit_text["workspace"])

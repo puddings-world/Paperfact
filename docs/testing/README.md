@@ -798,3 +798,25 @@ paper-context/metadata-only export bounds. The earlier compound-import case now
 expects the newly supported local-only behavior rather than its temporary refusal.
 No historical assertion is dropped. Source-aware desktop display and first-enrollment
 mapping remain separate gates; a data roundtrip is not installed UI acceptance.
+
+
+### Saved-report desktop reading checks
+
+`tests/test_survey_reader.py` has seven cases across native/local ownership. It
+checks exact reports without AI/PDF parsing or SQL changes, sealed content, original
+page/quote PNG inspection, invalid selections/pages/cancel, actual metadata edits
+and native database replacement, plus an older applied report during a pending
+update. The normal native read reproduced absent-to-zero-byte WAL creation; only
+that empty observation is normalized, while real writes/replacement still refuse
+stale work. Seven pass9.09s (13.0s stages).
+
+`tests/test_survey_evidence_ui.py` has ten cases and runs with the three existing
+survey-dialog cases. Actual Qt widgets verify EN/ZH native/local report and PDF
+pages, separate legacy editing controls, literal HTML/no external-link dispatch,
+held-read deduplication, workspace/list switches, failed read/inspection retry,
+explicit cancel then retry, close/cancel/drain and reopening after legacy jobs.
+The active-overview job case also prevents a late saved report from stealing its
+tab. Final13 pass30.03s (35.4s stages). Synthetic EN/ZH screenshots are visually inspected;
+the first bare fixture's missing-font squares were corrected by using the app's
+actual Fusion/font initialization. This is not an installed Mac or real-provider
+journey. Fixed critical14/release38 selections are unchanged.

@@ -1061,3 +1061,18 @@ Changed local/compound/portable22 pass92.58s (106.5s stages). One earlier combin
 selection hit its300s limit and is not passing evidence. Installed UI, explicit
 first-enrollment mapping and reviewed reattachment remain open. This refines
 existing owner/transaction/archive lessons, not a new global rule.
+
+
+### Saved reading and delayed GUI delivery (validated-local, 2026-11-16)
+
+Native/local saved surveys reuse actual owner metadata and verified report bytes;
+original PDF parsing waits for an explicit source click. Retained applied reports
+stay visible with a pending-update notice. A read-only open reproduced creation of
+an empty WAL with unchanged DB/report proofs: normalize absent/zero-byte WAL only
+for local UI freshness, preserving nonempty WAL, real writes and native replacement
+guards. This is not service rollback protection. Reader7 pass9.09s. Real Qt10 plus
+legacy3 pass30.03s: literal source links, duplicate/retry/cancel/close, workspace/list
+switching and legacy-result reopening. Bare test fonts produced squares; actual
+production font/style initialization made EN/ZH captures readable and visually
+reviewed. First-enrollment/AI creation and installed physical devices remain open;
+these observations refine existing local/delivery methods, not global rules.

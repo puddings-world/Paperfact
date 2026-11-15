@@ -728,3 +728,37 @@ native report is selected. A bound workspace cannot silently use stale local
 provenance. Source-aware desktop reading/AI generation, explicit first-enrollment
 mapping and reviewed report reattachment still require implementation/acceptance.
 Public sharing data paths are implemented in source, not certified installed apps.
+
+
+### Native/local desktop saved-report reader
+
+`survey_reader.read(database, list_id, *, cancelled=...)` returns a sealed
+`SavedReport` after verifying actual report bytes and current native/local metadata.
+Its defensive `data` contains the saved report and explicit source context;
+`current()` uses captured database/WAL/file versions and report byte proofs without
+SQL or full PDF hashing on the GUI thread. Empty and absent WAL files are equivalent
+only for this local UI observation: nonempty WAL frames, database identity/content
+and report bytes remain guarded. This is not service-history or rollback authority.
+
+Native reading can retain the old applied report while newer desired metadata
+awaits bytes, with `update_pending` shown. Local reading uses actual list/paper
+lifetimes and local source associations. Unknown/detached provenance still needs
+review; old plain summaries never acquire missing source history.
+
+`inspect(saved, section, statement, passage, *, page=None, cancelled=...)` selects
+only an actual saved quotation, verifies the exact associated original and located
+quotes off-thread, and returns a bounded immutable-page PNG with explicit location
+status. No source substitution, current-reader switch, AI call, network, activation
+or research write occurs. An unlocated passage does not gain an invented location.
+
+SurveyDialog keeps the existing editable overview and adds the read-only Report &
+sources pane. Research text is HTML-escaped and only internally generated source
+links dispatch actions. Source inventory, no-passage notices and pending-version
+labels retain epistemic distinctions. One worker per pane deduplicates admission;
+refresh/retry, explicit cancel, original-page navigation, workspace/list delivery
+checks and close/drain are covered. A reopened old-generation result returns to
+its editable overview. EN/ZH screenshots use actual startup fonts/style.
+
+This adds saved reading, not structured AI creation, manual rewriting with renewed
+evidence, first-enrollment mapping, or reviewed detached reattachment. Physical
+Mac/Windows installed, hosted and mobile acceptance gates are unchanged.

@@ -772,3 +772,29 @@ carrying their figures straightforward; check the licence before sharing others.
 There is also an Artifact version of the same reader, for reading on a phone or
 another machine. It needs `sync-queue` and `reader-doc` to push data to it, and is
 optional; the desktop app is the primary interface.
+
+
+## Read a saved list report and its originals (v0.5 source)
+
+Open the list overview dialog and choose **Report & sources**. When a saved
+source-aware report exists, the dialog selects it initially unless you have already
+chosen a tab, are editing, or have an overview job running/queued. **Editable overview** retains the earlier manually editable summary;
+editing it does not change or reuse the saved report's quotation ledger.
+
+- Read each statement with its retained quotations. Missing passages and unavailable
+  originals are explicit. Source inventory describes recorded source versions,
+  not a count of PDFs freshly verified on this device.
+- Choose **Open original** below a quotation. A worker verifies the exact captured
+  PDF and saved locations, then opens its page beside the report. The current paper
+  reader and drafts stay unchanged. Use the page control and draggable divider to
+  inspect the original; copy the retained quotation from the text pane.
+- **Cancel** stops a pending read/inspection without changing research. **Refresh**
+  retries after missing bytes or a changed report. Repeated activation cannot queue
+  duplicate work. Closing cancels and drains the admitted worker.
+- If an updated report awaits its bytes, the retained applied version is marked
+  explicitly. A changed list/workspace/database suppresses late delivery.
+
+Report integrity and quotation positions do not establish that a scientific claim
+is supported. Inspection does not invoke AI, download originals, activate a primary
+PDF or modify research. This source implementation has native/local Windows Qt
+fixture evidence; installed Mac and physical-device acceptance remain open.

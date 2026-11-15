@@ -195,5 +195,13 @@ and explicit replacement retain native history. Normal list export now includes
 the extension, and a local-only receiver can import/re-export without enrollment.
 Local version history and exact source associations are stored in the same import
 transaction; detached backups preserve reports/PDFs as inactive data. Reviewed
-reattachment, first-enrollment mapping, desktop/AI wiring and hosted/physical gates
+reattachment, first-enrollment mapping, AI creation and hosted/physical gates
 remain open. No new installer or deployment.
+
+Desktop source now includes the separate Report & sources tab for native/local
+saved reports. It verifies report bytes off-thread and inspects exact original
+pages only on request; no AI/download/publication is triggered. Literal source
+text, missing passages, retained-version notices, refresh/retry, cancel, duplicate
+admission and stale workspace/list/close delivery are covered in real Qt fixtures.
+Existing editable overviews stay separate. EN/ZH screenshots use production fonts
+and were visually inspected. These source fixtures are not installed Mac acceptance.

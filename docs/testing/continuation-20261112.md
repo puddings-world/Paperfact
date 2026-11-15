@@ -8095,3 +8095,59 @@ Final critical14 passes11.68s (18.4s stages); docs/skill consistency58 passes3.3
 suite, installed-device or hosted-provider check was performed. All checks ran
 sequentially; final scoped passes supersede the earlier incomplete combined run
 for these exact inputs, while the timeout remains recorded above.
+
+
+## 2026-11-16: saved-report desktop reading and exact original pages
+
+Baseadb0daa; same existing worktree/board. Shared survey_reader reads actual
+native/local reports without writing research. Report bytes are verified off-thread;
+PDF hashes/pages/located quotes are verified only on explicit inspection. Sealed
+content, exact original ownership and database/WAL/report byte observations protect
+read/delivery. Native metadata can show a retained applied report while an updated
+version awaits bytes. No AI, network, activation or source substitution.
+
+The first normal native read failed currentness. Diagnostic evidence showed
+signature=True/proof=True and unchanged DB metadata, but absent WAL became a
+zero-byte WAL during read-only opening. Normalize only absent/empty WAL; retain
+nonempty WAL and full DB/file guards. No retry, sleep, weaker source hash or
+write-capable connection masks the failure. Reader7 pass9.09s/13.0s stages,
+including actual changed metadata/replaced DB refusal and pending-update reading.
+
+SurveyDialog now separates its existing editable summary from a saved Report &
+sources tab. Source-aware content selects initially unless the reader already
+chose a tab or is editing. HTML-escaped statements, literal quotations, missing
+passage labels, source inventory and exact-page previews retain explicit semantic
+limits. Legacy edit/generate controls are hidden for saved evidence; they do not
+rewrite it. Refresh and per-pane cancel are visible, one worker deduplicates jobs,
+workspace/list changes suppress delayed delivery, and close drains cancellation.
+The old job-result path can reopen its disposed pane and selects the editable tab.
+
+Actual Qt UI8 plus old3 initially pass23.74s/27.6s stages. Initial screenshots had
+missing glyphs even for English: the bare QApplication fixture omitted production
+style/font setup. Using actual startup Fusion/style and shipped fonts gives
+readable EN/ZH screenshots, visually inspected. No font download or global setting
+change. Visual review also removed a duplicate notice, retained the ampersand in
+the Qt tab label, and added clear original/page status and explicit cancellation.
+Final UI9 plus old3 pass25.55s/30.3s stages, including list as well as workspace
+switching and cancel-then-retry. Formatting-only failures were fixed before test
+execution; no historical expectation was removed. Final English synthetic screenshot
+is maintained under docs/images/saved-survey-sources.png.
+
+All tests are isolated, one governed job at a time,300s/two logical CPUs/25% cap.
+No historical full suite, native rebuild, real provider call, daily research write,
+public release or deployment. Structured AI creation, first-enrollment mapping,
+reviewed report reattachment, durable authority and hosted/physical-device gates
+remain open. This checkpoint proves source/Qt behavior, not installed-device parity.
+
+Final focus review reproduced an actual active-job race: saved-report completion
+selected tab1 while a legacy overview job was running, hiding its status. The
+single-case60s governed repro fails in3.922s (index1 versus expected0). Auto-select
+now respects active/queued jobs as well as reader tab choice and editing. The case
+passes with final UI10 plus old3:13 pass30.03s/35.4s stages. Existing assertions
+remain; no new fake job/model invocation is used. The maintained screenshot remains
+a synthetic local fixture, not the owner's research or an installed Mac capture.
+
+Final integration critical14 passes8.00s (12.2s stages); docs/skill/link consistency58
+passes3.58s (7.7s stages). Privacy/Ruff/whitespace pass. Critical14/release38 selectors
+stay unchanged. No exhaustive historical suite, native rebuild, daily-app restart,
+installed Mac/device or hosted-service acceptance is claimed.
