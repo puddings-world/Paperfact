@@ -179,7 +179,8 @@ cancellation and source/workspace changes. This is not an in-place adoption of
 the owner's source or automatic upload. Complete maintenance locking, supported
 writer/file coverage and installed-device acceptance remain separate gates.
 
-Validated resource-discovery receipts and their exact redundant completion hints
-now use the [private history adapter](initial-enrollment-history.md#resource-discovery-observations).
-Current resource links remain shared research; old lookup requests remain inactive.
+Validated citation, related-work, resource and manual-item histories use the
+[private compound archive adapter](initial-enrollment-history.md#citation-and-related-work-history).
+Current research rows remain shared; old requests and candidate outcomes remain
+inactive. Only exact accepted resource/fetch completion hints are redundant.
 Unmatched hints and nonempty legacy extracted-text inputs still require review.

@@ -77,7 +77,10 @@ selection does not grow by adding every variant of the new feature.
 
 Original-source retirement/restoration adds one complete native peer lifecycle
 representative to the release gate (38 Python selectors including retained-history continuity, service execution and agent-import enrollment, not collected cases).
-Its regular focused checks use a metadata-only fixture instead of downloading an
+The existing agent-import enrollment representative also preserves a recorded
+citation analysis, exact inactive compound history and PDF through first copy and
+detached restore. The selector count stays 38.
+Original-source focused checks use a metadata-only fixture instead of downloading an
 unrelated original first. The source-lifetime transition is distinct from deck
 transfer or corpus-key validation; no historical assertion was removed to add it.
 

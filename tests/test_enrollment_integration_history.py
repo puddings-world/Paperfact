@@ -67,6 +67,19 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     imported, tmp_path, monkeypatch,
 ):
     source, first, proposed, original = imported
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+
+    with closing(generation._connect(source)) as conn:
+        context = compound.begin(conn, phase="citations", owner_id=first["paper_ids"][0])
+    context = compound.with_prompt(context, "Synthetic retained citation input")
+    value = compound.row(context, "fixture-ref", title="Recorded reference", basis="title",
+                         purpose="Background", gist="Earlier method", why="Recorded interpretation")
+    publication = compound.publish(context, puts=[value])
+    assert publication.status == "accepted", publication.reason
+    with closing(sqlite3.connect(source)) as conn:
+        conn.row_factory = sqlite3.Row
+        compound_record = dict(conn.execute("SELECT * FROM research_compound_requests").fetchone())
     assert rows(source, "SELECT position FROM list_papers WHERE list_id='" + first["list_id"]
                 + "' ORDER BY position") == [(0,), (1,)]
     # Exercise a valid older/sparse ordinal layout without changing its reading order.
@@ -93,6 +106,15 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     assert result["status"] == "prepared_for_review"
     destination = Path(result["database"])
     assert archives(destination) == expected
+    with closing(sqlite3.connect(destination)) as conn:
+        compound_archive = [row for row in enrollment_history.archived(conn)
+                            if row["protocol"] == "research_compound_requests"]
+        assert [json.loads(row["body_json"]) for row in compound_archive] == [compound_record]
+    assert rows(destination, "SELECT title,purpose,gist,why FROM cites") == [
+        ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]
+    assert not rows(
+        destination, "SELECT 1 FROM sqlite_master WHERE name='research_compound_requests'"
+    )
     assert not rows(destination, "SELECT 1 FROM kv WHERE key LIKE 'update.cache.%'")
     assert rows(destination, "SELECT value FROM kv WHERE key GLOB 'citegraph.*'") == [(graph,)]
     assert rows(destination, "SELECT feature FROM research_content_projection "
@@ -121,6 +143,12 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     assert restored["detached"] and archives(restored_database, detached=True) == expected
     restored_graph = rows(restored_database, "SELECT value FROM kv WHERE key GLOB 'citegraph.*'")
     assert restored_graph == [(graph,)]
+    restored_history = [json.loads(row[0]) for row in rows(restored_database,
+        "SELECT data FROM recovery_records WHERE table_name='research_history_archive'")]
+    assert [row for row in restored_history
+            if row["protocol"] == "research_compound_requests"] == compound_archive
+    assert rows(restored_database, "SELECT title,purpose,gist,why FROM cites") == [
+        ("Recorded reference", "Background", "Earlier method", "Recorded interpretation")]
     for table in expected:
         assert rows(restored_database, "SELECT COUNT(*) FROM " + table) == [(0,)]
     with monkeypatch.context() as patch:
