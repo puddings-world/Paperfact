@@ -257,3 +257,12 @@ Affected saved readers, publishers/imports, review callers and widgets88 pass
 source validation;88595d3 remains the native candidate and predates this workflow.
 Frozen/installed Mac/Windows, physical mobile, hosted operation and detached
 mapping/runtime-adoption requirements remain open.
+
+### Native candidate1f36ffb: Mac gate failed
+
+Run43770829105 passes Windows and Linux, but Mac fails the incomplete-HTTP-header
+shutdown regression before packaging. Do not label it an all-platform passing
+candidate. A source correction uses cancellation-aware reads while retaining
+reader descriptor ownership and backend/authority draining. Affected HTTP/admin
+76 pass11.9s stages locally; the next native build must validate Mac separately.
+No public release or change to daily research was made.

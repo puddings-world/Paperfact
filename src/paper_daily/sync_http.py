@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
 import json
 import math
 import re
 import secrets
+import select
 import socket
 import socketserver
 import threading
@@ -214,6 +216,34 @@ def _finish_rejection(connection, incoming, outgoing):
         pass
 
 
+class _RequestReader(io.RawIOBase):
+    """Keep socket ownership and bounded I/O while allowing listener cancellation."""
+
+    def __init__(self, raw, server):
+        self.raw, self.server = raw, server
+        super().__init__()
+
+    def readable(self):
+        return True
+
+    def readinto(self, buffer):
+        deadline = time.monotonic() + 10
+        while not self.server._closing:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Sync request read timed out")
+            ready, _, _ = select.select([self.raw], [], [], min(0.1, remaining))
+            if ready:
+                return self.raw.readinto(buffer)
+        return 0
+
+    def close(self):
+        try:
+            self.raw.close()
+        finally:
+            super().close()
+
+
 class _Server(ThreadingHTTPServer):
     daemon_threads = False
     block_on_close = True
@@ -265,12 +295,11 @@ class _Server(ThreadingHTTPServer):
             for request in requests:
                 with suppress(OSError):
                     request.shutdown(socket.SHUT_RDWR)
-                # makefile readers retain the socket. Detach first so their later
-                # cleanup cannot close a recycled descriptor after forced close.
+                # Keep the descriptor alive while makefile readers are unwinding.
+                # Detaching/closing it here can strand an in-flight timed recv on
+                # macOS; socket.close defers final release until readers close.
                 with suppress(OSError):
-                    descriptor = request.detach()
-                    if descriptor >= 0:
-                        socket.close(descriptor)
+                    request.close()
             try:
                 if hasattr(self, "socket"):
                     super().server_close()
@@ -328,6 +357,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
         def setup(self):
             self.request.settimeout(10)
             super().setup()
+            self.rfile = io.BufferedReader(_RequestReader(self.rfile.detach(), self.server))
 
         def log_message(self, format, *args):
             pass

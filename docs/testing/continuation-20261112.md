@@ -8543,3 +8543,28 @@ previous docs selection passed5.624s stages (run50950ea23fea465695c1c7320beb88f9
 The bounded reports retain the two-processor/25% cap; the historical suite was
 not run. The earlier check process is terminal, and no validation process remained
 at the checkpoint inspection. No production code changed after the88-case pass.
+
+## 2026-11-16: candidate Mac listener-shutdown failure
+
+Candidate1f36ffb/run43770829105 passed Windows and Linux; Mac stopped before
+packaging in the six-case authority gate. The original incomplete-header
+regression timed out with server_close joining a worker in socket.recv_into.
+Normal close alone also failed locally; it is not the final fix. Cancellation-aware
+raw reads now poll readiness/closing at100ms intervals, preserving the normal
+10-second read deadline and buffered socket ownership. Backend work still drains
+before authority release. No timeout/assertion was loosened.
+
+An expanded HTTP/admin run exposed a separate process-exit fixture issue: the
+Windows venv executable differs from its base runtime. The fixture now publishes
+the actual listener PID in its owned atomic ready file and terminates that PID,
+then waits for process exit; it no longer assumes the launcher is the listener.
+A new fragmented-request fixture initially omitted the required instance header
+and received428; supplying the normal session-issued instance makes it exercise
+valid delayed traffic. Initial failed runs are not passing evidence.
+
+Final affected HTTP/admin76 pass8.71s pytest/11.9s stages under the two-CPU/25%
+bounded governor. The existing shutdown case completes in0.15s locally. The
+new fragmented request waits250ms, succeeds and leaves research unchanged.
+The active-worker case additionally checks that its reader descriptor stays owned
+until worker exit. Mac validation of this correction is pending the next candidate;
+Windows offscreen/local evidence is not a physical Mac or hosted-service pass.

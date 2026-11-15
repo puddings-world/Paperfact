@@ -416,6 +416,10 @@ def test_listener_claim_survives_close_until_active_requests_drain(tmp_path, mon
             while server.socket.fileno() != -1 and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert server.socket.fileno() == -1 and not closed.is_set()
+            # A request's file reader still owns its descriptor until the worker exits.
+            with server._request_state:
+                assert server._requests
+                assert all(request.fileno() >= 0 for request in server._requests)
             with pytest.raises(AuthorityInUseError):
                 make_server(service)
         finally:
@@ -433,18 +437,19 @@ def test_listener_claim_survives_close_until_active_requests_drain(tmp_path, mon
 
 def test_listener_claim_is_released_by_process_exit_without_deleting_lock(tmp_path):
     import os
+    import signal
     import subprocess
     import sys
     import time
     service = ReferenceService(tmp_path / "service.sqlite")
     ready = tmp_path / "ready.json"
     script = (
-        "import json,sys;from pathlib import Path;"
+        "import json,os,sys;from pathlib import Path;"
         "from paper_daily.sync_http import make_server;"
         "from paper_daily.sync_service import ReferenceService;"
         "server=make_server(ReferenceService(Path(sys.argv[1])));"
         "ready=Path(sys.argv[2]);pending=ready.with_suffix('.pending');"
-        "pending.write_text(json.dumps({'port':server.server_port}),encoding='utf-8');"
+        "pending.write_text(json.dumps({'port':server.server_port,'pid':os.getpid()}),encoding='utf-8');"
         "pending.replace(ready);sys.stdin.buffer.read(1)"
     )
     child = subprocess.Popen(
@@ -462,13 +467,17 @@ def test_listener_claim_is_released_by_process_exit_without_deleting_lock(tmp_pa
             _out, error = child.communicate(timeout=5)
             raise AssertionError("Fixture listener did not start: "
                                  + error.decode("utf-8", errors="replace")[-2000:])
-        assert json.loads(ready.read_text(encoding="utf-8"))["port"] > 0
+        listener = json.loads(ready.read_text(encoding="utf-8"))
+        assert listener["port"] > 0 and listener["pid"] > 0
+        assert listener["pid"] != os.getpid()
         paths = list((service.path.parent / ".research-jobs").glob("*.lock"))
         assert len(paths) == 1
         identity = paths[0].stat()
         with pytest.raises(AuthorityInUseError):
             make_server(service)
-        child.terminate()
+        # Windows virtualenv launchers can spawn a separate interpreter. Terminate
+        # the ready listener, not just its launcher, then await process exit.
+        os.kill(listener["pid"], signal.SIGTERM)
         child.wait(timeout=5)
         with make_server(service):
             assert paths[0].is_file()
@@ -619,6 +628,39 @@ def test_listener_close_interrupts_incomplete_headers_without_waiting_for_client
             assert not closer.is_alive() and service.pull(token) == []
             with make_server(service):
                 pass
+
+
+def test_fragmented_headers_remain_valid_across_read_poll_intervals(tmp_path):
+    import socket
+    import time
+
+    service = ReferenceService(tmp_path / "service.sqlite")
+    token = service.enroll("workspace", "reader")
+    server = make_server(service)
+    with running(server) as url:
+        code, offered, _ = request(url, token, path="/v1/session/info", body=b"{}")
+        assert code == 200
+        instance = offered["X-Paperfact-Sync-Instance"]
+        port = int(url.rsplit(":", 1)[1])
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as client:
+            client.sendall(b"POST /v1/pull HTTP/1.1\r\nHost: localhost\r\n")
+            time.sleep(0.25)
+            body = b'{"after":0,"limit":10}'
+            headers = (
+                f"Authorization: Bearer {token}\r\n"
+                f"X-Paperfact-Sync-Instance: {instance}\r\n"
+                "Content-Type: application/json\r\n"
+                f"Content-Length: {len(body)}\r\n\r\n"
+            ).encode("ascii")
+            client.sendall(headers + body)
+            chunks = []
+            while chunk := client.recv(4096):
+                chunks.append(chunk)
+            response = b"".join(chunks)
+            head, data = response.split(b"\r\n\r\n", 1)
+            assert head.startswith(b"HTTP/1.1 200 ")
+            assert json.loads(data) == []
+    assert service.pull(token) == []
 
 
 def test_strict_service_refuses_prototype_writes_but_keeps_verified_retry_and_reads(tmp_path):

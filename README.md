@@ -424,3 +424,7 @@ Native candidate acceptance now includes a pinned0.4.3-to-current data-format
 probe: retained notes/Q&A/highlights, renamed list/order, exact PDF and editable
 slide layout before and after schema initialization. This found and fixed export
 of old databases without new optional research tables. [Exact upgrade scope](docs/toolchain.md#pinned-old-source-upgrade-preservation).
+
+Sync listener shutdown interrupts incomplete network reads while keeping admitted
+backend work and its authority lock alive until completion. Fragmented requests
+retain the normal read timeout.
