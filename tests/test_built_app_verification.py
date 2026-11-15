@@ -616,7 +616,8 @@ def test_screenshots_ignore_render_completion_for_an_older_page(screenshot_tool,
             scripts.append(script)
             if len(scripts) == 1:
                 view._page_id = 2
-            callback(True)
+            callback(json.dumps(dict(page_matches=True, document_complete=True,
+                                     has_main=True, has_text=True, fonts_loaded=True)))
 
     pixmap = types.SimpleNamespace(toImage=lambda: image, save=lambda name: image.save(name))
     view = types.SimpleNamespace(_body='Saved text', rich=True, _page_id=1,
@@ -629,3 +630,34 @@ def test_screenshots_ignore_render_completion_for_an_older_page(screenshot_tool,
     assert len(scripts) == 2
     assert 'PAGE_ID === 1' in scripts[0] and 'PAGE_ID === 2' in scripts[1]
     assert QImage(str(target)).pixelColor(1, 1) == QColor('black')
+
+
+@pytest.mark.parametrize("failure", ["fonts_loaded", "page_matches", "invalid", "missing"])
+def test_screenshot_timeout_reports_readiness_without_content(screenshot_tool, tmp_path, failure):
+    fields = dict(page_matches=True, document_complete=True, has_main=True,
+                  has_text=True, fonts_loaded=True)
+    if failure in fields:
+        fields[failure] = False
+
+    class Page:
+        def runJavaScript(self, script, world, callback):  # noqa: N802
+            if failure == "missing":
+                return
+            callback(None if failure == "invalid" else json.dumps(fields))
+
+    view = types.SimpleNamespace(
+        _body="Private research text must not appear in diagnostic errors", rich=True, _page_id=1,
+        view=types.SimpleNamespace(page=lambda: Page()),
+        grab_page=lambda: pytest.fail("An unready page must not be published"),
+    )
+    reader = types.SimpleNamespace(dive_view=view, preparation=types.SimpleNamespace(busy=False))
+    target = tmp_path / "reading.png"
+    with pytest.raises(TimeoutError, match="render state:") as caught:
+        screenshot_tool.save_reading_view(types.SimpleNamespace(processEvents=lambda: None),
+                                          reader, target, seconds=0)
+    message = str(caught.value)
+    assert not target.exists() and view._body not in message
+    if failure in fields:
+        assert json.loads(message.split("render state: ", 1)[1]) == fields
+    else:
+        assert json.loads(message.split("render state: ", 1)[1]) == {"callback": failure}

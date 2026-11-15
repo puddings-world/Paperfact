@@ -10,6 +10,7 @@ started.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -37,7 +38,7 @@ def save_reading_view(app, reader, target, *, seconds=10):
     wait_until(app, lambda: not reader.preparation.busy and bool(view._body.strip()),
                label='saved reading content', seconds=seconds)
     if view.rich:
-        state = dict(pending=False, ready=None)
+        state = dict(pending=False, ready=None, observed={"callback": "missing"})
 
         def rendered():
             if state['ready'] == view._page_id:
@@ -48,17 +49,37 @@ def save_reading_view(app, reader, target, *, seconds=10):
 
                 def observed(value):
                     state['pending'] = False
-                    if value is True and page_id == view._page_id:
+                    try:
+                        value = json.loads(value) if isinstance(value, str) else None
+                    except (ValueError, TypeError):
+                        value = None
+                    if not isinstance(value, dict):
+                        state['observed'] = {"callback": "invalid"}
+                        return
+                    state['observed'] = {
+                        "page_matches": value.get("page_matches") is True,
+                        "document_complete": value.get("document_complete") is True,
+                        "has_main": value.get("has_main") is True,
+                        "has_text": value.get("has_text") is True,
+                        "fonts_loaded": value.get("fonts_loaded") is True,
+                    }
+                    if all(state['observed'].values()) and page_id == view._page_id:
                         state['ready'] = page_id
 
                 view.view.page().runJavaScript(
-                    f"window.PAGE_ID === {page_id} && document.readyState === 'complete'"
-                    " && !!document.querySelector('main')"
-                    " && document.querySelector('main').textContent.trim().length > 0"
-                    " && document.fonts.status === 'loaded'", 0, observed)
+                    "JSON.stringify({"
+                    f"page_matches: window.PAGE_ID === {page_id},"
+                    "document_complete: document.readyState === 'complete',"
+                    "has_main: !!document.querySelector('main'),"
+                    "has_text: !!document.querySelector('main') && "
+                    "document.querySelector('main').textContent.trim().length > 0,"
+                    "fonts_loaded: document.fonts.status === 'loaded'})", 0, observed)
             return state['ready'] == view._page_id
 
-        wait_until(app, rendered, label='rendered reading page', seconds=seconds)
+        try:
+            wait_until(app, rendered, label='rendered reading page', seconds=seconds)
+        except TimeoutError as error:
+            raise TimeoutError(f"{error}; render state: {json.dumps(state['observed'])}") from error
         from PySide6.QtTest import QTest
 
         QTest.qWait(80)

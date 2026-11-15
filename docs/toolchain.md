@@ -354,3 +354,8 @@ Cocoa on macOS; the software `--disable-gpu` flag is scoped to that step only
 ([Qt diagnostic arguments](https://doc.qt.io/qt-6/qtwebengine-debugging.html)).
 The daily app's graphics settings are unchanged. Local source captures with no
 web assets use the plain view and must not be reported as typeset acceptance.
+
+Screenshot rendering failures report only readiness booleans (page identity,
+document completion, main element/text presence and loaded fonts), or a missing/
+invalid callback category. The ten-second rendering gate and blank-surface refusal
+remain unchanged; no research text is included in this diagnostic.

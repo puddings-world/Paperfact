@@ -8577,3 +8577,16 @@ a root-cause diagnosis. No third blind retry was started. Linux succeeds; Window
 was still in frozen acceptance when recorded. Mac render-state observation is the
 next diagnostic action; no test was skipped and no Mac package pass is claimed.
 Local final critical14 pass7.62s pytest; docs60 pass2.08s pytest/5.4s stages.
+
+## 2026-11-16: observe Mac rendering readiness without changing acceptance
+
+The small failed Mac screenshot artifact was downloaded: it contains only
+list.png, which renders the generated list; there is no reading screenshot.
+The render gate now observes the same five predicates independently and records
+only booleans on timeout, or missing/invalid callback. Its deadline, exact-page
+requirement and blank-image refusal are unchanged. No body text is emitted.
+Focused screenshot regressions8 pass0.73s pytest/5.0s stages, including stale
+completion, blank image, missing/invalid callbacks and distinct false predicates.
+This is diagnostic instrumentation, not a rendering fix or a Mac pass. A Mac-only
+CI run is required to obtain the previously missing page-state evidence. App
+runtime source remains5945820; no daily data, accounts or hosting changed.
