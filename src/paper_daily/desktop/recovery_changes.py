@@ -693,7 +693,7 @@ TEXT["zh-TW"].update(
 TEXT["en"].update(
     remove_reading="Remove selected saved reading",
     ready_remove_reading=(
-        "Review this saved explanation or section reading before removal. "
+        "Review this saved explanation, section reading or context summary before removal. "
         "Its original, notes, other analyses and history remain available."
     ),
     confirm_remove_reading=(
@@ -702,13 +702,13 @@ TEXT["en"].update(
     ),
 )
 TEXT["zh-TW"].update(
-    remove_reading="\u79fb\u9664\u9078\u5b9a\u7684\u8b1b\u89e3\u6216\u7cbe\u8b80",
+    remove_reading="\u79fb\u9664\u9078\u5b9a\u7684\u95b1\u8b80\u5831\u544a",
     ready_remove_reading=(
-        "\u78ba\u8a8d\u5f8c\u79fb\u9664\u9078\u5b9a\u8b1b\u89e3\u6216\u7cbe\u8b80\uff1b"
+        "\u78ba\u8a8d\u5f8c\u79fb\u9664\u9078\u5b9a\u95b1\u8b80\u5831\u544a\uff1b"
         "\u4fdd\u7559\u539f\u6587\u3001\u7b46\u8a18\u3001\u5176\u4ed6\u5206\u6790\u8207\u6b77\u53f2\u3002"
     ),
     confirm_remove_reading=(
-        "\u50c5\u79fb\u9664\u9078\u5b9a\u7684\u8b1b\u89e3\u6216\u7cbe\u8b80\uff1f"
+        "\u50c5\u79fb\u9664\u9078\u5b9a\u7684\u95b1\u8b80\u5831\u544a\uff1f"
         "\u4fdd\u7559\u539f\u6587\u3001\u7b46\u8a18\u3001\u5176\u4ed6\u5206\u6790\u8207\u6b77\u53f2\u3002"
         "\u4e0d\u6703\u91cd\u5beb\u65e2\u6709\u4e3b\u5f35\u5206\u6790\u3002"
     ),

@@ -722,3 +722,16 @@ the recorded result without removing a later restored or edited report; a fresh
 removal needs a fresh review. The old device remains unchanged. Native fixture
 peer delivery is verified; installed/hosted acceptance and other unsupported
 scientific deletions remain separate gates.
+
+
+The same recorded-deletion flow now supports `context/main` (the paper context
+summary and its background-reading suggestions). The desktop uses **Remove
+selected saved reading** and a default-No confirmation. This removes that single
+context row, including its manual-edit marker, only when every field still matches
+its current native head. Nullable summaries/readings are valid; oversized or
+untracked content is refused before it can replace the reviewed native state.
+Other analyses, notes, PDF versions, source associations and old-device history
+remain unchanged. The native receipt/outbox transaction and later-restore-safe
+retry contract are shared; this does not grant generic deletion of citations or
+other research groups. Source/Qt-fixture evidence does not certify the delivered
+8bf00f9 package, which predates this source change.

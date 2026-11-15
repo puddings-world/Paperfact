@@ -6219,3 +6219,40 @@ additional worktree was introduced.
 - Final documentation-only check: 58 passed in 1.79s / 4.9s total, privacy
   and Ruff passed. Reused unchanged source-critical/native evidence rather than
   rebuilding or running the historical suite for download/status edits.
+
+
+### 2026-11-15: recorded context-summary retirement
+
+- Previous goal turn made progress: 8bf00f9 added actual packaged sync execution
+  verification and all-platform candidate delivery; 88cd586 recorded exact results.
+  Both worktrees started clean at that checkpoint. No native job remains live.
+- Reviewed desktop authorized passes: each constructs/verifies a fresh transport;
+  retained received/acknowledged frontier checks still run before publication.
+  No unsupported persistent-epoch or complete installed-sync claim was made.
+- Found a remaining typed recovery gap: context/main deletion fell into the manual
+  highlight path. New real native case failed pre-fix with "Deletion has no exact
+  native manual-highlight creation proof" (8.35s / 11.5s total).
+- Added context only to the closed report-removal registry and saved-reading action.
+  Exact native creation, mapped parent lifetime, current head/projection and every
+  visible field must match. Summary/reading JSON may be null. SQL predicates bound
+  summary/reading JSON/timestamp before materialization; edited must be integer 0/1.
+  No original grant, source activation, AI call or generic deletion authority.
+- Same receipt/outbox transaction and no-op retry preserve a later restoration.
+  Existing tests now cover four report slots through the same four requirements:
+  peer/retry, receipt failure/cancel/stale target, untracked visible content and
+  actual Chinese default-No/single-flight confirmation. No new test file, gate
+  selector or stress matrix; daily critical remains 14, release 38 selectors.
+- Complete affected file: 13 passed in 119.84s / 123.4s total. Final context-only
+  byte/type guards and wording: 3 passed in 29.02s / 32.3s total (overlapping cases,
+  not an aggregate unique test count). Refusal checks cover oversized summary,
+  reading JSON and edit marker without changing the invalid target. All checks
+  used the single Windows governor (two logical processors/25 percent CPU).
+- Initial import ordering/line-length checks stopped before pytest and were fixed;
+  no behavior assertion was weakened. Source/Qt evidence only: installed/hosted/
+  physical-device and remaining source/research mappings are still gates.
+- Existing typed-write/receipt/bounded-input skill guidance already covers this
+  extension; harvest review found no new reusable rule to manufacture. No global
+  skill copies, owner data, cloud resources or current release were changed.
+- Final docs: 58 passed in 2.05s / 5.2s total. Critical: 14 passed in
+  7.70s / 10.9s total. Privacy, Ruff and CRLF-aware whitespace passed. No historical
+  suite, repeated native build or real account/provider invocation.

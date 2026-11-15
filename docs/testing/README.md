@@ -470,13 +470,13 @@ This is not server issuance, upload, arbitrary receipt migration or installed-de
 acceptance. The existing local operation/input/archive checks remain separate.
 
 
-### Retire a saved explanation or section reading
+### Retire a saved explanation, section reading or context summary
 
-The existing `test_sync_recovery_claim_removal.py` now covers three typed report
-slots (`claims/main`, `dive/main`, `close_reading/main`) through one guarded
+The existing `test_sync_recovery_claim_removal.py` now covers four typed report
+slots (`claims/main`, `dive/main`, `close_reading/main`, `context/main`) through one guarded
 removal implementation. Native peer/retry, untracked-visible-content refusal and
 actual Chinese confirmation are checked per slot; shared receipt-failure,
-cancellation and stale-target logic is checked once. This gives ten selected
+cancellation and stale-target logic is checked once. This gives thirteen selected
 cases, not a full stress cross-product. Other reports, notes, PDFs and historical
 records must remain byte/content-identical. See the existing
 [report retirement scenarios](device-recovery-review-scenarios.md#confirmed-claim-report-retirement-2026-11-15).

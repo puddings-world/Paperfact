@@ -664,12 +664,12 @@ separate gates; the verified-original flag describes the committed decision.
 
 `tests/test_sync_recovery_claim_removal.py` protects four behavior requirements.
 It now applies native-peer/retry, visible-content and desktop checks to claims,
-deep explanations and section readings; shared failure/cancel/stale handling runs
-once (ten selected cases).
+deep explanations, section readings and context summaries; shared failure/cancel/stale
+handling runs once (thirteen selected cases).
 
 | Case | Observable requirement |
 |---|---|
-| Native peer and retry | Retire only the selected claims/main, dive/main or close_reading/main; preserve PDF bytes, other analyses, notes and old device; deliver through real local authority and independent native peer; retry preserves a later restore |
+| Native peer and retry | Retire only the selected claims/main, dive/main, close_reading/main or context/main; preserve PDF bytes, other analyses, notes and old device; deliver through real local authority and independent native peer; retry preserves a later restore |
 | Failure/cancel/stale target | Receipt failure or cancellation rolls back report/outbox/receipt together; a post-review native edit prevents application |
 | Untracked visible content | A visible selected report row differing from native history cannot be removed by a new decision |
 | Desktop confirmation | Actual Chinese action/notice, default-No cancellation, successful confirmation and repeated clicks create one deletion |

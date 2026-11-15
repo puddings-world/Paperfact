@@ -215,7 +215,7 @@ def _report_feature(operation):
     if (operation["version"] == 2 and operation["entity_type"] == "research_content"
             and len(parents) == 1 and parents[0]["kind"] == "paper"):
         scope = dict(kind="paper", id=parents[0]["id"])
-        for feature in ("claims", "dive", "close_reading"):
+        for feature in ("claims", "dive", "close_reading", "context"):
             if operation["entity_id"] == content_id(scope, feature, "main"):
                 return feature
     return None
@@ -254,7 +254,7 @@ class Decision:
             return False
         operation = backup._decode(self.operation_json)
         return (operation["action"] == "delete"
-                and _report_feature(operation) in {"dive", "close_reading"})
+                and _report_feature(operation) in {"dive", "close_reading", "context"})
 
     @property
     def manual_restore(self):
@@ -607,6 +607,16 @@ def _report_removal(conn, observed, comparison, request_id, check):
             (MAX_BYTES, local),
         ).fetchone()
         body_key = "body_json"
+    elif feature == "context":
+        row = conn.execute(
+            "SELECT paper_id,summary,reading_json,written_at,edited FROM paper_context "
+            "WHERE paper_id=? AND coalesce(length(CAST(summary AS BLOB)),0)<=? "
+            "AND coalesce(length(CAST(reading_json AS BLOB)),0)<=? "
+            "AND length(CAST(written_at AS BLOB))<=? "
+            "AND typeof(edited)='integer' AND edited IN (0,1)",
+            (local, MAX_BYTES, MAX_BYTES, MAX_BYTES),
+        ).fetchone()
+        body_key = "written_at"
     else:
         row = conn.execute(
             "SELECT paper_id,CASE WHEN length(CAST(body AS BLOB))<=? "

@@ -11,11 +11,12 @@ from test_sync_device_recovery import dump
 from test_sync_files import drain
 from test_sync_recovery_claim_group import app as app
 from test_sync_recovery_claim_group import codec as codec
-from test_sync_recovery_claim_group import content, prepare, refresh
+from test_sync_recovery_claim_group import content as reading_content
 from test_sync_recovery_claim_group import group as group
 from test_sync_recovery_claim_group import original_group as original_group
 from test_sync_recovery_claim_group import pair as pair
 from test_sync_recovery_claim_group import positioned as positioned
+from test_sync_recovery_claim_group import prepare, refresh
 from test_sync_recovery_note_original_group import peer
 from test_sync_recovery_positioned_note import notes, source_file
 from test_sync_recovery_target import attached
@@ -30,13 +31,35 @@ from paper_daily.sync_capture import CaptureConnection, suppress_capture
 from paper_daily.sync_file_transfers import FileTransfers
 from paper_daily.sync_source_files import _inspection_paths
 
-REPORTS = {"claims": "paper_claim_sets", "dive": "dives", "close_reading": "close_readings"}
+REPORTS = {"claims": "paper_claim_sets", "dive": "dives", "close_reading": "close_readings",
+           "context": "paper_context"}
+
+
+def content(path):
+    result = reading_content(path)
+    with closing(_readonly_connection(path)) as conn:
+        result["paper_context"] = conn.execute("SELECT * FROM paper_context").fetchall()
+    return result
 
 
 def removal_case(group, feature="claims"):
     prepare(group).apply()
     old, _, _, path, root, *_ = group
-    if feature != "claims":
+    if feature == "context":
+        from paper_daily.sync_content import content_id
+
+        scope = root["payload"]["scope"]
+        payload = dict(scope=scope, feature=feature, key="main", source_document_hash=None,
+                       data=dict(summary=None, reading_json=[dict(
+                           title="Earlier comparison", direction="background",
+                           why="Study assumptions",
+                       )], written_at="2026-11-14T00:00:00+00:00", edited=1))
+        root = old.new_graph_operation("research_content", content_id(scope, feature, "main"),
+                                       payload)
+        old.save(root)
+        client = attached(path)
+        client.save(client.new_graph_operation("research_content", root["entity_id"], payload))
+    elif feature != "claims":
         with closing(_readonly_connection(old.journal.path)) as conn:
             root = next(json.loads(row[0]) for row in conn.execute(
                 "SELECT envelope FROM paperfact_sync_operations"
@@ -132,18 +155,29 @@ def test_claim_removal_failure_cancel_and_stale_target_preserve_everything(group
 def test_claim_removal_refuses_untracked_visible_analysis(group, feature):
     g = removal_case(group, feature)
     path = g[3]
-    with (closing(sqlite3.connect(path, factory=CaptureConnection)) as conn,
-          conn, suppress_capture(conn)):
-        if feature == "claims":
-            conn.execute("UPDATE paper_claim_sets SET written_at='2026-11-16T00:00:00+00:00'")
-        else:
-            # Oversized untracked specs must be refused without reading their full content.
-            conn.execute("UPDATE " + REPORTS[feature] + " SET spec=?", ("x" * (256 * 1024 + 1),))
-    before = dump(path)
+    if feature == "context":
+        changed_fields = ("summary", "reading_json", "edited")
+    else:
+        changed_fields = ("written_at",) if feature == "claims" else ("spec",)
+    table = REPORTS[feature]
+    with closing(_readonly_connection(path)) as conn:
+        original = dict(zip(changed_fields, conn.execute(
+            "SELECT " + ",".join(changed_fields) + " FROM " + table,
+        ).fetchone(), strict=True))
     label = "claim analysis" if feature == "claims" else "saved reading"
-    with pytest.raises(ValueError, match=f"Visible {label} differs"):
-        removal(g)
-    assert dump(path) == before
+    for column in changed_fields:
+        invalid = "2026-11-16T00:00:00+00:00" if feature == "claims" else "x" * (256 * 1024 + 1)
+        with (closing(sqlite3.connect(path, factory=CaptureConnection)) as conn,
+              conn, suppress_capture(conn)):
+            conn.execute("UPDATE " + table + " SET " + column + "=?", (invalid,))
+        before = dump(path)
+        with pytest.raises(ValueError, match=f"Visible {label} differs"):
+            removal(g)
+        assert dump(path) == before
+        with (closing(sqlite3.connect(path, factory=CaptureConnection)) as conn,
+              conn, suppress_capture(conn)):
+            conn.execute("UPDATE " + table + " SET " + column + "=?", (original[column],))
+
 
 
 @pytest.mark.parametrize("feature", REPORTS)

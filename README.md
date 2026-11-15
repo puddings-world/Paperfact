@@ -330,3 +330,8 @@ Candidate verification also starts the packaged loopback sync service, checks an
 authenticated pull, restarts it and verifies stale execution refusal plus explicit
 reconnection. This uses synthetic device state, not hosted or physical-device
 acceptance; see [the packaged check](docs/toolchain.md#packaged-local-acceptance).
+
+Recorded recovery deletions also support a paper's context summary and background
+reading suggestions, with explicit confirmation and exact current-content checks.
+Other saved analyses, notes and originals remain available; see the
+[recovery flow](docs/device-recovery-review.md#confirm-a-recorded-claim-analysis-removal).
