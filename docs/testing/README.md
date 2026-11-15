@@ -769,3 +769,18 @@ Final affected check passes in31.922s governed (28.476s selected tests). The
 300s/2-core/25% ceiling remains enabled; fixed critical14/release38 are unchanged.
 This is internal existing-owner acceptance, not new-root/unbound public bundle
 integration, installed-device testing or a completed sharing workflow.
+
+
+### Compound survey import checks
+
+`tests/test_survey_package_compound.py` uses real ZIP/native-publisher fixtures and
+the shared enrolled importer. It protects prospective list/paper/membership roots,
+exact source/report activation, no research writes during preparation, one action
+receipt on retry, and re-export collection. Injected failure and cancellation occur
+after actual report application: roots, ownership, outbox and receipt all roll
+back, then retry succeeds. Other cases reject archive/frame substitution, distinguish
+list-owned report files from paper originals, refuse malformed capabilities before
+writes, and preserve an existing report until explicit replacement while retaining
+history. Unsupported local-only import is checked for zero research/file changes
+and original-archive preservation. Existing package and bundle cases are selected
+together for regression evidence; historical selectors remain unchanged.

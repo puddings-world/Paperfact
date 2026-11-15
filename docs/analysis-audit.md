@@ -654,3 +654,35 @@ single transaction and action receipt. Do not create roots early in separate
 commits to reuse this existing-owner entry. Unbound report persistence, reviewed
 reattachment and common desktop/CLI/MCP wiring remain required. Current public
 bundle behavior and delivered installers are unchanged.
+
+
+### Compound enrolled list-package import
+
+`bundle._validated` recognizes `survey_evidence` only with the strict survey ZIP
+contract. Its owner inventory marks the report as list-owned (`None` paper owner)
+and each PDF with its actual package paper; no fake paper scope is introduced.
+Ordinary packages without survey metadata/reserved files keep their prior path.
+
+`survey_package_native.validate(archive, manifest, tables, *, cancelled=...)`
+returns a sealed, immutable checked portable frame. `payload_in(conn, client,
+frame, list_id, identities, originals)` derives report bytes and input/source pins
+from actual receiver graph parents, including prospective roots. `rebuild_in(conn,
+client, frame, list_id, identities, operation)` rechecks the actual originals inside
+the compound apply transaction. The frame is content evidence, not writer authority.
+
+The existing `PackageImporter.prepare/apply` and shared `import_package` now use
+these seams. Preparation simulates roots without research writes and stages exact
+source/report blobs. Apply owns new list/paper/membership roots, source ownership,
+report metadata, local activation, outbox and the existing durable action receipt.
+Failure or cancellation after report application rolls back all research. Receipt
+retry returns the prior mapping/result without new versions. Existing target
+mapping still requires confirmation; default preserve and explicit `replace=True`
+apply to the report too. Preview/result include `survey_reports` and `survey_state`
+(`imported`, `preserved`, or `unchanged`). No model or remote upload is invoked.
+
+This enables incoming survey extensions in the shared enrolled import service;
+normal public export deliberately does not emit them yet. Unbound `bundle.import_`
+refuses before research/file publication and keeps the original archive, rather
+than silently losing the report. Complete local-only persistence, export/re-export,
+first-enrollment preservation and public reader/UI remain required. Do not infer
+a completed public sharing flow or native installer from this source checkpoint.

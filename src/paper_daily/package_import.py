@@ -130,6 +130,7 @@ class PreparedImport:
     work: Path
     proposals: tuple = ()
     lineage: object = None
+    survey: object = None
 
     def preview(self):
         value = json.loads(self.report)
@@ -210,6 +211,11 @@ class PackageImporter:
             ):
                 raise UnsupportedPackage("The package metadata exceeds its byte budget")
             manifest, tables, owners = bundle._validated(z)
+            from paper_daily import survey_package_native
+
+            survey = (survey_package_native.validate(
+                z, manifest, tables, cancelled=lambda: ticket.cancelled)
+                if tables.get("survey_reports") else None)
             lineage = None
             if tables.get("paper_lineage_sets"):
                 from paper_daily.lineage_package_targets import validate
@@ -234,6 +240,7 @@ class PackageImporter:
                 "queue_pins",
                 "deck_proposals",
                 "paper_lineage_sets",
+                "survey_reports",
                 *bundle.PER_PAPER,
                 "pdf_ai_highlights",
                 "pdf_highlights",
@@ -328,7 +335,8 @@ class PackageImporter:
                     files[name] = data
         if version(selected) != before:
             raise ValueError("The selected package changed while it was inspected")
-        return selected, before, digest.hexdigest(), manifest, tables, owners, files, lineage
+        return (selected, before, digest.hexdigest(), manifest, tables,
+                owners, files, lineage, survey)
 
     def prepare(
         self,
@@ -349,9 +357,8 @@ class PackageImporter:
             raise ValueError("Import choices must be explicit booleans")
         ticket = ticket or Ticket()
         self._check()
-        selected, stamp, fingerprint, manifest, tables, owners, files, lineage = self._inventory(
-            archive, ticket
-        )
+        (selected, stamp, fingerprint, manifest, tables, owners, files,
+         lineage, survey) = self._inventory(archive, ticket)
         if lineage_decision is not None and lineage is None:
             raise ValueError("The selected package has no Lineage comparison to approve")
         proposal_store_index = None
@@ -641,8 +648,11 @@ class PackageImporter:
                     artifacts,
                     report,
                     ticket,
-                    consumed_originals=tuple(name for name, _data in lineage.files)
-                    if lineage is not None else (),
+                    consumed_originals=(
+                        tuple(name for name, _data in lineage.files) if lineage is not None else ()
+                    ) + (tuple(name for name, _data in survey.files)
+                         + tuple(row["path"] for row in tables["survey_reports"])
+                         if survey is not None else ()),
                 )
                 if lineage is not None:
                     report.setdefault("lineage_reports", 0)
@@ -705,6 +715,24 @@ class PackageImporter:
                             report["lineage_replaced"] += 1
                         else:
                             report["lineage_reports"] = report.get("lineage_reports", 0) + 1
+                if survey is not None:
+                    report.setdefault("survey_reports", 0)
+                    from paper_daily import survey_package_native
+                    from paper_daily.sync_files import list_file_id
+
+                    sources = {op["entity_id"]: op for *_rest, op in originals}
+                    payload, blobs = survey_package_native.payload_in(
+                        conn, self.client, survey, list_id, identities, sources)
+                    key = list_file_id(list_id)
+                    prior = sync_capture._current(conn, self.client, "research_file", key)
+                    operation = add("research_file", key, payload, "survey_reports")
+                    if operation and operation["payload"] == payload:
+                        stage_bytes(self.store, blobs)
+                        artifacts.append((operation, materialize(
+                            self.store, self.version_root, operation)))
+                        report["survey_state"] = "unchanged" if prior == operation else "imported"
+                    else:
+                        report["survey_state"] = "preserved"
                 for table in known_categories():
                     report.setdefault(table, 0)
                 # End our own read snapshot before the source seam's bounded
@@ -756,6 +784,7 @@ class PackageImporter:
                     work,
                     proposals,
                     lineage,
+                    survey,
                 )
             except BaseException:
                 self._cleanup(work)
@@ -812,6 +841,9 @@ class PackageImporter:
 
         records = [
             (item["paper_id"], item, True) for item in manifest.get("lineage_sources", [])
+        ]
+        records += [
+            (item["paper_id"], item, True) for item in manifest.get("survey_sources", [])
         ]
         records += [
             (item["paper_id"], item, True) for item in manifest.get("position_sources", [])
@@ -1173,6 +1205,15 @@ class PackageImporter:
                             actual = lineage_package_native.rebuild_in(
                                 conn, self.client, prepared.lineage, identities, operation,
                             )
+                        elif operation["payload"].get("feature") == "survey":
+                            from paper_daily import survey_package_native
+
+                            actual = survey_package_native.rebuild_in(
+                                conn, self.client, prepared.survey,
+                                json.loads(prepared.report)["list"],
+                                {old: value["portable_id"] for old, value in
+                                 json.loads(prepared.report)["identity_mapping"].items()},
+                                operation)
                         else:
                             actual = self.client.new_graph_operation_in(
                                 conn,

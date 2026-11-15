@@ -53,6 +53,8 @@ KV_KEYS = ("citegraph.{pid}", "followups.checked.{pid}", "resources:{pid}")
 
 def _required_capabilities(tables):
     capabilities = []
+    if tables.get("survey_reports"):
+        capabilities.append("survey_evidence")
     if tables.get("paper_lineage_sets"):
         capabilities.append("lineage")
     if tables.get("deck_proposals"):
@@ -615,6 +617,13 @@ def _validated(z):
         if ("paper_lineage_sets" in tables or "lineage_sources" in manifest
                 or "lineage" in manifest.get("capabilities", [])):
             lineage_packages.validate_package(z, manifest, tables)
+        from paper_daily import survey_packages
+
+        if ("survey_reports" in tables or "survey_sources" in manifest
+                or "survey_evidence" in manifest.get("capabilities", [])
+                or any(name.casefold().startswith(("files/survey-reports", "files/survey-sources"))
+                       for name in names)):
+            survey_packages.validate_package(z, manifest, tables)
         required = _required_capabilities(tables)
         capabilities = manifest.get("capabilities", [])
         if manifest["format"] == 2:
@@ -698,6 +707,9 @@ def _validated(z):
             if record and f"files/pdf/{_safe_name(pid)}.pdf" not in names:
                 raise ValueError(f"資料包缺少 PDF：{pid}")
     owners = {}
+    survey_files = {record["path"]: record["paper_id"]
+                    for record in manifest.get("survey_sources", [])}
+    survey_files.update({record["path"]: None for record in tables.get("survey_reports", [])})
     lineage_files = {record["path"]: record["paper_id"]
                      for record in manifest.get("lineage_sources", [])}
     for name in names:
@@ -713,6 +725,9 @@ def _validated(z):
             or not (DATA_DIR / rel).resolve().is_relative_to(DATA_DIR.resolve())
         ):
             raise ValueError(f"bundle path escapes the data directory: {name}")
+        if relative in survey_files:
+            owners[relative] = survey_files[relative]
+            continue  # The strict survey validator checked list/source ownership and bytes.
         if relative in lineage_files:
             owners[relative] = lineage_files[relative]
             continue  # The bounded Lineage validator checked exact bytes and ownership.
@@ -874,6 +889,9 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
     with (zipfile.ZipFile(path) as z, position_packages.ImportLease() as position_lease,
           later_packages.ImportLease() as later_lease):
         manifest, tables, owners = _validated(z)
+        if tables.get("survey_reports"):
+            raise ValueError("Saved survey import currently requires an enrolled receiver; "
+                             "keep the original package until local-only storage is supported")
         package_hash = hashlib.sha256()
         original_position = z.fp.tell()
         z.fp.seek(0)

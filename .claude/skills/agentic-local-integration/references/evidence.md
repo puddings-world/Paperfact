@@ -1031,3 +1031,17 @@ new-root and unbound public integration remain unverified. Reuse the compound
 caller's transaction/receipt rather than committing roots early to fit a helper.
 This evidence refines the existing transaction/authority pattern; no global rule
 or completed public workflow is claimed.
+
+
+### Prospective roots in compound import (validated-local, 2026-11-16)
+
+The existing whole-package importer simulates new roots before SQL rows exist.
+A sealed byte-validated survey frame can derive receiver pins against that graph;
+actual apply rebuilds them after original grants inside the single caller
+transaction. Failure/cancellation after actual report application rolls back roots,
+ownership, outbox and action receipt. Default preservation and explicit
+version-preserving replacement pass alongside old package behavior (51 affected
+cases70.03s/75.7s stages). Do not independently commit roots to satisfy an
+existing-owner helper. This validates enrolled import only; local-only persistence,
+normal public export, hosted and installed-device flows remain open. It refines
+the existing compound-transaction lesson without adding a global rule.

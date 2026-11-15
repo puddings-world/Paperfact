@@ -188,5 +188,9 @@ receiver mappings mint native report/original ownership; default preserve,
 reviewed replacement, exact retry and same-transaction rollback are verified.
 Independent peer delivery and re-export pass; reports without available originals
 do not invent PDF grants. Eight affected groups pass under the governor in32s.
-Public whole-list/new-root and unbound import, reviewed reattachment, desktop/AI
-wiring and hosted/physical gates remain open. No new installer or deployment.
+The shared enrolled whole-list importer now plans new roots and publishes
+originals/report/activation/action receipt in its single transaction; actual
+post-report failure and cancellation roll everything back. Default preservation
+and explicit replacement retain native history. Normal exports do not yet emit
+this extension. Local-only receiver storage/re-export, reviewed reattachment,
+desktop/AI wiring and hosted/physical gates remain open. No new installer or deployment.

@@ -7996,3 +7996,39 @@ production upload, real provider call, daily research write or new worktree.
 Integration critical14 passes8.19s (12.3s stages); documentation/skill consistency58
 passes2.25s (6.3s stages). Privacy/Ruff and whitespace pass. Selectors unchanged;
 no full historical suite or rebuilt installer. Tests remain sequential and bounded.
+
+
+## 2026-11-16: compound enrolled survey package import
+
+Base52ae59b; existing stabilization folder/board. The package validator now
+recognizes strict survey_evidence metadata/reserved paths and lists report files
+with a list owner, distinct from paper-owned originals. Ordinary archives without
+the extension retain their earlier validation/import path. A sealed immutable
+survey_package_native frame carries checked report/source bytes, not sender
+operations. Prospective-root payload construction derives the receiver's actual
+list/paper/original lifetimes; apply rebuilds against same-transaction source grants.
+
+PackageImporter now owns root creation, membership, source/report publication,
+local materialization activation, outbox and its existing receipt in one transaction.
+Injected failure/cancellation after actual report application roll everything back;
+retry succeeds. No research writes occur during preparation. Default preserve,
+explicit replacement/history and exact receipt retry are verified. Existing-owner
+mapping still needs confirmation. No new receipt system, fake AI context, early
+root commit or implicit enrollment is introduced.
+
+New compound6 cases initially pass19.54s/26.4s stages. Adding existing report
+preserve/replace yields7 new cases. These plus existing package_import/bundle checks
+pass51 in70.03s (75.7s stages), one governed job,300s/two logical CPUs/25% hard cap.
+The first check stopped at three new overlong source lines; only line wrapping
+was fixed. No test expectation or critical14/release38 selector was weakened.
+
+Normal export does not yet emit the new extension. Local-only import explicitly
+refuses before research/file publication and preserves the original ZIP; its
+persisted report store, enrollment mapping, reader and public export/re-export are
+next. No completed public sharing workflow, new native installer, hosted service
+or physical acceptance is claimed. Existing deployed/daily research is untouched.
+
+Final critical14 passes8.93s (15.1s stages); docs/skill consistency58 passes3.94s
+(10.2s stages). Privacy, Ruff and whitespace pass. No exhaustive historical suite
+or native rebuild was performed. These fixture results do not replace the open
+Mac/Windows/mobile installed-device and hosted acceptance gates.
