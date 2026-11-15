@@ -262,3 +262,45 @@ retain their existing meanings (including attachment HTTP 409). Mobile maps 412
 only on pull to the same preservation guidance. The client-side retained-event
 check also rejects an empty or different frontier before upload; see
 [the client contract](sync-client.md#verify-retained-history-before-upload).
+
+
+## Execution continuity during a transfer
+
+`POST /v1/session/info` validates the device credential and returns the existing
+closed workspace/device JSON plus `X-Paperfact-Sync-Instance`, one lowercase
+32-hex opaque value generated when `make_server` creates the listener. It is not
+a credential, workspace identity, stored journal field or persistent history epoch.
+
+Updated Python/mobile transports validate payload bounds before any handshake,
+validate the authenticated identity, and pin the value for that transport/session.
+All subsequent research, attachment and device requests carry the exact header.
+The receiver authenticates first, then requires the guard before calling a service
+mutation/read; missing or changed guards return HTTP 428 with the closed body
+`{"error":"sync_session_changed"}`. Malformed/duplicate guards are rejected.
+Bootstrap identity, invitation redemption and browser pairing/forget routes are
+exempt because a device is not yet connected or is explicitly forgetting access.
+No CORS grant, anonymous research route or new authorization is introduced.
+
+A changed, missing, malformed or duplicate response offer cannot silently replace
+a pin. `session_info` on an unsupported old service cannot authorize later research
+requests. Python creates a fresh transport to reconnect; mobile's explicit
+`begin_session()` clears only its in-memory pin and increments a delivery generation.
+`Engine.connect` invokes it before identity checking. Late responses from a prior
+generation cannot pin an old execution. Cookie transport carries the same guard
+without exposing its HttpOnly credential to JavaScript. Application history checks
+still run before upload after reconnect. No cursor/outbox reset or operation replay.
+
+Old 0.5 development peers must update the client, static PWA and service together;
+headerless research requests are intentionally refused. Missing handshake support
+is distinct from malformed JSON; low-level blob/pairing methods preserve their
+typed unsupported-capability errors. Existing authorization, quota, rate-limit and
+blob-unavailable errors retain their meanings. Proxies must preserve this header
+in both directions; removing it fails rather than downgrading to unguarded writes.
+
+This fences acceptance by a restarted/replaced HTTP listener. It is not a complete
+persistent authority-generation/compatibility protocol, history commitment,
+split-brain lease or protection against unsupported in-place DB rollback inside
+a live process. HTTP can already have transmitted buffered request bytes before
+a rejection; this is not a confidentiality guarantee. Private TLS deployment,
+operator restore policy, durable history proofs and physical-device acceptance
+remain separate release gates. Never overwrite a running authority database.

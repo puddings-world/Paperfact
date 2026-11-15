@@ -2,9 +2,12 @@
 
 import json
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from copy import deepcopy
 
+import httpx
 import pytest
 from test_continuous_sync import control as control
 from test_continuous_sync import enrolled as enrolled
@@ -14,7 +17,7 @@ from test_continuous_sync import service as service
 from test_sync_client import edit
 from test_sync_client import pair as pair
 from test_sync_http import endpoint as endpoint
-from test_sync_http import request
+from test_sync_http import request, running
 
 from paper_daily.sync_http import HttpTransport
 from paper_daily.sync_journal import SyncHistoryUnavailable
@@ -124,3 +127,99 @@ def test_automatic_sync_pauses_for_history_review_without_touching_research(
     controller.local_changed()
     controller.tick()
     assert calls == [True] and snapshot(service[0].workspace.path) == before
+
+
+def test_http_restart_refuses_existing_session_without_acknowledging_local_work(pair):
+    from paper_daily.sync_http import make_server
+
+    service, client, _, token, _ = pair
+    edit(client, "Keep this offline note")
+    before = snapshot(client.journal.path)
+    first = make_server(service)
+    with running(first) as url:
+        transport = HttpTransport(url)
+        transport.session_info(token)
+    try:
+        with running(make_server(service, port=first.server_port)):
+            for _ in range(2):
+                with pytest.raises(SyncHistoryUnavailable):
+                    client.sync_once(transport, token)
+                assert snapshot(client.journal.path) == before and service.pull(token) == []
+            with pytest.raises(PermissionError):
+                transport.pull("wrong-token")
+            with pytest.raises(SyncHistoryUnavailable):
+                transport.blob_read(token, "a" * 64, 1, 0, 1)
+            with HttpTransport(url) as reconnected:
+                assert client.sync_once(reconnected, token)["pending"] == 0
+            assert len(service.pull(token)) == 1
+    finally:
+        transport.close()
+
+
+@pytest.mark.parametrize(
+    "offer", [None, "invalid", ["a" * 32, "b" * 32]],
+    ids=["missing", "malformed", "duplicate"],
+)
+def test_transport_requires_one_valid_instance_before_sending_private_content(offer):
+    from test_sync_http import operation
+
+    calls = []
+
+    def reply(request):
+        calls.append(request.url.path)
+        headers = [("content-type", "application/json")]
+        if offer is not None:
+            headers.extend(("X-Paperfact-Sync-Instance", value)
+                           for value in (offer if isinstance(offer, list) else [offer]))
+        body = json.dumps(dict(workspace_id="workspace", device_id="a")).encode()
+        return httpx.Response(200, stream=httpx.ByteStream(body), headers=headers)
+
+    with HttpTransport("https://fixture.invalid") as transport:
+        transport._client.close()
+        transport._client = httpx.Client(transport=httpx.MockTransport(reply))
+        with pytest.raises(SyncHistoryUnavailable):
+            transport.push("fixture-token", operation())
+    assert calls == ["/v1/session/info"]
+
+
+def test_missing_execution_guard_cannot_be_silently_downgraded(endpoint):
+    service, token, url = endpoint
+    body = b'{"after":0,"limit":100}'
+    headers = [("Authorization", "Bearer " + token), ("Content-Type", "application/json"),
+               ("Content-Length", str(len(body)))]
+    code, _, value = request(url, token, headers=headers, body=body)
+    assert code == 428 and json.loads(value) == {"error": "sync_session_changed"}
+    assert service.pull(token) == []
+
+
+def test_late_python_identity_cannot_replace_an_already_pinned_execution():
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+    body = json.dumps(dict(workspace_id="workspace", device_id="a")).encode()
+
+    class Delayed(httpx.SyncByteStream):
+        def __iter__(self):
+            entered.set()
+            assert release.wait(5)
+            yield body
+
+    def reply(request):
+        calls.append(request.url.path)
+        first = len(calls) == 1
+        return httpx.Response(200, stream=Delayed() if first else httpx.ByteStream(body),
+            headers={"content-type": "application/json",
+                     "X-Paperfact-Sync-Instance": ("a" if first else "b") * 32})
+
+    with HttpTransport("https://fixture.invalid") as transport:
+        transport._client.close()
+        transport._client = httpx.Client(transport=httpx.MockTransport(reply))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            old = pool.submit(transport.session_info, "fixture-token")
+            try:
+                assert entered.wait(5)
+                assert transport.session_info("fixture-token")["device_id"] == "a"
+            finally:
+                release.set()
+            with pytest.raises(SyncHistoryUnavailable):
+                old.result(timeout=5)
+        assert transport.session_info("fixture-token")["device_id"] == "a"

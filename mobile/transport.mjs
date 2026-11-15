@@ -8,6 +8,9 @@ import {
 import {parsePositionJSON} from './position-json.mjs';
 import {sourceFileId,validateArtifact,validateOriginalSource} from './artifacts.mjs';
 export const CHUNK = 256 * 1024;
+const INSTANCE_HEADER='X-Paperfact-Sync-Instance';
+const UNBOUND_ROUTES=new Set(['/v1/session/info','/v1/devices/pairing/redeem',
+  '/v1/pairing/prepare','/v1/pairing/complete','/v1/session/forget']);
 export class TransportError extends Error {
   constructor(code) {
     super(code);
@@ -29,6 +32,12 @@ export class HttpTransport {
     );
     this.origin = url.origin;
     this.fetch = fetch;
+    this.instance=null;
+    this.sessionGeneration=0;
+  }
+  begin_session() {
+    this.instance=null;
+    this.sessionGeneration++;
   }
   async post(route, body, token, signal) {
     requireThat(
@@ -37,6 +46,9 @@ export class HttpTransport {
     );
     const data = JSON.stringify(body);
     requireThat(new TextEncoder().encode(data).length <= 512 * 1024, 'request_too_large');
+    const generation=this.sessionGeneration;
+    if(this.instance===null && !UNBOUND_ROUTES.has(route))await this.session_info(token,signal);
+    requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
     let response;
     try {
       const request = this.fetch;
@@ -46,7 +58,8 @@ export class HttpTransport {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          ...(this.instance?{[INSTANCE_HEADER]:this.instance}:{})
         },
         body: data,
         cache: 'no-store',
@@ -59,6 +72,9 @@ export class HttpTransport {
     } catch {
       throw new TransportError(signal?.aborted ? 'cancelled': 'connection_failed');
     }
+    if(generation!==this.sessionGeneration || signal?.aborted) {
+      await response.body?.cancel();throw new TransportError('cancelled');
+    }
     if(! response.ok) {
       await response.body?.cancel();
       throw new TransportError(({
@@ -67,10 +83,15 @@ export class HttpTransport {
         404: 'unsupported_service',
         409: 'file_unavailable',
         412: route === '/v1/pull' ? 'sync_history_unavailable' : 'request_rejected',
+        428: 'sync_history_unavailable',
         429: 'rate_limited',
         413: 'quota_exceeded',
         503: 'unsupported_service'
       })[response.status] ?? 'request_rejected');
+    }
+    const offered=response.headers.get(INSTANCE_HEADER);
+    if(this.instance!==null && offered!==this.instance) {
+      await response.body?.cancel();throw new TransportError('sync_history_unavailable');
     }
     requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'invalid_response');
     const reader = response.body.getReader(),
@@ -97,13 +118,21 @@ export class HttpTransport {
       bytes.set(part, offset);
       offset += part.length;
     }
+    let value;
     try {
-      return parsePositionJSON(new TextDecoder('utf-8', {
-        fatal: true
-      }).decode(bytes));
+      value=parsePositionJSON(new TextDecoder('utf-8', {fatal:true}).decode(bytes));
     } catch {
       throw new TransportError('invalid_response');
     }
+    requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
+    if(route==='/v1/session/info') {
+      closed(value,['workspace_id','device_id']);
+      identifier(value.workspace_id);identifier(value.device_id);
+      requireThat(typeof offered==='string' && /^[0-9a-f]{32}$/.test(offered),
+        'sync_history_unavailable');
+      this.instance=offered;
+    }
+    return value;
   }
   async create_pairing(token, code, signal) {
     requireThat(typeof code === 'string' && /^[A-Za-z0-9_-]{43}$/.test(code), 'invalid_pairing');

@@ -68,13 +68,15 @@ try {
   const transport = new HttpTransport(ready.url),
   fixture = await demoTransport();
   const post = async(route, body, token) => {
+    await transport.session_info(token);
     const response = await fetch(
     ready.url + route,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token
+        Authorization: 'Bearer ' + token,
+        'X-Paperfact-Sync-Instance':transport.instance
       },
       body: JSON.stringify(body)
     }

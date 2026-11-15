@@ -20,7 +20,8 @@ import {
 } from 'node:child_process';
 const json = value => new Response(JSON.stringify(value), {
   headers: {
-    'content-type': 'application/json'
+    'content-type': 'application/json',
+    'X-Paperfact-Sync-Instance':'a'.repeat(32)
   }
 });
 test(
@@ -124,9 +125,13 @@ async() => {
   );
   await assert.rejects(transport.session_info('private-token'), /session_denied/);
   transport=new HttpTransport('https://example.org',{
-    fetch:async()=>new Response('private service history',{status:412}),
+    fetch:async url=>url.endsWith('/info')?json({workspace_id:'work',device_id:'phone'}):
+      new Response('private service history',{status:412}),
   });
   await assert.rejects(transport.pull('private-token',5,1),error=>error.code==='sync_history_unavailable');
+  transport=new HttpTransport('https://example.org',{
+    fetch:async()=>new Response('private service history',{status:412}),
+  });
   await assert.rejects(transport.session_info('private-token'),error=>error.code==='request_rejected');
 }
 );
@@ -186,8 +191,11 @@ test('pairing uses bounded fixed routes and distinct owner/invitation/device sec
   assert.deepEqual(await transport.redeem_pairing(code, 'work', 'phone', credential),
     {workspace_id:'work', device_id:'phone'});
   assert.equal(seen[0][1].headers.Authorization, 'Bearer owner-secret');
-  assert.equal(seen[1][1].headers.Authorization, 'Bearer ' + code);
-  assert.equal(JSON.parse(seen[1][1].body).credential, credential);
+  assert.deepEqual(seen.map(([url])=>new URL(url).pathname),
+    ['/v1/session/info','/v1/devices/pairing/create','/v1/devices/pairing/redeem']);
+  assert.equal(seen[1][1].headers.Authorization,'Bearer owner-secret');
+  assert.equal(seen[2][1].headers.Authorization, 'Bearer ' + code);
+  assert.equal(JSON.parse(seen[2][1].body).credential, credential);
   for (const [url, options] of seen) {
     assert.equal(url.includes(code) || url.includes(credential), false);
     assert.equal(options.cache, 'no-store');
@@ -207,7 +215,58 @@ test('pairing refuses wrong response identity, leaked fields and malformed secre
   }});
   await assert.rejects(transport.create_pairing('owner-secret', 'p'.repeat(43)));
   await assert.rejects(transport.redeem_pairing('p'.repeat(43), 'work', 'phone', 'k'.repeat(43)));
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   await assert.rejects(transport.create_pairing('owner-secret', 'short'));
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
+});
+
+
+test('a changed server execution cannot replace the pinned session without explicit reconnect',async()=>{
+  for(const mode of ['changed','missing','restart']) {
+    let instance='a'.repeat(32),state='normal';const calls=[];
+    const transport=new HttpTransport('https://example.org',{fetch:async(url,options)=>{
+      calls.push([new URL(url).pathname,options.headers['X-Paperfact-Sync-Instance']]);
+      if(state==='restart' && !url.endsWith('/info'))return new Response('',{status:428});
+      const headers={'content-type':'application/json'};
+      if(state!=='missing')headers['X-Paperfact-Sync-Instance']=instance;
+      return new Response(JSON.stringify(url.endsWith('/info')?
+        {workspace_id:'work',device_id:'phone'}:[]),{headers});
+    }});
+    await transport.session_info('fixture');instance='b'.repeat(32);state=mode;
+    for(let repeat=0;repeat<2;repeat++)
+      await assert.rejects(transport.pull('fixture'),/sync_history_unavailable/);
+    assert.deepEqual(calls,[['/v1/session/info',undefined],
+      ['/v1/pull','a'.repeat(32)],['/v1/pull','a'.repeat(32)]]);
+    state='normal';transport.begin_session();await transport.session_info('fixture');
+    assert.deepEqual(await transport.pull('fixture'),[]);
+    assert.equal(calls.at(-1)[1],'b'.repeat(32));
+  }
+});
+
+test('missing malformed or duplicate execution offers receive identity requests only',async()=>{
+  for(const offer of [null,'invalid','a'.repeat(32)+', '+'b'.repeat(32)]) {
+    const calls=[];
+    const transport=new HttpTransport('https://example.org',{fetch:async(url)=>{
+      calls.push(new URL(url).pathname);
+      const headers={'content-type':'application/json'};
+      if(offer!==null)headers['X-Paperfact-Sync-Instance']=offer;
+      return new Response(JSON.stringify({workspace_id:'work',device_id:'phone'}),{headers});
+    }});
+    await assert.rejects(transport.push('fixture',{workspace_id:'work',body:'private research'}),
+      /sync_history_unavailable/);
+    assert.deepEqual(calls,['/v1/session/info']);
+  }
+});
+
+test('late identity response after reconnect cannot pin the old server execution',async()=>{
+  let release;const gate=new Promise(resolve=>release=resolve);let calls=0;
+  const transport=new HttpTransport('https://example.org',{fetch:async()=>{
+    const first=++calls===1;if(first)await gate;
+    return new Response(JSON.stringify({workspace_id:'work',device_id:'phone'}),{headers:{
+      'content-type':'application/json','X-Paperfact-Sync-Instance':(first?'a':'b').repeat(32),
+    }});
+  }});
+  const old=transport.session_info('fixture');transport.begin_session();release();
+  await assert.rejects(old,/cancelled/);
+  await transport.session_info('fixture');assert.equal(transport.instance,'b'.repeat(32));
 });

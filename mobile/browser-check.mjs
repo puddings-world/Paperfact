@@ -94,9 +94,11 @@ const server = createServer(async(request, response) => {
     if(plainNoteMode||pairingMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
     const upstream=await fetch(positionReady.url+request.url,{method:'POST',body,
       headers:pairingMode?Object.fromEntries(Object.entries(request.headers).filter(([name])=>
-        ['content-type','origin','cookie','x-paperfact-browser','x-paperfact-workspace','x-paperfact-device','sec-fetch-site'].includes(name)))
-        :{'Content-Type':'application/json',Authorization:request.headers.authorization??''},redirect:'error'});
+        ['content-type','origin','cookie','x-paperfact-browser','x-paperfact-workspace','x-paperfact-device','x-paperfact-sync-instance','sec-fetch-site'].includes(name)))
+        :{'Content-Type':'application/json',Authorization:request.headers.authorization??'',
+          'X-Paperfact-Sync-Instance':request.headers['x-paperfact-sync-instance']??''},redirect:'error'});
     response.writeHead(upstream.status,{'Content-Type':'application/json','Cache-Control':'no-store',
+      ...(upstream.headers.has('X-Paperfact-Sync-Instance')?{'X-Paperfact-Sync-Instance':upstream.headers.get('X-Paperfact-Sync-Instance')}:{}),
       ...(pairingMode&&upstream.headers.has('set-cookie')?{'Set-Cookie':upstream.headers.get('set-cookie')}:{})});
     response.end(new Uint8Array(await upstream.arrayBuffer()));return;
   }

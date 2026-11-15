@@ -64,6 +64,12 @@ buttons serialize through a server just to share behavior.
   verified version. A background revision should announce a choice without moving
   focus or discarding drafts. Key derived assets and their references by source
   version; a positional figure/page number is not stable cross-version identity.
+- During an existing multi-request remote job, pin an authenticated service execution
+  and require the receiver to check it before accepting later requests. A sender's
+  earlier preflight is not an atomic receiver condition. Preserve queued work when
+  the execution changes; explicit reconnect still needs history verification. A
+  process nonce is not a durable authority epoch, split-brain lease or proof of all
+  retained history, and rejected HTTP bodies may already have crossed the network.
 - Before sending private bytes with an opaque credential, authenticate its intended
   workspace/device binding. A valid token and a local cancellation generation do not
   prove they refer to the same workspace. Recheck binding after credential changes;

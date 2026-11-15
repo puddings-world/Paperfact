@@ -11,8 +11,10 @@ import binascii
 import json
 import math
 import re
+import secrets
 import socket
 import socketserver
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -35,6 +37,8 @@ _BLOB_ROUTES = {"/v1/blobs/" + name for name in ("begin", "append", "commit", "c
 MAX_REQUEST_BYTES = 512 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{1,4096}")
+_INSTANCE_HEADER = "X-Paperfact-Sync-Instance"
+_INSTANCE = re.compile(r"[0-9a-f]{32}")
 _LOOPBACK = {"127.0.0.1", "::1"}
 _ERRORS = {
     400: "invalid_request",
@@ -48,6 +52,7 @@ _ERRORS = {
     412: "sync_history_unavailable",
     413: "request_too_large",
     415: "unsupported_media_type",
+    428: "sync_session_changed",
     500: "service_unavailable",
     503: "blob_service_disabled",
 }
@@ -220,6 +225,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
         "/v1/browser/session/forget": "forget",
     }
 
+    instance = secrets.token_hex(16)
+
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "PaperfactSync"
@@ -242,6 +249,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header(_INSTANCE_HEADER, instance)
             self.send_header("Connection", "close")
             if cookie is not None:
                 self.send_header("Set-Cookie", cookie)
@@ -315,6 +323,19 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None) -> Threading
                     self._reply(200, _encode(result), cookie)
                     return
                 route = self._route
+                guards = self.headers.get_all(_INSTANCE_HEADER, [])
+                if route not in {"/v1/session/info", devices.PAIR_REDEEM}:
+                    # Authenticate first; an execution guard is not a credential.
+                    authenticate = getattr(service, "session_info", None)
+                    if authenticate is None:
+                        raise _RequestError(404)
+                    authenticate(token)
+                    if not guards:
+                        raise _RequestError(428)
+                    if len(guards) != 1 or not _INSTANCE.fullmatch(guards[0]):
+                        raise _RequestError(400)
+                    if not secrets.compare_digest(guards[0], instance):
+                        raise _RequestError(428)
                 if route == "/v1/push":
                     if set(value) != {"operation"}:
                         raise _RequestError(400)
@@ -427,6 +448,8 @@ class HttpTransport:
         if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 60:
             raise ValueError("Sync timeout must be between zero and 60 seconds")
         self.base_url = base_url.rstrip("/")
+        self._instance = None
+        self._pin_lock = threading.Lock()
         self._client = httpx.Client(timeout=timeout, trust_env=False, follow_redirects=False)
 
     def close(self):
@@ -444,6 +467,15 @@ class HttpTransport:
         data = _encode(payload)
         if len(data) > MAX_REQUEST_BYTES:
             raise ValueError("Sync request exceeds the transport limit")
+        if self._instance is None and path not in {"/v1/session/info", devices.PAIR_REDEEM}:
+            try:
+                self.session_info(token)
+            except SyncHistoryUnavailable:
+                if path in _BLOB_ROUTES:
+                    raise BlobDisabledError("Update sync service for attachments") from None
+                if path == devices.PAIR_CREATE:
+                    raise PairingUnavailableError("Update sync service for pairing") from None
+                raise
         try:
             with self._client.stream(
                 "POST",
@@ -453,10 +485,17 @@ class HttpTransport:
                     "Authorization": "Bearer " + token,
                     "Content-Type": "application/json",
                     "Accept-Encoding": "identity",
+                    **({_INSTANCE_HEADER: self._instance} if self._instance else {}),
                 },
             ) as response:
                 if response.status_code in (401, 403):
                     raise PermissionError("Sync authorization was rejected")
+                if response.status_code == 404 and path == "/v1/session/info":
+                    raise SyncHistoryUnavailable("Sync service needs continuity support")
+                if response.status_code == 428:
+                    raise SyncHistoryUnavailable(
+                        "Sync service restarted; preserve work and reconnect",
+                    )
                 if response.status_code == 429:
                     raise ConnectionError("Sync service is busy; retry later")
                 if response.status_code == 412 and path == "/v1/pull":
@@ -474,6 +513,14 @@ class HttpTransport:
                     raise PairingUnavailableError("Pairing is unavailable on this service")
                 if response.status_code != 200:
                     raise RuntimeError(f"Sync service returned HTTP {response.status_code}")
+                instances = response.headers.get_list(_INSTANCE_HEADER)
+                offered = (instances[0] if len(instances) == 1
+                           and _INSTANCE.fullmatch(instances[0]) else None)
+                if self._instance is not None and offered != self._instance:
+                    raise SyncHistoryUnavailable(
+                        "Sync service changed; preserve work and reconnect",
+                    )
+
                 if response.headers.get("content-encoding", "identity").lower() != "identity":
                     raise ValueError("Encoded sync responses are not supported")
                 if response.headers.get("content-type", "").split(";", 1)[0] != "application/json":
@@ -490,9 +537,20 @@ class HttpTransport:
                         raise ValueError("Sync response exceeds the transport limit")
                     chunks.append(chunk)
                 try:
-                    return _decode(b"".join(chunks))
+                    result = _decode(b"".join(chunks))
                 except (ValueError, UnicodeError, RecursionError):
                     raise ValueError("Invalid sync HTTP response") from None
+                if path == "/v1/session/info":
+                    _session_identity(result)
+                    if offered is None:
+                        raise SyncHistoryUnavailable("Sync service needs continuity support")
+                    with self._pin_lock:
+                        if self._instance not in (None, offered):
+                            raise SyncHistoryUnavailable(
+                                "Sync service changed while validating identity",
+                            )
+                        self._instance = offered
+                return result
         except httpx.TimeoutException:
             raise TimeoutError("Sync service timed out") from None
         except httpx.HTTPError:

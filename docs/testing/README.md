@@ -76,7 +76,7 @@ remains available for addressing changes and exhaustive diagnosis. The release
 selection does not grow by adding every variant of the new feature.
 
 Original-source retirement/restoration adds one complete native peer lifecycle
-representative to the release gate (37 Python selectors including retained-history continuity and agent-import enrollment, not collected cases).
+representative to the release gate (38 Python selectors including retained-history continuity, service execution and agent-import enrollment, not collected cases).
 Its regular focused checks use a metadata-only fixture instead of downloading an
 unrelated original first. The source-lifetime transition is distinct from deck
 transfer or corpus-key validation; no historical assertion was removed to add it.
@@ -504,4 +504,23 @@ remains alive, then require a normal primary exit. Existing script tests check
 success, absent endpoint/early exit, secondary error/timeout and primary loss;
 those fake-process cases establish orchestration only. The native report must
 separately record `instance_handoff` as true before claiming the package passed.
-Critical remains 14 and release remains 37 selectors. No historical test matrix.
+Critical remains 14. The later service-execution requirement adds one release
+representative (38 selectors); no historical test matrix.
+
+
+### Service execution continuity (source, not hosted)
+
+A real HTTP listener restart at the same address must reject an existing session
+without acknowledging or altering its queued research, while a fresh connection
+can retry normally. Identity is checked before private requests; absent, malformed
+or duplicated offers send no research. Headerless wire requests return 428.
+Existing HTTP/blob/device/browser requirements retain their assertions with a
+real identity preflight in raw fixture callers. One restart representative is
+added to release; daily critical remains 14. No broad historical suite is required.
+
+Mobile transport checks changed/missing offers, explicit reconnect and late-response
+cancellation; cookie and bearer paths share the guard. The actual JS/Python service
+journey and isolated headless Chromium cookie pairing/reload/reconnect/forget
+journey are distinct from mocked tests. The browser proxy preserves the header
+both directions. New native packages, live TLS/proxy and physical phone/Mac
+acceptance remain separate gates; a process nonce is not an authority-history proof.

@@ -324,7 +324,9 @@ sync and displays preservation guidance; mobile applies the same event check
 before outbox upload or reading-position reconciliation.
 
 This proves the selected received/acknowledged observations at request time, not a cryptographic
-commitment to all history or protection against a server reset during the pass.
+commitment to all history. The [HTTP execution guard](sync-http.md#execution-continuity-during-a-transfer)
+now refuses acceptance by a changed listener during the pass. Persistent history
+epochs, split-brain and unsupported in-place DB rollback are not solved by that guard.
 Complete authority-generation negotiation/rollback acceptance remains a release
 gate. Use the reviewed authority recovery/new-device flow; never reset the cursor,
 discard the outbox or blindly replay old envelopes. An unavailable legacy server

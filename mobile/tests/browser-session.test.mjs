@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CookieTransport,COOKIE_SESSION,HttpTransport} from '../transport.mjs';
 
 const origin='https://sync.example.org';
-const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
+const json=value=>new Response(JSON.stringify(value),{headers:{'content-type':'application/json','X-Paperfact-Sync-Instance':'a'.repeat(32)}});
 test('cookie pairing and ordinary Engine calls never send a JavaScript bearer credential',async()=>{
   const seen=[],identity={workspace_id:'research',device_id:'phone'};
   const transport=new CookieTransport(origin,{pageOrigin:origin,fetch:async(url,options)=>{

@@ -44,6 +44,12 @@ def post(fixture, path, value=None, cookie=None, headers=None):
             values.pop(key, None)
         else:
             values[key] = value_
+    bootstrap = {"pairing/prepare", "pairing/complete", "session/forget", "session/info"}
+    if cookie and path not in bootstrap and "X-Paperfact-Sync-Instance" not in values:
+        identity = httpx.post(fixture.url + "/v1/browser/session/info", json={},
+                              headers=values, trust_env=False)
+        if identity.status_code == 200:
+            values["X-Paperfact-Sync-Instance"] = identity.headers["X-Paperfact-Sync-Instance"]
     return httpx.post(fixture.url + "/v1/browser/" + path,
                       json={} if value is None else value, headers=values, trust_env=False)
 
@@ -206,7 +212,7 @@ def test_proxy_throttle_is_retryable_and_never_echoes_response_or_credentials():
             return httpx.Response(429, text="synthetic private upstream details")
         return httpx.Response(200, stream=httpx.ByteStream(
             json.dumps({"workspace_id": "workspace", "device_id": "phone"}).encode()),
-            headers={"content-type": "application/json"})
+            headers={"content-type": "application/json", "X-Paperfact-Sync-Instance": "a" * 32})
     with HttpTransport("https://sync.example.org") as transport:
         transport._client.close()
         transport._client = httpx.Client(transport=httpx.MockTransport(reply))

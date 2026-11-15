@@ -6076,3 +6076,55 @@ additional worktree was introduced.
   The unchanged runtime reuses this exact source candidate's critical passes on
   all three OSes above; no repeated local critical/exhaustive/native run for a
   download-link update. CRLF-aware whitespace check passed.
+
+
+## 2026-11-15: mandatory HTTP execution continuity
+
+- Previous turn made progress: common d2689e8 artifacts actually verified and
+  downloads refreshed in f8fbdf5. New code does not change those package facts.
+- Source diagnosis: a received/acknowledged frontier proof is not an atomic
+  receiver guard if the HTTP listener changes before later writes. Added a random
+  per-listener X-Paperfact-Sync-Instance offer, mandatory authenticated request
+  guard and closed 428 sync_session_changed rejection before service acceptance.
+- Payload bounds precede handshake; valid identity precedes pinning/private work.
+  Missing/changed/malformed/duplicate response offers cannot replace a pin.
+  Headerless private requests fail (identity/pairing/forget bootstrap is exempt).
+  Proxies must preserve both directions; the real browser test proxy now does.
+- Python recreates a transport to reconnect. Mobile begin_session clears only the
+  ephemeral pin and increments a delivery generation; Engine.connect invokes it.
+  A late old response cannot pin a previous execution. Cookie secrecy and expected
+  workspace/device checks remain. Existing UI guidance now checks version match.
+- Existing raw HTTP/browser fixtures now perform the required identity preflight;
+  no authorization/schema/data-preservation assertions were removed. Typed old
+  blob/pairing unsupported errors were retained rather than treating absence as
+  malformed JSON. A fake streamed httpx response initially used an already-read
+  body; replaced it with the proper ByteStream fixture, not a production bypass.
+  Missing offer in an old throttle fixture was corrected to model the new protocol.
+  Formatting findings stopped before pytest and were fixed.
+- Affected Python HTTP/blob/device/browser: 149 passed in 18.87s / 22.2s total.
+  Mobile transport/engine/cache: 31 passed in 3.594s governed execution. Actual
+  JS/Python HTTP journey passed in 2.344s. Isolated real headless Chromium cookie
+  pairing/reload/explicit reconnect/Chinese forget: four PASS observations in
+  14.39s, report build/browser-protocol-v26.json. No real profile, provider or data.
+- v26 shell replaces v25 without clearing research stores. Daily critical stays
+  14; one actual listener-restart representative adds a distinct release requirement
+  (38 selectors, not a historical full run). No new test file or public deployment.
+- This is listener-execution acceptance, not confidentiality of buffered HTTP bytes
+  or a complete authority protocol. Persistent history epochs, split-brain,
+  unsupported in-place live DB rollback, deployment/physical gates remain open.
+  New native packages are not built here; delivered candidate remains d2689e8.
+- Final delivery review caught a Python late-body race: an older identity response
+  could overwrite an execution pinned while its body was delayed. Regression
+  first failed (`DID NOT RAISE`) in 0.71s. Pin delivery now rechecks under a small
+  lock without holding it across I/O. All history/continuity cases: 17 passed in
+  3.66s / 6.9s total; actual JS/Python service path rechecked in 1.875s.
+- v26 allowlisted local artifact built and verified: 50 files, 3,914,699 bytes,
+  artifact ID `a569b6605a3c129ed7b242279ad1427e8025a52f72d5ceeb809549f9e9ba8619`,
+  ignored build/mobile-web-execution-v26. No upload or hosting is implied.
+- Docs gate: 58 passed in 1.96s / 5.6s total; default critical 14 passed in
+  7.80s / 11.1s total before the final HTTP-only pin-delivery refinement.
+  No full historical run, paid calls, research access, cleanup or native rebuild.
+- Final runtime gate after pin-delivery lock: critical 14 passed in 7.77s /
+  11.4s total, privacy/Ruff passed. Docs/CLI contract 58-case evidence remains
+  applicable; only dated evidence text changed afterward. Skill copies match
+  canonical content; CRLF-aware whitespace passed. No native/cloud dispatch.

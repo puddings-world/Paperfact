@@ -54,6 +54,9 @@ The earlier green-job/failed-mobile result is retained in the dated ledger;
 canonical TEMP allocation and fail-fast shells now have actual Windows CI evidence.
 Installed upgrades, real provider login, physical phones and hosted sync remain not run.
 The curated `release` selection has not been run for this manual candidate.
+Newer source requires HTTP execution continuity and v26 assets, not present in
+these d2689e8 packages. Client/service/static assets must update together;
+new native protocol and live reverse-proxy/device acceptance remain pending.
 Windows/Mac/Linux jobs took 7m20s / 3m33s / 2m18s respectively;
 critical pytest took 5.82s / 3.18s / 1.92s (Mac reported five warnings).
 Windows installer acceptance confirms clean install, installed reader/CLI/MCP,

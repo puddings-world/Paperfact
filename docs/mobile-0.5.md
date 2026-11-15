@@ -298,8 +298,18 @@ pass before outbox upload or reading-position reconciliation; drafts, local note
 receipts and cursor remain intact. The message asks for service-backup review,
 not browser storage deletion. Reconnecting cannot bypass that comparison.
 
-The v25 static shell refreshes the received-plus-acknowledged history guard while retaining
+The v26 static shell adds mandatory service-execution continuity to the received-plus-acknowledged history guard while retaining
 research storage. This is local source/artifact behavior; an installed PWA must
 receive the updated shell and service before pilot acceptance. This frontier
 check does not replace full authority-generation negotiation, private HTTPS
 hosting or Safari/physical-device durability checks.
+
+
+Execution continuity is pinned by the bearer/cookie transport after identity
+validation. A changed listener pauses research delivery without acknowledging or
+removing local notes. Reconnect explicitly after checking matching app/service
+versions; this clears only the ephemeral pin, and normal history checks still
+precede upload. An old in-flight identity response cannot replace the new pin.
+The service and v26 assets must be updated together; an older static client is
+refused by the new service. This source contract is not yet in the d2689e8 native
+candidate or a hosted PWA. See [the HTTP boundary](sync-http.md#execution-continuity-during-a-transfer).

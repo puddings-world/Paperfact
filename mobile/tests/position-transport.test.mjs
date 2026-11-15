@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {HttpTransport} from '../transport.mjs';
 const response=()=>new Response(JSON.stringify({workspace_id:'workspace',device_id:'phone'}),
-  {headers:{'Content-Type':'application/json'}});
+  {headers:{'Content-Type':'application/json','X-Paperfact-Sync-Instance':'a'.repeat(32)}});
 test('a fetch function is called without an invented transport receiver, with original signal and privacy headers',async()=>{
   const controller=new AbortController();let calls=0;
   async function fetchFunction(url,options) {

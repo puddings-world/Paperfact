@@ -56,6 +56,7 @@ export class Engine {
   }
   async connect(token) {
     this.disconnect();
+    this.transport?.begin_session?.();
     const generation = this.generation,
     signal = this.controller.signal;
     const identity = await this.transport.session_info(token, signal),

@@ -256,6 +256,13 @@ COPY["zh-TW"]["history"] = (
 )
 
 
+COPY["en"]["history"] += " Check matching app/service versions before reconnecting."
+COPY["zh-TW"]["history"] += (
+    "\uff1b\u91cd\u65b0\u9023\u7dda\u524d\uff0c\u8acb\u78ba\u8a8d"
+    " app \u8207\u670d\u52d9\u7248\u672c\u76f8\u7b26\u3002"
+)
+
+
 class SyncWorker(QThread):
     progress = Signal(object)
 

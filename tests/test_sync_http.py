@@ -73,6 +73,10 @@ def request(
                 ("Content-Length", str(len(body))),
             ]
         )
+        if headers is None and path != "/v1/session/info":
+            code, offered, _ = request(base_url, token, path="/v1/session/info", body=b"{}")
+            if code == 200:
+                supplied.append(("X-Paperfact-Sync-Instance", offered["X-Paperfact-Sync-Instance"]))
         for name, value in supplied:
             conn.putheader(name, value)
         conn.endheaders(body)

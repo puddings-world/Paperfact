@@ -146,6 +146,9 @@ RELEASE_JOURNEYS = {
     "Retained history before upload": (
         "tests/test_sync_history_frontier.py::test_frontier_is_checked_before_prepare_push_and_acknowledgment",
     ),
+    "Service execution continuity": (
+        "tests/test_sync_history_frontier.py::test_http_restart_refuses_existing_session_without_acknowledging_local_work",
+    ),
     "Existing agent research enrollment": (
         "tests/test_enrollment_integration_history.py::test_real_import_history_can_prepare_without_reactivating_receipts",
     ),

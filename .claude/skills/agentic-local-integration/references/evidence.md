@@ -613,3 +613,24 @@ and operation, not the old outcome/head: no stronger proof is claimed.
 The existing regression selector covers three checkpoint states and three remote
 outcomes, with mobile engine/shell checks. No authority generation negotiation,
 hosted rollback or physical-device guarantee follows from these fixtures.
+
+
+## 2026-11-15: remote execution continuity across a bounded job
+
+Status: validated-local in Paperfact; not a deployed/physical-device guarantee.
+A frontier check at job start cannot fence a listener replaced before a later
+push/blob request. The existing HTTP adapter now authenticates and advertises a
+per-listener nonce; transports pin it and the receiver requires it for subsequent
+research requests. A same-address real listener restart leaves local queued work
+unchanged; explicit fresh connection can continue. Missing/changed response offers
+and header stripping do not silently downgrade the job. Mobile bearer/cookie
+transport shares the guard; reconnect generations reject old identity responses.
+Actual JS/Python and isolated headless Chromium pairing/reload/reconnect/forget
+journeys pass. Old unsupported blob/pairing capabilities remain typed errors.
+No new account, persistent journal identity, automatic research replay or global
+installation. This does not cover split-brain, unsupported live DB overwrite,
+TLS/proxy deployment or persistent authority/history generation negotiation.
+Python pin delivery is also rechecked atomically after parsing the identity:
+a controlled delayed-body regression failed before that check, then passed.
+This prevents a concurrent older identity response from replacing a newer pin;
+it does not make transport history a persistent authority-generation proof.
