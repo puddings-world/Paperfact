@@ -524,3 +524,24 @@ journey and isolated headless Chromium cookie pairing/reload/reconnect/forget
 journey are distinct from mocked tests. The browser proxy preserves the header
 both directions. New native packages, live TLS/proxy and physical phone/Mac
 acceptance remain separate gates; a process nonce is not an authority-history proof.
+
+
+### Prepare a real existing profile without copying its authority
+
+`test_normal_local_controls_do_not_block_or_follow_a_prepared_copy` uses the actual
+schedule and update-cache writers with local sharing/failure controls, retained
+queue/list metadata and representative account/consent/usage files. It requires:
+
+- Coverage succeeds, source research/settings stay unchanged, private values/files
+  appear in neither candidate nor independent backup.
+- Protected account/diagnostic directories are pruned: a guarded scanner fails if
+  any private descendants are visited, so a large CLI home is not traversed.
+- A valid legacy adoption marker survives backup/restore as data; repeated list
+  refresh with and without that marker preserves the complete prepared SQL dump.
+- Unknown analysis/update/drive scopes and malformed legacy markers remain blocked;
+  unbound one-time adoption and ordinary read-only refresh retain their behavior.
+
+The existing release agent-import representative now includes a real update-cache
+write, with its exclusion asserted. Daily critical remains 14 and release remains
+38 selectors; no new test file or broad legacy stress matrix. Source/Qt-fixture
+results do not establish installed/hosted/device acceptance.

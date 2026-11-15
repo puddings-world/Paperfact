@@ -6128,3 +6128,44 @@ additional worktree was introduced.
   11.4s total, privacy/Ruff passed. Docs/CLI contract 58-case evidence remains
   applicable; only dated evidence text changed afterward. Skill copies match
   canonical content; CRLF-aware whitespace passed. No native/cloud dispatch.
+
+
+## 2026-11-15: ordinary profiles can prepare without exporting local authority
+
+- Previous turn made progress: mandatory HTTP execution continuity 03d7ab1
+  integrated/pushed. Reviewed server backup recovery already reconstructs a fresh
+  workspace and removes old credentials; no duplicate restore-generation system
+  was added. Hosted/device and persistent protocol gates remain separate.
+- Found real initial-copy blockers: update cache, local schedules/sharing/retry KV
+  and lists.legacy_queue were rejected as unsupported despite intact research.
+  The actual schedule/update-writer regression failed pre-fix with unsupported KV
+  and unsupported research KV: lists.legacy_queue (1.86s / 5.1s total).
+- Added explicit private KV classification; a bounded legacy adoption ID remains
+  local data in copy/backup/restore, including intentionally retired-list markers.
+  Unknown analysis/update/drive scopes and malformed marker values still block.
+- Bound workspace refresh now returns before legacy list construction and rechecks
+  under the existing write lock. No journal replay or implicit extra shared list.
+  Ordinary unbound one-time conversion and read-only refresh are unchanged.
+- Also classified actual AI settings, Google client config, usage and consent DB
+  files/sidecars. Root ai-accounts/usage-changes/diagnostics are pruned before
+  descendants are walked; root links and unknown research retain validation.
+  The regression's scanner fails on private traversal and verifies excluded values
+  never reach candidate or independent backup. No owner account files were read.
+- Initial controls/unknown scopes/agent-import cases: 5 passed in 12.09s / 15.3s.
+  Strengthened full-SQL preservation plus marker failures/unbound/read-only
+  compatibility: 9 passed in 11.01s / 14.2s. Private-tree pruning, existing unknown
+  file/schema failures and exact PDF/backup closure: 10 passed in 18.79s / 21.9s.
+  Counts overlap; no completion percentage. Formatting findings stopped before
+  pytest and were fixed, including a duplicate import, without weakening checks.
+- The existing release agent-import case now includes a real update-cache write;
+  no selector added: daily critical 14, release 38. No new test file, live account,
+  paid call, native build, research migration, cloud action or broad cleanup.
+  d2689e8 remains the delivered native candidate and predates these source fixes.
+  Complete arbitrary legacy/source/runtime adoption and physical gates remain.
+- Final actual desktop preview/prepare/open, updated agent-import representative
+  and unreadable research-directory rejection: 3 passed in 5.70s / 9.0s total.
+  The latter proves non-private scan errors fail rather than silently omitting
+  research. Docs 58 passed in 2.07s / 5.9s total; default critical 14 passed in
+  7.12s / 10.2s total. Privacy/Ruff/CRLF-aware whitespace passed; skill copies
+  synchronized without conflict. Unchanged passing checks were not broadened to
+  historical/stress or native builds. No global rule/installation was changed.

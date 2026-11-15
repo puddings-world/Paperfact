@@ -634,3 +634,19 @@ Python pin delivery is also rechecked atomically after parsing the identity:
 a controlled delayed-body regression failed before that check, then passed.
 This prevents a concurrent older identity response from replacing a newer pin;
 it does not make transport history a persistent authority-generation proof.
+
+
+## 2026-11-15: local controls versus migrated research
+
+Status: validated-local in Paperfact, not arbitrary profile/OS coverage.
+Actual update-cache and schedule writers plus private sharing/retry metadata made
+otherwise valid first enrollment fail as unsupported KV. Registered controls are
+now excluded alongside account/consent/usage files; unknown research still blocks.
+Protected root account/cache/diagnostic trees are pruned before traversal, with a
+scanner guard proving descendants are not visited. Root links remain invalid.
+A bounded legacy queue adoption marker is retained in copy/backup/restore as data.
+A synchronized workspace never reruns legacy queue-to-list construction, even
+without that marker; repeated refresh preserves its entire SQL dump. Unbound
+conversion still behaves normally. No old job, schedule or account authority is
+installed. This is an explicit registry, not permission to ignore unknown files,
+all JSON or every future setting prefix; declared originals remain verified.

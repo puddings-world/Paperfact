@@ -13,7 +13,7 @@ from test_enrollment_dialog import wait
 from test_workspace_enrollment import pdf, prepare, rows
 from test_workspace_enrollment import source as source
 
-from paper_daily import enrollment_history, store, sync_recovery
+from paper_daily import enrollment_history, store, sync_recovery, updates
 from paper_daily import local_operations as ops
 from paper_daily.desktop.enrollment_dialog import EnrollmentDialog
 from paper_daily.document_reader import DocumentReader
@@ -34,6 +34,9 @@ def imported(source, monkeypatch):
         "doi": "10.1234/enrollment"}], target_list_id=first["list_id"])
     ops.commit(appended["preview_id"], "agent-import-two", ["0"])
     original = pdf(source)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.row_factory = sqlite3.Row
+        updates.check(conn, current="0.4.4", fetch=lambda: [], now=1000)
     return source, first, proposed, original
 
 
@@ -85,6 +88,7 @@ def test_real_import_history_can_prepare_without_reactivating_receipts(
     assert result["status"] == "prepared_for_review"
     destination = Path(result["database"])
     assert archives(destination) == expected
+    assert not rows(destination, "SELECT 1 FROM kv WHERE key LIKE 'update.cache.%'")
     for table in expected:
         assert rows(destination, "SELECT COUNT(*) FROM " + table) == [(0,)]
     for table in ("papers", "lists", "notes"):

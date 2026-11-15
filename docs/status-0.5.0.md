@@ -24,6 +24,12 @@ old peers are refused. The v26 shell and this protocol are not in the d2689e8
 candidate or deployed. Update service/client/assets together for the next pilot.
 Persistent authority generations, split-brain and in-place rollback remain open.
 
+Source also supports ordinary local update/schedule/sharing/retry controls during
+reviewed-copy preparation and excludes registered account/consent/usage files.
+Private subtrees are pruned rather than scanned. Retained legacy adoption markers
+stay local data; synchronized list refresh cannot create an implicit extra list.
+Unknown research and malformed markers still block. These fixes are not in d2689e8.
+
 The integration line is `develop/0.5`. Current consolidation preserves the
 existing development work from base `9ab77e5`; the exact snapshot records 323
 paths. Four recovery modules and their tests are now in ordinary source/test

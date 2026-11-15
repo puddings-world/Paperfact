@@ -25,7 +25,7 @@ from paper_daily.sync_client import SyncClient
 from paper_daily.sync_content import CONTENT_TABLES
 from paper_daily.sync_document_actions import stage_file
 from paper_daily.sync_documents import bind_verified_document, desired_document, verify_document
-from paper_daily.sync_journal import Journal
+from paper_daily.sync_journal import Journal, _identifier
 from paper_daily.sync_operations import ResearchOperations
 from paper_daily.sync_recovery_fs import publish_directory
 from paper_daily.sync_research import prepare as prepare_adapter
@@ -40,8 +40,21 @@ MAX_ROWS = 100_000
 MAX_METADATA = 64 * 1024**2
 MAX_FILES = 256
 MAX_BYTES = 512 * 1024**2
-PRIVATE_FILES = {".env", "credentials.json", "tokens.json", "settings.json", "config.json"}
-PRIVATE_KV_PREFIXES = ("ui.", "ai.", "provider.", "account.", "usage.", "auth.")
+PRIVATE_FILES = {
+    ".env", "credentials.json", "tokens.json", "settings.json", "config.json", "llm.json",
+    "google-slides-client.json", "ai-usage.jsonl", "product-events.sqlite3",
+    "product-events.sqlite3-wal", "product-events.sqlite3-shm", "product-events.sqlite3-journal",
+}
+PRIVATE_DIRECTORIES = {"ai-accounts", "usage-changes", "diagnostics"}
+# Device controls and provider bookkeeping must not become recipient authority.
+PRIVATE_KV_KEYS = frozenset({
+    "analysis.schedule", "analysis.schedule.last_run", "analysis.batch", "analysis.batch.seen",
+    "update.last_check", "update.found", "update.snoozed", "pocket.url",
+})
+PRIVATE_KV_PREFIXES = (
+    "ui.", "ai.", "provider.", "account.", "usage.", "auth.", "update.cache.",
+    "drive.share.", "analyze.failed.", "dive.failures.", "dive.gave_up.",
+)
 SUPPORTED = CORE | set(CONTENT_TABLES) | INBOX_RESEARCH | {"paper_lineage_sets"}
 LOCAL_DERIVED = {
     "authors",
@@ -167,7 +180,16 @@ def _database(conn, ticket, *, history=None):
                 raise ValueError("Enrollment metadata exceeds its bounded inventory")
             digest.update(table.encode() + b"\0" + encoded + b"\n")
             value = dict(zip(columns, raw, strict=True))
-            if table == "kv" and value["key"] != "lists.order":
+            if table == "kv" and not isinstance(value["key"], str):
+                blockers.append("invalid local setting identity")
+                continue
+            if table == "kv" and value["key"] == "lists.legacy_queue":
+                try:
+                    _identifier(json.loads(value["value"]))
+                except (ValueError, TypeError, RecursionError):
+                    blockers.append("legacy queue marker requires a bounded list identity")
+                    continue
+            if table == "kv" and value["key"] not in {"lists.order", "lists.legacy_queue"}:
                 from paper_daily.later_outcome_history import redundant_hint
 
                 if redundant_hint(conn, value):
@@ -177,7 +199,8 @@ def _database(conn, ticket, *, history=None):
                     blockers.append("unsupported research KV: " + value["key"])
                 elif value["key"].startswith(("citegraph.", "followups.checked.", "resources:")):
                     blockers.append("unsupported research KV scope")
-                elif value["key"].startswith(PRIVATE_KV_PREFIXES):
+                elif (value["key"] in PRIVATE_KV_KEYS
+                      or value["key"].startswith(PRIVATE_KV_PREFIXES)):
                     excluded += 1
                 else:
                     blockers.append("unsupported KV scope")
@@ -225,6 +248,33 @@ def _source_descriptor(path, receipt):
     if json.loads(receipt["owner_json"])["format"] == LINEAGE_FORMAT:
         result["archive_only"] = True
     return result
+
+
+def _inventory_entries(root, ticket):
+    """Prune known local-control namespaces without walking private descendants."""
+    def failed(error):
+        raise error
+
+    for parent, folders, names in os.walk(root, topdown=True, followlinks=False, onerror=failed):
+        ticket.check()
+        parent = _safe_path(parent)
+        if parent == root:
+            for name in tuple(folders):
+                if name in PRIVATE_DIRECTORIES:
+                    _safe_path(parent / name)  # Root links remain invalid; never inspect children.
+                    folders.remove(name)
+        folders.sort()
+        for name in folders:
+            ticket.check()
+            yield _safe_path(parent / name)
+        for name in sorted(names):
+            ticket.check()
+            path = _safe_path(parent / name)
+            if not path.is_file():
+                raise ValueError("Source inventory contains an unsupported filesystem entry")
+            if parent == root and (name in PRIVATE_FILES or path.suffix == ".log"):
+                continue
+            yield path
 
 
 def _files(
@@ -314,7 +364,7 @@ def _files(
     checked_aliases = set()
     private_receipts = {_safe_path(item) for item in receipt_paths}
     entries = 0
-    for entry in root.rglob("*"):
+    for entry in _inventory_entries(root, ticket):
         ticket.check()
         entry = _safe_path(entry)
         entries += 1
@@ -352,8 +402,6 @@ def _files(
         if entry in private_receipts:
             continue  # Validated private receipt is archived, never shared authority.
         if entry in selected:
-            continue
-        if len(relative.parts) == 1 and (relative.name in PRIVATE_FILES or entry.suffix == ".log"):
             continue
         if entry in aliases:
             before = _identity(entry)

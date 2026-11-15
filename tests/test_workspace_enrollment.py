@@ -454,3 +454,140 @@ def test_absent_optional_recovery_table_does_not_require_source_migration(source
         sync_recovery, "OPTIONAL_RESEARCH_TABLES", {"optional_fixture"}, raising=False
     )
     assert EnrollmentService(source).plan()["supported"]
+
+
+def test_normal_local_controls_do_not_block_or_follow_a_prepared_copy(
+    source, tmp_path, monkeypatch,
+):
+    from paper_daily import analysis_schedule, lists, updates
+
+    controls = {
+        analysis_schedule.LAST_RUN: "2026-11-15",
+        analysis_schedule.BATCH: {"at": STAMP, "ids": ["paper"]},
+        analysis_schedule.SEEN: STAMP,
+        updates.LAST_CHECK: "2026-11-15",
+        updates.FOUND: {"version": "0.4.4"},
+        updates.SNOOZED: "0.4.4|2026-11-15",
+        "pocket.url": "https://private.example.invalid/reader",
+        "drive.share.list": {"file_id": "private-share-file", "anyone": False,
+                             "emails": ["private@example.invalid"]},
+        "analyze.failed.dive.paper": "private provider failure",
+        "dive.failures.paper": 2,
+        "dive.gave_up.paper": STAMP,
+    }
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.row_factory = sqlite3.Row
+        analysis_schedule.save(conn, dict(every=1, queue=4, lists=3, notify=True))
+        updates.check(conn, current="0.4.4", fetch=lambda: [], now=1000)
+        for key, value in controls.items():
+            store.set_kv(conn, key, value)
+        store.set_kv(conn, "lists.legacy_queue", "list")
+        conn.execute(
+            "INSERT INTO queue(paper_id,rank,state,queued_at) VALUES('paper',1,'pending',?)",
+            (STAMP,),
+        )
+    private_files = ("llm.json", "google-slides-client.json", "ai-usage.jsonl",
+                     "product-events.sqlite3", "product-events.sqlite3-wal")
+    for name in private_files:
+        (source.parent / name).write_text("private-account-control", encoding="utf-8")
+    private_roots = {source.parent / name
+                     for name in ("ai-accounts", "usage-changes", "diagnostics")}
+    for root in private_roots:
+        (root / "nested").mkdir(parents=True)
+        (root / "nested" / "private.json").write_text("private-account-control", encoding="utf-8")
+    from paper_daily import workspace_enrollment as enrollment
+
+    original_scan = enrollment.os.scandir
+
+    def scan(path):
+        if isinstance(path, (str, Path)) and Path(path) in private_roots:
+            pytest.fail("Private account/control descendants must not be scanned")
+        return original_scan(path)
+
+    monkeypatch.setattr(enrollment.os, "scandir", scan)
+    before = source.read_bytes()
+    private_keys = {row[0] for row in rows(source, "SELECT key FROM kv")
+                    if row[0] != "lists.legacy_queue"}
+    plan = EnrollmentService(source).plan()
+    assert plan["supported"], plan["blockers"]
+    assert plan["excluded_private_kv"] == len(private_keys)
+    result = prepare(source, tmp_path)
+    destination = Path(result["database"])
+    assert rows(destination, "SELECT key,value FROM kv WHERE key='lists.legacy_queue'") == [
+        ("lists.legacy_queue", json.dumps("list")),
+    ]
+    assert not private_keys.intersection(row[0] for row in rows(destination, "SELECT key FROM kv"))
+    for table in ("lists", "list_papers", "notes", "queue"):
+        assert rows(destination, "SELECT * FROM " + table) == rows(source, "SELECT * FROM " + table)
+    with zipfile.ZipFile(result["backup"]) as archive:
+        data = b"\n".join(archive.read(name) for name in archive.namelist())
+    assert b"private-account-control" not in data
+    assert all(not (destination.parent / name).exists() for name in private_files)
+    assert all(not (destination.parent / root.name).exists() for root in private_roots)
+    assert b"private-share-file" not in data and b"private@example.invalid" not in data
+    assert b"private.example.invalid" not in data and b"private provider failure" not in data
+    restored = tmp_path / "local-controls-restored"
+    sync_recovery.restore_detached(result["backup"], restored)
+    assert rows(restored / "papers.db", "SELECT value FROM kv WHERE key='lists.legacy_queue'") == [
+        (json.dumps("list"),),
+    ]
+    assert source.read_bytes() == before
+    monkeypatch.setattr(store, "ensure_dirs", lambda: None)
+    monkeypatch.setattr(lists, "connect", lambda: store.connect(path=destination))
+    for marker in (True, False):
+        if not marker:
+            with store.connect(path=destination) as conn:
+                conn.execute("DELETE FROM kv WHERE key='lists.legacy_queue'")
+        with closing(sqlite3.connect(destination)) as conn:
+            saved = list(conn.iterdump())
+        for _ in range(2):
+            assert lists.adopt_legacy_queue() is None
+        with closing(sqlite3.connect(destination)) as conn:
+            assert list(conn.iterdump()) == saved
+    assert source.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "key", ["analysis.future_research", "update.research", "drive.shared_notes"],
+)
+def test_unknown_setting_scopes_still_require_review(source, key):
+    with closing(sqlite3.connect(source)) as conn, conn:
+        store.set_kv(conn, key, {"body": "Unknown research must be retained"})
+    before = source.read_bytes()
+    plan = EnrollmentService(source).plan()
+    assert not plan["supported"] and plan["blockers"]
+    assert source.read_bytes() == before
+
+
+@pytest.mark.parametrize("raw", ["not-json", json.dumps({"private-marker": "list"})])
+def test_malformed_legacy_control_is_reported_without_normalization(source, raw):
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO kv VALUES('lists.legacy_queue',?)", (raw,))
+    before = source.read_bytes()
+    plan = EnrollmentService(source).plan()
+    assert not plan["supported"]
+    assert "legacy queue marker requires a bounded list identity" in plan["blockers"]
+    assert "private-marker" not in repr(plan)
+    assert source.read_bytes() == before
+
+
+
+def test_unreadable_research_directory_cannot_disappear_from_inventory(source, monkeypatch):
+    from paper_daily import workspace_enrollment as enrollment
+
+    directory = source.parent / "unreadable-research"
+    directory.mkdir()
+    (directory / "note.txt").write_text("Retain this research", encoding="utf-8")
+    original_scan = enrollment.os.scandir
+
+    def scan(path):
+        if isinstance(path, (str, Path)) and Path(path) == directory:
+            raise PermissionError("Synthetic unavailable research directory")
+        return original_scan(path)
+
+    monkeypatch.setattr(enrollment.os, "scandir", scan)
+    before = source.read_bytes()
+    with pytest.raises(PermissionError, match="unavailable research"):
+        EnrollmentService(source).plan()
+    assert source.read_bytes() == before
+    assert not (source.parent.parent / "candidate").exists()

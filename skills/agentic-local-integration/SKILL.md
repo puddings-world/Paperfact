@@ -22,7 +22,11 @@ buttons serialize through a server just to share behavior.
   When creating a distinct workspace, preserve validated old receipts/previews as
   private history, not live retry authority or pending commands. Reuse pure input
   validation without workspace/provider I/O; a copy is not permission to execute
-  an old request. See the validated-local import-enrollment evidence reference.
+  an old request. Keep explicit device-control/account namespaces local; prune
+  known private trees before scanning descendants while leaving unknown research
+  blocked. Preserve necessary migration markers as data, not permission for an
+  already synchronized workspace to rerun legacy constructors. See the
+  validated-local import-enrollment evidence reference.
 - When extending local operations into replication, distinguish remote acceptance
   from local application. An acknowledged write not yet received in a contiguous
   event stream remains a causal predecessor; older pages must not replace its newer

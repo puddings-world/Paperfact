@@ -54,13 +54,31 @@ creates existing `paper_document` manifests through `ResearchOperations`, verifi
 PDF readability, and binds the exact current desired target using the existing
 sealed verifier. PDFs are also included in the independent recovery archive.
 Final reader/store bindings refer to the new directory, never the temporary stage
-or source. Private configuration files and `ui.`, `ai.`, `provider.`, `account.`,
-`usage.` and `auth.` KV scopes are excluded from both candidate and archive. They
-are not interpreted or copied. Unknown KV scopes block enrollment.
+or source. Registered local configuration/account/consent/usage files are excluded
+from candidate and archive without interpreting their contents. Top-level
+`ai-accounts`, `usage-changes` and `diagnostics` directories are pruned before
+walking descendants. Private root links remain invalid; no credential path is
+followed or copied. Research directories/files still require complete coverage.
+
+Known `ui.`, `ai.`, `provider.`, `account.`, `usage.` and `auth.` KV scopes remain
+private. Local analysis schedule/notification keys, update controls/cache,
+`pocket.url`, `drive.share.*` and analysis retry/failure hints are also excluded.
+These are explicitly owned control namespaces, not a blanket exclusion of all
+`analysis.*`, `update.*`, `drive.*` or unknown JSON. Unknown research scopes still
+block, and source settings remain unchanged. The exact registry is maintained in
+`workspace_enrollment.PRIVATE_KV_KEYS`, `PRIVATE_KV_PREFIXES`, `PRIVATE_FILES` and
+`PRIVATE_DIRECTORIES`; future local controls need an explicit classification.
+
+`lists.legacy_queue` is a bounded JSON list-ID observation. It is retained locally
+and in the recovery archive, even if the user previously deleted that list; it
+is not proof that the list exists or permission to recreate it. Synchronized
+workspaces do not rerun automatic queue-to-list adoption, with or without this
+marker. The check repeats under the migration write lock. Ordinary unbound
+legacy conversion remains one-time and otherwise unchanged.
 
 The current limits are 100,000 inventoried SQL rows / 64 MiB encoded SQL values,
 256 explicitly mapped PDFs / 512 MiB total bytes / 150 MiB per PDF, and 2,048
-source filesystem entries. Cancellation is checked during inventory and between
+non-private source filesystem entries (private descendants are not walked). Cancellation is checked during inventory and between
 staging steps. A native PDF verification or recovery call is not interruptible
 mid-call; cancellation still prevents final publication. No percentages are
 inferred from these limits.

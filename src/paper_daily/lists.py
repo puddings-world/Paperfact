@@ -452,6 +452,15 @@ def reorder_papers(list_id: str, paper_ids: list[str]) -> None:
         )
 
 
+def _has_sync_binding(conn):
+    tables = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+        "('paperfact_sync_identity','research_sync_binding','research_capture_binding')"
+    ).fetchall()
+    return any(conn.execute('SELECT 1 FROM "' + row[0] + '" LIMIT 1').fetchone()
+               for row in tables)
+
+
 def adopt_legacy_queue() -> str | None:
     """Once, retain the old desktop queue as an ordinary, independently editable list.
 
@@ -463,6 +472,9 @@ def adopt_legacy_queue() -> str | None:
     from paper_daily import analysis_schedule
 
     with connect() as conn:
+        # Synchronized queue history is not permission to derive another list.
+        if _has_sync_binding(conn):
+            return None
         adopted = get_kv(conn, "lists.legacy_queue")
         if adopted:
             return adopted
@@ -475,6 +487,8 @@ def adopt_legacy_queue() -> str | None:
         # Normal refresh is read-only. Acquire a write lock only for the actual
         # one-time migration, then recheck in case another process adopted it.
         conn.execute("BEGIN IMMEDIATE")
+        if _has_sync_binding(conn):
+            return None
         adopted = get_kv(conn, "lists.legacy_queue")
         if adopted:
             return adopted

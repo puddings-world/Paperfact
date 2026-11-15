@@ -286,7 +286,9 @@ Preview the named requirements and exact selection without running tests:
 
 
 Prepared and restored workspaces open in separate windows without replacing
-current drafts. Workspace focus is bound to the exact destination database;
+current drafts. Reviewed copies leave personal accounts, schedules, usage and
+sharing controls on the source; refreshing a synchronized copy does not create
+extra lists from old queue history. Workspace focus is bound to the exact destination database;
 case-distinct Mac/Linux data roots remain separate. Close older app processes
 before installing a test build; this is not an installed-upgrade guarantee.
 New candidate acceptance also checks that a second launch uses the existing
