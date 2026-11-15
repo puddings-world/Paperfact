@@ -1,30 +1,33 @@
 # v0.5 Apple Silicon acceptance
 
 Status: physical Mac execution not yet recorded. A CI-native arm64 candidate is
-available from [run 43663374908](https://github.com/puddings-world/Paperfact/actions/runs/43663374908),
-clean commit `8bf00f999bb25acf20de4df94a697fa06323dd4e` (`0.5.0.dev`).
+available from [run 43671331418](https://github.com/puddings-world/Paperfact/actions/runs/43671331418),
+clean commit `15aae7e17c3ffa41852ee949d6fc1cabdc67e145` (`0.5.0.dev`).
 The same run includes matching Windows/Linux installers and verified mobile web assets.
 Download `build-macos` for the DMG, `research-fixture-macos` for `original.zip`, and
 `provenance-macos` for source identity and the frozen acceptance report.
 
 Exact Mac downloads (GitHub sign-in may be required for Actions artifacts):
 
-- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43663374908/artifacts/14140619840): DMG inside the 278,776,354-byte artifact archive.
-  Archive SHA-256: `b6a7663f3935fc4fbcc668800973d1baa0ef7eddf5711174e3487063e15a3603`.
-- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43663374908/artifacts/14140824453): synthetic `original.zip`, not private research.
-  Archive SHA-256: `93a34e8f7f58a80714fb43401ee95aebd11a19bc8b401098a08dbb638ad91549`.
+- [build-macos](https://github.com/puddings-world/Paperfact/actions/runs/43671331418/artifacts/14145025254): DMG inside the 279,423,984-byte artifact archive.
+  Archive SHA-256: `8612793792e88f9874e7d0587c8160504571c36c8e40b03aacc5accc9b244e7f`.
+- [research-fixture-macos](https://github.com/puddings-world/Paperfact/actions/runs/43671331418/artifacts/14144900578): synthetic `original.zip`, not private research.
+  Archive SHA-256: `a274278e5ccd4f6a807f12ea3086b3e050851c4f170092711e460554b4700beb`.
 
 These hashes identify the downloaded GitHub artifact ZIPs, not the contained DMG
 or research ZIP. All three native builds use the same commit above. This candidate
 includes received-plus-acknowledged history guards, recorded deep/section reading
 retirement, physical workspace-window routing, known CLI/MCP import preparation,
-private control/account exclusions and HTTP execution pinning; it does not provision a shared service or enable automatic
+private control/account exclusions, HTTP execution pinning, context-summary
+retirement, overview evidence labels, HTTP-cache exclusion and scoped citation
+graphs (including v27 PWA parity); it does not provision a shared service or enable automatic
 sync by installing it.
 
 CI passed three consecutive reader launches, actual same-workspace second-launch
 handoff, import/export, original audit and Launch Services activation/close.
 The packaged sync service also passed authenticated pull, restart/stale-execution
-refusal and explicit reconnection. This is local service evidence, not a real
+refusal, explicit reconnection, exact citation-graph write/retry and persistence
+after restart. This is local service evidence, not a real
 Windows/Mac offline-edit or hosted proxy journey. Earlier reader crashes (-11) were reproduced
 on the second launch. The remaining global Python file-open event filter was
 removed; OS file events now go directly through the application. Native three-launch
@@ -167,7 +170,7 @@ The existing CI still captures its generated fixture logs separately.
 | `lineage-audit`, `lineage-audit-result` | Actual frozen JSON CLI checks the imported synthetic corpus: three originals, five located quotations; no semantic-support claim |
 | `file-fidelity`, `research-content` | Exact exported PDF/assets plus saved analysis and membership |
 | `local-integration`, `appimage-integration` | Frozen JSON CLI and actual MCP stdio retry/restart behavior; AppImage variant when present |
-| `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (passed for 8bf00f9) |
+| `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (passed for 15aae7e) |
 | `sync-protocol` | Packaged CLI service init/issue, authenticated pull, restart, HTTP 428 for the old execution and successful reconnection; only synthetic state |
 | `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
 

@@ -87,8 +87,8 @@ The release workflow runs the common `release` selection once, on the Windows
 tag build. Every shipped OS runs `critical` plus the existing frozen-app verifier.
 Manual candidate builds use `critical`, not the larger release selection. All
 build jobs have a 30-minute deadline; the source-check step has a 10-minute cap.
-Common candidate [run 43663374908](https://github.com/puddings-world/Paperfact/actions/runs/43663374908)
-passed critical and frozen acceptance on Windows/Mac/Linux for clean `8bf00f9`:
+Common candidate [run 43671331418](https://github.com/puddings-world/Paperfact/actions/runs/43671331418)
+passed critical and frozen acceptance on Windows/Mac/Linux for clean `15aae7e`:
 14 critical cases per OS; four PDFs preserved; three-original/five-quote audit;
 CLI/MCP retry/restart and same-workspace handoff. The packaged sync service passed
 authenticated pull, restart/stale-execution refusal and explicit reconnection on
@@ -591,3 +591,7 @@ These are local scoped checks, not native installed graph/hosted/phone acceptanc
 The existing release-selected agent-import enrollment scenario now also carries
 a graph through capture, independent backup and detached restore. Release stays
 at 38 selectors; the daily critical gate stays at 14.
+
+Candidate 15aae7e also proves exact citation-graph content, idempotent retry and
+persistence after packaged service restart on all three desktop platforms. This
+does not establish a frozen GUI-client or hosted/physical-device sync journey.

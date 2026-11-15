@@ -45,8 +45,8 @@ Historical full-suite execution is not an automatic release prerequisite.
 | Privacy | Sync excludes AI credentials/telemetry; logs redact secrets and research bodies | Payload/log fixtures and consent boundary tests |
 | Distribution | Source, binaries, version, license/notices and provenance match | Clean build info, source archive, checksums and three-platform artifacts |
 
-Current common candidate: [8bf00f9 / run 43663374908](https://github.com/puddings-world/Paperfact/actions/runs/43663374908),
-full source `8bf00f999bb25acf20de4df94a697fa06323dd4e`, clean `0.5.0.dev`.
+Current common candidate: [15aae7e / run 43671331418](https://github.com/puddings-world/Paperfact/actions/runs/43671331418),
+full source `15aae7e17c3ffa41852ee949d6fc1cabdc67e145`, clean `0.5.0.dev`.
 All three desktop native reports passed; source critical is 14 per OS, not 42
 unique journeys. All three also passed the actual same-workspace instance
 handoff, with a live primary, a returning second launch and normal primary exit. Windows mobile artifact tests also passed 5/5 with 0 failures.
@@ -54,26 +54,26 @@ The earlier green-job/failed-mobile result is retained in the dated ledger;
 canonical TEMP allocation and fail-fast shells now have actual Windows CI evidence.
 Installed upgrades, real provider login, physical phones and hosted sync remain not run.
 The curated `release` selection has not been run for this manual candidate.
-These packages require HTTP execution continuity; the same run includes v26 web
+These packages require HTTP execution continuity; the same run includes v27 web
 assets. Each packaged service passed authenticated pull, restart/stale-execution
-refusal and explicit reconnection. Client/service/assets must update together.
+refusal, explicit reconnection and exact citation-graph write/retry/restart persistence. Client/service/assets must update together.
 Frozen GUI-client sync, live reverse-proxy and physical-device acceptance remain pending.
-Windows/Mac/Linux jobs took 7m44s / 4m34s / 3m09s respectively;
-critical pytest took 5.75s / 4.07s / 3.11s (Mac reported five warnings).
+Windows/Mac/Linux jobs took 6m38s / 5m30s / 3m06s respectively;
+critical pytest took 3.74s / 5.57s / 5.56s (Mac reported five warnings).
 Windows installer acceptance confirms clean install, installed reader/CLI/MCP,
 same-version reinstall/uninstall and byte-preserved synthetic research. It does
 not cover an older-release upgrade, registry/shortcuts or a physical Mac.
 The [Mac acceptance guide](testing/mac-acceptance-0.5.md) links exact downloads.
 Reports and artifact index are retained locally in ignored
-`build/candidate-43663374908/`; no release was created.
+`build/candidate-43671331418/`; no release was created.
 
 ## Platform acceptance
 
 | Target | Required v0.5.0 evidence | Current claim |
 |---|---|---|
-| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI 8bf00f9/run 43663374908: critical 14, same-workspace handoff, frozen workflow, isolated install, installed reader/CLI/MCP, same-version reinstall/uninstall and research preservation passed; old-release upgrade, shortcut/registration integration and physical sync not run |
-| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `8bf00f9`: critical 14, same-workspace handoff, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
-| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `8bf00f9`: critical 14, same-workspace handoff, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
+| Windows x64 source/setup EXE | Critical journeys, frozen app, isolated clean install/reinstall/upgrade/uninstall, data preservation | Native CI 15aae7e/run 43671331418: critical 14, same-workspace handoff, frozen workflow, isolated install, installed reader/CLI/MCP, same-version reinstall/uninstall and research preservation passed; old-release upgrade, shortcut/registration integration and physical sync not run |
+| macOS Apple silicon source/DMG | Critical journeys, frozen app, install/update preservation, offline reading and sync | Native CI `15aae7e`: critical 14, same-workspace handoff, three reader starts, original audit and Launch Services foreground/close passed; physical input/upgrade/offline two-device journey not run |
+| Linux x86-64 source/AppImage | Critical journeys, frozen app, executable/update preservation and offline reading | Native CI `15aae7e`: critical 14, same-workspace handoff, reader/import/export/original audit and AppImage CLI/MCP/retry passed; installed update/offline two-device journey not run |
 | iPhone/Safari installed PWA | Offline launch, PDF/readability, note reload, foreground reconnect, storage/error recovery, touch/accessibility | Pending; simulation does not replace physical-device results |
 | Android/Chrome installed PWA | Same journey, including suspend/foreground and failed-network recovery | Pending; no physical-device result recorded here |
 

@@ -6408,3 +6408,47 @@ additional worktree was introduced.
   skill rule is inferred. Frozen candidate build, installed devices and hosted
   acceptance remain separate gates. Candidate still 8bf00f9 until a new run passes.
 - Integration gate: 14 passed in 5.91s / 9.3s total, privacy and Ruff passed.
+
+
+## 2026-11-15: common v27 native candidate delivered
+
+- Clean source 15aae7e17c3ffa41852ee949d6fc1cabdc67e145, version 0.5.0.dev,
+  run https://github.com/puddings-world/Paperfact/actions/runs/43671331418.
+  One manual all-platform dispatch; no release or deployment. Windows/Mac/Linux
+  jobs passed in 398/330/186 seconds. Local build CPU was not used.
+- Read all three actual paperfact.packaged-acceptance.v1 reports and source build
+  metadata: matching commit, dirty=false, passed=true. Each reports all six closed
+  sync booleans, including exact citation graph, duplicate retry and restart
+  persistence; instance handoff and CLI/MCP 38-tool retry/restart also passed.
+- Critical per OS: Windows 14 in 3.74s / 7.2s total; Mac 14 plus five warnings in
+  5.57s / 9.0s; Linux 14 in 5.56s / 8.3s. These are overlapping journeys, not 42
+  distinct requirements. Windows mobile artifact tests: 5 passed, zero failed.
+- Mac arm64 report verifies three reader starts; native Launch Services acceptance
+  passed. Windows installer report verifies clean install, same-version reinstall,
+  uninstall, exact research preservation and installed CLI/MCP; older-release
+  upgrade and registry/shortcut checks explicitly false, not inferred passed.
+  Contained setup SHA-256: 95b91a0b350bf3d9792a0bac0be29f7cff499ba4f3c4c2ffa9caa35e68a72377.
+- Artifact ZIPs (hashes identify GitHub archives, not their contained installers):
+  Windows 14144148013, 184141069 bytes,
+  3cd07615bc0f52cc5e2b4d35e9de00e44a353e18062a479ea377cfda3d074806;
+  Mac 14145025254, 279423984 bytes,
+  8612793792e88f9874e7d0587c8160504571c36c8e40b03aacc5accc9b244e7f;
+  Linux 14144970038, 282167106 bytes,
+  fa8922d3d2b23de2079f618539f6da44d100dfaf25b609761f72733d5cc6b583;
+  Mac synthetic fixture 14144900578, 7591 bytes,
+  a274278e5ccd4f6a807f12ea3086b3e050851c4f170092711e460554b4700beb;
+  mobile web 14143544601, 883563 bytes,
+  552e116465315b7b0354e8546efaaab6c59147c41a108bf1bdd51f106a17853b.
+- Small provenance reports, exact artifact index and three job logs retained under
+  ignored build/candidate-43671331418. Existing Mac guide/status/readiness/test map
+  and sole board now identify the common candidate. No big installer download or
+  repeat build was needed to record this documentation checkpoint.
+- Candidate includes context retirement, overview evidence labels, reserved-cache
+  exclusion and scoped citation graphs/v27 parity since 8bf00f9. Old headerless
+  peers require coordinated update. Dev bundles do not auto-update.
+- Physical M01-M21, installed vault/input/upgrade/coexistence, hosted HTTPS/device
+  issuance/revocation/backup and phone durability remain not run. Complete legacy
+  mapping/recovery, source-aware survey audit and persistent authority/history
+  commitments remain incomplete. No claim of completed v0.5 or public readiness.
+- Documentation consistency: 58 passed in 2.21s / 5.5s total; privacy, Ruff
+  and CRLF-aware whitespace passed. Reused unchanged code/native evidence.
