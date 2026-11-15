@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import survey_jobs, survey_reader
+from paper_daily import survey_jobs, survey_reader, survey_result_review
 from paper_daily.desktop.note_source_dialog import PagePreview
 
 TEXT = {
@@ -37,7 +38,16 @@ TEXT = {
         result_label="{started} | {model} | {request}",
         result_scope=("Read-only retained result. Viewing it does not change the current list. "
                       "Open original checks the captured PDF, not today's replacement. "
-                      "Reapplication is not available in this view."),
+                      "Use this report requires a separate confirmation."),
+        apply="Use this report...",
+        apply_title="Use this retained report?",
+        apply_question=("Make this the current report? Previous versions are kept. "
+                        "Its captured goal and sources remain historical metadata; "
+                        "your current list goal is unchanged."),
+        apply_busy="Checking and applying retained report...",
+        apply_failed=("Could not complete application. Your retained result is kept. "
+                      "Check Current report before retrying."),
+        apply_stopped="Stopped. Check Current report; completed writes may already be saved.",
         recorded="Recorded location",
         loading="Reading saved report...",
         inspecting="Verifying original and opening page...",
@@ -73,16 +83,40 @@ TEXT = {
         not_selected="not selected",
     ),
     "zh-TW": {
+        "apply": (
+            "\u5957\u7528\u9019\u4efd\u5831\u544a..."
+        ),
+        "apply_title": (
+            "\u5957\u7528\u4fdd\u7559\u5831\u544a\uff1f"
+        ),
+        "apply_question": (
+            "\u5c07\u9019\u4efd\u5831\u544a\u8a2d\u70ba\u76ee\u524d\u7248\u672c\uff1f"
+            "\u820a\u7248\u6703\u4fdd\u7559\u3002\u539f\u7814\u7a76\u76ee\u6a19\u8207"
+            "\u4f86\u6e90\u4ecd\u70ba\u6b77\u53f2\u7d00\u9304\uff0c\u4e0d\u6703\u66f4"
+            "\u6539\u76ee\u524d\u6e05\u55ae\u7684\u7814\u7a76\u76ee\u6a19\u3002"
+        ),
+        "apply_busy": (
+            "\u6b63\u5728\u6838\u5c0d\u8207\u5957\u7528\u4fdd\u7559\u5831\u544a..."
+        ),
+        "apply_failed": (
+            "\u672a\u80fd\u5b8c\u6210\u5957\u7528\u3002\u4fdd\u7559\u7d50\u679c\u4ecd"
+            "\u5728\uff0c\u8acb\u5148\u67e5\u770b\u76ee\u524d\u5831\u544a\u518d\u91cd"
+            "\u8a66\u3002"
+        ),
+        "apply_stopped": (
+            "\u5df2\u505c\u6b62\u3002\u8acb\u67e5\u770b\u76ee\u524d\u5831\u544a\uff1b"
+            "\u5df2\u5b8c\u6210\u7684\u5beb\u5165\u53ef\u80fd\u5df2\u5132\u5b58\u3002"
+        ),
+
         "results": "\u5df2\u5b8c\u6210\u7684 AI \u7d50\u679c",
         "results_loading": "\u6b63\u5728\u8b80\u53d6\u5df2\u5b8c\u6210\u7684 AI \u7d50\u679c...",
         "results_empty": "\u6b64\u6e05\u55ae\u5c1a\u7121\u4fdd\u7559\u7684 AI \u7d50\u679c\u3002",
         "result_label": "{started} | {model} | {request}",
         "result_scope": (
-            "\u4fdd\u7559\u7d50\u679c\uff1a\u50c5\u4f9b\u95b1\u8b80\uff0c"
-            "\u6aa2\u8996\u4e0d\u6703\u66f4\u6539\u76ee\u524d\u6e05\u55ae\u3002"
-            "\u958b\u555f\u539f\u6587\u6703\u6838\u5c0d\u7576\u6642\u7684 PDF\uff0c\u4e0d"
-            "\u6703\u4ee5\u76ee\u524d\u65b0\u7248\u53d6\u4ee3\u3002\u6b64\u8655\u5c1a"
-            "\u4e0d\u63d0\u4f9b\u91cd\u65b0\u5957\u7528\u3002"
+            "\u4fdd\u7559\u7d50\u679c\uff1a\u6aa2\u8996\u4e0d\u6703\u66f4\u6539\u76ee"
+            "\u524d\u6e05\u55ae\u3002\u958b\u555f\u539f\u6587\u6703\u6838\u5c0d\u7576"
+            "\u6642\u7684 PDF\uff1b\u5957\u7528\u9019\u4efd\u5831\u544a\u9700\u8981"
+            "\u53e6\u884c\u78ba\u8a8d\u3002"
         ),
         "recorded": "\u5df2\u8a18\u9304\u7684\u4f4d\u7f6e",
         "goal": "\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19",
@@ -228,6 +262,7 @@ class SavedSurveyPane(QWidget):
         self.future = None
         self.saved = self.selection = None
         self._retained = []
+        self._review = None
         self.closing = self.disposed = False
         self._refresh_available = False
         self._reload_queued = False
@@ -250,6 +285,10 @@ class SavedSurveyPane(QWidget):
         self.results.setAutoDefault(False)
         self.results.clicked.connect(self.load_results)
         top.addWidget(self.results)
+        self.apply_result = QPushButton(self.words["apply"])
+        self.apply_result.setAutoDefault(False)
+        self.apply_result.clicked.connect(self.review_result)
+        top.addWidget(self.apply_result)
         top.addWidget(self.stop)
         layout.addLayout(top)
         self.result_selector = QComboBox()
@@ -315,9 +354,12 @@ class SavedSurveyPane(QWidget):
 
     def _controls(self):
         idle = self.future is None and not self.closing and not self.disposed and self.current()
-        self.refresh.setEnabled(idle)
-        self.results.setEnabled(idle)
-        self.result_selector.setEnabled(idle)
+        self.refresh.setEnabled(idle and self._review is None)
+        self.results.setEnabled(idle and self._review is None)
+        archive = self.saved is not None and self.saved.data["kind"] == "retained"
+        self.apply_result.setVisible(archive)
+        self.apply_result.setEnabled(idle and archive and self._review is None)
+        self.result_selector.setEnabled(idle and self._review is None)
         self.stop.setVisible(self.future is not None)
         self.stop.setEnabled(self.future is not None and not self.cancelled.is_set())
         self.page.setEnabled(idle and self.selection is not None)
@@ -325,7 +367,8 @@ class SavedSurveyPane(QWidget):
         self.state_changed.emit()
 
     def _start(self, call, callback, message):
-        if self.future is not None or self.closing or self.disposed:
+        if (self.future is not None or self.closing or self.disposed
+                or self._review is not None and callback != self._applied):
             return
         self.status.setText(message)
         self.future = (self.executor.submit(call), callback)
@@ -391,6 +434,52 @@ class SavedSurveyPane(QWidget):
         self.saved = result
         self.view.setHtml(render(result.data, self.words))
         self.status.setText(self.words["result_scope"])
+
+    def review_result(self):
+        if (self.future is not None or self._review is not None or self.saved is None
+                or self.saved.data["kind"] != "retained" or not self.current()):
+            return
+        saved, cancel = self.saved, self.cancelled.is_set
+        self._start(lambda: survey_result_review.prepare(saved, cancelled=cancel),
+                    self._review_ready, self.words["apply_busy"])
+
+    def _release_review(self):
+        value, self._review = self._review, None
+        if value is not None:
+            value.close()
+
+    def _review_ready(self, value):
+        self._review = value
+        self._controls()
+        summary = value.summary()
+        box = QMessageBox(self)
+        box.setWindowTitle(self.words["apply_title"])
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setText(self.words["apply_question"])
+        model = summary["generation"]
+        goal = (summary["goal"] or self.words["goal_empty"]
+                if "goal" in value.original.data["report"]["inputs"]
+                else self.words["goal_unknown"])
+        box.setDetailedText(
+            self.words["goal"] + "\n" + goal
+            + "\n\n" + model["backend"] + " / " + (model["requested_model"] or "-")
+            + " \u2192 " + (model["returned_model"] or "-")
+            + "\n" + self.words["inventory"] + ": " + str(summary["sources"]))
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        answer = box.exec()
+        if (answer != QMessageBox.StandardButton.Yes or not self.current()
+                or self.closing or self.disposed):
+            self._release_review()
+            self.status.setText(self.words["cancelled"])
+            return
+        cancel = self.cancelled.is_set
+        self._start(lambda: survey_result_review.apply(value, cancelled=cancel),
+                    self._applied, self.words["apply_busy"])
+
+    def _applied(self, _result):
+        self._release_review()
+        self.reload()
 
     def reload_after_job(self):
         if self.closing or self.disposed or not self.current():
@@ -501,12 +590,15 @@ class SavedSurveyPane(QWidget):
             return
         future, callback = self.future
         self.future = None
+        result, delivered = None, False
+        applying = callback == self._applied
         try:
             result = future.result()
             if not self.closing and self.cancelled.is_set():
-                self.status.setText(self.words["cancelled"])
+                self.status.setText(self.words["apply_stopped" if applying else "cancelled"])
             elif not self.closing and self.current():
                 callback(result)
+                delivered = True
             elif not self.closing:
                 self._stale()
         except survey_reader.ReadChanged:
@@ -517,8 +609,18 @@ class SavedSurveyPane(QWidget):
         except Exception:
             if not self.closing:
                 self.status.setText(
-                    self.words["cancelled"] if self.cancelled.is_set() else self.words["failed"]
+                    self.words["apply_stopped" if applying else "cancelled"]
+                    if self.cancelled.is_set() else self.words[
+                        "apply_failed" if applying or callback == self._review_ready else "failed"]
                 )
+        finally:
+            if isinstance(result, survey_result_review.Review) and not delivered:
+                if self._review is result:
+                    self._release_review()
+                else:
+                    result.close()
+            if applying and self._review is not None:
+                self._release_review()
         if not self.closing:
             self.cancelled.clear()
         self._controls()
@@ -574,6 +676,8 @@ class SavedSurveyPane(QWidget):
         if self.disposed:
             return
         self.disposed = True
+        if self.future is None:
+            self._release_review()
         self.cancelled.set()
         self.poll.stop()
         self.executor.shutdown(wait=False, cancel_futures=True)

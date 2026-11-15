@@ -8462,3 +8462,52 @@ reference records the verified case, without adding a new skill/global install.
 No daily research/account, real inference, background service, build, release or
 deployment changed. Native88595d3 predates this source; installed/physical/hosted
 acceptance and reviewed reapplication remain separate gates.
+
+## 2026-11-16: confirmed retained-report application and test diagnosis
+
+Use this report now prepares the existing verified local/native import and asks
+with a default-Cancel plain-text confirmation. Goal/model/source data remain
+historical; the current list goal and previous report versions are preserved.
+No model/login/download occurs. Real widget tests include cancel then confirm,
+repeat clicks, goal/workspace changes during confirmation and close-before-write
+with exact owned-stage cleanup. OS temporary staging stays outside research data.
+
+Manual-review admission checks the archive seal/file and actual original owner,
+not the historical whole-database/WAL read stamp. Current report/goal are captured
+separately; established import target checks and the bounded goal check share the
+write transaction. The strict saved reader and its source checks remain unchanged.
+Unrelated UI settings survive without invalidating the review. Exact retry is an
+acknowledgment; old retries cannot reactivate over newer reports. Same original
+workspace/list/paper lifetimes/members are required; detached mapping stays open.
+
+Diagnosis evidence, not a complete pass: backend12 passed24.7s stages; initial UI
+waits failed. Thread capture located pending apply in Windows file_change checks.
+Governed40-observation probe: qWait2.125s versus yielding below1ms; counterbalanced
+native-warmed yield/Qt/yield was0.015s/0.860s/0.015s. The Qt helper now pumps events
+and sleeps5ms to yield Python execution, keeping the same8s deadline/assertions.
+New UI8 passed19.2s stages. Later combined runs exposed archive admission based on
+an expired global DB/WAL snapshot (now replaced by explicit logical review intent),
+then an existing native read false-invalidated after unrelated fixture GC.
+
+The latter now has a deterministic GC regression: proof bytes stayed valid while
+WAL disappeared. The shared sync fixture had used a transaction-only SQLite context
+without closing. Both fixture connections now close explicitly, with SQL behavior
+and expectations unchanged. Native/local GC cases pass2 in7.4s stages after the
+fix; before it the native case fails immediately after GC. No production file
+version guard was loosened. One tool creation attempt never started because
+approval review timed out; the permitted single retry created the intended check.
+
+Final combined selection90 passes141.74s pytest/145.4s all stages, governed300s,
+two CPUs/25% cap. This covers saved-report UI, new review UI/backend, saved-reader
+and shared sync-capture fixture tests. It is an affected selection, not the whole
+historical suite or release acceptance. Initial anchor/static/fixture failures and
+partial passes are not counted as successful verification. No owner research,
+credentials, paid inference, daily app, native build, release or deployment changed.
+Candidate88595d3 predates this source; installed/device/hosted gates remain open.
+
+Final read-seal tightening binds the actual archived/current memory fields, not
+only their stored signatures. Expanded backend/UI24 pass44.78s/48.3s stages,
+including altered-read refusal without SQL writes. These overlap the earlier90.
+Final critical14 passes7.53s/11.1s; docs/skill consistency60 passes1.98s/5.2s.
+No runtime source changed after these passes. The pending in-app finish-activation
+entry is explicitly retained in the release-readiness gates.

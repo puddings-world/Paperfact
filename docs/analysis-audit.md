@@ -823,3 +823,30 @@ a sealed read-only report cannot be passed to either publication preparation.
 The desktop also disables regeneration in archive mode, including programmatic
 handler entry before account authorization. Current report returns to normal
 reading. Reviewed reapplication and installed/hosted/device gates remain open.
+
+
+### Explicit retained-report application
+
+`survey_result_review.prepare(saved, *, cancelled=...)` accepts a sealed retained
+read, its unchanged recovery file and exact original/receipt pairs. It prepares a
+minimal verified portable report, not a new AI generation context or job replay.
+The fresh review requires the original database identity/binding, list/paper
+lifetimes and retained members. It captures the current report and bounded goal
+row separately from historical report metadata. An expired whole-database read
+stamp is not itself a write target: unrelated settings changes remain independent.
+
+`Review.summary()` is a pure checked display snapshot. `apply(review, *,
+cancelled=...)` rechecks the exact prepared stage, record/files and live owners.
+Goal comparison and the established native/local target checks share the write
+transaction. Native imports publish original grants/report/outbox atomically and
+finish local activation through complete_pending; local imports preserve report
+history and their verified originals. Exact current-content retry is a read-only
+acknowledgment; an old review cannot reactivate over a newer report. `close()`
+releases only its owned OS temporary directory. Partial cache bytes confer no grant.
+
+The desktop uses its existing single executor, a default-Cancel plain-text
+confirmation, stale-workspace/target checks and close/drain. It shows stop/failure
+without claiming a completed write was rolled back; Current report reveals the
+saved state. No provider authorization or model invocation participates. Same-
+workspace direct adoption is supported; detached mapping, installed/frozen/device
+and hosted acceptance remain separate gates.

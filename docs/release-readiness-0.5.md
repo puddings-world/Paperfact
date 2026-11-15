@@ -211,3 +211,18 @@ A bounded local download stopped after45s with an incomplete ZIP; it supplies no
 additional runtime evidence. Preserve the successful CI candidate rather than
 rebuild unchanged source to work around a download. Physical devices, deployment,
 runtime adoption and remaining recovery/authority gates are still open.
+
+
+### Reviewed retained-result application (source)
+
+The same-workspace desktop action now prepares existing native/local import,
+asks before writing and preserves historical metadata, current goals and older
+report versions. Source fixtures cover result equality, no extra AI, stale-target
+refusal, repeat/nonreactivation, cancellation and close/drain. The88595d3 native
+candidate predates this action; a passing old packaged report cannot certify it.
+
+Interrupted native activation has the existing complete_pending backend. The
+report reader exposes a pending version; a dedicated in-app finish-local-activation
+entry for this review action is not yet wired. Verify that recovery path before
+closing the offline restart gate. Detached owner remapping, frozen/installed
+review flow, physical devices and hosted operation remain separate requirements.

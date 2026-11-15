@@ -215,15 +215,16 @@ publication; a changed target stays untouched. The [CLI reference](docs/cli-refe
 also explains how to read a retained result without AI. In current source,
 **Completed AI results** opens retained reports in the app without another AI
 call. **Current report** returns to the saved version; retained results are
-read-only and cannot overwrite newer research. Their **Open original** links
-verify and display the retained PDF version, even if today's primary PDF changed.
+read-only until you choose **Use this report...** and confirm a prepared review.
+This preserves previous report versions and the list's current goal, without AI.
+**Open original** verifies the retained PDF, even if today's primary PDF changed.
 
 List packages preserve saved reports and original bytes for enrolled and local-only
 receivers. First-enrollment copies use fresh source mappings and retain private
 history. [Reader guide](docs/reader-guide.md) ? [Evidence and limits](docs/analysis-audit.md).
 
 This is source preview functionality. Installed Mac/Windows, physical mobile,
-hosted synchronization, reviewed result reapplication and runtime adoption remain
+hosted synchronization, installed recovery flows and runtime adoption remain
 acceptance gates; it is not a public v0.5 release.
 
 ![Saved report with its exact original page, using a synthetic fixture](docs/images/saved-survey-sources.png)

@@ -34,6 +34,10 @@ buttons serialize through a server just to share behavior.
   Archive inspection may use its own read-only observation of the exact record and
   retained originals. A readable archive is not a current generation target:
   reject it at write boundaries and before UI account/model authorization.
+  A separately confirmed restoration can prepare a new receiver-owned review of
+  the historical bytes. Preserve its original purpose/model; capture current
+  target/goal revisions independently and recheck them in the write transaction.
+  This is an explicit publication, not replay or relabeling of the old AI job.
 - If research and device controls share a key/value table, scope every capture,
   snapshot, import and projection by a closed research key family. A table-level
   permission must not expose credentials/settings. Resolve the feature's owner

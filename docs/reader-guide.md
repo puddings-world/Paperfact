@@ -853,6 +853,21 @@ historical. **Open original** verifies the retained receipt, PDF hash and quote
 location before displaying that exact original page. Missing or corrupt archives
 fail visibly; today's primary PDF is never a substitute. This does not establish
 scientific support or grant publication rights. Regeneration is disabled in this
-archive view; choose **Current report** first. Reviewed reapplication remains
-pending. The88595d3 preview predates this UI.
+archive view; choose **Current report** first.
+
+To reuse a completed result, choose **Use this report...**. The app verifies the
+retained originals and prepares the current receiver target in the background,
+then asks for confirmation (Cancel is the default). Its captured research goal,
+model and quotations stay historical; your current list goal is unchanged.
+Previous report versions remain in history. No AI, login or download occurs.
+
+This direct action requires the same original workspace/list and paper lifetimes,
+with the original members still in the list. It refuses changed targets/goals,
+missing/corrupt originals and retired owners instead of silently remapping them.
+Unrelated window-setting changes do not invalidate the review. Repeated activation
+starts one worker; an old retry cannot bring back an older report over a newer one.
+After stopping or closing during application, check **Current report** before
+retrying: a completed save may already be present. Review staging uses the
+user-scoped OS temporary directory and closes its exact owned stage on cancel,
+completion or dialog drain. The88595d3 installers predate this source workflow.
 No sources are downloaded by this action, and an oversized input fails visibly.

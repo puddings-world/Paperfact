@@ -1161,3 +1161,20 @@ or installed-device acceptance. No global rule is promoted.
   and local publishers reject the archive read, and UI cannot authorize AI from it.
 - Limits: source/Qt synthetic fixtures; no fresh writer proof, reviewed
   reapplication, native package/device/provider acceptance or hosted deployment.
+
+
+## Explicit retained-report review (2026-11-16)
+
+- Status: validated-local. Archived reports enter a separately confirmed receiver
+  import, not the AI producer boundary. Historical goal/model/quotes are unchanged;
+  current goal/target and original database/list/paper lifetimes are checked.
+- Evidence: affected saved readers, real local/native UI review, application and
+  shared sync-fixture module90 pass141.74s/145.4s stages. Preparing changes no
+  research SQL. Confirm/cancel, duplicate activation, changed goal/workspace,
+  close/drain, unchanged retry and old-retry nonreactivation are covered. Unrelated
+  UI-setting changes do not become stale-report conflicts. No extra AI occurs.
+- Lesson: a whole-database read stamp is not a domain-specific review target.
+  Use the established import's target observation plus a bounded goal row in the
+  actual write transaction. A sealed archive read alone still cannot publish.
+- Limits: same original database/binding/lifetimes and retained members. Detached
+  remapping and installed/frozen/device/provider/hosted acceptance remain open.
