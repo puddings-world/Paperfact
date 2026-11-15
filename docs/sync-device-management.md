@@ -250,13 +250,25 @@ results; neither the historical full suite nor the complete release profile ran.
    the details and choose **Pair and save on this device**. This explicitly uses
    the system credential store before contacting the authority. A new device ID
    and independent credential are retained for retry; no research is uploaded.
-3. Choose **Join in new folder**, then **Open created workspace**. The metadata
-   workspace is created separately and its verified connection is remembered for
-   that exact database. Attachment availability remains a separate sync step.
-   The original workspace and research remain unchanged.
-4. In the joined workspace, choose **Reconnect saved connection**. Enable
-   **Reconnect and sync when this workspace opens on this device** only if you
-   want automatic research transfer on later opens. Pairing does not enable it.
+3. Optionally select **Keep the new workspace synchronized when I open it on
+   this device** (off by default), then **Join in new folder** and **Open created
+   workspace**. This explicit permission applies only to the verified new folder:
+   opening it reauthenticates the saved device and starts the existing continuous
+   research/attachment sync. It never enables sync for the original workspace.
+   The metadata copy alone does not guarantee offline attachment availability.
+4. If you left that option off, use **Reconnect saved connection** in the joined
+   workspace. You can then enable **Reconnect and sync when this workspace opens
+   on this device**. Pairing or remembering a connection alone never enables it.
+
+The worker captures the option before joining, disables changes while pending,
+and saves it only after the exact new database/device has been reverified.
+`remember_joined(session, destination, ticket, *, vault_factory=None, startup=False)`
+uses the existing native `ConnectionVault.set_startup` boundary for an explicit
+Boolean opt-in; the default only remembers credentials. Stop cancels the live
+connection generation even if metadata publication already completed. Native-save
+failure or cancellation preserves the created directory, does not report automatic
+sync success, and permits retry with the same destination/device. The saved
+preference remains device-local and excluded from research transfer.
 
 If a reply is lost or the dialog closes after admission, **Reconnect saved
 connection** resumes the same native attempt, not a second device. The receiver

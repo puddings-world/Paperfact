@@ -58,8 +58,9 @@ def pair(view, invitation):
     wait(app(), lambda: not view.busy)
 
 
+@pytest.mark.parametrize("startup", [False, True])
 def test_issued_clipboard_pairing_joins_and_remembers_only_the_new_workspace(
-    receiver, service, tmp_path, monkeypatch
+    receiver, service, tmp_path, monkeypatch, startup
 ):
     connect(service)
     service[0].sync(Ticket())
@@ -88,14 +89,38 @@ def test_issued_clipboard_pairing_joins_and_remembers_only_the_new_workspace(
         assert not view.credential.text() and not view.connection_details.text()
         assert view.join_button.isVisible() and view.join_button.isEnabled()
         assert not view.advanced_panel.isVisible()
+        assert view.join_automatic_box.isVisible()
+        assert not view.join_automatic_box.isChecked()
+        view.join_automatic_box.setChecked(startup)
         destination = tmp_path / "joined"
         assert view.start_join(destination) and not view.start_join(destination)
         wait(app(), lambda: not view.busy)
         assert (destination / "papers.db").is_file(), view.status.text()
         assert view.created_destination is not None
         fresh = SyncSession(destination / "papers.db", transport_factory=receiver[4])
-        stored = ConnectionVault(fresh.workspace, backend=lambda: receiver[2]).load()
-        assert stored == record
+        saved = ConnectionVault(fresh.workspace, backend=lambda: receiver[2],
+                                startup_dir=receiver[1].startup_path.parent)
+        assert saved.load() == record
+        assert bool(saved.startup_record()) is startup
+        assert not receiver[1].startup_record()
+        from paper_daily.desktop.continuous_sync import ContinuousSync
+
+        continuous = ContinuousSync(fresh)
+        continuous.timer.stop()
+        try:
+            assert continuous.resume_saved(saved) is startup
+            if startup:
+                continuous.tick()
+                wait(app(), lambda: not continuous.busy)
+                assert continuous.enabled and fresh.summary()["authenticated"]
+                continuous.tick()
+                wait(app(), lambda: not continuous.busy)
+                assert continuous.state == "idle", continuous.summary()
+            else:
+                assert not fresh.summary()["authenticated"]
+        finally:
+            continuous.stop()
+            wait(app(), lambda: not continuous.busy)
         assert view.open_created() and not view.open_created()
         assert len(opened) == 1 and opened[0].database_path == destination / "papers.db"
         assert len(service[1].device_catalog(service[2])["devices"]) == 2
@@ -220,7 +245,61 @@ def test_pairing_controls_render_in_both_languages_without_secrets(receiver, ser
         for name, view in (("send", sender), ("receive", receiver_view)):
             target = Path.cwd() / "build" / f"pairing-{name}-{language}.png"
             assert view.grab().save(str(target))
+        pair(receiver_view, sender._invitation)
+        assert receiver_view.join_automatic_box.isVisible()
+        assert not receiver_view.join_automatic_box.isChecked()
+        target = Path.cwd() / "build" / f"pairing-join-{language}.png"
+        assert receiver_view.grab().save(str(target))
     finally:
         sender.close()
         receiver_view.close()
         gui.setFont(previous)
+
+
+@pytest.mark.parametrize("mode", ["cancel", "save_failure"])
+def test_join_startup_failure_preserves_destination_and_retries_without_duplicate_device(
+    receiver, service, tmp_path, mode,
+):
+    from paper_daily.connection_vault import VaultUnavailable
+
+    connect(service)
+    service[0].sync(Ticket())
+    view = view_for(receiver)
+    destination = tmp_path / "joined-retry"
+    entered, release = Event(), Event()
+    try:
+        pair(view, receiver[3])
+        view.join_automatic_box.setChecked(True)
+
+        def interrupted():
+            if mode == "cancel":
+                entered.set()
+                assert release.wait(8)
+            else:
+                raise VaultUnavailable("Synthetic native write failure")
+
+        receiver[2].after_write = interrupted
+        assert view.start_join(destination) and not view.start_join(destination)
+        if mode == "cancel":
+            wait(app(), entered.is_set)
+            assert view._worker.ticket.published  # Metadata is already preserved.
+            view.cancel()  # Actual user action also stops the connection generation.
+            release.set()
+        wait(app(), lambda: not view.busy)
+        assert (destination / "papers.db").is_file()
+        target = SyncSession(destination / "papers.db", transport_factory=receiver[4])
+        vault = ConnectionVault(target.workspace, backend=lambda: receiver[2],
+                                startup_dir=receiver[1].startup_path.parent)
+        assert not vault.startup_record() and not receiver[1].startup_record()
+        assert len(service[1].device_catalog(service[2])["devices"]) == 2
+        receiver[2].after_write = lambda: None
+        assert view.start_join(destination)
+        wait(app(), lambda: not view.busy)
+        assert vault.startup_record() and view.created_destination is not None
+        assert view.t["join_automatic_ready"] in view.status.text()
+        assert len(service[1].device_catalog(service[2])["devices"]) == 2
+    finally:
+        release.set()
+        receiver[2].after_write = lambda: None
+        view.close()
+        wait(app(), lambda: not view.busy)

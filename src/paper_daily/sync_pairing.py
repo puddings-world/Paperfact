@@ -170,11 +170,13 @@ class Attempt:
         return dict(result, generation=session.generation)
 
 
-def remember_joined(session, destination, ticket, *, vault_factory=None):
+def remember_joined(session, destination, ticket, *, vault_factory=None, startup=False):
     """Remember this device only for the exact newly joined DB, with source fences."""
     from paper_daily.connection_vault import ConnectionVault
     from paper_daily.workspace_sync import SyncSession
 
+    if type(startup) is not bool:
+        raise ValueError("Startup synchronization requires an explicit Boolean choice")
     epoch = session.generation
     with session._job():
         session._live(epoch, ticket)
@@ -215,7 +217,10 @@ def remember_joined(session, destination, ticket, *, vault_factory=None):
                 ticket,
             )
             vault = (vault_factory or ConnectionVault)(target.workspace)
-            vault.remember(target, connection, ticket)
+            if startup:
+                vault.set_startup(target, True, ticket)
+            else:
+                vault.remember(target, connection, ticket)
             session._live(epoch, ticket)
         finally:
             target.disconnect()

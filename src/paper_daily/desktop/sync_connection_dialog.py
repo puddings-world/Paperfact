@@ -223,12 +223,30 @@ COPY["en"].update({
         "Another pairing is saved. Reconnect it or forget the saved connection "
         "before replacing it."
     ),
+    "join_automatic": "Keep the new workspace synchronized when I open it on this device",
+    "join_automatic_help": (
+        "Opt in for the new folder only. Opening it reconnects the saved device and "
+        "starts research and attachment sync; the current workspace stays unchanged."
+    ),
+    "join_automatic_ready": "Automatic sync will start when you open the created workspace.",
     "join_save_failed": (
         "Workspace created, but saving its connection was not confirmed. Retry "
         "this destination before closing this window."
     ),
 })
 COPY["zh-TW"].update({
+    "join_automatic": (
+        "\u5728\u6b64\u88dd\u7f6e\u958b\u555f\u65b0\u5de5\u4f5c"
+        "\u5340\u6642\u6301\u7e8c\u540c\u6b65"
+    ),
+    "join_automatic_help": (
+        "\u50c5\u6388\u6b0a\u65b0\u8cc7\u6599\u593e\u3002\u958b\u555f\u5f8c\u6703\u91cd\u9023\u4e26\u540c\u6b65"
+        "\u7814\u7a76\u8207\u9644\u4ef6\uff1b\u76ee\u524d\u5de5\u4f5c\u5340\u4e0d\u8b8a\u3002"
+    ),
+    "join_automatic_ready": (
+        "\u958b\u555f\u65b0\u5de5\u4f5c\u5340\u5f8c\u6703\u555f"
+        "\u52d5\u81ea\u52d5\u540c\u6b65\u3002"
+    ),
     "pair_unavailable": "此服務尚不支援配對，請更新服務或使用進階手動連線資料。",
     "pair": "配對並儲存在此裝置", "pair_hint": "貼上另一台裝置的配對資料",
     "pair_help": "配對與重試資料會存在系統憑證庫，不會上傳研究內容。",
@@ -506,6 +524,9 @@ class SyncConnectionDialog(QDialog):
         self.join_button = QPushButton(self.t["join"])
         self.join_button.clicked.connect(self.choose_join)
         layout.addWidget(self.join_button)
+        self.join_automatic_box = QCheckBox(self.t["join_automatic"])
+        self.join_automatic_box.setToolTip(self.t["join_automatic_help"])
+        layout.addWidget(self.join_automatic_box)
         self.open_created_button = QPushButton(
             "開啟新工作區視窗" if self.zh else "Open created workspace"
         )
@@ -690,6 +711,13 @@ class SyncConnectionDialog(QDialog):
         )
         self.join_button.setEnabled(available and live and self.binding != summary["identity"])
         self.join_button.setVisible(live and self.binding != summary["identity"])
+        can_join_saved = live and self.binding != summary["identity"] and self._remember_joined
+        self.join_automatic_box.setVisible(can_join_saved)
+        self.join_automatic_box.setEnabled(
+            available and can_join_saved and self.created_destination is None
+        )
+        if not can_join_saved:
+            self.join_automatic_box.setChecked(False)
         self.open_created_button.setVisible(self.created_destination is not None)
         self.destination_label.setVisible(self.join_destination is not None)
         self.open_created_button.setEnabled(
@@ -985,6 +1013,7 @@ class SyncConnectionDialog(QDialog):
         self.join_destination = destination
         self.destination_label.setText(str(self.join_destination))
         remember = self._remember_joined
+        startup = remember and self.join_automatic_box.isChecked()
 
         def run(ticket, progress):
             result = sync_bootstrap.join(self.session, destination, ticket, progress)
@@ -993,15 +1022,17 @@ class SyncConnectionDialog(QDialog):
 
                 try:
                     remember_joined(
-                        self.session, destination, ticket,
+                        self.session, destination, ticket, startup=startup,
                         vault_factory=lambda workspace: ConnectionVault(
                             workspace, backend=self._connection_vault()._backend,
+                            startup_dir=self._connection_vault().startup_path.parent,
                         ),
                     )
-                except VaultUnavailable:
+                except (VaultUnavailable, OSError):
                     result["connection_remembered"] = False
                 else:
                     result["connection_remembered"] = True
+                    result["startup_enabled"] = startup
             return result
 
         return self._start("join", run)
@@ -1220,6 +1251,8 @@ class SyncConnectionDialog(QDialog):
                             "ontinue in a separate window."
                         )
                     )
+                if result.get("startup_enabled"):
+                    text += "\n" + self.t["join_automatic_ready"]
                 if result.get("connection_remembered") is False:
                     text += "\n" + self.t["join_save_failed"]
                 self.status.setText(text + "\n" + result["path"])

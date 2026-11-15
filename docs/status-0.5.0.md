@@ -22,7 +22,10 @@ Included source functionality:
 
 Source after the delivered candidate additionally retains unreferenced canonical
 reading-text caches as private history, with bounded bytes, collision refusal and
-a history-only preview count. This change is not in candidate f7616ae.
+a history-only preview count. These source changes are not in candidate f7616ae.
+Joining another desktop now also offers default-off, explicit automatic-sync
+permission for the exact new folder, avoiding another manual reconnect sequence;
+source/Qt startup and cancellation evidence is recorded in the continuation ledger.
 
 The matching v28 PWA artifact is built, not deployed. Update client/service/assets
 together; old headerless peers are refused. Close older app processes before

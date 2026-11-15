@@ -13,7 +13,10 @@ issuance and production hosted login.
   the verified in-memory session usable and reports that saving was not confirmed.
 - To pair a second desktop, follow [desktop pairing](sync-device-management.md#desktop-pairing-and-retry).
   Pairing explicitly saves a pending independent key before enrollment, then a
-  verified connection. It does not grant startup upload consent.
+  verified connection. It does not grant startup upload consent. The separate,
+  default-off **Keep the new workspace synchronized when I open it on this device**
+  option during joining can explicitly grant that permission for the new folder;
+  the original workspace remains unchanged.
 - On another app session choose **Reconnect saved connection**. Paperfact first
   resumes any unfinished native pairing attempt; otherwise it reads
   the system credential store and verifies device identity in the background.

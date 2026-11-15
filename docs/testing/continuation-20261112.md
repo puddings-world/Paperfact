@@ -6727,3 +6727,38 @@ additional worktree was introduced.
 
 - Documentation/skill consistency: 58 passed in 1.89s / 5.0s total; privacy and
   Ruff passed. Project copies synchronized without conflicts; no global install.
+
+
+## 2026-11-15: opt in to continuous sync while joining a desktop
+
+- The existing pairing/joining screen now offers one default-off checkbox for
+  automatic sync on opening the exact new workspace. It is shown only with a
+  remembered verified connection, frozen during work and saved only after fresh
+  destination/device validation. Source workspace and its startup preference stay
+  unchanged. Existing remember_joined adds an explicit Boolean startup keyword;
+  it calls the existing native consent boundary, not a new credential protocol.
+- Existing SDK and actual clipboard/pair/join tests now cover default-off and
+  opt-in; the latter constructs a fresh ContinuousSync controller and proves
+  reauthentication and research sync without another connection-button action.
+  Four normal cases passed in the initial behavioral slice before the next case
+  exposed a fixture mistake (not a six-case pass).
+- The initial cancellation fixture tried to cancel a publication Ticket after its
+  metadata publication. Ticket correctly treats that publication as final. The
+  test now invokes the actual GUI Stop path while the worker is held at native
+  save: it also cancels the connection generation. No assertion was loosened.
+  Stop/native-save failure preserve the destination and prevent startup permission;
+  retry of the same destination succeeds without another authority device.
+- Two new failure/retry variants plus three existing queued startup close/permission/
+  binding guards: five passed in 14.42s / 17.7s total. Both-language rendering,
+  actual MainWindow startup and session-only manual joining: four passed in
+  13.52s / 16.7s total. Actual en/zh-TW joined-screen images inspected under build/;
+  the option fits and defaults off. Initial translation-literal formatting/syntax
+  errors were corrected before these behavior results; no test ran on that red lint.
+- All tests use fake native storage and isolated authorities. No owner credential,
+  hosted deployment, installed Mac/Windows prompt or physical-device sync claimed.
+  Existing candidate f7616ae does not contain this newer source change. No new
+  runtime module, worktree, daemon, global skill or release selection was added.
+
+- Final critical gate: 14 passed in 4.97s / 8.2s total; privacy scan and Ruff passed.
+  No repeated historical/full run. Existing explicit-consent and generation-fence
+  methods were reused; no new portable skill rule was manufactured.

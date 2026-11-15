@@ -208,6 +208,7 @@ See [troubleshooting](SUPPORT.md) and the [0.4.4 candidate scope](docs/maintenan
 - Preserve known reading-text caches privately in reviewed copies and backups, without treating them as verified originals.
 - Verify received and newer acknowledged history before uploading; pin the service execution during transfers and preserve local work if it changes. Desktop, mobile and service must support the same continuity handshake.
 - Keep local use and personal AI accounts independent of optional sync.
+- Pair another desktop and optionally enable automatic sync for its new workspace in the same joining flow.
 - Give each list a reading goal, so its papers open with the depth and background
   work that goal needs.
 - See where every explanation comes from: each claim links to a passage, or says no

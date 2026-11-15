@@ -125,8 +125,9 @@ def test_pairing_cannot_replace_the_identity_of_enrolled_local_research(receiver
     assert service[0].workspace.path.read_bytes() == before
 
 
+@pytest.mark.parametrize("startup", [False, True])
 def test_joined_workspace_gets_its_own_verified_vault_entry_without_rebinding_source(
-    receiver, service, tmp_path, monkeypatch
+    receiver, service, tmp_path, monkeypatch, startup
 ):
     session, vault, backend, invitation, factory, _calls = receiver
     connect(service)
@@ -141,16 +142,21 @@ def test_joined_workspace_gets_its_own_verified_vault_entry_without_rebinding_so
         session,
         destination,
         Ticket(),
-        vault_factory=lambda workspace: ConnectionVault(workspace, backend=lambda: backend),
+        startup=startup,
+        vault_factory=lambda workspace: ConnectionVault(
+            workspace, backend=lambda: backend, startup_dir=vault.startup_path.parent,
+        ),
     )
     target = SyncSession(destination / "papers.db", transport_factory=factory)
-    remembered = ConnectionVault(target.workspace, backend=lambda: backend)
+    remembered = ConnectionVault(target.workspace, backend=lambda: backend,
+                                 startup_dir=vault.startup_path.parent)
     assert remembered.account != vault.account and remembered.load() == attempt.connection
     record = remembered.load()
     target.connect(record.endpoint, record.workspace_id, record.device_id, record.token, Ticket())
     assert target.summary()["authenticated"]
     assert session.workspace.path.read_bytes() == before
-    assert not remembered.startup_record()  # Saving credentials is not startup upload consent.
+    assert bool(remembered.startup_record()) is startup
+    assert not vault.startup_record()  # Consent belongs to the new folder only.
 
     import os
 
