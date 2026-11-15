@@ -180,3 +180,39 @@ Future CLI/MCP imports start new lists at zero, matching the ordinary list write
 append retains the existing maximum and ordering. No old IDs or research content
 are rewritten in place. Preparation remains a reviewed local copy, not complete
 in-place runtime adoption, service issuance or upload.
+
+
+## Resource-discovery observations
+
+The existing `research_compound_requests` and owned recovery-sidecar protocols
+now accept the closed `resources` phase in addition to the previously supported
+empty-fetch history. `enrollment_history.resource_sources(record) -> set[str]`
+validates the maintained compound envelope, strict duplicate-key-safe nested JSON,
+closed captured paper/authors, prior typed resource rows and generated mutations.
+Unexpected model inputs are rejected; this phase is a recorded lookup, not an AI
+request. Captured paths remain text, never capabilities to open arbitrary files.
+Declared PDF hashes use the existing explicit owned-original closure verifier.
+Legacy extracted-text observations with actual text bytes still require an
+explicit adapter; an absent-text observation grants no original ownership.
+
+Current resource links enter the ordinary native graph. Complete original request,
+context, mutation and outcome strings stay in the private history archive and
+independent backup. They do not become live request tables, model work or shared
+research payloads. Detached restore retains the exact inactive archive rows in
+`recovery_records`, rather than reinstating executable receipt authority.
+
+A `resources:<local-paper>` completion hint is omitted from the new live KV table
+only when it exactly duplicates a validated accepted resource request for that
+existing paper. The archived mutation retains its original `text`/`notext` value.
+Unmatched, malformed and unsupported hints still block preparation. Candidate
+outcomes cannot authorize completion. Matching reads are bounded by the existing
+row, record and total-byte limits and restricted to the selected owner. No source
+SQL/file is rewritten, and old job observations never suppress a newly required
+check in the fresh workspace.
+
+Fixture evidence covers an actual resource producer with a readable PDF, live
+link capture, exact private-history preservation, independent backup/detached
+restore and unchanged source; no external lookup or model call. Unknown nested
+paper fields raise the existing static validation error; planning does not
+normalize them into supported data. This does not complete arbitrary legacy
+workspace adoption, resource source-lifetime mapping or installed-device acceptance.

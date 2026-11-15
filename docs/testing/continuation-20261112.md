@@ -6502,3 +6502,49 @@ additional worktree was introduced.
 - Final docs: 58 passed in 2.28s / 6.0s total. Critical: 14 passed in
   7.54s / 11.0s total. Privacy, Ruff and CRLF-aware whitespace passed.
   No owned citation-test Chrome process remained. No native rebuild was started.
+
+
+## 2026-11-15: first-sync resource history
+
+- Fixed an actual preparation blocker: resource lookup uses native compound
+  receipts and a completion hint, but the old archive adapter accepted only an
+  empty followup fetch. The existing private archive now supports the closed
+  resources phase; no new table/protocol/module or transport is introduced.
+- Strict bounded duplicate-key-safe context/mutation decode plus maintained
+  envelope/output validation; closed paper/authors and typed observed resource
+  rows. Unexpected model inputs and nonempty legacy extracted-text provenance
+  remain unsupported. Declared PDFs join the existing owned-byte closure check;
+  archived paths are not opened or used as capabilities.
+- Only exact validated accepted owner/completion matches omit a redundant live
+  resources hint. Actual completion remains in the archived mutation. Candidate,
+  malformed or mismatched hints do not suppress work. Reads are SQL-bounded and
+  owner-filtered, with record/total-byte limits. NULL candidate_id remains the
+  existing successful-receipt contract, separately checked from oversized data.
+- Actual mocked-network resource producer, readable original, first-copy/live
+  resource operation, exact archived strings, no private context in the outbox,
+  unchanged source and independent backup/restore verified. Detached restoration
+  intentionally retains old private history in recovery_records, not live tables;
+  the initial new test expected the wrong table, then was corrected to compare
+  full exact records and original PDF bytes without changing production restore.
+- Affected history file: 11 passed in 23.85s / 27.0s total. Early runs stopped on
+  formatting, then exposed the new adapter's incorrect blanket NULL rejection;
+  fixed the implementation. Unknown nested input correctly raised the existing
+  validation error; the new negative test now asserts that contract and redaction.
+- Existing private-archive and mixed-KV skill boundaries already cover this change;
+  no new portable rule or synchronized/global skill copy is needed. Source-only
+  progress; native candidate stays 15aae7e. No deployment, owner data or paid calls.
+- Expanded the existing negative behavior with duplicate nested keys, unsupported
+  author/model snapshots, a foreign captured owner and nonempty legacy text;
+  no new selectors. Mismatched hints and private error redaction remain pinned.
+- The broader hint check exposed a prior citation-graph import message regression:
+  unsupported legacy KV still correctly refused without any writes, but lost its
+  established error category. Restored legacy research KV only for non-graph
+  scopes; malformed graphs keep their existing category. Existing tests unchanged.
+- Strict new negative plus unchanged later-hint regressions: 14 passed before the
+  selected graph-import journey caught a newly introduced local import alias
+  shadowing its selected file path. Fixed that code, not the test. Final graph
+  journey: 1 passed in 3.12s / 6.2s total; prior slice was 14 passed/1 failed,
+  not a green combined run. The alias fix changes no accepted data contract.
+- Final docs consistency: 58 passed in 2.00s / 5.3s total. Critical: 14
+  passed in 7.59s / 11.1s total. Privacy, Ruff and CRLF-aware whitespace passed.
+  Existing native/device evidence was not rerun or broadened.

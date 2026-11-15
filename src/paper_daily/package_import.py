@@ -248,6 +248,7 @@ class PackageImporter:
                     unsupported.append("annotation deletion without portable history")
             if tables.get("kv"):
                 from paper_daily.citation_graph_content import local_id
+                from paper_daily.citation_graph_content import selected as graph_selected
 
                 paper_ids = {row["id"] for row in tables.get("papers", [])
                              + tables.get("cited_papers", [])}
@@ -255,7 +256,10 @@ class PackageImporter:
                     if any(local_id(row) not in paper_ids for row in tables["kv"]):
                         raise ValueError("Unknown graph owner")
                 except ValueError:
-                    unsupported.append("unsupported or invalid research KV")
+                    unsupported.append(
+                        "legacy research KV" if any(not graph_selected(row) for row in tables["kv"])
+                        else "unsupported or invalid research KV"
+                    )
             if unsupported:
                 raise UnsupportedPackage(
                     "This package contains unsupported research scopes", unsupported

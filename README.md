@@ -344,3 +344,6 @@ retry and persistence across listener restart; see [toolchain](docs/toolchain.md
 
 The mobile overview includes collapsible saved reference analyses and citation
 passages, with explicit original-version scope; see [mobile reader](docs/mobile-0.5.md).
+
+First-sync preparation also retains validated resource-discovery history privately
+while publishing current resource links; see [enrollment history](docs/initial-enrollment-history.md).

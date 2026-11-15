@@ -275,6 +275,9 @@ def validate_record(protocol, record):
     if protocol in {"research_compound_requests", "research_compound_recovery"}:
         from paper_daily.later_outcome_history import query_sources
 
+        context = _value(record["context_json"])
+        if isinstance(context, dict) and context.get("phase") == "resources":
+            return resource_sources(record)
         return query_sources(record)
     if protocol == "reading_position_import_v1":
         from paper_daily.reading_position_packages import validate_import_record
@@ -640,3 +643,95 @@ def canonical_membership_rows(rows):
             row["position"] = position
             canonical.append(row)
     return canonical_research_rows(canonical)
+def resource_sources(record):
+    """Archive exact resource observations; paths never grant read or replay rights."""
+    from paper_daily import research_compound as compound
+    from paper_daily import sync_content
+
+    context = _value(record["context_json"])
+    _value(record["mutations_json"])
+    compound.validate_request_record(record)
+    if context["phase"] != "resources" or context["prompts"]:
+        raise ValueError("Unsupported resource history phase or model inputs")
+    paper = context["paper"]
+    closed(paper, {"id", "title", "arxiv_id", "authors_json"})
+    for key, value in paper.items():
+        sync_content._text(value, 32768, nullable=key != "id")
+    if paper["authors_json"] is not None:
+        authors = _value(paper["authors_json"])
+        if not isinstance(authors, list) or len(authors) > 512:
+            raise ValueError("Unsupported resource author snapshot")
+        for author in authors:
+            sync_content._text(author, 4096, nullable=False)
+    text = context["text_source"]
+    if text is not None and text["sha256"] is not None:
+        raise ValueError("Extracted resource text needs an explicit archive adapter")
+    source = (context["document"] or {}).get("sha256")
+    for row in context["rows"]:
+        sync_content.validate_payload(
+            dict(
+                scope={"kind": "paper", "id": "11111111-1111-4111-8111-111111111111"},
+                feature="resource",
+                key=row["url"],
+                data={key: row[key] for key in sync_content.FEATURES["resource"][2].split()},
+                source_document_hash=source,
+            )
+        )
+    return {source} if source is not None else set()
+
+
+def redundant_resource_hint(conn, row):
+    """A completion hint is redundant only with its validated accepted archive input."""
+    import sqlite3
+
+    if not row["key"].startswith("resources:"):
+        return False
+    owner = row["key"][len("resources:") :]
+    try:
+        completion = _value(row["value"])
+        if completion not in ("text", "notext") or not owner:
+            return False
+        if not conn.execute("SELECT 1 FROM papers WHERE id=?", (owner,)).fetchone():
+            return False
+        protocol = "research_compound_requests"
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (protocol,)
+        ).fetchone():
+            return False
+        fields = FORMATS[protocol].split()
+        if [
+            r[1] for r in conn.execute('PRAGMA table_info("research_compound_requests")')
+        ] != fields:
+            return False
+        query = (
+            "SELECT "
+            + ",".join(
+                f'CASE WHEN length(CAST("{field}" AS BLOB))<=? THEN "{field}" END'
+                for field in fields
+            )
+            + ",CASE WHEN length(CAST(candidate_id AS BLOB))>? THEN 1 ELSE 0 END"
+            + " FROM research_compound_requests WHERE status='accepted' AND "
+            + "CASE WHEN length(CAST(context_json AS BLOB))<=? THEN "
+            + "CASE WHEN json_valid(context_json) THEN json_extract(context_json,'$.owner_id') "
+            + "END END=? LIMIT ?"
+        )
+        total = 0
+        arguments = (*([MAX_ROW] * (len(fields) + 2)), owner, MAX_RECORDS + 1)
+        for count, record in enumerate(conn.execute(query, arguments), 1):
+            value = dict(zip(fields, record[:-1], strict=True))
+            if record[-1] or any(value[key] is None for key in fields if key != "candidate_id"):
+                return False
+            total += sum(
+                len(item.encode("utf-8")) for item in value.values() if isinstance(item, str)
+            )
+            if count > MAX_RECORDS or total > MAX_TOTAL:
+                return False
+            context = _value(value["context_json"])
+            if context.get("phase") != "resources" or context.get("owner_id") != owner:
+                continue
+            resource_sources(value)
+            if _value(value["mutations_json"])["completion"] == completion:
+                return True
+    except (ValueError, TypeError, AttributeError, sqlite3.Error):
+        return False
+    return False
