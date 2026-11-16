@@ -17,40 +17,28 @@ checks before removal. These changes are now included in d14c512 candidates.
 Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
-Source after30b5776 adds cooperative cancellation/workspace checks during exact
-original-supply hash reads, including staged and reused-final validation. Newer
-source also separates unsupported research formats from history-integrity errors,
-hides inappropriate desktop history-adoption controls and pauses automatic sync;
-mobile retains unsent notes with the matching fixed compatibility message.
-The PWA exporter now also produces identical first-party assets from LF/CRLF
-checkouts while preserving exact vendor bytes and raw source-change checks.
-These source changes are not in the candidate linked below.
-
 ## Current deliverable
 
-Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean
-**30b577601276fbccffa03b293f381d6d1a47f500**, version `0.5.0.dev`, beta-candidate.
-[Run43859467437](https://github.com/puddings-world/Paperfact/actions/runs/43859467437)
-succeeded: Mac6m35s, Windows8m06s, Linux3m40s; draft/release skipped.
-[Downloads and separate-app/workspace steps](testing/mac-acceptance-0.5.md).
+Integration branch: `develop/0.5`, source **66855cc**. The Apple Silicon Mac
+candidate now uses that exact clean source, version `0.5.0.dev`, beta-candidate.
+[Run43881479241](https://github.com/puddings-world/Paperfact/actions/runs/43881479241)
+passed in5m35s; draft/release skipped. It includes cancellable exact-original
+supply, unsupported-format pause and claim-card regeneration history enrollment.
+[Downloads and separate-app/workspace steps](testing/mac-acceptance-0.5.md#latest-tested-downloads).
 
-Mac now verifies the actual read-only DMG mount, app copy, bounded complete content
-and executable/link closure, and successful detach before running the same frozen
-workflow from the copy. Independently hash-matched native reports prove exact clean
-source/host, all15 sync flags and no active/failing stage. Mac passes three reader
-launches and Launch Services foreground; its screenshot has Chinese/formula/code.
-Windows isolated install/reinstall/uninstall preserves research; Linux AppImage
-integration passes. Large installer ZIPs were not independently downloaded here.
-Each OS passes critical14, first-sync1 and selected54 source cases; Mac has five
-warnings per phase, no failures. Selected passes do not certify every GUI action.
+Its downloaded/hash-matched native report proves arm64, exact clean source,
+read-only DMG mount/copy/verification/detach, workflow from the copied app, three
+reader launches/foreground and all15 sync flags. Source phases pass critical14,
+first-enrollment1 and selected54; five warnings each, no failures. This does not
+certify every dialog, real credential store, physical input or two-device journey.
+The large installer ZIP was not independently downloaded locally.
 
-Mobile artifact14223076072 was independently hash-matched and all54 assets/3983781
-bytes, proxy map and worker identity verified in1.640s under the CPU/time governor.
-Content ID remains
-`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
-It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
-Hosted continuous sync remains undeployed; package export/import is the available
-cross-machine snapshot handoff.
+Windows/Linux installers remain clean30b5776 from the earlier all-platform run;
+no matching66855cc native build is claimed. The reproducible PWA exporter is in
+current source, but this Mac-only run creates no new mobile artifact. Previously
+verified mobile artifact14223076072 remains built, not deployed HTTPS/PWA or
+physically accepted. Hosted continuous sync is undeployed; package export/import
+is the available cross-machine snapshot handoff.
 
 Independent authority anchoring/fencing, complete supported adoption and retention,
 full new GUI/live accounts/native vaults/IME, quarantine/notarization, older installed

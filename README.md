@@ -266,9 +266,9 @@ acceptance gates; it is not a public v0.5 release.
   built on it, quoted from the papers themselves.
 
 These are planned capabilities, not features in v0.4.x releases.
-Matching [Windows and Apple Silicon Mac test builds](docs/testing/mac-acceptance-0.5.md#latest-tested-downloads-1875db5)
-are available from clean1875db5. Use an isolated workspace and list-package transfer;
-hosted continuous sync and physical-device acceptance remain open.
+[Development test installers](docs/testing/mac-acceptance-0.5.md#latest-tested-downloads)
+list the exact source for each platform. Use an isolated workspace and list-package
+transfer; hosted continuous sync and physical-device acceptance remain open.
 
 The development sync dialog supports [explicit saved reconnection](docs/remembered-sync-connection.md):
 verify this device in one click, then choose manual, session-only or explicitly

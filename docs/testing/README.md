@@ -2,10 +2,47 @@
 
 ## Start here: scope, not case counts
 
-Updated 2026-11-14. The default development gate is now the curated critical
+Updated 2026-11-16. The default development gate is now the curated critical
 journeys, not every historical test. See [development checks](../development.md#development)
 for commands, budgets and report meaning. Historical results below are dated
 snapshots and do not describe the current default or certify the present source.
+
+## Choose what to check
+
+The default has six groups, currently expanding to14 cases. These are behavior
+representatives, not14 complete features or a completion percentage.
+
+| Default group | Observable result protected |
+|---|---|
+| Startup | Open/close the app without granting consent automatically |
+| List package and PDFs | Preserve papers, originals, analysis, order and pins; protect receiver edits |
+| Notes and Q&A | Save/reopen edits, persist a question before answering, keep writes in their original workspace |
+| AI settings | Drop the previous provider's credentials/model and keep task overrides separate from defaults |
+| Offline synchronization | Restart/retry without duplicates and preserve both concurrent note versions |
+| Backup and restore | Restore saved research without changing the source; cancellation starts no job |
+
+Use the configured project Python environment to preview the exact selectors:
+
+```sh
+python scripts/check.py --profile critical --plan
+python scripts/check.py --profile focused --python tests/test_bundle.py --plan
+```
+
+The second command selects the whole list-package test file. Append `::test_name`
+to select one case instead. Preview runs no tests and replaces no result report.
+For actual Windows execution, use `scripts/check_bounded.py` with the same
+`--profile focused --python ...` selection and omit `--plan`; on macOS/Linux use
+`scripts/check.py`. The bounded Windows runner limits CPU and elapsed work.
+Fixed `critical`/`release` profiles cannot be silently narrowed; choose `focused`
+for a subset. Their maintained definitions are `CRITICAL_JOURNEYS` and
+`RELEASE_JOURNEYS` in [the runner](../../scripts/check.py).
+
+There is currently no graphical feature picker. Ask for an explicit workflow
+scope, preview its selectors, then report each workflow's outcome and limits.
+Do not substitute a raw case count for that explanation.
+
+<details>
+<summary>Wider test-family reference (includes optional and historical coverage)</summary>
 
 | Test family | User behavior and failure boundaries protected | Representative source |
 |---|---|---|
@@ -25,6 +62,8 @@ snapshots and do not describe the current default or certify the present source.
 | Legacy storage cleanup | Keep originals for saved research, offline selections, reference endpoints and retained managed owners; recheck late claims under the writer reservation; pause unsupported metadata; leave immutable versions untouched | `tests/test_storage.py`, `tests/test_research_storage_retention.py` |
 | Backup and recovery | Preview/restore without changing the source; reject corrupt or stale decisions; confirmed plain/positioned note removal, atomic receipts, peer delivery and later-restore-safe retries | `tests/test_workspace_dialog.py`, `tests/test_sync_recovery_note_removal.py`, recovery scenario maps below |
 | Desktop, distribution and mobile | Worker/status delivery, dialogs, update notices, package contracts, safe per-stage packaged acceptance/failure reports, offline mobile domain and service behavior | `tests/test_update_notices.py`, `tests/test_distribution.py`, `tests/test_built_app_verification.py`, `mobile/tests/` |
+
+</details>
 
 These families include normal paths plus many variants of cancellation, repeated
 clicks, stale windows, changed papers/accounts, corrupt files and interrupted

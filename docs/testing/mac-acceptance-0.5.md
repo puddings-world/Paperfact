@@ -27,7 +27,40 @@ report, then decide where to send it. Do not send the whole research folder.
 The [full acceptance record](#acceptance-record) below tracks release/device tests;
 service-dependent cases stay **not run** until a reachable test service exists.
 
-## Latest tested downloads: 30b5776
+## Latest tested downloads
+
+Latest Apple Silicon Mac: clean **66855cc9d12eeb8b9c0f163019cf3f7f9efe7d01**,
+version `0.5.0.dev`, beta-candidate. [Run43881479241](https://github.com/puddings-world/Paperfact/actions/runs/43881479241)
+passed in **5m35s**. No tag, release or auto-update was created.
+
+| Platform | Exact source | Download | Native job duration |
+|---|---|---|---|
+| Apple Silicon Mac | `66855cc` | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43881479241/artifacts/14232986961) | 5m35s |
+| Windows x64 | `30b5776` | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43859467437/artifacts/14222404200) | 8m06s |
+| Linux x86-64 | `30b5776` | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43859467437/artifacts/14222013278) | 3m40s |
+
+The Windows/Linux installers are older; they have not been rebuilt at66855cc.
+The local integrated source is66855cc. Record the actual source on each machine;
+a shared `0.5.0.dev` label does not mean identical code.
+
+The Mac includes cancellable exact-original supply, an explicit pause for unreadable
+newer research formats, and claim-card enrollment that preserves edited notes and
+archives local regeneration controls without receiver-side deletion authority.
+The native report confirms a read-only DMG mount/copy/verification/detach, three
+reader starts, foreground activation and all15 named sync-protocol outcomes.
+The small provenance ZIP was independently downloaded and hash-matched; the large
+installer ZIP was not downloaded on this source workstation.
+
+The Mac source stages pass core14, first-enrollment1 and selected54 cases, with
+five warnings per phase and no failures. Their check totals are7.0s,3.3s and11.0s;
+the full5m35s includes dependency preparation, packaging, frozen-app operations
+and artifact upload. These are selected checks, not the historical full suite.
+Physical keyboard/IME, native credential prompts, quarantine/notarization, older
+installed upgrades, full dialogs and Windows/Mac/phone convergence remain open.
+Hosted sync is undeployed; use the list-package handoff at the top of this page.
+[Detailed identities and evidence](continuation-20261112.md#2026-11-16-66855cc-mac-candidate-and-readable-acceptance-guide).
+
+## Previous common-platform candidate: 30b5776
 
 All native candidates share clean source
 `30b577601276fbccffa03b293f381d6d1a47f500`, version `0.5.0.dev`, beta-candidate.
@@ -60,384 +93,12 @@ CPU governor. Its content identity is unchanged; HTTPS/PWA deployment remains op
 Hosted continuous sync is undeployed: use the snapshot handoff above.
 [Detailed identities and evidence](continuation-20261112.md#2026-11-16-30b5776-actual-dmg-copy-and-three-platform-candidates).
 
-## Previous tested downloads: d14c512
-
-All native candidates share clean source
-`d14c51253c348b921bfcb823ece22957e969cab7`, version `0.5.0.dev`, beta-candidate.
-[Run43851985599](https://github.com/puddings-world/Paperfact/actions/runs/43851985599)
-succeeded; draft/release was skipped. Check source **d14c512** in version/support
-information. Close an older test app before opening the new one, and keep the
-existing isolated test-data directory. These are test installers, not a public
-release or automatic update.
-
-| Platform | Download | Native job duration |
-|---|---|---|
-| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14217833669) | 5m59s |
-| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14219496165) | 8m29s |
-| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14218331821) | 2m47s |
-
-The d14c512 Mac workflow runs against the build-directory app. Newer verifier
-source adds actual read-only DMG mount/copy/detach and runs the same checks from
-the copied app; that stronger native result is not yet recorded for this download.
-
-This candidate combines the previous source-observed PDF/reader/deck transfer
-work with reviewed package missing-byte recovery, exact nullable list descriptions,
-and saved-research cleanup protection. Preview remains separate from confirmation;
-research retained outside a list still protects its declared legacy originals.
-Immutable history/conflict/blob garbage collection remains a separate open item.
-
-Every OS passes critical14, first-sync1 and54 selected authority/control/recovery/
-offline/original cases. Mac reports five warnings per source phase, no failures.
-Small provenance ZIPs for
-[Mac](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14218397450),
-[Windows](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14219681025)
-and [Linux](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14218955314)
-were independently downloaded/hash-matched and strictly inspected: exact clean
-source/host, passed report and all15 named sync flags. Mac passes three reader
-launches plus Launch Services foreground; its downloaded screenshot shows Chinese,
-formula and code. Windows isolated install/reinstall/uninstall preserves research;
-Linux passes AppImage integration. Large installer ZIPs were not independently
-downloaded locally. This is not full new-GUI, live AI/Google/vault/IME, older
-installed-binary upgrade or physical two-device/phone acceptance.
-
-The matching [mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14217163768)
-was independently downloaded/hash-matched and all54 assets/3983781 bytes, proxy
-map and cache identity verified under the existing governor in0.375s. Content ID
-remains `5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
-It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
-Hosted continuous sync remains undeployed; use the snapshot handoff above.
-[Detailed hashes and evidence](continuation-20261112.md#2026-11-16-d14c512-three-platform-candidate-acceptance).
-
-## Previous tested downloads: 8252010
-
-All native candidates share clean source
-`8252010ad4a0d72fef84e9e1622d0a48b88056ba`, version `0.5.0.dev`, beta-candidate.
-[Run43843383556](https://github.com/puddings-world/Paperfact/actions/runs/43843383556)
-succeeded; draft/release was skipped. These are test installers, not an automatic
-update or public release. Check source **8252010** in version/support information.
-
-| Platform | Download | Native job duration |
-|---|---|---|
-| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14213973245) | 4m09s |
-| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214746277) | 8m01s |
-| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14213464829) | 3m36s |
-
-This candidate includes reader/analysis first-original intake, list PDF preservation,
-exact known-original supply without a new version/AI call, and explicit missing
-deck/body/image retry. Earlier native replacement, atomic successful-URL publication,
-retention guards and mobile storage-protection behavior are retained. A different
-PDF remains explicit replacement; corrupt finalized files are never overwritten.
-
-Each OS passes critical14, first-sync1 and53 selected authority/control/recovery/
-offline/original cases within the existing budgets. Mac reports five warnings
-per source phase, not failures. Small provenance ZIPs for
-[Mac](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214786054),
-[Windows](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214626637)
-and [Linux](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214197426)
-were independently downloaded, hash-matched and inspected: exact clean source,
-expected host, `passed=true` and all15 packaged sync flags. Large installer ZIPs
-were not independently downloaded on the source workstation.
-
-Mac passes three reader launches/foreground activation; its downloaded screenshot
-shows Chinese/formula/code. Windows isolated install/reinstall/uninstall preserves
-research; Linux passes AppImage integration. Source-format0.4.3 preservation is
-not an installed-old-binary upgrade. Full new-action GUI, native vault/IME, live
-AI/Google and physical two-device/phone acceptance remain open.
-
-The matching [mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214850454)
-was downloaded/hash-matched and all54 assets, proxy map and cache identity verified
-under the existing governor in0.813s. Its content ID remains
-`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
-It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
-Hosted continuous sync remains undeployed; use the snapshot handoff above.
-Detailed ZIP hashes/counts are in the [continuation ledger](continuation-20261112.md#2026-11-16-8252010-three-platform-candidate-acceptance).
-
-## Previous tested downloads: 2021103
-
-All three native candidates now share clean source
-`20211036cea31cc7d0764c28946926870617a7f4`, version `0.5.0.dev`, beta-candidate.
-[Run43820427097](https://github.com/puddings-world/Paperfact/actions/runs/43820427097)
-succeeded; its release/draft job was skipped. These are test builds, not an
-automatic-update offer or a public release.
-
-| Platform | Download | Native job duration |
-|---|---|---|
-| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14203933161) | 5m52s |
-| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204657506) | 9m09s |
-| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14203983233) | 3m32s |
-
-Sign into GitHub to download; extract the ZIP and open its installer. Keep the
-existing daily app/data. Follow the separate-app/workspace steps below and check
-source **2021103** in version/support information. Export a list research package
-on the desktop, include PDFs and personal notes/Q&A, transfer its ZIP, then choose
-**Import research package** on the Mac list overview. Import preview preserves
-existing receiver research by default. Reading needs no AI login. This is a
-snapshot handoff; hosted continuous synchronization is not deployed.
-
-The candidates include source-observed native PDF replacement, first-original
-list prefetch with atomic successful URL/outbox/binding/receipt publication,
-retention-safe legacy cleanup and explicit mobile origin-storage protection.
-Existing legacy files are not automatically migrated. A missing managed original
-uses attachment transfer, not a replacement source search. Source tests verify
-these new writer paths; the packaged acceptance below is not a full frozen GUI
-certificate for every new action.
-
-Each OS passes critical14, first-sync preservation1 and48 named authority/control/
-recovery/offline/original source cases, without a historical full suite. Frozen
-apps pass all15 sync-protocol flags, CLI/MCP retries and source-aware cached model
-handoff. Mac passes three reader launches and foreground activation; its downloaded
-screenshot shows readable Chinese/formula/code. Windows passes isolated actual
-install/reinstall/uninstall with research preserved; Linux passes AppImage
-integration. Source-format0.4.3 preservation is tested; older installed-binary
-upgrade, native account login/IME/vault, full GUI and physical two-device/phone
-acceptance remain open.
-
-Small provenance ZIPs for [Mac](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204521558),
-[Windows](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204014268)
-and [Linux](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204860735)
-were independently downloaded/hash-matched and inspected: exact clean source,
-expected arm64/amd64/x86_64 hosts, `passed=true`, all15 flags true. Large installer
-ZIPs were not independently downloaded on this source workstation. The following
-ZIP hashes are GitHub-reported artifact metadata:
-
-| Platform | ZIP bytes | ZIP SHA-256 |
-|---|---:|---|
-| macos | 280939951 | `b48e1c095de465412cf2256ad3603cab1fd6081fb0b21487586ca190696c8440` |
-| windows | 184738912 | `3354bd2275e4c2b988267b3142b97473a5e0cdfd09d358f689b1f35b81b045d8` |
-| linux | 282713093 | `8bd3830f6a3bdfbd441c06f757ea2abe408ee7f5eb412a5e7a0cce76d0adff19` |
-
-The [matching mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204845490)
-was downloaded/hash-matched and verified against all54 assets, proxy map and cache
-identity in0.453s under the two-processor/25% CPU governor. Content ID
-`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
-It includes the storage-protection module but is **not deployed HTTPS/PWA** and
-has not passed physical Safari/iOS/Android acceptance.
-
-## Previous tested downloads: 1875db5
-
-Windows and Apple Silicon Mac now share clean source
-`1875db595b7df510a851a2d44ea5157cc994689f`, version `0.5.0.dev`, beta-candidate.
-These are test builds, not a public release or an automatic-update offer.
-
-| Platform | Download | Exact job | Duration |
-|---|---|---|---|
-| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199876771) | [Mac run](https://github.com/puddings-world/Paperfact/actions/runs/43808973671) | 3m54s |
-| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199523450) | [Windows run](https://github.com/puddings-world/Paperfact/actions/runs/43808976905) | 7m48s |
-
-Download the ZIP while signed into GitHub, extract it, then open its DMG/setup.
-Keep the daily app and research. Use the separate Mac app/workspace commands below;
-import an exported list research package to read your desktop research on Mac.
-Check source **1875db5** in the bottom-right version/support information before
-reporting a problem. Your own supported AI login is separate from package import.
-Hosted continuous synchronization is not deployed; export/import is the available
-cross-machine handoff. Do not paste one device's credentials into another device.
-
-Both jobs pass critical14, first-sync preservation1 and45 named authority/control/
-recovery/offline source cases. Their actual frozen applications pass all15 sync
-protocol flags, including control-history challenge, absent/forged control refusal
-and restart, plus report/source handoff, exact originals, cached model completion,
-CLI/MCP retry and source-format0.4.3 preservation. Mac passes three reader launches
-and foreground activation; actual screenshots show readable Traditional Chinese,
-formula and code. Windows passes isolated install/reinstall/uninstall with research
-preserved. This does not certify every frozen dialog, live AI/Google login, native
-vault/IME, older installed-binary upgrade or physical two-device/phone journey.
-
-Small [Mac provenance](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199338423)
-and [Windows provenance](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14200082064)
-ZIPs were independently downloaded, SHA-256-matched and inspected: both are clean,
-exact1875db5, `passed=true`, and have the expected arm64/amd64 host. Mac screenshots
-and [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199872015)
-were also hash-matched; the reading screenshot was visually inspected.
-
-Installer ZIP hashes below are GitHub-reported metadata; large installer payloads
-were not independently downloaded on this Windows source workstation.
-
-| Platform | ZIP bytes | ZIP SHA-256 |
-|---|---:|---|
-| macos | 277900881 | `8a9e615a9c1532407b958cf137acc36aef650a32cfe49c2b7404e9a81a262a6f` |
-| windows | 184769284 | `7d3d20c4b212ebbe6684c86259750e0764c10245a583d81b4b6b2744ed778653` |
-
-[Mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199263514)
-uses the same source. Its downloaded ZIP hash and all53 assets, proxy map and cache identity
-were independently verified; content ID
-`dae60b2ab54a12460d51065b76711d5668647ca26c8eccf601a05c5d55ecd2b3`.
-It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
-Linux remains the older88b2497 baseline below and lacks this new official-v4 control
-handshake. Do not mix it with these candidates for v4 sync acceptance.
-
-The earlier7a95b31 Mac attempt failed because the packaged test client omitted the
-new handshake; it published no installer. The repaired independent verifier adds
-refusal checks and retains all earlier assertions. This successful exact-source
-build supersedes that failed attempt; see the continuation ledger for evidence.
-
-## Previous downloads: e26ec8f / 88b2497
-
-All builds are `0.5.0.dev`, beta-candidate, not a public v0.5 release.
-
-| Platform | Download | Exact clean source | Job duration |
-|---|---|---|---|
-| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195365154) | e26ec8fef7cabacba91af9c982b3011cc7eda4ca | 4m27s |
-| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194602606) | 88b24974f985fbd8832940cdd15ad3be3af4f649 | 8m40s |
-| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194043098) | 88b24974f985fbd8832940cdd15ad3be3af4f649 | 3m22s |
-
-Mac source adds only the screenshot helper/diagnostics repair and its tests/docs
-on top of88b2497; app research code is the same. The original all-platform run
-failed its Mac screenshot step before packaging. The Mac-only follow-up passes
-that actual gate and frozen acceptance; successful Windows/Linux were not rebuilt.
-All three small provenance ZIPs were independently downloaded/hash-matched and
-checked against their exact source. [Mac provenance](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195061327),
-[Mac screenshots](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195160887),
-[synthetic research package](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195096086).
-
-Each OS passes critical14, first-sync preservation1 and17 authority/offline-delivery
-source representatives. The new dialog guard clears stale readiness if a PDF,
-research or storage ownership changes after worker completion. Frozen CLI checks
-include report generation, exact originals/located quotes, private captured-model
-handoff, retained/cached retry and read-only list-report audit. Mac passes three
-reader launches and foreground; its actual reading screenshot shows Chinese,
-formula and code. Windows install/reinstall/uninstall preserves research; Linux
-AppImage integration passes. This is not full frozen-dialog or physical-device
-acceptance. Hosted continuous sync is not deployed: use list-package export/import
-for now. Follow the separate-app launch steps below and verify source **e26ec8f**.
-
-GitHub-reported installer ZIP metadata (installer payloads not downloaded here):
-
-| Platform | ZIP bytes | ZIP SHA-256 |
-|---|---:|---|
-| macos | 279959043 | `3d8be8c88343881db70ffa37f3d44184a1f618a4c98a36f9dab3145e451b64af` |
-| windows | 184644327 | `4f26cc61ce12e1d2fc1eeff909049bec79af5d74bff035b1ec1d1d8ebd12a7f7` |
-| linux | 282645955 | `cd630eabdda4c800bd13c09bd7d06d0b09010546697e81bafdd39ff98004626b` |
-
-No public tag/release, production deployment or daily research migration.
-The preceding same-source0a64ec7 candidate remains recorded in the
-[continuation ledger](continuation-20261112.md).
-
-## Previous Apple Silicon test build: 2fb6923
-
-[Mac run43774457806](https://github.com/puddings-world/Paperfact/actions/runs/43774457806)
-passes in6m03s, from clean `2fb69238377a4a43d8cccae28eef78820494bf6a`,
-version `0.5.0.dev`, beta-candidate channel. This is newer than the common-platform
-baseline below; Windows/Linux have not been rebuilt at this exact source.
-
-| Download | Purpose |
-|---|---|
-| [Mac DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14184844475) | Extract the ZIP, open the DMG, and copy the test app into a separate folder |
-| [Synthetic research package](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185583010) | Import `original.zip` into the isolated test workspace |
-| [Build identity and acceptance report](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185706911) | Match build2fb6923 when reporting a problem |
-| [Actual Mac screenshots](https://github.com/puddings-world/Paperfact/actions/runs/43774457806/artifacts/14185632796) | Compare the saved reading page, list, notes and slide layout |
-
-GitHub sign-in may be required. The DMG artifact ZIP is279,157,494bytes;
-GitHub-reported ZIP SHA-256 is
-`9d36a2e95a15b7383d2c8d28f8f9910480a3ca4ce62f3e57a1def2ca2ab23472`.
-This is not an independently downloaded DMG payload hash. The small provenance
-and screenshot ZIPs were downloaded and their hashes independently matched.
-The report confirms clean source, arm64, three reader launches, foreground
-activation, four research files preserved, CLI/MCP retry/restart and all11 packaged
-sync protocol checks. The reading screenshot was inspected: Chinese explanation,
-formula and pseudocode render with actual text, resolving the preceding blank-page
-gate. Empty-to-content now loads directly; populated views retain incremental
-updates. The screenshot tool keeps its exact-page, loaded-font and nonblank checks.
-
-Start with the separate-app commands below. Verify build2fb6923, import the
-synthetic package, read its PDF/explanation offline, save/reopen a note, then
-export/import the list package. Use your own AI only for explicit account checks.
-The new report review/completion flows have source/widget coverage; the standard
-frozen report does not automate every new dialog. Physical M01-M21, real accounts,
-old installed-binary upgrades, hosted sync and phone durability remain not run.
-No public release/tag or service deployment was created.
-
-## Previous common-platform candidate: 88595d3
-
-Built from clean `88595d332eaf36d911e3d15521e8d3f07ae976ca`, version
-`0.5.0.dev`, beta-candidate channel:
-[all-platform run43754647228](https://github.com/puddings-world/Paperfact/actions/runs/43754647228).
-Mac arm64 passed5m48s, Windows7m44s, Linux2m25s. All are the same source.
-
-- [Mac DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177314884):
-  279,577,751 bytes; GitHub ZIP SHA-256
-  `9180dfaf09dfbfc2e33777197ee938bfb294adcb81ac56e1cd296a3a975a5acf`.
-- [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14178077416).
-- [Mac provenance/report](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177654011).
-- [Windows installer ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14178142192).
-- [Linux AppImage ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43754647228/artifacts/14177398894).
-
-The small provenance/reports were downloaded and inspected: clean commit matches,
-all pass. Mac includes three native reader launches and foreground activation;
-Windows includes isolated install/reinstall/uninstall with research preserved.
-Reported ZIP hashes are GitHub metadata, not independently downloaded installer
-payload hashes. No public release/tag was created; the draft job was skipped.
-
-This candidate includes the connected **Report & sources ? Generate with sources**
-desktop/private-CLI flow, captured research goal/model, retained completed output,
-read-only retained-result CLI and safe refresh/reopening. Its generation flow uses
-simulated model/IPC evidence; the standard frozen acceptance is not proof that
-your live provider account is authorized. Use a separate workspace/data copy and
-the steps below. Do not point development at the only copy of your research.
-
-Verify About/build info shows88595d3, import the synthetic fixture, read its PDF
-and notes offline, then explicitly select your own AI and try the report action.
-Confirm progress, one job after repeated clicks, source inspection and reopen.
-Report actual results with build ID, platform and the app's reviewed diagnostic
-export. Installed-device, physical-mobile, hosted sync and runtime-adoption gates
-remain open; downloading this app does not deploy a sync service.
-
 ## Historical candidates
 
-Historical 2026-11-15 Apple Silicon candidate:
-[3b344c7 / run43714643158](https://github.com/puddings-world/Paperfact/actions/runs/43714643158),
-clean `3b344c77cbea449f22767f35d5475b6ae2672bfc`, version `0.5.0.dev`.
-Mac passed in5m30s; Linux passed in2m55s. The original Windows attempt failed
-Git archive line-ending preflight; the corrected Windows-only follow-up below
-passes. These are separate exact source commits, not a single all-platform run.
-No public release was created.
-
-Exact Mac downloads (GitHub sign-in may be required):
-
-- [build-macos: DMG inside](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14162371150),
-  artifact ZIP279,874,743 bytes; GitHub-reported ZIP SHA-256
-  `86b49f3cf499329141a581778dc4c2e4a5ba71ff77a09201836951dbad76eaa8`.
-- [research-fixture-macos: synthetic original.zip](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14161729979),
-  GitHub-reported artifact ZIP SHA-256
-  `cc42e04352baf05ca8786028e6b93077d64f07c4c0ddd7c5b235ab86c1aa516a`.
-- [provenance-macos: build identity/report](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14162615645).
-- [acceptance-macos: synthetic logs](https://github.com/puddings-world/Paperfact/actions/runs/43714643158/artifacts/14161744952).
-
-The provenance/report were downloaded and inspected; the DMG was not installed
-on a physical Mac here. Archive hashes are not hashes of contained installers.
-The prior355382c/run43705488673 remains the last all-platform passing candidate.
-The new [Windows setup artifact](https://github.com/puddings-world/Paperfact/actions/runs/43715636579/artifacts/14163025642)
-is clean4ee34278c463a25f6b40fc64e01b2286187c3c5e from
-[run43715636579](https://github.com/puddings-world/Paperfact/actions/runs/43715636579),
-passing7m34s. It has the same app runtime as3b344c7 plus the archive recipe,
-regression and delivery-doc corrections. GitHub artifact ZIP184,308,740 bytes,
-SHA-256 `ccedd3f1135bdfa5ecc42aca43bf0282c2698f45e671a3ce43d475eac86e5e08`.
-Its separate setup payload SHA-256 is
-`15c308826c35e64bc990d3d1541cd473864088d7a36cf5b00bf65376a27f6595`.
-Both provenance reports were inspected. Use these exact identities in reports.
-
-Packaged acceptance preserves four PDFs, verifies three reader starts/foreground,
-same-workspace handoff and38 CLI/MCP tools with retry/restart. Eleven sync protocol
-checks pass, including official-service refusal of unverified mutations, exact
-retry and retained verified history after restart. This bundle includes explicit
-legacy-history review and default-No adoption in the existing desktop dialog;
-that dialog's physical Mac interaction remains untested.
-
-The new old-source probe uses pinned0.4.3 writers to create synthetic research,
-then the actual frozen CLI exports before/after schema initialization. All seven
-old table families, PDF/deck bytes, positioned Unicode note, Q&A, highlight and
-hand-edited deck survive. This is source-format preservation, **not old-installer
-or GUI upgrade acceptance**. No live research or credentials were used.
-
-Matching mobile shell v31 content ID:
-`8b6f4eac84eeedabd025cfa2237cc18c3312a16834405313028e6f7263493229`.
-The downloaded50-file artifact passes its existing hash verifier in0.219s; its
-content ID matches the previously accepted offline Chromium artifact. This run
-does not establish new Safari/physical-phone acceptance or deploy the PWA.
-
-Keep the daily app/data unchanged. This experimental bundle does not auto-update
-or provision a service. Use the separate test folder below. Physical M01-M21,
-native credential prompts, input/IME, installed upgrade, hosted sync and durable
-control-history/distributed fencing remain open. No public release was created.
+Older downloads, hashes and superseded failures remain in the
+[immutable candidate catalogue at66855cc](https://github.com/puddings-world/Paperfact/blob/66855cc9d12eeb8b9c0f163019cf3f7f9efe7d01/docs/testing/mac-acceptance-0.5.md)
+and the [dated evidence ledger](continuation-20261112.md). They are not current
+installation instructions or proof for a newer candidate.
 
 ## Prepare a separate test app
 
@@ -642,21 +303,3 @@ expected/actual behavior and a redacted screenshot if useful. Review generated
 acceptance logs before sharing. Do not publish the whole research workspace,
 raw app log, credentials, or private PDFs. Logs can contain earlier failures;
 an empty diagnostics report does not prove a frozen UI is healthy.
-
-## Historical failed candidate5945820 (superseded)
-
-[Run43771771878](https://github.com/puddings-world/Paperfact/actions/runs/43771771878)
-builds source5945820f802bac8462d43dbb56719393b0792088. The Mac authority lifetime
-gate now passes, but Screenshots times out on rendered reading page before
-packaging. A single Mac-only retry at the identical source,
-[run43772183133](https://github.com/puddings-world/Paperfact/actions/runs/43772183133),
-fails at the same predicate. This is reproducible CI failure, not an accepted Mac
-installer. The screenshot/rich-view/rich-HTML/demo inputs are unchanged from88595d3;
-that comparison does not identify the cause. Do not skip rendering acceptance,
-extend the timeout without evidence, or label88595d3 as containing newer source.
-
-Local affected HTTP/admin76 and critical14 pass; those results do not certify
-Mac rendering. Linux packaging passes; Windows is still running at this record.
-The next step is to capture the exact rendered-page identity/readiness/font state
-on failure before another retry. No new public release or research-data migration
-was performed.

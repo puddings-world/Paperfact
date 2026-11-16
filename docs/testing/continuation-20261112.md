@@ -10554,3 +10554,43 @@ stay in the existing acceptance/continuation records.
   Existing archive-only observation patterns apply; no new global skill is needed.
   Hosted deployment, physical Windows/Mac acceptance and the remaining full v0.5
   gates remain open. No daily research, release, account or cloud resource changed.
+
+
+## 2026-11-16 66855cc Mac candidate and readable acceptance guide
+
+- One manual Mac-only run43881479241 built clean66855cc9d12eeb8b9c0f163019cf3f7f9efe7d01,
+  version0.5.0.dev, beta-candidate, macOS/arm64. Job133348201274 succeeded from
+  14:01:36 to14:07:11 UTC (5m35s); draft skipped. No tag, public release,
+  auto-update, deployment or owner-data migration was performed.
+- Source stages: critical14 passed in3.74s (check7.0s); first-enrollment1 passed
+  in1.47s (check3.3s); selected lifetime/control/recovery/attachment54 passed
+  in9.14s (check11.0s). Five warnings per phase, no failures. These are the
+  existing workflow selections, not the historical full suite or every feature.
+  The two new claim-enrollment regressions have the separate local evidence above;
+  no claim is made that this CI selection ran those two new nodes.
+- Downloaded/hash-matched provenance14232722435, ZIP3282bytes,
+  SHA25653f1b9e6ba8e7121e302041accc423da4a899c9168c0905ddcae1d6d444610fa.
+  Strict report inspection confirms exact clean source/host, passed terminal
+  state, all15 sync flags, three reader launches, foreground activation and
+  real DMG preflight/mount/copy/verify/detach with workflow from the copied app.
+- Installer artifact14232986961: ZIP279300029bytes, GitHub-reported SHA256
+  92651ca482c78c244c279cb724dcd431e48c42fa5c7d6b71d58c6adcdc769f0e.
+  The large ZIP was not independently downloaded locally. Native report separately
+  records raw DMG SHA256f110febbda8c609c1378129eb591b854684dd7a82f65255314726bd463e3e073
+  and copied-bundle closure41affd567384bf7c1138c3b1726d819968c368e31989499479b123014c6e7f97.
+- Synthetic fixture artifact14232882207 is available. Evidence/report/job log are
+  retained under ignored build/preview-66855cc. No extra fixture run or build was
+  started to inspect these completed results. Native quarantine/notarization,
+  older installed upgrade, keyboard/IME, vault prompts, full dialogs and physical
+  Windows/Mac/phone convergence remain unaccepted. Windows/Linux installers remain
+  30b5776; this run created no mobile web artifact or hosted service.
+- Simplified the Mac guide: current downloads first, immutable history link instead
+  of repeated superseded installation instructions. Fixed README's stale download
+  anchor and removed stale current-build duplication from release readiness.
+  Current status/coordination point at per-platform identities. The test guide now
+  opens with the six protected behaviors and preview/focused controls; no GUI test
+  picker or new test system was added. Documentation-only follow-up is reviewed
+  statically and does not trigger another test/build cycle.
+- Static follow-up: five newly changed local link targets exist and the stable
+  download anchor/whitespace pass. Fifteen pre-existing optional generated-report
+  links remain unavailable locally; no report was generated or claimed verified.
