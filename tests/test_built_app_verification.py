@@ -707,3 +707,47 @@ def test_screenshot_trace_preserves_calls_without_recording_html(screenshot_tool
         view.setHtml("other private content")
     assert len(view._screenshot_render_trace) == 24
     assert "private" not in json.dumps(view._screenshot_render_trace)
+
+
+@pytest.mark.parametrize("navigate", [False, True])
+def test_screenshot_recovers_dropped_probe_within_original_deadline(
+    screenshot_tool, tmp_path, monkeypatch, navigate,
+):
+    from PySide6.QtGui import QColor, QImage
+
+    clock = [0.0]
+    monkeypatch.setattr(screenshot_tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(screenshot_tool.time, "sleep", lambda _seconds: None)
+    callbacks, scripts = [], []
+    fields = json.dumps(dict(page_matches=True, document_complete=True, has_main=True,
+                             has_text=True, fonts_loaded=True))
+
+    class Page:
+        def runJavaScript(self, script, world, callback):  # noqa: N802
+            scripts.append(script)
+            callbacks.append(callback)
+            if len(scripts) == 1:
+                if navigate:
+                    view._page_id += 1
+                return  # A replaced/loading renderer can lose this callback.
+            callbacks[0](fields)  # A late prior probe must not complete the current one.
+            callback(fields)
+
+    image = QImage(4, 4, QImage.Format.Format_RGBA8888)
+    image.fill(QColor("white"))
+    image.setPixelColor(1, 1, QColor("black"))
+    pixmap = types.SimpleNamespace(toImage=lambda: image, save=lambda name: image.save(name))
+    view = types.SimpleNamespace(_body="Saved text", rich=True, _page_id=1,
+                                 view=types.SimpleNamespace(page=lambda: Page()),
+                                 grab_page=lambda: pixmap)
+    reader = types.SimpleNamespace(dive_view=view, preparation=types.SimpleNamespace(busy=False))
+
+    def events():
+        clock[0] += 0.25
+
+    target = tmp_path / "reading.png"
+    screenshot_tool.save_reading_view(types.SimpleNamespace(processEvents=events),
+                                      reader, target, seconds=3)
+    assert len(scripts) == 2 and clock[0] < 3
+    assert QImage(str(target)).pixelColor(1, 1) == QColor("black")
+    assert ("PAGE_ID === 2" in scripts[1]) is navigate

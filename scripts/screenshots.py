@@ -59,17 +59,23 @@ def save_reading_view(app, reader, target, *, seconds=10):
     wait_until(app, lambda: not reader.preparation.busy and bool(view._body.strip()),
                label='saved reading content', seconds=seconds)
     if view.rich:
-        state = dict(pending=False, ready=None, observed={"callback": "missing"})
+        state = dict(pending=None, probe=0, ready=None, observed={"callback": "missing"})
 
         def rendered():
             if state['ready'] == view._page_id:
                 return True
-            if not state['pending']:
-                page_id = view._page_id
-                state['pending'] = True
+            pending, now = state['pending'], time.monotonic()
+            if pending is None or pending[1] != view._page_id or now - pending[2] >= 1:
+                # A navigation/loading renderer may never answer a queued probe.
+                # Reissue unanswered probes once per second within the original deadline.
+                state['probe'] += 1
+                probe, page_id = state['probe'], view._page_id
+                state['pending'] = (probe, page_id, now)
 
                 def observed(value):
-                    state['pending'] = False
+                    if probe != state['probe']:
+                        return  # A superseded callback cannot release/complete a newer probe.
+                    state['pending'] = None
                     try:
                         value = json.loads(value) if isinstance(value, str) else None
                     except (ValueError, TypeError):

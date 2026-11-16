@@ -9286,3 +9286,29 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - No daily app/data/account change, cloud deployment or physical-device claim.
   Latest delivered native0a64ec7 predates this fix; a new candidate needs its own
   source/frozen provenance and physical Windows/Mac/phone acceptance remains open.
+
+
+## 2026-11-16 candidate screenshot callback recovery
+
+- Native run43795810511 at clean88b2497: Mac source critical14, preservation1 and
+  authority/offline-delivery17 passed. Mac then failed before packaging because
+  the exact reading-page readiness callback never arrived within ten seconds.
+  The state-only diagnostic retained body-present and load events, no raw text.
+  Windows/Linux jobs were allowed to finish; no restart on observation timeout.
+- Deterministic dropped-callback regression failed before the repair. The existing
+  screenshot helper now reissues unanswered probes at one-second intervals inside
+  the original deadline and immediately after page changes. Per-probe generations
+  ignore superseded callbacks. No longer deadline, blank screenshot, weakened
+  exact-page/text/font assertion or whole-workflow retry is introduced.
+- Existing packaging/screenshot file44 passes63.60s (69.7s including privacy/Ruff)
+  under the governor. New synthetic-clock cases cover same-page dropped replies,
+  navigation, stale callback arrival and actual nonblank PNG output.
+- Actual Windows offscreen captures pass: plain5.094s and rich WebEngine12.531s.
+  The rich capture reused the existing installed pinned web assets read-only in
+  its isolated process; source checkout vendor assets were not silently installed.
+  Inspected dive.png: readable Traditional Chinese, rendered formula and code.
+  Isolated home/research and blocked external network; no owner workspace changes.
+- Mac native success is still unproven. A Mac-only candidate must exercise the
+  repaired real screenshot gate and frozen acceptance. Other successful platforms
+  need no rebuild for this diagnostic-script-only change. Physical-device and
+  hosted-sync gates remain open; no public release or deployment.

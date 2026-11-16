@@ -378,6 +378,11 @@ Screenshot rendering failures report only readiness booleans (page identity,
 document completion, main element/text presence and loaded fonts), or a missing/
 invalid callback category. The ten-second rendering gate and blank-surface refusal
 remain unchanged; no research text is included in this diagnostic.
+Unanswered rendering probes may be reissued once per second within that same
+deadline, or when the exact page changes. Probe generations discard late replies;
+a missing callback cannot permanently suppress the next probe. All original
+page/text/font and nonblank-surface checks remain mandatory. This does not retry
+an entire failed screenshot/build or certify the installed Mac reader.
 
 The screenshot-only render trace retains at most24 load/patch state events, with
 content-presence booleans rather than HTML or text. It records whether Python
