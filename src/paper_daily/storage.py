@@ -63,7 +63,11 @@ def folders(data_dir: Path = DATA_DIR) -> list[tuple[str, int, int]]:
 
 
 class RetentionReviewError(ValueError):
-    """Cleanup cannot classify retained research safely; no deletion is authorized."""
+    """Cleanup paused; earlier removals may already have completed."""
+
+    def __init__(self, message, *, cleanup_started=False):
+        super().__init__(message)
+        self.cleanup_started = cleanup_started
 
 
 def claimed(conn: sqlite3.Connection) -> set[str]:
@@ -166,6 +170,8 @@ def plan(conn: sqlite3.Connection, cache_days: int = CACHE_DAYS, now: float | No
 def prune(conn: sqlite3.Connection, chosen: Plan, vacuum: bool = False) -> int:
     """Delete what `chosen` lists; returns the bytes freed. Checks every path is
     still under the data folder and still unclaimed, since the plan may be stale."""
+    if conn.in_transaction:
+        raise RetentionReviewError("Finish the existing transaction before cleaning storage")
     keep = {_safe_name(i) for i in claimed(conn)}
     from paper_daily.sync_blobs import _no_link
 
@@ -185,25 +191,41 @@ def prune(conn: sqlite3.Connection, chosen: Plan, vacuum: bool = False) -> int:
         except (OSError, ValueError):
             return False
 
-    targets = [(path, HTTP_CACHE) for path in chosen.cache if path.is_file()]
+    targets = [(path, HTTP_CACHE, None) for path in chosen.cache if path.is_file()]
     for name, paths in chosen.papers.items():
         if name in keep or name != _safe_name(name):
             continue
         expected = {PDF_DIR / f"{name}.pdf": PDF_DIR,
                     TEXT_DIR / f"{name}.txt": TEXT_DIR, FIGURES_DIR / name: FIGURES_DIR}
-        targets.extend((path, expected[path]) for path in paths if path in expected)
-    freed = 0
-    for path, root in targets:
-        if not safe(path, root):
-            continue
-        freed += _size(path)[0]
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-    if vacuum:
-        conn.commit()
-        conn.execute("VACUUM")
+        targets.extend((path, expected[path], name) for path in paths if path in expected)
+    freed, cleanup_started = 0, False
+    try:
+        for path, root, owner in targets:
+            if not safe(path, root):
+                continue
+            size = _size(path)[0]
+            # Filesystem observation can take time. Re-read claims afterwards and
+            # prevent another SQL writer from committing a claim until removal ends.
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                current = {_safe_name(i) for i in claimed(conn)}
+                if owner in current or not safe(path, root):
+                    continue
+                cleanup_started = True
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+                freed += size
+            finally:
+                conn.rollback()  # This reservation never owns research mutations.
+        if vacuum:
+            conn.execute("VACUUM")
+    except (RetentionReviewError, sqlite3.Error, OSError) as error:
+        raise RetentionReviewError(
+            "Storage cleanup paused; review retention and retry the remaining plan",
+            cleanup_started=cleanup_started,
+        ) from error
     return freed
 
 

@@ -209,10 +209,18 @@ privately rather than treating the entire folder as a disposable cache.
 `prune` previews legacy cleanup; `--yes` deletes only old HTTP cache files and
 unclaimed PDF/text/figure paths. Current local offline intent and owners in native
 document desired/applied/intent tables keep their legacy files, including inactive
-or superseded records. Claims are re-read at execution, so a preview is not durable
-permission to delete. Invalid or unmapped retention metadata stops before any
-cache deletion. The storage API raises `RetentionReviewError`; CLI commands return
-status 2 with a bounded review message and no traceback. Removing offline intent allows ordinary cleanup only if no other
+or superseded records. Before each removal, claims are re-read under a SQLite
+writer reservation held until that target's removal completes. A claim committed
+during earlier filesystem observation protects all remaining files of its paper;
+a preview is not durable permission to delete. A caller-owned open transaction
+is refused without committing/rolling back its research. Each target releases its
+read-only reservation; the entire file tree is not one long SQL transaction.
+Invalid/unmapped retention found initially stops before any deletion. Late invalid
+metadata, a busy writer or filesystem failure pauses the remaining plan. The
+storage API raises `RetentionReviewError(cleanup_started=...)`; CLI exit2 reports
+whether earlier cleanup may have completed, without claiming an all-or-nothing
+filesystem rollback. Inspect storage and retry a fresh preview; completed removals
+are not repeated. No raw SQL/path traceback is printed for these pauses. Removing offline intent allows ordinary cleanup only if no other
 research/document owner remains. This is not a synchronized research deletion.
 
 Each supplied entry must match its actual cache/PDF/text/figure category; root

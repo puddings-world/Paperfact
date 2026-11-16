@@ -28,7 +28,11 @@ excluded by the existing capture boundary from research operations. Retrying a
 pin operation creates no additional research data or outgoing sync operations.
 Unpinning removes intent, never file bytes. Missing/damaged asset metadata does
 not prevent unpinning an otherwise existing mapped paper. Pin intent survives
-restart but **does not yet guarantee download or protection from eviction**.
+restart but **does not guarantee downloaded bytes, operating-system retention or
+protection from arbitrary external deletion**. The legacy CLI cleaner protects
+valid offline intent and managed-original ownership, rechecking it under a writer
+reservation for each removal. This is not automatic immutable-cache eviction;
+verify actual availability before disconnecting.
 At most 1,000 intent keys are supported; orphaned/deleted-paper intent cleanup
 is not implemented automatically.
 

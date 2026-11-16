@@ -962,3 +962,16 @@ only to the same damaged translation constant had missed literal question marks.
 Adjacent survey/artifact tests retain literal research rendering, stale-source
 refusal, cache integrity and absence of private/test files. Physical layout,
 HTTPS deployment and installed-phone updates remain separate acceptance.
+
+
+### Legacy cleanup and offline retention
+
+`tests/test_storage.py` uses synthetic owned files and independent SQLite writers.
+It checks actual PDF/text/figure preservation when a note/offline pin commits during
+cleanup, holds the SQL writer reservation at removal, preserves a caller's unsaved
+transaction, pauses before deletion on writer contention, and reports partial
+cleanup/retry honestly when retention becomes invalid later. Other cases retain
+existing category/path/reparse and native original-owner checks. This is the explicit
+legacy CLI cleaner, not automatic blob-history GC, browser quota eviction or a
+hostile/concurrent external filesystem guarantee. The current1875db5 downloadable
+candidates predate this source fix; a future build must verify it on each OS.

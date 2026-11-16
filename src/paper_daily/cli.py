@@ -980,9 +980,12 @@ def cmd_prune(args) -> int:
         compacted = " and compacted the database" if args.vacuum else ""
         print(f"\nfreed {storage.human(freed)}{compacted}")
         return 0
-    except storage.RetentionReviewError:
+    except storage.RetentionReviewError as error:
+        outcome = ("Earlier cleanup may have completed; "
+                   "review storage and retry the remaining plan."
+                   if error.cleanup_started else "No cleanup was performed.")
         print("Storage cleanup paused. Review offline selections and managed-original "
-              "mappings before retrying. No cleanup was performed.", file=sys.stderr)
+              "mappings before retrying. " + outcome, file=sys.stderr)
         return 2
 
 

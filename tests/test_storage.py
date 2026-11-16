@@ -202,3 +202,139 @@ def test_cli_pauses_invalid_retention_with_actionable_message(workspace, monkeyp
     assert "Review offline selections" in message and "No cleanup was performed" in message
     assert "Traceback" not in message and "unmapped" not in message
     assert (root / "httpcache" / "ab" / "old.bin").read_bytes() == b"cached"
+
+
+@pytest.mark.parametrize("claim", ["note", "offline"])
+def test_claim_committed_during_cleanup_keeps_the_whole_paper(workspace, monkeypatch, claim):
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    conn.execute("CREATE TABLE research_paper_identity "
+                 "(sync_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)")
+    conn.execute("INSERT INTO research_paper_identity VALUES ('portable', 'ref:stray')")
+    conn.commit()
+    target = root / "pdf" / "ref_stray.pdf"
+    original = storage._size
+    committed = []
+
+    def late_claim(path):
+        if path == target and not committed:
+            with sqlite3.connect(root / "papers.db", timeout=0.1) as writer:
+                if claim == "note":
+                    writer.execute("INSERT INTO notes(paper_id,body,created_at) "
+                                   "VALUES('ref:stray','Saved during cleanup','now')")
+                else:
+                    writer.execute("INSERT INTO kv(key,value) "
+                                   "VALUES('ui.offline.paper.portable','true')")
+            committed.append(True)
+        return original(path)
+
+    monkeypatch.setattr(storage, "_size", late_claim)
+    storage.prune(conn, chosen)
+    assert committed
+    assert target.read_bytes() == b"%PDF" * 100
+    assert (root / "text" / "ref_stray.txt").read_text(encoding="utf-8") == "text"
+    assert (root / "figures" / "ref_stray" / "p01-Figure_1.png").read_bytes() == b"png"
+
+
+def test_cleanup_does_not_commit_or_rollback_the_callers_unsaved_research(workspace):
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    conn.execute("INSERT INTO notes(paper_id,body,created_at) VALUES('ref:stray','Unsaved','now')")
+    with pytest.raises(storage.RetentionReviewError) as raised:
+        storage.prune(conn, chosen)
+    assert not raised.value.cleanup_started and conn.in_transaction
+    assert conn.execute("SELECT body FROM notes WHERE body='Unsaved'").fetchone()[0] == "Unsaved"
+    assert (root / "pdf" / "ref_stray.pdf").exists()
+    conn.rollback()
+    assert storage.prune(conn, chosen) > 0 and not conn.in_transaction
+
+
+def test_claim_reservation_is_held_during_the_actual_file_removal(workspace, monkeypatch):
+    from pathlib import Path
+
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    target = root / "pdf" / "ref_stray.pdf"
+    original, blocked = Path.unlink, []
+
+    def remove(path, *args, **kwargs):
+        if path == target:
+            with (sqlite3.connect(root / "papers.db", timeout=0) as writer,
+                  pytest.raises(sqlite3.OperationalError, match="locked")):
+                writer.execute("INSERT INTO notes(paper_id,body,created_at) "
+                               "VALUES('ref:stray','Concurrent claim','now')")
+            blocked.append(True)
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", remove)
+    assert storage.prune(conn, chosen) > 0
+    assert blocked == [True] and not conn.in_transaction
+    with sqlite3.connect(root / "papers.db", timeout=0) as writer:
+        writer.execute("INSERT INTO notes(paper_id,body,created_at) "
+                       "VALUES('ref:stray','After cleanup','now')")
+
+
+def test_late_invalid_retention_pauses_remaining_cleanup_and_can_retry(workspace, monkeypatch):
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    target = root / "pdf" / "ref_stray.pdf"
+    original, changed = storage._size, []
+
+    def invalidated(path):
+        if path == target and not changed:
+            with sqlite3.connect(root / "papers.db", timeout=0) as writer:
+                writer.execute("INSERT INTO kv(key,value) VALUES('ui.offline.paper.bad','invalid')")
+            changed.append(True)
+        return original(path)
+
+    monkeypatch.setattr(storage, "_size", invalidated)
+    with pytest.raises(storage.RetentionReviewError) as raised:
+        storage.prune(conn, chosen)
+    assert raised.value.cleanup_started and not conn.in_transaction
+    assert not (root / "httpcache" / "ab" / "old.bin").exists()
+    assert target.exists() and (root / "text" / "ref_stray.txt").exists()
+    conn.execute("DELETE FROM kv WHERE key='ui.offline.paper.bad'")
+    conn.commit()
+    assert storage.prune(conn, chosen) > 0 and not target.exists()
+
+
+def test_cli_reports_partial_cleanup_without_claiming_nothing_happened(
+    workspace, monkeypatch, capsys,
+):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from paper_daily import cli
+
+    @contextmanager
+    def connection():
+        yield workspace[0]
+
+    def paused(*_args, **_kwargs):
+        raise storage.RetentionReviewError("Synthetic late refusal", cleanup_started=True)
+
+    monkeypatch.setattr(cli, "connect", connection)
+    monkeypatch.setattr(storage, "prune", paused)
+    result = cli.cmd_prune(SimpleNamespace(cache_days=30, yes=True, vacuum=False))
+    message = capsys.readouterr().err
+    assert result == 2 and "Earlier cleanup may have completed" in message
+    assert "No cleanup was performed" not in message and "Traceback" not in message
+
+
+def test_busy_writer_pauses_before_any_deletion_and_retry_is_safe(workspace):
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    conn.execute("PRAGMA busy_timeout=1")
+    blocker = sqlite3.connect(root / "papers.db")
+    try:
+        blocker.execute("BEGIN IMMEDIATE")
+        with pytest.raises(storage.RetentionReviewError) as raised:
+            storage.prune(conn, chosen)
+        assert not raised.value.cleanup_started and not conn.in_transaction
+        assert (root / "httpcache" / "ab" / "old.bin").exists()
+        assert (root / "pdf" / "ref_stray.pdf").exists()
+    finally:
+        blocker.rollback()
+        blocker.close()
+    assert storage.prune(conn, chosen) > 0
+    assert not (root / "pdf" / "ref_stray.pdf").exists()

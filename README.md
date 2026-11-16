@@ -421,13 +421,17 @@ including saved list-report audit and all15 control/research sync protocol flags
 Legacy storage cleanup also preserves device-local offline selections and retained
 managed-original owners, with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).
+Legacy cleanup rechecks claims under a per-target writer reservation. It keeps
+remaining files when a paper gains a claim and preserves caller-owned transactions.
+A late pause reports earlier completed cleanup accurately; see [storage behavior](docs/toolchain.md#caching-and-disk).
+This source fix is newer than the1875db5 installers.
 Selected-file offline checks now revalidate their native observations at desktop
 delivery, rejecting files or research changed after background verification;
 [behavior and limits](docs/workspace-offline-verification.md).
 
 
-New candidate builds verify guarded-history sync and duplicate-listener refusal
-inside the packaged CLI, plus45 source authority/control/recovery/offline cases per OS. See
+The1875db5 Windows/Mac candidates verify guarded-history sync and duplicate-listener
+refusal inside the packaged CLI, plus45 source authority/control/recovery/offline cases per OS. See
 [the exact acceptance contract](docs/toolchain.md); physical device acceptance
 remains separate.
 

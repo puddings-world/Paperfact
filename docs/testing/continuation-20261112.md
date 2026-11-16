@@ -9585,3 +9585,42 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final delivery-docs validation:60 passed2.58s,8.7s including privacy/Ruff;
   whitespace review clean. No executable behavior changed after the exact1875db5
   native builds. Documentation-only commit does not supersede their build identity.
+
+
+## 2026-11-16 offline-retention claims cannot race legacy cleanup
+
+- Inspected current attachment/offline paths before editing. Automatic immutable
+  cache/history eviction is still open; this checkpoint fixes an actual existing
+  retention race rather than introducing another cache manager or deletion policy.
+- Reproduced with a second synthetic SQLite writer committing a note after the
+  initial cleanup claim scan, during later file measurement. The PDF was deleted:
+  new regression failed with FileNotFoundError (1failed0.98s;8.7s with privacy/Ruff).
+  Offline-intent case pins the same boundary. No owner storage was used or cleaned.
+- Each target now measures before a short BEGIN IMMEDIATE reservation, re-reads
+  current research/offline/native-original claims, validates its owned path again
+  and holds the reservation through removal. Another SQL writer cannot commit a
+  claim between the final check and unlink. Reservations release per target, never
+  committing research. Existing caller transactions are refused without commit or
+  rollback. This serializes cooperating SQLite writers, not arbitrary filesystem
+  publishers/replacements, immutable-history GC or a whole-workspace availability
+  guarantee. Large directory removals can still hold a reservation for that target.
+- A late invalid retention record, busy reservation or filesystem error pauses
+  remaining cleanup. RetentionReviewError carries cleanup_started; CLI exit2 states
+  whether prior cleanup may have completed. It no longer falsely says nothing was
+  cleaned after earlier removals. The source metadata/outbox is never rewritten.
+- Seven focused new cases: note/offline claim committed during measurement, actual
+  writer lock at unlink, preserved caller transaction/retry, late invalid metadata
+  and remaining-plan retry, partial CLI message and busy-before-deletion/retry.
+  All23 storage cases passed4.06s,9.1s including privacy/Ruff under the existing
+  two-processor/25% governor. Initial formatting failures were corrected; no test
+  assertion was removed, skipped or weakened. Earlier22-case pass overlapped.
+- Existing three-minute per-OS source stage adds only one positive race case,
+  no new job/timeout. New source behavior is not in1875db5 native downloads; no
+  rebuild, owner app restart, cloud/PWA deployment, credentials, release or tag.
+  Automatic reference-aware eviction/history lifecycle and physical offline-trip
+  acceptance remain open. Reviewed reusable scope: keep the validated local race
+  evidence here and in the existing test map; no new global skill is manufactured.
+
+- Final integration gate:critical14 passed13.65s,21.2s including privacy/Ruff;
+  docs60 passed5.38s,11.4s including privacy/Ruff. Exact scoped gates, no historical
+  full run. No post-validation executable behavior changed; whitespace review clean.
