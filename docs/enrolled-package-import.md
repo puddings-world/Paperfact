@@ -23,6 +23,15 @@ receiver-local and portable paper mapping, destination list, PDF conflicts,
 research counts, and omitted reproducible files. Staging may leave private
 immutable cache bytes; that alone grants no applied ownership.
 
+Newer source after candidate8252010 can also restore an absent finalized private
+blob from the package's included exact bytes. Primary PDFs, original-source blobs,
+deck assets and survey bodies use the same explicit staging option. The offered
+immutable byte string is hash-checked before resetting missing-final state; corrupt
+existing final files are verified and refused, never overwritten. Review still
+creates no research/outbox/applied binding. Final ownership and stale-target checks
+remain in the observed application transaction. A saved receipt replay remains a
+historical result, not an availability repair or a new offline-ready verdict.
+
 `import_package(database, data_root, archive, **options)` is the shared one-shot
 entry and rejects concurrent repeated activation for the same archive path.
 Callers that expose previews must retain the prepared object and its ticket;

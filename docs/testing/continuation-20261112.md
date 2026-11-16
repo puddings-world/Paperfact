@@ -10031,3 +10031,45 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   using the existing two-core/25% governor; whitespace clean. Runtime is unchanged
   from8252010, so its actual three-OS critical/affected/frozen evidence is reused
   rather than rerunning unchanged source journeys locally for a docs-only commit.
+
+## 2026-11-16 reviewed package missing-byte recovery
+
+- Previous turn delivered verified8252010 native/mobile candidates and their exact
+  records; this source checkpoint follows that build and is not in its installers.
+  Continued through the shared enrolled package importer rather than changing the
+  daily workspace, release line or deployment scope.
+- Actual synthetic package preparation failed when a previously finalized primary
+  PDF cache file was absent: package_import.prepare -> stage_bytes -> begin raised
+  `A finalized attachment is missing; restore it explicitly`. Red reproduction1
+  failed8.82s (27.2s total, privacy15.4s/Ruff0.5s). New-test line-length lint was
+  corrected before this behavioral run; no existing assertion was changed.
+- `sync_artifacts.stage_bytes(store, blobs, *, restore_missing=False)` now exposes
+  explicit missing-final restoration. It requires an actual complete immutable
+  byte string matching the digest before missing state can reset. Default staging,
+  verified closure, corrupt-final refusal and interrupted-partial retry remain.
+  The reviewed importer opts in at its four staging boundaries for included PDFs,
+  originals, decks and surveys. This changes private availability, not research
+  authority. Preview, observed apply/rollback, request receipt and later peer sync
+  retain their existing ownership and transaction boundaries.
+- Focused11 passed74.98s (96.9s total, privacy16.5s/Ruff1.2s). Three new cases
+  cover actual primary/figure import repair, preview SQL/outbox isolation, exact
+  local document and editable deck/notes readback, repeated receipt retry, wrong
+  offered bytes, default missing-final refusal and corrupt-final preservation.
+  Eight unchanged cases cover actual two-device delivery/newer-note preservation,
+  four cancellation phases, workspace change, transactional rollback and corrupted
+  partial retry. Actual reports retained under ignored build/package-byte-repair-evidence.
+- Existing sequential300s, two-logical-processor/25%/below-normal governor retained.
+  No real account/provider/paid AI, network upload, owner research, global setting,
+  new worker/worktree or competing process was touched. No new CI selector/job
+  or historical full-suite expansion; future candidate acceptance reuses the
+  existing frozen import and affected source gates. Current installers stay8252010.
+- README, import/file API contracts, test map and current status explain this
+  newer source and keep receipt replay separate from fresh availability proof.
+  Existing canonical local-integration invariant applies: verified cache bytes do
+  not authorize active ownership. No new global rule or skill install warranted.
+- Full target remains open: complete supported writer/legacy/file adoption,
+  independent authority anchoring/fencing, hosted GCP/HTTPS enrollment/recovery,
+  frozen new GUI/provider/vault/IME and real Windows/Mac/phone acceptance.
+- Default critical14 passed17.56s (28.5s total, privacy8.0s/Ruff0.4s).
+- Docs60 passed6.99s (20.3s total, privacy10.9s/Ruff0.6s); whitespace clean.
+  Scoped checks pass; no historical exhaustive or new physical-device claim.

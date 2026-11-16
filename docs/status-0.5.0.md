@@ -15,6 +15,11 @@ protected. These changes are now in8252010 native candidates. Existing legacy
 files are not migrated automatically; complete writer/runtime enrollment remains
 open. [Contract and limits](sync-operations.md#observed-native-pdf-replacement).
 
+Source after8252010 additionally lets reviewed package import restore missing
+private PDF/figure/artifact bytes from complete verified included files. Preview
+still commits no research; confirmation retains observed atomic publication.
+This newer change is not yet in the installers below.
+
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean

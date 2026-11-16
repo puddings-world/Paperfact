@@ -595,7 +595,7 @@ class PackageImporter:
                         raise UnsupportedPackage(
                             "Enrolled import requires included primary PDF bytes", [old]
                         )
-                    stage_bytes(self.store, {record["sha256"]: data})
+                    stage_bytes(self.store, {record["sha256"]: data}, restore_missing=True)
                     op = add(
                         "paper_document",
                         portable,
@@ -727,7 +727,7 @@ class PackageImporter:
                     prior = sync_capture._current(conn, self.client, "research_file", key)
                     operation = add("research_file", key, payload, "survey_reports")
                     if operation and operation["payload"] == payload:
-                        stage_bytes(self.store, blobs)
+                        stage_bytes(self.store, blobs, restore_missing=True)
                         artifacts.append((operation, materialize(
                             self.store, self.version_root, operation)))
                         report["survey_state"] = "unchanged" if prior == operation else "imported"
@@ -887,7 +887,7 @@ class PackageImporter:
             selected.write_bytes(files[relative])
             identity = file_id(portable, "original_source", record["sha256"])
             payload, blobs = encode(portable, files[relative])
-            stage_bytes(self.store, blobs)
+            stage_bytes(self.store, blobs, restore_missing=True)
             operation = add("research_file", identity, payload, "original_sources", overwrite=False)
             originals.append((portable, parent, selected, record["sha256"], operation))
             artifacts.append((operation, materialize(self.store, self.version_root, operation)))
@@ -1056,7 +1056,7 @@ class PackageImporter:
                 source_document_hash=source_hash,
                 evidence=evidence,
             )
-            stage_bytes(self.store, blobs)
+            stage_bytes(self.store, blobs, restore_missing=True)
             identity = file_id(identities[old], "deck", deck.mode)
             operation = add("research_file", identity, payload, "decks")
             if operation and operation["payload"] == payload:

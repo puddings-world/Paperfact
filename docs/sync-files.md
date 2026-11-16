@@ -134,6 +134,13 @@ ordinary metadata synchronization does not certify every local file as available
 authentication, repeated repair, actual editable-deck/figure readback and corrupt
 final preservation. These are isolated source fixtures, not installed-device proof.
 
+`sync_artifacts.stage_bytes(store, blobs, *, restore_missing=False)` preserves
+ordinary staging by default. Explicit restoration requires complete immutable byte
+strings matching their declared digests before missing-final state is reset. It
+changes private cache availability only; it does not publish or activate research.
+The reviewed package importer opts in for included files. A corrupt existing final
+still fails closed. Existing interrupted-partial retry semantics remain unchanged.
+
 `sync_files.referenced_blobs(operation)` is the pure backup/retention closure seam.
 `validate_closure(payload, read_blob)` validates all bytes and typed references.
 `sync_artifacts.materialize` returns a sealed pathlike `MaterializedVersion`;

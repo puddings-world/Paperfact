@@ -317,10 +317,18 @@ def write_file(conn, operation):
     )
 
 
-def stage_bytes(store, blobs):
+def stage_bytes(store, blobs, *, restore_missing=False):
+    """Stage private bytes; verified complete sources may explicitly restore absence."""
+    if type(restore_missing) is not bool:
+        raise BlobError("Missing-object restoration must be explicit")
     for sha256, data in blobs.items():
         manifest = BlobManifest(sha256, len(data))
-        status = store.begin(manifest)
+        if restore_missing and (
+            not isinstance(data, bytes) or hashlib.sha256(data).hexdigest() != sha256
+        ):
+            raise BlobError("Attachment source differs from the requested immutable bytes")
+        status = (store.begin(manifest, restore_missing=True)
+                  if restore_missing else store.begin(manifest))
         if status["complete"]:
             continue
         offset = status["offset"]
