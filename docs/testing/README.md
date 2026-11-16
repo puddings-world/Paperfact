@@ -947,3 +947,14 @@ on retry; retained partial output; bounded invalid/duplicate/oversized JSON refu
 and the actual standalone Python CLI. Test IDs describe failure classes instead
 of printing long input blobs. It creates only isolated review files, never calls
 GCP, installs a service or establishes hosted/device/security acceptance.
+
+
+### Readable mobile report translations
+
+The focused `mobile/tests/survey-view.test.mjs` selection now checks that each
+Traditional Chinese report label contains actual translated characters, then
+exercises the localized offline-failure/retry action. Comparing a rendered label
+only to the same damaged translation constant had missed literal question marks.
+Adjacent survey/artifact tests retain literal research rendering, stale-source
+refusal, cache integrity and absence of private/test files. Physical layout,
+HTTPS deployment and installed-phone updates remain separate acceptance.

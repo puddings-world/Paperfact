@@ -345,6 +345,22 @@ and the verified v28 artifact; the web app is built, not deployed.
 
 ![Saved citation card at phone width, synthetic Traditional Chinese fixture](images/mobile-citations-zh-TW.png)
 
+## Saved list reports
+
+Open a list to read its saved research overview. **Save report offline** downloads
+and verifies the report; it does not generate new analysis. Saved cards show the
+historical research goal, statements, quotation excerpts and expandable source
+records. Original PDFs are downloaded separately. Recorded quotation locations
+remain declarations; text occurrence alone does not certify scientific support.
+
+The source now restores the Traditional Chinese report title, download/retry
+messages and source states that had been literal question marks. It uses explicit
+Unicode escapes and keeps English copy and literal-text rendering unchanged.
+Shell cachev34 includes this correction; upgrading the shell does not migrate or
+clear research IndexedDB, drafts, outbox or connections. The locally built and
+verified v34 artifact is not deployed HTTPS or physical-phone acceptance. Current
+0a64ec7 native/mobile downloads remain the independently verified v33 candidate.
+
 ## Prepare one paper for offline reading
 
 In **Original PDF**, choose **Prepare offline reading** to verify and save the

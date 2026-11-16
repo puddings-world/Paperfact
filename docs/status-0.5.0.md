@@ -37,6 +37,10 @@ and hash-checked; `public/sw.mjs` declares **paperfact-mobile-shell-v33**.
 It is built, not deployed HTTPS/PWA or physical-phone acceptance. No release/tag,
 daily-app migration, cloud resource or owner research mutation was performed.
 
+Source after this candidate restores lost Traditional Chinese mobile report copy.
+A local shell-v34 artifact is built/hash-verified, not deployed; the downloadable
+0a64ec7 artifact remains v33. No IndexedDB research or connection migration.
+
 ## Requirements and actual boundaries
 
 | Required outcome | Verified implementation boundary | Still open |

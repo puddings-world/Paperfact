@@ -55,3 +55,19 @@ test('historical goals render literally and old unknown goals are never backfill
     }
   }
 });
+
+
+test('Traditional Chinese report actions and source states contain readable translations',async()=>{
+  const words=SURVEY_COPY['zh-TW'];
+  for(const key of Object.keys(SURVEY_COPY.en)){
+    assert.equal(typeof words[key],'string',key);
+    assert.match(words[key],/\p{Script=Han}/u,key+' must not be question marks or English fallback');
+  }
+  const panel=el('div');let calls=0;
+  renderSurveys(panel,collection,rows,el,{language:'zh-TW',canDownload:true,
+    read:async()=>{throw Error('not cached');},download:async()=>{calls++;throw Error('offline');}});
+  await tick();const button=panel.find('button');
+  assert.equal(button.text,words.download);
+  await button.events.click();
+  assert.equal(calls,1);assert(panel.text.includes(words.retry));assert.equal(button.disabled,false);
+});

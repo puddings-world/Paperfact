@@ -9213,3 +9213,25 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   verification remain external review. GCP target details are still pending.
   Authority history/independent anchoring/fencing, hosted restore and physical
   Windows/Mac/phone convergence remain open. Native0a64ec7 artifacts unchanged.
+
+## 2026-11-16 mobile report copy and offline-shell delivery
+
+- Confirmed mobile report transport/rendering already exists; no missing-format
+  claim or new protocol implementation was made. Raw source bytes instead showed
+  literal question marks in15 Traditional Chinese report labels. A locale-quality
+  and actual failed-download/retry regression failed before the copy correction.
+- Restored the report title/actions/status/source states with explicit ASCII
+  Unicode escapes and readable key layout; English copy, goals, synchronization,
+  downloads, literal-content rendering and account/workspace cancellation remain
+  unchanged. Added one named behavior case, not a duplicate mobile suite.
+- Existing source/format/artifact selection15 passes5.274s Node/5.516s governed
+  wall time, zero failures/skips, two processors/25% cap. It covers locale, offline
+  retry/dedup, stale reads, report/source integrity and public-asset exclusion.
+- Advanced only the PWA shell cachev33 to v34 so a future coordinated deployment
+  can update the corrected asset. No IndexedDB/draft/outbox/session schema change.
+  Built and independently manifest-verified build/mobile-web-v34 from current
+  working assets, artifact_id `6f55d5a4a2b10502a80aca5ef77404de19df7225a451c7b7d0cc6f1ef9cb4505`,
+  52files/3962103bytes. This content artifact is not a clean native build/provenance,
+  a deployed site or physical-device acceptance. Current0a64ec7 downloads stayv33.
+- No hosted resource, key, login, paid model call, service installation, real
+  research mutation or new native installer. GCP target details remain pending.

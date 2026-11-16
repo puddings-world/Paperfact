@@ -1,5 +1,40 @@
 /** Saved-only list overview. All research strings become literal text nodes. */
-export const SURVEY_COPY={"en":{"title":"List research overview","notSaved":"Report not downloaded.","download":"Save report offline","working":"Downloading report...","ready":"Report saved offline","update":"Saved report - update available","retry":"Could not load the report. Retry when connected.","sourceNote":"Retained excerpts; original PDFs download separately.","sources":"Source records","passages":"Source excerpts","captured":"Original captured for this report","unavailable":"Original unavailable","not_selected":"Original not selected","located":"Retained location","missing":"Location unresolved"},"zh-TW":{"title":"??????","notSaved":"???????","download":"?????????","working":"???????","ready":"????????","update":"?????????????","retry":"????????????????","sourceNote":"?????????PDF ??????","sources":"????","passages":"????","captured":"??????????","unavailable":"???????","not_selected":"?????","located":"???????","missing":"?????"}};
+export const SURVEY_COPY={
+  "en": {
+    "title": "List research overview",
+    "notSaved": "Report not downloaded.",
+    "download": "Save report offline",
+    "working": "Downloading report...",
+    "ready": "Report saved offline",
+    "update": "Saved report - update available",
+    "retry": "Could not load the report. Retry when connected.",
+    "sourceNote": "Retained excerpts; original PDFs download separately.",
+    "sources": "Source records",
+    "passages": "Source excerpts",
+    "captured": "Original captured for this report",
+    "unavailable": "Original unavailable",
+    "not_selected": "Original not selected",
+    "located": "Retained location",
+    "missing": "Location unresolved"
+  },
+  "zh-TW": {
+    "title": "\u6e05\u55ae\u7814\u7a76\u7d9c\u89bd",
+    "notSaved": "\u5831\u544a\u5c1a\u672a\u4e0b\u8f09\u3002",
+    "download": "\u5132\u5b58\u5831\u544a\u4f9b\u96e2\u7dda\u95b1\u8b80",
+    "working": "\u6b63\u5728\u4e0b\u8f09\u5831\u544a...",
+    "ready": "\u5831\u544a\u5df2\u5132\u5b58\uff0c\u53ef\u96e2\u7dda\u95b1\u8b80",
+    "update": "\u5df2\u5132\u5b58\u5831\u544a\uff1b\u6709\u66f4\u65b0\u53ef\u4e0b\u8f09",
+    "retry": "\u7121\u6cd5\u8f09\u5165\u5831\u544a\uff0c\u9023\u7dda\u5f8c\u8acb\u91cd\u8a66\u3002",
+    "sourceNote": "\u6b64\u8655\u4fdd\u7559\u5f15\u7528\u6458\u9304\uff1b\u539f\u6587 PDF \u9700\u53e6\u5916\u4e0b\u8f09\u3002",
+    "sources": "\u4f86\u6e90\u7d00\u9304",
+    "passages": "\u5f15\u7528\u6458\u9304",
+    "captured": "\u6b64\u5831\u544a\u5df2\u64f7\u53d6\u539f\u6587",
+    "unavailable": "\u539f\u6587\u7121\u6cd5\u53d6\u5f97",
+    "not_selected": "\u672a\u9078\u53d6\u539f\u6587",
+    "located": "\u5df2\u8a18\u9304\u7684\u5f15\u7528\u4f4d\u7f6e",
+    "missing": "\u5c1a\u672a\u5b9a\u4f4d\u5f15\u7528"
+  }
+};
 Object.assign(SURVEY_COPY.en,{goal:'Research goal for this report',
   goalEmpty:'No research goal was provided.',goalUnknown:'This older report did not record a research goal.'});
 Object.assign(SURVEY_COPY['zh-TW'],{goal:'\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19',
