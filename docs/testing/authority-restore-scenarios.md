@@ -19,6 +19,7 @@ research, real account, paid model or installed application is used.
 | Existing paths | Existing output and overlapping source/destination paths are never overwritten. |
 | CLI | Explicit required mapping/help and bounded token-free success/failure output. |
 | Actual desktop admission | Fresh credentials cannot rebind an old local journal or discard its pending outbox; no push/pull/upload occurs. |
+| Device-held access history | Separate backup/control relations, unavailable legacy history, malformed/forked point refusal, and visible English/Chinese guidance; actual HTTP restore/join retains old trust and unsent lists while enrolling a fresh workspace. `tests/test_control_recovery.py` and `tests/test_device_recovery_review_ui.py`. |
 | Empty/deadline | An empty known workspace retains no old device access; expiry before copying creates no output. |
 | Verification handoff race | A database changed immediately after successful inspection cannot be re-trusted during restore; no output is created. |
 | Ordering (2 cases) | Both list and workspace ordering re-key their workspace-scoped proof while retaining stale-set and opaque-proof conflicts. |

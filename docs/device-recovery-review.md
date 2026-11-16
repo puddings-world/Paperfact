@@ -56,7 +56,8 @@ On Windows use `.\.venv-sync\Scripts\python.exe`. All paths/identities are expli
 this uses no GCP SDK, credentials, network, login, AI or global research database.
 It does not initialize missing databases. Success is one JSON receipt with
 `state=reviewed`, identities, sequences, counts, `uncovered_journal_domains`,
-`requires_preservation`, `replayed=false`, `research_and_files_fully_audited=false`.
+`requires_preservation`, `replayed=false`, `research_and_files_fully_audited=false`,
+and a separate `control_history` observation.
 The receipt contains no note bodies, titles, source paths or credentials.
 
 | Flag | Requirement/default |
@@ -735,3 +736,40 @@ remain unchanged. The native receipt/outbox transaction and later-restore-safe
 retry contract are shared; this does not grant generic deletion of citations or
 other research groups. Source/Qt-fixture evidence does not certify the delivered
 8bf00f9 package, which predates this source change.
+
+
+## Device-held access history in recovery review
+
+Current source also compares the device's private authority-control checkpoint
+against the verified backup, inside the same read-only review transactions.
+This is separate from research-event counts: zero uncovered operations does not
+mean a backup includes later device enrollment, revocation or access changes.
+The desktop displays the relation and preservation guidance in English/Traditional
+Chinese. No new connection, trust reset, replay, upload or mutation is authorized.
+
+`control_history` has exactly `state`, `device_sequence` and `backup_sequence`.
+Sequences are integers or null; they count authority controls, not research events
+or completion percentages. Authority UUIDs, chain hashes and private labels are
+not included in this observation or desktop text.
+
+| State | Observed boundary / action |
+|---|---|
+| `not_recorded` | This device has no retained checkpoint; do not infer verified access-history coverage. |
+| `included` | The backup contains the exact authority/sequence/hash prefix observed by this device. Disaster recovery still uses a fresh identity. |
+| `backup_older` | The same authority's backup ends before the known device sequence. Preserve the device; recover under a new identity. This does not prove ancestry beyond the backup's retained end. |
+| `different_authority` | Authority IDs differ. Preserve both; do not replace saved trust or silently treat them as one history. |
+| `unavailable` | A historical backup has no verifiable control journal. Preserve device knowledge and use explicit fresh-identity recovery. |
+
+Malformed device knowledge or a conflicting digest at an available same-authority
+sequence fails the review instead of claiming coverage. Backup content and device
+file versions are rechecked before completion, preserving existing cancellation,
+concurrent-change and bounded-record behavior. The result is point-in-time;
+rerun after edits. `requires_preservation` retains its research-journal meaning
+and must not be used as an overall access-history safety verdict.
+
+Fresh-identity restoration and actual HTTP joining retain old device knowledge
+and unsent work in the old folder while creating a separately authenticated new
+workspace. They never rebind the old outbox, grant old credentials access, or
+reset old trust to accept a rollback. The end-to-end case uses synthetic notes
+and lists; existing native original/deck recovery evidence remains separate.
+No installed Mac, hosted restore or physical cross-device acceptance is implied.

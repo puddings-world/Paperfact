@@ -132,3 +132,33 @@ def test_chinese_labels_are_utf8_and_unenrolled_workspace_action_is_disabled(app
         assert not dialog.device_review.button.isEnabled()
     finally:
         dialog.close()
+
+
+@pytest.mark.parametrize("language", ["en", "zh-TW"])
+def test_control_history_warning_is_visible_without_claiming_missing_research(
+    prepared, app, language,
+):
+    from test_control_recovery import remember
+
+    prepared[1].rename_device(prepared[2], "a", "After backup")
+    store, point = remember(prepared)
+    before = prepared[0].journal.path.read_bytes()
+    dialog = WorkspaceDialog(prepared[0].journal.path, language=language)
+    try:
+        dialog.show()
+        wait(app, lambda: dialog._ready and not dialog.busy)
+        panel = dialog.device_review
+        assert panel.inspect(prepared[3])
+        wait(app, lambda: not dialog.busy)
+        text = panel.label.text()
+        if language == "en":
+            assert "Backup predates access changes" in text
+            assert "Keep this workspace; recover into a new identity." in text
+            assert "No uncovered journal work observed" in text
+        else:
+            assert "\u5099\u4efd\u65e9\u65bc" in text
+            assert "\u4fdd\u7559\u539f\u5de5\u4f5c\u5340" in text
+        assert prepared[0].journal.path.read_bytes() == before
+        assert store.load() == point and panel.button.isEnabled()
+    finally:
+        dialog.close()

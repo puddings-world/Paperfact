@@ -9446,3 +9446,42 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   integrity:8 passed14.359s governed total, including actual assets, new module
   closure, content-derived cache identity and historical numeric-cache reading.
   No post-validation source behavior changed; final whitespace review is clean.
+
+
+## 2026-11-16 recovery comparison preserves device-held control knowledge
+
+- A new minimal pre-implementation case failed with `KeyError: control_history`:
+  existing backup review counted research events but could not disclose whether
+  the device had seen later access changes. Added a separate bounded observation
+  under the existing read-only local/verified-backup transactions, not a trust reset.
+- States: no device point, exact included prefix, same-authority backup ending
+  earlier, different authority, historical backup lacking a control journal.
+  An older end is not proof of ancestry beyond the backed-up prefix. Malformed
+  metadata or an available conflicting digest fails review. Receipts omit private
+  UUID/hash/labels and keep research preservation/count semantics unchanged.
+- Actual desktop review now displays preservation/fresh-identity guidance in English
+  and Traditional Chinese; old layout, worker admission, cancellation and lifetime
+  guards remain. New Chinese source copy uses ASCII Unicode escapes.
+- Actual HTTP end-to-end fixture exports a backup, retains newer device knowledge
+  and an unsent list, restores to a fresh authority/workspace, rejects the old
+  token and old-journal sync, joins a new folder and authenticates its fresh
+  checkpoint. Old checkpoint and pending list remain unchanged; only backed-up
+  research appears in the fresh workspace. No automatic post-backup merge claimed.
+- First affected selection:27 passed46.68s,54.7s including privacy/Ruff (new
+  comparison variants plus existing device/Qt recovery). Final expanded new
+  corruption/fresh-HTTP/bilingual UI selection:17 passed20.14s,48.0s including
+  privacy/Ruff. Selections overlap; do not sum them as unique coverage. One fixture
+  setup in the first selection took19.03s; no historical suite or parallel check.
+- Existing three-minute per-OS source stage adds only the new seven-case recovery
+  file, with no extra job, lower assertion or timeout increase. No build dispatched.
+- Limits remain independent anchoring/fencing, supported content/file lifecycle,
+  hosted restore and physical installed-device acceptance. This is source-only;
+  linked installers are unchanged. No credentials, owner research, active app,
+  cloud resource, release/tag or global skill was modified.
+- Harvest review: verified recovery observation is project evidence, not a new
+  general agentic authentication skill. Existing local-integration skill excludes
+  remote auth. No generated/global copy is changed.
+
+- Final curated integration:critical14 passed10.79s,16.4s including privacy/Ruff;
+  docs60 passed3.69s,7.9s including privacy/Ruff. One governed check at a time,
+  at most two logical processors and25% CPU. No post-validation behavior change.

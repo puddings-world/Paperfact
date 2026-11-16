@@ -765,6 +765,8 @@ and mobile engines provide persistence; there is no global account credential or
 implicit upload consent. A retained client point detects a jointly rolled-back
 server database/marker only while that client knowledge survives. Simultaneously
 rolling back all client copies and the authority, a fork beyond a common observed
-prefix, copied-host fencing, independent anchors and intentional fresh-authority
-recovery still require further work. This source is not in the linked native
+prefix, copied-host fencing and independent anchors still require further work.
+[Recovery comparison](device-recovery-review.md#device-held-access-history-in-recovery-review)
+now observes device-versus-backup control knowledge; explicit fresh-authority
+restore/join has actual HTTP fixture coverage without rebinding the old outbox. This source is not in the linked native
 installers and has not been deployed or physically accepted on Mac/phone.

@@ -28,6 +28,32 @@ def _version(path):
     return tuple(result)
 
 
+def _control_review(local, remote, database, identity, check):
+    from paper_daily import sync_authority_history as history
+    from paper_daily.workspace_control import ControlKnowledge
+
+    check()
+    known = ControlKnowledge(database, dict(workspace_id=identity[0], device_id=identity[1]),
+                             check)._read(local)
+    result = dict(state="not_recorded", device_sequence=None, backup_sequence=None)
+    if known is None:
+        return result
+    result["device_sequence"] = known["sequence"]
+    if history.TABLE not in _tables(remote):
+        return dict(result, state="unavailable")
+    saved = history.read(remote, check=check)
+    result["backup_sequence"] = saved["sequence"]
+    if saved["authority_id"] != known["authority_id"]:
+        return dict(result, state="different_authority")
+    if known["sequence"] > saved["sequence"]:
+        return dict(result, state="backup_older")
+    row = remote.execute(f"SELECT sha256 FROM {history.TABLE} WHERE sequence=?",
+                         (known["sequence"],)).fetchone()
+    if row is None or row[0] != known["sha256"]:
+        raise ValueError("Device and backup do not share the observed authority control prefix")
+    return dict(result, state="included")
+
+
 def review(database, snapshot, workspace, *, seconds=30, cancelled=lambda: False):
     """Count observed work beyond an exact backup without transferring authority.
 
@@ -75,6 +101,7 @@ def review(database, snapshot, workspace, *, seconds=30, cancelled=lambda: False
         if identity[0] != workspace:
             raise ValueError("Device and backed-up workspace differ")
         _identifier(identity[1])
+        control_history = _control_review(local, remote, database, identity, check)
         known = remote.execute(
             "SELECT 1 FROM sync_devices WHERE workspace=? LIMIT 1", (workspace,)
         ).fetchone()
@@ -179,4 +206,5 @@ def review(database, snapshot, workspace, *, seconds=30, cancelled=lambda: False
         ),
         "replayed": False,
         "research_and_files_fully_audited": False,
+        "control_history": control_history,
     }

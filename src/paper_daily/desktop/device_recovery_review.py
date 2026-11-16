@@ -10,6 +10,40 @@ from paper_daily import sync_device_recovery
 from paper_daily.workspace_service import Cancelled, WorkspaceChanged
 from paper_daily.workspace_sync import local_binding
 
+CONTROL_REVIEW_COPY = {
+    'not_recorded': (
+        'No device-held access-history checkpoint was recorded.',
+        '\u5c1a\u672a\u8a18\u9304\u6b64\u88dd\u7f6e\u7684\u5b58\u53d6\u6b77\u53f2\u6aa2\u67e5\u9ede\u3002',
+    ),
+    'included': (
+        "Backup includes this device's observed access history. "
+        "Recovery still requires a fresh identity.",
+        '\u5099\u4efd\u5305\u542b\u6b64\u88dd\u7f6e\u5df2\u77e5\u7684\u5b58\u53d6\u6b77\u53f2\u3002\u5fa9\u539f\u4ecd\u9700\u4f7f\u7528\u65b0\u8eab\u5206\u3002',
+    ),
+    'backup_older': (
+        'Backup predates access changes seen on this device. '
+        'Keep this workspace; recover into a new identity.',
+        '\u5099\u4efd\u65e9\u65bc\u6b64\u88dd\u7f6e\u5df2\u77e5\u7684\u5b58\u53d6\u6b0a\u9650\u8b8a\u66f4\u3002\u8acb\u4fdd\u7559\u539f\u5de5\u4f5c\u5340\uff0c\u4f7f\u7528\u65b0\u8eab\u5206\u5fa9\u539f\u3002',
+    ),
+    'different_authority': (
+        'Backup belongs to a different authority. Keep both; do not replace saved trust.',
+        '\u5099\u4efd\u4f86\u81ea\u4e0d\u540c\u670d\u52d9\u8eab\u5206\u3002\u8acb\u4fdd\u7559\u96d9\u65b9\u8cc7\u6599\uff0c\u4e0d\u8981\u8986\u5beb\u4fe1\u4efb\u7d00\u9304\u3002',
+    ),
+    'unavailable': (
+        'Backup has no verifiable access history. '
+        'Keep the device checkpoint; use fresh-identity recovery.',
+        '\u5099\u4efd\u6c92\u6709\u53ef\u6838\u5c0d\u7684\u5b58\u53d6\u6b77\u53f2\u3002\u8acb\u4fdd\u7559\u88dd\u7f6e\u6aa2\u67e5\u9ede\uff0c\u4f7f\u7528\u65b0\u8eab\u5206\u5fa9\u539f\u3002',
+    ),
+    'not_reviewed': (
+        'Access history was not reviewed.',
+        '\u5c1a\u672a\u6838\u5c0d\u5b58\u53d6\u6b77\u53f2\u3002',
+    ),
+}
+
+
+def control_review_message(result, zh=False):
+    state = result.get("control_history", {}).get("state", "not_reviewed")
+    return CONTROL_REVIEW_COPY.get(state, CONTROL_REVIEW_COPY["not_reviewed"])[bool(zh)]
 
 class DeviceRecoveryReview(QWidget):
     def __init__(self, owner):
@@ -143,6 +177,7 @@ class DeviceRecoveryReview(QWidget):
             if owner.zh
             else "Point-in-time review; rerun after edits. No replay or workspace switch."
         )
+        lines.append(control_review_message(result, owner.zh))
         self.label.setText("\n".join(lines))
         owner.status.setText(
             "本機與服務備份比對完成。" if owner.zh else "Device/backup review finished."

@@ -79,7 +79,9 @@ See [queue pin migration](queue-pin-migration.md) and
 
 1. **Authority safety:** source v4 now retains transactional control history;
    device-held knowledge now has desktop/mobile fixture coverage. Complete
-   independent anchoring/fencing, recovery integration and installed acceptance.
+   independent anchoring/fencing and installed acceptance. Recovery comparison
+   now reports device-held control knowledge, and actual HTTP fresh-identity
+   restore/join preserves old knowledge and unsent work in fixtures.
    Local listener exclusion and received history
    proofs do not establish protection against every rollback or cloned host.
 2. **Lossless adoption and coverage:** finish remaining supported writer, legacy
