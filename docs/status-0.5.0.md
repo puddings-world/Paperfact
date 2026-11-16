@@ -16,6 +16,9 @@ passes Windows x64 in 6m14s, Mac arm64 in 6m20s and Linux x86-64 in 3m31s.
 All three provenance ZIPs were downloaded, independently hash-matched and read;
 the source commit is clean and identical. [Downloads and testing steps](testing/mac-acceptance-0.5.md).
 Documentation commits after this candidate do not create another app build.
+Source after e5eb093 also pins official authority database identity across restart;
+this guard is not inside the delivered candidate yet. Legacy v1 services require
+explicit backup/fresh restore; source fixtures pass, native acceptance remains.
 
 The actual frozen CLIs pass import/export and original-file preservation,
 CLI/MCP retry/restart, strict verified-history sync and the new source-aware
@@ -42,7 +45,7 @@ or physical-phone acceptance. Earlier v31 browser results remain historical.
 | Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading and offline preparation; v33 artifact is built | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
 | Sync visibility and settings | Workspace/device status, explicit pairing and device-local reconnect opt-in have desktop fixtures | Installed location/storage/offline and backup/device controls, native vault prompts, restart/account-switch/focus/input and cross-device UX |
 | Backups and recovery | Verified authority/client backups, fresh-identity restore and reviewed editable adoption exist for supported content | Complete lossless migration/runtime adoption, cloud backup/restore rehearsal, scheduling/retention and unsupported-source handling |
-| Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested | Durable authority/control history, independent anchoring/cross-host fencing and hosted authorization/recovery |
+| Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested; source adds restart-persisted file identity | Durable authority/control history, independent anchoring/cross-host fencing and hosted authorization/recovery |
 | UI/CLI/MCP/AI integrations | Existing shared operations and 38 MCP tools pass named package journeys; frozen source-aware report CLI gate now passes on all desktop OSes | Frozen desktop private report handoff, every retained-review/completion dialog and live provider/account acceptance |
 | Grounded research features | Reading goals, exact-source claims/Lineage and bounded audit/recovery/report paths have source evidence; report provenance also has frozen CLI evidence | Complete audit/retained-result adoption and mappings; scientific support needs researcher review beyond quotation location |
 

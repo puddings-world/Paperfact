@@ -238,3 +238,114 @@ def test_second_serve_is_actionable_and_preserves_existing_authority(tmp_path, c
     assert service.path.read_bytes() == before
     with make_server(service):
         pass
+
+
+def test_restarting_official_service_refuses_replaced_database_with_old_live_token(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    state = tmp_path / "service"
+    sync_admin.initialize(state)
+    service = sync_admin.authority(state)
+    token = service.enroll("workspace", "lost-device")
+    old = tmp_path / "old.sqlite"
+    with service._transaction() as source, closing(sqlite3.connect(old)) as target:
+        source.backup(target)
+    service.revoke(token)
+    with pytest.raises(PermissionError):
+        service.session_info(token)
+    with pytest.raises(PermissionError):
+        sync_admin.authority(state).session_info(token)
+    old.replace(service.path)
+    before = service.path.read_bytes()
+    with pytest.raises(ValueError, match="identity|lifetime|recovery"):
+        sync_admin.authority(state)
+    assert service.path.read_bytes() == before
+
+
+def test_legacy_marker_can_only_back_up_and_restore_with_fresh_credentials(tmp_path, capsys):
+    from test_sync_service import operation
+
+    from paper_daily import sync_authority_backup, sync_authority_restore
+
+    state = tmp_path / "legacy"
+    sync_admin.initialize(state)
+    service = sync_admin.authority(state)
+    old = service.enroll("workspace-a", "device-a")
+    service.push(old, operation())
+    marker = state / sync_admin.MARKER
+    marker.write_text(json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
+    with pytest.raises(sync_admin.AuthorityMarkerError, match="Legacy"):
+        sync_admin.authority(state)
+    assert sync_admin.main(["init", "--state", str(state)]) == 2
+    assert "restore-backup" in capsys.readouterr().err
+    assert json.loads(marker.read_text()) == sync_admin.LEGACY_FORMAT
+    snapshot = tmp_path / "snapshot"
+    sync_authority_backup.export(state, snapshot)
+    fresh = tmp_path / "fresh"
+    sync_authority_restore.restore(snapshot, fresh, "workspace-a", "recovered-workspace")
+    recovered = sync_admin.authority(fresh)
+    with pytest.raises(PermissionError):
+        recovered.session_info(old)
+    new = recovered.enroll("recovered-workspace", "new-device")
+    assert recovered.pull(new)[0]["operation"]["payload"]["body"] == "Research observation"
+    assert json.loads((fresh / sync_admin.MARKER).read_text())["format"] == sync_admin.FORMAT[
+        "format"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["swap", "missing"])
+def test_database_swap_after_marker_check_is_refused_before_schema_writes(
+    tmp_path, monkeypatch, mode,
+):
+    import sqlite3
+    from contextlib import closing
+
+    state = tmp_path / "service"
+    sync_admin.initialize(state)
+    replacement = tmp_path / "replacement.sqlite"
+    with closing(sqlite3.connect(replacement)) as connection, connection:
+        connection.execute("CREATE TABLE sentinel(body TEXT)")
+        connection.execute("INSERT INTO sentinel VALUES ('keep')")
+    expected = replacement.read_bytes()
+    actual = sync_admin.ReferenceService
+
+    def swapped(database, **kwargs):
+        if mode == "swap":
+            replacement.replace(database)
+        else:
+            database.unlink()
+        return actual(database, **kwargs)
+
+    monkeypatch.setattr(sync_admin, "ReferenceService", swapped)
+    with pytest.raises(ValueError, match="identity"):
+        sync_admin.authority(state)
+    if mode == "swap":
+        assert (state / sync_admin.DATABASE).read_bytes() == expected
+    else:
+        assert not (state / sync_admin.DATABASE).exists()
+
+
+@pytest.mark.parametrize("damage", ["identity", "extra-field", "float", "duplicate"])
+def test_invalid_lifetime_marker_never_opens_or_repins_authority(tmp_path, monkeypatch, damage):
+    state = tmp_path / "service"
+    sync_admin.initialize(state)
+    marker = state / sync_admin.MARKER
+    record = json.loads(marker.read_text())
+    if damage == "identity":
+        record["database_identity"][1] += 1
+    elif damage == "extra-field":
+        record["unexpected"] = True
+    elif damage == "float":
+        record["database_identity"][0] = float(record["database_identity"][0])
+    raw = json.dumps(record)
+    if damage == "duplicate":
+        raw = raw[:-1] + ',"format":"' + sync_admin.FORMAT["format"] + '"}'
+    marker.write_text(raw, encoding="utf-8")
+    before = (state / sync_admin.DATABASE).read_bytes()
+    monkeypatch.setattr(sync_admin, "ReferenceService",
+                        lambda *_a, **_k: pytest.fail("Must refuse before opening"))
+    with pytest.raises(ValueError):
+        sync_admin.authority(state)
+    assert marker.read_text() == raw
+    assert (state / sync_admin.DATABASE).read_bytes() == before

@@ -1222,3 +1222,18 @@ or installed-device acceptance. No global rule is promoted.
   were inspected; the latter contains explanation, formula and pseudocode.
 - Limits: physical-device and live-account checks remain; this does not establish
   that every WebEngine navigation or later callback is reliable.
+
+## Persist a local authority file lifetime across restart (2026-11-16)
+
+- Status: validated-local. A revoked-token old-file replacement was admitted by
+  a newly constructed official authority before the fix. The official marker now
+  pins actual database device/inode and the constructor rechecks before schema SQL.
+- Evidence: admin/mount/backup/restore/native/HTTP/service189 pass62.7s stages,
+  including normal restart, swapped/missing constructor target, closed marker,
+  explicit legacy backup and fresh-identity restore with old tokens refused.
+- Lesson: an in-memory file identity does not survive process restart. Retain its
+  provenance at the official entry, carry the exact observation through opening,
+  and create new pins only at explicit initialization/fresh-restore boundaries.
+- Limits: local native lifetime, not same-file rollback detection, joint backup
+  rollback, independent control history or cross-host fencing. No global install,
+  operator action, paid service or owner-data change is authorized.

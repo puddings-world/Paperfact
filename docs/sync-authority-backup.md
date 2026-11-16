@@ -125,3 +125,17 @@ verified snapshots with shared content objects and a completion manifest last.
 It is explicitly invoked, not automatic backup scheduling. Its cloud behavior is
 simulated locally; actual GCS upload/fetch/restore and operational acceptance
 remain unverified. Ordinary desktop use does not require the operator SDK.
+
+## Service-marker lifetime compatibility
+
+New source uses a v2 service marker bound to the live authority database's local
+file identity. Export checks that pin and keeps the observed identity through
+backup capture. It refuses a mismatched v2 marker, including after service restart,
+before producing a trusted backup.
+
+A recognized unpinned v1 marker is accepted for explicit backup only. It cannot
+serve or issue new credentials. Use the existing verify/restore commands to create
+a fresh service/workspace and issue fresh device records; never rewrite the old
+marker, copy its identity into restored state or silently rebind old clients.
+The backup format and research schemas do not change. Full independent authority
+anchoring, same-file rollback protection and hosted restore remain separate gates.

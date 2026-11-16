@@ -9001,3 +9001,33 @@ release approval. Downloads are in the Mac acceptance guide; no public tag or
 service was created. The daily app and owner research remain unchanged.
 
 ~~~~
+
+## 2026-11-16: persisted official-authority file lifetime
+
+Before the fix, replacing a revoked-token database with its earlier file and
+constructing a new official authority did not raise; the new regression demonstrates
+that restart gap. New official markers are v2 with the actual device/inode pin.
+Startup checks before opening and passes the expected identity into ReferenceService
+so a later replacement/removal cannot trigger schema creation on the wrong file.
+Normal restart preserves revocation. The marker is not silently regenerated.
+
+Legacy v1 serving/issuance now refuses with static recovery guidance, but explicit
+backup remains compatible. Fresh-workspace restore emits a new actual pin and
+requires new credentials; original research remains and old tokens fail. Backup
+carries its admission pin into the captured source identity. Research/backup/wire
+formats are unchanged; service-marker compatibility changes deliberately.
+
+Initial static checks stopped on import/test-signature formatting. The first
+marker decoder incorrectly required canonical artifact JSON; it was replaced with
+the existing duplicate-safe whitespace-tolerant service JSON decoder. No source
+or test assertion was weakened. Admin21 passed6.0s stages; final selected
+admin/mount/backup/restore/native/HTTP/service189 pass59.19s pytest/62.7s stages.
+The new marker refuses extra fields, duplicate keys, floating identities and
+changed native identity. Constructor races refuse before SQL writes and never
+recreate a missing database. All data/tokens are synthetic.
+
+This closes the named local file replacement/restart gap only. Same-file SQL
+rollback, joint marker/database restoration, independent control history and
+cross-host fencing remain open. The e5eb093 native candidates predate the source
+change. No app restart, owner-data mutation, real credential, cloud operation,
+installer build or release was performed.

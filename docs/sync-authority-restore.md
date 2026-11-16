@@ -141,3 +141,10 @@ phone acceptance, automatic client migration, or a coherent full release gate.
 ### Read-only old-device review
 
 A local [device recovery comparison](device-recovery-review.md) now distinguishes exact backed-up journal entries, unconfirmed/acknowledged entries absent from the backup and received later events. It preserves the old database and never replays or rebinds it. Use the result to plan preservation; automatic/guided per-change reconciliation remains pending.
+
+The source after e5eb093 publishes a v2 service marker containing the reconstructed
+database's actual local file identity. Publication checks the service's observed
+identity again, so replacement before final marker creation cannot silently become
+a new trusted authority. Old v1 authorities may be backed up explicitly and
+restored through this fresh-workspace path; their old device tokens remain inactive.
+This is not independent authority/control-history or same-inode rollback protection.

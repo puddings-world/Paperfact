@@ -33,3 +33,13 @@ power-loss behavior, large-store capacity/lock timing, HTTPS proxy traffic,
 private GCS publication/retention, coherent isolated restore/new identity and
 physical Windows/Apple Silicon/phone convergence. A locally verified backup is
 not a tested restore or release.
+
+### Official service restart/lifetime boundary
+
+`tests/test_sync_admin.py` adds a revoked-token snapshot replacement regression
+that fails before the source fix. It also covers normal re-open, v1 backup/fresh
+restore with new credentials, replacement/removal between marker admission and
+constructor, and malformed/extra/duplicate/noninteger marker refusal before writes.
+The selected service/admin/mount/HTTP and backup/restore/native suite189 passes
+59.19s pytest/62.7s stages under the two-core/25% governor. These overlap earlier
+focused runs; they are not new feature counts or installed/cross-host evidence.

@@ -633,3 +633,29 @@ The trusted adapter policy parameters are
 `BrowserSessions.complete(value, cookie, *, require_history=False)` and
 `redeem_pairing(code, workspace_id, device_id, credential, label=None, *, require_history=False)`.
 Strict HTTP selects them internally; JSON bodies cannot override receiver policy.
+
+### Persisted official-authority file lifetime (source after e5eb093)
+
+New official service directories use `paperfact-reference-service-v2` in
+`.paperfact-sync-service.json`, with an exact two-integer `database_identity`
+(device/inode). `sync-admin` validates this local pin before opening the database
+and carries it into the constructor's pre-schema check. A normal restart retains
+access/revocation; a replaced or missing database is refused across restarts.
+`init` never repairs or rewrites a mismatched marker. Marker JSON is bounded,
+closed and duplicate-safe; hard links and noninteger identities are refused.
+
+Old v1 markers have no observed lifetime and cannot serve or issue credentials.
+They remain eligible for explicit verified `backup`, then `restore-backup` into a
+new directory/workspace and explicit device enrollment. No new command or automatic
+migration is added. Preserve old research/outboxes for reviewed recovery; do not
+edit/recreate the marker or bind old clients to the new workspace by resetting
+cursors. The restored marker pins the actual new database, never the copied file
+identity from the backup. Backup capture also pins its source through observation.
+
+This is local file-lifetime evidence, not a portable authority epoch. It does not
+detect in-place SQL rollback retaining the same file identity, protect a jointly
+restored marker/database, or provide independent control-history anchoring or
+cross-host fencing. Those remain release gates. Filesystem identity can change
+after copying/restoring/moving between filesystems; refusal requires operator
+recovery review, not automatic repinning. The e5eb093 installers predate this
+source change; native candidate and hosted acceptance remain required.

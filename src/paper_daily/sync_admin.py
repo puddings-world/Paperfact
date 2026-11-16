@@ -6,16 +6,18 @@ import argparse
 import json
 import os
 import sqlite3
+import stat
 import sys
 from contextlib import closing
 from pathlib import Path
 
 from paper_daily.connection_vault import MAX_BYTES, Connection
-from paper_daily.sync_http import make_server
+from paper_daily.sync_http import _decode, make_server
 from paper_daily.sync_service import AuthorityInUseError, ReferenceService
 
 MARKER = ".paperfact-sync-service.json"
-FORMAT = {"format": "paperfact-reference-service-v1"}
+FORMAT = {"format": "paperfact-reference-service-v2"}
+LEGACY_FORMAT = {"format": "paperfact-reference-service-v1"}
 DATABASE = "authority.sqlite"
 
 
@@ -42,19 +44,57 @@ def require_mount(state, mount):
     return root
 
 
+class AuthorityMarkerError(ValueError):
+    """An official authority cannot establish its persisted local file lifetime."""
+
+
+def marker_for(database, *, expected_identity=None):
+    info = database.lstat()
+    identity = (info.st_dev, info.st_ino)
+    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_ino <= 0
+            or expected_identity is not None and identity != tuple(expected_identity)):
+        raise AuthorityMarkerError("Authority database identity changed; review recovery")
+    return {**FORMAT, "database_identity": list(identity)}
+
+
+def marker_identity(marker, database, *, allow_legacy_backup=False):
+    info = marker.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 256:
+        raise AuthorityMarkerError("Invalid authority lifetime marker")
+    with marker.open("rb") as stream:
+        raw = stream.read(257)
+    if len(raw) > 256:
+        raise AuthorityMarkerError("Invalid authority lifetime marker")
+    record = _decode(raw)
+    expected = marker_for(database)
+    if record == LEGACY_FORMAT:
+        if allow_legacy_backup:
+            return tuple(expected["database_identity"])
+        raise AuthorityMarkerError(
+            "Legacy authority has no persisted database identity. Stop serving, create a "
+            "verified backup and restore-backup into a fresh service/workspace; re-enroll devices.")
+    pin = record.get("database_identity") if isinstance(record, dict) else None
+    if (not isinstance(pin, list) or len(pin) != 2
+            or any(type(value) is not int for value in pin) or record != expected):
+        raise AuthorityMarkerError(
+            "Authority database identity differs from its lifetime marker. Preserve state "
+            "and review recovery; do not recreate the marker or reuse old credentials.")
+    return tuple(pin)
+
+
 def authority(state):
     root = _root(state)
     marker, database = root / MARKER, root / DATABASE
-    if (marker.is_symlink() or not marker.is_file() or marker.stat().st_size > 256
-            or json.loads(marker.read_text(encoding="utf-8")) != FORMAT
-            or database.is_symlink() or not database.is_file()):
+    if not marker.exists() or not database.exists():
         raise ValueError("Initialize a dedicated sync service directory first")
+    identity = marker_identity(marker, database)
     with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as conn:
         tables = {row[0] for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
     if "papers" in tables or not {"sync_devices", "sync_events", "sync_heads"} <= tables:
         raise ValueError("This is not a reference sync authority")
-    return ReferenceService(database, blob_root=root / "blobs")
+    return ReferenceService(database, blob_root=root / "blobs",
+                            expected_database_identity=identity)
 
 
 def initialize(state):
@@ -65,11 +105,14 @@ def initialize(state):
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise ValueError("Choose an empty service directory, separate from research")
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    ReferenceService(root / DATABASE, blob_root=root / "blobs")
+    service = ReferenceService(root / DATABASE, blob_root=root / "blobs")
+    record = marker_for(service.path, expected_identity=service._database_identity)
     fd = os.open(root / MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        json.dump(FORMAT, stream)
+        json.dump(record, stream)
         stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
     return {"state": "initialized"}
 
 
@@ -260,6 +303,9 @@ def run(args):
             return 0
         print(json.dumps(result), flush=True)
         return 0
+    except AuthorityMarkerError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     except AuthorityInUseError:
         print("Sync service already active for this authority. Stop the existing listener "
               "and let its current requests finish before starting another. "

@@ -44,13 +44,23 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
         blob_quota_bytes: int = 4 * 1024**3,
         blob_max_bytes: int = 150 * 1024**2,
         blob_max_uploads: int = 16,
+        expected_database_identity: tuple[int, int] | None = None,
     ):
+        if (expected_database_identity is not None and (
+                not isinstance(expected_database_identity, tuple)
+                or len(expected_database_identity) != 2
+                or any(type(value) is not int for value in expected_database_identity)
+                or expected_database_identity[0] < 0 or expected_database_identity[1] <= 0)):
+            raise ValueError("Invalid expected authority database identity")
         self._configure_blobs(blob_root, blob_quota_bytes, blob_max_bytes, blob_max_uploads)
         self.path = Path(path).absolute()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._database_identity = None
         if self.path.exists() or self.path.is_symlink():
             self._database_identity = self._database_file_identity()
+        if (expected_database_identity is not None
+                and self._database_identity != expected_database_identity):
+            raise SyncHistoryUnavailable("Authority database identity changed before opening")
         with self._transaction(write=True) as conn:
             self._blob_schema(conn)
             conn.execute(

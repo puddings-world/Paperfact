@@ -127,7 +127,7 @@ def restore(
     accepted/conflict outcome. Old devices and unfinished uploads are not restored.
     Publication of the service marker is the final success boundary.
     """
-    from paper_daily.sync_admin import DATABASE, FORMAT, MARKER
+    from paper_daily.sync_admin import DATABASE, MARKER, marker_for
 
     for value in (workspace, replacement):
         if not isinstance(value, str) or not ID.fullmatch(value):
@@ -268,7 +268,8 @@ def restore(
             backup._sync_directory(Path(folder))
         backup._write(
             target / ".service.pending",
-            lambda stream: stream.write(json.dumps(FORMAT).encode("utf-8")),
+            lambda stream: stream.write(json.dumps(marker_for(
+                service.path, expected_identity=service._database_identity)).encode("utf-8")),
         )
         live()
         (target / ".service.pending").rename(target / MARKER)

@@ -225,8 +225,7 @@ def export(state, output, *, seconds=30, cancelled=lambda: False):
     Failed output is deliberately retained without a completion manifest. Retry
     with a new empty pathname; never overwrite or delete operator-owned files.
     """
-    from paper_daily.sync_admin import DATABASE, MARKER
-    from paper_daily.sync_admin import FORMAT as SERVICE_FORMAT
+    from paper_daily.sync_admin import DATABASE, MARKER, marker_identity
 
     check = _guard(seconds, cancelled)
     root, output = _path(state), _path(output)
@@ -234,9 +233,10 @@ def export(state, output, *, seconds=30, cancelled=lambda: False):
         raise ValueError("Keep backups separate from authority state")
     marker, database = root / MARKER, root / DATABASE
     _identity(marker)
-    if marker.stat().st_size > 256 or _json(marker) != SERVICE_FORMAT:
-        raise ValueError("Initialize a dedicated authority first")
+    pinned = marker_identity(marker, database, allow_legacy_backup=True)
     original = _identity(database)
+    if original[:2] != pinned:
+        raise ValueError("Authority database identity changed before backup")
     for suffix in ("-wal", "-shm", "-journal"):
         _path(Path(str(database) + suffix))
     check()
