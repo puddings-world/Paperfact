@@ -9235,3 +9235,23 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   a deployed site or physical-device acceptance. Current0a64ec7 downloads stayv33.
 - No hosted resource, key, login, paid model call, service installation, real
   research mutation or new native installer. GCP target details remain pending.
+
+## 2026-11-16 content-derived exported PWA cache identities
+
+- Confirmed baseline: five existing artifact cases passed and three new cases
+  failed for manual cache revisions, stale derived identities and mismatched
+  worker/manifest cache names. The existing builder now compiles the exported
+  worker from content hashes; it never rewrites the source worker or research.
+- Eight artifact cases pass in11.734s governed wall time (11.484s Node), no skips.
+  They retain source-change/no-overwrite/private-file checks and add asset/worker
+  cache invalidation, legacy numeric-cache compatibility and consistency refusal.
+- Critical14 plus privacy/Ruff pass in18.9s. All checks use the existing two-core,
+  25% CPU governor. No historical full-suite or native packaging repetition.
+- Actual local build and manifest verification pass in1.031s:52files/3962164bytes,
+  artifact_id `edaae1f55d2a3216b7d097913e0af962c2721cc359f49021ec41a5662abda0ff`,
+  output `build/mobile-web-content-cache`. This is a local content artifact, not
+  a new native candidate, hosted deployment, runtime-response integrity check or
+  physical-device acceptance. Existing0a64ec7 downloads remain unchanged.
+- Reviewed the canonical harvest workflow: this is a focused packaging correction
+  recorded here, with no new global skill rule or generated skill-copy edits.
+  GCP deployment details and hosted/physical convergence gates remain open.

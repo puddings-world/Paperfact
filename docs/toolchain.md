@@ -248,7 +248,10 @@ operator acceptance remain separate from static/fixture checks.
 ## Static PWA deployment artifact
 
 `scripts/build_mobile.mjs` uses the existing Node 22+ runtime and built-in modules
-only: no bundler or npm dependencies. CI supplies Node through setup-node. Build
+only: no bundler or npm dependencies. Exported worker/cache identities derive from
+asset content; verification also checks the identity against the actual worker.
+The source worker remains unchanged and older numeric-cache exports stay readable.
+CI supplies Node through setup-node. Build
 with `node scripts/build_mobile.mjs --output build/mobile-web`, then verify against
 the trusted content ID using `--verify build/mobile-web --expect SHA256`. The
 output contains only the runtime allowlist, manifest and generated Nginx static

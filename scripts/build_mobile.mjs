@@ -71,10 +71,22 @@ async function write(path,data){
  await noLinks(dirname(path));const handle=await open(path,'wx',0o644);
  try{await handle.writeFile(data);await handle.sync();}finally{await handle.close();}
 }
+const CACHE_NAME=/^paperfact-mobile-shell-(?:v\d+|[a-f0-9]{64})$/;
+const NORMALIZED_CACHE="const CACHE = 'paperfact-mobile-shell-CONTENT';";
+function workerTemplate(data){
+ const text=data.toString('utf8'),matches=[...text.matchAll(/const CACHE = '(paperfact-mobile-shell-(?:v\d+|[a-f0-9]{64}))';/g)];
+ if(matches.length!==1)fail('invalid_shell_worker');
+ return {cache:matches[0][1],normalized:Buffer.from(text.replace(matches[0][0],NORMALIZED_CACHE))};
+}
+function shellIdentity(version,files,worker){
+ const {normalized}=workerTemplate(worker);
+ const rows=files.map(row=>row.path==='sw.mjs'?{path:row.path,size:normalized.length,sha256:hash(normalized)}:row);
+ return 'paperfact-mobile-shell-'+hash(JSON.stringify({version,files:rows}));
+}
 function validateManifest(value){
  closed(value,['format','version','shell_cache','files','nginx_map_sha256','artifact_id']);
  if(value.format!==FORMAT||typeof value.version!=='string'||value.version.length>64||!/^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/.test(value.version)||
-  typeof value.shell_cache!=='string'||!/^paperfact-mobile-shell-v\d+$/.test(value.shell_cache)||
+  typeof value.shell_cache!=='string'||!CACHE_NAME.test(value.shell_cache)||
   !HASH.test(value.nginx_map_sha256)||!HASH.test(value.artifact_id)||!Array.isArray(value.files)||
   !value.files.length||value.files.length>MAX_FILES)fail('invalid_manifest');
  let previous='',total=0;const folded=new Set();
@@ -109,10 +121,15 @@ export async function verifyMobile(directory,{expectedId=null}={}){
  const actual=await inventory(root);
  if(JSON.stringify(actual)!==JSON.stringify(expected))fail('unexpected_artifact_entry');
  if(hash(await bytes(root,'nginx-static-map.conf',256*1024))!==manifest.nginx_map_sha256)fail('changed_proxy_map');
+ let worker=null;
  for(const row of manifest.files){
   const data=await bytes(join(root,'public'),row.path);privateRecord(row.path,data);
   if(data.length!==row.size||hash(data)!==row.sha256)fail('changed_asset');
+  if(row.path==='sw.mjs')worker=data;
  }
+ if(!worker||workerTemplate(worker).cache!==manifest.shell_cache||
+  (!/^paperfact-mobile-shell-v\d+$/.test(manifest.shell_cache)&&
+   shellIdentity(manifest.version,manifest.files,worker)!==manifest.shell_cache))fail('invalid_shell_identity');
  return {state:'verified',directory:root,version:manifest.version,artifact_id:manifest.artifact_id,
   files:manifest.files.length,bytes:manifest.files.reduce((n,row)=>n+row.size,0)};
 }
@@ -125,9 +142,11 @@ export async function buildMobile({output,sourceRoot=SOURCE,version=null,onProgr
  const staged=[],files=[];let total=0;
  for(const name of paths()){
   const data=await bytes(source,name);privateRecord(name,data);total+=data.length;if(total>MAX_TOTAL)fail('asset_limit');
-  staged.push({name,data});files.push({path:name,size:data.length,sha256:hash(data)});
+  staged.push({name,data,sourceData:data});files.push({path:name,size:data.length,sha256:hash(data)});
  }
- const shell=staged.find(row=>row.name==='sw.mjs').data.toString('utf8').match(/const CACHE = '(paperfact-mobile-shell-v\d+)';/)?.[1];
+ const worker=staged.find(row=>row.name==='sw.mjs'),shell=shellIdentity(version,files,worker.data);
+ worker.data=Buffer.from(workerTemplate(worker.data).normalized.toString('utf8').replace(NORMALIZED_CACHE,"const CACHE = '"+shell+"';"));
+ Object.assign(files.find(row=>row.path==='sw.mjs'),{size:worker.data.length,sha256:hash(worker.data)});
  const map=mapFor(files),payload={format:FORMAT,version,shell_cache:shell,files,nginx_map_sha256:hash(map)},
   manifest={...payload,artifact_id:hash(JSON.stringify(payload))};validateManifest(manifest);
  await mkdir(dirname(destination),{recursive:true});await noLinks(dirname(destination));
@@ -139,7 +158,7 @@ export async function buildMobile({output,sourceRoot=SOURCE,version=null,onProgr
  await write(join(destination,'nginx-static-map.conf'),map);
  await onProgress({stage:'staged',completed:files.length,total:files.length});
  // Confirm the source did not change during export before publishing completion.
- for(const row of files)if(hash(await bytes(source,row.path))!==row.sha256)fail('source_changed');
+ for(const row of staged)if(hash(await bytes(source,row.name))!==hash(row.sourceData))fail('source_changed');
  await write(join(destination,'artifact.json'),JSON.stringify(manifest,null,2)+'\n');
  return verifyMobile(destination,{expectedId:manifest.artifact_id});
 }

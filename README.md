@@ -264,6 +264,8 @@ installed-device acceptance remain open.
 The [PWA deployment artifact](docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
 is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 `node scripts/build_mobile.mjs --verify DIR --expect SHA256` (`--help` lists options).
+Exported offline-shell cache identities follow asset content automatically; existing
+numeric-cache artifacts remain readable. This does not deploy a website or change research data.
 [Release scope](docs/roadmap-0.5.0.md) ·
 [Proposed sync architecture](docs/sync-architecture.md) ·
 [Implementation plan](docs/implementation-0.5.0.md) |

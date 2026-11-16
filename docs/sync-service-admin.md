@@ -130,6 +130,15 @@ mobile-web/
   public/                   only runtime/service-worker assets and vendor license
 ```
 
+Exported workers now use `paperfact-mobile-shell-<sha256>` derived from the app
+version and every runtime asset, including the worker with its cache declaration
+normalized to avoid a circular hash. Asset or worker edits change the exported
+worker/cache without requiring a manual source revision. Source files remain
+unchanged. Verification checks worker/manifest agreement and recomputes derived
+identities; legacy numeric `vNN` artifacts remain readable with matching workers.
+This is build-time consistency, not response-time integrity or atomic deployment.
+It does not clear IndexedDB research, drafts, outbox or connection state.
+
 The source of truth is the existing service-worker `SHELL` plus `sw.mjs`, not a
 recursive directory copy. Test pages, test/service fixtures, Python, environment
 files, research databases, issued credentials and signing keys are not copied.
@@ -155,14 +164,15 @@ file count without file contents. Format `paperfact.mobile-artifact.v1` has limi
 of 256 files, 16 MiB per asset and 64 MiB total. Builds over identical input bytes
 are deterministic; different checkout line endings can legitimately change IDs.
 
-The Release workflow runs the five focused artifact cases and builds/verifies
+The Release workflow runs the focused artifact cases and builds/verifies
 this shared artifact once (Windows job,
 two-minute step budget) and uploads `mobile-web-<commit>`. It does not deploy it or
 attach it implicitly to the native installer release. Download/unzip, independently
 verify the expected content ID, then stage the unchanged directory through the
 approved operator process. Workflow execution has not been observed here.
 
-Five focused cases in `tests/test_mobile_artifact.mjs` protect reproducibility and
+Eight focused cases in `tests/test_mobile_artifact.mjs` protect content-derived
+cache changes, stale-identity refusal, legacy cache compatibility, reproducibility and
 private-file exclusion, no-overwrite/excess-file refusal, interrupted build/new-path
 retry, corrupt bytes/maps/wrong pins, and linked/private-JSON source refusal.
 The existing browser acceptance harness can use an exported artifact instead of

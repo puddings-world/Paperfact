@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,copyFile,writeFile,readFile,readdir,rm,link,unlink,realpath,lstat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -84,4 +85,51 @@ test('linked source files and private key records cannot become public assets',a
   format:'paperfact.browser-signing-key.v1',key:'synthetic-placeholder-not-a-real-key'}));
  await assert.rejects(build({sourceRoot,output}),/private_json_record/);
  await assert.rejects(readdir(output),error=>error.code==='ENOENT');
+}));
+
+const digest=data=>createHash('sha256').update(data).digest('hex');
+async function refreshManifest(output,name,data){
+ await writeFile(join(output,'public',name),data);
+ const manifest=JSON.parse(await readFile(join(output,'artifact.json'),'utf8'));
+ Object.assign(manifest.files.find(row=>row.path===name),{size:Buffer.byteLength(data),sha256:digest(data)});
+ const {artifact_id,...payload}=manifest;
+ manifest.artifact_id=digest(JSON.stringify(payload));
+ await writeFile(join(output,'artifact.json'),JSON.stringify(manifest));return manifest;
+}
+
+test('exported cache follows asset and worker content without changing the source cache revision',async()=>fixture(async({root,sourceRoot,output})=>{
+ const original=await readFile(join(sourceRoot,'sw.mjs'),'utf8');
+ await build({sourceRoot,output});
+ const first=JSON.parse(await readFile(join(output,'artifact.json'),'utf8'));
+ assert.match(first.shell_cache,/^paperfact-mobile-shell-[a-f0-9]{64}$/);
+ assert((await readFile(join(output,'public','sw.mjs'),'utf8')).includes("const CACHE = '"+first.shell_cache+"';"));
+ assert.equal(await readFile(join(sourceRoot,'sw.mjs'),'utf8'),original);
+ await writeFile(join(sourceRoot,'style.css'),'/* revised style without a cache revision edit */');
+ const next=join(root,'style-change');await build({sourceRoot,output:next});
+ const second=JSON.parse(await readFile(join(next,'artifact.json'),'utf8'));
+ assert.notEqual(second.shell_cache,first.shell_cache);
+ await writeFile(join(sourceRoot,'sw.mjs'),original+'\n// revised worker logic\n');
+ const last=join(root,'worker-change');await build({sourceRoot,output:last});
+ const third=JSON.parse(await readFile(join(last,'artifact.json'),'utf8'));
+ assert.notEqual(third.shell_cache,second.shell_cache);
+ assert.equal((await verifyMobile(last)).state,'verified');
+}));
+
+test('rehashing changed assets cannot conceal a stale derived shell identity',async()=>fixture(async({sourceRoot,output})=>{
+ await build({sourceRoot,output});
+ const changed=await refreshManifest(output,'style.css','/* internally rehashed but stale worker */');
+ await assert.rejects(verifyMobile(output,{expectedId:changed.artifact_id}),/invalid_shell_identity/);
+}));
+
+test('legacy numeric cache artifacts remain readable but mismatched worker names are refused',async()=>fixture(async({sourceRoot,output})=>{
+ await build({sourceRoot,output});
+ const worker=(await readFile(join(output,'public','sw.mjs'),'utf8'))
+  .replace(/const CACHE = '[^']+';/,"const CACHE = 'paperfact-mobile-shell-v34';");
+ const manifest=await refreshManifest(output,'sw.mjs',worker);
+ manifest.shell_cache='paperfact-mobile-shell-v34';
+ const {artifact_id,...payload}=manifest;manifest.artifact_id=digest(JSON.stringify(payload));
+ await writeFile(join(output,'artifact.json'),JSON.stringify(manifest));
+ assert.equal((await verifyMobile(output,{expectedId:manifest.artifact_id})).state,'verified');
+ await refreshManifest(output,'sw.mjs',worker.replace('shell-v34','shell-v35'));
+ await assert.rejects(verifyMobile(output),/invalid_shell_identity/);
 }));
