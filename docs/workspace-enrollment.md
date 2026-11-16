@@ -127,6 +127,15 @@ without becoming current originals or executable caches; see
 [unreferenced reading text](initial-enrollment-history.md#unreferenced-reading-text). The inventory and returned `plan["blockers"]` are authoritative for the
 particular workspace; this is not a claim of arbitrary legacy-directory coverage.
 
+Claim-card regeneration maps (`claims.written.<paper-id>`) are retained verbatim
+in the existing inactive history archive as `claim_note_regeneration_v1`. Their
+local note IDs and SHA256 fingerprints are validated; malformed maps block
+preparation. Actual claim notes, including reader edits, remain live research.
+The map is not installed as receiver-side regeneration/deletion authority. A
+receiver's later AI run therefore preserves received cards rather than inferring
+that its local note IDs identify untouched generated cards. Detached restore
+retains the observation in `recovery_records`; the source remains unchanged.
+
 ## Consistency, backup and adoption
 
 A source read snapshot is copied into trusted schema and passed through the

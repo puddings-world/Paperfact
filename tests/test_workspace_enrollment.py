@@ -637,3 +637,48 @@ def test_unreadable_research_directory_cannot_disappear_from_inventory(source, m
         EnrollmentService(source).plan()
     assert source.read_bytes() == before
     assert not (source.parent.parent / "candidate").exists()
+
+
+def test_claim_card_regeneration_history_is_retained_without_receiver_delete_authority(
+    source, tmp_path,
+):
+    original = "Original generated claim"
+    edited = "Researcher's edited claim"
+    tracking = json.dumps({"1": hashlib.sha256(original.encode()).hexdigest()}, indent=2)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("UPDATE notes SET kind='claim',body=? WHERE id=1", (edited,))
+        store.set_kv(conn, "claims.written.paper", json.loads(tracking))
+        # Preserve the exact stored observation, including its whitespace.
+        conn.execute("UPDATE kv SET value=? WHERE key='claims.written.paper'", (tracking,))
+    before = source.read_bytes()
+    plan = EnrollmentService(source).plan()
+    assert plan["supported"], plan["blockers"]
+    result = prepare(source, tmp_path)
+    candidate = Path(result["database"])
+    saved = rows(candidate, "SELECT body_json FROM research_history_archive "
+                 "WHERE protocol='claim_note_regeneration_v1'")
+    assert len(saved) == 1
+    assert json.loads(saved[0][0]) == {"paper_id": "paper", "tracking_json": tracking}
+    assert not rows(candidate, "SELECT value FROM kv WHERE key='claims.written.paper'")
+    assert rows(candidate, "SELECT kind,body FROM notes") == [("claim", edited)]
+    restored = tmp_path / "claim-history-restored"
+    sync_recovery.restore_detached(result["backup"], restored)
+    historical = [json.loads(row[0]) for row in rows(
+        restored / "papers.db",
+        "SELECT data FROM recovery_records WHERE table_name='research_history_archive'",
+    )]
+    assert [row["body_json"] for row in historical
+            if row["protocol"] == "claim_note_regeneration_v1"] == [saved[0][0]]
+    assert not rows(restored / "papers.db", "SELECT value FROM kv "
+                    "WHERE key='claims.written.paper'")
+    assert rows(restored / "papers.db", "SELECT kind,body FROM notes") == [("claim", edited)]
+    assert source.read_bytes() == before
+
+
+def test_malformed_claim_card_regeneration_history_blocks_without_changing_source(source):
+    with closing(sqlite3.connect(source)) as conn, conn:
+        store.set_kv(conn, "claims.written.paper", {"1": "not-a-fingerprint"})
+    before = source.read_bytes()
+    with pytest.raises(ValueError):
+        EnrollmentService(source).plan()
+    assert source.read_bytes() == before

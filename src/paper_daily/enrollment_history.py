@@ -19,10 +19,12 @@ SCHEMA = (
 )
 COMPOUND_TEXT = "compound_text_history_v1"
 LEGACY_TEXT = "legacy_text_cache_v1"
+CLAIM_NOTES = "claim_note_regeneration_v1"
 MAX_TEXT = 3 * 1024**2
 FORMATS = {
     COMPOUND_TEXT: "protocol request text",
     LEGACY_TEXT: "paper_id cache sha256 text",
+    CLAIM_NOTES: "paper_id tracking_json",
     "research_lineage_publications": "request_id candidate_id row_json sources_json",
     "research_local_surveys": "version_id list_id body_json is_current",
     "research_lineage_imports": "request_id body_json",
@@ -252,6 +254,22 @@ def validate_record(protocol, record):
 
         body = validate_survey(record)
         return {item["original"]["sha256"] for item in body["bindings"]}
+    if protocol == CLAIM_NOTES:
+        from paper_daily.sync_files import text
+
+        text(record["paper_id"], 4096)
+        tracking = _value(record["tracking_json"])
+        if not isinstance(tracking, dict) or len(tracking) > MAX_RECORDS:
+            raise ValueError("Invalid archived claim-card regeneration map")
+        for identity, fingerprint in tracking.items():
+            if (
+                not isinstance(identity, str) or not identity.isascii()
+                or not identity.isdecimal() or len(identity) > 19
+                or not 0 < int(identity) < 2**63 or str(int(identity)) != identity
+            ):
+                raise ValueError("Invalid archived claim-card note identity")
+            digest(fingerprint)
+        return set()  # Local note IDs never authorize deletion on another device.
     if protocol == LEGACY_TEXT:
         from paper_daily.sync_files import text
 
@@ -612,6 +630,21 @@ def collect(conn, database, ticket):
             raise ValueError("Private history exceeds its inventory bound")
     if len(records) > MAX_RECORDS or total > MAX_TOTAL:
         raise ValueError("Private history exceeds its inventory bound")
+    claim_controls = {}
+    for key, raw in conn.execute(
+        "SELECT key,CASE WHEN length(CAST(value AS BLOB))>? THEN NULL ELSE value END "
+        "FROM kv WHERE key GLOB 'claims.written.*' ORDER BY key", (MAX_ROW,)
+    ):
+        ticket.check()
+        wrapped = wrap(CLAIM_NOTES, {
+            "paper_id": key[len("claims.written."):], "tracking_json": raw,
+        })
+        if wrapped["record_id"] not in records:
+            total += len(wrapped["body_json"].encode())
+        records[wrapped["record_id"]] = wrapped
+        claim_controls[key] = raw
+        if len(records) > MAX_RECORDS or total > MAX_TOTAL:
+            raise ValueError("Private history exceeds its inventory bound")
     for value in records.values():
         sources.update(validate(value)[1])
     deletions = []
@@ -633,6 +666,7 @@ def collect(conn, database, ticket):
         "sources": sorted(sources),
         "sidecars": sorted(set(metadata)),
         "compound_text_snapshots": text_snapshots,
+        "claim_note_controls": claim_controls,
         "known_deletions": sorted(deletions, key=lambda row: (row["paper_id"], row["feature"])),
     }
 

@@ -201,6 +201,11 @@ def _database(conn, ticket, *, history=None):
                 selected.append(value)
                 continue
             if table == "kv" and value["key"] not in {"lists.order", "lists.legacy_queue"}:
+                if value["key"] in (history or {}).get("claim_note_controls", {}):
+                    if history["claim_note_controls"][value["key"]] != value["value"]:
+                        raise SnapshotChanged("Claim-card regeneration history changed")
+                    excluded += 1
+                    continue
                 from paper_daily.enrollment_history import redundant_compound_hint
                 from paper_daily.later_outcome_history import redundant_hint
 

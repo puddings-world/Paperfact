@@ -10526,3 +10526,31 @@ stay in the existing acceptance/continuation records.
   CRLF-aware whitespace passed. The existing collaboration row was shortened to
   current ownership/scope and canonical evidence links; its historical detailed
   row remains in Git history. No cross-session messaging or new board created.
+
+
+## 2026-11-16 claim-card regeneration metadata no longer blocks enrollment
+
+- Reproduced a real producer/adapter mismatch: a valid `claims.written.paper`
+  record made the reviewed workspace plan report `unsupported KV scope`.
+- Reuse the existing bounded history archive with `claim_note_regeneration_v1`.
+  Preserve exact tracking JSON and edited claim-note rows, without installing
+  local-ID regeneration/deletion authority in the candidate or detached restore.
+  Receiver regeneration preserves received cards; no portable replacement
+  provenance or automatic deletion semantics are claimed by this adapter.
+- Two focused cases cover successful preparation, source immutability, independent
+  backup/detached retained history and edited notes, plus malformed-fingerprint
+  refusal. Initial reproduction failed as expected. The first green attempt found
+  a new test's incorrect assumption that detached history is a live SQL table;
+  its lookup now checks the existing recovery_records archive without changing
+  restore behavior or any older assertion.
+- Final affected selection: 2 passed in3.10s; privacy/Ruff/check total6.9s.
+  Command: `python scripts/check_bounded.py --profile focused --python
+  tests/test_workspace_enrollment.py::test_claim_card_regeneration_history_is_retained_without_receiver_delete_authority
+  tests/test_workspace_enrollment.py::test_malformed_claim_card_regeneration_history_blocks_without_changing_source`.
+- Existing critical gate: 14 passed in7.47s; privacy/Ruff/check total12.5s.
+  Command: `python scripts/check_bounded.py`. One job at a time, existing two-core/
+  25-percent CPU budget; no exhaustive suite, native rebuild or paid AI call.
+- README and enrollment contract describe the conservative receiver behavior.
+  Existing archive-only observation patterns apply; no new global skill is needed.
+  Hosted deployment, physical Windows/Mac acceptance and the remaining full v0.5
+  gates remain open. No daily research, release, account or cloud resource changed.

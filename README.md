@@ -250,6 +250,8 @@ acceptance gates; it is not a public v0.5 release.
 - Prepare selected papers offline with the exact originals used by saved annotations
   and research lineage.
 - Prepare existing CLI/MCP-created research for sync while archiving old import requests safely.
+  Claim cards and reader edits are retained; [old local regeneration maps](docs/workspace-enrollment.md#explicit-blockers-and-remaining-work)
+  stay inactive instead of authorizing deletion on another device.
 - Preserve known reading-text caches privately in reviewed copies and backups, without treating them as verified originals.
 - Verify received and newer acknowledged history before uploading; pin the service execution during transfers and preserve local work if it changes. Desktop, mobile and service must support the same continuity handshake.
 - Development desktop and mobile sync now verify durable received/acknowledged history, store proofs with local transactions, reject completed tails older than known acknowledgments, and check research pushes inside the authority write. Mobile shell v31 retains proof observations in private v3 recovery; attachment writes verify history again at the server transaction; device controls and invitation redemption also verify retained history; see [API, migration and limits](docs/sync-http.md#verified-desktop-flow-and-wire-contract).
