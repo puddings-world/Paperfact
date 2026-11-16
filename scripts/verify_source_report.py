@@ -85,10 +85,27 @@ def verify(command, folder, env, package):
             backend="openai", model=REQUESTED, api_key=KEY, isolated=True,
             base_url=f"http://127.0.0.1:{server.server_port}/v1",
         )))
-        (workspace / "llm.json").write_text(json.dumps(settings), encoding="utf-8")
+        from verify_private_report import run as run_private
+
+        from paper_daily.ai_job_intent import FrozenRoutes
+        from paper_daily.ai_types import Settings
+
         arguments = ("survey", "demo", "--sources", "--source-paper", "demo:paperfact")
-        if "Source-aware survey: saved" not in run(*arguments):
+        # A child that ignores the private route must fail instead of using disk settings.
+        disabled = dict(backend="none", model="wrong-disk-model", isolated=True)
+        (workspace / "llm.json").write_text(json.dumps(disabled), encoding="utf-8")
+        selected = Settings("openai", model=REQUESTED, api_key=KEY, isolated=True,
+                            base_url=f"http://127.0.0.1:{server.server_port}/v1")
+        routes = FrozenRoutes(selected, {"survey": selected},
+                              account_directory=str(workspace / "ai-accounts"))
+        generated = run_private(command, arguments, environment, routes)
+        if KEY in generated or KEY in json.dumps(environment) or KEY in str(command):
+            raise AssertionError("Synthetic credential escaped the private handoff")
+        if "Source-aware survey: saved" not in generated:
             raise AssertionError("The synthetic report was not saved")
+        if json.loads((workspace / "llm.json").read_text(encoding="utf-8")) != disabled:
+            raise AssertionError("Private handoff rewrote child settings")
+        (workspace / "llm.json").write_text(json.dumps(settings), encoding="utf-8")
         archive = folder / "report.zip"
         run("list-export", "demo", "--out", archive)
         with zipfile.ZipFile(archive) as data:
@@ -115,7 +132,8 @@ def verify(command, folder, env, package):
             raise AssertionError("A read or cached retry repeated model completion")
         return dict(saved=True, quote_located=True, originals_verified=True,
                     requested_model=REQUESTED, returned_model=RETURNED,
-                    retained_read=True, cached_without_completion=True)
+                    retained_read=True, cached_without_completion=True,
+                    private_handoff=True, child_disk_settings_ignored=True)
     finally:
         server.shutdown()
         server.server_close()

@@ -1253,3 +1253,16 @@ or installed-device acceptance. No global rule is promoted.
 - Limits: retained local marker only, not append-only history, joint rollback
   protection, independent anchoring or cross-host fencing. Process exit is not
   physical power loss. No global installation or operator/cloud action.
+
+## Check private desktop routing against the selected CLI (2026-11-16)
+
+- Status: validated-local. Extend an existing report round trip instead of
+  building a second duplicate research fixture. Use production JobHandoff with
+  a real QProcess and the selected CLI private stdin entry; deliberately disable
+  the child disk route to prove the captured task/model is authoritative.
+- Evidence: source CLI completes once at the synthetic endpoint with separate
+  requested/returned IDs and unchanged disk settings; retained read/cache retry
+  repeat no model completion. Missing handshake and bounded timeout fail safely.
+- Limits: the host desktop component is source, not a frozen GUI. Actual frozen
+  execution, complete report dialogs and live accounts remain separate checks.
+  No cloud/global installation, owner research or account action is authorized.

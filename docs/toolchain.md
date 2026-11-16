@@ -379,5 +379,18 @@ original PDF hash/quotation location, separate requested/returned model IDs,
 retained/exported report equality and no second model completion. One subprocess
 has a45-second deadline; the fixture endpoint bounds request bytes and read time.
 The report records named outcomes in `source_report`. A pass does not certify
-the desktop private handoff, every new report dialog, live scientific support,
-installed-device behavior or hosted synchronization.
+every new report dialog, live scientific support, installed-device behavior or
+hosted synchronization.
+
+Source after 4cdca19 adds `scripts/verify_private_report.py` to that same stage.
+It drives the production `JobHandoff` with a real QProcess and the selected CLI's
+private stdin protocol. The child disk route is deliberately disabled; only the
+captured synthetic task route can succeed. It checks unchanged disk settings,
+no credential in argv/environment/user output, then restores the local fixture
+route for cached CLI retry. Output is bounded to 1 MiB and the owned child is
+stopped at its deadline. Invalid handshake/zero exit and timeout are explicit
+failure cases. Named outcomes are `private_handoff` and
+`child_disk_settings_ignored`. No new command, tool installation or product hook.
+The host desktop component is source code; only the selected CLI may be frozen.
+Delivered e5eb093 artifacts predate this extension. Actual frozen execution of
+the new stage and the full desktop dialog journey remain separate gates.

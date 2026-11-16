@@ -928,5 +928,12 @@ not semantic scientific support. The endpoint rejects unexpected/repeated calls.
 CLI; the verifier contract test also requires the named stage and its result.
 Affected verifier/helper43 pass44.9s stages locally. All three actual frozen CLIs
 now pass this stage at e5eb093/run43776461463; downloaded provenance confirms its
-named outcomes. Existing desktop handoff/widget tests and physical devices remain
-separate from this CLI evidence.
+named outcomes for the original CLI stage.
+
+Source after 4cdca19 extends the same journey with the production desktop
+`JobHandoff`, a real QProcess and private stdin to the selected CLI. Disabled
+child disk settings prove the captured synthetic route is used without modifying
+those settings. Failure-before-handshake and timeout are checked separately.
+The existing e5eb093 artifacts do not contain this extended acceptance evidence.
+The host component remains source code; full frozen desktop dialogs and physical
+devices remain separate from this CLI/private-transport evidence.

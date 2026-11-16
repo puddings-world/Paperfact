@@ -403,6 +403,10 @@ are refused. Legacy v1/v2 services require explicit backup/fresh restore, not
 automatic marker repair. These source guards postdate the e5eb093 installers. See
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
 These local safeguards do not yet provide distributed fencing or durable control-history proof.
+The existing source-report package check now also exercises private desktop-to-CLI
+AI routing against a deliberately disabled child disk configuration; see
+[acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
+This source extension does not update already-delivered installers.
 
 
 New candidate builds verify guarded-history sync and duplicate-listener refusal

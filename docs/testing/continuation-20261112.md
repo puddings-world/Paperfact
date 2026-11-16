@@ -9051,3 +9051,19 @@ installer build or release was performed.
   account/model, cloud resource, new build, app restart or physical device used.
   Joint marker/database rollback, independent control history/anchor and
   cross-host fencing remain open; no power-loss durability claim.
+
+## 2026-11-16 extend the existing report gate to private QProcess routing
+
+- The same source-aware-report verifier now uses production JobHandoff and a real
+  QProcess for initial generation through the selected CLI's private stdin entry.
+  Child disk AI is disabled; exact captured requested/returned models, unchanged
+  disk settings, source/PDF identity, retained read and one-completion cached retry
+  remain assertions. Credentials are absent from argv/environment/user output.
+- Failure cases refuse zero exit without handshake and enforce an outer deadline
+  with owned child shutdown. The Qt startup timeout stays independent (30s), so
+  a short harness deadline cannot race its own identical protocol timer.
+- Initial affected source/helper/protocol/desktop-private/packaged-verifier scope:
+  100 pass45.77s pytest/49.1s stages, CPU bounded. Existing frozen e5eb093 evidence
+  is unchanged and does not prove this source extension. Full frozen GUI dialogs,
+  provider accounts and physical-device/hosted journeys remain separate gates.
+- No new product command/hook, installed tool, build, cloud call or owner data.

@@ -199,7 +199,8 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     monkeypatch.setitem(
         sys.modules, "verify_source_report", types.SimpleNamespace(
             verify=lambda *args: dict(saved=True, quote_located=True, originals_verified=True,
-                                      retained_read=True, cached_without_completion=True),
+                                      retained_read=True, cached_without_completion=True,
+                                      private_handoff=True, child_disk_settings_ignored=True),
         ),
     )
     monkeypatch.setattr(verify, "_instance_handoff", handoff)
@@ -212,6 +213,8 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     assert first == saved and first["passed"] and first["status"] == "passed"
     assert first["active_check"] is first["failure"] is None
     assert first["source_report"]["cached_without_completion"]
+    assert first["source_report"]["private_handoff"]
+    assert first["source_report"]["child_disk_settings_ignored"]
     assert "source-aware-report" in first["completed_checks"]
     assert {
         "import",
