@@ -1266,3 +1266,18 @@ or installed-device acceptance. No global rule is promoted.
 - Limits: the host desktop component is source, not a frozen GUI. Actual frozen
   execution, complete report dialogs and live accounts remain separate checks.
   No cloud/global installation, owner research or account action is authorized.
+
+## Make legacy cleanup honor native offline retention (2026-11-16)
+
+- Status: validated-local. A legacy cleaner offered an offline-selected PDF because
+  it knew only pre-sync paper claims. Add local offline intent and retained native
+  document owners to its preservation boundary, including inactive/superseded
+  records; absence from a current list is not permission to evict historical bytes.
+- Recheck claims at execution, validate exact path/category rather than trusting
+  a preview label, and refuse invalid/unmapped retention metadata before deletion.
+  Keep immutable/history stores outside legacy cleanup until their own complete
+  reference-aware eviction policy exists.
+- Evidence: storage/offline43 pass56.9s stages, with stale preview, retry, unpin,
+  retained originals, forged category and no-deletion-on-invalid-metadata cases.
+- Limits: isolated fixture cleanup only; no real directory, physical filesystem
+  race, installed-device journey, general history GC or global change is authorized.

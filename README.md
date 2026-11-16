@@ -407,6 +407,9 @@ The existing source-report package check now also exercises private desktop-to-C
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
 This source extension does not update already-delivered installers.
+Legacy storage cleanup also preserves device-local offline selections and retained
+managed-original owners, with current-state checks before deletion; see
+[storage retention](docs/toolchain.md#caching-and-disk).
 
 
 New candidate builds verify guarded-history sync and duplicate-listener refusal

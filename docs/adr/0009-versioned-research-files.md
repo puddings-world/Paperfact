@@ -174,8 +174,10 @@ Initialize one baseline binding per artifact slot. Import valid existing histori
 decks into retained version records, not repeated overwrites of the current slot.
 Keep invalid/oversized legacy content recoverable and report it; it must not be
 deleted or marked synchronized. Source hashes that cannot be proven remain unknown.
-`storage.prune` currently reasons about live paper claims and legacy paths, not all
-sync history. Exclude the owned store/version directories until reference-aware
+`storage.prune` now protects device-local offline intent and owners retained in
+native desired/applied/document-intent tables, including inactive/superseded
+records. It still cleans only legacy paths, not the full sync asset history.
+Exclude the owned store/version directories until reference-aware
 retention covers accepted, pending, conflicted, historical and draft-dependent
 assets. No automatic history/blob garbage collection in this slice.
 

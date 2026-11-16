@@ -934,46 +934,56 @@ def cmd_storage(args) -> int:
     """Where the data folder's space goes, by folder and by list."""
     from paper_daily import storage
 
-    with connect() as conn:
-        print("-- data folder --")
-        for name, size, count in storage.folders():
-            print(f"{name:22s} {storage.human(size):>10s}  {count:>7,} files")
-        print("\n-- by list (PDF, figures, text, decks) --")
-        for name, papers, size in storage.by_list(conn):
-            print(f"{name[:22]:22s} {storage.human(size):>10s}  {papers:>7,} papers")
-        chosen = storage.plan(conn, args.cache_days)
-    print(
-        f"\nprunable: {storage.human(chosen.cache_bytes)} of HTTP cache older than "
-        f"{args.cache_days} days, {storage.human(chosen.paper_bytes)} of files of "
-        f"{len(chosen.papers)} unclaimed papers. Run `prune` to see them."
-    )
-    return 0
+    try:
+        with connect() as conn:
+            print("-- data folder --")
+            for name, size, count in storage.folders():
+                print(f"{name:22s} {storage.human(size):>10s}  {count:>7,} files")
+            print("\n-- by list (PDF, figures, text, decks) --")
+            for name, papers, size in storage.by_list(conn):
+                print(f"{name[:22]:22s} {storage.human(size):>10s}  {papers:>7,} papers")
+            chosen = storage.plan(conn, args.cache_days)
+        print(
+            f"\nprunable: {storage.human(chosen.cache_bytes)} of HTTP cache older than "
+            f"{args.cache_days} days, {storage.human(chosen.paper_bytes)} of files of "
+            f"{len(chosen.papers)} unclaimed papers. Run `prune` to see them."
+        )
+        return 0
+    except storage.RetentionReviewError:
+        print("Storage cleanup paused. Review offline selections and managed-original "
+              "mappings before retrying. No cleanup was performed.", file=sys.stderr)
+        return 2
 
 
 def cmd_prune(args) -> int:
     """Delete what can be fetched or rebuilt again; a dry run unless --yes."""
     from paper_daily import storage
 
-    with connect() as conn:
-        chosen = storage.plan(conn, args.cache_days)
-        print(
-            f"HTTP cache older than {args.cache_days} days: {len(chosen.cache):,} files, "
-            f"{storage.human(chosen.cache_bytes)}"
-        )
-        print(
-            f"unclaimed papers (in no list or queue, no notes or analysis): "
-            f"{len(chosen.papers)}, {storage.human(chosen.paper_bytes)}"
-        )
-        for name, paths in chosen.papers.items():
-            kinds = ", ".join(sorted({p.parent.name for p in paths}))
-            print(f"  {name}  ({kinds})")
-        if not args.yes:
-            print("\ndry run: nothing deleted. Add --yes to delete these.")
-            return 0
-        freed = storage.prune(conn, chosen, vacuum=args.vacuum)
-    compacted = " and compacted the database" if args.vacuum else ""
-    print(f"\nfreed {storage.human(freed)}{compacted}")
-    return 0
+    try:
+        with connect() as conn:
+            chosen = storage.plan(conn, args.cache_days)
+            print(
+                f"HTTP cache older than {args.cache_days} days: {len(chosen.cache):,} files, "
+                f"{storage.human(chosen.cache_bytes)}"
+            )
+            print(
+                f"unclaimed papers (in no list or queue, no notes or analysis): "
+                f"{len(chosen.papers)}, {storage.human(chosen.paper_bytes)}"
+            )
+            for name, paths in chosen.papers.items():
+                kinds = ", ".join(sorted({p.parent.name for p in paths}))
+                print(f"  {name}  ({kinds})")
+            if not args.yes:
+                print("\ndry run: nothing deleted. Add --yes to delete these.")
+                return 0
+            freed = storage.prune(conn, chosen, vacuum=args.vacuum)
+        compacted = " and compacted the database" if args.vacuum else ""
+        print(f"\nfreed {storage.human(freed)}{compacted}")
+        return 0
+    except storage.RetentionReviewError:
+        print("Storage cleanup paused. Review offline selections and managed-original "
+              "mappings before retrying. No cleanup was performed.", file=sys.stderr)
+        return 2
 
 
 def cmd_web_assets(args) -> int:

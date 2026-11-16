@@ -7,6 +7,8 @@ fetched or rebuilt again are ever offered for pruning: the cache, and the PDF,
 figures and extracted text of papers nobody claims. A paper is claimed when it is
 in a list, in the queue (not skipped), pinned, or carries anything a reader or an
 analysis produced: notes, highlights, a deep dive, citations, chat, a close reading.
+Local offline intent and retained managed-original owners also keep legacy files;
+this cleaner never garbage-collects the immutable blob/version store.
 """
 
 from __future__ import annotations
@@ -60,8 +62,43 @@ def folders(data_dir: Path = DATA_DIR) -> list[tuple[str, int, int]]:
     return sorted(((n, s, c) for n, (s, c) in sizes.items()), key=lambda r: -r[1])
 
 
+class RetentionReviewError(ValueError):
+    """Cleanup cannot classify retained research safely; no deletion is authorized."""
+
+
 def claimed(conn: sqlite3.Connection) -> set[str]:
-    return {row[0] for row in conn.execute(" UNION ".join(_CLAIMS))}
+    """Keep live research, local offline intent and retained native document owners."""
+    keep = {row[0] for row in conn.execute(" UNION ".join(_CLAIMS))}
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    from paper_daily.workspace_offline import PREFIX
+
+    pinned = conn.execute("SELECT key,value FROM kv WHERE key>=? AND key<?",
+                          (PREFIX, PREFIX + "\U0010ffff")).fetchall()
+    if any(value not in ("true", "false") for _key, value in pinned):
+        raise RetentionReviewError("Review invalid offline intent before cleaning storage")
+    for key, value in pinned:
+        if value == "true":
+            rows = (conn.execute("SELECT local_id FROM research_paper_identity WHERE sync_id=?",
+                                 (key[len(PREFIX):],)).fetchall()
+                    if "research_paper_identity" in tables else [])
+            if len(rows) != 1:
+                raise RetentionReviewError("Review unmapped offline intent before cleaning storage")
+            keep.add(rows[0][0])
+    for table in ("research_document_desired", "research_document_applied",
+                  "research_document_intents"):
+        if table not in tables:
+            continue
+        if "research_paper_identity" not in tables:
+            if conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone():
+                raise RetentionReviewError("Review unmapped managed originals before cleanup")
+            continue
+        # Inactive/superseded originals remain retained history, not eviction permission.
+        rows = conn.execute(f"SELECT m.local_id FROM {table} d LEFT JOIN "
+                            "research_paper_identity m ON m.sync_id=d.paper_id").fetchall()
+        if any(row[0] is None for row in rows):
+            raise RetentionReviewError("Review unmapped managed originals before cleanup")
+        keep.update(row[0] for row in rows)
+    return keep
 
 
 def _paper_bytes(paper_id: str) -> int:
@@ -130,13 +167,34 @@ def prune(conn: sqlite3.Connection, chosen: Plan, vacuum: bool = False) -> int:
     """Delete what `chosen` lists; returns the bytes freed. Checks every path is
     still under the data folder and still unclaimed, since the plan may be stale."""
     keep = {_safe_name(i) for i in claimed(conn)}
-    allowed = [HTTP_CACHE.resolve(), PDF_DIR.resolve(), TEXT_DIR.resolve(), FIGURES_DIR.resolve()]
+    from paper_daily.sync_blobs import _no_link
+
+    def safe(path, root):
+        try:
+            path, root = path.absolute(), root.absolute()
+            if path == root or not path.is_relative_to(root):
+                return False
+            for part in (path, *path.parents):
+                _no_link(part)
+            if not path.resolve().is_relative_to(root.resolve()):
+                return False
+            if path.is_dir():
+                for child in path.rglob("*"):
+                    _no_link(child)
+            return path.exists()
+        except (OSError, ValueError):
+            return False
+
+    targets = [(path, HTTP_CACHE) for path in chosen.cache if path.is_file()]
+    for name, paths in chosen.papers.items():
+        if name in keep or name != _safe_name(name):
+            continue
+        expected = {PDF_DIR / f"{name}.pdf": PDF_DIR,
+                    TEXT_DIR / f"{name}.txt": TEXT_DIR, FIGURES_DIR / name: FIGURES_DIR}
+        targets.extend((path, expected[path]) for path in paths if path in expected)
     freed = 0
-    targets = list(chosen.cache)
-    targets += [p for name, ps in chosen.papers.items() if name not in keep for p in ps]
-    for path in targets:
-        resolved = path.resolve()
-        if not any(resolved.is_relative_to(root) for root in allowed) or not path.exists():
+    for path, root in targets:
+        if not safe(path, root):
             continue
         freed += _size(path)[0]
         if path.is_dir():

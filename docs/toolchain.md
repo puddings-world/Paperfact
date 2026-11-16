@@ -206,6 +206,22 @@ Downloading every PDF in the corpus would be 400-600 GB, which is why fetching i
 lazy. The data folder also holds original notes, edits and analysis: back it up
 privately rather than treating the entire folder as a disposable cache.
 
+`prune` previews legacy cleanup; `--yes` deletes only old HTTP cache files and
+unclaimed PDF/text/figure paths. Current local offline intent and owners in native
+document desired/applied/intent tables keep their legacy files, including inactive
+or superseded records. Claims are re-read at execution, so a preview is not durable
+permission to delete. Invalid or unmapped retention metadata stops before any
+cache deletion. The storage API raises `RetentionReviewError`; CLI commands return
+status 2 with a bounded review message and no traceback. Removing offline intent allows ordinary cleanup only if no other
+research/document owner remains. This is not a synchronized research deletion.
+
+Each supplied entry must match its actual cache/PDF/text/figure category; root
+directories, disguised claimed-paper entries and linked/reparse paths are refused.
+The immutable blob store, versions, pending/history/conflict assets and arbitrary
+research directories are never scanned for deletion by this command. Automatic
+reference-aware eviction, retention expiry and concurrent external filesystem
+replacement are separate lifecycle work; no reclamation guarantee is claimed.
+
 ## Scheduled run
 
 The nightly job runs `refresh` (to pick up newly published papers) then `today` (to

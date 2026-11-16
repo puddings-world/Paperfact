@@ -97,3 +97,108 @@ def test_disk_use_is_reported_per_list(workspace):
     assert rows["Cataract"][0] == 1 and rows["Cataract"][1] > 400
     assert rows["main queue"][0] == 1
     assert storage.human(1536) == "1.5 KB" and storage.human(12) == "12 B"
+
+
+@pytest.mark.parametrize("reason", ["offline", "desired", "applied", "retained-intent"])
+def test_prune_preserves_offline_and_managed_originals_even_after_planning(workspace, reason):
+    from paper_daily.sync_documents import initialize
+
+    conn, root = workspace
+    chosen = storage.plan(conn)
+    portable = "11111111-1111-4111-8111-111111111111"
+    conn.execute("CREATE TABLE research_paper_identity "
+                 "(sync_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)")
+    conn.execute("INSERT INTO research_paper_identity VALUES (?,?)", (portable, "ref:stray"))
+    initialize(conn)
+    if reason == "offline":
+        conn.execute("INSERT INTO kv(key,value) VALUES (?, 'true')",
+                     ("ui.offline.paper." + portable,))
+    elif reason == "desired":
+        conn.execute("INSERT INTO research_document_desired VALUES (?, '{}', 0)", (portable,))
+    elif reason == "applied":
+        conn.execute("INSERT INTO research_document_applied VALUES (?, '{}')", (portable,))
+    else:
+        conn.execute("INSERT INTO research_document_intents VALUES ('old', ?, '{}', 'superseded')",
+                     (portable,))
+    conn.commit()
+    before = {path: path.read_bytes() for path in (root / "pdf" / "ref_stray.pdf",
+                                                   root / "text" / "ref_stray.txt")}
+    assert "ref_stray" not in storage.plan(conn).papers
+    storage.prune(conn, chosen)
+    storage.prune(conn, chosen)
+    assert all(path.read_bytes() == body for path, body in before.items())
+    assert (root / "figures" / "ref_stray" / "p01-Figure_1.png").read_bytes() == b"png"
+
+
+def test_plan_cannot_disguise_claimed_paper_as_cache_or_another_paper(workspace):
+    conn, root = workspace
+    protected = root / "pdf" / "ref_noted.pdf"
+    chosen = storage.Plan(cache=[protected, root / "pdf"],
+                          papers={"unclaimed": [protected, root / "text"]})
+    assert storage.prune(conn, chosen) == 0
+    assert protected.read_bytes() == b"%PDF" * 100
+    assert (root / "text" / "ref_noted.txt").read_text(encoding="utf-8") == "text"
+
+
+@pytest.mark.parametrize("reason", ["unmapped-pin", "invalid-pin", "unmapped-original"])
+def test_invalid_retention_metadata_stops_cleanup_before_deleting_cache(workspace, reason):
+    from paper_daily.sync_documents import initialize
+
+    conn, root = workspace
+    old_cache = root / "httpcache" / "ab" / "old.bin"
+    chosen = storage.Plan(cache=[old_cache])
+    if reason == "unmapped-original":
+        conn.execute("BEGIN")
+        initialize(conn)
+        conn.execute("INSERT INTO research_document_applied VALUES ('unmapped', '{}')")
+    else:
+        conn.execute("INSERT INTO kv(key,value) VALUES ('ui.offline.paper.unknown', ?)",
+                     ("invalid" if reason == "invalid-pin" else "true",))
+    conn.commit()
+    before = (root / "pdf" / "ref_stray.pdf").read_bytes()
+    with pytest.raises(ValueError, match="Review"):
+        storage.prune(conn, chosen)
+    assert old_cache.read_bytes() == b"cached"
+    assert (root / "pdf" / "ref_stray.pdf").read_bytes() == before
+
+
+def test_removing_offline_intent_restores_ordinary_unclaimed_cleanup(workspace):
+    conn, root = workspace
+    conn.execute("CREATE TABLE research_paper_identity "
+                 "(sync_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)")
+    conn.execute("INSERT INTO research_paper_identity VALUES ('portable', 'ref:stray')")
+    conn.execute("INSERT INTO kv(key,value) VALUES ('ui.offline.paper.portable', 'true')")
+    conn.commit()
+    assert "ref_stray" not in storage.plan(conn).papers
+    conn.execute("DELETE FROM kv WHERE key='ui.offline.paper.portable'")
+    conn.commit()
+    chosen = storage.plan(conn)
+    assert "ref_stray" in chosen.papers
+    assert storage.prune(conn, chosen) > 0
+    assert not (root / "pdf" / "ref_stray.pdf").exists()
+
+
+@pytest.mark.parametrize("action,yes", [("storage", False), ("prune", False), ("prune", True)])
+def test_cli_pauses_invalid_retention_with_actionable_message(workspace, monkeypatch, capsys,
+                                                            action, yes):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from paper_daily import cli
+
+    conn, root = workspace
+    conn.execute("INSERT INTO kv(key,value) VALUES ('ui.offline.paper.unmapped', 'true')")
+    conn.commit()
+
+    @contextmanager
+    def connect():
+        yield conn
+
+    monkeypatch.setattr(cli, "connect", connect)
+    monkeypatch.setattr(storage, "folders", lambda: [])
+    result = getattr(cli, "cmd_" + action)(SimpleNamespace(cache_days=30, yes=yes, vacuum=False))
+    assert result == 2
+    message = capsys.readouterr().err
+    assert "Review offline selections" in message and "No cleanup was performed" in message
+    assert "Traceback" not in message and "unmapped" not in message
+    assert (root / "httpcache" / "ab" / "old.bin").read_bytes() == b"cached"

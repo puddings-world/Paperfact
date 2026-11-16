@@ -9067,3 +9067,26 @@ installer build or release was performed.
   is unchanged and does not prove this source extension. Full frozen GUI dialogs,
   provider accounts and physical-device/hosted journeys remain separate gates.
 - No new product command/hook, installed tool, build, cloud call or owner data.
+
+## 2026-11-16 preserve offline originals during legacy cleanup
+
+- Reproduced a selected offline paper still being offered by storage.plan before
+  the fix. Current claims now include device-local offline intent and native
+  desired/applied/document-intent owners, including inactive/superseded records.
+- Cleanup rechecks claims at execution, rejects disguised cache/paper entries and
+  root/linked path scopes, and stops before deletion on invalid/unmapped retention
+  metadata. Explicit unpin restores ordinary cleanup only without another owner.
+  Immutable blob/version/history stores remain outside this cleaner.
+- Storage/offline43 pass53.47s pytest/56.9s stages with the bounded CPU runner.
+  Storage cases cover stale preview, repeated prune, retained original states,
+  explicit unpin and no deletion on invalid retention metadata; existing offline
+  fixtures cover actual local intent and byte-readiness behavior. Native symlink
+  mutation races, actual installed-device cleanup and complete automatic asset
+  eviction are not proven by these fixtures.
+- No real cleanup or vacuum was run, no research directory or account was touched,
+  and no native artifact/release/cloud deployment was created.
+
+Final storage/CLI selection25 passes2.56s pytest/5.8s stages, including preview
+and confirmed cleanup returning status2 with bounded review guidance and no
+file deletion on invalid retention metadata. This overlaps the storage/offline
+selection above and is not an additional feature count.
