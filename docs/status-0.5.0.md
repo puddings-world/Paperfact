@@ -18,7 +18,9 @@ open. [Contract and limits](sync-operations.md#observed-native-pdf-replacement).
 Source after8252010 additionally lets reviewed package import restore missing
 private PDF/figure/artifact bytes from complete verified included files. Preview
 still commits no research; confirmation retains observed atomic publication.
-This newer change is not yet in the installers below.
+Enrolled package import also preserves explicit nullable list descriptions without
+changing the legacy missing-field default or implicit receiver-preservation policy.
+These newer changes are not yet in the installers below.
 
 ## Current deliverable
 

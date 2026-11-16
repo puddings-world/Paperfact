@@ -170,7 +170,8 @@ Any other file host still works: save the ZIP, upload it, and use
 **製作並複製分享連結…**. Your colleague chooses **網址匯入…**, previews the
 package, and confirms the import.
 In v0.5 development, a reviewed import can restore missing cached PDF/figure
-bytes from its verified included files; preview still does not save research.
+bytes from its verified included files; list descriptions retain their exact
+values. Preview still does not save research.
 [Enrolled import contract](docs/enrolled-package-import.md).
 [Share by link →](docs/sharing.md) · [Package contents →](docs/colleague-handoff.md)
 

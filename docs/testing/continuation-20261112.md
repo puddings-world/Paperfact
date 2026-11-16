@@ -10073,3 +10073,45 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Default critical14 passed17.56s (28.5s total, privacy8.0s/Ruff0.4s).
 - Docs60 passed6.99s (20.3s total, privacy10.9s/Ruff0.6s); whitespace clean.
   Scoped checks pass; no historical exhaustive or new physical-device claim.
+
+## 2026-11-16 exact list descriptions at enrolled package intake
+
+- Previous turn committed67c7c6f with exact package-byte recovery; runtime now
+  advances the lossless-list requirement at the same reviewed import boundary.
+  Inspected enrollment/open-copy behavior: the existing flow opens a distinct
+  process and retains source/drafts, with current-job/cancellation guards already
+  documented. No new switching/maintenance framework was justified by that read.
+  It is not new physical or frozen dialog acceptance.
+- Existing v2 capture/projection/PWA/enrollment preserve null, empty, whitespace
+  and nonempty list notes. `PackageImporter.prepare` alone used `get("note") or ""`,
+  losing explicit null. Actual import reproduction failed1 in4.04s (14.7s total,
+  privacy8.5s/Ruff0.6s): SQL stored empty text instead of the supplied null.
+- The adapter now uses the existing empty-text default only if the optional old
+  package field is absent. Explicit null and strings pass through exactly.
+  Existing receiver notes remain by default; reviewed replacement can set null,
+  with exact retry preserving the same result/outbox. No wire version, schema,
+  mobile cache, command or provider behavior changes.
+- Focused9 passed29.48s (42.8s total, privacy10.8s/Ruff0.4s). Six new cases cover
+  four values through actual import/retry/peer/re-export, legacy missing-field
+  compatibility and receiver keep/explicit replacement. Three unchanged cases
+  retain closed v2 validation, empty-list behavior and wrong-PDF/research protection.
+  Actual red/green reports retained under ignored build/package-list-note-evidence.
+- Checked the same `get("note")` pattern across the current source with literal
+  argument-list search: legacy bundle persistence already retains null; remaining
+  list-overview coercion is display-only. No other persisted adapter was changed.
+- Existing sequential300s, two-logical-processor/25%/below-normal resource cap
+  retained. No owner research, paid/model/network call, credentials, global
+  setting, new worktree/worker or competing process touched. Curated CI53 unchanged;
+  no historical full-suite run or test weakening. Existing local-integration exact
+  value invariant applies; evidence extends nullable-list contract, not a new
+  global skill or installation.
+- README/import/domain/test-map/current status updated. Current delivered native
+  candidates remain8252010; newer package-byte and list-value changes are source
+  only until the next coherent candidate. Asked for actual Mac8252010 offline
+  import/PDF/note/deck results; unanswered is not acceptance.
+- Full v0.5 target remains open: complete supported adoption/file lifecycle,
+  independent authority anchoring/fencing, hosted GCP/HTTPS enrollment/recovery,
+  frozen new GUI/provider/vault/IME and physical Windows/Mac/phone acceptance.
+- Default critical14 passed16.45s (27.5s total, privacy8.2s/Ruff0.5s).
+- Docs60 passed7.54s (18.9s total, privacy9.0s/Ruff0.6s); whitespace clean.
+  Scoped source/contract checks pass; historical exhaustive and physical gates remain unrun.

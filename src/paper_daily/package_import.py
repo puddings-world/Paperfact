@@ -536,7 +536,7 @@ class PackageImporter:
             add(
                 "list",
                 list_id,
-                {"name": manifest["list"]["name"], "note": manifest["list"].get("note") or ""},
+                {"name": manifest["list"]["name"], "note": manifest["list"].get("note", "")},
                 "lists",
             )
             from paper_daily.sync_schema_v2 import membership_id

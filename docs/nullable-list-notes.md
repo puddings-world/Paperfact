@@ -4,7 +4,12 @@ The persisted list schema permits SQL NULL for `lists.note`, including ordinary
 unbound package imports. The version-2 list payload now accepts exactly a bounded
 string or explicit JSON null. Capture preserves the original value; projection,
 peers, package export and complete recovery preserve it again. NULL, empty text
-and whitespace text remain distinct. This supersedes the nullable-list refusal
+and whitespace text remain distinct. Newer source after candidate8252010 also
+preserves these values at the enrolled package-import boundary; it no longer
+coerces explicit null to empty text. Legacy packages missing the optional note
+field keep their existing empty-text import default. Existing receiver descriptions
+remain unless the reviewed import explicitly replaces them.
+This supersedes the nullable-list refusal
 noted in the initial imported-source enrollment slice.
 
 No version-1 behavior changes: v1 still requires text. No new fields or implicit
@@ -28,3 +33,8 @@ a captured rename, peer sync, package export and detached recovery. A separate
 actual authenticated HTTP/PWA fixture exercises retry/offline persistence with
 no model calls or mobile writes. Unsupported original sources, decks, history
 formats and unknown files retain their existing refusal gates.
+
+`tests/test_package_list_notes.py` covers actual enrolled import, exact request
+retry, a separate peer and re-export for all four values, plus missing-field
+compatibility and reviewed receiver replacement. Existing closed v2 validation
+continues to reject non-text/non-null values; no schema or PWA change is needed.

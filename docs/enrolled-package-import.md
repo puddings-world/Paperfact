@@ -60,7 +60,10 @@ list membership/order, notes, typed research content (including reference edges,
 list pins, reading goals, linked Q&A, and SQL-backed reading annotations), current
 PDFs, immutable original PDFs, and editable notes/guide decks with their used PNG
 assets. Semantic evidence IDs, quotes, original source hashes and original URLs
-are retained. Hashless historical explanation remains provenance-unknown; importing
+are retained. Explicit list-note null, empty text, whitespace and nonempty text
+remain distinct through import, retry, peer synchronization and re-export. Older
+packages lacking the optional note field retain the existing empty-text default.
+An existing receiver note is preserved unless replacement is explicitly reviewed. Hashless historical explanation remains provenance-unknown; importing
 beside a PDF does not turn it into verified analysis.
 
 Included bytes must pass the existing document/artifact verifiers. Original
