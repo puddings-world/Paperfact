@@ -160,8 +160,8 @@ See [document transfer](sync-transfers.md) for recovery and acceptance evidence.
 
 `repdf <paper_id> --file <path>` and `repdf <paper_id> --url <url>` now use the
 shared attachment action in a completely enrolled workspace with registered,
-owned reader/blob storage. This is explicit replacement, not automatic download
-queue enrollment. A partially enrolled or unavailable store refuses replacement.
+owned reader/blob storage. First-original list prefetch shares this boundary as
+described below. A partially enrolled or unavailable store refuses replacement.
 Unenrolled workspaces retain the existing alias/reanchor behavior.
 
 The native operation captures the paper lifetime, original graph head, reader
@@ -178,9 +178,9 @@ an authority or enable hosting.
 
 Worker-level API in `native_primary_publication`:
 
-- `observe(database, local_id, *, ticket=None, current=lambda: True)` captures the
+- `observe(database, local_id, *, ticket=None, current=lambda: True, first_only=False)` captures the
   source before external work; returns `None` only for an unenrolled workspace.
-- `prepare(observation, path, *, request_id=None)` stages an explicit local PDF;
+- `prepare(observation, path, *, request_id=None, pdf_url=None)` stages an explicit local PDF;
   callers may retain the returned prepared action for exact retry.
 - `run(prepared)` publishes through the shared attachment transaction. Repeated
   activation of the same running action is refused; exact completed retry returns
@@ -188,9 +188,43 @@ Worker-level API in `native_primary_publication`:
   explicit replacement, not a persistent retry of an earlier command.
 
 This source change is not in the currently delivered1875db5 native installers.
-Frozen CLI acceptance, physical Mac replacement and download-queue adoption remain
-separate gates. No live download, AI call or owner database is used by regression
+Frozen CLI acceptance and physical Mac replacement remain separate gates.
+No live download, AI call or owner database is used by regression
 fixtures (`tests/test_native_primary_publication.py`).
+
+## First-original background downloads
+
+List prefetch (`pdf_downloads.download`) captures its database native identity at
+entry, before waiting for the existing per-paper process lock. It uses the same
+native publisher for a fully enrolled paper with no managed-document history and
+no legacy file, with owned reader/blob storage already configured. The streamed
+PDF stays in an owned temporary directory until verification and publication.
+Real byte progress remains visible; verification is indeterminate until the queue
+reports completion. No arbitrary percentage is assigned to staging or SQL work.
+
+`first_only=True` refuses an original that appeared before admission; the observed
+base is rechecked after streaming and in the final transaction. A newly supplied
+legacy PDF, changed workspace/path or replaced database also invalidates pending
+publication. Existing aliases stay legacy; existing managed originals use their
+verified bytes, and unavailable managed versions require workspace attachment
+transfer rather than searching for another PDF. This is not read-time migration
+of all legacy files or adoption of `fetch.ensure_pdf`'s remaining legacy fallback.
+
+When `pdf_url` is supplied, publication includes the successful candidate's ordinary
+paper-metadata operation and clears the local PDF-failure cache in the same SQL
+transaction as the original/outbox/receipt. Local URL projection changes only that
+column, preserving rich existing local author data. The complete ordinary paper
+payload travels in the existing shared graph; this adds no new wire entity. Failed
+or cancelled publication rolls all these changes back. A receipt retry does not
+re-clear a later failure cache or overwrite a later metadata edit. Final publication
+is the completion boundary; cancelling after a successful commit does not undo it.
+
+`tests/test_native_pdf_downloads.py` covers actual mocked HTTP streaming, alternate
+sources, atomic metadata/byte publication, cancellation, failure after URL write,
+source/workspace/lock races, independent manual originals, retained rich metadata,
+exact retry and managed-byte recovery boundaries. Existing queue/stream tests
+retain their concurrency, deduplication, progress and partial-file assertions.
+No external service/provider, owner research, or physical-device acceptance is used.
 
 ## Deletion boundary: remove from a list versus erase a paper
 

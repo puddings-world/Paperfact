@@ -9707,3 +9707,41 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   adoption, physical Mac replacement and full frozen GUI acceptance remain open.
 - Final integration gates:critical14 passed12.57s (23.1s total); docs60
   passed4.21s (10.3s total). Privacy/Ruff and whitespace checks passed.
+
+## 2026-11-16: first-original prefetch uses native publication
+
+- List prefetch previously wrote a never-managed enrolled paper's first PDF to a
+  legacy alias. It now captures the entry database identity before waiting on the
+  existing process lock, then admits only a still-missing first original through
+  native_primary_publication. Stream progress is real bytes; staging/publication
+  remain indeterminate until success. Existing managed missing versions require
+  attachment synchronization; existing legacy aliases are not auto-migrated.
+- The optional successful URL publishes an ordinary paper operation with original
+  metadata/outbox/verified binding/receipt in one SQL transaction. Its narrow local
+  URL projection preserves pre-existing rich author metadata. The PDF-failure cache
+  clears in that transaction; a completed receipt retry never clears a later error.
+  No new wire entity, authority, database, transport or persistent worker.
+- Captured admission refuses later paper/source/path/database replacement, supplied
+  legacy original and cancellation before final publication. Failure after the URL
+  operation rolls back PDF binding, URL, outbox, receipt and failure-cache changes.
+  Unreferenced verified staging bytes may remain private cache; SQL rollback is not
+  a claim of filesystem rollback. Cancellation after commit does not undo research.
+- Added12 cases including actual mocked HTTP streaming with an alternate source,
+  byte readback/reopen, stream/bind cancellation, source/workspace/lock races,
+  independent manual PDF, atomic failure after URL write, retained legacy/rich
+  metadata, exact retry and managed-byte recovery refusal. These use synthetic
+  workspaces/responses. Real HTTP credentials/providers and owner research unused.
+- Final focused selection41 passed60.05s (89.6s total including27.2s privacy scan);
+  combines12 new,9 prior native-publication and20 existing queue/stream cases.
+  Earlier40-case selection overlaps and is not additional coverage. Privacy/Ruff
+  passed. Same300s/two-processor/25% CPU governor, one local check at a time.
+- Added only two representatives (first-original success and post-URL rollback)
+  to the existing three-minute per-OS authority/original gate; no old guard or
+  assertion removed and no new CI job/budget. Native packaging still uses existing
+  frozen acceptance; this addition is source evidence, not a frozen-GUI certificate.
+- Reapplied existing agentic-local-integration pattern; project-local evidence
+  validates observation before external work and one commit owner. No new global
+  skill or copied rules. Reader-fetch legacy fallback and remaining writer adoption,
+  hosted deployment, physical device and full frozen GUI gates remain open.
+- Final integration gates:critical14 passed13.02s (17.6s total); docs60
+  passed3.94s (10.1s total). Privacy/Ruff and whitespace checks passed.

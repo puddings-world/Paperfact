@@ -140,6 +140,8 @@ jobs:
           tests/test_offline_verification_ui.py::test_completed_worker_cannot_deliver_stale_offline_success
           tests/test_storage.py::test_prune_preserves_offline_and_managed_originals_even_after_planning
           tests/test_storage.py::test_claim_committed_during_cleanup_keeps_the_whole_paper[note]
+          tests/test_native_pdf_downloads.py::test_alternate_first_pdf_publishes_url_bytes_and_cache_atomically
+          tests/test_native_pdf_downloads.py::test_failure_after_url_operation_rolls_back_bytes_url_outbox_and_cache
 
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact

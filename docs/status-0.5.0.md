@@ -10,8 +10,11 @@ acceptance. Historical iterations belong in the
 Source-only PDF writer adoption: `repdf` now observes the enrolled workspace's
 original before download/staging and uses shared versioned attachment publication.
 Prior originals/anchors remain retained; stale/failed publication is refused.
-This is not yet included in1875db5 installers and does not enroll the download
-queue. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
+First-original list prefetch now uses the same native boundary, including atomic
+successful-URL publication. Existing legacy files are not migrated automatically;
+managed missing originals still use workspace attachment transfer. These source
+changes are not yet included in1875db5 installers. Reader-fetch fallback and
+remaining writer enrollment still require work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
 
 ## Current deliverable
 

@@ -41,7 +41,8 @@ not allow third-party tools to use Antigravity's subscription login.
 [Account and model help](docs/ai-setup.md)
 
 For an enrolled v0.5 workspace, replacing an original with `repdf` keeps prior
-PDF versions and their source references. See [PDF replacement](docs/sync-operations.md#observed-native-pdf-replacement).
+PDF versions and their source references. First-original background downloads also
+use verified versioned storage. See [PDF replacement and downloads](docs/sync-operations.md#observed-native-pdf-replacement).
 
 ## Start here
 

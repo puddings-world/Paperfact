@@ -1,6 +1,7 @@
 """Bounded PDF prefetch, atomic files and paper-keyed observable job states."""
 
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -13,7 +14,7 @@ from urllib.parse import urlsplit
 import httpx
 import pymupdf
 
-from paper_daily import pdf_sources
+from paper_daily import pdf_sources, store
 from paper_daily.config import PDF_DIR, USER_AGENT
 from paper_daily.fetch import _safe_name
 from paper_daily.http import FetchError, _throttle
@@ -140,20 +141,42 @@ def download(paper_id, progress, cancel):
     from paper_daily.fetch import capture_document, document_current
 
     check_cancel(cancel)
+    database = Path(store.DB_PATH).resolve()
+    info = database.stat()
+    identity = info.st_dev, info.st_ino
+    require_missing_alias = False
+    dest = PDF_DIR / (_safe_name(paper_id) + ".pdf")
+
+    def current():
+        check_cancel(cancel)
+        if Path(store.DB_PATH).resolve() != database:
+            return False
+        try:
+            now = database.stat()
+        except OSError:
+            return False
+        return (now.st_dev, now.st_ino) == identity and not (
+            require_missing_alias and dest.exists()
+        )
+
+    def check_workspace():
+        if not current():
+            raise FetchError("Download workspace changed; retry in the selected workspace")
+
     document = capture_document(paper_id, legacy_root=PDF_DIR)
-    check_cancel(cancel)
+    check_workspace()
     if document is not None:
         if not document_current(document):
             raise FetchError("Managed PDF is unavailable; use workspace attachment synchronization")
         return document.path
-    with connect() as conn:
+    with connect(path=database) as conn:
         record = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
     if record is None:
         raise FetchError("論文已不在資料庫中。")
     row = dict(record)
-    dest = PDF_DIR / (_safe_name(paper_id) + ".pdf")
     progress("waiting", 0, None, "等待同篇下載工作")
     with paper_lock(dest, cancel):
+        check_workspace()
         document = capture_document(paper_id, legacy_root=PDF_DIR)
         check_cancel(cancel)
         if document is not None:
@@ -164,6 +187,17 @@ def download(paper_id, progress, cancel):
             return document.path
         if dest.exists():
             return dest
+        from paper_daily import native_primary_publication as native
+
+        require_missing_alias = True
+        try:
+            observed = native.observe(database, paper_id, current=current, first_only=True)
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            raise FetchError(
+                "PDF storage is unavailable or changed; review workspace storage"
+            ) from exc
+        if observed is None:
+            require_missing_alias = False
         attempted, reasons = set(), []
 
         def attempt(url):
@@ -175,6 +209,29 @@ def download(paper_id, progress, cancel):
             if url in attempted:
                 return None
             attempted.add(url)
+            if observed is not None:
+                try:
+                    observed.live()
+                except (ValueError, OSError, sqlite3.Error) as exc:
+                    raise FetchError("PDF workspace changed; retry the download") from exc
+                with tempfile.TemporaryDirectory(prefix="paperfact-download-") as temporary:
+                    staged = Path(temporary) / "selected.pdf"
+                    try:
+                        stream_pdf(url, staged, progress, cancel)
+                    except (FetchError, httpx.HTTPError) as exc:
+                        reasons.append(
+                            str(exc) if isinstance(exc, FetchError) else "Download failed"
+                        )
+                        return None
+                    try:
+                        prepared = native.prepare(observed, staged, pdf_url=url)
+                        progress("verifying", prepared.manifest.size, prepared.manifest.size, "")
+                        native.run(prepared)
+                    except (ValueError, OSError, sqlite3.Error) as exc:
+                        raise FetchError(
+                            "PDF original or workspace changed; retry the download"
+                        ) from exc
+                    return observed.store._path(prepared.manifest)
             try:
                 result = stream_pdf(url, dest, progress, cancel)
             except (FetchError, httpx.HTTPError) as exc:
@@ -184,7 +241,7 @@ def download(paper_id, progress, cancel):
                 raise FetchError(
                     "Document ownership changed; retry through workspace synchronization"
                 )
-            with connect() as conn:
+            with connect(path=database) as conn:
                 conn.execute("UPDATE papers SET pdf_url=? WHERE id=?", (url, paper_id))
                 conn.execute("DELETE FROM kv WHERE key=?", (f"analyze.failed.pdf.{paper_id}",))
             return result
@@ -194,7 +251,7 @@ def download(paper_id, progress, cancel):
                 return result
         progress("resolving", 0, None, "正在查找開放原文來源")
         try:
-            for url in pdf_sources.discover(row, lambda: check_cancel(cancel)):
+            for url in pdf_sources.discover(row, check_workspace):
                 if result := attempt(url):
                     return result
                 progress("resolving", 0, None, "嘗試其他原文來源")
