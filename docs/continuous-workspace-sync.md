@@ -2,11 +2,35 @@
 
 Status: local development candidate; not a hosted service or production login.
 
-After verifying a matching enrolled workspace/device, enable **Sync this workspace
-automatically during this app session**. The toggle is off by default. Connecting
-alone never sends research; closing settings preserves the explicit session choice.
-Restarting the app requires reconnecting and opting in again. Credentials and this
-choice stay in process memory, outside research, packages, backups and settings.
+## Choose session-only or remembered synchronization
+
+A reachable private sync service and an enrolled workspace/device are required.
+The current candidate does not include a deployed service. AI or Google login
+alone does not connect a research workspace.
+
+- **Sync now:** explicitly exchange changes after verifying the connection.
+- **Sync this workspace automatically during this app session:** enable the
+  existing background worker until stopped or the app closes. Off by default.
+- **Reconnect and sync when this workspace opens on this device:** separately
+  opt in to remembering the exact verified connection in the native credential
+  store and reconnecting automatically for this local workspace. It enables
+  continuous sync now and on later opens after successful authentication.
+
+Remembering a connection alone does not authorize background synchronization.
+Without startup permission, reconnect explicitly after reopening the app.
+Clearing startup permission stops automatic synchronization and future startup
+reconnects. Disconnect ends this session; it does not remove startup permission.
+See [remembered connections](remembered-sync-connection.md) for the exact controls,
+native-store failure behavior and workspace-copy isolation.
+
+For another computer, use [desktop pairing](sync-device-management.md#desktop-pairing-and-retry)
+and join into a new folder. The join option **Keep the new workspace synchronized
+when I open it on this device** grants startup permission only for that new folder.
+Neither pairing nor joining switches or uploads the original local workspace.
+Without an available sync service, use reviewed list-package export/import;
+that creates an independent snapshot rather than ongoing synchronization.
+
+## Background behavior
 
 One background worker uses the same guarded SyncSession as manual sync and selected
 downloads. New committed local journal entries request a debounced pass,
@@ -28,21 +52,22 @@ cannot redirect an old worker. Stop/close can retain an already committed server
 prefix; retry deduplicates it. Window close waits for the worker, and updater
 restart preparation stops sync before proceeding.
 
-This does not implement secure remembered login, device issuance, production
-hosting, first-enrollment adoption or cache eviction. Test credentials, fixture
-authorities and copied workspaces were used; no paid provider or research upload.
+The controller does not itself provision a server, issue the first device,
+complete arbitrary legacy enrollment or evict cached files. Remembered startup
+and trusted-peer pairing are implemented by the linked shared connection flows;
+native vault prompts, hosted service operation and installed two-device acceptance
+remain separate release gates. Tests use fixture workspaces and credentials,
+not the owner's research or paid providers.
 
-Focused evidence: 61 tests passed in 128.21 seconds, including the new controller,
-existing connection/dialog/session behavior, actual captured journal/authority,
-offline retry, revocation, session replacement, source change, cancellation,
-repeated activation, close/restart and bilingual labels. A combined full gate
-is still required before commit.
+## Evidence and remaining acceptance
 
-
-Merged evidence: 85 controller/session/dialog/claim-entry cases passed in 83.44s;
-23 controller/status cases passed in 64.32s after marking new edits Waiting and
-labeling historical counters. These overlap with the isolated selection above.
-No complete-gate claim is made by those focused runs.
+The controller checks cover local save wakeup, offline retry, duplicate activation,
+connection replacement, cancellation and closing with work pending. These protect
+the shared worker behavior; they do not prove hosted or installed-device success.
+See [current delivery status](status-0.5.0.md) and the
+[remembered-connection evidence](remembered-sync-connection.md#evidence-and-remaining-gates)
+for scoped results. Historical overlapping case counts are not coverage percentages
+and are not a reason to rerun every suite after a documentation change.
 
 Automatic-sync status includes unfinished attachment work: **Files pending**
 continues bounded passes; **Retrying files** uses backoff after file failures.
