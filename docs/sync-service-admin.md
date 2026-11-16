@@ -164,8 +164,22 @@ Library APIs: `buildMobile({output, sourceRoot, version, onProgress})` and
 `verifyMobile(directory, {expectedId})`, exported by `scripts/build_mobile.mjs`.
 Defaults use the repo's mobile root and `__version__`; progress reports a staged
 file count without file contents. Format `paperfact.mobile-artifact.v1` has limits
-of 256 files, 16 MiB per asset and 64 MiB total. Builds over identical input bytes
-are deterministic; different checkout line endings can legitimately change IDs.
+of 256 files, 16 MiB per source/exported asset and 64 MiB total raw/exported bytes.
+First-party runtime text is decoded as strict UTF-8, preserving Unicode and any
+accepted BOM, then exported with CRLF normalized to LF. With the same version and
+vendor bytes, LF/CRLF source checkouts now produce identical assets, manifest,
+proxy map and worker/cache IDs. `vendor/` files remain byte-exact; no source file
+is rewritten. Bare CR and Unicode normalization are not performed. The final
+source-change check still compares raw source observations, so a newline-only edit
+during staging refuses completion. `invalid_asset_encoding` means a first-party
+asset is not valid UTF-8: correct that source and retry, rather than altering vendor
+files or accepting replacement characters.
+
+Older artifacts, including CRLF-built content-derived and numeric-cache variants,
+remain verified against their original exact bytes and trusted IDs. Verification
+does not normalize an artifact or repair a mismatched hash. The export normalization
+is new source behavior, not a claim that every supported OS was physically built
+and accepted with it.
 
 The Release workflow runs the focused artifact cases and builds/verifies
 this shared artifact once (Windows job,

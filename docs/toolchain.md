@@ -289,6 +289,9 @@ operator acceptance remain separate from static/fixture checks.
 only: no bundler or npm dependencies. Exported worker/cache identities derive from
 asset content; verification also checks the identity against the actual worker.
 The source worker remains unchanged and older numeric-cache exports stay readable.
+Export normalizes first-party CRLF to LF with strict UTF-8 and BOM preservation;
+`vendor/` bytes stay opaque and exact. Raw source observations still reject edits
+during export, even newline-only edits. Older CRLF-built artifacts remain verifiable.
 CI supplies Node through setup-node. Build
 with `node scripts/build_mobile.mjs --output build/mobile-web`, then verify against
 the trusted content ID using `--verify build/mobile-web --expect SHA256`. The

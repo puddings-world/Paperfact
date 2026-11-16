@@ -56,6 +56,14 @@ function privateRecord(name,data){
   (value?.format===1&&typeof value.token==='string')||value?.installed?.client_secret||value?.web?.client_secret)
   fail('private_json_record');
 }
+function publicAssetBytes(name,data){
+ // Git checkout line endings must not change first-party runtime/cache identity.
+ if(name.startsWith('vendor/'))return data;
+ try{
+  const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(data);
+  return Buffer.from(text.replace(/\r\n/g,'\n'));
+ }catch{fail('invalid_asset_encoding');}
+}
 function paths(){
  const names=SHELL.map(name=>name==='./'?'index.html':assetPath(name.startsWith('./')?name.slice(2):''));
  names.push('sw.mjs');const unique=[...new Set(names)].sort(sort);
@@ -141,8 +149,10 @@ export async function buildMobile({output,sourceRoot=SOURCE,version=null,onProgr
  version??=(await readFile(VERSION,'utf8')).match(/^__version__ = "([^"]+)"$/m)?.[1];
  const staged=[],files=[];let total=0;
  for(const name of paths()){
-  const data=await bytes(source,name);privateRecord(name,data);total+=data.length;if(total>MAX_TOTAL)fail('asset_limit');
-  staged.push({name,data,sourceData:data});files.push({path:name,size:data.length,sha256:hash(data)});
+  const sourceData=await bytes(source,name);privateRecord(name,sourceData);
+  total+=sourceData.length;if(total>MAX_TOTAL)fail('asset_limit');
+  const data=publicAssetBytes(name,sourceData);
+  staged.push({name,data,sourceData});files.push({path:name,size:data.length,sha256:hash(data)});
  }
  const worker=staged.find(row=>row.name==='sw.mjs'),shell=shellIdentity(version,files,worker.data);
  worker.data=Buffer.from(workerTemplate(worker.data).normalized.toString('utf8').replace(NORMALIZED_CACHE,"const CACHE = '"+shell+"';"));

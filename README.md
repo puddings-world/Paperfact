@@ -283,8 +283,9 @@ installed-device acceptance remain open.
 The [PWA deployment artifact](docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
 is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 `node scripts/build_mobile.mjs --verify DIR --expect SHA256` (`--help` lists options).
-Exported offline-shell cache identities follow asset content automatically; existing
-numeric-cache artifacts remain readable. This does not deploy a website or change research data.
+Exported cache identities follow asset content, with first-party LF/CRLF checkouts
+producing the same bytes; vendor assets stay exact. Older artifacts remain readable.
+This does not deploy a website or change research data.
 The mobile PDF view now offers [explicit browser storage protection](docs/mobile-0.5.md#browser-offline-storage-protection)
 with current status, denied/unsupported states and no automatic permission request.
 This is separate from downloading verified files and is newer than the1875db5 mobile artifact.

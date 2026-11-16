@@ -10484,3 +10484,45 @@ stay in the existing acceptance/continuation records.
   privacy/Ruff/usage inputs before commit. External gates remain unchanged.
 - Final docs60 passed4.33s, total9.3s; privacy3.4/Ruff0.3s and
   CRLF-aware whitespace passed. Existing native/PWA evidence reused by scope.
+
+
+## 2026-11-16: reproducible first-party PWA bytes across checkout line endings
+
+- Controlled isolated LF/CRLF copies of the same runtime assets reproduced two
+  artifact IDs before the change:3fb8c867b3fb9cb210ed0474d30f40fd7d376fedd9bbf8e467432719967c959c
+  versus04a0d8f076b6e19cf8763cc47a81b790ca0a9821633f3f9dd9d10e1ec7302709.
+  These are synthetic fixture IDs, not published artifacts. Existing8 passed,
+  new1 failed;10.521s Node/14.3s complete focused check. The old operator contract
+  explicitly permitted newline-based variation; this intentionally improves it.
+- build_mobile now normalizes only exported first-party CRLF to LF after strict
+  UTF-8 validation, retaining Unicode/BOM bytes. Vendor assets remain opaque.
+  Manifest/cache identities use exported bytes; source-change checks use original
+  raw observations. Existing raw-source/per-file/total bounds remain in force.
+  No source, installed app, research, vendor file or deployed website is rewritten.
+- Focused11 passed13.769s Node/17.6s complete check, privacy3.4/Ruff0.4s. New tests
+  prove LF/CRLF identity for every exported asset/manifest/map, unchanged source,
+  BOM/Unicode preservation and opaque synthetic CRLF vendor text plus actual PDF.js
+  bytes. Invalid first-party UTF-8 refuses before creating output. A newline-only
+  edit after staging still refuses the completion marker, and new-path retry uses
+  the normalized bytes. Earlier source-edit/corruption/identity/private-file/
+  filesystem controls remain; no assertion was weakened.
+- The actual previous30b5776 CRLF-built artifact still verifies under its trusted
+  5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246 ID,
+  all54 assets/3983781 bytes. Verification was not changed to normalize old bytes.
+- Local new export verifies54 assets/3976520 bytes; content ID
+  d207093600d81ba4c23576db30d32746d5ff859902b5f0c22968fc7c67ebc679.
+  All4 real vendor files match current reviewed source byte-for-byte. Combined
+  previous/current artifact inspection0.984s under the existing CPU governor.
+  This is controlled source-fixture and local-artifact evidence, not actual OS
+  runner parity, HTTPS delivery, Safari acceptance or a new native installer.
+- Evidence: ignored build/pwa-newline-evidence. One job at a time, existing two-core/
+  25-percent/300-second local budgets. No infrastructure, accounts, broad temporary
+  cleanup, duplicate plan/worktree, source runtime feature or global skill added.
+  The existing pattern of keeping input observations separate from derived output
+  is reused; no new universal agentic rule manufactured. README/operator/toolchain
+  and current-source status updated together. Full v0.5 scope and deployment/
+  device/authority/adoption/retention gates remain open; latest native30b5776 remains.
+- Final critical14 passed11.74s, total17.7s; privacy4.1/Ruff0.3s and
+  CRLF-aware whitespace passed. The existing collaboration row was shortened to
+  current ownership/scope and canonical evidence links; its historical detailed
+  row remains in Git history. No cross-session messaging or new board created.

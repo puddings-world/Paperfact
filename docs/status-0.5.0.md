@@ -22,6 +22,8 @@ original-supply hash reads, including staged and reused-final validation. Newer
 source also separates unsupported research formats from history-integrity errors,
 hides inappropriate desktop history-adoption controls and pauses automatic sync;
 mobile retains unsent notes with the matching fixed compatibility message.
+The PWA exporter now also produces identical first-party assets from LF/CRLF
+checkouts while preserving exact vendor bytes and raw source-change checks.
 These source changes are not in the candidate linked below.
 
 ## Current deliverable

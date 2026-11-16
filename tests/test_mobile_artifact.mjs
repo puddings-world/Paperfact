@@ -133,3 +133,52 @@ test('legacy numeric cache artifacts remain readable but mismatched worker names
  await refreshManifest(output,'sw.mjs',worker.replace('shell-v34','shell-v35'));
  await assert.rejects(verifyMobile(output),/invalid_shell_identity/);
 }));
+
+
+test('LF and CRLF first-party checkouts produce identical artifacts without altering vendor bytes',async()=>fixture(async({root,sourceRoot,output})=>{
+ const names=[...new Set([...SHELL.map(path=>path==='./'?'index.html':path.slice(2)),'sw.mjs'])];
+ const firstParty=names.filter(name=>!name.startsWith('vendor/'));
+ for(const name of firstParty){const path=join(sourceRoot,name);await writeFile(path,(await readFile(path,'utf8')).replace(/\r\n/g,'\n'));}
+ const css=join(sourceRoot,'style.css');
+ await writeFile(css,'\ufeff/* Unicode: \u96e2\u7dda \ud83d\udd2c */\n'+await readFile(css,'utf8'));
+ // A synthetic CRLF vendor license verifies that vendor bytes stay opaque.
+ const license='vendor/pdfjs-6.4.299/LICENSE',vendor=Buffer.from('Synthetic vendor license\r\nretain exact bytes\r\n');
+ await writeFile(join(sourceRoot,license),vendor);
+ const first=await build({sourceRoot,output});
+ const vendorCode=await readFile(join(sourceRoot,'vendor/pdfjs-6.4.299/pdf.mjs'));
+ for(const name of firstParty){const path=join(sourceRoot,name);await writeFile(path,(await readFile(path,'utf8')).replace(/\n/g,'\r\n'));}
+ const sourceBefore=await Promise.all(names.map(name=>readFile(join(sourceRoot,name))));
+ const again=join(root,'crlf');
+ const second=await build({sourceRoot,output:again});
+ assert.equal(second.artifact_id,first.artifact_id);
+ for(const name of ['artifact.json','nginx-static-map.conf'])assert.deepEqual(await readFile(join(output,name)),await readFile(join(again,name)));
+ for(let index=0;index<names.length;index++){
+  const name=names[index];
+  assert.deepEqual(await readFile(join(sourceRoot,name)),sourceBefore[index]);
+  assert.deepEqual(await readFile(join(output,'public',name)),await readFile(join(again,'public',name)));
+ }
+ assert.deepEqual(await readFile(join(again,'public',license)),vendor);
+ assert.deepEqual(await readFile(join(again,'public','vendor/pdfjs-6.4.299/pdf.mjs')),vendorCode);
+ assert((await readFile(join(again,'public','style.css'))).subarray(0,3).equals(Buffer.from([0xef,0xbb,0xbf])));
+ assert.equal((await verifyMobile(again,{expectedId:first.artifact_id})).state,'verified');
+}));
+
+
+test('invalid first-party UTF-8 fails before publishing output instead of replacing text',async()=>fixture(async({sourceRoot,output})=>{
+ await writeFile(join(sourceRoot,'style.css'),Buffer.from([0x63,0x73,0x73,0xc3,0x28]));
+ await assert.rejects(build({sourceRoot,output}),/invalid_asset_encoding/);
+ await assert.rejects(readdir(output),error=>error.code==='ENOENT');
+}));
+
+test('newline-only edits during export remain source changes and retry uses a new destination',async()=>fixture(async({root,sourceRoot,output})=>{
+ const css=join(sourceRoot,'style.css'),original='body{color:#111}\n';
+ await writeFile(css,original);
+ await assert.rejects(build({sourceRoot,output,onProgress:async()=>{
+  await writeFile(css,original.replace(/\n/g,'\r\n'));
+ }}),/source_changed/);
+ await assert.rejects(readFile(join(output,'artifact.json')),error=>error.code==='ENOENT');
+ assert.equal(await readFile(css,'utf8'),original.replace(/\n/g,'\r\n'));
+ const retry=join(root,'retry-newlines');
+ assert.equal((await build({sourceRoot,output:retry})).state,'verified');
+ assert.equal(await readFile(join(retry,'public','style.css'),'utf8'),original);
+}));
