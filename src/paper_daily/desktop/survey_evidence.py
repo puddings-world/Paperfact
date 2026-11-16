@@ -436,7 +436,7 @@ class SavedSurveyPane(QWidget):
         if saved.data["kind"] == "none":
             return
         cancel = self.cancelled.is_set
-        self._start(lambda: (saved, survey_audit.audit(saved, cancelled=cancel)),
+        self._start(lambda: (saved, survey_audit.prepare(saved, cancelled=cancel)),
                     self._sources_checked, self.words["audit_busy"])
 
     def _sources_checked(self, value):
@@ -444,6 +444,7 @@ class SavedSurveyPane(QWidget):
         if self.saved is not saved or not saved.current():
             self._stale()
             return
+        result = result.for_delivery(saved)
         self.status.setText(self.words["audit_done"].format(
             verified=result["originals_verified"], total=result["originals_total"],
             quotes=result["verified_located_passages"], unlocated=result["unlocated_passages"]))

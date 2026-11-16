@@ -1289,6 +1289,10 @@ or installed-device acceptance. No global rule is promoted.
   owned original once for all recorded quotation locations; recheck all source
   observations and the saved report before delivery. Equal bytes do not substitute
   for independently checked ownership.
+- Retain an immutable, integrity-bound source/report witness through queued GUI
+  delivery, rechecking metadata at the actual consumer. Matching report SQL alone
+  misses an original replaced after the worker completes. Actual local/native PDF
+  mutation reproduced the stale-success bug; the delivery gate now refuses it.
 - Report stored location claims separately from locations actually rechecked;
   missing originals and unlocated quotations stay explicit. Matching text grants
   no semantic-support judgment. Keep results ephemeral and preserve SQL/outbox.

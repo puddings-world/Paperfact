@@ -9168,3 +9168,23 @@ selection above and is not an additional feature count.
   deletion/no-list/no-outbox assertions. No existing test expectation was changed.
 - No owner research, credential, cloud resource, new installer/release or real
   deletion was used. The current0a64ec7 native candidate remains unchanged.
+
+## 2026-11-16 recheck list-audit originals at actual GUI delivery
+
+- Reproduced with a real worker: stop only the GUI polling timer, finish the audit,
+  change the actual captured PDF bytes, then deliver. Report SQL/bytes still pass
+  their observation but the old UI showed a verified-source success. Native case
+  failed before the fix; it was a source-delivery race, not a changed report.
+- Reuse the established prepared-audit pattern: retain the exact saved read,
+  immutable JSON and source observation callbacks in an integrity-bound process-
+  local witness. The UI calls for_delivery at actual completion, rechecking only
+  metadata, not reparsing PDFs. The synchronous dict API/MCP format is unchanged.
+- Delivery-witness/actual desktop/real CLI13 pass33.36s pytest/37.2s stages,
+  covering local/native actual PDF mutation, preserved visible report/SQL,
+  wrong saved-read identity, result tampering, close and workspace switch.
+  Missing/stale inputs still fail without publication, download or model retry.
+- No installer build, source migration, account operation, cloud resource or owner
+  research mutation. Current0a64ec7 artifacts predate this source change.
+Final saved-audit semantics and actual queued PDF race19 pass54.43s pytest/
+63.4s bounded stages; cancellation, missing originals and read budgets remain
+unchanged. This overlaps earlier selections; it is not a total feature count.

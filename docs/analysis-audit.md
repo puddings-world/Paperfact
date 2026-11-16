@@ -905,6 +905,14 @@ silently upgraded into source-aware reports.
 
 API: `survey_audit.audit(saved, *, cancelled=lambda: False, seconds=60) -> dict`,
 where `saved` is a current `survey_reader.SavedReport`.
+For queued desktop work, `survey_audit.prepare(saved, *, cancelled=lambda: False,
+seconds=60) -> PreparedSurveyAudit` retains the exact saved read, immutable result
+and original observations. Deliver only through `prepared.for_delivery(saved)`;
+`prepared.current()` is metadata-only. An altered witness, different saved-read
+object or original changed after worker completion is refused. The GUI checks
+this at actual delivery, preserving the visible report and asking for recheck.
+The witness is process-local, never a portable source grant or research record;
+JSON CLI/MCP output and the audit format remain unchanged.
 `local_operations.audit_paper(paper_id=None, *, corpus_key=None, list_id=None)`
 owns the shared transport boundary. At most16 captured originals and128 MiB
 actual source bytes are checked, with a default60-second cooperative budget

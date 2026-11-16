@@ -90,3 +90,18 @@ def test_original_change_and_resource_bounds_never_return_success(saved, monkeyp
     with pytest.raises(ValueError):
         survey_audit.audit(selected)
     assert snapshot(database) == before
+
+
+def test_prepared_result_is_bound_to_its_saved_read_and_cannot_be_rewritten(saved):
+    from dataclasses import replace
+
+    database, list_id, _report = saved
+    selected = survey_reader.read(database, list_id)
+    prepared = survey_audit.prepare(selected)
+    report = prepared.for_delivery(selected)
+    report["sources"].clear()
+    assert prepared.for_delivery(selected)["sources"]
+    with pytest.raises(survey_reader.ReadChanged):
+        replace(prepared, _json='{"originals_verified":999}').for_delivery(selected)
+    with pytest.raises(survey_reader.ReadChanged):
+        prepared.for_delivery(survey_reader.read(database, list_id))

@@ -448,5 +448,6 @@ nonempty updates keep the existing incremental rendering and scroll behavior.
 
 Source after the0a64ec7 test build adds **Check all sources** to saved list reports.
 The same read-only CLI/MCP action accepts `analysis.audit` with `{"list_id":"LIST_ID"}`.
+Queued desktop results recheck the report and original observations at display time.
 It checks owned originals and recorded quote locations without AI or downloads;
 scientific support remains unassessed. [Usage and limits](docs/analysis-audit.md#saved-list-report-source-audit).

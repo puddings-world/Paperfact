@@ -48,7 +48,7 @@ def test_close_or_workspace_change_drops_late_audit(saved, app, monkeypatch, tmp
     database, list_id, _report = saved
     monkeypatch.setattr(store, "DB_PATH", database)
     entered, release = Event(), Event()
-    actual, calls = survey_audit.audit, []
+    actual, calls = survey_audit.prepare, []
 
     def delayed(*args, **kwargs):
         calls.append(True)
@@ -56,7 +56,7 @@ def test_close_or_workspace_change_drops_late_audit(saved, app, monkeypatch, tmp
         assert release.wait(3)
         return actual(*args, **kwargs)
 
-    monkeypatch.setattr(survey_audit, "audit", delayed)
+    monkeypatch.setattr(survey_audit, "prepare", delayed)
     dialog = SurveyDialog(list_id, "Research", LIGHT, language="en")
     pane = dialog.saved_report
     dialog.show()
@@ -79,6 +79,45 @@ def test_close_or_workspace_change_drops_late_audit(saved, app, monkeypatch, tmp
         assert len(calls) == 1 and snapshot(database) == before
     finally:
         release.set()
+        dialog.close()
+        wait_until(lambda: pane.disposed)
+        dialog.deleteLater()
+
+
+def test_original_changed_after_worker_finish_is_rejected_at_ui_delivery(saved, app, monkeypatch):
+    from paper_daily import source_snapshots, survey_reader
+    from paper_daily.sync_blobs import BlobManifest
+
+    database, list_id, _report = saved
+    monkeypatch.setattr(store, "DB_PATH", database)
+    dialog = SurveyDialog(list_id, "Research", LIGHT, language="en")
+    pane = dialog.saved_report
+    dialog.show()
+    path = original = None
+    try:
+        wait_until(lambda: pane.future is None)
+        report = pane.saved
+        source = next(item for item in report.data["report"]["sources"]
+                      if item["state"] == "captured")
+        binding = next(item for item in report.data["sources"]
+                       if item["source_id"] == source["id"])
+        original, _fresh = survey_reader._checked_original(report, source, binding, lambda: False)
+        path = (report._store._path(BlobManifest(source["document_hash"], len(original)))
+                if report.data["kind"] == "native"
+                else source_snapshots.source_path(database, binding["original"]))
+        before, visible = snapshot(database), pane.view.toPlainText()
+        pane.poll.stop()  # Hold delivery after the real worker finishes, not its work.
+        pane.audit_sources.click()
+        wait_until(lambda: pane.future[0].done())
+        path.write_bytes(original + b"\nchanged after worker completion")
+        assert report.current()  # Report SQL/bytes are unchanged; its original changed.
+        pane._poll()
+        assert pane.future is None and "Originals verified:" not in pane.status.text()
+        assert pane.status.text() == pane.words["stale"]
+        assert pane.view.toPlainText() == visible and snapshot(database) == before
+    finally:
+        if path is not None and original is not None:
+            path.write_bytes(original)
         dialog.close()
         wait_until(lambda: pane.disposed)
         dialog.deleteLater()
