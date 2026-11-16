@@ -142,6 +142,79 @@ def contexts(text: str, max_per_key: int = 3, highest: int | None = None) -> dic
     return found
 
 
+_LIST_HEADING_RE = re.compile(r"\n\s*(?:references|bibliography)\s*\n", re.I)
+_LIST_ENTRY_RE = re.compile(r"(?m)^[ \t]*\[?(\d{1,3})[\].][ \t]+(?=\S)")
+_LIST_END_RE = re.compile(
+    r"(?m)^[ \t]*(?:acknowledge?ments?|author contributions?|competing interests?|"
+    r"additional information|funding|appendix|supplementary)\b",
+    re.I,
+)
+_LIST_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+)")
+_LIST_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})[a-z]?\b")
+
+
+def _letters(text: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
+def listed_references(text: str) -> dict[str, dict]:
+    """Reference number -> {title, year, doi, citation}, read from the paper's own list.
+
+    A paper a few weeks old has no reference list at Crossref or Semantic Scholar
+    yet, and those are the papers read first. Without one every "13" is a bare
+    number, the model can only describe the cited work from the sentence around it,
+    and the map has nothing to draw. The list is printed at the end of the PDF.
+
+    Only a list numbered 1, 2, 3 in order is taken: a number out of turn is a page
+    number, a volume or a table cell, and one wrong pairing names the wrong paper.
+    """
+    headings = list(_LIST_HEADING_RE.finditer(text or ""))
+    if not headings:
+        return {}
+    tail = text[headings[-1].end() - 1 :]
+    starts = []
+    for m in _LIST_ENTRY_RE.finditer(tail):
+        if int(m.group(1)) == len(starts) + 1:
+            starts.append(m)
+    # The list starts under its heading. Numbered steps further on, in an appendix
+    # after an author-year bibliography, are not it.
+    if len(starts) < 3 or starts[0].start() > 200:
+        return {}
+    out: dict[str, dict] = {}
+    for position, m in enumerate(starts):
+        last = position + 1 == len(starts)
+        raw = tail[m.end() : len(tail) if last else starts[position + 1].start()]
+        if last:
+            end = _LIST_END_RE.search(raw)
+            raw = raw[: end.start() if end else len(raw)][:600]
+        citation = " ".join(raw.split())
+        doi = _LIST_DOI_RE.search(citation)
+        years = _LIST_YEAR_RE.findall(citation)
+        # A citation is short and dated. Anything else under a number is a page of
+        # appendix that happened to follow the list.
+        if not 15 <= len(citation) <= 600 or not years:
+            continue
+        # The same convention as the publisher's unstructured entries: drop a marked
+        # author block, and keep the whole string otherwise.
+        title = re.sub(r"^.{0,90}?\bet al\.\s*", "", citation).strip() or citation
+        out[m.group(1)] = {
+            "title": title[:300],
+            "year": int(years[-1]) if years else None,
+            "doi": doi.group(1).rstrip(".,;)") if doi else None,
+            "citation": citation,
+        }
+    return out
+
+
+def listed_title(known: dict, answered: str | None) -> str | None:
+    """The title to keep for a reference: the list's, or the model's when the list
+    entry is a whole citation string and the model's title is printed inside it."""
+    named = _letters(answered)
+    if len(named) >= 12 and named in _letters(known.get("citation")):
+        return str(answered).strip()
+    return known.get("title") or answered
+
+
 # The analysis specification this module writes. Bumped when the prompt or the
 # coverage rules change, so `cites --rewrite` can walk an existing shelf forward the
 # way dives.spec does rather than leaving a mix of old and new answers.
@@ -290,7 +363,7 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
     row = context.paper
     # The publisher's own numbering, when there is a DOI to ask about. Without it a
     # superscript "17" is just a number and the model has to guess the title.
-    numbered = crossref.reference_list(row["doi"] or "")
+    numbered = crossref.reference_list(row["doi"] or "") or listed_references(text)
     highest = max((int(k) for k in numbered if k.isdigit()), default=None)
 
     ctx = contexts(text, highest=highest)
@@ -367,7 +440,7 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
         ):
             continue
         known = numbered.get(key) or {}
-        title = known.get("title") or e.get("title")
+        title = listed_title(known, e.get("title"))
         match = by_doi.get(known.get("doi") or "") or {}
         if not match and title:
             match = _s2_match(refs, title, same_paper)
