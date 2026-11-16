@@ -10174,3 +10174,66 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final critical14 passed11.38s (18.4s total, privacy4.9s/Ruff0.3s).
 - Docs60 passed3.71s (10.3s total, privacy5.0s/Ruff0.3s); whitespace clean.
   Preserve original workflow line endings; current scoped checks pass, not the historical full suite.
+
+## 2026-11-16 d14c512 three-platform candidate acceptance
+
+- Previous turn committed/integrated d14c512 and dispatched exactly one all-platform
+  workflow. This turn polled that same43851985599 through terminal success, never
+  restarted it. All native reports/build metadata are exact clean
+  d14c51253c348b921bfcb823ece22957e969cab7, `0.5.0.dev`, beta-candidate.
+  Draft/release skipped. Mac359s, Windows509s, Linux167s actual native durations.
+- Actual completed source phases (not guessed percentages or elapsed estimates):
+  - build (ubuntu-22.04, linux): 14 passed in 2.14s, 1 passed in 1.58s, 54 passed in 6.72s.
+  - build (windows-latest, windows): 14 passed in 5.49s, 1 passed in 2.87s, 54 passed in 19.94s.
+  - build (macos-latest, macos): 14 passed, 5 warnings in 5.18s, 1 passed, 5 warnings in 2.30s, 54 passed, 5 warnings in 14.65s.
+- Independent small-provenance downloads match GitHub ZIP hashes. Strictly
+  checked closed report format/status, exact clean source/version/channel, expected
+  arm64/amd64/x86_64 host, all15 named sync flags as actual booleans, and completed
+  report state. Mac has3 verified reader starts and completed mac-foreground
+  Launch Services check. Windows actual isolated install/reinstall/uninstall and
+  preserved research are all true; raw setup payload SHA-256:
+  `bab4fb3eb35f577e9ca40ee631b4233fba541e56d37f00ab0fada013f684751d`.
+  Linux completes AppImage integration. Large installer ZIPs were not independently
+  downloaded locally; their archive hashes below are GitHub metadata, not physical
+  device or older installed-binary upgrade evidence.
+- Downloaded/hash-matched Mac screenshots; visually inspected dive.png for actual
+  Chinese/formula/code. This does not certify every new desktop action or IME.
+- Mobile artifact independently downloaded/hash-matched and safely extracted.
+  Existing verifier checks all54 files/3983781 bytes, proxy map and cache identity
+  in0.375s under two-core/25%/below-normal governor with60s wall bound. Content ID
+  remains5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246;
+  backend changes did not alter public static content. No hosted HTTPS/PWA,
+  Safari/physical-phone or new browser acceptance is inferred.
+
+| Artifact | ID | ZIP bytes | ZIP SHA-256 |
+|---|---:|---:|---|
+| build-macos | 14217833669 | 279831557 | `5466bccda28cb20c702ab1b727be43fb0c26b75c54c958aaa36322f58f068842` |
+| build-windows | 14219496165 | 184689096 | `cc1a18d1bd6ff855e70f29d4e7b9c987ac1a85cbb531d35490763a8f5024f10a` |
+| build-linux | 14218331821 | 282744636 | `98b1f202d3fcea5c71870585c6eee455067283cf9bcda8efe36c6e2cecf959ad` |
+| provenance-macos | 14218397450 | 3062 | `a007dbbeb4fdfe384681fc2322dfc385e8059ea83c3ea81fea3a57c75d8d91a6` |
+| provenance-windows | 14219681025 | 3444 | `10cdb20fcff8cdc9ca386ba00198768c250dc10e8d9224405d227f7269e91763` |
+| provenance-linux | 14218955314 | 3072 | `aadadccef4d03907663c7c811575847f3c92ace7e6b8a6d80a287a6615d6d153` |
+| mobile-web-d14c51253c348b921bfcb823ece22957e969cab7 | 14217163768 | 901434 | `d5ff2c3abbb5261adc3172bde9358f4fe523335216c80352ea6281483c09cc64` |
+| screenshots-macos | 14219010767 | 795472 | `fc5bcec21be286da352c265259f3965a3bb0d639224c81fa4f0fd36cea6016fc` |
+
+- Evidence under ignored build/preview-d14c512: actual run/artifact metadata,
+  small reports, screenshots, per-job logs/source counts and mobile verifier result.
+  Current status/README/download guide now promote this tested candidate, retaining
+  8252010 and earlier records. Closed older test windows and retained isolated data
+  are explicit Mac instructions. No release, auto-update offer or deployment made.
+- Frozen source-aware report/model handoff, exact-original preservation, CLI/MCP
+  retries and official-v4 history/control checks pass within their existing scope.
+  Source-format0.4.3 preservation is not old-installed-binary/GUI upgrade acceptance.
+  New import/cleanup code is included; selected source/frozen journeys do not imply
+  every new GUI action was exercised in the installed product.
+- Full objective remains open: complete supported writer/file lifecycle and
+  immutable-store retention/eviction, independent authority anchoring/fencing,
+  hosted GCP/HTTPS enrollment/recovery, full new GUI/live accounts/native vaults/IME,
+  old installed-binary upgrade and real Windows/Mac/phone offline/conflict/restore.
+  The earlier Mac8252010 physical-reading question is still unanswered; no device
+  result was invented. Existing public-support/local-integration patterns apply;
+  no novel global skill installation or personal account/credential action.
+- Final local documentation gate60 passed3.91s (9.5s total, privacy4.1s/Ruff0.3s),
+  existing two-core/25% governor; whitespace clean. Runtime remains exactlyd14c512;
+  reuse its actual three-OS critical/affected/frozen results for this docs-only
+  checkpoint instead of repeating unchanged source tests locally.
