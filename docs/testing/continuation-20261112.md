@@ -9149,3 +9149,22 @@ selection above and is not an additional feature count.
 - Earlier formatting/edit failures produced no passing test evidence; one edit
   stopped on mixed newline bytes and a requested new selector did not yet exist.
   Exact-byte correction preceded the passing scoped checks. No test was weakened.
+
+## 2026-11-16 verify the existing deletion admission boundary
+
+- The initial claim that the official service could accept global paper deletion
+  was incorrect. Inspecting/reproducing the complete shared codec showed it already
+  rejects this operation in sync_schema_v2 before history acceptance. No product
+  code was changed and no extra service restriction was added.
+- New composite regression tests preserve this contract: repeated refusal leaves
+  authority SQL/history unchanged; a real native peer then retires a list through
+  its actual graph builder and completes verified synchronization with paper
+  metadata retained. Raw HTTP refusal is sanitized and valid wrong-device input
+  remains forbidden. Global paper deletion still needs a later retention contract.
+- Two pass2.09s pytest/6.1s bounded stages. The first hand-built list deletion
+  fixture guessed both base/structural revision and read the verified envelope as
+  a legacy event. Inspecting receipts proved a conflict, not lost data. The final
+  fixture uses the production client builder and preserves the original accepted
+  deletion/no-list/no-outbox assertions. No existing test expectation was changed.
+- No owner research, credential, cloud resource, new installer/release or real
+  deletion was used. The current0a64ec7 native candidate remains unchanged.

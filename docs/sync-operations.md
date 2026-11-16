@@ -154,3 +154,27 @@ An exact retry cannot revert a newer document; changed retries fail. Bytes remai
 local until the separate authenticated coordinator uploads them. No current desktop
 control, legacy PDF alias or AI workflow is automatically enrolled by this action.
 See [document transfer](sync-transfers.md) for recovery and acceptance evidence.
+
+
+## Deletion boundary: remove from a list versus erase a paper
+
+The current v2 codec explicitly refuses `paper` operations with action `delete`
+(`sync_schema_v2.validate`); global paper deletion requires a later retention
+contract. This check already applies before authority history is changed. It is
+not a new admission restriction or a completed global deletion feature.
+
+Remove a membership or delete a list through supported operations instead. A
+native list retirement preserves paper metadata/research and retains accepted
+operation history. Use the real client's operation builder: base revisions and
+structural observations come from received state, not guessed per-entity counters.
+Unsupported attempts do not grant permission to reset a cursor, discard a queued
+operation or rewrite history. A native peer can continue verified synchronization
+after such an attempt is refused.
+
+`tests/test_official_research_admission.py` checks repeated unsupported attempts
+against a real official authority with unchanged SQL/history, then actual native
+list retirement and verified retry/convergence with paper metadata retained.
+It also checks sanitized raw HTTP refusal, client-side validation and ownership
+refusal of a valid wrong-device operation. Two cases pass in2.09s pytest/6.1s
+bounded stages. This does not certify arbitrary scientific deletion/recovery,
+physical-device history or real owner data.
