@@ -131,6 +131,9 @@ jobs:
           tests/test_sync_http.py::test_live_listener_refuses_replaced_or_missing_database_without_recreating_it
           tests/test_sync_http.py::test_listener_close_interrupts_incomplete_headers_without_waiting_for_client
           tests/test_sync_admin.py::test_second_serve_is_actionable_and_preserves_existing_authority
+          tests/test_sync_admin.py::test_same_file_revocation_rollback_is_refused_after_restart
+          tests/test_authority_control.py
+          tests/test_storage.py::test_prune_preserves_offline_and_managed_originals_even_after_planning
 
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact

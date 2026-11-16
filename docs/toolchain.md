@@ -410,3 +410,11 @@ failure cases. Named outcomes are `private_handoff` and
 The host desktop component is source code; only the selected CLI may be frozen.
 Delivered e5eb093 artifacts predate this extension. Actual frozen execution of
 the new stage and the full desktop dialog journey remain separate gates.
+
+
+The existing native authority-lifetime CI stage also selects the source same-file
+revocation regression, the bounded control publication/restart/crash cases, and
+stale-preview offline/retained-document cleanup representatives on every desktop
+OS. It retains its three-minute stage budget; it does not add a full suite or a
+second build. These synthetic cases exercise platform-specific file replacement,
+locking and process exit. They do not prove real power-loss or device/hosted sync.
