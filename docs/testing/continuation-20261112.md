@@ -9090,3 +9090,36 @@ Final storage/CLI selection25 passes2.56s pytest/5.8s stages, including preview
 and confirmed cleanup returning status2 with bounded review guidance and no
 file deletion on invalid retention metadata. This overlaps the storage/offline
 selection above and is not an additional feature count.
+
+## 2026-11-16 common native candidate0a64ec7
+
+- Exact clean source0a64ec7ed8c2aec8c435c12f285eae36d80d5d61,0.5.0.dev,
+  beta-candidate; run43784461643. Windows7m40s, Mac arm646m15s, Linux3m36s
+  success; draft skipped. No tag/release/deployment or owner-data mutation.
+- Each OS passes critical14, first-sync preservation1 and authority/retention14
+  source cases. The existing three-minute source lifetime stage now includes
+  same-file control rollback, publication/process-exit and stale-preview offline
+  preservation; no historical full-suite run or duplicate build was added.
+- Independently downloaded/hash-checked all three small provenance ZIPs. Their
+  build-info and frozen reports confirm exact clean source, passed true and both
+  private_handoff/child_disk_settings_ignored true. Host desktop JobHandoff and
+  real QProcess drive the actual frozen CLI; child disk AI is disabled. One
+  synthetic completion preserves PDF/located quote and requested/returned model,
+  retained read and cached retry. This is not full frozen GUI-dialog acceptance.
+- Windows additionally passes isolated install/reinstall/uninstall with research
+  preserved; Mac three launches/foreground; Linux AppImage integration. Verified
+  mobile ZIP contains shellv33; built only, no HTTPS deployment or phone evidence.
+- Large installer ZIPs were not downloaded here; their digests below are GitHub
+  artifact metadata, not independent payload checksums. Native vault/live account,
+  physical Mac/Windows/phone convergence, old installed-binary upgrades, complete
+  runtime coverage and independent authority control/hosting gates remain open.
+
+| Artifact | ID | ZIP bytes | Published ZIP SHA-256 |
+|---|---:|---:|---|
+| provenance-macos | 14190002815 | 3023 | `8928e62b01a78b20572e413225560e99b145f5f528fa38f43b5a516e24fb42a1` |
+| build-linux | 14189797058 | 282627999 | `0330e09f4b783331e094dd8d426d2b229261e3fc5dd9d939233306be5ad71e76` |
+| mobile-web-0a64ec7ed8c2aec8c435c12f285eae36d80d5d61 | 14189708134 | 896862 | `d3cd1845865c04fec587441251c51bdb1ed608a6fe47b3373c7458e71a655f1a` |
+| build-macos | 14189674380 | 279114356 | `e4370c5195f2357087996fd74c51d257d56bcd59f8f399fc6a563544004019a9` |
+| build-windows | 14189183704 | 184672050 | `a6289da8c804995adc6967881a9725f2f944d9c61c4b319e1f26f40eb14376ce` |
+| provenance-linux | 14189058557 | 3032 | `7d7747f41b46c67b69431371b8831e31483db60b157f4e2645aab1eb766b71a3` |
+| provenance-windows | 14188969318 | 3404 | `1d5502ba3db7dcd82aad6e26aba705867bb6efa052818a0183920907a0f27336` |

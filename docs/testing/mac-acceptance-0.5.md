@@ -1,36 +1,40 @@
 # Mac v0.5 acceptance
 
-## Latest common-platform test build: e5eb093
+## Latest common-platform test build: 0a64ec7
 
-[All-platform run43776461463](https://github.com/puddings-world/Paperfact/actions/runs/43776461463)
-passes from clean `e5eb093ad708b52580daccce4058d24dfcc59998`, version
-`0.5.0.dev`, beta-candidate channel. Mac arm64:6m20s; Windows x64:6m14s;
-Linux x86-64:3m31s. The downloaded, hash-checked provenance reports all match.
+[All-platform run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643) passes from clean
+`0a64ec7ed8c2aec8c435c12f285eae36d80d5d61`, version `0.5.0.dev`, beta-candidate.
+Mac arm64:6m15s; Windows x64:7m40s; Linux x86-64:3m36s. All three
+small provenance ZIPs were downloaded, independently hash-checked and inspected.
 
-| Download | Contents |
+| Download | Artifact contents |
 |---|---|
-| [Apple Silicon Mac](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186344319) | ZIP containing the DMG |
-| [Windows x64](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186567355) | ZIP containing the setup EXE |
-| [Linux x86-64](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186432302) | ZIP containing the AppImage |
-| [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186379143) | Import the contained `original.zip` into a separate workspace |
-| [Mac report](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186229638) | Exact source identity and named acceptance results |
+| [Apple Silicon Mac](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189674380) | build-macos |
+| [Windows x64](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189183704) | build-windows |
+| [Linux x86-64](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189797058) | build-linux |
+| [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189893569) | research-fixture-macos |
+| [Mac report](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14190002815) | provenance-macos |
 
-All three frozen CLIs now pass source-aware report generation through one
-loopback synthetic completion, exact PDF/quote verification, separate requested/
-returned models, retained-result read and cached retry without another completion.
-Windows additionally passes isolated install/reinstall/uninstall and preserved
-research; Mac passes three launches/foreground; Linux passes AppImage integration.
-These results do not certify live accounts, every report dialog, an old installed
-binary upgrade, hosted sync or physical-phone durability. No public release/tag
-or hosting was created. Use the separate-app commands below and check e5eb093.
+The candidate includes local authority v3 control checkpoints and offline-original
+cleanup protection. Each OS passes critical14, first-sync preservation1 and
+source authority/retention14. Actual frozen CLI report acceptance now uses the
+production host desktop handoff and a real QProcess: a disabled child disk route
+cannot override captured synthetic provider/model settings. Original/PDF/quote
+identity, retained read and cached retry preserve exactly one model completion.
+Windows additionally passes isolated install/reinstall/uninstall and research
+preservation; Mac passes three reader launches and foreground; Linux passes
+AppImage integration. This is not every frozen GUI dialog, physical two-device
+sync, native vault/account, old installed-binary upgrade or hosted acceptance.
+No release/tag or production deployment was created. Check source **0a64ec7**
+when using the separate-app launch instructions below.
 
-GitHub-reported installer ZIP metadata (payloads not independently downloaded here):
+GitHub-reported installer ZIP metadata (installer payloads not downloaded here):
 
 | Platform | ZIP bytes | ZIP SHA-256 |
 |---|---:|---|
-| Mac | 279451404 | `defbeda1a9e65172aea01660a0a8b6110bad5b6e696dbea641b9d0fcae8f66c0` |
-| Windows | 184674683 | `90f7b7d0398c6a1937348fc751754f40061c88530106c3df2ac19105faa862e5` |
-| Linux | 282605109 | `3c817662589dc0c75eeccc8b543940a24123031688ab48f606623a809b511f5b` |
+| macos | 279114356 | `e4370c5195f2357087996fd74c51d257d56bcd59f8f399fc6a563544004019a9` |
+| windows | 184672050 | `a6289da8c804995adc6967881a9725f2f944d9c61c4b319e1f26f40eb14376ce` |
+| linux | 282627999 | `0330e09f4b783331e094dd8d426d2b229261e3fc5dd9d939233306be5ad71e76` |
 
 ## Previous Apple Silicon test build: 2fb6923
 

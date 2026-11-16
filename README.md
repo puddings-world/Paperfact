@@ -400,20 +400,20 @@ The development sync service refuses a second local listener for the same author
 and pins newly initialized database identity across restarts. Replaced/missing
 files and same-file device/pairing rollback against the retained local checkpoint
 are refused. Legacy v1/v2 services require explicit backup/fresh restore, not
-automatic marker repair. These source guards postdate the e5eb093 installers. See
+automatic marker repair. The 0a64ec7 native candidate includes these guards. See
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
 These local safeguards do not yet provide distributed fencing or durable control-history proof.
 The existing source-report package check now also exercises private desktop-to-CLI
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
-This source extension does not update already-delivered installers.
+The 0a64ec7 native candidate passes this extended frozen CLI acceptance on all three OSes.
 Legacy storage cleanup also preserves device-local offline selections and retained
 managed-original owners, with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).
 
 
 New candidate builds verify guarded-history sync and duplicate-listener refusal
-inside the packaged CLI, plus six source lifetime journeys per OS. See
+inside the packaged CLI, plus fourteen source authority/retention representatives per OS. See
 [the exact acceptance contract](docs/toolchain.md); physical device acceptance
 remains separate.
 

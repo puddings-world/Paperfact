@@ -10,30 +10,32 @@ acceptance. Historical iterations belong in the
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Latest same-source native candidate:
-**e5eb093ad708b52580daccce4058d24dfcc59998**, version `0.5.0.dev`, beta-candidate.
-[Run43776461463](https://github.com/puddings-world/Paperfact/actions/runs/43776461463)
-passes Windows x64 in 6m14s, Mac arm64 in 6m20s and Linux x86-64 in 3m31s.
-All three provenance ZIPs were downloaded, independently hash-matched and read;
-the source commit is clean and identical. [Downloads and testing steps](testing/mac-acceptance-0.5.md).
+**0a64ec7ed8c2aec8c435c12f285eae36d80d5d61**, version `0.5.0.dev`, beta-candidate.
+[Run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643) passes Windows x64 in7m40s, Mac arm64 in6m15s
+and Linux x86-64 in3m36s. All three provenance ZIPs were downloaded,
+independently hash-matched and inspected against the exact clean source.
+[Downloads and testing steps](testing/mac-acceptance-0.5.md).
 Documentation commits after this candidate do not create another app build.
-Source after e5eb093 pins official authority database identity and checkpoints
-device/pairing state outside SQLite across restart. These guards are not inside
-the delivered candidate yet. Legacy v1/v2 services require explicit backup/fresh
-restore. Source validation is separate from native/device acceptance.
 
-The actual frozen CLIs pass import/export and original-file preservation,
-CLI/MCP retry/restart, strict verified-history sync and the new source-aware
-report action. The latter uses one loopback synthetic completion, preserves
-requested/returned model IDs, checks exact PDF/quotation location, retains the
-result and retries from cache without another completion. Windows also passes
-isolated install/reinstall/uninstall with research preserved; Mac passes three
-reader launches and foreground; Linux passes AppImage integration.
+This candidate contains the v3 local authority identity/control checkpoint,
+offline/retained-original cleanup protection and extended private AI handoff
+verifier. Each OS passes critical14, first-sync preservation1 and named authority/
+retention14 source cases. Legacy authority v1/v2 requires explicit backup/fresh
+restore; retained local checkpoints are not independent anchoring or fencing.
 
-The matching mobile artifact is
-[mobile-web-e5eb093](https://github.com/puddings-world/Paperfact/actions/runs/43776461463/artifacts/14186213608).
-Its downloaded ZIP hash matches the published digest; `public/sw.mjs` declares
-**paperfact-mobile-shell-v33**. It is a built artifact, not a deployed HTTPS PWA
-or physical-phone acceptance. Earlier v31 browser results remain historical.
+Actual frozen CLIs pass import/export, original-file preservation, CLI/MCP retry/
+restart, verified-history sync and a source-aware report using one synthetic
+loopback completion. The production host `JobHandoff` drives a real QProcess to
+the frozen CLI while its disk AI route is disabled: captured models are honored,
+disk settings remain unchanged and cached retry makes no second completion.
+This is not the full frozen GUI dialog journey. Windows also passes isolated
+install/reinstall/uninstall with research preserved; Mac passes three reader
+launches and foreground; Linux passes AppImage integration.
+
+[Matching mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189708134) was downloaded
+and hash-checked; `public/sw.mjs` declares **paperfact-mobile-shell-v33**.
+It is built, not deployed HTTPS/PWA or physical-phone acceptance. No release/tag,
+daily-app migration, cloud resource or owner research mutation was performed.
 
 ## Requirements and actual boundaries
 
