@@ -32,10 +32,11 @@ ticket cancellation and keep the dialog alive until the worker finishes.
 Source/reader identity and selected inspection are checked again after native
 confirmations, at final publication, and before launching a new window.
 
-Unknown or unsupported recovered content remains a blocker. Queue-scope pins,
-until their typed migration is available, are reported before creation and are
-preserved in the source. A failed or cancelled attempt retains destination
-fields for retry; a changed saved snapshot requires another inspection.
+Unknown or unsupported recovered content remains a blocker. Typed queue-scope
+pins are now accepted and preserved through the editable-copy flow; see
+[queue pin migration](queue-pin-migration.md). Unknown schemas and unsupported
+owners still require review before creation. A failed or cancelled attempt retains
+destination fields for retry; a changed saved snapshot requires another inspection.
 
 The body scrolls on small windows while actions remain reachable. Native text
 fields retain ordinary keyboard editing and copying. No SQLite connection or
