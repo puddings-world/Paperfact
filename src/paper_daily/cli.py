@@ -622,18 +622,34 @@ def cmd_list_add(args) -> int:
 
 
 def _attach_pdf(result: dict, file: str) -> bool:
-    """Read the paper from the dropped file. A paper already in the list keeps the
-    PDF it has: replacing it would move its notes for no reason the person gave."""
+    """Attach one missing original; list membership never authorizes replacement."""
+    from sqlite3 import Error as SQLiteError
+
     from paper_daily import fetch, repdf
 
-    ids = result.get("paper_ids") or result.get("already") or []
-    if not ids:
+    ids = list(dict.fromkeys((result.get("paper_ids") or []) + (result.get("already") or [])))
+    if len(ids) != 1:
+        print("Attach a PDF to exactly one resolved paper; no original was changed")
         return False
     paper_id = ids[0]
-    if not result["added"] and (repdf.PDF_DIR / f"{fetch._safe_name(paper_id)}.pdf").exists():
-        print(f"{paper_id} already has a PDF; kept it")
-        return True
-    return repdf.replace(paper_id, None, log=_log, file=file)
+    try:
+        document = fetch.capture_document(paper_id, legacy_root=repdf.PDF_DIR)
+        if document is not None:
+            if document.managed and fetch.document_current(document):
+                print(f"{paper_id} already has a versioned PDF; kept it")
+                return True
+            print(
+                f"{paper_id} has unavailable or ambiguous original ownership; "
+                "use workspace attachment synchronization, or repdf for an explicit replacement"
+            )
+            return False
+        if (repdf.PDF_DIR / f"{fetch._safe_name(paper_id)}.pdf").exists():
+            print(f"{paper_id} already has a PDF; kept it")
+            return True
+        return repdf.replace(paper_id, None, log=_log, file=file, first_only=True)
+    except (ValueError, OSError, SQLiteError) as exc:
+        print(f"PDF not attached: {exc}")
+        return False
 
 
 def cmd_list_remove(args) -> int:

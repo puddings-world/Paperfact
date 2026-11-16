@@ -9826,3 +9826,57 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   writer/runtime adoption, hosted sync and physical-device/GUI gates stay open.
 - Final integration gates:critical14 passed11.94s (19.1s total); docs60
   passed2.99s (8.8s total). Privacy/Ruff/whitespace passed. No exhaustive claim.
+
+## 2026-11-16: list PDF intake preserves global original ownership
+
+- Verified writer gap: _attach_pdf used only the legacy filename and result.added
+  to protect originals. Managed storage without that alias could be replaced on
+  retry, and another list membership could replace an existing global original.
+  The adapter now reads managed ownership first, keeps current native/legacy PDFs,
+  and refuses unavailable/ambiguous history or multiple distinct resolved papers.
+  Existing resolution/list additions remain a separately reported stage.
+- First attachment passes first_only=True into repdf's shared native observation
+  and transaction. An original arriving after the CLI check is not adopted as a
+  replacement target. Legacy first files use exclusive complete-temp hard linking;
+  a late destination survives without a replaced copy or partial-file residue.
+  Deliberate replacement remains available through repdf and the existing desktop
+  Supply PDF/Read another PDF context-menu action. No new command or UI control.
+- Added focused synthetic behavior coverage for preserved native bytes/positioned
+  notes across membership outcomes, first intake/rapid retries, missing/retired
+  history, source races, empty/ambiguous/duplicate resolutions, legacy original
+  preservation, exclusive first install, valid text readback and invalid bytes.
+  Existing PDF-drop fixture now accepts and asserts the explicit first-only flag;
+  all prior paper identity/file/exit-code assertions remain. No real AI/provider,
+  login, publishing or owner research used by tests.
+- The initial four-module bounded check timed out at300.609s (exit124), after
+  privacy passed167.2s/Ruff5.1s; no Python summary was produced. It is not a pass.
+  Later measurement:1978 committable files/28904217 bytes, inventory2.312s. Host
+  CPU samples91-99%, with ffmpeg41.3% in one process-delta sample after our check
+  had terminated. This does not prove a cause for every earlier delay. No other
+  process, scanner rule, priority or CPU cap was changed.
+- Two direct core diagnostics passed15.07s/18.0s total under the same governor;
+  explicitly diagnostic-only, not a replacement for privacy/integration gates.
+  The smaller formal action selection then passed17 in20.95s (59.2s total,
+  privacy36.3s). It covered12 initial new cases plus5 unchanged CLI/native/legacy
+  representatives; later retired-history coverage is recorded separately.
+  Earlier diagnostic cases overlap. Passed reports are retained under ignored
+  build/intake-attachment-evidence; the timeout figures are from actual tool output.
+- Existing two-processor/25%/below-normal/300s governor remains unchanged. Applied
+  the owner's new resource-mode question for subsequent testing; until answered,
+  retain headroom using the existing conservative limit. No competing work stopped.
+- One positive first-attachment/retry representative joins the existing three-
+  minute per-OS gate; default critical14 stays unchanged. Future gate50 is not
+  the48-case result from delivered2021103 installers. No new CI job or budget.
+- Existing local-integration pattern applied: action intent must survive through
+  asynchronous preparation to the shared write boundary. No novel global skill
+  rule warranted. Source-only after2021103, not new native/device acceptance;
+  complete writer enrollment, hosted sync and physical GUI/device gates stay open.
+- Final history selection2 passed11.69s (34.2s total): missing bytes and
+  explicit retired-document history both refuse intake without changing research.
+  It adds the retired case to the earlier17-case coverage; the missing case overlaps.
+  This yields13 new behavior cases plus5 unchanged action representatives, not19
+  distinct cases. Saved actual reports include both selections.
+- Final default check runs the repository actual critical profile:14 passed
+  in16.07s (27.6s total), privacy9.2s. Docs60 passed24.22s (54.8s total),
+  privacy23.9s. Ruff/whitespace passed. These are not historical full-suite results.
+  No privacy rule, harness timeout, CPU limit or existing assertion was weakened.

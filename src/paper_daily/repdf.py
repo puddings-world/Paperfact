@@ -13,6 +13,7 @@ the link back.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -65,18 +66,37 @@ def reanchor(conn, paper_id: str) -> tuple[int, list[str]]:
     return placed, lost
 
 
-def replace(paper_id: str, url: str | None = None, log=print, file: str | None = None) -> bool:
+def replace(
+    paper_id: str, url: str | None = None, log=print, file: str | None = None,
+    *, first_only: bool = False,
+) -> bool:
     """Read `paper_id` from `url` (default: its arXiv copy), or from a PDF on this
     machine, from now on. The local file is how a paywalled paper gets in: download
-    it through the library, then hand it over."""
+    it through the library, then hand it over. first_only is the list-intake
+    admission: it refuses managed history or a file appearing before publication."""
     # Observe before external I/O, not after a slow download has completed.
     from paper_daily import native_primary_publication as native
 
+    if type(first_only) is not bool:
+        raise ValueError("First-original attachment must be an explicit boolean")
     database = Path(store.DB_PATH).resolve()
+    safe = fetch._safe_name(paper_id)
+    dest = PDF_DIR / f"{safe}.pdf"
     try:
+        info = database.stat()
+        identity = info.st_dev, info.st_ino
+
+        def current():
+            if Path(store.DB_PATH).resolve() != database:
+                return False
+            now = database.stat()
+            return (now.st_dev, now.st_ino) == identity and not (first_only and dest.exists())
+
         observed = native.observe(
-            database, paper_id, current=lambda: Path(store.DB_PATH).resolve() == database,
+            database, paper_id, current=current, first_only=first_only,
         )
+        if not current():
+            raise ValueError("Original or workspace changed before attachment")
     except (ValueError, OSError, sqlite3.Error) as exc:
         log(f"PDF replacement refused: {exc}")
         return False
@@ -123,14 +143,36 @@ def replace(paper_id: str, url: str | None = None, log=print, file: str | None =
         log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
         return True
 
-    safe = fetch._safe_name(paper_id)
-    dest = PDF_DIR / f"{safe}.pdf"
-    if dest.exists():
-        # Kept aside rather than deleted: the figures and anchors of the old copy
-        # are gone either way, but the file itself may be the version of record.
-        (PDF_DIR / "replaced").mkdir(exist_ok=True)
-        shutil.move(dest, PDF_DIR / "replaced" / f"{safe}.pdf")
-    dest.write_bytes(blob)
+    # A legacy request must not adopt enrollment that began during file/network
+    # work, or overwrite an independently supplied first original.
+    if not current() or native.has_workspace_markers(database):
+        log("PDF replacement refused: original or workspace changed; retry the action")
+        return False
+    if first_only:
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=dest.parent, suffix=".part", delete=False,
+            ) as output:
+                temporary = Path(output.name)
+                output.write(blob)
+            if not current() or native.has_workspace_markers(database):
+                log("PDF attachment refused: original or workspace changed")
+                return False
+            try:
+                os.link(temporary, dest)
+            except FileExistsError:
+                log("PDF attachment refused: an original appeared; kept it")
+                return False
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+    else:
+        if dest.exists():
+            # Explicit legacy replacement keeps the previous file aside.
+            (PDF_DIR / "replaced").mkdir(exist_ok=True)
+            shutil.move(dest, PDF_DIR / "replaced" / f"{safe}.pdf")
+        dest.write_bytes(blob)
     log(f"PDF  {file or url} ({len(blob) // 1024} KB)")
 
     (TEXT_DIR / f"{safe}.txt").unlink(missing_ok=True)

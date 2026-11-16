@@ -74,14 +74,16 @@ def test_list_add_with_a_pdf_names_the_paper_and_reads_that_file(tmp_path, monke
     monkeypatch.setattr(
         repdf,
         "replace",
-        lambda pid, url, log=print, file=None: attached.append((pid, file)) or True,
+        lambda pid, url, log=print, file=None, first_only=False: (
+            attached.append((pid, file, first_only)) or True
+        ),
     )
     from paper_daily import resources
 
     monkeypatch.setattr(resources, "refresh", lambda conn, ids, log=None: None)
     assert cli.cmd_list_add(_args(pdf=str(pdf))) == 0
     assert asked == [("x", TITLE, "10.5555/12345.678")]
-    assert attached == [("p1", str(pdf))]
+    assert attached == [("p1", str(pdf), True)]
 
 
 def test_a_paper_already_in_the_list_keeps_its_pdf(tmp_path, monkeypatch):

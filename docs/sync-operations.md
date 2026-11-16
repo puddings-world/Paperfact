@@ -261,6 +261,44 @@ and an enrollment transition during legacy fetching. Existing managed missing/
 detached/unbound, text-cache and cancellation representatives remain unchanged.
 These source checks do not certify current installers or physical-device behavior.
 
+## List intake attaches a first original, not a replacement
+
+Newer source after candidate2021103 separates `list-add --pdf`/desktop PDF intake
+from deliberate `repdf` replacement. Existing native originals and legacy files
+are kept whether the paper was already in this list or is joining another one.
+Positioned notes and original versions remain unchanged. An unavailable or retired
+managed original requires attachment synchronization or an explicit replacement;
+a stale legacy alias or new list membership cannot revive it.
+
+The resolver must identify exactly one distinct paper. Repeated appearances of
+the same identity are deduplicated; zero or multiple identities refuse attachment.
+Metadata/list changes completed by the earlier resolver stage remain saved and
+reported. This is not a claim that resolution and attachment are one transaction.
+
+The attachment adapter passes `first_only=True` to
+`repdf.replace(paper_id, url=None, log=print, file=None, *, first_only=False)`.
+That admission is checked by the existing native publisher, not just by an earlier
+CLI file-existence check. A managed original or independently supplied file that
+appears during preparation wins; the stale first-file action is refused. Legacy
+first attachment installs complete temporary bytes with an exclusive hard link,
+so an existing destination is neither moved aside nor overwritten. Explicit
+replacement retains its existing native/legacy behavior. No new CLI flag is added.
+
+The desktop list context menu already offers **Supply PDF**/**Read another PDF**
+through `queue_view._supply_pdf`; its explicit URL/file choice still calls `repdf`.
+Adding or dropping a paper therefore preserves the current original, while that
+separate action deliberately changes it. First-original publication shares the
+existing verified bytes, outbox and receipt transaction; exact retry cannot create
+another current version. Source verification is not scientific identity proof.
+
+`tests/test_list_pdf_attachment.py` covers saved notes/current bytes across same-
+and different-list results, first-file/repeated intake, unavailable and retired
+history, concurrent publication, ambiguous/duplicate identities, legacy keep and
+exclusive install, and invalid bytes. Existing PDF-drop CLI assertions additionally
+verify the first-only admission is actually passed, without loosening old outcomes.
+The native candidate2021103 predates this change. Physical GUI/provider and complete
+legacy enrollment/file-lifetime acceptance remain separate release gates.
+
 ## Deletion boundary: remove from a list versus erase a paper
 
 The current v2 codec explicitly refuses `paper` operations with action `delete`
