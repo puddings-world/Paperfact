@@ -1,6 +1,63 @@
 # Mac v0.5 acceptance
 
-## Latest tested downloads
+## Latest tested downloads: 1875db5
+
+Windows and Apple Silicon Mac now share clean source
+`1875db595b7df510a851a2d44ea5157cc994689f`, version `0.5.0.dev`, beta-candidate.
+These are test builds, not a public release or an automatic-update offer.
+
+| Platform | Download | Exact job | Duration |
+|---|---|---|---|
+| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199876771) | [Mac run](https://github.com/puddings-world/Paperfact/actions/runs/43808973671) | 3m54s |
+| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199523450) | [Windows run](https://github.com/puddings-world/Paperfact/actions/runs/43808976905) | 7m48s |
+
+Download the ZIP while signed into GitHub, extract it, then open its DMG/setup.
+Keep the daily app and research. Use the separate Mac app/workspace commands below;
+import an exported list research package to read your desktop research on Mac.
+Check source **1875db5** in the bottom-right version/support information before
+reporting a problem. Your own supported AI login is separate from package import.
+Hosted continuous synchronization is not deployed; export/import is the available
+cross-machine handoff. Do not paste one device's credentials into another device.
+
+Both jobs pass critical14, first-sync preservation1 and45 named authority/control/
+recovery/offline source cases. Their actual frozen applications pass all15 sync
+protocol flags, including control-history challenge, absent/forged control refusal
+and restart, plus report/source handoff, exact originals, cached model completion,
+CLI/MCP retry and source-format0.4.3 preservation. Mac passes three reader launches
+and foreground activation; actual screenshots show readable Traditional Chinese,
+formula and code. Windows passes isolated install/reinstall/uninstall with research
+preserved. This does not certify every frozen dialog, live AI/Google login, native
+vault/IME, older installed-binary upgrade or physical two-device/phone journey.
+
+Small [Mac provenance](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199338423)
+and [Windows provenance](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14200082064)
+ZIPs were independently downloaded, SHA-256-matched and inspected: both are clean,
+exact1875db5, `passed=true`, and have the expected arm64/amd64 host. Mac screenshots
+and [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43808973671/artifacts/14199872015)
+were also hash-matched; the reading screenshot was visually inspected.
+
+Installer ZIP hashes below are GitHub-reported metadata; large installer payloads
+were not independently downloaded on this Windows source workstation.
+
+| Platform | ZIP bytes | ZIP SHA-256 |
+|---|---:|---|
+| macos | 277900881 | `8a9e615a9c1532407b958cf137acc36aef650a32cfe49c2b7404e9a81a262a6f` |
+| windows | 184769284 | `7d3d20c4b212ebbe6684c86259750e0764c10245a583d81b4b6b2744ed778653` |
+
+[Mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199263514)
+uses the same source. Its downloaded ZIP hash and all53 assets, proxy map and cache identity
+were independently verified; content ID
+`dae60b2ab54a12460d51065b76711d5668647ca26c8eccf601a05c5d55ecd2b3`.
+It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
+Linux remains the older88b2497 baseline below and lacks this new official-v4 control
+handshake. Do not mix it with these candidates for v4 sync acceptance.
+
+The earlier7a95b31 Mac attempt failed because the packaged test client omitted the
+new handshake; it published no installer. The repaired independent verifier adds
+refusal checks and retains all earlier assertions. This successful exact-source
+build supersedes that failed attempt; see the continuation ledger for evidence.
+
+## Previous downloads: e26ec8f / 88b2497
 
 All builds are `0.5.0.dev`, beta-candidate, not a public v0.5 release.
 

@@ -184,6 +184,7 @@ list does not share device-control metadata. Mobile uses a separate IndexedDB
 metadata record rather than copying the PDF cache per request.
 
 See [wire/API details and remaining recovery limits](sync-http.md#device-retained-authority-control-checkpoints).
-These changes are source-only, not present in the linked Mac candidate. Independent
-external anchors, coordinated HTTPS deployment and physical cross-device acceptance
-remain release gates.
+Windows/Mac1875db5 candidates include these changes and pass the frozen control
+handshake/refusal/restart checks. Durable storage and recovery-dialog coverage
+remains source/Qt/HTTP evidence. Independent external anchors, coordinated HTTPS
+deployment and physical cross-device acceptance remain release gates.

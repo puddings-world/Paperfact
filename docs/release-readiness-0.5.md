@@ -1,6 +1,13 @@
 # v0.5.0 release readiness
 
-Latest common-platform candidate: [0a64ec7 / run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643).
+Current Windows/Mac candidates share clean1875db5: Mac3m54s, Windows7m48s.
+Hash-checked provenance confirms `passed=true` on arm64/amd64, all15 actual frozen
+sync protocol flags, source-report handoff, preserved originals and retained retry.
+Each OS also passes critical14, first-sync1 and45 authority/control/recovery/offline
+source cases. [Current downloads and limits](testing/mac-acceptance-0.5.md).
+Linux remains the older baseline below; no public release or deployment is approved.
+
+Previous common-platform candidate: [0a64ec7 / run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643).
 Windows7m40s/Mac6m15s/Linux3m36s pass from the same clean source, version
 `0.5.0.dev`. Hash-checked provenance confirms frozen report generation via the
 production host QProcess handoff with disabled child disk settings, exact original/

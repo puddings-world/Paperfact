@@ -148,5 +148,6 @@ remains in the unchanged source backup, identified by the existing recovery
 provenance database hash; it is not installed as live grants/history. Publication
 rechecks file identity. Legacy v1/v2/v3 authorities use explicit backup/fresh
 recovery; old grants stay inactive. This local history is not an independent
-rollback anchor or cross-host fence. The e26ec8f native candidate predates v4;
-installed/hosted recovery acceptance remains required.
+rollback anchor or cross-host fence. Windows/Mac1875db5 native candidates include
+v4, with frozen control-protocol evidence and separate actual HTTP fresh-recovery
+fixtures. Full installed/hosted recovery acceptance remains required.

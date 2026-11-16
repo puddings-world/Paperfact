@@ -696,8 +696,9 @@ against jointly restored marker/database or copied hosts by itself. The next
 section adds device-retained prefixes. Independent external anchoring, ambiguous
 external commits, cross-host fencing, hosted restore and physical acceptance
 remain release gates. File identity changes require recovery
-review, not automatic repinning. Existing downloadable native candidates contain
-v3 administration; this source-only v4 work is not a new installer or deployment.
+review, not automatic repinning. Windows/Mac1875db5 native candidates include v4
+administration and control-handshake acceptance; the older Linux download is v3.
+No hosted deployment or physical-device acceptance is implied.
 
 
 ### Device-retained authority control checkpoints
@@ -768,8 +769,10 @@ rolling back all client copies and the authority, a fork beyond a common observe
 prefix, copied-host fencing and independent anchors still require further work.
 [Recovery comparison](device-recovery-review.md#device-held-access-history-in-recovery-review)
 now observes device-versus-backup control knowledge; explicit fresh-authority
-restore/join has actual HTTP fixture coverage without rebinding the old outbox. This source is not in the linked native
-installers and has not been deployed or physically accepted on Mac/phone.
+restore/join has actual HTTP fixture coverage without rebinding the old outbox.
+Windows/Mac1875db5 candidates now contain this code and pass actual frozen
+control-handshake checks. Full recovery dialogs, deployed hosting and physical
+Mac/phone convergence remain separate acceptance gates.
 
 
 The packaged protocol acceptance client independently encodes the same control

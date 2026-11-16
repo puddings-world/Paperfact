@@ -249,6 +249,9 @@ acceptance gates; it is not a public v0.5 release.
   built on it, quoted from the papers themselves.
 
 These are planned capabilities, not features in v0.4.x releases.
+Matching [Windows and Apple Silicon Mac test builds](docs/testing/mac-acceptance-0.5.md#latest-tested-downloads-1875db5)
+are available from clean1875db5. Use an isolated workspace and list-package transfer;
+hosted continuous sync and physical-device acceptance remain open.
 
 The development sync dialog supports [explicit saved reconnection](docs/remembered-sync-connection.md):
 verify this device in one click, then choose manual, session-only or explicitly
@@ -405,16 +408,16 @@ files and same-file device/pairing rollback against the retained local checkpoin
 are refused. Legacy v1/v2 services require explicit backup/fresh restore, not
 automatic marker repair. The 0a64ec7 native candidate includes these guards. See
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
-Source after e26ec8f adds v4 transactional control history: actual controls and
-their journal commit together, with replay-checked local checkpoints and explicit
-legacy backup/fresh recovery. [Contract and limits](docs/sync-http.md#official-authority-lifetime-and-transactional-control-history).
-Device-held control proofs and independent anchoring/fencing remain open. Existing
-downloads predate this source-only service change.
+Current Windows/Mac1875db5 candidates include v4 transactional control history:
+actual controls and their journal commit together, with replay-checked checkpoints,
+device-retained knowledge and explicit legacy backup/fresh recovery.
+[Contract and limits](docs/sync-http.md#official-authority-lifetime-and-transactional-control-history).
+Independent anchoring/fencing and physical-device acceptance remain open.
 The existing source-report package check now also exercises private desktop-to-CLI
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
-Latest tested downloads (Mac e26ec8f; Windows/Linux88b2497) pass the extended frozen
-CLI acceptance, including saved list-report audit; [downloads and exact scope](docs/testing/mac-acceptance-0.5.md).
+Latest Windows/Mac downloads (1875db5) pass the extended frozen CLI acceptance,
+including saved list-report audit and all15 control/research sync protocol flags; [downloads and exact scope](docs/testing/mac-acceptance-0.5.md).
 Legacy storage cleanup also preserves device-local offline selections and retained
 managed-original owners, with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).
@@ -424,7 +427,7 @@ delivery, rejecting files or research changed after background verification;
 
 
 New candidate builds verify guarded-history sync and duplicate-listener refusal
-inside the packaged CLI, plus fourteen source authority/retention representatives per OS. See
+inside the packaged CLI, plus45 source authority/control/recovery/offline cases per OS. See
 [the exact acceptance contract](docs/toolchain.md); physical device acceptance
 remains separate.
 
@@ -433,7 +436,8 @@ After a legacy sync-history warning, the development desktop can **Review saved
 sync history**, then explicitly **Use verified history** with a default-No
 confirmation. Research, pending edits and the received cursor are preserved;
 [workflow and limits](docs/workspace-sync-connection.md#explicit-review-of-legacy-acknowledgments).
-This source-only UI is newer than the355382c native test candidate.
+The current Windows/Mac candidates include this UI; full frozen-dialog and
+physical-device acceptance remains separate from its source/widget evidence.
 
 
 The official development sync service now accepts only history-verified mutations

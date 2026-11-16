@@ -9527,3 +9527,61 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Repair integration gate:critical14 passed36.22s,42.1s with privacy/Ruff;
   docs60 passed4.30s,18.5s with privacy/Ruff. These are bounded partial gates,
   not a substitute for rebuilding and verifying the actual installers.
+
+
+## 2026-11-16 matching Windows/Mac1875db5 candidates delivered
+
+- Mac-only run43808973671 passes3m54s; Windows-only run43808976905 passes7m48s.
+  Both are workflow_dispatch, clean1875db595b7df510a851a2d44ea5157cc994689f,
+  version0.5.0.dev, beta-candidate; draft-release jobs skipped. They supersede the
+  failed7a95b31 Mac attempt. No release/tag, daily-app restart/migration or deployment.
+- Each actual OS source gate passes critical14, first-sync preservation1 and45
+  authority/control/recovery/offline cases. Mac times2.98s/1.24s/5.55s; Windows
+  times5.70s/3.18s/16.44s. Gates retain their original three-minute bounds. These
+  named checks are not exhaustive button/writer coverage or milestone completion.
+- Independently downloaded and SHA-256-matched both provenance ZIPs. Actual reports
+  are `passed=true`, exact clean1875db5, hostmacOS/arm64 andWindows/amd64. All15
+  sync flags pass, including the new control challenge, missing/wrong guard refusal
+  and restart, while all11 prior assertions remain. Source-aware frozen CLI report
+  verifies exact originals/quotes, captured model handoff, disabled child disk route,
+  retained read, cached single completion and read-only list audit on both OSes.
+- Mac has three reader launches and foreground activation. Its downloaded screenshots
+  ZIP was hash-matched; actual dive.png was visually inspected for Chinese/formula/
+  code. Windows has isolated install/reinstall/uninstall with research preserved.
+  Both preserve four synthetic research files and source-format0.4.3 research/decks.
+  Actual older installed-binary upgrades, vault/IME, live providers, Google Slides,
+  full frozen private dialogs, hosted sync and physical devices remain unverified.
+- Mac metadata: installer ZIP14199876771,277900881bytes, GitHub SHA-256
+  `8a9e615a9c1532407b958cf137acc36aef650a32cfe49c2b7404e9a81a262a6f`;
+  independently checked provenance14199338423,3064bytes,
+  `071bc1169923432d69c774be21f65d766b885c68dac9caa48b129a4dc9950106`;
+  screenshots14199488387,795913bytes,
+  `99b8178549aa820d9c0b1ff84704887a5dcee8af3f500dcb29436090b856f7b1`;
+  research fixture14199872015,7603bytes,
+  `a31405cfe9ab9aed17557b69dc5ef2d51db1f0d51c5eba25dc3c0015f3478cca`.
+- Windows metadata: installer ZIP14199523450,184769284bytes, GitHub SHA-256
+  `7d3d20c4b212ebbe6684c86259750e0764c10245a583d81b4b6b2744ed778653`;
+  independently checked provenance14200082064,3445bytes,
+  `e353bb817be6a20f359af9de46a2dffc36cedf997db8830e0c697f7c30076d03`.
+  Large installer ZIP payloads were not independently downloaded here; distinguish
+  GitHub ZIP metadata from the actual CI installer checks/report's payload digest.
+- Mobile artifact14199263514,899286bytes, independently downloaded/matched ZIP SHA-256
+  `cd26e1a63b37101f8da35a295cd824a14d161a37214e3fbe5fad16395108ff2f`.
+  Existing verifier checks its actual53 files/3977652rawbytes, exact proxy map,
+  no private records and derived shell identity in0.453s under the local governor.
+  Content ID`dae60b2ab54a12460d51065b76711d5668647ca26c8eccf601a05c5d55ecd2b3`;
+  shell`paperfact-mobile-shell-9d8ea13c70a4d80c084a91185532bc16fe85950f06443e332cbe92953114ca3c`.
+  It is built, not HTTPS/PWA deployed or physically accepted. No IndexedDB reset,
+  credential migration or user upload was performed. Ignored evidence lives in
+  build/preview-1875db5. Linux remains older88b2497 and lacks this v4 handshake.
+- Public-app-support workflow used for exact build identity, scoped evidence and
+  physical-device limits. No global skill or user GitHub engagement action.
+
+- Updated current download/status/readiness pages and stale native-v3/source-only
+  descriptions in README and protocol/admin/recovery docs. Historical candidate
+  records remain explicitly labeled. Documentation does not create another binary.
+  The earlier Mac screenshot issue and failed7a95b31 run remain preserved, not hidden.
+
+- Final delivery-docs validation:60 passed2.58s,8.7s including privacy/Ruff;
+  whitespace review clean. No executable behavior changed after the exact1875db5
+  native builds. Documentation-only commit does not supersede their build identity.

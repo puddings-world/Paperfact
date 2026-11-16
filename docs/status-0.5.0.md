@@ -9,22 +9,23 @@ acceptance. Historical iterations belong in the
 
 ## Current deliverable
 
-Integration branch: `develop/0.5`. Latest tested downloads are Mac **e26ec8f**
-([run43796990188](https://github.com/puddings-world/Paperfact/actions/runs/43796990188),4m27s)
-and Windows/Linux **88b2497**
-([run43795810511](https://github.com/puddings-world/Paperfact/actions/runs/43795810511),8m40s/3m22s).
-Mac adds only a screenshot-helper/test/docs correction; app research code matches.
-All three exact clean provenance ZIPs were independently hash-verified. Each OS
-passes critical14, first-sync1 and authority/offline-delivery17. Frozen CLI report
-acceptance now also verifies read-only list-report audit. Mac screenshots show
-readable Chinese, formula and code. Full frozen GUI, physical-device and hosting
-gates remain open. [Current downloads](testing/mac-acceptance-0.5.md).
+Integration branch: `develop/0.5`. Latest Windows/Mac candidates share clean
+**1875db595b7df510a851a2d44ea5157cc994689f**, version `0.5.0.dev`, beta-candidate.
+[Mac run43808973671](https://github.com/puddings-world/Paperfact/actions/runs/43808973671)
+passes3m54s; [Windows run43808976905](https://github.com/puddings-world/Paperfact/actions/runs/43808976905)
+passes7m48s. Both small provenance ZIPs were independently hash-checked and inspected.
+Each OS passes critical14, first-sync1 and45 authority/control/recovery/offline source
+cases. Actual frozen apps pass15 sync protocol flags and source-report acceptance;
+Mac screenshots show readable Chinese, formula and code. Full frozen GUI,
+physical-device and hosting gates remain open. [Downloads and isolation steps](testing/mac-acceptance-0.5.md).
+Linux remains older88b2497 and is not a compatible official-v4 sync acceptance peer.
 
-The preceding common-source0a64ec7 candidate is historical; details remain in the
+Earlier candidates and the failed7a95b31 Mac attempt remain historical in the
 [continuation ledger](testing/continuation-20261112.md). Documentation-only commits
-do not create another native build. Current candidates retain v3 local authority
-identity/control checkpoints and offline/retained-original cleanup protection.
-Legacy authority v1/v2 requires explicit backup/fresh restore; retained local
+do not create another native build. Current Windows/Mac candidates include official
+v4 transactional control history, device-retained checkpoints and recovery comparison.
+The packaged test client now performs that actual handshake without relaxing guards.
+Legacy authority v1/v2/v3 requires explicit backup/fresh restore; retained local
 checkpoints are not independent anchoring or fencing.
 
 Actual frozen CLIs pass import/export, original-file preservation, CLI/MCP retry/
@@ -36,18 +37,18 @@ This is not the full frozen GUI dialog journey. Windows also passes isolated
 install/reinstall/uninstall with research preserved; Mac passes three reader
 launches and foreground; Linux passes AppImage integration.
 
-The [current mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194207419)
-was independently downloaded and ZIP-hash-checked. It includes restored Traditional
-Chinese report copy and a content-derived shell cache; numeric-cache exports stay
-readable. Content ID: `2383b47d34db70bbaed1cdf1a9b608a6c2144ecb459dedc861db1ee223222f1a`.
+The [current mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199263514)
+was independently downloaded, ZIP-hash-matched and verified against all53 assets, proxy map and cache identity in0.453s. It includes small IndexedDB control metadata and source-aware
+Traditional Chinese copy with a content-derived shell cache; numeric-cache exports
+stay readable. Content ID: `dae60b2ab54a12460d51065b76711d5668647ca26c8eccf601a05c5d55ecd2b3`.
 This is built, not deployed HTTPS/PWA or physical-phone acceptance. No IndexedDB
 research/connection migration, public release/tag, daily-app migration, cloud
 resource or owner research mutation was performed.
 
-Source after these downloads adds official-authority v4 transactional control
-history and explicit legacy v1/v2/v3 backup/fresh recovery. This is source-only;
-desktop/mobile retained control checkpoints now have scoped source evidence;
-independent anchoring/fencing and installed-device acceptance remain open.
+Official-v4 control challenge/refusal/restart now also has actual frozen Windows/
+Mac evidence. Durable desktop/mobile storage, join/resume and fresh-identity recovery
+have scoped fixture/Qt/HTTP evidence, not full frozen-dialog or physical-device proof.
+Independent anchoring/fencing, hosted recovery and installed-device acceptance remain open.
 
 Current desktop downloads also guard offline verification at queued delivery:
 changed originals, research or storage ownership clear prior readiness and require
