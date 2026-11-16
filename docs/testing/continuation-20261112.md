@@ -9485,3 +9485,45 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final curated integration:critical14 passed10.79s,16.4s including privacy/Ruff;
   docs60 passed3.69s,7.9s including privacy/Ruff. One governed check at a time,
   at most two logical processors and25% CPU. No post-validation behavior change.
+
+
+## 2026-11-16 Mac candidate exposed stale packaged test-client protocol
+
+- Dispatched Mac-only run43807591768 from clean7a95b31. It failed the actual frozen
+  `sync-protocol` stage after package build; no downloadable installer/release was
+  published. Retained report is `passed=false`, hostmacOS/arm64, exactclean7a95b31,
+  active_checksync-protocol. Earlier reader launches, report/source handoff and
+  package research checks completed; do not treat the overall candidate as passed.
+- Independently downloaded/hash-verified small failure artifacts:
+  provenance14199465740 ZIP SHA-256
+  `4a7714b374661aa0bda6f0c4ec2811aff3afb3572bd1549ac71f26fdfb730f04`;
+  acceptance14198234659 ZIP SHA-256
+  `75bf3dbdb8443db29f853aecb42df2afdef7aeaaf7036131b51485f863a6a43e`.
+  They are retained under ignored build/preview-7a95b31-failed.
+- Failure detail: `scripts/verify_sync_protocol.py` raised `Packaged sync initial
+  pull failed`. Its manually encoded HTTP client omitted the new control handshake
+  and guard; the actual official listener correctly refused that private request.
+  The existing normal real-CLI verifier test reproduced the identical assertion
+  locally before changes (1failed,2.60s;7.1s with privacy/Ruff).
+- Updated only the independent packaged-test client and its tests: strict advertised
+  control capability, exact identity/point challenge, canonical header on every
+  private request, explicit missing/wrong-control refusal and retained-point restart.
+  All eleven prior protocol outcomes and their assertions remain. Four additional
+  report flags expose control checks. No application guard was disabled or relaxed.
+- Existing fault injection still checks each earlier failure at its intended stage;
+  stale-execution injection now distinguishes the new missing-control428 refusal
+  from its own restart428 case. New fault cases simulate missing/wrong control
+  being accepted, changed authority on reconnect and absent capability. No failure
+  can be converted into a successful receipt.
+- All11 real isolated CLI/listener cases passed31.30s,35.3s with privacy/Ruff under
+  the existing two-processor/25% governor. The existing per-OS three-minute source
+  stage adds only the one normal case, no new job or timeout. This catches helper
+  drift before the expensive build; full frozen acceptance remains required.
+- App research/runtime code is unchanged from7a95b31 by this repair. Mac/Windows
+  candidates still need a new exact-source build and independently inspected
+  acceptance report. No owner data, credentials, active app, tag, cloud or PWA
+  deployment changed. No repeated build was started before diagnosis/local proof.
+
+- Repair integration gate:critical14 passed36.22s,42.1s with privacy/Ruff;
+  docs60 passed4.30s,18.5s with privacy/Ruff. These are bounded partial gates,
+  not a substitute for rebuilding and verifying the actual installers.

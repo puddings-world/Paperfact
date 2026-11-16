@@ -1,5 +1,6 @@
 """Verify a packaged loopback sync listener with synthetic, private device state."""
 
+import base64
 import http.client
 import json
 import os
@@ -8,8 +9,11 @@ import subprocess
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from uuid import UUID
 
 HEADER = "X-Paperfact-Sync-Instance"
+CONTROL_HEADER = "X-Paperfact-Control-Checkpoint"
+CONTROL_SUPPORT = "X-Paperfact-Control-History"
 
 
 def _graph_operations(identity):
@@ -83,21 +87,49 @@ def _listener(command, state, env, log):
                     process.wait(timeout=5)
 
 
-def _post(endpoint, token, route, value, instance=None):
+def _post(endpoint, token, route, value, instance=None, control=None):
     connection = http.client.HTTPConnection("127.0.0.1", int(endpoint.rsplit(":", 1)[1]), timeout=5)
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
     if instance is not None:
         headers[HEADER] = instance
+    if control is not None:
+        raw = json.dumps(control, separators=(",", ":")).encode("utf-8")
+        headers[CONTROL_HEADER] = base64.urlsafe_b64encode(raw).decode().rstrip("=")
     try:
         connection.request("POST", route, json.dumps(value).encode(), headers)
         response = connection.getresponse()
         body = response.read(4097)
         offers = response.headers.get_all(HEADER, [])
+        if response.headers.get_all(CONTROL_SUPPORT, []) != ["1"]:
+            raise ValueError("Packaged sync has no unambiguous control-history offer")
         if len(body) > 4096 or len(offers) != 1 or not re.fullmatch("[0-9a-f]{32}", offers[0]):
             raise ValueError("Invalid packaged sync response bounds or execution identity")
         return response.status, offers[0], json.loads(body)
     finally:
         connection.close()
+
+
+def _control_offer(endpoint, token, instance, identity, previous=None):
+    status, offered, body = _post(endpoint, token, "/v1/control/checkpoint",
+                                 {"checkpoint": previous}, instance, previous)
+    if (status != 200 or offered != instance or not isinstance(body, dict)
+            or set(body) != {"version", "identity", "accepted", "checkpoint"}
+            or type(body["version"]) is not int or body["version"] != 1
+            or body["identity"] != identity or body["accepted"] != previous):
+        raise AssertionError("Packaged control-history challenge differs")
+    point = body["checkpoint"]
+    if (not isinstance(point, dict) or set(point) != {"authority_id", "sequence", "sha256"}
+            or not isinstance(point["authority_id"], str)
+            or str(UUID(point["authority_id"])) != point["authority_id"]
+            or type(point["sequence"]) is not int or not 1 <= point["sequence"] <= 10000
+            or not isinstance(point["sha256"], str)
+            or not re.fullmatch("[0-9a-f]{64}", point["sha256"])):
+        raise ValueError("Invalid packaged control-history point")
+    if previous is not None and (point["authority_id"] != previous["authority_id"]
+            or point["sequence"] < previous["sequence"]
+            or point["sequence"] == previous["sequence"] and point != previous):
+        raise AssertionError("Packaged control history changed on reconnect")
+    return point
 
 
 def verify(command, folder, env):
@@ -127,18 +159,30 @@ def verify(command, folder, env):
         status, first, body = _post(endpoint, token, "/v1/session/info", {})
         if status != 200 or body != identity:
             raise AssertionError("Packaged sync device identity differs")
-        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1}, first)
+        control = _control_offer(endpoint, token, first, identity)
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1},
+                                      first, control=None)
+        if status != 428 or body != {"error": "sync_session_changed"}:
+            raise AssertionError("Packaged sync accepted a request without control knowledge")
+        wrong_control = dict(control, sha256="0" * 64)
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1},
+                                      first, wrong_control)
+        if status != 412 or body != {"error": "sync_history_unavailable"}:
+            raise AssertionError("Packaged sync accepted different authority control history")
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1},
+                                      first, control)
         if status != 200 or offered != first or body != []:
             raise AssertionError("Packaged sync initial pull failed")
         paper, graph = _graph_operations(identity)
-        status, offered, body = _post(endpoint, token, "/v1/push", {"operation": paper}, first)
+        status, offered, body = _post(endpoint, token, "/v1/push", {"operation": paper},
+                                      first, control)
         if (status != 412 or offered != first
                 or body != {"error": "sync_history_unavailable"}):
             raise AssertionError("Packaged sync accepted a prototype write without proof")
         checkpoint = {"sequence": 0, "sha256": history_seed(identity["workspace_id"])}
         for sequence, operation in enumerate((paper, graph), start=1):
             status, offered, receipt = _post(endpoint, token, "/v1/history/push",
-                {"operation": operation, "checkpoint": checkpoint}, first)
+                {"operation": operation, "checkpoint": checkpoint}, first, control)
             if status != 200 or offered != first or set(receipt) != {"record", "checkpoint"}:
                 raise AssertionError("Packaged verified citation graph write failed")
             event = json.loads(receipt["record"])
@@ -148,32 +192,38 @@ def verify(command, folder, env):
                     or event.get("operation") != operation or receipt["checkpoint"] != checkpoint):
                 raise AssertionError("Packaged citation graph acknowledgment proof differs")
         status, offered, body = _post(endpoint, token, "/v1/history/push",
-            {"operation": graph, "checkpoint": {"sequence": 2, "sha256": "0" * 64}}, first)
+            {"operation": graph, "checkpoint": {"sequence": 2, "sha256": "0" * 64}}, first, control)
         if (status != 412 or offered != first
                 or body != {"error": "sync_history_unavailable"}):
             raise AssertionError("Packaged sync accepted a different history proof")
         status, offered, retry = _post(endpoint, token, "/v1/history/push",
-                                      {"operation": graph, "checkpoint": checkpoint}, first)
+                                      {"operation": graph, "checkpoint": checkpoint},
+                                      first, control)
         if status != 200 or offered != first or retry != receipt:
             raise AssertionError("Packaged citation graph retry differs")
-        status, offered, tail = _post(endpoint, token, "/v1/pull", {"after": 2, "limit": 1}, first)
+        status, offered, tail = _post(endpoint, token, "/v1/pull", {"after": 2, "limit": 1},
+                                      first, control)
         if status != 200 or offered != first or tail != []:
             raise AssertionError("Packaged citation graph retry duplicated an event")
-        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1}, first)
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1},
+                                      first, control)
         if status != 200 or offered != first or body != [event]:
             raise AssertionError("Packaged citation graph pull differs")
     with _listener(command, state, env, folder / "second-listener.log") as endpoint:
-        status, second, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1}, first)
+        status, second, body = _post(endpoint, token, "/v1/pull", {"after": 0, "limit": 1},
+                                      first, control)
         if status != 428 or second == first or body != {"error": "sync_session_changed"}:
             raise AssertionError("Packaged sync accepted a stale execution")
         status, offered, body = _post(endpoint, token, "/v1/session/info", {})
         if status != 200 or offered != second or body != identity:
             raise AssertionError("Packaged sync reconnect identity differs")
-        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1}, second)
+        control = _control_offer(endpoint, token, second, identity, control)
+        status, offered, body = _post(endpoint, token, "/v1/pull", {"after": 1, "limit": 1},
+                                      second, control)
         if status != 200 or offered != second or body != [event]:
             raise AssertionError("Packaged sync reconnect failed")
         status, offered, page = _post(endpoint, token, "/v1/history/pull",
-            {"after": 2, "limit": 1, "checkpoint": checkpoint}, second)
+            {"after": 2, "limit": 1, "checkpoint": checkpoint}, second, control)
         if (status != 200 or offered != second or page != dict(
                 version=1, workspace_id=identity["workspace_id"], after=checkpoint,
                 events=[], checkpoint=checkpoint, caught_up=True)):
@@ -182,4 +232,6 @@ def verify(command, folder, env):
                 citation_graph=True, citation_graph_retry=True, citation_graph_restart=True,
                 duplicate_listener_refused=True, verified_history=True,
                 wrong_history_refused=True, verified_history_restart=True,
-                prototype_writes_refused=True)
+                prototype_writes_refused=True, control_history=True,
+                missing_control_refused=True, wrong_control_refused=True,
+                control_history_restart=True)

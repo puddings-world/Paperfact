@@ -367,7 +367,8 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
 
 @pytest.mark.parametrize("failure", [
     None, "stale_accepted", "bad_header", "graph_lost", "wrong_history_accepted",
-    "duplicate_accepted", "prototype_accepted",
+    "duplicate_accepted", "prototype_accepted", "control_missing_accepted",
+    "control_wrong_accepted", "control_changed", "bad_control_header",
 ])
 def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, monkeypatch, failure):
     sys.path.insert(0, str(ROOT / "scripts"))
@@ -389,7 +390,8 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
 
     def altered(*args, **kwargs):
         status, offered, body = post(*args, **kwargs)
-        if failure == "stale_accepted" and status == 428:
+        if (failure == "stale_accepted" and status == 428
+                and len(args) > 5 and args[5] is not None):
             return 200, offered, []
         if failure == "graph_lost" and args[2] == "/v1/pull" and args[3].get("after") == 1:
             return status, offered, []
@@ -398,6 +400,16 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
             return 200, offered, body
         if failure == "prototype_accepted" and status == 412 and args[2] == "/v1/push":
             return 200, offered, body
+        if (failure == "control_missing_accepted" and status == 428
+                and kwargs.get("control") is None):
+            return 200, offered, []
+        if (failure == "control_wrong_accepted" and status == 412 and len(args) > 5
+                and args[5].get("sha256") == "0" * 64):
+            return 200, offered, []
+        if (failure == "control_changed" and args[2] == "/v1/control/checkpoint"
+                and args[3]["checkpoint"]):
+            body = dict(body, checkpoint=dict(body["checkpoint"],
+                        authority_id="11111111-1111-4111-8111-111111111111"))
         return status, offered, body
 
     if failure == "duplicate_accepted":
@@ -413,6 +425,8 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
     if failure == "bad_header":
         # Change the expected contract: actual service still offers its real header.
         monkeypatch.setattr(verify_sync_protocol, "HEADER", "X-Unknown-Sync-Instance")
+    if failure == "bad_control_header":
+        monkeypatch.setattr(verify_sync_protocol, "CONTROL_SUPPORT", "X-Unknown-Control-History")
     monkeypatch.setattr(verify_sync_protocol, "_post", altered)
     try:
         if failure:
@@ -433,7 +447,9 @@ def test_packaged_sync_verifier_uses_real_isolated_cli_and_listener(tmp_path, mo
                                   citation_graph_retry=True, citation_graph_restart=True,
                                   duplicate_listener_refused=True, verified_history=True,
                                   wrong_history_refused=True, verified_history_restart=True,
-                                  prototype_writes_refused=True)
+                                  prototype_writes_refused=True, control_history=True,
+                                  missing_control_refused=True, wrong_control_refused=True,
+                                  control_history_restart=True)
             assert "token" not in json.dumps(result)
     finally:
         assert children and all(child.poll() is not None for child in children)

@@ -770,3 +770,15 @@ prefix, copied-host fencing and independent anchors still require further work.
 now observes device-versus-backup control knowledge; explicit fresh-authority
 restore/join has actual HTTP fixture coverage without rebinding the old outbox. This source is not in the linked native
 installers and has not been deployed or physically accepted on Mac/phone.
+
+
+The packaged protocol acceptance client independently encodes the same control
+handshake and headers. It requires one advertised capability, verifies the exact
+workspace/device and returned point, tests rejection of absent/forged control
+knowledge, and carries the retained point through listener restart. Its previous
+research-history, retry, duplicate-listener, prototype-write and stale-execution
+checks remain. The receipt adds `control_history`, `missing_control_refused`,
+`wrong_control_refused` and `control_history_restart` to the existing eleven flags.
+An old test client omitting the new header is correctly refused; it must complete
+the handshake rather than disable official guards. The existing source CI stage
+runs its one normal real-CLI case before packaging to catch protocol drift early.
