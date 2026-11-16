@@ -63,3 +63,6 @@ desktop.ini
 *-connection.json
 
 *-browser-key.json
+
+# Local operator target metadata; committed example is synthetic only.
+/deploy/gcp/pilot.local.json

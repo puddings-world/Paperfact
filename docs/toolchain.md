@@ -418,3 +418,15 @@ stale-preview offline/retained-document cleanup representatives on every desktop
 OS. It retains its three-minute stage budget; it does not add a full suite or a
 second build. These synthetic cases exercise platform-specific file replacement,
 locking and process exit. They do not prove real power-loss or device/hosted sync.
+
+
+## Offline GCP pilot review preparation
+
+`deploy/gcp/prepare.py` uses only the existing Python3.11+ toolchain and standard
+library. It renders the adjacent three deployment templates from the closed
+`pilot.example.json` shape, retaining template/output hashes and open gates in
+`review.json`. It has no cloud, subprocess, credentials, service installation or
+scheduling dependency. Existing review directories are never overwritten;
+interrupted output is retained. [Command/options and field meanings](gcp-sync-pilot-plan.md#prepare-one-offline-configuration-review).
+Run `scripts/check_bounded.py --profile focused --python tests/test_gcp_pilot_prepare.py`
+for the small renderer/actual CLI selection; this is not Linux/GCP acceptance.

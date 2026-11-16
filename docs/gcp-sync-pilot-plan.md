@@ -7,6 +7,75 @@ has not been confirmed as Paperfact's target and is not embedded in public docs.
 Target project ID, approved region, hostname and budget remain unconfirmed.
 This is not authorization to apply infrastructure or upload research.
 
+## Prepare one offline configuration review
+
+The existing templates can now be rendered together using only Python3.11+:
+
+```sh
+python deploy/gcp/prepare.py --config deploy/gcp/pilot.example.json --output build/pilot-review-example
+```
+
+Success prints `state=prepared_for_review`, `files=4`, `resource_changes=false`,
+`budget_enforced=false` and `artifacts_verified=false`. Inspect the new directory;
+this command does not call GCP/gcloud, log in, read credentials, create resources,
+install/restart services, issue TLS certificates or upload research.
+The example's project, domain and bucket are synthetic. Its budget is an example
+review value, not a cost estimate, approved target or enforced spending limit.
+
+For a real review copy the JSON to `deploy/gcp/pilot.local.json` (gitignored),
+replace the complete non-secret target fields and choose a fresh output directory.
+Do not put account tokens or service-account keys in this closed configuration.
+Generated output belongs under the ignored `build/` or another private operator
+folder; it is not installed in the app/research directory. POSIX output is created
+with a private directory mode; Windows inherits the selected parent's ACLs.
+
+| CLI option | Requirement |
+|---|---|
+| `--config FILE` | Required UTF-8 JSON, at most16 KiB, exactly the fields below |
+| `--output DIRECTORY` | Required new directory in an existing parent; existing output is refused |
+| `-h`, `--help` | Show usage; no configuration is read or output created |
+
+| JSON field | Meaning |
+|---|---|
+| `format` | Exact `paperfact.sync-pilot-review.v1` |
+| `project_id` | Explicit target ID; [project naming rules](https://docs.cloud.google.com/resource-manager/reference/rest/v1/projects), not inferred from OAuth or local SDK defaults |
+| `region` | Explicit region name; availability/residency is not verified offline |
+| `zone` | Zone in that region; capacity/quota is not verified |
+| `hostname` | Lowercase DNS host only; no scheme, port, wildcard or directive text |
+| `monthly_budget_usd` | Positive finite review value; no billing budget or hard cap is created |
+| `backup_bucket` | Explicit private target name; existence/access/privacy must be verified separately |
+| `backup_snapshot` | One plain directory name below the fixed reviewed backup root |
+| `source_commit` | Full40/64-hex source identity to verify on the host; symbolic refs are refused |
+| `mobile_zip_sha256` | Exact64-hex mobile artifact ZIP digest to verify before deployment |
+| `browser_enabled` | Explicit boolean; true renders same-origin browser flags, but does not provision the required private signing key |
+
+Output reuses the three checked-in `.example` templates:
+
+- `paperfact-sync.service`: fixed loopback port, data mount and source paths;
+  optionally the exact browser HTTPS origin/key reference.
+- `paperfact-nginx.conf`: the matching hostname, reviewed TLS paths and bounded
+  reverse proxy/static rules. It includes the generated mobile allowlist file;
+  the actual mobile artifact must be independently verified/deployed.
+- `paperfact-backup-upload.service`: explicit bucket and snapshot path, no timer.
+- `review.json`: complete non-secret inputs, original-template hashes, generated
+  file hashes/byte counts and unresolved approval/platform/security gates.
+
+No global operator defaults or cloud SDK are required to render. Fields are
+validated for bounded rendering, not proof of project ownership, live provider
+availability, correct IAM/TLS or installation. Operator approval and artifact
+verification remain required. Unknown/duplicate/oversized/malformed inputs return
+status2 without an output directory; raw field values are not printed. A later
+write failure retains partial output without a completed `review.json`; review it
+and retry into a different new directory. Repeating the command never replaces
+reviewed files or cleans a directory automatically.
+
+Python API in `deploy/gcp/prepare.py`: `load(path) -> dict`,
+`prepare(config, output) -> dict`, `main(argv=None) -> int`. These are operator
+preparation helpers, not desktop/MCP actions or a public hosted service.
+The planning tool does not resolve independent authority history/anchoring/fencing,
+actual mount/TLS/service supervision, cloud restore or physical-device acceptance.
+
+
 ## Recommended first deployment
 
 Engineering recommendation: one Compute Engine VM, one dedicated durable data

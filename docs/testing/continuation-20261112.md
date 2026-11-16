@@ -9188,3 +9188,28 @@ selection above and is not an additional feature count.
 Final saved-audit semantics and actual queued PDF race19 pass54.43s pytest/
 63.4s bounded stages; cancellation, missing originals and read budgets remain
 unchanged. This overlaps earlier selections; it is not a total feature count.
+
+## 2026-11-16 offline GCP pilot review preparation
+
+- Added deploy/gcp/prepare.py using the existing Python3.11 standard library and
+  adjacent reviewed templates. It accepts a closed bounded non-secret target
+  record and creates one new directory containing matched service/proxy/manual
+  backup units and review.json with template/output hashes and unresolved gates.
+- It never contacts cloud/SDK/accounts, installs/restarts a host, issues keys/TLS,
+  schedules backups, deletes output or infers project ownership. Explicit flags
+  resource_changes/budget_enforced/artifacts_verified remain false. The sample
+  budget/project/bucket/domain are illustrative only, not an approved target.
+  pilot.local.json is explicitly ignored; generated output belongs under build
+  or another private operator directory. There is no new desktop UI/MCP action.
+- Renderer/standalone CLI15 pass1.46s pytest/10.9s bounded stages. They cover
+  browser-mode consistency, injection/malformed/budget/source refusal, no output
+  on invalid input, no replacement on retry and retained interrupted files.
+  Long raw fixture IDs were replaced with named cases for readable reports.
+- Ran the actual CLI once to create build/pilot-review-example from the synthetic
+  config and inspected its active browser-origin/mount line and review receipt.
+  Four review files exist; no live host configuration or research was changed.
+- Confirmed project ID syntax against the official Resource Manager reference;
+  actual project, zone capacity, DNS, bucket privacy/IAM, cost and artifact
+  verification remain external review. GCP target details are still pending.
+  Authority history/independent anchoring/fencing, hosted restore and physical
+  Windows/Mac/phone convergence remain open. Native0a64ec7 artifacts unchanged.

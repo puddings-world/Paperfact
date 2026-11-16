@@ -1,0 +1,13 @@
+{
+  "format": "paperfact.sync-pilot-review.v1",
+  "project_id": "paperfact-example",
+  "region": "asia-east1",
+  "zone": "asia-east1-b",
+  "hostname": "sync.example.org",
+  "monthly_budget_usd": 10,
+  "backup_bucket": "paperfact-example-private",
+  "backup_snapshot": "reviewed-snapshot",
+  "source_commit": "0a64ec7ed8c2aec8c435c12f285eae36d80d5d61",
+  "mobile_zip_sha256": "d3cd1845865c04fec587441251c51bdb1ed608a6fe47b3373c7458e71a655f1a",
+  "browser_enabled": true
+}

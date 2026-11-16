@@ -451,3 +451,8 @@ The same read-only CLI/MCP action accepts `analysis.audit` with `{"list_id":"LIS
 Queued desktop results recheck the report and original observations at display time.
 It checks owned originals and recorded quote locations without AI or downloads;
 scientific support remains unassessed. [Usage and limits](docs/analysis-audit.md#saved-list-report-source-audit).
+
+
+Deployment operators can prepare existing GCP pilot templates entirely offline:
+`python deploy/gcp/prepare.py --config deploy/gcp/pilot.example.json --output build/pilot-review-example`.
+This creates review files only, never resources or credentials. [All flags, fields and remaining gates](docs/gcp-sync-pilot-plan.md#prepare-one-offline-configuration-review).

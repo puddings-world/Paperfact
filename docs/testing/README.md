@@ -937,3 +937,13 @@ those settings. Failure-before-handshake and timeout are checked separately.
 The existing e5eb093 artifacts do not contain this extended acceptance evidence.
 The host component remains source code; full frozen desktop dialogs and physical
 devices remain separate from this CLI/private-transport evidence.
+
+
+### Offline pilot configuration preparation
+
+`tests/test_gcp_pilot_prepare.py` has a small, named behavior selection: consistent
+same-origin service/proxy/backup rendering; unchanged source templates; no overwrite
+on retry; retained partial output; bounded invalid/duplicate/oversized JSON refusal;
+and the actual standalone Python CLI. Test IDs describe failure classes instead
+of printing long input blobs. It creates only isolated review files, never calls
+GCP, installs a service or establishes hosted/device/security acceptance.

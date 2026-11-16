@@ -76,7 +76,9 @@ See [queue pin migration](queue-pin-migration.md) and
 4. **Deployment:** review the existing [GCP pilot plan](gcp-sync-pilot-plan.md),
    exact project/region/hostname/budget, operator and recovery boundary. Provisioning,
    HTTPS, coordinated mobile delivery, backup/restore rehearsal and owner enrollment
-   have not been performed. This page does not authorize creating cloud resources.
+   have not been performed. An offline template renderer now prepares consistent
+   operator review files; it neither verifies artifacts nor authorizes resources.
+   This page does not authorize creating cloud resources.
 5. **Installed-device acceptance:** run the maintained Windows/Mac and physical
    phone journeys, including offline edits, conflict, interrupted attachment,
    revocation and restore. Installed old-release upgrades, native vaults/IME and
