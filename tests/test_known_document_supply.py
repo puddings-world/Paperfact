@@ -21,7 +21,7 @@ from paper_daily.sync_blobs import (
     BlobStore,
 )
 from paper_daily.sync_document_actions import stage_file
-from paper_daily.workspace_service import Cancelled, Ticket
+from paper_daily.workspace_service import Cancelled, Ticket, WorkspaceChanged
 
 
 def missing(make, monkeypatch, *, unbound=False):
@@ -301,11 +301,10 @@ def test_interrupted_local_copy_retains_one_bounded_resumable_reservation(tmp_pa
     blobs = BlobStore(tmp_path / "blobs", quota_bytes=len(data))
     chosen = tmp_path / "known.bin"
     chosen.write_bytes(data)
-    calls = []
+    partial = blobs._path(manifest, partial=True)
 
     def interrupt():
-        calls.append(1)
-        if len(calls) == 7:
+        if partial.exists() and partial.stat().st_size >= 1024**2:
             raise Cancelled()
 
     with pytest.raises(Cancelled):
@@ -328,3 +327,62 @@ def test_supply_never_truncates_or_deletes_its_selected_partial_source(tmp_path)
     with pytest.raises(BlobError, match="external file"):
         blobs.import_file(manifest, partial)
     assert partial.read_bytes() == data and not blobs.available(manifest)
+
+
+@pytest.mark.parametrize("phase", ["source", "staged", "cached"])
+@pytest.mark.parametrize("failure", [Cancelled, WorkspaceChanged])
+def test_local_supply_hashing_stops_at_first_chunk_and_retries(
+    tmp_path, monkeypatch, phase, failure,
+):
+    from contextlib import contextmanager
+    from pathlib import Path
+
+    data = b"x" * (3 * 1024**2 + 17)
+    manifest = BlobManifest(hashlib.sha256(data).hexdigest(), len(data))
+    blobs = BlobStore(tmp_path / "blobs", quota_bytes=len(data))
+    chosen = tmp_path / "known.bin"
+    chosen.write_bytes(data)
+    final = blobs._path(manifest)
+    part = blobs._path(manifest, partial=True)
+    if phase == "cached":
+        blobs.import_file(manifest, chosen)
+    watched = {"source": chosen, "staged": part, "cached": final}[phase]
+    original = Path.open
+    read_bytes = []
+
+    @contextmanager
+    def tracking(path, mode="r", *args, **kwargs):
+        with original(path, mode, *args, **kwargs) as stream:
+            class Reader:
+                def read(self, size):
+                    value = stream.read(size)
+                    read_bytes.append(len(value))
+                    return value
+            yield Reader()
+
+    def opened(path, mode="r", *args, **kwargs):
+        if path == watched and mode == "rb":
+            return tracking(path, mode, *args, **kwargs)
+        return original(path, mode, *args, **kwargs)
+
+    def check():
+        if sum(read_bytes) >= 1024**2:
+            raise failure("Synthetic cancelled or replaced workspace")
+
+    monkeypatch.setattr(Path, "open", opened)
+    with pytest.raises(failure):
+        blobs.import_file(manifest, chosen, check=check)
+    assert sum(read_bytes) == 1024**2
+    monkeypatch.setattr(Path, "open", original)
+    assert chosen.read_bytes() == data
+    if phase == "source":
+        assert blobs.usage()["reserved_bytes"] == 0
+        assert not final.exists() and not part.exists()
+    elif phase == "staged":
+        assert not final.exists() and part.read_bytes() == data
+        assert blobs.begin(manifest) == {"offset": len(data), "complete": False}
+    else:
+        assert final.read_bytes() == data
+        assert blobs.begin(manifest) == {"offset": len(data), "complete": True}
+    assert blobs.import_file(manifest, chosen).read_bytes() == data
+    assert blobs.usage()["objects"] == 1

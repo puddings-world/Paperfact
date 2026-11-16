@@ -10367,3 +10367,43 @@ stay in the existing acceptance/continuation records.
 - Final docs gate60 passed6.38s, total23.7s; privacy/Ruff/CRLF-aware
   whitespace passed. Runtime unchanged: reuse the exact candidate source/native
   evidence rather than repeat unaffected runtime tests for this documentation.
+
+
+## 2026-11-16: cancellable exact-original hash validation
+
+- Gap verified in sync_blobs.BlobStore._verify: import_file accepted an existing
+  caller lifetime/cancellation callback but complete source/staged/final hash scans
+  did not invoke it. The new source-phase regression observed3145745 bytes read
+  after the first1 MiB cancellation point, instead of1048576;1failed in4.20s,
+  32.0s full scoped check. No product attribution was based on an assumed OS issue.
+- Reuse the existing callback before every at-most1 MiB hash read and after
+  verification. Pass it from local exact-byte supply and existing begin checks.
+  No research/version/receipt behavior, final-object overwrite rule, storage quota,
+  UI surface, new daemon or automatic transfer is introduced. Blocking filesystem
+  reads and native PDF parsing are not forcibly preempted.
+- Six new behavior cases cover Cancelled and WorkspaceChanged at source, staged
+  and reused-final hash phases: stop after1048576 bytes, preserve selected bytes,
+  publish no new final on cancellation, retain exact staged/reused bytes and one
+  reservation where applicable, then retry successfully with one object.
+  The existing interrupted-copy test now triggers on the actual first1 MiB
+  partial rather than callback number7; all saved-byte/reservation/retry assertions
+  remain. This preserves its intended behavior as more check points are added.
+- Affected60 cases pass167.21s, total187.4s including privacy14.5/Ruff1.6s:
+  test_known_document_supply.py plus test_sync_blobs.py. Includes original supply,
+  changed source/workspace, exact retry, failure rollback, immutable final
+  preservation, missing/corrupt bytes, quota, concurrent retries and link controls.
+  Existing two-core/25-percent/300-second governor; no real research/AI/network.
+- Non-test preparation failures remain separate: an unsupported --pytest-arg
+  stopped before tests; a new test's102-character signature failed Ruff before
+  pytest. Both were corrected before reproducing the real regression. A guarded
+  source edit expected CRLF but the actual source uses LF; it wrote nothing.
+  The correction preserved existing file line endings and stopped on failures.
+- Evidence is ignored build/supply-cancellation-evidence. This is a source-level
+  improvement after30b5776, not a new installer or hosted/physical acceptance.
+  Latest accepted three-platform downloads remain30b5776; no rebuild is necessary
+  to commit this scoped source checkpoint. Existing bounded-work/public-support
+  principles apply; no novel global skill or credential/deployment action.
+- Final critical gate14 passed109.29s, total138.9s; privacy20.0/Ruff2.5s
+  passed. Combined final focused+critical time326.3s; no claim that both together
+  fit five minutes. Each stayed below its existing300-second resource budget.
+  Whitespace checked with CRLF-aware settings; docs/API updated with this fix.

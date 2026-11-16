@@ -450,6 +450,9 @@ Physical-device and older-installed-release upgrade checks remain separate.
 Selected-file offline checks now revalidate their native observations at desktop
 delivery, rejecting files or research changed after background verification;
 [behavior and limits](docs/workspace-offline-verification.md).
+Local exact-original supply also checks cancellation/workspace lifetime between
+hash-read chunks, retaining interrupted staging for explicit retry;
+[attachment behavior](docs/sync-attachments.md#api).
 
 
 The1875db5 Windows/Mac candidates verify guarded-history sync and duplicate-listener

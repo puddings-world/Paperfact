@@ -148,15 +148,20 @@ class BlobStore:
         return row
 
     @staticmethod
-    def _verify(path, manifest):
+    def _verify(path, manifest, *, check=lambda: None):
         if not path.exists():
             raise FileNotFoundError("Attachment bytes are unavailable")
         if path.stat().st_size != manifest.size:
             raise BlobError("Attachment byte size does not match its manifest")
         digest = hashlib.sha256()
         with path.open("rb") as stream:
-            while chunk := stream.read(1024**2):
+            while True:
+                check()
+                chunk = stream.read(1024**2)
+                if not chunk:
+                    break
                 digest.update(chunk)
+        check()
         if digest.hexdigest() != manifest.sha256:
             raise BlobError("Attachment hash does not match its manifest")
 
@@ -178,7 +183,7 @@ class BlobStore:
                     "INSERT INTO blobs(digest,size) VALUES(?,?)", (manifest.sha256, manifest.size)
                 )
             if final.exists():
-                self._verify(final, manifest)
+                self._verify(final, manifest, check=check)
                 conn.execute("UPDATE blobs SET complete=1 WHERE digest=?", (manifest.sha256,))
                 return {"offset": manifest.size, "complete": True}
             if row and row[1]:
@@ -272,7 +277,7 @@ class BlobStore:
                 if reserved + manifest.size > self.quota_bytes:
                     raise BlobQuotaError("Attachment store quota would be exceeded")
         try:
-            self._verify(incoming, manifest)
+            self._verify(incoming, manifest, check=check)
         except BlobError as exc:
             raise BlobSourceMismatch("Selected file does not match the known original") from exc
         check()
@@ -289,7 +294,7 @@ class BlobStore:
                 raise BlobError("Local supply reservation changed; retry")
             part = self._path(manifest, partial=True)
             if final.exists():
-                self._verify(final, manifest)
+                self._verify(final, manifest, check=check)
             else:
                 if part.exists() and incoming.samefile(part):
                     raise BlobError("Supply an external file, not the active partial itself")
@@ -308,14 +313,14 @@ class BlobStore:
                         output.flush()
                         os.fsync(output.fileno())
                 try:
-                    self._verify(part, manifest)
+                    self._verify(part, manifest, check=check)
                 except BlobError as exc:
                     raise BlobSourceMismatch("Selected file changed during supply") from exc
                 check()
                 try:
                     os.link(part, final)
                 except FileExistsError:
-                    self._verify(final, manifest)
+                    self._verify(final, manifest, check=check)
             conn.execute("UPDATE blobs SET complete=1 WHERE digest=?", (manifest.sha256,))
             # A locked private partial can remain; verified final bytes are usable.
             with suppress(OSError):

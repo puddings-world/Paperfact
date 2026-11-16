@@ -17,6 +17,10 @@ checks before removal. These changes are now included in d14c512 candidates.
 Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
+Source after30b5776 adds cooperative cancellation/workspace checks during exact
+original-supply hash reads, including staged and reused-final validation. Affected
+Windows fixtures pass; this source fix is not in the candidate linked below.
+
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean

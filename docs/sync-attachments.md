@@ -19,7 +19,16 @@ offset = store.append(item, state["offset"], received_chunk)
 path = store.finalize(item)           # only after full size and SHA-256 verification
 ```
 
-- `begin(manifest)` reserves the whole declared size and resumes existing bytes.
+- `begin(manifest, *, restore_missing=False, check=...)` reserves the declared
+  size and resumes bytes. Missing-final restoration is explicit; `check` guards
+  lifetime/cancellation, including bounded hash reads when reusing a final object.
+- `import_file(manifest, source, *, check=...)` explicitly supplies exact known
+  bytes without replacing a corrupt final or creating a research revision. Source,
+  staged-copy and reused-final hash reads call `check` before each at-most1 MiB
+  read and after verification. Cancellation/workspace changes propagate before
+  completion; a retained indexed partial can be retried with the same exact bytes.
+  This is cooperative cancellation, not interruption of a blocked filesystem read,
+  native PDF parser or every attachment-transfer method.
 - `append(manifest, offset, bytes)` accepts a bounded chunk. Repeated or overlapping
   retries must match saved bytes; only a missing suffix is appended. Gaps fail.
 - `finalize(manifest)` verifies size/hash and atomically publishes the staged file.
