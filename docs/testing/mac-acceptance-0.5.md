@@ -1,40 +1,46 @@
 # Mac v0.5 acceptance
 
-## Latest common-platform test build: 0a64ec7
+## Latest tested downloads
 
-[All-platform run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643) passes from clean
-`0a64ec7ed8c2aec8c435c12f285eae36d80d5d61`, version `0.5.0.dev`, beta-candidate.
-Mac arm64:6m15s; Windows x64:7m40s; Linux x86-64:3m36s. All three
-small provenance ZIPs were downloaded, independently hash-checked and inspected.
+All builds are `0.5.0.dev`, beta-candidate, not a public v0.5 release.
 
-| Download | Artifact contents |
-|---|---|
-| [Apple Silicon Mac](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189674380) | build-macos |
-| [Windows x64](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189183704) | build-windows |
-| [Linux x86-64](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189797058) | build-linux |
-| [Synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189893569) | research-fixture-macos |
-| [Mac report](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14190002815) | provenance-macos |
+| Platform | Download | Exact clean source | Job duration |
+|---|---|---|---|
+| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195365154) | e26ec8fef7cabacba91af9c982b3011cc7eda4ca | 4m27s |
+| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194602606) | 88b24974f985fbd8832940cdd15ad3be3af4f649 | 8m40s |
+| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194043098) | 88b24974f985fbd8832940cdd15ad3be3af4f649 | 3m22s |
 
-The candidate includes local authority v3 control checkpoints and offline-original
-cleanup protection. Each OS passes critical14, first-sync preservation1 and
-source authority/retention14. Actual frozen CLI report acceptance now uses the
-production host desktop handoff and a real QProcess: a disabled child disk route
-cannot override captured synthetic provider/model settings. Original/PDF/quote
-identity, retained read and cached retry preserve exactly one model completion.
-Windows additionally passes isolated install/reinstall/uninstall and research
-preservation; Mac passes three reader launches and foreground; Linux passes
-AppImage integration. This is not every frozen GUI dialog, physical two-device
-sync, native vault/account, old installed-binary upgrade or hosted acceptance.
-No release/tag or production deployment was created. Check source **0a64ec7**
-when using the separate-app launch instructions below.
+Mac source adds only the screenshot helper/diagnostics repair and its tests/docs
+on top of88b2497; app research code is the same. The original all-platform run
+failed its Mac screenshot step before packaging. The Mac-only follow-up passes
+that actual gate and frozen acceptance; successful Windows/Linux were not rebuilt.
+All three small provenance ZIPs were independently downloaded/hash-matched and
+checked against their exact source. [Mac provenance](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195061327),
+[Mac screenshots](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195160887),
+[synthetic research package](https://github.com/puddings-world/Paperfact/actions/runs/43796990188/artifacts/14195096086).
+
+Each OS passes critical14, first-sync preservation1 and17 authority/offline-delivery
+source representatives. The new dialog guard clears stale readiness if a PDF,
+research or storage ownership changes after worker completion. Frozen CLI checks
+include report generation, exact originals/located quotes, private captured-model
+handoff, retained/cached retry and read-only list-report audit. Mac passes three
+reader launches and foreground; its actual reading screenshot shows Chinese,
+formula and code. Windows install/reinstall/uninstall preserves research; Linux
+AppImage integration passes. This is not full frozen-dialog or physical-device
+acceptance. Hosted continuous sync is not deployed: use list-package export/import
+for now. Follow the separate-app launch steps below and verify source **e26ec8f**.
 
 GitHub-reported installer ZIP metadata (installer payloads not downloaded here):
 
 | Platform | ZIP bytes | ZIP SHA-256 |
 |---|---:|---|
-| macos | 279114356 | `e4370c5195f2357087996fd74c51d257d56bcd59f8f399fc6a563544004019a9` |
-| windows | 184672050 | `a6289da8c804995adc6967881a9725f2f944d9c61c4b319e1f26f40eb14376ce` |
-| linux | 282627999 | `0330e09f4b783331e094dd8d426d2b229261e3fc5dd9d939233306be5ad71e76` |
+| macos | 279959043 | `3d8be8c88343881db70ffa37f3d44184a1f618a4c98a36f9dab3145e451b64af` |
+| windows | 184644327 | `4f26cc61ce12e1d2fc1eeff909049bec79af5d74bff035b1ec1d1d8ebd12a7f7` |
+| linux | 282645955 | `cd630eabdda4c800bd13c09bd7d06d0b09010546697e81bafdd39ff98004626b` |
+
+No public tag/release, production deployment or daily research migration.
+The preceding same-source0a64ec7 candidate remains recorded in the
+[continuation ledger](continuation-20261112.md).
 
 ## Previous Apple Silicon test build: 2fb6923
 

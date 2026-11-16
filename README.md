@@ -408,7 +408,8 @@ These local safeguards do not yet provide distributed fencing or durable control
 The existing source-report package check now also exercises private desktop-to-CLI
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
-The 0a64ec7 native candidate passes this extended frozen CLI acceptance on all three OSes.
+Latest tested downloads (Mac e26ec8f; Windows/Linux88b2497) pass the extended frozen
+CLI acceptance, including saved list-report audit; [downloads and exact scope](docs/testing/mac-acceptance-0.5.md).
 Legacy storage cleanup also preserves device-local offline selections and retained
 managed-original owners, with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).

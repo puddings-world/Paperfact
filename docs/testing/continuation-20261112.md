@@ -9312,3 +9312,36 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   repaired real screenshot gate and frozen acceptance. Other successful platforms
   need no rebuild for this diagnostic-script-only change. Physical-device and
   hosted-sync gates remain open; no public release or deployment.
+
+
+## 2026-11-16 delivered offline-ready correction candidates
+
+- Original run43795810511: clean88b24974f985fbd8832940cdd15ad3be3af4f649,
+  Windows8m40s and Linux3m22s pass. Mac failed its screenshot before packaging;
+  never report the whole original run as passing. Successful platforms were not
+  rebuilt for the diagnostic-only repair.
+- Mac-only run43796990188: cleane26ec8fef7cabacba91af9c982b3011cc7eda4ca,
+  arm64, version0.5.0.dev, passes4m27s. Actual screenshot, three reader launches,
+  foreground, original/package preservation,38-tool CLI/MCP retry/restart,
+  verified-history protocol and frozen private report/list audit pass. Downloaded
+  provenance and screenshot ZIPs independently match GitHub digests; inspected
+  Mac dive.png contains Chinese, rendered formula and code.
+- Mac DMG ZIP14195365154:279959043bytes, GitHub digest
+  `3d8be8c88343881db70ffa37f3d44184a1f618a4c98a36f9dab3145e451b64af`.
+  This is reported ZIP metadata, not an independently downloaded installer payload.
+  Provenance14195061327 hash `1f264c303c81a4cbc37950c3c9d2b68d019d4e57e967f9387e6de96b8c1e91a7`;
+  screenshots14195160887 hash `cbbe2e9ec18c0d0a2304a751e76b7f3f65a7ef5033eaca2f6c0ca5935f1d2c4c`.
+- Windows provenance14194537817 hash `945e8eb7fd416b14cd378a2d9b7a04746bb1fe673d008dd58afe7520052d6a11`;
+  Linux provenance14194162760 hash `2eb194fabf952fb8b6f003e29acd9372e2d1239a05b828062c2e183328ae617c`.
+  Both actually downloaded/verified, clean88b2497 and passed:true. Windows isolated
+  install/reinstall/uninstall and Linux AppImage integration preserve research.
+- Mobile ZIP14194207419 is independently hash-matched:
+  `9b60f16440311b2e54489c36487d8406ce05c39dfc7ff6b718c43f9d7ceff365`;
+  artifact_id `2383b47d34db70bbaed1cdf1a9b608a6c2144ecb459dedc861db1ee223222f1a`,
+  content-derived cache `paperfact-mobile-shell-862ce88a37821dcf8eb73206fbacab564a9a5ccf55ab150d51062f6fd6d45e76`.
+  Built, not HTTPS-deployed or physical-phone accepted.
+- Current Mac guide, status and readiness now name exact per-platform downloads.
+  Real installed input/vault/old-binary upgrade, full frozen-dialog workflows,
+  authority history/independent anchoring/fencing, hosted restore and physical
+  Windows/Mac/phone convergence remain required. No public tag/release, cloud
+  resources, credentials, paid models or owner research changes.

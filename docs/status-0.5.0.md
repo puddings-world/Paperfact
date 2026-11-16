@@ -9,19 +9,23 @@ acceptance. Historical iterations belong in the
 
 ## Current deliverable
 
-Integration branch: `develop/0.5`. Latest same-source native candidate:
-**0a64ec7ed8c2aec8c435c12f285eae36d80d5d61**, version `0.5.0.dev`, beta-candidate.
-[Run43784461643](https://github.com/puddings-world/Paperfact/actions/runs/43784461643) passes Windows x64 in7m40s, Mac arm64 in6m15s
-and Linux x86-64 in3m36s. All three provenance ZIPs were downloaded,
-independently hash-matched and inspected against the exact clean source.
-[Downloads and testing steps](testing/mac-acceptance-0.5.md).
-Documentation commits after this candidate do not create another app build.
+Integration branch: `develop/0.5`. Latest tested downloads are Mac **e26ec8f**
+([run43796990188](https://github.com/puddings-world/Paperfact/actions/runs/43796990188),4m27s)
+and Windows/Linux **88b2497**
+([run43795810511](https://github.com/puddings-world/Paperfact/actions/runs/43795810511),8m40s/3m22s).
+Mac adds only a screenshot-helper/test/docs correction; app research code matches.
+All three exact clean provenance ZIPs were independently hash-verified. Each OS
+passes critical14, first-sync1 and authority/offline-delivery17. Frozen CLI report
+acceptance now also verifies read-only list-report audit. Mac screenshots show
+readable Chinese, formula and code. Full frozen GUI, physical-device and hosting
+gates remain open. [Current downloads](testing/mac-acceptance-0.5.md).
 
-This candidate contains the v3 local authority identity/control checkpoint,
-offline/retained-original cleanup protection and extended private AI handoff
-verifier. Each OS passes critical14, first-sync preservation1 and named authority/
-retention14 source cases. Legacy authority v1/v2 requires explicit backup/fresh
-restore; retained local checkpoints are not independent anchoring or fencing.
+The preceding common-source0a64ec7 candidate is historical; details remain in the
+[continuation ledger](testing/continuation-20261112.md). Documentation-only commits
+do not create another native build. Current candidates retain v3 local authority
+identity/control checkpoints and offline/retained-original cleanup protection.
+Legacy authority v1/v2 requires explicit backup/fresh restore; retained local
+checkpoints are not independent anchoring or fencing.
 
 Actual frozen CLIs pass import/export, original-file preservation, CLI/MCP retry/
 restart, verified-history sync and a source-aware report using one synthetic
@@ -32,20 +36,17 @@ This is not the full frozen GUI dialog journey. Windows also passes isolated
 install/reinstall/uninstall with research preserved; Mac passes three reader
 launches and foreground; Linux passes AppImage integration.
 
-[Matching mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43784461643/artifacts/14189708134) was downloaded
-and hash-checked; `public/sw.mjs` declares **paperfact-mobile-shell-v33**.
-It is built, not deployed HTTPS/PWA or physical-phone acceptance. No release/tag,
-daily-app migration, cloud resource or owner research mutation was performed.
+The [current mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43795810511/artifacts/14194207419)
+was independently downloaded and ZIP-hash-checked. It includes restored Traditional
+Chinese report copy and a content-derived shell cache; numeric-cache exports stay
+readable. Content ID: `2383b47d34db70bbaed1cdf1a9b608a6c2144ecb459dedc861db1ee223222f1a`.
+This is built, not deployed HTTPS/PWA or physical-phone acceptance. No IndexedDB
+research/connection migration, public release/tag, daily-app migration, cloud
+resource or owner research mutation was performed.
 
-Source after this candidate restores lost Traditional Chinese mobile report copy.
-A local shell-v34 artifact is built/hash-verified, not deployed; the downloadable
-0a64ec7 artifact remains v33. No IndexedDB research or connection migration.
-The current source builder derives exported cache identities from asset/worker
-content and verifies consistency; existing numeric-cache artifacts remain readable.
-This packaging change is not a deployed mobile update or a new native candidate.
-Source also guards offline verification at queued desktop delivery: changed
-originals, research or storage ownership clear prior readiness and require retry.
-The current native download predates this source correction.
+Current desktop downloads also guard offline verification at queued delivery:
+changed originals, research or storage ownership clear prior readiness and require
+retry. This does not certify the whole workspace as available offline.
 
 ## Requirements and actual boundaries
 
@@ -55,7 +56,7 @@ The current native download predates this source correction.
 | Offline work and retry | Local research, durable requests, duplicate/restart checks and cached report generation pass for named journeys | Full installed offline trip/reconnect journey and remaining producer/file lifecycles |
 | Conflicts and deletion | Supported edit/delete resolution and reviewed recovery preserve history in fixtures | Remaining scientific deletion/recovery mappings and installed conflict UX. Global paper deletion is explicitly rejected by the current shared codec; supported list retirement preserves paper research. |
 | Verified attachments | Exact originals, owned manifests, resumable transfers, offline preparation and wrong-source refusal have scoped evidence | Automatic reference-aware eviction/history lifecycle, complete supported attachment coverage and physical interrupted-transfer acceptance; source legacy cleanup now protects offline intent and retained managed-original owners |
-| Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading and offline preparation; v33 artifact is built | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
+| Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading and offline preparation; content-addressed88b2497 artifact is built and ZIP-verified | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
 | Sync visibility and settings | Workspace/device status, explicit pairing and device-local reconnect opt-in have desktop fixtures | Installed location/storage/offline and backup/device controls, native vault prompts, restart/account-switch/focus/input and cross-device UX |
 | Backups and recovery | Verified authority/client backups, fresh-identity restore and reviewed editable adoption exist for supported content | Complete lossless migration/runtime adoption, cloud backup/restore rehearsal, scheduling/retention and unsupported-source handling |
 | Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested; source adds restart-persisted file identity and a local device/pairing checkpoint | Durable authority/control history, independent anchoring/cross-host fencing and hosted authorization/recovery |
