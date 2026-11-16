@@ -127,6 +127,10 @@ def test_real_official_mcp_client_discovers_and_calls_readonly_audit(corpus):
             tool = next(t for t in tools.tools if t.name == "analysis.audit")
             assert tool.annotations.read_only_hint is True
             assert "corpus_key" in tool.input_schema["properties"]
+            assert "list_id" in tool.input_schema["properties"]
+            mixed = await client.call_tool(
+                "analysis.audit", {"paper_id": "paper", "list_id": "list"})
+            assert mixed.is_error
             invalid = await client.call_tool(
                 "analysis.audit", {"paper_id": "paper", "corpus_key": "not-a-corpus"}
             )

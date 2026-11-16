@@ -892,3 +892,17 @@ Saved-text rendering retries locally when the same open reader changes during
 a delayed rendering callback. This does not call AI. Switching papers/workspaces
 or closing still discards obsolete delivery; persistent interference stays bounded
 and asks you to reopen rather than publishing stale content.
+
+
+### Check a saved list report's sources offline
+
+Open a list's **Report & sources** tab and select **Check all sources**. The report
+stays visible while Paperfact checks its saved original files and recorded quote
+locations. The summary separates verified originals, checked locations and
+unlocated quotations. It does not judge whether a paper scientifically supports
+a statement. Stop cancels the check; changing workspace or closing prevents late
+results from appearing elsewhere. Refresh Current report before retrying stale
+research. This action neither downloads missing PDFs nor uses AI.
+
+This is source after candidate0a64ec7; its existing installers do not contain it.
+[Limits and CLI/MCP use](analysis-audit.md#saved-list-report-source-audit).

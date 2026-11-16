@@ -444,3 +444,9 @@ finds intervening writes in the same live workspace; stale content stays refused
 
 The first saved reading body replaces the blank document directly; subsequent
 nonempty updates keep the existing incremental rendering and scroll behavior.
+
+
+Source after the0a64ec7 test build adds **Check all sources** to saved list reports.
+The same read-only CLI/MCP action accepts `analysis.audit` with `{"list_id":"LIST_ID"}`.
+It checks owned originals and recorded quote locations without AI or downloads;
+scientific support remains unassessed. [Usage and limits](docs/analysis-audit.md#saved-list-report-source-audit).

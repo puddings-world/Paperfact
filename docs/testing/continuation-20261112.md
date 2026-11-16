@@ -9123,3 +9123,29 @@ selection above and is not an additional feature count.
 | build-windows | 14189183704 | 184672050 | `a6289da8c804995adc6967881a9725f2f944d9c61c4b319e1f26f40eb14376ce` |
 | provenance-linux | 14189058557 | 3032 | `7d7747f41b46c67b69431371b8831e31483db60b157f4e2645aab1eb766b71a3` |
 | provenance-windows | 14188969318 | 3404 | `1d5502ba3db7dcd82aad6e26aba705867bb6efa052818a0183920907a0f27336` |
+
+## 2026-11-16 shared saved list-report source audit
+
+- Added explicit Check all sources in Report & sources and the existing shared
+  analysis.audit operation with list_id only. Paper/corpus calls stay compatible;
+  mixed targets fail before reading. Official MCP discovers the new parameter;
+  tool count and transport names do not change.
+- Factored the original exact-source read/verification from survey_reader.inspect
+  so preview and full report audit share ownership/hash/page/location rules. Each
+  captured original is parsed once, with final lifetime/source rechecks. Findings
+  distinguish verified/unavailable/not-selected sources, recorded versus actually
+  rechecked locations, unlocated passages and statements with no source passages.
+  Scientific semantics are always not_checked. No raw research output is logged.
+- Local/native service and existing reader/audit integration31 pass64.2s stages;
+  desktop/actual CLI/official MCP8 pass28.4s; added original-change/budget and
+  close/workspace-switch cases10 pass25.8s. Selections overlap, not feature totals.
+  The existing report acceptance helper now audits its generated report through
+  actual JSON CLI without another synthetic model completion.
+- Existing executor deduplicates clicks and preserves the visible report; closing,
+  cancellation and workspace/report changes discard late delivery. SQL snapshots
+  remain unchanged. Bound16 captured originals/128MiB/default60s cooperative work;
+  native parsing is not a hard instruction-level timeout. No live account/network,
+  owner data, new package, release or deployment. Delivered0a64ec7 predates it.
+- Earlier formatting/edit failures produced no passing test evidence; one edit
+  stopped on mixed newline bytes and a requested new selector did not yet exist.
+  Exact-byte correction preceded the passing scoped checks. No test was weakened.

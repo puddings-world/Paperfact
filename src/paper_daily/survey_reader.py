@@ -262,25 +262,11 @@ def read_retained(database, list_id, request_id, *, cancelled=lambda: False):
     return result
 
 
-def inspect(report, section, statement, passage, *, page=None, cancelled=lambda: False):
-    """Verify one captured original and render a bounded page; never change a reader."""
+def _checked_original(report, source, binding, cancelled):
+    """Verify one exact original once; callers recheck the returned observation."""
     from paper_daily.local_source_owners import _read_pdf
 
-    if not isinstance(report, SavedReport) or not report.current():
-        raise ValueError("Saved report changed; refresh before inspecting originals")
-    _cancel(cancelled)
     data = report.data
-    for index in (section, statement, passage):
-        if type(index) is not int or index < 0:
-            raise ValueError("Choose an actual saved quotation")
-    try:
-        item = data["report"]["sections"][section]["statements"][statement]["passages"][passage]
-    except (KeyError, IndexError) as error:
-        raise ValueError("Choose an actual saved quotation") from error
-    source = next(s for s in data["report"]["sources"] if s["id"] == item["source_id"])
-    binding = next((s for s in data["sources"] if s["source_id"] == source["id"]), None)
-    if source["state"] != "captured" or binding is None:
-        raise ValueError("This quotation has no captured original; no substitute was opened")
     if data["kind"] == "native":
         proof, _body, blobs = verify_closure(report._store, binding["operation"])
         raw = blobs[source["document_hash"]]
@@ -310,6 +296,27 @@ def inspect(report, section, statement, passage, *, page=None, cancelled=lambda:
             return file_change.version(path) == version
 
     survey_packages.verify_original(raw, source, data["report"], cancelled=cancelled)
+    return raw, fresh
+
+
+def inspect(report, section, statement, passage, *, page=None, cancelled=lambda: False):
+    """Verify one captured original and render a bounded page; never change a reader."""
+    if not isinstance(report, SavedReport) or not report.current():
+        raise ValueError("Saved report changed; refresh before inspecting originals")
+    _cancel(cancelled)
+    data = report.data
+    for index in (section, statement, passage):
+        if type(index) is not int or index < 0:
+            raise ValueError("Choose an actual saved quotation")
+    try:
+        item = data["report"]["sections"][section]["statements"][statement]["passages"][passage]
+    except (KeyError, IndexError) as error:
+        raise ValueError("Choose an actual saved quotation") from error
+    source = next(s for s in data["report"]["sources"] if s["id"] == item["source_id"])
+    binding = next((s for s in data["sources"] if s["source_id"] == source["id"]), None)
+    if source["state"] != "captured" or binding is None:
+        raise ValueError("This quotation has no captured original; no substitute was opened")
+    raw, fresh = _checked_original(report, source, binding, cancelled)
     location = item["location"]
     selected = (
         page

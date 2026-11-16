@@ -102,7 +102,7 @@ sequenceDiagram
 | `imports.commit` | Save selected candidate IDs in their supplied order, atomically |
 | `imports.discard` | Cancel a preview, leaving saved research untouched |
 | `operations.inspect` | Recover a completed commit by operation ID |
-| `analysis.audit` | v0.5 development: `paper_id`; optional `corpus_key` selects one saved Lineage corpus for independently verified multi-original checks; no AI or edits |
+| `analysis.audit` | v0.5 development: `paper_id` with optional `corpus_key` selects a paper/Lineage audit; alternatively supply only `list_id` to check saved report originals and recorded quote locations. No AI or edits; mixed paper/list targets are rejected. |
 
 The ten list, import and research-reading operations above are **offline and use no AI**. Metadata supplied by an agent
 is not publication verification. Sources are stored as data; URLs are not fetched

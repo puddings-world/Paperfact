@@ -358,8 +358,21 @@ def commit(
         return result
 
 
-def audit_paper(paper_id: str, *, corpus_key: str | None = None) -> dict:
-    """Read-only deterministic checks of saved analysis, using the owned local PDF."""
+def audit_paper(paper_id: str | None = None, *, corpus_key: str | None = None,
+                list_id: str | None = None) -> dict:
+    """Read-only owned-source checks of saved paper/corpus or list-report evidence."""
+    if list_id is not None:
+        if paper_id is not None or corpus_key is not None:
+            raise OperationError("invalid_input", "Choose a paper/corpus or a list, not both")
+        _id(list_id, "list_id")
+        from paper_daily import survey_audit, survey_reader
+
+        try:
+            saved = survey_reader.read(store.DB_PATH, list_id)
+            return survey_audit.audit(saved)
+        except (OSError, ValueError):
+            raise OperationError("audit_unavailable", "Saved list source check unavailable; "
+                                 "refresh the report and inspect its originals") from None
     if not isinstance(paper_id, str) or not paper_id.strip() or len(paper_id) > 512:
         raise OperationError("invalid_input", "paper_id must identify a saved paper")
     from pathlib import Path

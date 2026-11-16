@@ -72,9 +72,9 @@ def verify(command, folder, env, package):
                               kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
 
-    def run(*arguments):
+    def run(*arguments, input=None):
         result = subprocess.run([*map(str, command), *map(str, arguments)],
-                                env=environment, capture_output=True, timeout=45)
+                                env=environment, input=input, capture_output=True, timeout=45)
         if result.returncode:
             raise RuntimeError("Source-report acceptance command failed: " + arguments[0])
         return result.stdout.decode("utf-8")
@@ -122,6 +122,12 @@ def verify(command, folder, env, package):
                 or passage["quote"] != QUOTE or passage["location"]["state"] != "located"
                 or calls != [originals[0]["sha256"]] or errors):
             raise AssertionError("Report source/model provenance differs")
+        audited = json.loads(run("integration", "analysis.audit", "--workspace", workspace,
+                                 input=json.dumps(dict(list_id="demo")).encode("utf-8")))
+        if (not audited["ok"] or audited["result"]["originals_verified"] != 1
+                or audited["result"]["verified_located_passages"] != 1
+                or audited["result"]["semantics"] != "not_checked"):
+            raise AssertionError("Read-only saved list audit differs")
         records = list_recovery_requests(workspace / "papers.db")
         if len(records) != 1:
             raise AssertionError("Exactly one completed report must be retained")
@@ -133,7 +139,8 @@ def verify(command, folder, env, package):
         return dict(saved=True, quote_located=True, originals_verified=True,
                     requested_model=REQUESTED, returned_model=RETURNED,
                     retained_read=True, cached_without_completion=True,
-                    private_handoff=True, child_disk_settings_ignored=True)
+                    private_handoff=True, child_disk_settings_ignored=True,
+                    list_audit_verified=True)
     finally:
         server.shutdown()
         server.server_close()

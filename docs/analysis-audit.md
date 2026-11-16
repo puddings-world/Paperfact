@@ -50,7 +50,7 @@ original quotation. Answers use the validated typed Q&A source link, when presen
 All preserve old source versions and leave missing bindings unknown. Versionless
 legacy text stays versionless. Selected editable decks have a separate bounded
 audit entry described below. Saved grounded-lineage statements now use the
-source-aware adapter below. List surveys, complete multi-original corpus checks
+source-aware adapter below. Versionless list overviews, complete multi-original corpus checks
 and cross-output consistency remain explicit gaps, not successful checks.
 
 ## Saved research lineage
@@ -868,3 +868,49 @@ stop/close, failure/retry and stale delivery checks. Pending reports cannot star
 AI authorization/regeneration. Original-source byte availability stays separate
 from report activation. This completes the source-level local finish entry; frozen,
 installed/offline-device and hosted acceptance remain open.
+
+
+## Saved list-report source audit
+
+Source after native candidate0a64ec7 adds an explicit **Check all sources** action
+in the existing Report & sources tab. It runs on the same background executor,
+with repeat activation deduplicated, stop/close handling and late-workspace/report
+rejection. It leaves the report visible and returns a short summary. Opening a
+list never runs this audit or calls AI automatically.
+
+CLI and MCP reuse `analysis.audit` with **only** `list_id`; the old paper/corpus
+shape remains supported. Supplying both kinds is an input error. Example:
+
+```powershell
+'{"list_id":"LIST_ID"}' | paperfact integration analysis.audit --workspace C:\Research\Paperfact
+```
+
+Success returns the shared `ok` envelope and `paperfact.survey-audit.v1` result.
+It identifies the exact saved report/list/kind and pending-activation state,
+counts captured/verified originals and bytes, and gives a state per source ID.
+`recorded_located_passages` describes stored claims; only
+`verified_located_passages` counts locations rechecked against available exact
+originals. Unlocated passages and statements without passages remain explicit.
+Missing, changed, corrupt or unowned original bytes cannot become a verified
+source; no replacement PDF, network fetch or model inference is attempted.
+`semantics` is always `not_checked`: matching a quotation is not proof of support.
+
+Each captured original is read/parsed once for all of its recorded locations.
+Ownership is checked independently even for equal-byte papers. The service
+reuses the sealed reader and original verifier; it supports current local/native
+reports and retained-result inspection. All report/original observations are
+rechecked before delivery. Findings are ephemeral and write no research, outbox,
+settings, source location or AI judgment. Versionless editable overviews are not
+silently upgraded into source-aware reports.
+
+API: `survey_audit.audit(saved, *, cancelled=lambda: False, seconds=60) -> dict`,
+where `saved` is a current `survey_reader.SavedReport`.
+`local_operations.audit_paper(paper_id=None, *, corpus_key=None, list_id=None)`
+owns the shared transport boundary. At most16 captured originals and128 MiB
+actual source bytes are checked, with a default60-second cooperative budget
+(maximum120); existing per-PDF/page and closed-report bounds also apply.
+Budget/cancellation or stale observations fail the whole selected check rather
+than returning success over a truncated subset. Native PDF/file verification is
+bounded but not interruptible at every instruction; this is not a hard real-time
+CPU deadline. Hosted/physical-device and full frozen GUI acceptance remain open;
+the delivered0a64ec7 installers predate this source feature.

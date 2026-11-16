@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import survey_jobs, survey_reader, survey_result_review
+from paper_daily import survey_audit, survey_jobs, survey_reader, survey_result_review
 from paper_daily.desktop.note_source_dialog import PagePreview
 
 TEXT = {
@@ -32,6 +32,10 @@ TEXT = {
         tab="Report & sources",
         legacy="Editable overview",
         refresh="Current report",
+        audit="Check all sources",
+        audit_busy="Checking saved originals and recorded quote locations...",
+        audit_done=("Originals verified: {verified}/{total}; located quotes checked: {quotes}; "
+                    "unlocated quotes: {unlocated}. Scientific support was not checked."),
         results="Completed AI results",
         results_loading="Reading completed AI results...",
         results_empty="No completed AI results are retained for this list.",
@@ -141,6 +145,15 @@ TEXT = {
             "\u524d\u6e05\u55ae\u3002\u958b\u555f\u539f\u6587\u6703\u6838\u5c0d\u7576"
             "\u6642\u7684 PDF\uff1b\u5957\u7528\u9019\u4efd\u5831\u544a\u9700\u8981"
             "\u53e6\u884c\u78ba\u8a8d\u3002"
+        ),
+        "audit": "\u6838\u5c0d\u5168\u90e8\u4f86\u6e90",
+        "audit_busy": ("\u6b63\u5728\u6838\u5c0d\u5df2\u5b58\u539f\u6587"
+                       "\u8207\u5f15\u7528\u4f4d\u7f6e..."),
+        "audit_done": (
+            "\u539f\u6587\u5df2\u6838\u5c0d {verified}/{total}\uff1b"
+            "\u5df2\u6838\u5c0d\u5b9a\u4f4d\u5f15\u7528 {quotes}\uff1b"
+            "\u672a\u5b9a\u4f4d\u5f15\u7528 {unlocated}\u3002"
+            "\u5c1a\u672a\u5224\u5b9a\u5b78\u8853\u8ad6\u9ede\u662f\u5426\u6210\u7acb\u3002"
         ),
         "recorded": "\u5df2\u8a18\u9304\u7684\u4f4d\u7f6e",
         "goal": "\u9019\u4efd\u5831\u544a\u7684\u7814\u7a76\u76ee\u6a19",
@@ -305,6 +318,10 @@ class SavedSurveyPane(QWidget):
         self.refresh.clicked.connect(self.reload)
         top.addWidget(self.status, 1)
         top.addWidget(self.refresh)
+        self.audit_sources = QPushButton(self.words["audit"])
+        self.audit_sources.setAutoDefault(False)
+        self.audit_sources.clicked.connect(self.check_sources)
+        top.addWidget(self.audit_sources)
         self.finish = QPushButton(self.words["finish"])
         self.finish.setAutoDefault(False)
         self.finish.setToolTip(self.words["finish_scope"])
@@ -384,6 +401,9 @@ class SavedSurveyPane(QWidget):
     def _controls(self):
         idle = self.future is None and not self.closing and not self.disposed and self.current()
         self.refresh.setEnabled(idle and self._review is None)
+        self.audit_sources.setEnabled(
+            idle and self._review is None and self.saved is not None
+            and self.saved.data["kind"] != "none" and self.saved.current())
         self.results.setEnabled(idle and self._review is None)
         archive = self.saved is not None and self.saved.data["kind"] == "retained"
         pending = (self.saved is not None and self.saved.data["kind"] == "native"
@@ -406,6 +426,27 @@ class SavedSurveyPane(QWidget):
         self.status.setText(message)
         self.future = (self.executor.submit(call), callback)
         self._controls()
+
+    def check_sources(self):
+        saved = self.saved
+        if not self.current() or saved is None or not saved.current():
+            self._stale()
+            self._controls()
+            return
+        if saved.data["kind"] == "none":
+            return
+        cancel = self.cancelled.is_set
+        self._start(lambda: (saved, survey_audit.audit(saved, cancelled=cancel)),
+                    self._sources_checked, self.words["audit_busy"])
+
+    def _sources_checked(self, value):
+        saved, result = value
+        if self.saved is not saved or not saved.current():
+            self._stale()
+            return
+        self.status.setText(self.words["audit_done"].format(
+            verified=result["originals_verified"], total=result["originals_total"],
+            quotes=result["verified_located_passages"], unlocated=result["unlocated_passages"]))
 
     def load_results(self):
         if not self.current():

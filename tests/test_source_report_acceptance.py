@@ -25,7 +25,8 @@ def test_report_cli_uses_one_synthetic_completion_and_preserves_originals(tmp_pa
                           requested_model="synthetic-requested-model",
                           returned_model="synthetic-returned-model", retained_read=True,
                           cached_without_completion=True,
-                          private_handoff=True, child_disk_settings_ignored=True)
+                          private_handoff=True, child_disk_settings_ignored=True,
+                          list_audit_verified=True)
     assert os.environ.get("PAPERFACT_DATA") != str(tmp_path / "report" / "workspace")
 
 

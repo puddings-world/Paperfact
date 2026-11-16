@@ -1281,3 +1281,19 @@ or installed-device acceptance. No global rule is promoted.
   retained originals, forged category and no-deletion-on-invalid-metadata cases.
 - Limits: isolated fixture cleanup only; no real directory, physical filesystem
   race, installed-device journey, general history GC or global change is authorized.
+
+## Audit saved multi-original evidence once per owned source (2026-11-16)
+
+- Status: validated-local. Extend the existing read-only audit operation with an
+  exclusive list selector and reuse the exact-source preview verifier. Parse each
+  owned original once for all recorded quotation locations; recheck all source
+  observations and the saved report before delivery. Equal bytes do not substitute
+  for independently checked ownership.
+- Report stored location claims separately from locations actually rechecked;
+  missing originals and unlocated quotations stay explicit. Matching text grants
+  no semantic-support judgment. Keep results ephemeral and preserve SQL/outbox.
+- Evidence: local/native fixtures, existing reader, actual JSON CLI, official MCP
+  discovery/rejection and desktop buttons/close/workspace-switch pass selected
+  bounded checks. Read budgets fail the whole selected audit, not silently omit.
+- Limits: no semantic/expert certification, arbitrary corpus coverage, full frozen
+  GUI, physical device or hosted acceptance. No global/cloud/account permission.
