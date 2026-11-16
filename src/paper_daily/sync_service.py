@@ -152,6 +152,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
     @contextmanager
     def _transaction(self, *, write=False):
         from paper_daily import sync_authority_control as control
+        from paper_daily import sync_authority_history as history
 
         existing = self._database_identity is not None
         if existing:
@@ -174,9 +175,12 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 self._require_database_identity()
                 before = (control.observe(conn, self._authority_marker, self.path,
                                           self._database_identity) if guarded else None)
+                control_baseline = history.read(conn) if guarded and write else None
                 yield conn
                 self._require_database_identity()
                 if guarded:
+                    if write:
+                        history.append(conn, control_baseline)
                     after = control.fingerprint(conn)
                     if after != before["control_sha256"]:
                         if not write:

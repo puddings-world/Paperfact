@@ -133,6 +133,7 @@ jobs:
           tests/test_sync_admin.py::test_second_serve_is_actionable_and_preserves_existing_authority
           tests/test_sync_admin.py::test_same_file_revocation_rollback_is_refused_after_restart
           tests/test_authority_control.py
+          tests/test_authority_control_history.py
           tests/test_offline_verification_ui.py::test_completed_worker_cannot_deliver_stale_offline_success
           tests/test_storage.py::test_prune_preserves_offline_and_managed_originals_even_after_planning
 

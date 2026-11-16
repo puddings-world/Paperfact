@@ -351,8 +351,10 @@ control change survived an in-place SQL restore or an entire disk rollback.
 
 Still proposed before same-identity rollback/split-brain support:
 
-1. Version authority identity and control mutations (issuance, revocation, label
-   and invitation state) with a durable, transactional control history.
+1. Source now versions authority identity/control changes with a bounded v4
+   transactional journal, replay validation and local checkpoint. This implements
+   local history, not same-identity rollback/split-brain support. Existing native
+   downloads predate it; hosted acceptance remains open.
 2. Define a monotonic external anchor outside the restored authority/database
    failure domain, admission/fencing rules and ambiguous-commit recovery. A SQL
    row or a second file copied with the same disk is insufficient as that anchor.
@@ -363,7 +365,7 @@ Still proposed before same-identity rollback/split-brain support:
    followed by the installed Windows/Mac/phone journey. No fixture result stands
    in for that operational evidence.
 
-These are unimplemented requirements, not an invented working lease or permission
+Items2-4 remain unimplemented requirements, not a working lease or permission
 to deploy. The exact project, region/hostname, cost envelope, retention and operator
 remain unconfirmed as recorded above. No GCP resources/credentials were inspected
 or changed for this checkpoint. The one-VM pilot proposal remains unchanged;

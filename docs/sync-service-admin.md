@@ -18,7 +18,10 @@ paperfact sync-admin init --state "$HOME/.paperfact-sync/service"
 
 Success: `{"state":"initialized"}`. Repeating succeeds; an unrelated nonempty
 folder is rejected. The marked directory contains authority SQLite state and
-verified attachment storage, not the desktop research database.
+verified attachment storage, not the desktop research database. Current source
+initializes authority format v4 with transactional private control history;
+existing native downloads use v3. Legacy services require explicit verified
+backup/fresh restore, never marker repair. [History and limits](sync-http.md#official-authority-lifetime-and-transactional-control-history).
 
 Issue a new local test device and write its connection record outside that folder:
 

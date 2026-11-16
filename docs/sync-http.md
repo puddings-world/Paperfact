@@ -634,37 +634,66 @@ The trusted adapter policy parameters are
 `redeem_pairing(code, workspace_id, device_id, credential, label=None, *, require_history=False)`.
 Strict HTTP selects them internally; JSON bodies cannot override receiver policy.
 
-### Persisted official-authority file lifetime (source after e5eb093)
+### Official authority lifetime and transactional control history
 
-New official directories use `paperfact-reference-service-v3` in
-`.paperfact-sync-service.json`: exact integer `database_identity` (device/inode)
-and `control_sha256`, a deterministic digest of all supported device and pairing
-columns/rows. Marker JSON is bounded, closed and duplicate-safe. `sync-admin`
+Current source (after the e26ec8f native candidate) initializes
+`paperfact-reference-service-v4` in `.paperfact-sync-service.json`. Its exact native
+`database_identity` and `control_sha256` bind actual device/pairing state to a fresh
+authority UUID, dense history sequence and validated chain head. Marker JSON is
+bounded, closed and duplicate-safe. `sync-admin`
 carries the native pin into the pre-schema constructor check; replacement, missing
 files, invalid control schemas and changed control state are refused on restart.
 `init` never repairs or rewrites mismatched state.
 
+`sync_control_history` stores canonical `paperfact.authority-control-event.v1`
+records: authority UUID, sequence/previous hash, UTC observation time, before/after
+state hashes and sorted closed row deltas. Issuance, revocation, labels and pairing
+creation/claim/removal commit history in the same SQL transaction as controls.
+Reads and unchanged intent add no events. Verification replays the complete chain
+and compares it to actual controls. Even coherently rewritten history fails the
+retained marker commitment. No plaintext tokens/pairing codes are recorded; hashes
+and past labels remain sensitive private metadata, not anonymous telemetry.
+
+Internal APIs take explicit SQLite connections: `snapshot(conn)` reads bounded
+controls; `read(conn, *, check=lambda: None)` verifies/replays the history and
+returns private authority ID/sequence/head/state; `initialize(conn)` creates a
+fresh baseline in the caller's write transaction; `append(conn, before)` records
+actual deltas in that same transaction, using the observed `read` result as its
+baseline and refusing any replacement of that prefix. These functions live in
+`sync_authority_history`; `sync_authority_control.fingerprint(conn)` binds their
+verified state/history to the marker. Cooperative cancellation keeps its caller
+signal. No research package, device-catalog response or public diagnostic includes
+the private journal.
+
+Limits are10,000 events,8 MiB per event,64 MiB total journal,10,000 current control
+rows and8 MiB encoded state. Validation is bounded and linear in retained history;
+large-history throughput is not certified. Capacity failures reject the new
+mutation and preserve committed access. Back up and review fresh-identity recovery,
+not history deletion.
+
 Official transactions serialize through a bounded cooperating-process local lock.
 They compare the retained checkpoint before use. A control mutation publishes and
 flushes the new marker before committing SQLite. Failure before publication rolls
-back SQL; process loss after publication and before SQL commit leaves an explicit
+back controls and history together; process loss after publication and before SQL
+commit leaves an explicit
 mismatch and pauses access/backup. Preserve both files and review recovery into a
 fresh service/workspace; do not repair the marker or revive old credentials.
 A synthetic subprocess-exit test covers this window, not real power-loss durability.
 Read transactions retain SQLite read semantics, including backup compatibility.
 
-Legacy v1 (unpinned) and v2 (file-pinned only) markers are accepted for explicit
-verified backup, never serving or credential issuance. Use existing backup and
-fresh-workspace restore commands, then enroll devices explicitly. Restored v3
-markers describe the actual reconstructed database/control state. Backup verifies
-current v3 controls while holding its SQL reservation. No wire/research/backup
-format or command changes, automatic migration or client cursor reset is added.
+Legacy v1/v2/v3 markers are backup-only, never serving or issuing credentials.
+Legacy v3 backup still verifies its actual control-state digest. Current backups
+verify complete history/state under the SQL reservation and preserve the exact
+journal. Fresh restore keeps old history in the unchanged source backup, identified
+by recovery provenance, discards old grants and creates a new authority/history
+baseline. Research, HTTP and backup formats are unchanged; no automatic migration
+or client cursor reset is added.
 Bare `ReferenceService` remains a trusted prototype; official entry enables guards.
 
-This detects same-file device/pairing rollback while the current local marker is
-retained. It is not an append-only control journal, independent remote anchor,
-protection against jointly restored marker/database, all research-data rollback,
-or cross-host fencing. Those remain release gates. File identity changes across
-filesystem copies require recovery review, not automatic repinning. The e5eb093
-installers predate these guards; native, hosted and physical-device acceptance
-remain required.
+This detects same-file control/history rollback while the current local marker is
+retained. It is not an independent external anchor, distributed lease, protection
+against jointly restored marker/database or copied hosts. Device-held control
+checkpoints, ambiguous external commits, cross-host fencing, hosted restore and
+physical acceptance remain release gates. File identity changes require recovery
+review, not automatic repinning. Existing downloadable native candidates contain
+v3 administration; this source-only v4 work is not a new installer or deployment.

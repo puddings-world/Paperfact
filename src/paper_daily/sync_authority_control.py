@@ -20,7 +20,7 @@ COLUMNS = {
 }
 
 
-def fingerprint(conn):
+def state_fingerprint(conn):
     """Stream every supported device/pairing field in a deterministic order."""
     digest = hashlib.sha256(b"paperfact.authority-control.v1")
     try:
@@ -38,6 +38,18 @@ def fingerprint(conn):
     except (ValueError, TypeError, UnicodeError, sqlite3.Error) as error:
         raise SyncHistoryUnavailable("Authority control state needs recovery review") from error
     return digest.hexdigest()
+
+
+def fingerprint(conn):
+    """Bind actual controls to their replayed authority lifetime and complete history."""
+    from paper_daily import sync_authority_history as history
+
+    checked = history.read(conn)
+    if checked["state"] != history.snapshot(conn):
+        raise SyncHistoryUnavailable("Authority control state differs from its history")
+    value = [state_fingerprint(conn), checked["authority_id"], checked["sequence"],
+             checked["sha256"]]
+    return hashlib.sha256(json.dumps(value, separators=(",", ":")).encode()).hexdigest()
 
 
 @contextmanager

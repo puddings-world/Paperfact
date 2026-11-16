@@ -56,7 +56,7 @@ def _event(raw, workspace):
 
 def _scope(conn, workspace, replacement):
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if tables - {"sync_pairings", "sync_history"} != TABLES:
+    if tables - {"sync_pairings", "sync_history", "sync_control_history"} != TABLES:
         raise ValueError("Authority recovery requires the supported reference schema")
     if "sync_history" in tables:
         columns = tuple(row[1] for row in conn.execute("PRAGMA table_info(sync_history)"))
@@ -230,6 +230,9 @@ def restore(
         # No source token hash, device session or label survives in active state.
         with service._transaction(write=True) as conn:
             conn.execute("DELETE FROM sync_devices")
+            from paper_daily import sync_authority_history as history
+
+            history.initialize(conn)
         tokens.clear()
         live()
         for name, identity in identities.items():

@@ -17,7 +17,8 @@ from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.sync_service import AuthorityInUseError, ReferenceService
 
 MARKER = ".paperfact-sync-service.json"
-FORMAT = {"format": "paperfact-reference-service-v3"}
+FORMAT = {"format": "paperfact-reference-service-v4"}
+LEGACY_CONTROL_FORMAT = {"format": "paperfact-reference-service-v3"}
 LEGACY_PINNED_FORMAT = {"format": "paperfact-reference-service-v2"}
 LEGACY_FORMAT = {"format": "paperfact-reference-service-v1"}
 DATABASE = "authority.sqlite"
@@ -92,6 +93,14 @@ def marker_record(marker, database, *, allow_legacy_backup=False):
             "Legacy authority has no control checkpoint. Stop serving, create a verified "
             "backup and restore-backup into a fresh service/workspace; re-enroll devices.")
     digest = record.get("control_sha256") if isinstance(record, dict) else None
+    if (valid_pin and isinstance(digest, str) and len(digest) == 64
+            and all(char in "0123456789abcdef" for char in digest)
+            and record == {**expected, **LEGACY_CONTROL_FORMAT, "control_sha256": digest}):
+        if allow_legacy_backup:
+            return record, tuple(pin)
+        raise AuthorityMarkerError(
+            "Legacy authority has no transactional control history. Stop serving, create a "
+            "verified backup and restore-backup into a fresh service/workspace; re-enroll devices.")
     if (not isinstance(pin, list) or len(pin) != 2
             or any(type(value) is not int for value in pin)
             or not isinstance(digest, str) or len(digest) != 64
@@ -131,6 +140,10 @@ def initialize(state):
         raise ValueError("Choose an empty service directory, separate from research")
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     service = ReferenceService(root / DATABASE, blob_root=root / "blobs")
+    from paper_daily import sync_authority_history as history
+
+    with service._transaction(write=True) as conn:
+        history.initialize(conn)
     record = marker_for(service.path, expected_identity=service._database_identity)
     fd = os.open(root / MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:

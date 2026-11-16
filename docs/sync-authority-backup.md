@@ -128,13 +128,15 @@ remain unverified. Ordinary desktop use does not require the operator SDK.
 
 ## Service-marker lifetime compatibility
 
-Current source uses a v3 marker pinning native database identity and a digest of
-all supported device/pairing rows. Export validates both under its SQLite writer
-reservation before trusted capture. A same-file control rollback or interrupted
-marker/SQL mismatch is refused without a completed backup manifest.
+Current source uses a v4 marker pinning native database identity and actual
+controls plus complete transactional control history. Export validates them under
+its SQLite writer reservation before capture. Snapshots preserve the exact private
+journal; state/history rollback, rewritten chains and interrupted marker/SQL
+mismatch refuse a completed backup manifest.
 
-Recognized legacy v1/v2 markers are accepted only for explicit backup, never
+Recognized legacy v1/v2/v3 markers are accepted only for explicit backup, never
 serving or new credentials. Restore into a fresh service/workspace and enroll new
 devices; do not rewrite old markers or silently rebind old clients. Backup format
-and research schemas are unchanged. Independent history/anchoring, joint rollback,
+and research schemas are unchanged; v3 also validates its actual control digest.
+Device-held control checkpoints, independent anchoring, joint rollback,
 cross-host fencing and hosted restore remain separate gates.

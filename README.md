@@ -404,7 +404,11 @@ files and same-file device/pairing rollback against the retained local checkpoin
 are refused. Legacy v1/v2 services require explicit backup/fresh restore, not
 automatic marker repair. The 0a64ec7 native candidate includes these guards. See
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
-These local safeguards do not yet provide distributed fencing or durable control-history proof.
+Source after e26ec8f adds v4 transactional control history: actual controls and
+their journal commit together, with replay-checked local checkpoints and explicit
+legacy backup/fresh recovery. [Contract and limits](docs/sync-http.md#official-authority-lifetime-and-transactional-control-history).
+Device-held control proofs and independent anchoring/fencing remain open. Existing
+downloads predate this source-only service change.
 The existing source-report package check now also exercises private desktop-to-CLI
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).

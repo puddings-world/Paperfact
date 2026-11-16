@@ -446,6 +446,8 @@ def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
         (root / sync_admin.MARKER).write_text(
             json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
         with closing(sqlite3.connect(old.path)) as conn, conn:
+            # The simulated old authority predates transactional control history too.
+            conn.execute("DROP TABLE sync_control_history")
             conn.execute("DROP TABLE sync_pairings")
     else:
         old.create_pairing(owner, code, checkpoint=old.history_page(owner)["checkpoint"])
@@ -453,6 +455,7 @@ def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
             (root / sync_admin.MARKER).write_text(
                 json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
             with closing(sqlite3.connect(old.path)) as conn, conn:
+                conn.execute("DROP TABLE sync_control_history")
                 conn.execute("ALTER TABLE sync_pairings DROP COLUMN history_checkpoint")
     original = dump(old.path)
     source, destination = tmp_path / "pair-backup", tmp_path / "pair-recovered"

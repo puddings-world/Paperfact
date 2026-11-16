@@ -72,6 +72,12 @@ def _schema(conn, check):
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if not tables >= TABLES or "papers" in tables:
         raise ValueError("Expected a reference sync authority")
+    if "sync_control_history" in tables:
+        from paper_daily import sync_authority_history as history
+
+        checked = history.read(conn, check=check)
+        if checked["state"] != history.snapshot(conn):
+            raise ValueError("Authority control history differs from its current state")
     if conn.execute("PRAGMA quick_check").fetchone() != ("ok",):
         raise ValueError("Authority database integrity check failed")
 
@@ -246,12 +252,15 @@ def export(state, output, *, seconds=30, cancelled=lambda: False):
         try:
             lock.execute("BEGIN IMMEDIATE")
             from paper_daily.sync_admin import FORMAT as SERVICE_FORMAT
-            from paper_daily.sync_admin import marker_record
-            from paper_daily.sync_authority_control import observe
+            from paper_daily.sync_admin import LEGACY_CONTROL_FORMAT, marker_record
+            from paper_daily.sync_authority_control import observe, state_fingerprint
 
             record, _pin = marker_record(marker, database, allow_legacy_backup=True)
             if record.get("format") == SERVICE_FORMAT["format"]:
                 observe(lock, marker, database, original[:2])
+            elif (record.get("format") == LEGACY_CONTROL_FORMAT["format"]
+                    and record["control_sha256"] != state_fingerprint(lock)):
+                raise ValueError("Legacy authority control checkpoint differs; review recovery")
             with closing(_connect(database)) as source:
                 _schema(source, check)
                 destination = output / DATABASE

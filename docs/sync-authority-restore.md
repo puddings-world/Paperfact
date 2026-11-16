@@ -142,9 +142,11 @@ phone acceptance, automatic client migration, or a coherent full release gate.
 
 A local [device recovery comparison](device-recovery-review.md) now distinguishes exact backed-up journal entries, unconfirmed/acknowledged entries absent from the backup and received later events. It preserves the old database and never replays or rebinds it. Use the result to plan preservation; automatic/guided per-change reconciliation remains pending.
 
-The source after e5eb093 publishes a v3 marker containing the reconstructed
-database's actual native identity and device/pairing digest. Publication rechecks
-the observed file identity. Legacy v1/v2 authorities may be backed up explicitly
-and restored through this fresh-workspace path; old device grants remain inactive.
-This retained local checkpoint is not independent control history, protection
-against joint marker/database rollback, or cross-host fencing.
+Current source publishes a v4 marker binding the reconstructed native database
+identity and a fresh transactional-control-history baseline. Old private history
+remains in the unchanged source backup, identified by the existing recovery
+provenance database hash; it is not installed as live grants/history. Publication
+rechecks file identity. Legacy v1/v2/v3 authorities use explicit backup/fresh
+recovery; old grants stay inactive. This local history is not an independent
+rollback anchor or cross-host fence. The e26ec8f native candidate predates v4;
+installed/hosted recovery acceptance remains required.

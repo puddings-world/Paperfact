@@ -9345,3 +9345,52 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   authority history/independent anchoring/fencing, hosted restore and physical
   Windows/Mac/phone convergence remain required. No public tag/release, cloud
   resources, credentials, paid models or owner research changes.
+
+
+## 2026-11-16 transactional authority control history
+
+- Reproduced the missing history table before implementation. Official service
+  source now initializes formatv4: a fresh authority UUID, canonical dense
+  `sync_control_history` deltas, before/after state hashes, UTC observation time
+  and previous/head hashes. Every actual device/pairing mutation uses the same
+  transaction boundary; reads and unchanged intent append nothing. No plaintext
+  token/pairing code, research body, new CLI command or external service call.
+- Validation replays the bounded complete chain, compares actual controls and
+  binds its authority/sequence/head into the retained local marker. A separate
+  adversarial case proved a writer could originally rewrite an earlier prefix
+  within its own transaction; pinning the transaction-entry history now rejects
+  that operation and rolls it back without changing the marker or active access.
+- Publication failure rolls controls/history back together. The existing actual
+  subprocess crash after marker publication remains fail-closed, including backup.
+  Cancellation preserves its caller signal; capacity failure keeps old access and
+  research intact. No journal deletion/GC or partial-history acceptance is added.
+- Legacy v1/v2/v3 markers are explicit backup-only; v3 retains its state-digest
+  check. Backups preserve and verify current history. Fresh restore discards old
+  grants and starts a new control identity; original history remains in its
+  unchanged source backup and existing database-hash provenance. Research/HTTP/
+  backup formats are unchanged. Existing native downloads still contain v3.
+- Final affected selection:19 passes9.06s (16.5s including privacy/Ruff), including
+  the13 new history cases,3 existing control/crash cases and3 legacy recovery
+  variants. Earlier broader admin/backup/recovery run passed77 before stopping at
+  a synthetic legacy fixture retaining the newly introduced table. Corrected only
+  that historical setup to omit the table; no existing preservation/auth assertion
+  changed. Corrected legacy + actual native deck/Lineage/original recovery and
+  history selection16 passed84.25s (93.5s including privacy/Ruff). Counts overlap;
+  this is not an exhaustive suite or installed/hosted acceptance claim.
+- Current-format missing-schema and coherently rehashed-history cases still reject
+  access/backup. Tests also cover concurrent writes, actual issuer/claim/revocation,
+  no-op reads, retry, private-secret exclusion, typed prior fields and cancellation.
+  The existing three-minute per-OS source stage adds the13-case file, no new job.
+- Limits:10,000 journal events/64 MiB total,8 MiB per event and current state,
+  10,000 current control rows. Verification is linear in retained history; large
+  throughput, physical power loss and native packaging of v4 remain unverified.
+  Device-held control knowledge, independent external anchoring/fencing, hosted
+  restore and physical Windows/Mac/phone convergence remain open release gates.
+- Reviewed harvest scope: these auth/history invariants are recorded in the
+  project protocol/test map. The local-integration skill excludes remote auth;
+  no speculative global rule or generated skill copy was changed. No cloud,
+  credential, daily-app, owner-data, tag or release mutation occurred.
+
+- Final integration gate: critical14 plus privacy/Ruff passed24.5s; docs60 plus
+  privacy/Ruff passed22.4s. All local checks used the existing two-processor/25%
+  governor. No historical full-suite, new native build or deployment was run.
