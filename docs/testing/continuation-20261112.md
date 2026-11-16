@@ -9969,3 +9969,65 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   from delivered2021103. No new job, full-suite expansion or timeout increase.
 - Docs60 passed16.56s (37.4s total, privacy15.9s/Ruff0.6s); whitespace clean.
   Default critical and affected checks pass; historical exhaustive suite not run.
+
+## 2026-11-16 8252010 three-platform candidate acceptance
+
+- Previous turn made authoritative progress: committed and integrated8252010,
+  started one all-platform workflow. This turn polled that exact run; no retry,
+  replacement run or expanded suite. Run43843383556 completed successfully at
+  exact clean8252010ad4a0d72fef84e9e1622d0a48b88056ba, `0.5.0.dev`, beta-candidate.
+  Draft/release skipped. Mac249s, Windows481s, Linux216s total native job durations.
+- All OS source gates actually pass critical14, first-sync1 and affected53.
+  Existing affected stage stays three minutes; complete job cap stays30 minutes.
+  Actual phase results from retained job logs:
+  - build (ubuntu-22.04, linux): 14 passed in 3.73s, 1 passed in 2.08s, 53 passed in 18.81s.
+  - build (windows-latest, windows): 14 passed in 6.88s, 1 passed in 3.12s, 53 passed in 22.33s.
+  - build (macos-latest, macos): 14 passed, 5 warnings in 3.33s, 1 passed, 5 warnings in 1.51s, 53 passed, 5 warnings in 9.01s.
+- Independently downloaded/hash-matched all three small provenance ZIPs.
+  Build metadata and actual frozen reports agree on exact clean source, expected
+  arm64/amd64/x86_64 host, `passed=true` and all15 sync-protocol flags. Mac report
+  verifies3 reader launches plus foreground/instance handoff. Downloaded Mac
+  screenshot ZIP also hash-matches; dive.png visually shows readable Chinese,
+  formula and code. Windows report verifies actual isolated install/reinstall/
+  uninstall with research preserved; its raw installer payload SHA-256 is
+  `287e869cd53efa14c1f25f53361adf1e811fa3836a1ed20bd23f944fad51c914`.
+  Linux passes AppImage CLI/MCP integration. Large installer ZIPs were not
+  independently downloaded locally; their hashes below are GitHub metadata.
+- Matching mobile ZIP independently downloaded/hash-matched, safely extracted,
+  then existing verifier passed all54 files/3983781 bytes, proxy map and cache
+  identity in0.813s under two-core/25%/below-normal governor with60s wall bound.
+  Its content ID remains
+  `5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`;
+  archive identity changed, static public content did not. This is not a new
+  Safari/physical-phone acceptance or a deployment.
+
+| Artifact | ID | ZIP bytes | ZIP SHA-256 |
+|---|---:|---:|---|
+| build-macos | 14213973245 | 277629353 | `e50410ebab90624e8c8d727077ee0a0f432b67182189bc5a995c7f244c4e6568` |
+| build-windows | 14214746277 | 184782113 | `db92b20ec80147ac0dfca7b548a2914b76025901be0bcd36754290d6a6bdf96f` |
+| build-linux | 14213464829 | 282740155 | `4ed250f1ce889308bba6aff9fe3ef6610b660687c84c71da0f606eaa9479f10d` |
+| provenance-macos | 14214786054 | 3063 | `1dcb45e4fd7bb3c7aaab0baac21a93b73f3ef58c26bb613b34233d9091b87e00` |
+| provenance-windows | 14214626637 | 3444 | `2df9d6cd43e666e78459b3b1aae96ca9053f9eb688999cce7346b187e8adb37e` |
+| provenance-linux | 14214197426 | 3073 | `7ac20e109a862421fa21894c2223dcd6241ba2c421ff30bb6a23f4e3ea98bee4` |
+| mobile-web-8252010ad4a0d72fef84e9e1622d0a48b88056ba | 14214850454 | 901434 | `f95f613e03c8d3ef697c02ea84de0014ee5561549bdffc42efa537ff42e55f62` |
+| screenshots-macos | 14213674132 | 795130 | `a4672f257eeaa60ae6c49399cc3c795088e49973c82b96815a60dd94f78f92f7` |
+
+- Evidence retained under ignored build/preview-8252010: run/artifact metadata,
+  per-job actual logs/counts, small provenance reports, mobile verification and
+  Mac screenshots. No account/provider/owner research was used.
+- Current status/download docs now identify8252010. The Mac guide begins with
+  install (extract installer ZIP), import (keep research ZIP zipped), verify saved
+  research offline, and explicit report/export steps. Review existing receiver
+  edits before replacement; snapshots are not automatic three-way sync.
+- Applied public-app-support for exact build/OS/reproduction reporting and separate
+  reviewed diagnostic sharing; canonical local-integration boundaries unchanged.
+  No new portable rule, global install, background upload or credential action.
+- Still open: hosted GCP/HTTPS enrollment and recovery, independent authority
+  anchoring/fencing, complete supported writer/legacy/file adoption, frozen new GUI
+  workflows, live accounts/Google/native vaults/IME, older installed-binary upgrades
+  and actual Windows/Mac/phone offline/reconnect/conflict/revocation/recovery.
+  Installer delivery does not complete or narrow the original v0.5 objective.
+- Final documentation gate60 passed14.05s (40.3s total, privacy22.1s/Ruff0.8s),
+  using the existing two-core/25% governor; whitespace clean. Runtime is unchanged
+  from8252010, so its actual three-OS critical/affected/frozen evidence is reused
+  rather than rerunning unchanged source journeys locally for a docs-only commit.

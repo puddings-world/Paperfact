@@ -1,6 +1,77 @@
 # Mac v0.5 acceptance
 
-## Latest tested downloads: 2021103
+## Start reading on your Mac
+
+1. Download the **Apple Silicon Mac** artifact from the latest tested table below.
+   Unzip this installer download and open the DMG. Keep the daily app; use the
+   [separate test app and data folder](#prepare-a-separate-test-app).
+2. On the desktop, open the list and choose **Export this list** (or
+   **Research data > Export current list package**). Include PDFs and personal
+   notes/Q&A/manual highlights. Check the result for missing original PDFs.
+3. Transfer the research-package ZIP to the Mac. **Keep this ZIP zipped.** On the
+   Mac list overview choose **Import research package**, inspect the preview and
+   confirm. Existing receiver research is preserved unless replacement is chosen.
+4. Open a saved analysis, a note, its PDF and an editable deck. Reading saved work
+   needs no AI login. Before leaving, disconnect the Mac and reopen those items;
+   a successful import alone does not prove every original was included.
+
+The installer ZIP and the research ZIP have different purposes: extract the first,
+import the second. This workflow transfers one snapshot, not a continuous sync
+connection. To bring Mac edits back, export that list again and review its import
+on the desktop; package import is not an automatic three-way merge. See
+[sharing](../sharing.md#move-your-own-research-to-another-computer).
+
+For a problem, record the bottom-right version/source, macOS version, exact action
+and expected/actual result. Use **Diagnostics and support** to preview/export a
+report, then decide where to send it. Do not send the whole research folder.
+The [full acceptance record](#acceptance-record) below tracks release/device tests;
+service-dependent cases stay **not run** until a reachable test service exists.
+
+## Latest tested downloads: 8252010
+
+All native candidates share clean source
+`8252010ad4a0d72fef84e9e1622d0a48b88056ba`, version `0.5.0.dev`, beta-candidate.
+[Run43843383556](https://github.com/puddings-world/Paperfact/actions/runs/43843383556)
+succeeded; draft/release was skipped. These are test installers, not an automatic
+update or public release. Check source **8252010** in version/support information.
+
+| Platform | Download | Native job duration |
+|---|---|---|
+| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14213973245) | 4m09s |
+| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214746277) | 8m01s |
+| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14213464829) | 3m36s |
+
+This candidate includes reader/analysis first-original intake, list PDF preservation,
+exact known-original supply without a new version/AI call, and explicit missing
+deck/body/image retry. Earlier native replacement, atomic successful-URL publication,
+retention guards and mobile storage-protection behavior are retained. A different
+PDF remains explicit replacement; corrupt finalized files are never overwritten.
+
+Each OS passes critical14, first-sync1 and53 selected authority/control/recovery/
+offline/original cases within the existing budgets. Mac reports five warnings
+per source phase, not failures. Small provenance ZIPs for
+[Mac](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214786054),
+[Windows](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214626637)
+and [Linux](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214197426)
+were independently downloaded, hash-matched and inspected: exact clean source,
+expected host, `passed=true` and all15 packaged sync flags. Large installer ZIPs
+were not independently downloaded on the source workstation.
+
+Mac passes three reader launches/foreground activation; its downloaded screenshot
+shows Chinese/formula/code. Windows isolated install/reinstall/uninstall preserves
+research; Linux passes AppImage integration. Source-format0.4.3 preservation is
+not an installed-old-binary upgrade. Full new-action GUI, native vault/IME, live
+AI/Google and physical two-device/phone acceptance remain open.
+
+The matching [mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43843383556/artifacts/14214850454)
+was downloaded/hash-matched and all54 assets, proxy map and cache identity verified
+under the existing governor in0.813s. Its content ID remains
+`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
+It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
+Hosted continuous sync remains undeployed; use the snapshot handoff above.
+Detailed ZIP hashes/counts are in the [continuation ledger](continuation-20261112.md#2026-11-16-8252010-three-platform-candidate-acceptance).
+
+## Previous tested downloads: 2021103
 
 All three native candidates now share clean source
 `20211036cea31cc7d0764c28946926870617a7f4`, version `0.5.0.dev`, beta-candidate.
@@ -490,7 +561,7 @@ acceptance logs before sharing. Do not publish the whole research workspace,
 raw app log, credentials, or private PDFs. Logs can contain earlier failures;
 an empty diagnostics report does not prove a frozen UI is healthy.
 
-## Newer source5945820: Mac package not yet available
+## Historical failed candidate5945820 (superseded)
 
 [Run43771771878](https://github.com/puddings-world/Paperfact/actions/runs/43771771878)
 builds source5945820f802bac8462d43dbb56719393b0792088. The Mac authority lifetime
