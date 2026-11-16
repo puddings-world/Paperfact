@@ -1,8 +1,10 @@
 # Versioned editable decks
 
-The first `research_file` feature is `deck`, with independent `notes` and `guide`
-slots. Other research-file features remain unsupported. This is an explicitly
-configured workspace capability, not automatic enrollment of existing research.
+This page describes the `research_file` feature `deck`, with independent `notes`
+and `guide` slots. Other supported file features share the transfer coordinator
+and retain their own closed schemas; this is not permission for arbitrary files.
+Storage is an explicitly configured workspace capability, not automatic enrollment
+of existing research.
 
 ```mermaid
 flowchart LR
@@ -106,7 +108,8 @@ is implemented: old/current/conflicted/draft-dependent blobs stay retained.
 
 `FileTransfers(client, store, transport, origin=..., token=..., version_root=...)`
 uses the existing authenticated session discovery and five blob endpoints.
-`upload(operation)` and `download(entity_id)` do at most one data chunk per step;
+`upload(operation, *, retry=False)` and `download(entity_id, *, retry=False)` do
+at most one data chunk per step;
 `ready_to_push` plugs into `SyncClient.sync_once(prepare_push=...)`. Metadata pull
 does not wait for uploads. Combine this predicate with the PDF predicate when
 both coordinators are used. The existing bounded outbox window is not a fair
@@ -118,6 +121,18 @@ switch/close/cancel invalidate activation. Every remote phase still authenticate
 the final download activation reauthenticates after closure validation. Partial
 bytes can remain for resume; cancellation does not pretend to retract bytes already
 sent. Exceptions contain no persisted provider error text or tokens.
+
+An explicit download retry can restore absent finalized body/image/evidence bytes
+using the existing bounded reservation and verified closure. It authenticates the
+workspace/device before staging and reauthenticates before activation. Ordinary
+download still refuses the missing-final inconsistency; corrupt existing final
+files remain unavailable and are never overwritten. Restoring availability keeps
+the same desired/applied operation and creates no research edit or outbox entry.
+Selected offline preparation uses this retry path for previously applied files;
+ordinary metadata synchronization does not certify every local file as available.
+`tests/test_missing_artifact_retry.py` checks body/image restoration, wrong-device
+authentication, repeated repair, actual editable-deck/figure readback and corrupt
+final preservation. These are isolated source fixtures, not installed-device proof.
 
 `sync_files.referenced_blobs(operation)` is the pure backup/retention closure seam.
 `validate_closure(payload, read_blob)` validates all bytes and typed references.
@@ -131,7 +146,9 @@ Fixture tests exercise wire rejection, used-figure closure, actual save/upload/
 receive/reopen/HTML export, stale candidates, request retry, crash intent recovery,
 wrong-workspace isolation, pending bytes, cancellation, corrupt partial repair,
 history restore, bounded validation and real desktop save/undo/recovery paths.
-The parent full check remains the release gate. No cloud deployment, real user
+Use the curated release gate and affected regressions described in the
+[test map](testing/README.md); the historical full suite is diagnostic, not the
+default iteration gate. No cloud deployment, real user
 enrollment, physical-phone test, Google Slides publication or paid AI invocation
 is implied by these fixtures. Populated-workspace backup/migration, other file
 producers and a user-facing retained-work review UI remain separate acceptance

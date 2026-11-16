@@ -145,6 +145,7 @@ jobs:
           tests/test_native_reader_download.py::test_first_reader_download_extracts_from_exact_native_projection
           tests/test_list_pdf_attachment.py::test_first_native_attachment_uses_shared_publication_and_repeat_keeps_it
           tests/test_known_document_supply.py::test_exact_supply_restores_known_bytes_without_new_version_or_outbox
+          tests/test_missing_artifact_retry.py::test_explicit_retry_restores_exact_artifact_without_revising_deck[figure]
 
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact

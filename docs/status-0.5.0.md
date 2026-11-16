@@ -21,7 +21,9 @@ passes first-original intent to the final publication boundary. These newer
 changes are not yet in2021103 installers. Current source additionally repairs
 missing active originals from exact local bytes, retaining their version and
 citations; supplying PDFs no longer automatically starts AI. Explicit transfer
-retry can restore absent finalized bytes, while corrupt finals remain protected.
+retry can restore absent finalized PDF and editable-artifact bytes, while corrupt
+finals remain protected. Restoring a deck body/image keeps its operation and
+editable content; selected offline preparation uses this explicit retry path.
 Remaining writer/runtime enrollment still requires work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
 
 ## Current deliverable

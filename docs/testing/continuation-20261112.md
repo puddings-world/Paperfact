@@ -9928,3 +9928,44 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Default critical check:14 passed18.41s (26.3s total), privacy5.7s/Ruff0.3s.
 - Docs gate:60 passed9.59s (25.6s total), privacy11.5s/Ruff0.7s; whitespace clean.
   These are scoped checks, not a historical full-suite or native-device pass.
+
+## 2026-11-16 missing editable-artifact bytes repair
+
+- Followed the exact-PDF availability fix through the shared file coordinator.
+  `FileTransfers._step` still used ordinary `BlobStore.begin` even for explicit
+  retries; a previously finalized but absent deck body/image could never recover.
+- Reproduced with an actual saved/transferred/applied synthetic editable deck:
+  the body case failed in `sync_file_transfers.py` with `BlobError: A finalized
+  attachment is missing; restore it explicitly`. Behavior reproduction1 failed
+  in16.54s (53.6s total, privacy31.5s/Ruff0.8s). The earlier lint-only check
+  failed on new-test import ordering; it ran no behavior tests and was corrected.
+- Explicit download retry now opts into existing missing-final restoration after
+  workspace/device authentication. Ordinary download and corrupt-final behavior
+  stay fail-closed. Full closure verification, target/session activation guards,
+  bounded per-step transfer and existing cancellation remain unchanged. No new
+  wire kind, UI control, server, worktree, CI job or automatic AI call was added.
+- Focused selection7 passed95.82s (113.7s total, privacy13.6s/Ruff1.1s):3 new
+  body/image repair and corrupt-final cases, plus4 unchanged cancellation,
+  corrupt-partial, newer-target and actual manual-sync representatives. New cases
+  also verify wrong-device rejection before repair, repeated retry, exact saved
+  bytes, unchanged desired/applied revision/outbox and actual reopened editable
+  text, speaker notes and decoded figure bytes. Reports are retained under ignored
+  build/missing-artifact-evidence, including the red reproduction.
+- The selected-offline driver already uses explicit retry and includes applied
+  targets when requested. Ordinary metadata passes can skip applied files; they
+  do not certify local availability. Complete offline verification is separate.
+  README/current status/file contract/test map record that distinction.
+- All checks use isolated fixtures with the existing sequential300s, two-logical-
+  processor/25% CPU/below-normal governor. No historical full suite, real account,
+  paid AI, owner research, competing process or deployed service was used.
+- This extends the existing canonical local-integration invariant: availability
+  repair must not become a new research edit. No new portable skill rule warranted.
+  Source follows bcbefa9; delivered installers remain2021103. Hosted continuous
+  sync, complete writer/file enrollment, independent authority anchoring/fencing
+  and installed Windows/Mac/phone acceptance remain open v0.5 gates.
+- Default critical14 passed36.15s (49.0s total, privacy7.7s/Ruff0.5s).
+- One figure-repair representative joins the existing bounded per-OS stage for
+  the next coherent candidate. Future source gate53 is not the48-case evidence
+  from delivered2021103. No new job, full-suite expansion or timeout increase.
+- Docs60 passed16.56s (37.4s total, privacy15.9s/Ruff0.6s); whitespace clean.
+  Default critical and affected checks pass; historical exhaustive suite not run.

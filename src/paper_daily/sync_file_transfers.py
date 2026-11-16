@@ -186,7 +186,10 @@ class FileTransfers:
                         token, {"sha256": manifest.sha256, "size": manifest.size}
                     )
                 else:
-                    begun = self.store.begin(manifest)
+                    begun = (
+                        self.store.begin(manifest, restore_missing=True)
+                        if retry else self.store.begin(manifest)
+                    )
                 offset = begun["offset"]
                 if (
                     type(offset) is not int

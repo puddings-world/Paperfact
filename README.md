@@ -46,7 +46,9 @@ use verified versioned storage. Reader and analysis intake share that route in t
 current source. Adding a PDF to a list preserves an existing original, including
 when that paper joins another list. Supplying the exact known missing PDF keeps
 its version and citations; choosing different bytes through explicit replacement
-creates a new version. Supplying a PDF does not start AI analysis.
+creates a new version. Supplying a PDF does not start AI analysis. Explicit
+attachment retries also restore missing saved-deck bytes while keeping the same
+editable revision; corrupt existing files remain protected.
 See [PDF replacement and downloads](docs/sync-operations.md#observed-native-pdf-replacement).
 
 ## Start here
