@@ -9784,3 +9784,45 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   direct frozen GUI certification. Remaining goal/device/deployment gates unchanged.
 - Delivery/sharing docs60 passed3.13s (7.8s total), privacy/Ruff passed.
   Reused exact-source critical/native evidence; no redundant code-suite rebuild.
+
+## 2026-11-16: reader and analysis intake shares native original publication
+
+- Verified remaining writer gap: ensure_pdf still installed a legacy alias for
+  an enrolled never-managed paper. It now dispatches through the shared downloader
+  with the entry database/native identity, before taking any legacy process lock.
+  A read-only marker hint includes partial enrollment but grants no authority;
+  actual admission still validates complete binding and owned storage. Legacy
+  network results are refused on workspace/enrollment change before install.
+- Native downloads now deliver their exact reader projection. Returning a blob
+  cache name caused downstream extraction's current-path check to refuse the new
+  document. prepare retains the newly managed source through real extraction,
+  version-keyed text caching and final invalidation checks. One process lock
+  deduplicates a concurrent reader/prefetch transfer. Existing unenrolled behavior
+  stays legacy; no implicit account, AI call, enrollment, server or wire entity.
+- Publication and delivery stay distinct: a post-commit projection failure or
+  cancellation reports Original saved and retries opening cached bytes. It does
+  not claim rollback of committed research or redownload it. Source/cancellation
+  refusal before publication keeps the existing atomic transaction boundary.
+- Added9 isolated reader cases: actual native PDF/text readback, partial binding,
+  changed handoff database, concurrent reader/prefetch, post-commit projection
+  failure/cancellation, source invalidation after text, ordinary legacy download/
+  cache, and enrollment transition during a legacy request. Real external HTTP,
+  accounts/providers and owner research are unused.
+- First selection40 passed50.52s (55.3s total), covering the initial8 new cases,
+  existing12 native-download and20 legacy queue/stream cases. Final selection14
+  passed41.55s (50.8s total):9 new reader cases plus5 existing missing/detached/
+  unbound/text-cache/cancellation representatives. Selections overlap; do not sum.
+  Privacy/Ruff passed under the existing300s/two-processor/25% CPU governor, one
+  local check at a time. No historical full suite.
+- Added only the actual first-reader/text representative to the existing three-
+  minute per-OS source gate. Default critical14 stays unchanged; no old guard
+  removed, no new job, no extended budget. Future source gate49 is not the48-case
+  result from the already delivered2021103 native candidate.
+- Existing local-integration pattern applied: shared operation, observed handoff,
+  exact-source delivery and truthful committed-versus-delivered outcome. Evidence
+  remains local/project-specific; no new global rule or generated skill changes.
+- Source-only after2021103; no native rebuild for this iteration, public tag,
+  release, daily app/data restart, credential change or deployment. Complete
+  writer/runtime adoption, hosted sync and physical-device/GUI gates stay open.
+- Final integration gates:critical14 passed11.94s (19.1s total); docs60
+  passed2.99s (8.8s total). Privacy/Ruff/whitespace passed. No exhaustive claim.

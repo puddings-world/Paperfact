@@ -13,8 +13,10 @@ Prior originals/anchors remain retained; stale/failed publication is refused.
 First-original list prefetch now uses the same native boundary, including atomic
 successful-URL publication. Existing legacy files are not migrated automatically;
 managed missing originals still use workspace attachment transfer. These source
-changes are included in2021103 native candidates. Reader-fetch fallback and
-remaining writer enrollment still require work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
+changes are included in2021103 native candidates. Newer source also routes enrolled
+reader/analysis first-original intake through the shared downloader and delivers
+the exact reader projection for text extraction. This newer change is not yet in
+2021103 installers. Remaining writer/runtime enrollment still requires work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
 
 ## Current deliverable
 

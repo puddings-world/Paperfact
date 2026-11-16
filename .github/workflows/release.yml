@@ -142,6 +142,7 @@ jobs:
           tests/test_storage.py::test_claim_committed_during_cleanup_keeps_the_whole_paper[note]
           tests/test_native_pdf_downloads.py::test_alternate_first_pdf_publishes_url_bytes_and_cache_atomically
           tests/test_native_pdf_downloads.py::test_failure_after_url_operation_rolls_back_bytes_url_outbox_and_cache
+          tests/test_native_reader_download.py::test_first_reader_download_extracts_from_exact_native_projection
 
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact

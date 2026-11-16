@@ -21,7 +21,7 @@ import threading
 from pathlib import Path
 
 from paper_daily.config import PDF_DIR, TEXT_DIR, ensure_dirs
-from paper_daily.http import fetch
+from paper_daily.http import FetchError, fetch
 
 _REFERENCES_RE = re.compile(r"\n\s*(references|bibliography)\s*\n", re.I)
 
@@ -104,18 +104,43 @@ def derivative_key(document, producer, options):
 
 def ensure_pdf(row: sqlite3.Row, *, document=None) -> Path | None:
     """Download the PDF if we do not have it. Returns the local path, or None."""
-    from paper_daily.pdf_downloads import paper_lock
+    from paper_daily import native_primary_publication as native
+    from paper_daily import store
+    from paper_daily.pdf_downloads import Cancelled, download, paper_lock
 
     document = capture_document(row["id"], document=document)
     if document is not None:
         return document.path if document_current(document) else None
-    ensure_dirs()
-    dest = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
-    with paper_lock(dest, threading.Event()):
-        return _ensure_pdf_locked(row, dest)
+    database = Path(store.DB_PATH).resolve()
+    try:
+        info = database.stat() if database.exists() else None
+        identity = (info.st_dev, info.st_ino) if info else None
+        if native.has_workspace_markers(database):
+            return download(
+                row["id"], lambda *event: None, threading.Event(),
+                _expected=(database, identity),
+            )
+
+        def legacy_current():
+            if Path(store.DB_PATH).resolve() != database:
+                return False
+            now = database.stat() if database.exists() else None
+            return (
+                ((now.st_dev, now.st_ino) if now else None) == identity
+                and not native.has_workspace_markers(database)
+            )
+
+        ensure_dirs()
+        dest = PDF_DIR / f"{_safe_name(row['id'])}.pdf"
+        with paper_lock(dest, threading.Event()):
+            return _ensure_pdf_locked(row, dest, _current=legacy_current)
+    except (FetchError, Cancelled, OSError, ValueError, sqlite3.Error):
+        return None
 
 
-def _ensure_pdf_locked(row, dest):
+def _ensure_pdf_locked(row, dest, *, _current=lambda: True):
+    if not _current():
+        return None
     document = capture_document(row["id"])
     if document is not None:
         return document.path if document_current(document) else None
@@ -127,6 +152,8 @@ def _ensure_pdf_locked(row, dest):
             blob = fetch(url, cache=False)
         except Exception:
             continue
+        if not _current():
+            return None
         document = capture_document(row["id"])
         if document is not None:
             return document.path if document_current(document) else None
@@ -138,6 +165,8 @@ def _ensure_pdf_locked(row, dest):
                 ) as f:
                     temporary = Path(f.name)
                     f.write(blob)
+                if not _current():
+                    return None
                 temporary.replace(dest)
             finally:
                 if temporary is not None:
@@ -206,5 +235,13 @@ def prepare(row: sqlite3.Row) -> tuple[Path | None, str | None]:
     pdf = ensure_pdf(row, document=document)
     if not pdf:
         return None, None
+    # A missing original may have become managed through the shared downloader.
+    # Retain that exact observation through extraction and result delivery.
+    if document is None:
+        document = capture_document(row["id"])
+        if document is not None and (
+            not document_current(document) or Path(pdf).resolve() != document.path.resolve()
+        ):
+            return None, None
     text = extract_text(pdf, row["id"], document=document)
     return (pdf, text) if document_current(document) else (None, None)

@@ -187,7 +187,8 @@ Worker-level API in `native_primary_publication`:
   its receipt while that original is still current. A new CLI invocation is a new
   explicit replacement, not a persistent retry of an earlier command.
 
-This source change is not in the currently delivered1875db5 native installers.
+Native repdf and first-original list prefetch are included in2021103 candidates.
+The newer reader/analysis delivery work below is source-only after that candidate.
 Frozen CLI acceptance and physical Mac replacement remain separate gates.
 No live download, AI call or owner database is used by regression
 fixtures (`tests/test_native_primary_publication.py`).
@@ -208,7 +209,8 @@ legacy PDF, changed workspace/path or replaced database also invalidates pending
 publication. Existing aliases stay legacy; existing managed originals use their
 verified bytes, and unavailable managed versions require workspace attachment
 transfer rather than searching for another PDF. This is not read-time migration
-of all legacy files or adoption of `fetch.ensure_pdf`'s remaining legacy fallback.
+of all legacy files. Newer source also routes enrolled reader intake through the
+same operation, as described below.
 
 When `pdf_url` is supplied, publication includes the successful candidate's ordinary
 paper-metadata operation and clears the local PDF-failure cache in the same SQL
@@ -225,6 +227,39 @@ source/workspace/lock races, independent manual originals, retained rich metadat
 exact retry and managed-byte recovery boundaries. Existing queue/stream tests
 retain their concurrency, deduplication, progress and partial-file assertions.
 No external service/provider, owner research, or physical-device acceptance is used.
+
+## Reader and analysis first-original intake
+
+Newer source after candidate2021103 closes `fetch.ensure_pdf`'s enrolled fallback:
+it dispatches through the same `pdf_downloads.download` operation before taking
+any legacy file lock. The handoff retains the entry database path/native identity;
+a changed database cannot become the new target. `has_workspace_markers(database)`
+is a read-only dispatch hint, including partial enrollment, not authorization.
+The actual downloader still requires complete matching enrollment and owned paths.
+A legacy network result is refused if workspace/enrollment changes before install.
+Unenrolled library/legacy behavior remains available; this does not auto-enroll it.
+
+A native first download now delivers the exact verified reader projection path,
+not an internal blob-cache filename. `fetch.prepare` retains the newly managed
+source observation through extraction, version-keyed text caching and result
+validation. Source invalidation drops the result rather than relabeling old text.
+Reader and list prefetch retain the same process lock and deduplicate transfer.
+No AI request, account switch, background service or new wire operation is needed.
+
+SQL publication and delivery are distinct. If opening the reader projection fails,
+the original becomes unavailable, or opening is cancelled after commit, the queue
+reports **Original saved** and asks for an opening retry. It does not claim SQL
+rollback or discard the saved original. `ensure_pdf` retains its path-or-None API;
+a retry uses already verified bytes rather than a second download. Cancellation
+before publication keeps the previous transaction behavior. This delivery gate is
+not proof of every GUI consumer or operating-system file lifetime race.
+
+`tests/test_native_reader_download.py` uses real PDF/text extraction and mocked
+HTTP, plus source invalidation, partial enrollment, entry-handoff and shared-lock
+races, projection failure/post-commit cancellation, ordinary legacy cache behavior
+and an enrollment transition during legacy fetching. Existing managed missing/
+detached/unbound, text-cache and cancellation representatives remain unchanged.
+These source checks do not certify current installers or physical-device behavior.
 
 ## Deletion boundary: remove from a list versus erase a paper
 

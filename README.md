@@ -42,7 +42,8 @@ not allow third-party tools to use Antigravity's subscription login.
 
 For an enrolled v0.5 workspace, replacing an original with `repdf` keeps prior
 PDF versions and their source references. First-original background downloads also
-use verified versioned storage. See [PDF replacement and downloads](docs/sync-operations.md#observed-native-pdf-replacement).
+use verified versioned storage. Reader and analysis intake share that route in the
+current source. See [PDF replacement and downloads](docs/sync-operations.md#observed-native-pdf-replacement).
 
 ## Start here
 

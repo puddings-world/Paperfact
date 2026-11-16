@@ -27,6 +27,18 @@ from paper_daily.workspace_service import Ticket, _binding, _tables
 from paper_daily.workspace_sync import GuardedJournal, local_binding
 
 _SEAL = object()
+_WORKSPACE_MARKERS = frozenset({
+    "paperfact_sync_identity", "research_sync_binding", "research_capture_binding",
+})
+
+
+def has_workspace_markers(database):
+    """Read-only dispatch hint, including incomplete enrollment; never permission."""
+    path = _owned_path(database)
+    if not path.exists():
+        return False
+    with closing(_read(path)) as conn:
+        return bool(_tables(conn) & _WORKSPACE_MARKERS)
 
 
 @dataclass(frozen=True)
@@ -76,9 +88,7 @@ def observe(database, local_id, *, ticket=None, current=lambda: True, first_only
         tables = _tables(conn)
         binding = _binding(conn, tables)
     if not binding:
-        if tables & {
-            "paperfact_sync_identity", "research_sync_binding", "research_capture_binding",
-        }:
+        if tables & _WORKSPACE_MARKERS:
             raise ValueError("Incomplete workspace binding; legacy PDF replacement refused")
         return None
     owner = local_binding(database, require_capture=True)

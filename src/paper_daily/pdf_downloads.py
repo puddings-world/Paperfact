@@ -137,13 +137,15 @@ def stream_pdf(url, dest, progress, cancel):
             temporary.unlink(missing_ok=True)
 
 
-def download(paper_id, progress, cancel):
+def download(paper_id, progress, cancel, *, _expected=None):
     from paper_daily.fetch import capture_document, document_current
 
     check_cancel(cancel)
     database = Path(store.DB_PATH).resolve()
     info = database.stat()
     identity = info.st_dev, info.st_ino
+    if _expected is not None and _expected != (database, identity):
+        raise FetchError("Download entry workspace changed; retry in the selected workspace")
     require_missing_alias = False
     dest = PDF_DIR / (_safe_name(paper_id) + ".pdf")
 
@@ -231,7 +233,20 @@ def download(paper_id, progress, cancel):
                         raise FetchError(
                             "PDF original or workspace changed; retry the download"
                         ) from exc
-                    return observed.store._path(prepared.manifest)
+                    # Deliver the same versioned projection used by extraction
+                    # and the reader, not an internal immutable blob-cache name.
+                    # Publication has committed: delivery failure is not rollback.
+                    try:
+                        delivered = capture_document(paper_id, legacy_root=PDF_DIR)
+                        check_workspace()
+                        if (delivered is None or not document_current(delivered)
+                                or delivered.sha256 != prepared.manifest.sha256):
+                            raise ValueError("Published original is no longer available")
+                    except (Cancelled, ValueError, OSError, sqlite3.Error) as exc:
+                        raise FetchError(
+                            "Original saved; opening failed or its version changed. Retry opening."
+                        ) from exc
+                    return delivered.path
             try:
                 result = stream_pdf(url, dest, progress, cancel)
             except (FetchError, httpx.HTTPError) as exc:
