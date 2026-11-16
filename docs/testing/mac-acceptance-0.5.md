@@ -27,7 +27,40 @@ report, then decide where to send it. Do not send the whole research folder.
 The [full acceptance record](#acceptance-record) below tracks release/device tests;
 service-dependent cases stay **not run** until a reachable test service exists.
 
-## Latest tested downloads: d14c512
+## Latest tested downloads: 30b5776
+
+All native candidates share clean source
+`30b577601276fbccffa03b293f381d6d1a47f500`, version `0.5.0.dev`, beta-candidate.
+[Run43859467437](https://github.com/puddings-world/Paperfact/actions/runs/43859467437)
+succeeded; draft/release was skipped. Check source **30b5776** in support/version
+information. Keep the existing isolated test-data directory and close an older
+test app before opening this one. These are test installers, not an auto-update.
+
+| Platform | Download | Native job duration |
+|---|---|---|
+| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43859467437/artifacts/14223445465) | 6m35s |
+| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43859467437/artifacts/14222404200) | 8m06s |
+| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43859467437/artifacts/14222013278) | 3m40s |
+
+Mac now mounts the actual generated DMG read-only, copies and verifies the app,
+detaches that volume, then runs the existing frozen research workflow from the
+copy. Downloaded/hash-matched provenance proves the exact clean source/arm64 host,
+all five DMG stages, all15 sync flags, three reader launches and Launch Services
+foreground. Its screenshot was visually inspected for Chinese, formula and code.
+Windows isolated install/reinstall/uninstall preserves research; Linux AppImage
+integration passes. All three source phases pass critical14, first-sync1 and
+selected54 cases. Mac reports five warnings per phase, no failures.
+
+All small native provenance ZIPs were independently downloaded/hash-matched;
+large installer ZIPs were not downloaded locally. Quarantine/notarization, older
+installed-binary upgrade, complete new GUI/live accounts/native vaults/IME and
+physical two-device/phone acceptance remain open. Mobile artifact14223076072
+was hash-matched and its54 assets/3983781 bytes verified in1.640s under the existing
+CPU governor. Its content identity is unchanged; HTTPS/PWA deployment remains open.
+Hosted continuous sync is undeployed: use the snapshot handoff above.
+[Detailed identities and evidence](continuation-20261112.md#2026-11-16-30b5776-actual-dmg-copy-and-three-platform-candidates).
+
+## Previous tested downloads: d14c512
 
 All native candidates share clean source
 `d14c51253c348b921bfcb823ece22957e969cab7`, version `0.5.0.dev`, beta-candidate.

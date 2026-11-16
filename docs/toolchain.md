@@ -81,8 +81,11 @@ quarantine, notarization and older-installed-upgrade checks explicitly false.
 Native commands (`hdiutil`, `ditto`) are already used by the Mac build; no new SDK
 or CI job is introduced. Programmatic mount output uses Apple's supported
 [`-plist` interface](https://developer.apple.com/forums/thread/721232).
-The first actual DMG-copy CI result is still required; source fixtures simulate
-mounts on Windows and do not establish native acceptance.
+[Run43859467437](https://github.com/puddings-world/Paperfact/actions/runs/43859467437)
+accepts this actual native route for clean30b5776 on macOS/arm64. Its report
+records `copied`, `detached` and `workflow_from_copy` as true; quarantine,
+notarization and older-installed-upgrade checks remain false. Windows controller
+fixtures are separate from that native result.
 
 The Windows GitHub job additionally passes
 `--installer dist/Paperfact-<version>-windows-x64-setup.exe`. This option refuses

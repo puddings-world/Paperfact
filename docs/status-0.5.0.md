@@ -17,48 +17,37 @@ checks before removal. These changes are now included in d14c512 candidates.
 Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
-Newer verifier source adds CI-only Mac DMG content/copy/detach checks and routes
-the shared frozen workflow through the copied app. Local controller fixtures pass;
-actual Mac mounting is pending. The d14c512 record below remains build-app
-acceptance, not an independently verified DMG-copy journey.
-
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean
-**d14c51253c348b921bfcb823ece22957e969cab7**, version `0.5.0.dev`, beta-candidate.
-[Run43851985599](https://github.com/puddings-world/Paperfact/actions/runs/43851985599)
-succeeded: Mac5m59s, Windows8m29s, Linux2m47s; draft/release skipped.
+**30b577601276fbccffa03b293f381d6d1a47f500**, version `0.5.0.dev`, beta-candidate.
+[Run43859467437](https://github.com/puddings-world/Paperfact/actions/runs/43859467437)
+succeeded: Mac6m35s, Windows8m06s, Linux3m40s; draft/release skipped.
 [Downloads and separate-app/workspace steps](testing/mac-acceptance-0.5.md).
-All small native provenance ZIPs were independently downloaded/hash-matched and
-strictly inspected: exact clean source/expected host, passed reports, all15 named
-sync flags. Large installer ZIPs were not independently downloaded here.
 
-Each OS passes critical14, first-sync1 and54 selected authority/control/recovery/
-offline/original cases in the existing budgets. One saved-claim retention case
-joins the three-minute affected stage, without a new job or historical full suite.
-Mac has five warnings per source phase, no failures. Frozen CLI research/source/
-model-handoff, cached retry, CLI/MCP, official-v4 history and control refusal/restart
-journeys pass. Mac passes three reader launches and Launch Services foreground;
-its actual downloaded screenshot has Chinese/formula/code. Windows actual isolated
-install/reinstall/uninstall preserves research; Linux AppImage integration passes.
-Older installed-binary upgrade, full new GUI actions, live AI/Google, native vault/
-IME and physical devices remain unaccepted.
+Mac now verifies the actual read-only DMG mount, app copy, bounded complete content
+and executable/link closure, and successful detach before running the same frozen
+workflow from the copy. Independently hash-matched native reports prove exact clean
+source/host, all15 sync flags and no active/failing stage. Mac passes three reader
+launches and Launch Services foreground; its screenshot has Chinese/formula/code.
+Windows isolated install/reinstall/uninstall preserves research; Linux AppImage
+integration passes. Large installer ZIPs were not independently downloaded here.
+Each OS passes critical14, first-sync1 and selected54 source cases; Mac has five
+warnings per phase, no failures. Selected passes do not certify every GUI action.
 
-The matching [mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14217163768)
-was independently downloaded/hash-matched and all54 assets/3983781 bytes, proxy
-map and cache identity verified in0.375s under the existing CPU/time governor.
+Mobile artifact14223076072 was independently hash-matched and all54 assets/3983781
+bytes, proxy map and worker identity verified in1.640s under the CPU/time governor.
 Content ID remains
 `5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
-Its origin-storage protection is separate from per-paper pinning and backups.
 It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
-Hosted continuous sync remains undeployed; list-package export/import is the
-available cross-machine handoff.
+Hosted continuous sync remains undeployed; package export/import is the available
+cross-machine snapshot handoff.
 
-Device-retained authority prefixes are not independent anchoring/fencing. Complete
-supported adoption, hosted recovery and installed multi-device acceptance still
-gate v0.5.0. Selected offline verification refuses changed source/storage but does
-not certify the entire workspace. Detailed current/prior build hashes and counts
-stay in the existing acceptance/continuation records.
+Independent authority anchoring/fencing, complete supported adoption and retention,
+full new GUI/live accounts/native vaults/IME, quarantine/notarization, older installed
+binary upgrades, hosted recovery and physical device journeys still gate v0.5.0.
+Detailed identities and previous candidate records stay in the acceptance guide and
+continuation ledger. This candidate does not authorize deployment or daily-data migration.
 
 ## Requirements and actual boundaries
 

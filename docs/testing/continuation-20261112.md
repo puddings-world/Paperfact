@@ -10273,3 +10273,97 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   Hosted continuous sync remains undeployed; list package handoff is a snapshot.
 - Documentation gate: 60 passed in 3.56s, total14.7s; privacy and Ruff
   passed. Whitespace checked with CRLF-aware Git settings. No exhaustive run.
+
+
+## 2026-11-16: superseded d14c512 current-deliverable snapshot
+
+Newer verifier source adds CI-only Mac DMG content/copy/detach checks and routes
+the shared frozen workflow through the copied app. Local controller fixtures pass;
+actual Mac mounting is pending. The d14c512 record below remains build-app
+acceptance, not an independently verified DMG-copy journey.
+
+## Current deliverable
+
+Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean
+**d14c51253c348b921bfcb823ece22957e969cab7**, version `0.5.0.dev`, beta-candidate.
+[Run43851985599](https://github.com/puddings-world/Paperfact/actions/runs/43851985599)
+succeeded: Mac5m59s, Windows8m29s, Linux2m47s; draft/release skipped.
+[Downloads and separate-app/workspace steps](testing/mac-acceptance-0.5.md).
+All small native provenance ZIPs were independently downloaded/hash-matched and
+strictly inspected: exact clean source/expected host, passed reports, all15 named
+sync flags. Large installer ZIPs were not independently downloaded here.
+
+Each OS passes critical14, first-sync1 and54 selected authority/control/recovery/
+offline/original cases in the existing budgets. One saved-claim retention case
+joins the three-minute affected stage, without a new job or historical full suite.
+Mac has five warnings per source phase, no failures. Frozen CLI research/source/
+model-handoff, cached retry, CLI/MCP, official-v4 history and control refusal/restart
+journeys pass. Mac passes three reader launches and Launch Services foreground;
+its actual downloaded screenshot has Chinese/formula/code. Windows actual isolated
+install/reinstall/uninstall preserves research; Linux AppImage integration passes.
+Older installed-binary upgrade, full new GUI actions, live AI/Google, native vault/
+IME and physical devices remain unaccepted.
+
+The matching [mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14217163768)
+was independently downloaded/hash-matched and all54 assets/3983781 bytes, proxy
+map and cache identity verified in0.375s under the existing CPU/time governor.
+Content ID remains
+`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
+Its origin-storage protection is separate from per-paper pinning and backups.
+It is built, not deployed HTTPS/PWA or physically accepted on Safari/phones.
+Hosted continuous sync remains undeployed; list-package export/import is the
+available cross-machine handoff.
+
+Device-retained authority prefixes are not independent anchoring/fencing. Complete
+supported adoption, hosted recovery and installed multi-device acceptance still
+gate v0.5.0. Selected offline verification refuses changed source/storage but does
+not certify the entire workspace. Detailed current/prior build hashes and counts
+stay in the existing acceptance/continuation records.
+
+
+
+## 2026-11-16: 30b5776 actual DMG copy and three-platform candidates
+
+- Run43859467437 completed successfully from clean30b577601276fbccffa03b293f381d6d1a47f500.
+  All3 native jobs pass; draft skipped. Durations: Linux3m40s, Mac6m35s,
+  Windows8m06s. No public release, auto-update offer or hosting deployment.
+- Per-OS critical14 / first-sync1 / selected54 source cases:
+  Linux3.49/2.03/11.09s; Windows5.58/3.18/22.89s; Mac5.32/1.97/11.53s.
+  Mac reports5 warnings per phase, not failures. No historical full suite.
+- All small provenance ZIPs independently downloaded and SHA-256 matched:
+  Linux14222323514 a0c8c1a324a7ff6922dd2617d0a90b0855a4a5cee735d36fb03f9178463ae78c;
+  Mac14221953665 363951ff1f550248d1872b70e681a6a2868009fe15a5f6a1c12bdc8a8bce6c9b;
+  Windows14222459161 d647e1c7d266fc7984650476363761093987613089ae7aeeaf81093b732e1251.
+  Exact clean source/host, passed v1 report, no active/failure stage, all15 exact
+  Boolean sync-protocol fields. Mac all5 DMG stages and copied/detached/workflow
+  flags true. All quarantine/notarization/older-installed-upgrade flags false.
+- Mac native image SHA4da1e9b5f9505f23569b9541cf301ec35946f9f442106c76148732d56b9824ab;
+  bundle closure SHA c7edea5114923cec66b5ff075ae12bece1869071d1523b5c033d03dd783c4f75.
+  Three reader starts and Launch Services foreground pass from the verified copy.
+  Mac screenshots14221783959 ZIP SHA5af2e9aa2ccb80ed11d0901ba645a80157150be7e224384f62a2201fdba12275
+  hash-matched; dive.png visually inspected: Chinese, math and code render.
+- Installer artifacts (GitHub ZIP metadata only; not independently downloaded):
+  Mac14223445465 278783289 bytes SHAea7d42d90c80f81f87f03c20856d80f27bd9870b0b2659e73013a6113ccdc473;
+  Windows14222404200 184728695 bytes SHA66daffd7f96a55e3faa35deb5b455612396e1474bebe62f1dcf8078cf66c7571;
+  Linux14222013278 282743939 bytes SHAf9e679c62754f09c7ffc172962ac62255f375a5fb347f434bf4c22bc7a02493c.
+  Windows actual isolated install/reinstall/uninstall/research-preserved flags true,
+  raw Setup SHA8633047e35b234f525b2cb9d70e7eeed0553919ea68fbac737fc252afaee34bb;
+  registry/shortcuts and older-release upgrade remain false. Linux integration passes.
+- Mobile14223076072 ZIP901434 bytes SHAba8729a2cb2cafb8bc4ff197a4845e9912ac9f09b6d9b79491fe5742a8cd948b
+  independently matched;54 assets/3983781 raw bytes, proxy/worker identity verified
+  in1.640s with2-core/25-percent governor. Content identity unchanged5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246.
+  This is not HTTPS deployment or physical Safari/phone acceptance.
+- A completed job's log was briefly unavailable while its containing run remained
+  active. It was not treated as a failed job or restarted; logs retrieved after
+  the same run completed. Ignored evidence: build/preview-30b5776 (metadata, logs,
+  small reports, screenshots, mobile verification). Existing origin/master ref is
+  an ancestor of integration; no missing commits in that inspected local ref.
+- Current downloads/status updated; old records retained. Full objective remains
+  open: complete writer/file adoption and reference-aware retention, independent
+  authority anchoring/fencing, hosted enrollment/HTTPS/recovery, new frozen GUI/
+  live account/native vault/IME and old installed upgrades/physical multi-device
+  offline/conflict/revocation/restore. No daily research, credentials, other
+  session, cloud configuration or global skill was changed.
+- Final docs gate60 passed6.38s, total23.7s; privacy/Ruff/CRLF-aware
+  whitespace passed. Runtime unchanged: reuse the exact candidate source/native
+  evidence rather than repeat unaffected runtime tests for this documentation.
