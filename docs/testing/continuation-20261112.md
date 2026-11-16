@@ -9672,3 +9672,38 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final integration:critical14 passed12.45s,22.5s including privacy/Ruff;
   docs60 passed3.99s,8.7s including privacy/Ruff. Existing CPU/time governor,
   one local check at a time; no historical full suite or native installer build.
+
+## 2026-11-16: source-observed native PDF replacement
+
+- Closed a supported writer gap: repdf previously rewrote the legacy alias and
+  reanchored notes even when a workspace had an immutable managed original. It
+  now observes complete enrollment, paper lifetime, original graph head and owned
+  reader/store registration before fetching or staging. Unenrolled behavior stays
+  legacy; partial bindings and unavailable registered storage are refused.
+- Reused the shared attach_document transaction with a sealed native admission,
+  existing immutable BlobStore and retry receipts. No second SQL commit owner,
+  transport, authority, database or synchronization framework was added.
+  Native publication binds verified bytes with metadata/outbox/receipt atomically.
+  Old originals, legacy aliases and positioned notes remain retained. Stale work
+  cannot replace a newer original; completed retry cannot revive one.
+- Added nine isolated behavior cases: replacement/readback and exact retry with
+  saved note content/anchor, late source and stale retry, cancellation/bad PDF/
+  repeated activation, native CLI without legacy derivative/reanchor writes,
+  source change during simulated download, partial enrollment, workspace switch,
+  first enrolled original, and rollback after binding failure. Composite cases
+  are not separate feature counts. No real HTTP/provider or owner research.
+- Initial focused selection:40 passed149.84s (159.7s total), including maintained
+  legacy migration and repdf behavior. Final source adds saved note assertions
+  and clarifies the admission hook:26 passed35.40s (43.3s total), comprising the
+  nine new cases plus17 shared document-client cases. These selections overlap;
+  do not sum them. Ruff/privacy passed; existing 300s/two-core/25% CPU governor,
+  one check at a time. During development lint/fixture errors were corrected;
+  timezone and canonical JSON requirements were honored without changing capture.
+- Skill checkpoint: applied agentic-local-integration; this validates its existing
+  observed-source/single-transaction pattern in another local writer. No novel
+  global rule or copied skill is warranted. Evidence stays in this project ledger.
+- Not in the1875db5 Mac/Windows installers. No native rebuild, tag, release,
+  deployment, credentials, app restart or owner research mutation. Download queue
+  adoption, physical Mac replacement and full frozen GUI acceptance remain open.
+- Final integration gates:critical14 passed12.57s (23.1s total); docs60
+  passed4.21s (10.3s total). Privacy/Ruff and whitespace checks passed.

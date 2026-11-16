@@ -42,7 +42,7 @@ def stage_file(store: BlobStore, path: Path) -> BlobManifest:
     return manifest
 
 
-def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=None):
+def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=None, _native=None):
     """Commit one manifest and outbox operation after verifying immutable PDF bytes.
 
     File validation happens outside the write transaction. Rebuilding the target
@@ -59,13 +59,24 @@ def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=N
         "media_type": "application/pdf",
     }
     validate_manifest(payload, paper_id=paper_id)
-    legacy = None
+    if _legacy is not None and _native is not None:
+        raise ValueError("Select one explicit document admission")
+    admission = None
     request = {"mode": "attach_document", **payload}
+    if _native is not None:
+        from paper_daily.native_primary_publication import validate_for_attach
+
+        admission = validate_for_attach(_native, actions, paper_id, manifest, store, request_id)
+        request = {
+            "mode": "publish_native_primary", **payload, "observation": admission.fingerprint,
+        }
     if _legacy is not None:
         from paper_daily.legacy_primary_migration import validate_for_attach
 
-        legacy = validate_for_attach(_legacy, actions, paper_id, manifest, store, request_id)
-        request = {"mode": "migrate_legacy_primary", **payload, "observation": legacy.fingerprint}
+        admission = validate_for_attach(_legacy, actions, paper_id, manifest, store, request_id)
+        request = {
+            "mode": "migrate_legacy_primary", **payload, "observation": admission.fingerprint,
+        }
     fingerprint = hashlib.sha256(
         json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -109,11 +120,11 @@ def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=N
     with journal.transaction() as conn:
         previous = receipt(conn)
         if previous is not None:
-            if legacy is not None:
-                legacy._replay_in(conn, previous)
+            if admission is not None:
+                admission._replay_in(conn, previous)
             return previous
-        if legacy is not None:
-            legacy._check_in(conn)
+        if admission is not None:
+            admission._check_in(conn)
         operation = build(conn)
     expected = target(operation)
     verified = verify_document(store, expected)
@@ -122,25 +133,25 @@ def attach_document(actions, paper_id, manifest, *, store, request_id, _legacy=N
         with journal.transaction() as conn:
             previous = receipt(conn)
             if previous is not None:
-                if legacy is not None:
-                    legacy._replay_in(conn, previous)
+                if admission is not None:
+                    admission._replay_in(conn, previous)
                 return previous
-            if legacy is not None:
-                legacy._check_in(conn)
+            if admission is not None:
+                admission._check_in(conn)
             current = build(conn)
             if current != operation or not verified.matches(expected):
                 raise ValueError("Document changed while verifying; retry the action")
             journal.apply_in(conn, current, actions.client.writer)
-            if legacy is not None:
-                legacy._bind_in(conn, target(current), verified)
+            if admission is not None:
+                admission._bind_in(conn, target(current), verified)
             result = {"paper_id": paper_id, "operation_id": current["operation_id"], **payload}
             encoded = json.dumps(result, sort_keys=True, separators=(",", ":"))
-            if legacy is not None:
-                legacy._before_receipt(conn, target(current))
+            if admission is not None:
+                admission._before_receipt(conn, target(current))
             conn.execute(
                 "INSERT INTO research_action_receipts VALUES(?,?,?)",
                 (request_id, fingerprint, encoded),
             )
             return json.loads(encoded)
 
-    return legacy._publish(publish) if legacy is not None else publish()
+    return admission._publish(publish) if admission is not None else publish()

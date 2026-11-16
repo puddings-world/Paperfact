@@ -1670,7 +1670,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--force", action="store_true", help="look again at papers already checked")
     sp.set_defaults(func=cmd_resources)
 
-    sp = sub.add_parser("repdf", help="read a paper from another PDF, notes re-anchored")
+    sp = sub.add_parser(
+        "repdf", help="replace an original PDF; enrolled workspaces retain previous versions",
+    )
     sp.add_argument("paper_id")
     sp.add_argument("--url", default=None, help="the PDF to use (default: its arXiv copy)")
     sp.add_argument("--file", default=None, help="a PDF on this machine to use instead")

@@ -40,6 +40,9 @@ does not cover them, because Google ended Gemini CLI for personal accounts and d
 not allow third-party tools to use Antigravity's subscription login.
 [Account and model help](docs/ai-setup.md)
 
+For an enrolled v0.5 workspace, replacing an original with `repdf` keeps prior
+PDF versions and their source references. See [PDF replacement](docs/sync-operations.md#observed-native-pdf-replacement).
+
 ## Start here
 
 **Use a released preview:** choose the file for your computer from

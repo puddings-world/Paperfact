@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
+import tempfile
 from pathlib import Path
 
 from paper_daily import fetch, figures, pocket, store
@@ -67,12 +69,31 @@ def replace(paper_id: str, url: str | None = None, log=print, file: str | None =
     """Read `paper_id` from `url` (default: its arXiv copy), or from a PDF on this
     machine, from now on. The local file is how a paywalled paper gets in: download
     it through the library, then hand it over."""
+    # Observe before external I/O, not after a slow download has completed.
+    from paper_daily import native_primary_publication as native
+
+    database = Path(store.DB_PATH).resolve()
+    try:
+        observed = native.observe(
+            database, paper_id, current=lambda: Path(store.DB_PATH).resolve() == database,
+        )
+    except (ValueError, OSError, sqlite3.Error) as exc:
+        log(f"PDF replacement refused: {exc}")
+        return False
     with store.connect() as conn:
         row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
     if row is None:
         log(f"no paper {paper_id}")
         return False
     if file:
+        if observed is not None:
+            try:
+                result = native.run(native.prepare(observed, Path(file)))
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                log(f"PDF replacement refused: {exc}")
+                return False
+            log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
+            return True
         blob = Path(file).read_bytes()
         url = row["pdf_url"]
     else:
@@ -84,6 +105,23 @@ def replace(paper_id: str, url: str | None = None, log=print, file: str | None =
     if blob[:5] != b"%PDF-":
         log(f"{file or url} is not a PDF")
         return False
+
+    if observed is not None:
+        from paper_daily.sync_documents import MAX_PDF_BYTES
+
+        if len(blob) > MAX_PDF_BYTES:
+            log("PDF replacement refused: original exceeds 150 MiB")
+            return False
+        try:
+            with tempfile.TemporaryDirectory(prefix="paperfact-repdf-") as temporary:
+                selected = Path(temporary) / "selected.pdf"
+                selected.write_bytes(blob)
+                result = native.run(native.prepare(observed, selected))
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            log(f"PDF replacement refused: {exc}")
+            return False
+        log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
+        return True
 
     safe = fetch._safe_name(paper_id)
     dest = PDF_DIR / f"{safe}.pdf"

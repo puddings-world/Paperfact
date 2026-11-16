@@ -7,6 +7,12 @@ This page separates current evidence from unfinished implementation and external
 acceptance. Historical iterations belong in the
 [continuation ledger](testing/continuation-20261112.md#2026-11-16-superseded-status-snapshot-90b13e5).
 
+Source-only PDF writer adoption: `repdf` now observes the enrolled workspace's
+original before download/staging and uses shared versioned attachment publication.
+Prior originals/anchors remain retained; stale/failed publication is refused.
+This is not yet included in1875db5 installers and does not enroll the download
+queue. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
+
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Latest Windows/Mac candidates share clean

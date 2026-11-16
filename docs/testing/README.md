@@ -12,6 +12,7 @@ snapshots and do not describe the current default or certify the present source.
 | Reading and notes | Open papers, save/reopen notes and questions; preserve drafts when navigation or a worker races | `tests/test_reader_chat.py`, `tests/test_list_notes.py` |
 | AI routing and analysis | Keep account/model settings isolated; retain durable questions and avoid duplicate delivery | `tests/test_ai_profiles.py`, `tests/test_ai_providers.py`, `tests/test_research_chat.py` |
 | Originals and research evidence | Preserve exact PDF/source versions, citation locations, highlights and claim/lineage decisions | The original, highlight and Lineage scenario maps below |
+| Explicit original replacement | Enrolled repdf publishes a verified version, retains old PDF/positioned notes, refuses late downloads, cancellation, partial binding and stale retry; atomic binding failure rolls back outbox/receipt | `tests/test_native_primary_publication.py` |
 | Slides and attachments | Preserve editable slide content and only activate fully verified attachment closures | `tests/test_sync_files.py` |
 | Lists and sharing | Carry PDFs, analyses, list names/order and pinned papers; preserve receiver edits and reject unsafe paths | `tests/test_bundle.py`, `tests/test_package_review.py` |
 | Offline synchronization | Restart/retry, lost acknowledgments, concurrent edits, deletion conflicts, atomic receive and source-authored intake-note timestamps | `tests/test_sync_client.py`, `tests/test_sync_operations.py` |

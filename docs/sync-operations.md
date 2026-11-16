@@ -156,6 +156,42 @@ control, legacy PDF alias or AI workflow is automatically enrolled by this actio
 See [document transfer](sync-transfers.md) for recovery and acceptance evidence.
 
 
+## Observed native PDF replacement
+
+`repdf <paper_id> --file <path>` and `repdf <paper_id> --url <url>` now use the
+shared attachment action in a completely enrolled workspace with registered,
+owned reader/blob storage. This is explicit replacement, not automatic download
+queue enrollment. A partially enrolled or unavailable store refuses replacement.
+Unenrolled workspaces retain the existing alias/reanchor behavior.
+
+The native operation captures the paper lifetime, original graph head, reader
+registration and database/store identities **before** downloading or staging.
+It verifies immutable PDF bytes outside the write transaction, then rechecks the
+observed base inside the single shared transaction. Publication records desired
+metadata, outbox, applied verified bytes and receipt together. Failure or
+cancellation before commit keeps the previous original. Stale publication or
+retry cannot overwrite or revive a newer original. Previous immutable PDFs,
+legacy aliases and existing note anchors are retained; no derivative deletion or
+automatic source relabeling occurs. Other peers receive metadata/bytes through
+the existing separately authenticated coordinator; this command does not contact
+an authority or enable hosting.
+
+Worker-level API in `native_primary_publication`:
+
+- `observe(database, local_id, *, ticket=None, current=lambda: True)` captures the
+  source before external work; returns `None` only for an unenrolled workspace.
+- `prepare(observation, path, *, request_id=None)` stages an explicit local PDF;
+  callers may retain the returned prepared action for exact retry.
+- `run(prepared)` publishes through the shared attachment transaction. Repeated
+  activation of the same running action is refused; exact completed retry returns
+  its receipt while that original is still current. A new CLI invocation is a new
+  explicit replacement, not a persistent retry of an earlier command.
+
+This source change is not in the currently delivered1875db5 native installers.
+Frozen CLI acceptance, physical Mac replacement and download-queue adoption remain
+separate gates. No live download, AI call or owner database is used by regression
+fixtures (`tests/test_native_primary_publication.py`).
+
 ## Deletion boundary: remove from a list versus erase a paper
 
 The current v2 codec explicitly refuses `paper` operations with action `delete`
