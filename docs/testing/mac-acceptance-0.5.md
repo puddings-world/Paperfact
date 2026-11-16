@@ -1,6 +1,67 @@
 # Mac v0.5 acceptance
 
-## Latest tested downloads: 1875db5
+## Latest tested downloads: 2021103
+
+All three native candidates now share clean source
+`20211036cea31cc7d0764c28946926870617a7f4`, version `0.5.0.dev`, beta-candidate.
+[Run43820427097](https://github.com/puddings-world/Paperfact/actions/runs/43820427097)
+succeeded; its release/draft job was skipped. These are test builds, not an
+automatic-update offer or a public release.
+
+| Platform | Download | Native job duration |
+|---|---|---|
+| Apple Silicon Mac | [DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14203933161) | 5m52s |
+| Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204657506) | 9m09s |
+| Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14203983233) | 3m32s |
+
+Sign into GitHub to download; extract the ZIP and open its installer. Keep the
+existing daily app/data. Follow the separate-app/workspace steps below and check
+source **2021103** in version/support information. Export a list research package
+on the desktop, include PDFs and personal notes/Q&A, transfer its ZIP, then choose
+**Import research package** on the Mac list overview. Import preview preserves
+existing receiver research by default. Reading needs no AI login. This is a
+snapshot handoff; hosted continuous synchronization is not deployed.
+
+The candidates include source-observed native PDF replacement, first-original
+list prefetch with atomic successful URL/outbox/binding/receipt publication,
+retention-safe legacy cleanup and explicit mobile origin-storage protection.
+Existing legacy files are not automatically migrated. A missing managed original
+uses attachment transfer, not a replacement source search. Source tests verify
+these new writer paths; the packaged acceptance below is not a full frozen GUI
+certificate for every new action.
+
+Each OS passes critical14, first-sync preservation1 and48 named authority/control/
+recovery/offline/original source cases, without a historical full suite. Frozen
+apps pass all15 sync-protocol flags, CLI/MCP retries and source-aware cached model
+handoff. Mac passes three reader launches and foreground activation; its downloaded
+screenshot shows readable Chinese/formula/code. Windows passes isolated actual
+install/reinstall/uninstall with research preserved; Linux passes AppImage
+integration. Source-format0.4.3 preservation is tested; older installed-binary
+upgrade, native account login/IME/vault, full GUI and physical two-device/phone
+acceptance remain open.
+
+Small provenance ZIPs for [Mac](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204521558),
+[Windows](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204014268)
+and [Linux](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204860735)
+were independently downloaded/hash-matched and inspected: exact clean source,
+expected arm64/amd64/x86_64 hosts, `passed=true`, all15 flags true. Large installer
+ZIPs were not independently downloaded on this source workstation. The following
+ZIP hashes are GitHub-reported artifact metadata:
+
+| Platform | ZIP bytes | ZIP SHA-256 |
+|---|---:|---|
+| macos | 280939951 | `b48e1c095de465412cf2256ad3603cab1fd6081fb0b21487586ca190696c8440` |
+| windows | 184738912 | `3354bd2275e4c2b988267b3142b97473a5e0cdfd09d358f689b1f35b81b045d8` |
+| linux | 282713093 | `8bd3830f6a3bdfbd441c06f757ea2abe408ee7f5eb412a5e7a0cce76d0adff19` |
+
+The [matching mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204845490)
+was downloaded/hash-matched and verified against all54 assets, proxy map and cache
+identity in0.453s under the two-processor/25% CPU governor. Content ID
+`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
+It includes the storage-protection module but is **not deployed HTTPS/PWA** and
+has not passed physical Safari/iOS/Android acceptance.
+
+## Previous tested downloads: 1875db5
 
 Windows and Apple Silicon Mac now share clean source
 `1875db595b7df510a851a2d44ea5157cc994689f`, version `0.5.0.dev`, beta-candidate.

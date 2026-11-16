@@ -7,61 +7,58 @@ This page separates current evidence from unfinished implementation and external
 acceptance. Historical iterations belong in the
 [continuation ledger](testing/continuation-20261112.md#2026-11-16-superseded-status-snapshot-90b13e5).
 
-Source-only PDF writer adoption: `repdf` now observes the enrolled workspace's
+PDF writer adoption: `repdf` now observes the enrolled workspace's
 original before download/staging and uses shared versioned attachment publication.
 Prior originals/anchors remain retained; stale/failed publication is refused.
 First-original list prefetch now uses the same native boundary, including atomic
 successful-URL publication. Existing legacy files are not migrated automatically;
 managed missing originals still use workspace attachment transfer. These source
-changes are not yet included in1875db5 installers. Reader-fetch fallback and
+changes are included in2021103 native candidates. Reader-fetch fallback and
 remaining writer enrollment still require work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
 
 ## Current deliverable
 
-Integration branch: `develop/0.5`. Latest Windows/Mac candidates share clean
-**1875db595b7df510a851a2d44ea5157cc994689f**, version `0.5.0.dev`, beta-candidate.
-[Mac run43808973671](https://github.com/puddings-world/Paperfact/actions/runs/43808973671)
-passes3m54s; [Windows run43808976905](https://github.com/puddings-world/Paperfact/actions/runs/43808976905)
-passes7m48s. Both small provenance ZIPs were independently hash-checked and inspected.
-Each OS passes critical14, first-sync1 and45 authority/control/recovery/offline source
-cases. Actual frozen apps pass15 sync protocol flags and source-report acceptance;
-Mac screenshots show readable Chinese, formula and code. Full frozen GUI,
-physical-device and hosting gates remain open. [Downloads and isolation steps](testing/mac-acceptance-0.5.md).
-Linux remains older88b2497 and is not a compatible official-v4 sync acceptance peer.
+Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux now share
+clean **20211036cea31cc7d0764c28946926870617a7f4**, version `0.5.0.dev`, beta-candidate.
+[Run43820427097](https://github.com/puddings-world/Paperfact/actions/runs/43820427097)
+succeeded: Mac5m52s, Windows9m09s, Linux3m32s; draft/release job skipped.
+[Downloads and separate-app/workspace steps](testing/mac-acceptance-0.5.md).
+All small provenance ZIPs were independently hash-matched and inspected against
+source/host; actual native reports have `passed=true` and all15 protocol flags.
+Large installer ZIPs were not independently downloaded here.
 
-Earlier candidates and the failed7a95b31 Mac attempt remain historical in the
-[continuation ledger](testing/continuation-20261112.md). Documentation-only commits
-do not create another native build. Current Windows/Mac candidates include official
-v4 transactional control history, device-retained checkpoints and recovery comparison.
-The packaged test client now performs that actual handshake without relaxing guards.
-Legacy authority v1/v2/v3 requires explicit backup/fresh restore; retained local
-checkpoints are not independent anchoring or fencing.
+Each OS passes critical14, first-sync1 and48 authority/control/recovery/offline/
+original source cases. New first-original success and atomic URL rollback join
+the existing three-minute gate, without a new job or historical full suite.
+Mac source cases pass with five reported warnings; the native report passes.
+Frozen CLIs exercise exact originals, source-aware reports, private captured model
+handoff, durable/cached retry, verified history and official-v4 challenge/refusal/
+restart. Mac passes three reader launches and native foreground activation;
+its actual screenshot has readable Chinese/formula/code. Windows isolated actual
+install/reinstall/uninstall preserves research. Linux AppImage integration now
+uses the same official-v4 source; older88b2497 is superseded for acceptance.
+Source-format0.4.3 preservation is tested, not an older installed-binary upgrade.
+Full frozen GUI, live account/IME/vault, hosted and physical-device gates remain.
 
-Actual frozen CLIs pass import/export, original-file preservation, CLI/MCP retry/
-restart, verified-history sync and a source-aware report using one synthetic
-loopback completion. The production host `JobHandoff` drives a real QProcess to
-the frozen CLI while its disk AI route is disabled: captured models are honored,
-disk settings remain unchanged and cached retry makes no second completion.
-This is not the full frozen GUI dialog journey. Windows also passes isolated
-install/reinstall/uninstall with research preserved; Mac passes three reader
-launches and foreground; Linux passes AppImage integration.
+These candidates include native repdf and first-original prefetch adoption,
+retention-safe cleanup and mobile storage protection. Source tests cover the new
+writer actions; packaged protocol/report acceptance does not prove every new GUI
+workflow. Prior exact candidates remain in the continuation ledger and Mac guide.
+No daily data migration, public tag/release, cloud resource or owner account change.
 
-The [current mobile web artifact](https://github.com/puddings-world/Paperfact/actions/runs/43808976905/artifacts/14199263514)
-was independently downloaded, ZIP-hash-matched and verified against all53 assets, proxy map and cache identity in0.453s. It includes small IndexedDB control metadata and source-aware
-Traditional Chinese copy with a content-derived shell cache; numeric-cache exports
-stay readable. Content ID: `dae60b2ab54a12460d51065b76711d5668647ca26c8eccf601a05c5d55ecd2b3`.
-This is built, not deployed HTTPS/PWA or physical-phone acceptance. No IndexedDB
-research/connection migration, public release/tag, daily-app migration, cloud
-resource or owner research mutation was performed.
+The [matching mobile artifact](https://github.com/puddings-world/Paperfact/actions/runs/43820427097/artifacts/14204845490)
+was independently downloaded, SHA-256-matched and verified against all54 assets,
+proxy map and cache identity in0.453s under the existing CPU/time governor. Content
+ID:`5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246`.
+Its origin-storage protection permission remains separate from per-paper pinning,
+PDF verification and research backup. It is built, not deployed HTTPS/PWA or
+physically accepted on Safari/phones. Hosted continuous sync remains undeployed;
+list-package export/import is the available cross-machine handoff.
 
-Official-v4 control challenge/refusal/restart now also has actual frozen Windows/
-Mac evidence. Durable desktop/mobile storage, join/resume and fresh-identity recovery
-have scoped fixture/Qt/HTTP evidence, not full frozen-dialog or physical-device proof.
-Independent anchoring/fencing, hosted recovery and installed-device acceptance remain open.
-
-Current desktop downloads also guard offline verification at queued delivery:
-changed originals, research or storage ownership clear prior readiness and require
-retry. This does not certify the whole workspace as available offline.
+Device-retained control prefixes and recovery comparison are not independent
+anchoring/fencing. Complete writer/file enrollment, hosted recovery and installed
+multi-device acceptance still gate v0.5.0. Queued offline verification also refuses
+changed originals/research/storage; this is not whole-workspace offline proof.
 
 ## Requirements and actual boundaries
 
@@ -71,7 +68,7 @@ retry. This does not certify the whole workspace as available offline.
 | Offline work and retry | Local research, durable requests, duplicate/restart checks and cached report generation pass for named journeys | Full installed offline trip/reconnect journey and remaining producer/file lifecycles |
 | Conflicts and deletion | Supported edit/delete resolution and reviewed recovery preserve history in fixtures | Remaining scientific deletion/recovery mappings and installed conflict UX. Global paper deletion is explicitly rejected by the current shared codec; supported list retirement preserves paper research. |
 | Verified attachments | Exact originals, owned manifests, resumable transfers, offline preparation and wrong-source refusal have scoped evidence | Automatic reference-aware eviction/history lifecycle, complete supported attachment coverage and physical interrupted-transfer acceptance; source legacy cleanup now rechecks offline intent and managed-original owners under a writer reservation at each deletion |
-| Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading, offline preparation and explicit origin-wide storage-protection status/request; content-addressed1875db5 artifact is built and independently verified | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
+| Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading, offline preparation and explicit origin-wide storage-protection status/request; content-addressed2021103 artifact is built and independently verified | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
 | Sync visibility and settings | Workspace/device status, explicit pairing and device-local reconnect opt-in have desktop fixtures | Installed location/storage/offline and backup/device controls, native vault prompts, restart/account-switch/focus/input and cross-device UX |
 | Backups and recovery | Verified authority/client backups, fresh-identity restore and reviewed editable adoption exist for supported content | Complete lossless migration/runtime adoption, cloud backup/restore rehearsal, scheduling/retention and unsupported-source handling |
 | Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested; source adds restart-persisted file identity and a local device/pairing checkpoint | Installed control-checkpoint acceptance, independent anchoring/cross-host fencing and hosted authorization/recovery; current source retains device-local prefixes across desktop join/restart and browser reconnect |

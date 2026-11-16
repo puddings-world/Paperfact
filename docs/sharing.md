@@ -14,6 +14,23 @@ flowchart LR
     E --> F["Continue with recipient's own AI → export again"]
 ```
 
+## Move your own research to another computer
+
+1. On the source computer, open the list and choose **Export this list**, or
+   **Research data > Export current list package**. Keep both PDFs and personal
+   notes/Q&A/manual highlights included; save the package ZIP. The result reports
+   missing originals, which cannot be included until acquired.
+2. Transfer that ZIP through your preferred file-sharing method. Keep it zipped.
+3. On the other computer's list overview, choose **Import research package**,
+   select the ZIP, inspect the preview and confirm. Saved supported analysis,
+   notes, available originals and editable slides are read locally without AI.
+
+This is a one-time snapshot, not continuous two-way sync. Existing receiver
+research is preserved by default; replacing it is an explicit preview choice.
+Later edits need a new export/import and review, not an assumed automatic merge.
+AI credentials/settings stay on each device; log into that device's own account
+only when continuing AI analysis. Hosted continuous workspace sync is not deployed.
+
 ## Sender: share through your Google Drive
 
 1. Choose the list's export button, as below.

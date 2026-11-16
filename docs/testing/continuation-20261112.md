@@ -9745,3 +9745,42 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   hosted deployment, physical device and full frozen GUI gates remain open.
 - Final integration gates:critical14 passed13.02s (17.6s total); docs60
   passed3.94s (10.1s total). Privacy/Ruff and whitespace checks passed.
+
+## 2026-11-16: matched2021103 native and mobile candidate delivery
+
+- Run43820427097 succeeded from clean20211036cea31cc7d0764c28946926870617a7f4.
+  Existing manual all-platform workflow only: Mac5m52s, Windows9m09s, Linux3m32s.
+  Draft/release job skipped; no public tag, auto-update offer or cloud deployment.
+- Each OS passes critical14/first-sync1/authority-original48. Test seconds are
+  Windows5.51/3.05/16.76, Linux4.68/1.93/8.44, Mac4.87/1.86/9.38. Mac reports five
+  warnings in each source phase, not failures. No historical full suite. Logs and
+  run/artifact metadata retained under ignored build/preview-2021103.
+- All native provenance ZIPs independently downloaded/hash-matched: Linux14204860735
+  fdc570e8919095be9bbb2e960e87dd5bb41ff6891688924ef97522845731fb10;
+  Mac14204521558 3a2ca6e501f6059e4cd6ba8d2d341f0a53c722e8c22b556d6394056ef351d724;
+  Windows14204014268 06d6996d25f844cf6b36f0a5161b830397a4e4ef4dce3d78a53ce075d9b6e8af.
+  Inspected reports: exact clean source/host, passed=true, all15 protocol flags.
+  Mac three native reader launches/foreground; Windows actual isolated install/
+  reinstall/uninstall preserves research; Linux AppImage integration. Source-format
+  0.4.3 upgrade is checked, not older installed-binary or full GUI upgrade.
+- Mac screenshot ZIP14204132405 matched
+  43fa8acdc30a9c44ab85f426499b3d3c85f037956c87c5fb3d0827975e435deb;
+  dive.png visually inspected: readable Traditional Chinese, formula and code.
+- Installer ZIP metadata is GitHub-reported, not independently downloaded here:
+  Mac14203933161/280939951 bytes/b48e1c095de465412cf2256ad3603cab1fd6081fb0b21487586ca190696c8440;
+  Windows14204657506/184738912/3354bd2275e4c2b988267b3142b97473a5e0cdfd09d358f689b1f35b81b045d8;
+  Linux14203983233/282713093/8bd3830f6a3bdfbd441c06f757ea2abe408ee7f5eb412a5e7a0cce76d0adff19.
+- Mobile ZIP14204845490 independently matched
+  6e8333db57334215242d27c030d93aa31d958896203475c96b6c91e7552abad5.
+  Actual verify checks54 files/3983781 raw bytes/proxy map/content-derived shell
+  in0.453s with two processors/25% CPU, existing governor. Content ID
+  5a55483512ff75d5a09b676b865b721e07ce9390f8f882a6f858243400f54246;
+  shell07edca7225c3eb7cf55b811274eee22c957c90e09ff6d59ace530c87120d89da.
+  Includes storage protection; not deployed or physically accepted on phones.
+- Mac download offered with separate-app/data steps. Desktop list export with
+  PDFs/notes and Mac preview/import is available now; it is a snapshot, not hosted
+  automatic synchronization or automatic conflict merging. Personal AI accounts
+  stay local. New native PDF writer scenarios have scoped source evidence, not
+  direct frozen GUI certification. Remaining goal/device/deployment gates unchanged.
+- Delivery/sharing docs60 passed3.13s (7.8s total), privacy/Ruff passed.
+  Reused exact-source critical/native evidence; no redundant code-suite rebuild.
