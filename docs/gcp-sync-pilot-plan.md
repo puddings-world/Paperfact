@@ -1,11 +1,39 @@
 ﻿# GCP private sync pilot proposal
 
-Status: proposal, 2026-11-13. The owner selected reuse of the existing GCP project
-for planning only. No cloud account, billing, DNS, IAM, resource or deployment was
-changed or inspected. The local SDK project preference was read; its candidate
-has not been confirmed as Paperfact's target and is not embedded in public docs.
-Target project ID, approved region, hostname and budget remain unconfirmed.
+Status: proposal, updated 2026-11-16. The owner selected reuse of existing GCP
+for planning only. Read-only SDK inventory found an accessible Paperfact project
+with Drive, Slides and Cloud Storage APIs enabled. Compute Engine and Cloud Run
+were absent from its enabled-API list at inspection. This is not proof of billing
+readiness, resource capacity, deployment permission or service availability.
+The local SDK default points elsewhere and must not select the deployment target.
+No billing, DNS, IAM, API enablement, resource or deployment was changed.
+Target confirmation, approved region, hostname and budget remain outstanding.
 This is not authorization to apply infrastructure or upload research.
+
+## Personal sync and colleague sharing are separate workflows
+
+| Workflow | Data boundary | Additional resources |
+|---|---|---|
+| Share a list with a colleague | Export available PDFs, analyses, notes and editable slides as a reviewed ZIP; import into the colleague's independent local workspace | No Paperfact server required. Transfer the ZIP directly or through the sender's own file host. Later edits require another reviewed transfer. |
+| Continue personal research across devices | Each device keeps its own database/cache and durable pending operations; an authenticated service reconciles operations and verified attachments | One reachable private service, durable authority/attachment storage, HTTPS and an independent backup. The installed two-device journey is not yet accepted. |
+
+AI credentials and provider settings stay device-local. Reading a research package
+or synchronizing saved work does not require an AI completion or GPU. CLI/MCP are
+local operation adapters; they do not replace the private cross-device service.
+
+The existing proposed GCP pilot uses one small VM for the API and same-origin PWA,
+a durable data disk, an HTTPS hostname/certificate and a separate private backup
+bucket. Capacity and region need a measured pilot and an explicit budget; no
+monthly price or production throughput is implied. Cost components are VM time,
+disk allocation, backup storage/operations and network transfer. See official
+[VM pricing](https://cloud.google.com/products/compute/pricing),
+[disk pricing](https://cloud.google.com/compute/disks-image-pricing) and
+[Cloud Storage pricing](https://cloud.google.com/storage/pricing).
+
+The present deliverable is snapshot export/import. Hosted sync still requires
+reviewed deployment and installed offline/reconnect/conflict/recovery acceptance;
+local protocol tests alone do not establish that end state. This clarification
+adds no billing resources, cloud login, research upload or public multi-user signup.
 
 ## Prepare one offline configuration review
 

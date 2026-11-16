@@ -24,6 +24,35 @@ if you need a file in someone else's row, ask the owner.
 A session cannot message another session. The table and the commit history are
 the only handoff, so commit often on your own branch.
 
+## Delivery priority and essential checks
+
+Owner clarification, 2026-11-16: prioritize the installed Windows-to-Mac journey
+and the real sync deployment path. Optional storage statistics and additional
+verification infrastructure must not displace that delivery. The optional
+uncommitted storage-inventory work is parked locally in Git stash, with its
+exact receipt under ignored build/storage-inventory-evidence/parked-work.json.
+Preserve it; do not automatically restore or include it in a release candidate.
+
+- Batch related work into one coherent change. Run its affected checks once;
+  repeat only after a relevant change, a failure, or a specific unresolved risk.
+- Keep the existing critical gate as the integration baseline. Historical full
+  suites are diagnostic tools, not a routine iteration or mandatory release ritual.
+- Share cancellation, duplicate-job and worker-close controls where the same job
+  mechanism is used. Keep feature-specific data-loss, wrong-target and account/
+  workspace-isolation cases when those boundaries differ. A shared-worker pass
+  does not certify every button or third-party service.
+- Documentation/copy changes should not launch a new cross-platform build or a
+  large interaction matrix. Record review and applicable existing evidence.
+- Local verification targets 3-5 minutes; candidate validation/packaging targets
+  20-30 minutes. One job at a time, bounded CPU, and no invented time percentages.
+
+Keep six representative delivery journeys explicit: complete list-package
+export/import; offline save/restart/reconnect; conflicting edits preserving both
+versions; interrupted/duplicate attachment transfer; device/workspace isolation
+and revocation; independent backup/restore. Exercise portable source contracts in
+fixtures, then the real Windows/Mac journey before promoting a release. More test
+cases are warranted by a concrete uncovered risk, not by a target count.
+
 ## Checking without blocking development
 
 - Own-branch checkpoint: focused checks for the changed behavior and its callers.
