@@ -7,7 +7,9 @@ fetched or rebuilt again are ever offered for pruning: the cache, and the PDF,
 figures and extracted text of papers nobody claims. A paper is claimed when it is
 in a list, in the queue (not skipped), pinned, or carries anything a reader or an
 analysis produced: notes, highlights, a deep dive, citations, chat, a close reading.
-Local offline intent and retained managed-original owners also keep legacy files;
+Saved annotation reports, context/resources, reading history, reference endpoints,
+and citation-graph ownership also keep legacy files. Local offline intent and
+retained managed-original owners keep their legacy files;
 this cleaner never garbage-collects the immutable blob/version store.
 """
 
@@ -70,11 +72,45 @@ class RetentionReviewError(ValueError):
         self.cleanup_started = cleanup_started
 
 
+# Closed positive research-owner tables, including optional older-workspace extensions.
+# Annotation tables come from their canonical domain registry, never arbitrary SQL names.
+_RESEARCH_OWNERS = frozenset({
+    "followups", "paper_context", "resources", "reading_log", "reading_positions",
+    "paper_later_outcomes", "paper_lineage_sets", "refs",
+})
+
+
 def claimed(conn: sqlite3.Connection) -> set[str]:
-    """Keep live research, local offline intent and retained native document owners."""
-    keep = {row[0] for row in conn.execute(" UNION ".join(_CLAIMS))}
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    """Keep saved research, local offline intent and retained native document owners."""
+    from paper_daily.annotation_content import FEATURES
+    from paper_daily.citation_graph_content import PREFIX as GRAPH_PREFIX
     from paper_daily.workspace_offline import PREFIX
+
+    shapes = dict(conn.execute("SELECT name,type FROM sqlite_master "
+                               "WHERE type IN ('table','view')"))
+    tables = {name for name, kind in shapes.items() if kind == "table"}
+    owners = _RESEARCH_OWNERS | frozenset(FEATURES.values())
+    if any(shapes.get(name) == "view" for name in owners):
+        raise RetentionReviewError("Review research owner views before cleaning storage")
+    queries = list(_CLAIMS)
+    for table in sorted(owners & tables):
+        queries.append(f"SELECT paper_id FROM {table}")
+    if "refs" in tables:
+        queries.append("SELECT ref_paper_id FROM refs")
+    try:
+        keep = {row[0] for row in conn.execute(" UNION ".join(queries))}
+    except sqlite3.DatabaseError as error:
+        raise RetentionReviewError("Review research owners before cleaning storage") from error
+    if any(not isinstance(owner, str) or not owner for owner in keep):
+        raise RetentionReviewError("Review invalid research owners before cleaning storage")
+    # Presence is retained knowledge even if an old graph body cannot be rendered.
+    # Do not parse/rebuild it, or interpret unrelated device/private KV as research.
+    for (key,) in conn.execute("SELECT key FROM kv WHERE key>=? AND key<?",
+                               (GRAPH_PREFIX, GRAPH_PREFIX + "\U0010ffff")):
+        owner = key[len(GRAPH_PREFIX):]
+        if not owner or len(owner) > 4096:
+            raise RetentionReviewError("Review citation graph ownership before cleaning storage")
+        keep.add(owner)
 
     pinned = conn.execute("SELECT key,value FROM kv WHERE key>=? AND key<?",
                           (PREFIX, PREFIX + "\U0010ffff")).fetchall()

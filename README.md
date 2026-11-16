@@ -434,15 +434,16 @@ Independent anchoring/fencing and physical-device acceptance remain open.
 The existing source-report package check now also exercises private desktop-to-CLI
 AI routing against a deliberately disabled child disk configuration; see
 [acceptance scope](docs/toolchain.md#source-aware-report-package-acceptance).
-Latest Windows/Mac downloads (1875db5) pass the extended frozen CLI acceptance,
+Latest native downloads (8252010) pass the extended frozen CLI acceptance,
 including saved list-report audit and all15 control/research sync protocol flags; [downloads and exact scope](docs/testing/mac-acceptance-0.5.md).
-Legacy storage cleanup also preserves device-local offline selections and retained
-managed-original owners, with current-state checks before deletion; see
+Legacy storage cleanup also preserves saved SQL research, citation/reference
+owners, device-local offline selections and retained managed-original owners,
+with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).
 Legacy cleanup rechecks claims under a per-target writer reservation. It keeps
 remaining files when a paper gains a claim and preserves caller-owned transactions.
 A late pause reports earlier completed cleanup accurately; see [storage behavior](docs/toolchain.md#caching-and-disk).
-This source fix is newer than the1875db5 installers.
+The additional saved-research retention rules are newer than the8252010 installers.
 Selected-file offline checks now revalidate their native observations at desktop
 delivery, rejecting files or research changed after background verification;
 [behavior and limits](docs/workspace-offline-verification.md).

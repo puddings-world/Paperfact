@@ -10115,3 +10115,62 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Default critical14 passed16.45s (27.5s total, privacy8.2s/Ruff0.5s).
 - Docs60 passed7.54s (18.9s total, privacy9.0s/Ruff0.6s); whitespace clean.
   Scoped source/contract checks pass; historical exhaustive and physical gates remain unrun.
+
+## 2026-11-16 retain saved research during legacy cleanup
+
+- Continued from e94efde. Inspected current storage owners and found the original
+  positive-claim union omitted newer durable SQL research. An actual saved claim
+  without list/old analysis still appeared in the cleanup plan. Reproduction1
+  failed1.05s (12.3s total, privacy9.5s/Ruff0.6s), before any owner data was used.
+- `storage.claimed` now adds the canonical annotation-table registry plus a closed
+  set of follow-up/context/resource, reading-event/position, later-outcome, Lineage
+  and reference tables when present. Stored reference edges retain both local
+  endpoints. Exact paper-scoped citation-graph key presence retains its owner
+  without interpreting/rebuilding the graph body or unrelated private KV.
+  Optional missing tables remain compatible; unsupported owner schemas or invalid
+  owner identities stop cleanup for review. Current native/offline guards remain.
+- Existing fresh-state checks run under the same per-target SQLite writer
+  reservation; a stale preview is not permission to delete new research. The
+  command still cleans only its bounded legacy/cache categories and never scans
+  immutable versions/conflict/history/outbox assets for garbage collection.
+- Selected32 passed15.51s (27.8s total, privacy8.7s/Ruff0.5s):30 actual cleanup
+  cases (7 new plus23 existing). New cases assert PDF/text/figure bytes survive
+  saved claims/context/resources, graph-only ownership, reference endpoints, a
+  commit during file inspection and malformed optional owner metadata. Two
+  unrelated stale-deck retention compatibility cases were also selected due to
+  their similar filename; they passed but are not cleanup coverage and should
+  not be included in future cleanup-only runs. No existing assertion weakened.
+- Small bounded cost probe:20000 synthetic reference edges/5000 owners and32
+  disposable cache files; claim scan0.0797s, cleanup0.9806s, entire governed
+  diagnostic3.562s, under two-core/25%/below-normal with60s wall limit. It does not
+  prove costs for every catalog/volume; owner scans still repeat per target.
+  Initial diagnostic measured1.2684s cleanup but failed only on its own temporary
+  SQLite cleanup (connection context did not close its handle). Added explicit
+  closing and reran successfully. First cleanup guard refused the prior exact
+  fixture because its empty httpcache directory remained; after inspecting and
+  validating that directory and SQLite file against the script, removed only that
+  exact owned fixture. No wildcard cleanup, ACL change or competing process used.
+- Actual reports under ignored build/research-retention-evidence. Current source
+  docs/test map and README clarify positive research owners and immutable-store
+  lifecycle limits; installer/source references now use accepted8252010 instead
+  of a superseded1875db5 summary. A new claim-owner representative joins the same
+  three-minute per-OS stage: future54, not the53 observed for8252010.
+- Existing local-integration retention/owner invariant applies; no novel portable
+  rule or global skill installation. No owner research, paid AI/provider, account,
+  deployment, new worktree or broad historical suite. Current installer remains
+  8252010 until a new coherent candidate completes native acceptance.
+- Original v0.5 target remains open: complete supported writer/file adoption,
+  reference-aware immutable-store eviction/history lifecycle, independent authority
+  anchoring/fencing, hosted enrollment/recovery and installed/device acceptance.
+- Same-class schema audit also found that a known optional owner name replaced
+  by a view would be skipped by a tables-only inventory. Refuse those views for
+  explicit review instead. Final affected selection31 passed13.00s (24.3s total,
+  privacy7.9s/Ruff0.8s):8 new plus23 existing cleanup cases, excluding the two
+  unrelated deck cases. Before this final guard, critical14 passed16.44s/28.3s total;
+  final current-source critical result follows separately.
+- Final guarded-source cost probe passes:20000 edges/5000 owners/32 cache files,
+  claim scan0.1179s, cleanup0.8031s, whole governed diagnostic3.453s. No production-
+  scale or arbitrary-file lifecycle guarantee is inferred from this small probe.
+- Final critical14 passed11.38s (18.4s total, privacy4.9s/Ruff0.3s).
+- Docs60 passed3.71s (10.3s total, privacy5.0s/Ruff0.3s); whitespace clean.
+  Preserve original workflow line endings; current scoped checks pass, not the historical full suite.

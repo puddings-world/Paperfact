@@ -20,6 +20,9 @@ private PDF/figure/artifact bytes from complete verified included files. Preview
 still commits no research; confirmation retains observed atomic publication.
 Enrolled package import also preserves explicit nullable list descriptions without
 changing the legacy missing-field default or implicit receiver-preservation policy.
+Legacy cleanup also retains current SQL annotations, context/resources, reading
+history, reference endpoints and citation-graph ownership, including claims saved
+after a cleanup preview. Immutable version-store eviction remains unimplemented.
 These newer changes are not yet in the installers below.
 
 ## Current deliverable
@@ -66,7 +69,7 @@ evidence stay in the existing acceptance/continuation records.
 | Desktop research synchronization | Shared operations, transactional local writes/outbox, retained history and strict transport have source/packaged protocol evidence | Complete supported writer/runtime adoption, remaining legacy/source mappings, installed two-device convergence |
 | Offline work and retry | Local research, durable requests, duplicate/restart checks and cached report generation pass for named journeys | Full installed offline trip/reconnect journey and remaining producer/file lifecycles |
 | Conflicts and deletion | Supported edit/delete resolution and reviewed recovery preserve history in fixtures | Remaining scientific deletion/recovery mappings and installed conflict UX. Global paper deletion is explicitly rejected by the current shared codec; supported list retirement preserves paper research. |
-| Verified attachments | Exact originals, owned manifests, resumable transfers, offline preparation and wrong-source refusal have scoped evidence | Automatic reference-aware eviction/history lifecycle, complete supported attachment coverage and physical interrupted-transfer acceptance; source legacy cleanup now rechecks offline intent and managed-original owners under a writer reservation at each deletion |
+| Verified attachments | Exact originals, owned manifests, resumable transfers, offline preparation and wrong-source refusal have scoped evidence | Automatic reference-aware eviction/history lifecycle, complete supported attachment coverage and physical interrupted-transfer acceptance; source legacy cleanup now rechecks saved SQL research, reference/graph ownership, offline intent and managed-original owners under a writer reservation at each deletion |
 | Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading, offline preparation and explicit origin-wide storage-protection status/request; content-addressed8252010 artifact is built and independently verified | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
 | Sync visibility and settings | Workspace/device status, explicit pairing and device-local reconnect opt-in have desktop fixtures | Installed location/storage/offline and backup/device controls, native vault prompts, restart/account-switch/focus/input and cross-device UX |
 | Backups and recovery | Verified authority/client backups, fresh-identity restore and reviewed editable adoption exist for supported content | Complete lossless migration/runtime adoption, cloud backup/restore rehearsal, scheduling/retention and unsupported-source handling |

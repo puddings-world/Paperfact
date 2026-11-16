@@ -207,7 +207,15 @@ lazy. The data folder also holds original notes, edits and analysis: back it up
 privately rather than treating the entire folder as a disposable cache.
 
 `prune` previews legacy cleanup; `--yes` deletes only old HTTP cache files and
-unclaimed PDF/text/figure paths. Current local offline intent and owners in native
+unclaimed PDF/text/figure paths. Saved SQL annotation reports, follow-ups,
+context/resources, reading events/positions, later outcomes and Lineage owners
+also retain their original files. Citation edges retain both local endpoints;
+paper-scoped citation-graph presence retains its owner without parsing/rebuilding
+its body. The annotation domain supplies its own closed table registry; other
+positive owner tables are explicitly classified in storage. Unknown optional
+owner-table shapes, substituted owner views or invalid owner identities stop
+cleanup for review.
+Current local offline intent and owners in native
 document desired/applied/intent tables keep their legacy files, including inactive
 or superseded records. Before each removal, claims are re-read under a SQLite
 writer reservation held until that target's removal completes. A claim committed
