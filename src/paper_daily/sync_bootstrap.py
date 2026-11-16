@@ -251,6 +251,15 @@ def join(session, destination, ticket, progress=lambda _value: None, *, max_page
             order_writer=research_order_writer,
             projection_writer=research_projection_writer,
         )
+        from paper_daily.workspace_control import ControlKnowledge
+
+        knowledge = ControlKnowledge(path, identity, live)
+        saved = knowledge.load()
+        if saved is not None:
+            transport.check_control_checkpoint(token, saved)
+        point = transport.control_checkpoint()
+        if point is not None:
+            knowledge.remember(point, saved)
         deadline, received = time.monotonic() + seconds, 0
         ready = False
         for _ in range(max_pages):
@@ -262,6 +271,9 @@ def join(session, destination, ticket, progress=lambda _value: None, *, max_page
             ):
                 raise ValueError("Joining needs an unused device identity")
             result = client.receive(events)
+            point = transport.control_checkpoint()
+            if point is not None:
+                knowledge.remember(point, knowledge.load())
             received += result["received"]
             with journal.transaction() as conn:
                 conn.execute(

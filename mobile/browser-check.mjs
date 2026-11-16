@@ -93,17 +93,18 @@ const server = createServer(async(request, response) => {
       const result=await serviceMessage(command);
       response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end(JSON.stringify(result));return;
     }
-    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/push','/v1/browser/pull','/v1/browser/history/pull','/v1/browser/history/push']:['/v1/session/info','/v1/pull','/v1/push','/v1/history/pull','/v1/history/push','/v1/history/blobs/begin','/v1/history/blobs/append','/v1/history/blobs/commit','/v1/history/blobs/cancel','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
+    if(!(pairingMode?['/v1/browser/pairing/prepare','/v1/browser/pairing/complete','/v1/browser/session/forget','/v1/browser/session/info','/v1/browser/control/checkpoint','/v1/browser/push','/v1/browser/pull','/v1/browser/history/pull','/v1/browser/history/push']:['/v1/session/info','/v1/pull','/v1/push','/v1/history/pull','/v1/history/push','/v1/history/blobs/begin','/v1/history/blobs/append','/v1/history/blobs/commit','/v1/history/blobs/cancel','/v1/blobs/read','/v1/blobs/begin','/v1/blobs/append','/v1/blobs/commit']).includes(request.url) || request.method!=='POST') {
       response.writeHead(404);response.end();return;
     }
     if(plainNoteMode||pairingMode)fixtureResearchRequests.push({path:request.url,document:request.headers['x-paperfact-test-document']??null});
     const upstream=await fetch(positionReady.url+request.url,{method:'POST',body,
       headers:pairingMode?Object.fromEntries(Object.entries(request.headers).filter(([name])=>
-        ['content-type','origin','cookie','x-paperfact-browser','x-paperfact-workspace','x-paperfact-device','x-paperfact-sync-instance','sec-fetch-site'].includes(name)))
+        ['content-type','origin','cookie','x-paperfact-browser','x-paperfact-workspace','x-paperfact-device','x-paperfact-sync-instance','x-paperfact-control-checkpoint','sec-fetch-site'].includes(name)))
         :{'Content-Type':'application/json',Authorization:request.headers.authorization??'',
           'X-Paperfact-Sync-Instance':request.headers['x-paperfact-sync-instance']??''},redirect:'error'});
     response.writeHead(upstream.status,{'Content-Type':'application/json','Cache-Control':'no-store',
       ...(upstream.headers.has('X-Paperfact-Sync-Instance')?{'X-Paperfact-Sync-Instance':upstream.headers.get('X-Paperfact-Sync-Instance')}:{}),
+      ...(upstream.headers.has('X-Paperfact-Control-History')?{'X-Paperfact-Control-History':upstream.headers.get('X-Paperfact-Control-History')}:{}),
       ...(pairingMode&&upstream.headers.has('set-cookie')?{'Set-Cookie':upstream.headers.get('set-cookie')}:{})});
     response.end(new Uint8Array(await upstream.arrayBuffer()));return;
   }

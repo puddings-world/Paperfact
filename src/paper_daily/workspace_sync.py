@@ -109,6 +109,22 @@ class GuardedTransport:
         self.transport, self.live, self.history = transport, live, history
         self.base_url = transport.base_url
 
+    def control_checkpoint(self):
+        self.live()
+        reader = getattr(type(self.transport), "control_checkpoint", None)
+        point = reader(self.transport) if reader is not None else None
+        self.live()
+        return point
+
+    def check_control_checkpoint(self, token, point):
+        self.live()
+        checker = getattr(type(self.transport), "check_control_checkpoint", None)
+        if checker is None:
+            raise SyncHistoryUnavailable("Transport removed authority control continuity")
+        result = checker(self.transport, token, point)
+        self.live()
+        return result
+
     def __getattr__(self, name):
         if name not in {
             "session_info",
@@ -258,6 +274,10 @@ class SyncSession:
                 self._live(generation, ticket)
                 # Construction validates HTTPS/literal-loopback URL policy without I/O.
                 with self._factory(endpoint) as transport:
+                    from paper_daily.workspace_control import bind_control
+
+                    bind_control(transport, self.workspace.path, expected,
+                                 _Live(self, generation, ticket))
                     identity = transport.session_info(token)
                     self._live(generation, ticket)
                     if identity != expected:
@@ -288,6 +308,9 @@ class SyncSession:
         live()
         try:
             with self._factory(endpoint) as transport:
+                from paper_daily.workspace_control import bind_control
+
+                bind_control(transport, self.workspace.path, expected, live)
                 guarded = GuardedTransport(transport, live)
                 if guarded.session_info(token) != expected:
                     raise PermissionError("The authenticated device binding changed")

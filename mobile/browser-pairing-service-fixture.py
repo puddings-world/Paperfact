@@ -11,7 +11,7 @@ from pathlib import Path
 
 core = Path(sys.argv[1]).resolve()
 sys.path.insert(0, str(core / "src"))
-from paper_daily import store  # noqa: E402
+from paper_daily import store, sync_admin  # noqa: E402
 from paper_daily.sync_browser import BrowserSessions  # noqa: E402
 from paper_daily.sync_client import SyncClient  # noqa: E402
 from paper_daily.sync_http import make_server  # noqa: E402
@@ -19,7 +19,6 @@ from paper_daily.sync_journal import Journal  # noqa: E402
 from paper_daily.sync_pairing import Invitation  # noqa: E402
 from paper_daily.sync_research import prepare, research_writer  # noqa: E402
 from paper_daily.sync_schema_v2 import membership_id  # noqa: E402
-from paper_daily.sync_service import ReferenceService  # noqa: E402
 
 
 def main():
@@ -34,7 +33,8 @@ def main():
         writer = SyncClient(
             Journal(database, workspace_id=workspace, device_id=device), research_writer
         )
-        service = ReferenceService(root / "authority.sqlite", blob_root=root / "blobs")
+        sync_admin.initialize(root / "authority")
+        service = sync_admin.authority(root / "authority")
         token = service.enroll(workspace, device)
         payload = dict(title="Synthetic paired research", authors=[], year=2026)
         payload.update(

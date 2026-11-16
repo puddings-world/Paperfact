@@ -231,3 +231,30 @@ def append(conn, before):
     if before["state"] != after:
         _append(conn, before["state"], after, history["authority_id"], history["sequence"] + 1,
                 history["sha256"])
+
+
+def validate_checkpoint(value):
+    if (not isinstance(value, dict) or set(value) != {"authority_id", "sequence", "sha256"}
+            or not isinstance(value["authority_id"], str)
+            or type(value["sequence"]) is not int or not 1 <= value["sequence"] <= MAX_RECORDS
+            or not _hex(value["sha256"])):
+        _fail()
+    try:
+        if str(UUID(value["authority_id"])) != value["authority_id"]:
+            _fail()
+    except (ValueError, AttributeError):
+        _fail()
+    return dict(value)
+
+
+def checkpoint(conn, expected=None):
+    checked = read(conn)
+    point = {key: checked[key] for key in ("authority_id", "sequence", "sha256")}
+    if expected is not None:
+        expected = validate_checkpoint(expected)
+        row = conn.execute(f"SELECT sha256 FROM {TABLE} WHERE sequence=?",
+                           (expected["sequence"],)).fetchone()
+        if (point["authority_id"] != expected["authority_id"] or row is None
+                or row[0] != expected["sha256"]):
+            raise SyncHistoryUnavailable("Observed authority control history is unavailable")
+    return point

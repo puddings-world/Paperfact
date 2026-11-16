@@ -9394,3 +9394,55 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final integration gate: critical14 plus privacy/Ruff passed24.5s; docs60 plus
   privacy/Ruff passed22.4s. All local checks used the existing two-processor/25%
   governor. No historical full-suite, new native build or deployment was run.
+
+
+## 2026-11-16 device-retained authority control knowledge
+
+- Added an authenticated closed control-prefix challenge and advertised official-v4
+  capability. Private HTTP requests require the retained prefix in addition to the
+  execution pin. It is checked inside the actual SQL transaction; an adversarial
+  request rolling back after authentication now returns412 without research.
+- Native sessions retain scope-bound small private `ui.sync.control.*` metadata
+  with bounded reads, capture-aware atomic monotonic compare-and-swap and session
+  checks. Credentials, outbox and research are untouched. New-device joining proves
+  both source and retained stage knowledge, then preserves it through publication.
+  A newer stage refuses a server rollback even after the source copy loses its pin.
+- Mobile engines bind equivalent scope-aware callbacks. IndexedDB keeps control
+  metadata in a separate small record, avoiding research/PDF-cache clones per HTTP
+  request. Persistence failure blocks connection; stale/concurrent saves, removal
+  of protocol support or a replacement adapter cannot silently discard knowledge.
+- The first affected mobile run reproduced a reconnect timing regression: awaiting
+  an absent persistence hook delayed the old fetch until after reconnect. Removed
+  that unnecessary await; kept the existing stale-response assertion unchanged.
+  MemoryStore compare-and-swap now has no await between observation and mutation.
+- Source Python selection:93 passed53.55s,58.8s total including privacy/Ruff:
+  `tests/test_control_checkpoint.py`, `tests/test_workspace_sync.py`,
+  `tests/test_sync_http.py`, `tests/test_authority_control_history.py`.
+  Seven new cases include actual HTTP/storage/join, cancellation/private capture,
+  rollback, and the authentication/transaction race. Existing assertions stay.
+- Mobile selection:36 passed,5.079s governed total, using new control-checkpoint plus
+  existing transport/engine files. Real isolated headless browser:4 complete pairing,
+  durable offline note, explicit reconnect and forget journeys passed11.641s,
+  now against an official authority with actual IndexedDB control persistence and
+  refusal assertions. Synthetic local credentials only; no owner profile/accounts.
+- Critical14 passed10.05s,14.6s total including privacy/Ruff. All checks used the
+  existing two-processor/25% governor, one at a time. Earlier partial failures were
+  fixture/lint setup errors and the reproduced mobile race; final evidence above
+  supersedes them rather than treating them as passes. No historical full run.
+- Existing per-OS three-minute source stage adds only the new seven-case file;
+  no extra CI job or timeout increase. The raw mobile development shell advances
+  v34 to v35 for its new dependency; exported caches remain content-derived.
+- Reviewed harvest applicability: local-integration already excludes remote auth.
+  Keep this validated-local evidence here and in the protocol/test map; no new
+  global skill, generated copy or universal authentication rule was introduced.
+- Remaining: intentional fresh-authority recovery integration for retained points,
+  independent external anchoring/fencing, all-copy rollback/forks, hosted restore,
+  supported runtime/attachment lifecycle coverage and installed Windows/Mac/phone
+  acceptance. Device-held knowledge is not an external anchor or distributed lease.
+  Existing downloadable installers predate this work. No native build, cloud/PWA
+  deployment, account/owner-data mutation, daily-app restart, tag or release.
+
+- Final docs gate:60 passed5.78s,12.4s with privacy/Ruff. Exported mobile artifact
+  integrity:8 passed14.359s governed total, including actual assets, new module
+  closure, content-derived cache identity and historical numeric-cache reading.
+  No post-validation source behavior changed; final whitespace review is clean.

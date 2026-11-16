@@ -46,7 +46,8 @@ resource or owner research mutation was performed.
 
 Source after these downloads adds official-authority v4 transactional control
 history and explicit legacy v1/v2/v3 backup/fresh recovery. This is source-only;
-installed control checkpoints and independent anchoring/fencing remain open.
+desktop/mobile retained control checkpoints now have scoped source evidence;
+independent anchoring/fencing and installed-device acceptance remain open.
 
 Current desktop downloads also guard offline verification at queued delivery:
 changed originals, research or storage ownership clear prior readiness and require
@@ -63,7 +64,7 @@ retry. This does not certify the whole workspace as available offline.
 | Mobile reading and notes | PWA source includes durable notes/outbox, private sessions, verified reading and offline preparation; content-addressed88b2497 artifact is built and ZIP-verified | Coordinated HTTPS deployment, Safari/iOS/Android durability, quota and foreground/reconnect journeys |
 | Sync visibility and settings | Workspace/device status, explicit pairing and device-local reconnect opt-in have desktop fixtures | Installed location/storage/offline and backup/device controls, native vault prompts, restart/account-switch/focus/input and cross-device UX |
 | Backups and recovery | Verified authority/client backups, fresh-identity restore and reviewed editable adoption exist for supported content | Complete lossless migration/runtime adoption, cloud backup/restore rehearsal, scheduling/retention and unsupported-source handling |
-| Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested; source adds restart-persisted file identity and a local device/pairing checkpoint | Device-held control checkpoints, independent anchoring/cross-host fencing and hosted authorization/recovery; source after current downloads adds bounded v4 transactional control history |
+| Private access | Credential isolation, revocation, verified-history writes, strict official routes and same-host listener exclusion are tested; source adds restart-persisted file identity and a local device/pairing checkpoint | Installed control-checkpoint acceptance, independent anchoring/cross-host fencing and hosted authorization/recovery; current source retains device-local prefixes across desktop join/restart and browser reconnect |
 | UI/CLI/MCP/AI integrations | Existing shared operations and 38 MCP tools pass named package journeys; frozen source-aware report CLI gate now passes on all desktop OSes | Full frozen desktop private report/dialog journey and live provider/account acceptance; source now verifies production QProcess handoff to an actual CLI with disabled child disk settings |
 | Grounded research features | Reading goals, exact-source claims/Lineage and bounded audit/recovery/report paths have source evidence; report provenance also has frozen CLI evidence | Complete audit/retained-result adoption and mappings; source after0a64ec7 adds list-report original/location checks in desktop/CLI/MCP. Scientific support needs researcher review beyond quotation location |
 
@@ -77,7 +78,8 @@ See [queue pin migration](queue-pin-migration.md) and
 ## Work still required before v0.5.0
 
 1. **Authority safety:** source v4 now retains transactional control history;
-   complete device-held control knowledge and independent anchoring/fencing.
+   device-held knowledge now has desktop/mobile fixture coverage. Complete
+   independent anchoring/fencing, recovery integration and installed acceptance.
    Local listener exclusion and received history
    proofs do not establish protection against every rollback or cloned host.
 2. **Lossless adoption and coverage:** finish remaining supported writer, legacy

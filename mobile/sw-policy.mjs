@@ -1,5 +1,5 @@
 export const SHELL =['./', './index.html', './style.css', './app.mjs', './browser-pairing.mjs', './workspace-startup.mjs', './store.mjs', './domain.mjs',
-'./reading-position-schema.mjs', './position-json.mjs', './pdf-page-count.mjs',
+'./control-point.mjs', './reading-position-schema.mjs', './position-json.mjs', './pdf-page-count.mjs',
 './reading-position-report.mjs',
 './primary-source-retention.mjs',
 './reading-position-ops.mjs',

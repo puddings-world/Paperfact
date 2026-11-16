@@ -6,9 +6,12 @@ import {
   validateEvent
 } from './domain.mjs';
 import {parsePositionJSON} from './position-json.mjs';
+import {controlPoint,sameControl} from './control-point.mjs';
 import {sourceFileId,validateArtifact,validateOriginalSource} from './artifacts.mjs';
 export const CHUNK = 256 * 1024;
 const INSTANCE_HEADER='X-Paperfact-Sync-Instance';
+const CONTROL_HEADER='X-Paperfact-Control-Checkpoint',CONTROL_SUPPORT='X-Paperfact-Control-History';
+const CONTROL_ROUTE='/v1/control/checkpoint';
 const UNBOUND_ROUTES=new Set(['/v1/session/info','/v1/devices/pairing/redeem',
   '/v1/pairing/prepare','/v1/pairing/complete','/v1/session/forget']);
 export class TransportError extends Error {
@@ -34,19 +37,39 @@ export class HttpTransport {
     this.fetch = fetch;
     this.instance=null;
     this.sessionGeneration=0;
+    this.control=null;this.controlSupported=null;this.controlLoad=null;
+    this.controlSave=null;this.controlIdentity=null;
   }
   begin_session() {
     this.instance=null;
+    this.controlSupported=null;
     this.sessionGeneration++;
+  }
+  bind_control_checkpoint(load,remember,identity) {
+    requireThat(typeof load==='function' && typeof remember==='function','sync_history_unavailable');
+    this.controlLoad=load;this.controlSave=remember;this.controlIdentity={...identity};
+  }
+  async reloadControl(generation,signal) {
+    const loaded=await this.controlLoad();
+    requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
+    if(loaded===null)return;
+    const point=controlPoint(loaded);
+    if(this.control!==null) {
+      requireThat(point.authority_id===this.control.authority_id &&
+        (point.sequence!==this.control.sequence || sameControl(point,this.control)),'sync_history_unavailable');
+      if(point.sequence<this.control.sequence)return;
+    }
+    this.control=point;
   }
   async post(route, body, token, signal) {
     requireThat(
     typeof token === 'string' && token.length > 0 && token.length <= 4096 && ! /[\r\n]/.test(token),
     'invalid_session'
     );
+    const generation=this.sessionGeneration;
+    if(route!==CONTROL_ROUTE && this.controlLoad)await this.reloadControl(generation,signal);
     const data = JSON.stringify(body);
     requireThat(new TextEncoder().encode(data).length <= 512 * 1024, 'request_too_large');
-    const generation=this.sessionGeneration;
     if(this.instance===null && !UNBOUND_ROUTES.has(route))await this.session_info(token,signal);
     requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
     let response;
@@ -59,7 +82,8 @@ export class HttpTransport {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(this.instance?{[INSTANCE_HEADER]:this.instance}:{})
+          ...(this.instance?{[INSTANCE_HEADER]:this.instance}:{}),
+          ...(this.control?{[CONTROL_HEADER]:btoa(JSON.stringify(this.control)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'')}:{})
         },
         body: data,
         cache: 'no-store',
@@ -90,6 +114,12 @@ export class HttpTransport {
         503: 'unsupported_service'
       })[response.status] ?? 'request_rejected');
     }
+    const support=response.headers.get(CONTROL_SUPPORT);
+    requireThat(support===null || support==='1','sync_history_unavailable');
+    const supported=support==='1';
+    requireThat(this.control===null || supported,'sync_history_unavailable');
+    if(route==='/v1/session/info')this.controlSupported=supported;
+    else requireThat(this.controlSupported===null || this.controlSupported===supported,'sync_history_unavailable');
     const offered=response.headers.get(INSTANCE_HEADER);
     if(this.instance!==null && offered!==this.instance) {
       await response.body?.cancel();throw new TransportError('sync_history_unavailable');
@@ -158,10 +188,31 @@ export class HttpTransport {
     return value;
   }
   async session_info(token, signal) {
+    const generation=this.sessionGeneration;
     const value = await this.post('/v1/session/info', {}, token, signal);
     closed(value, ['workspace_id', 'device_id']);
-    identifier(value.workspace_id);
-    identifier(value.device_id);
+    identifier(value.workspace_id);identifier(value.device_id);
+    requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
+    if(this.controlIdentity)requireThat(value.workspace_id===this.controlIdentity.workspace_id &&
+      value.device_id===this.controlIdentity.device_id,'wrong_session');
+    if(this.controlSupported) {
+      const known=this.control===null?null:controlPoint(this.control);
+      const response=await this.post(CONTROL_ROUTE,{checkpoint:known},token,signal);
+      requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
+      closed(response,['version','identity','accepted','checkpoint']);
+      closed(response.identity,['workspace_id','device_id']);
+      requireThat(response.version===1 && response.identity?.workspace_id===value.workspace_id &&
+        response.identity?.device_id===value.device_id &&
+        sameControl(response.accepted===null?null:controlPoint(response.accepted),known),'sync_history_unavailable');
+      const point=controlPoint(response.checkpoint);
+      requireThat(known===null || point.authority_id===known.authority_id && point.sequence>=known.sequence &&
+        (point.sequence!==known.sequence || sameControl(point,known)),'sync_history_unavailable');
+      requireThat(sameControl(this.control,known) || sameControl(this.control,point),'sync_history_unavailable');
+      if(this.controlSave)await this.controlSave(point,known);
+      requireThat(generation===this.sessionGeneration && !signal?.aborted,'cancelled');
+      requireThat(sameControl(this.control,known) || sameControl(this.control,point),'sync_history_unavailable');
+      this.control=point;
+    }
     return value;
   }
   async history_page(token,after=0,limit=100,checkpoint,signal) {

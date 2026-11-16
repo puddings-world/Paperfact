@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 import stat
 from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from pathlib import Path
 
 from paper_daily.sync_blob_service import BlobServiceMixin
@@ -56,6 +57,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
         if authority_marker is not None and expected_database_identity is None:
             raise ValueError("A control marker requires the expected authority database identity")
         self._authority_marker = Path(authority_marker) if authority_marker is not None else None
+        self._control_request = ContextVar("paperfact-control-checkpoint", default=None)
         self._configure_blobs(blob_root, blob_quota_bytes, blob_max_bytes, blob_max_uploads)
         self.path = Path(path).absolute()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,6 +177,8 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 self._require_database_identity()
                 before = (control.observe(conn, self._authority_marker, self.path,
                                           self._database_identity) if guarded else None)
+                if guarded and self._control_request.get() is not None:
+                    history.checkpoint(conn, self._control_request.get())
                 control_baseline = history.read(conn) if guarded and write else None
                 yield conn
                 self._require_database_identity()
@@ -215,6 +219,29 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
         return conn.execute(
             "SELECT COALESCE(MAX(sequence),0) FROM sync_events WHERE workspace=?", (workspace,)
         ).fetchone()[0]
+
+    @contextmanager
+    def control_execution(self, point):
+        from paper_daily.sync_authority_history import validate_checkpoint
+
+        if self._authority_marker is None:
+            raise SyncHistoryUnavailable("Authority control continuity is unavailable")
+        owned = self._control_request.set(validate_checkpoint(point))
+        try:
+            yield
+        finally:
+            self._control_request.reset(owned)
+
+    def control_session(self, token, checkpoint=None):
+        from paper_daily import sync_authority_history as history
+
+        if self._authority_marker is None:
+            raise SyncHistoryUnavailable("Authority control continuity is unavailable")
+        with self._transaction() as conn:
+            workspace, device = self._authenticate(conn, token)
+            point = history.checkpoint(conn, checkpoint)
+            return dict(version=1, identity=dict(workspace_id=workspace, device_id=device),
+                        accepted=checkpoint, checkpoint=point)
 
     def session_info(self, token: str) -> dict:
         """Read the authenticated immutable token binding without creating state.

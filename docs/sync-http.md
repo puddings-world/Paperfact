@@ -692,8 +692,79 @@ Bare `ReferenceService` remains a trusted prototype; official entry enables guar
 
 This detects same-file control/history rollback while the current local marker is
 retained. It is not an independent external anchor, distributed lease, protection
-against jointly restored marker/database or copied hosts. Device-held control
-checkpoints, ambiguous external commits, cross-host fencing, hosted restore and
-physical acceptance remain release gates. File identity changes require recovery
+against jointly restored marker/database or copied hosts by itself. The next
+section adds device-retained prefixes. Independent external anchoring, ambiguous
+external commits, cross-host fencing, hosted restore and physical acceptance
+remain release gates. File identity changes require recovery
 review, not automatic repinning. Existing downloadable native candidates contain
 v3 administration; this source-only v4 work is not a new installer or deployment.
+
+
+### Device-retained authority control checkpoints
+
+Official v4 responses advertise `X-Paperfact-Control-History: 1`. After verifying
+`POST /v1/session/info`, clients call `POST /v1/control/checkpoint` with the closed
+body `{"checkpoint": null}` on first use, or their previously retained point.
+The authenticated response is the closed object `version: 1`, `identity` (the same
+workspace/device), `accepted` (the exact submitted point), and `checkpoint`.
+Each point has exactly `authority_id` (canonical UUID), `sequence` (integer1..10,000)
+and `sha256` (64 lowercase hex digits). A known prefix must exist at its exact
+sequence and digest in the current authority. A new head cannot change authority,
+move backwards or change the digest at the same sequence.
+
+Later official private requests include `X-Paperfact-Control-Checkpoint`: unpadded
+base64url of compact UTF-8 JSON for that point, with fields in authority/sequence/hash
+order. The receiver validates a single canonical header of at most512 characters.
+Missing required guards return428; malformed/duplicate guards return400; unavailable
+history returns412. First-use checkpoint challenges may omit this header; when
+present it is checked too, alongside the body's prefix. Identity and pairing-redemption
+routes remain bootstrap exceptions; credentials and research-history checks still
+apply. Browser-cookie routes use the equivalent `/v1/browser/control/checkpoint`.
+Proxies must preserve both control headers and the existing execution header.
+
+Crucially, the prefix is checked inside the actual service transaction, not only
+in earlier authentication. A rollback between authentication and the private read
+is rejected. This guard covers control and research/file routes without making a
+process nonce an authority history. Older clients without this handshake cannot
+use an official v4 private route; update client/service together. The unmarked
+`ReferenceService` remains a prototype compatibility seam, never a downgrade once
+a device has retained control knowledge.
+
+Desktop `SyncSession.connect` and each authorized job bind `ControlKnowledge` to
+the exact workspace file/session and expected remote workspace/device. It stores
+only the small closed `paperfact.device-control-knowledge.v1` record under a hashed
+`ui.sync.control.*` key, excluded from research capture/sharing. Loads are bounded
+to2 KiB. Writes use an immediate SQLite transaction, monotonic compare-and-swap,
+capture-aware connection and live-session checks; failed/cancelled writes preserve
+the prior point. Joining retains the point in the staging and published databases;
+resumption challenges that stage prefix in addition to the source connection's
+prefix. Tokens never enter this metadata.
+
+Mobile `Engine.connect` binds equivalent scope-checked callbacks. `IndexedStore`
+uses a separate `control:<scopeKey>` record in the existing `scopes` object store,
+so per-request checks do not clone PDFs, drafts or the research cache. Control
+writes use one IndexedDB compare-and-swap transaction. Research/outbox/cache export
+stays separate. Existing offline research remains readable without connecting;
+failed continuity leaves that research and pending work intact. Browser storage
+clearance removes local knowledge and must not be described as verified recovery.
+
+| Internal API | Contract |
+|---|---|
+| `sync_authority_history.validate_checkpoint(value) -> dict` | Closed bounded point validation |
+| `checkpoint(conn, expected=None) -> dict` | Verify complete control chain and optionally an exact retained prefix |
+| `ReferenceService.control_session(token, checkpoint=None) -> dict` | Authenticate and challenge in the same guarded SQL transaction |
+| `ReferenceService.control_execution(point)` | Request-local context checked by every actual official transaction |
+| `HttpTransport.bind_control_checkpoint(load, remember, identity)` | Bind explicit device-local callbacks; `remember(point, previous)` must commit or raise |
+| `HttpTransport.control_checkpoint() -> dict or None` | Copy the current authenticated in-memory point |
+| `HttpTransport.check_control_checkpoint(token, observed) -> dict` | Verify an additional retained join prefix alongside current connection knowledge |
+| `ControlKnowledge(path, identity, live).load()` / `.remember(point, previous)` | Scope-bound private native persistence with monotonic compare-and-swap |
+| `IndexedStore.readControlCheckpoint()` / `.writeControlCheckpoint(point, previous)` | Small private metadata transactions; no research-cache copy |
+
+Low-level transports without callbacks retain only process memory. Desktop sessions
+and mobile engines provide persistence; there is no global account credential or
+implicit upload consent. A retained client point detects a jointly rolled-back
+server database/marker only while that client knowledge survives. Simultaneously
+rolling back all client copies and the authority, a fork beyond a common observed
+prefix, copied-host fencing, independent anchors and intentional fresh-authority
+recovery still require further work. This source is not in the linked native
+installers and has not been deployed or physically accepted on Mac/phone.

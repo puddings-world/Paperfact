@@ -1,4 +1,5 @@
 /** Each scope is one atomic record: content, drafts, outbox, receipts and cursor. */
+import {advanceControl,controlRecord,savedControl} from './control-point.mjs';
 export function scopeKey(workspace, device) {
   return JSON.stringify([workspace, device]);
 }
@@ -38,6 +39,7 @@ export class MemoryStore {
   constructor(workspace, device, state = null) {
     this.value = copy(state ?? emptyState(workspace, device));
     this.failure = null;
+    this.controlValue=null;
   }
   async read() {
     return copy(this.value);
@@ -51,6 +53,15 @@ export class MemoryStore {
     return copy(result);
   }
 }
+MemoryStore.prototype.readControlCheckpoint=async function() {
+ return controlRecord(this.controlValue,this.value.workspace,this.value.device);
+};
+MemoryStore.prototype.writeControlCheckpoint=async function(point,previous) {
+ const current=controlRecord(this.controlValue,this.value.workspace,this.value.device);
+ point=advanceControl(current,point,previous);
+ if(this.failure)throw Error(this.failure);
+ this.controlValue=savedControl(point,this.value.workspace,this.value.device);
+};
 export class IndexedStore {
   constructor(db, workspace, device, {existingOnly=false}={}) {
     this.db = db;
@@ -123,6 +134,24 @@ export class IndexedStore {
       tx.onabort = tx.onerror =() => reject(failure ?? new Error('storage_write_failed'));
     });
   }
+  controlTransaction(point,previous,writing) {
+    return new Promise((resolve,reject)=>{
+      let result,failure;
+      const tx=this.db.transaction('scopes',writing?'readwrite':'readonly'),table=tx.objectStore('scopes');
+      const key='control:'+this.key,request=table.get(key);
+      request.onsuccess=()=>{try {
+        const current=controlRecord(request.result,this.workspace,this.device);result=current;
+        if(writing) {
+          point=advanceControl(current,point,previous);
+          table.put(savedControl(point,this.workspace,this.device),key);result=point;
+        }
+      } catch(error){failure=error;tx.abort();}};
+      tx.oncomplete=()=>resolve(copy(result));
+      tx.onabort=tx.onerror=()=>reject(failure??Error('storage_write_failed'));
+    });
+  }
+  readControlCheckpoint(){return this.controlTransaction(null,null,false);}
+  writeControlCheckpoint(point,previous){return this.controlTransaction(point,previous,true);}
   close() {
     this.db.close();
   }

@@ -171,3 +171,19 @@ recorded, full research completeness, durable authority control history or
 anti-rollback/distributed fencing. A normal fresh sync still performs the actual
 receive/conflict projection. No hosted, installed-Mac or physical-device result is
 implied by the Windows Qt/native fixtures.
+
+
+## Device-local authority knowledge (development)
+
+Current official-v4 source connections retain a small authenticated control-history
+point in private workspace metadata. Reconnect verifies it before private research
+requests. Joining keeps it in the staging and final workspace too; a rejected
+rollback leaves the old workspace, staged research and outbox available. This is
+not a credential and grants no automatic connection/upload permission. Sharing a
+list does not share device-control metadata. Mobile uses a separate IndexedDB
+metadata record rather than copying the PDF cache per request.
+
+See [wire/API details and remaining recovery limits](sync-http.md#device-retained-authority-control-checkpoints).
+These changes are source-only, not present in the linked Mac candidate. Independent
+external anchors, coordinated HTTPS deployment and physical cross-device acceptance
+remain release gates.

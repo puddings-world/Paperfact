@@ -128,8 +128,20 @@ export class Engine {
     this.transport?.begin_session?.();
     const generation = this.generation,
     signal = this.controller.signal;
-    const identity = await this.transport.session_info(token, signal),
-    state = await this.store.read();
+    const state = await this.store.read();
+    this.check(generation);
+    const known=this.store.readControlCheckpoint?await this.store.readControlCheckpoint():null;
+    this.check(generation);
+    requireThat(known===null || typeof this.transport.bind_control_checkpoint==='function','sync_history_unavailable');
+    if(this.transport.bind_control_checkpoint && this.store.readControlCheckpoint) {
+      const store=this.store,identity={workspace_id:state.workspace,device_id:state.device};
+      this.transport.bind_control_checkpoint(async()=>{
+        this.check(generation);const point=await store.readControlCheckpoint();this.check(generation);return point;
+      },async(point,previous)=>{
+        this.check(generation);await store.writeControlCheckpoint(point,previous);this.check(generation);
+      },identity);
+    }
+    const identity = await this.transport.session_info(token, signal);
     this.check(generation);
     requireThat(identity.workspace_id === state.workspace && identity.device_id === state.device, 'wrong_session');
     this.#token = token;

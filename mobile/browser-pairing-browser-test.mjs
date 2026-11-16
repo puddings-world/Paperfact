@@ -55,6 +55,15 @@ await check('real cookie pairs once, opens research and never exposes credential
  const report=await inspect();assert(report.devices===2,'duplicate device enrollment');
  const state=await scoped();identity={workspace:state.workspace,device:state.device};
  assert(state.workspace===fixture.workspace&&Object.keys(state.entities).length>=3,'wrong research scope');
+ const store=await IndexedStore.openExisting(state.workspace,state.device);
+ try {
+  const known=await store.readControlCheckpoint();assert(known?.sequence>=2,'control knowledge was not saved in actual IndexedDB');
+  const before=JSON.stringify(await store.read());
+  try {await store.writeControlCheckpoint({...known,sequence:1},known);throw Error('rollback accepted');}
+  catch(error){assert(error.message==='sync_history_unavailable','wrong rollback result');}
+  assert(JSON.stringify(await store.readControlCheckpoint())===JSON.stringify(known),'knowledge changed after refusal');
+  assert(JSON.stringify(await store.read())===before,'control metadata changed research');
+ } finally {store.close();}
  assert(!doc.cookie.includes('paperfact-device'),'HttpOnly cookie exposed to script');
  assert(!JSON.stringify(state).includes(JSON.parse(fixture.invitation).code),'invitation in research storage');
 });

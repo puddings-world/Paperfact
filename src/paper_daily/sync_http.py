@@ -18,7 +18,7 @@ import socket
 import socketserver
 import threading
 import time
-from contextlib import nullcontext, suppress
+from contextlib import ExitStack, nullcontext, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -51,6 +51,30 @@ MAX_REQUEST_BYTES = 512 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z0-9._~-]{1,4096}")
 _INSTANCE_HEADER = "X-Paperfact-Sync-Instance"
+_CONTROL_HEADER = "X-Paperfact-Control-Checkpoint"
+_CONTROL_SUPPORT = "X-Paperfact-Control-History"
+_CONTROL_ROUTE = "/v1/control/checkpoint"
+
+
+def _control_point(value):
+    from paper_daily.sync_authority_history import validate_checkpoint
+
+    return validate_checkpoint(value)
+
+
+def _control_encode(value):
+    return base64.urlsafe_b64encode(_encode(_control_point(value))).decode().rstrip("=")
+
+
+def _control_decode(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,512}", value):
+        raise ValueError("Invalid control checkpoint header")
+    raw = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+    point = _control_point(_decode(raw))
+    if _control_encode(point) != value:
+        raise ValueError("Invalid control checkpoint header")
+    return point
+
 _INSTANCE = re.compile(r"[0-9a-f]{32}")
 _LOOPBACK = {"127.0.0.1", "::1"}
 _ERRORS = {
@@ -335,6 +359,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
 
     if browser is not None and browser.service is not service:
         raise ValueError("Browser sessions must use this exact authority")
+    control_required = getattr(service, "_authority_marker", None) is not None
     browser_actions = {
         "/v1/browser/pairing/prepare": "prepare",
         "/v1/browser/pairing/complete": "complete",
@@ -373,6 +398,8 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header(_INSTANCE_HEADER, instance)
+            if control_required:
+                self.send_header(_CONTROL_SUPPORT, "1")
             self.send_header("Connection", "close")
             if cookie is not None:
                 self.send_header("Set-Cookie", cookie)
@@ -385,7 +412,7 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
             self._reply(code, _encode({"error": _ERRORS[code]}))
 
         def _request(self):
-            allowed = ({"/v1/push", "/v1/pull", "/v1/session/info",
+            allowed = ({"/v1/push", "/v1/pull", "/v1/session/info", _CONTROL_ROUTE,
                         "/v1/history/pull", "/v1/history/push"}
                        | _BLOB_ROUTES | _HISTORY_BLOB_ROUTES
                        | devices.ROUTES | devices.HISTORY_ROUTES)
@@ -436,6 +463,10 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
             return token, value
 
         def do_POST(self):
+            with ExitStack() as contexts:
+                self._post_request(contexts)
+
+        def _post_request(self, contexts):
             try:
                 token, value = self._request()
                 if self.path in browser_actions:
@@ -464,6 +495,14 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
                         raise _RequestError(400)
                     if not secrets.compare_digest(guards[0], instance):
                         raise _RequestError(428)
+                if control_required and route not in {"/v1/session/info", devices.PAIR_REDEEM}:
+                    points = self.headers.get_all(_CONTROL_HEADER, [])
+                    if not points and route != _CONTROL_ROUTE:
+                        raise _RequestError(428)
+                    if len(points) > 1:
+                        raise _RequestError(400)
+                    if points:
+                        contexts.enter_context(service.control_execution(_control_decode(points[0])))
                 if not allow_unverified_mutations and route in _PROTOTYPE_MUTATIONS:
                     raise SyncHistoryUnavailable("Use verified history mutation routes")
                 if route == "/v1/history/pull":
@@ -489,6 +528,9 @@ def make_server(service, host="127.0.0.1", port=0, *, browser=None,
                     response = _encode(service.push(token, value["operation"]))
                     if len(response) > MAX_RESPONSE_BYTES:
                         raise _RequestError(500)
+                elif route == _CONTROL_ROUTE:
+                    _closed(value, {"checkpoint"})
+                    response = _encode(service.control_session(token, value["checkpoint"]))
                 elif route == "/v1/session/info":
                     _closed(value, set())
                     method = getattr(service, "session_info", None)
@@ -599,6 +641,11 @@ class HttpTransport:
             raise ValueError("Sync timeout must be between zero and 60 seconds")
         self.base_url = base_url.rstrip("/")
         self._instance = None
+        self._control = None
+        self._control_supported = None
+        self._control_load = lambda: None
+        self._control_save = None
+        self._control_identity = None
         self._pin_lock = threading.Lock()
         self._client = httpx.Client(timeout=timeout, trust_env=False, follow_redirects=False)
 
@@ -611,9 +658,32 @@ class HttpTransport:
     def __exit__(self, exc_type, exc, traceback):
         self.close()
 
+    def bind_control_checkpoint(self, load, remember, identity):
+        if not callable(load) or not callable(remember):
+            raise ValueError("Control knowledge requires local load/save callbacks")
+        self._control_load, self._control_save = load, remember
+        self._control_identity = _session_identity(identity)
+
+    def _reload_control(self):
+        value = self._control_load()
+        if value is None:
+            return
+        value = _control_point(value)
+        with self._pin_lock:
+            if self._control is not None:
+                if (value["authority_id"] != self._control["authority_id"]
+                        or value["sequence"] == self._control["sequence"]
+                        and value != self._control):
+                    raise SyncHistoryUnavailable("Local authority control knowledge differs")
+                if value["sequence"] < self._control["sequence"]:
+                    return
+            self._control = value
+
     def _post(self, path, token, payload):
         if not isinstance(token, str) or not _TOKEN.fullmatch(token):
             raise PermissionError("Invalid sync credential")
+        if path != _CONTROL_ROUTE:
+            self._reload_control()
         data = _encode(payload)
         if len(data) > MAX_REQUEST_BYTES:
             raise ValueError("Sync request exceeds the transport limit")
@@ -636,11 +706,12 @@ class HttpTransport:
                     "Content-Type": "application/json",
                     "Accept-Encoding": "identity",
                     **({_INSTANCE_HEADER: self._instance} if self._instance else {}),
+                    **({_CONTROL_HEADER: _control_encode(self._control)} if self._control else {}),
                 },
             ) as response:
                 if response.status_code in (401, 403):
                     raise PermissionError("Sync authorization was rejected")
-                if response.status_code == 404 and path == "/v1/session/info":
+                if response.status_code == 404 and path in {"/v1/session/info", _CONTROL_ROUTE}:
                     raise SyncHistoryUnavailable("Sync service needs continuity support")
                 if response.status_code == 404 and path.startswith("/v1/history/"):
                     raise SyncHistoryUnavailable("Sync service needs verified history support")
@@ -667,6 +738,16 @@ class HttpTransport:
                     raise PairingUnavailableError("Pairing is unavailable on this service")
                 if response.status_code != 200:
                     raise RuntimeError(f"Sync service returned HTTP {response.status_code}")
+                support = response.headers.get_list(_CONTROL_SUPPORT)
+                if support not in ([], ["1"]):
+                    raise SyncHistoryUnavailable("Invalid authority control continuity response")
+                supported = support == ["1"]
+                if self._control is not None and not supported:
+                    raise SyncHistoryUnavailable("Authority control continuity was removed")
+                if path == "/v1/session/info":
+                    self._control_supported = supported
+                elif self._control_supported is not None and supported != self._control_supported:
+                    raise SyncHistoryUnavailable("Authority control continuity changed")
                 instances = response.headers.get_list(_INSTANCE_HEADER)
                 offered = (instances[0] if len(instances) == 1
                            and _INSTANCE.fullmatch(instances[0]) else None)
@@ -749,7 +830,47 @@ class HttpTransport:
 
     def session_info(self, token):
         """Resolve authenticated identity before binding a workspace transfer session."""
-        return _session_identity(self._post("/v1/session/info", token, {}))
+        identity = _session_identity(self._post("/v1/session/info", token, {}))
+        if self._control_identity is not None and identity != self._control_identity:
+            raise PermissionError("Credential belongs to a different workspace/device")
+        if self._control_supported:
+            self._challenge_control(token, identity, self.control_checkpoint())
+        return identity
+
+    def control_checkpoint(self):
+        with self._pin_lock:
+            return dict(self._control) if self._control is not None else None
+
+    def check_control_checkpoint(self, token, observed):
+        """Prove a join-stage prefix alongside this connection's retained prefix."""
+        observed = _control_point(observed)
+        identity = self.session_info(token)
+        if not self._control_supported:
+            raise SyncHistoryUnavailable("Authority control continuity was removed")
+        self._challenge_control(token, identity, observed)
+        return self.control_checkpoint()
+
+    def _challenge_control(self, token, identity, observed):
+        with self._pin_lock:
+            known = dict(self._control) if self._control is not None else None
+        value = self._post(_CONTROL_ROUTE, token, {"checkpoint": observed})
+        if (not isinstance(value, dict)
+                or set(value) != {"version", "identity", "accepted", "checkpoint"}
+                or type(value["version"]) is not int or value["version"] != 1
+                or value["identity"] != identity or value["accepted"] != observed):
+            raise SyncHistoryUnavailable("Invalid authority control checkpoint response")
+        point = _control_point(value["checkpoint"])
+        for retained in (known, observed):
+            if retained is not None and (point["authority_id"] != retained["authority_id"]
+                    or point["sequence"] < retained["sequence"]
+                    or point["sequence"] == retained["sequence"] and point != retained):
+                raise SyncHistoryUnavailable("Authority control history moved backwards")
+        with self._pin_lock:
+            if self._control not in (known, point):
+                raise SyncHistoryUnavailable("Authority control challenge was superseded")
+            if self._control_save is not None:
+                self._control_save(dict(point), known)
+            self._control = point
 
     def create_pairing(self, token, code, *, checkpoint=None):
         path = ("/v1/history/devices/pairing/create"
