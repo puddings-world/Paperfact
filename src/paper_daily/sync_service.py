@@ -11,7 +11,7 @@ import json
 import secrets
 import sqlite3
 import stat
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from paper_daily.sync_blob_service import BlobServiceMixin
@@ -45,6 +45,7 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
         blob_max_bytes: int = 150 * 1024**2,
         blob_max_uploads: int = 16,
         expected_database_identity: tuple[int, int] | None = None,
+        authority_marker: Path | None = None,
     ):
         if (expected_database_identity is not None and (
                 not isinstance(expected_database_identity, tuple)
@@ -52,6 +53,9 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 or any(type(value) is not int for value in expected_database_identity)
                 or expected_database_identity[0] < 0 or expected_database_identity[1] <= 0)):
             raise ValueError("Invalid expected authority database identity")
+        if authority_marker is not None and expected_database_identity is None:
+            raise ValueError("A control marker requires the expected authority database identity")
+        self._authority_marker = Path(authority_marker) if authority_marker is not None else None
         self._configure_blobs(blob_root, blob_quota_bytes, blob_max_bytes, blob_max_uploads)
         self.path = Path(path).absolute()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,6 +151,8 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
 
     @contextmanager
     def _transaction(self, *, write=False):
+        from paper_daily import sync_authority_control as control
+
         existing = self._database_identity is not None
         if existing:
             self._require_database_identity()
@@ -158,16 +164,26 @@ class ReferenceService(BlobServiceMixin, DeviceManagementMixin):
                 self._require_database_identity()
             raise
         conn.row_factory = sqlite3.Row
+        guarded = self._authority_marker is not None
         try:
-            if not existing:
-                self._database_identity = self._database_file_identity()
-            self._require_database_identity()
-            conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-            self._require_database_identity()
-            yield conn
-            self._require_database_identity()
-            conn.commit()
-            self._require_database_identity()
+            with control.transaction_lock(self.path) if guarded else nullcontext():
+                if not existing:
+                    self._database_identity = self._database_file_identity()
+                self._require_database_identity()
+                conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+                self._require_database_identity()
+                before = (control.observe(conn, self._authority_marker, self.path,
+                                          self._database_identity) if guarded else None)
+                yield conn
+                self._require_database_identity()
+                if guarded:
+                    after = control.fingerprint(conn)
+                    if after != before["control_sha256"]:
+                        if not write:
+                            raise SyncHistoryUnavailable("Unexpected read-only control change")
+                        control.publish(self._authority_marker, self.path, before, after)
+                conn.commit()
+                self._require_database_identity()
         except BaseException:
             conn.rollback()
             raise

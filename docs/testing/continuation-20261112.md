@@ -9031,3 +9031,23 @@ rollback, joint marker/database restoration, independent control history and
 cross-host fencing remain open. The e5eb093 native candidates predate the source
 change. No app restart, owner-data mutation, real credential, cloud operation,
 installer build or release was performed.
+
+## 2026-11-16 retained local device/pairing checkpoint
+
+- Implemented official v3 marker with exact native identity and deterministic
+  device/pairing digest; cooperating transactions serialize and publish the
+  checkpoint before committing SQL. Legacy v1/v2 are explicit-backup-only.
+- Same-file revoked-token resurrection failed before the implementation. Current
+  fixtures cover restart/pairing/concurrent enrollment, schema rollback, explicit
+  retry and actual subprocess exit after publication, with access/export refusal
+  and sanitized recovery guidance. No new wire, backup or research format.
+- Fixed a local service-format import shadowing backup FORMAT. The old-schema
+  fixture now creates explicit legacy files instead of deleting a current guarded
+  table; all original recovery/research/old-grant assertions are retained.
+- Affected bounded selection: 195 passed in 66.46s pytest, 70.1s stages. Earlier
+  intermediate failures are not passes. This selection overlaps existing cases;
+  it is not an exhaustive release or all-feature gate.
+- Source-only: e5eb093 native artifacts predate the guard. No owner research,
+  account/model, cloud resource, new build, app restart or physical device used.
+  Joint marker/database rollback, independent control history/anchor and
+  cross-host fencing remain open; no power-loss durability claim.

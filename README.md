@@ -398,8 +398,9 @@ privately, including verified legacy text inputs, while publishing current resea
 
 The development sync service refuses a second local listener for the same authority
 and pins newly initialized database identity across restarts. Replaced/missing
-files are refused; legacy unpinned services require explicit backup/fresh restore,
-not automatic marker repair. See
+files and same-file device/pairing rollback against the retained local checkpoint
+are refused. Legacy v1/v2 services require explicit backup/fresh restore, not
+automatic marker repair. These source guards postdate the e5eb093 installers. See
 [ownership, shutdown and recovery limits](docs/sync-http.md#local-listener-ownership-and-database-lifetime).
 These local safeguards do not yet provide distributed fencing or durable control-history proof.
 

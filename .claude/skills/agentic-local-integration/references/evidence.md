@@ -1237,3 +1237,19 @@ or installed-device acceptance. No global rule is promoted.
 - Limits: local native lifetime, not same-file rollback detection, joint backup
   rollback, independent control history or cross-host fencing. No global install,
   operator action, paid service or owner-data change is authorized.
+
+## Retain a local control checkpoint outside SQLite (2026-11-16)
+
+- Status: validated-local. Native identity alone missed same-file revoked-token
+  resurrection. Official transactions now validate an external deterministic
+  device/pairing digest, serialize through an existing local lock and publish
+  the new checkpoint before committing SQL.
+- Failure contract: publication failure rolls SQL back; process loss after
+  publication pauses access/export on mismatch. Preserve state for fresh-identity
+  reviewed recovery instead of guessing a trusted head or reviving credentials.
+- Evidence: bounded affected selection195 passes70.1s, including actual synthetic
+  subprocess exit, concurrent enrollment, explicit retry, legacy backup/restore,
+  schema rollback and sanitized CLI refusal. Existing assertions remain intact.
+- Limits: retained local marker only, not append-only history, joint rollback
+  protection, independent anchoring or cross-host fencing. Process exit is not
+  physical power loss. No global installation or operator/cloud action.

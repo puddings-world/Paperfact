@@ -443,12 +443,16 @@ def test_recovery_accepts_pre_pairing_backups_and_never_carries_device_grants(
     root, old, owner, _manifest, _data = state
     code = secrets.token_urlsafe(32)
     if legacy is True:
-        with old._transaction(write=True) as conn:
+        (root / sync_admin.MARKER).write_text(
+            json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
+        with closing(sqlite3.connect(old.path)) as conn, conn:
             conn.execute("DROP TABLE sync_pairings")
     else:
         old.create_pairing(owner, code, checkpoint=old.history_page(owner)["checkpoint"])
         if legacy == "old-columns":
-            with old._transaction(write=True) as conn:
+            (root / sync_admin.MARKER).write_text(
+                json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
+            with closing(sqlite3.connect(old.path)) as conn, conn:
                 conn.execute("ALTER TABLE sync_pairings DROP COLUMN history_checkpoint")
     original = dump(old.path)
     source, destination = tmp_path / "pair-backup", tmp_path / "pair-recovered"

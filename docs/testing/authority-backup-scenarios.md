@@ -43,3 +43,18 @@ constructor, and malformed/extra/duplicate/noninteger marker refusal before writ
 The selected service/admin/mount/HTTP and backup/restore/native suite189 passes
 59.19s pytest/62.7s stages under the two-core/25% governor. These overlap earlier
 focused runs; they are not new feature counts or installed/cross-host evidence.
+
+### Retained local control checkpoint (v3 source)
+
+`tests/test_authority_control.py` covers pairing/rename/concurrent enrollment and
+restart, refusal and rollback of unsupported schema mutation, pairing tampering,
+failed checkpoint publication with explicit retry, and an actual subprocess exit
+between marker publication and SQLite commit. That last case rolls SQL back,
+refuses subsequent access/export, and gives sanitized CLI recovery guidance.
+`tests/test_sync_admin.py` adds same-file revoked-device resurrection refusal.
+Legacy recovery fixtures now construct explicit old-format files directly;
+research preservation and old-grant rejection assertions remain unchanged.
+
+Affected admin/control/mount/backup/restore/native/HTTP/service and source CLI
+selection: **195 passed, 66.46s pytest, 70.1s total** with bounded CPU. These are
+source fixtures, not new installer, physical power-loss or hosted acceptance.

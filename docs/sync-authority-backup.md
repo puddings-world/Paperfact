@@ -128,14 +128,13 @@ remain unverified. Ordinary desktop use does not require the operator SDK.
 
 ## Service-marker lifetime compatibility
 
-New source uses a v2 service marker bound to the live authority database's local
-file identity. Export checks that pin and keeps the observed identity through
-backup capture. It refuses a mismatched v2 marker, including after service restart,
-before producing a trusted backup.
+Current source uses a v3 marker pinning native database identity and a digest of
+all supported device/pairing rows. Export validates both under its SQLite writer
+reservation before trusted capture. A same-file control rollback or interrupted
+marker/SQL mismatch is refused without a completed backup manifest.
 
-A recognized unpinned v1 marker is accepted for explicit backup only. It cannot
-serve or issue new credentials. Use the existing verify/restore commands to create
-a fresh service/workspace and issue fresh device records; never rewrite the old
-marker, copy its identity into restored state or silently rebind old clients.
-The backup format and research schemas do not change. Full independent authority
-anchoring, same-file rollback protection and hosted restore remain separate gates.
+Recognized legacy v1/v2 markers are accepted only for explicit backup, never
+serving or new credentials. Restore into a fresh service/workspace and enroll new
+devices; do not rewrite old markers or silently rebind old clients. Backup format
+and research schemas are unchanged. Independent history/anchoring, joint rollback,
+cross-host fencing and hosted restore remain separate gates.

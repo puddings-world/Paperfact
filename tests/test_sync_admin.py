@@ -263,7 +263,10 @@ def test_restarting_official_service_refuses_replaced_database_with_old_live_tok
     assert service.path.read_bytes() == before
 
 
-def test_legacy_marker_can_only_back_up_and_restore_with_fresh_credentials(tmp_path, capsys):
+@pytest.mark.parametrize("legacy", ["v1", "v2"])
+def test_legacy_marker_can_only_back_up_and_restore_with_fresh_credentials(
+    tmp_path, capsys, legacy,
+):
     from test_sync_service import operation
 
     from paper_daily import sync_authority_backup, sync_authority_restore
@@ -274,12 +277,16 @@ def test_legacy_marker_can_only_back_up_and_restore_with_fresh_credentials(tmp_p
     old = service.enroll("workspace-a", "device-a")
     service.push(old, operation())
     marker = state / sync_admin.MARKER
-    marker.write_text(json.dumps(sync_admin.LEGACY_FORMAT), encoding="utf-8")
+    record = sync_admin.LEGACY_FORMAT
+    if legacy == "v2":
+        record = {**sync_admin.LEGACY_PINNED_FORMAT,
+                  "database_identity": list(service._database_identity)}
+    marker.write_text(json.dumps(record), encoding="utf-8")
     with pytest.raises(sync_admin.AuthorityMarkerError, match="Legacy"):
         sync_admin.authority(state)
     assert sync_admin.main(["init", "--state", str(state)]) == 2
     assert "restore-backup" in capsys.readouterr().err
-    assert json.loads(marker.read_text()) == sync_admin.LEGACY_FORMAT
+    assert json.loads(marker.read_text()) == record
     snapshot = tmp_path / "snapshot"
     sync_authority_backup.export(state, snapshot)
     fresh = tmp_path / "fresh"
@@ -349,3 +356,21 @@ def test_invalid_lifetime_marker_never_opens_or_repins_authority(tmp_path, monke
         sync_admin.authority(state)
     assert marker.read_text() == raw
     assert (state / sync_admin.DATABASE).read_bytes() == before
+
+
+def test_same_file_revocation_rollback_is_refused_after_restart(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    state = tmp_path / "service"
+    sync_admin.initialize(state)
+    service = sync_admin.authority(state)
+    token = service.enroll("workspace", "lost-device")
+    service.revoke(token)
+    before = service.path.stat()
+    with closing(sqlite3.connect(service.path)) as connection, connection:
+        connection.execute("UPDATE sync_devices SET revoked=0")
+    after = service.path.stat()
+    assert (before.st_dev, before.st_ino) == (after.st_dev, after.st_ino)
+    with pytest.raises(ValueError, match="control|recovery"):
+        sync_admin.authority(state).session_info(token)

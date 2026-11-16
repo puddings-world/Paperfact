@@ -245,6 +245,13 @@ def export(state, output, *, seconds=30, cancelled=lambda: False):
     with closing(sqlite3.connect(database.as_uri() + "?mode=rw", uri=True, timeout=1)) as lock:
         try:
             lock.execute("BEGIN IMMEDIATE")
+            from paper_daily.sync_admin import FORMAT as SERVICE_FORMAT
+            from paper_daily.sync_admin import marker_record
+            from paper_daily.sync_authority_control import observe
+
+            record, _pin = marker_record(marker, database, allow_legacy_backup=True)
+            if record.get("format") == SERVICE_FORMAT["format"]:
+                observe(lock, marker, database, original[:2])
             with closing(_connect(database)) as source:
                 _schema(source, check)
                 destination = output / DATABASE

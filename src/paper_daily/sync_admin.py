@@ -13,10 +13,12 @@ from pathlib import Path
 
 from paper_daily.connection_vault import MAX_BYTES, Connection
 from paper_daily.sync_http import _decode, make_server
+from paper_daily.sync_journal import SyncHistoryUnavailable
 from paper_daily.sync_service import AuthorityInUseError, ReferenceService
 
 MARKER = ".paperfact-sync-service.json"
-FORMAT = {"format": "paperfact-reference-service-v2"}
+FORMAT = {"format": "paperfact-reference-service-v3"}
+LEGACY_PINNED_FORMAT = {"format": "paperfact-reference-service-v2"}
 LEGACY_FORMAT = {"format": "paperfact-reference-service-v1"}
 DATABASE = "authority.sqlite"
 
@@ -48,7 +50,7 @@ class AuthorityMarkerError(ValueError):
     """An official authority cannot establish its persisted local file lifetime."""
 
 
-def marker_for(database, *, expected_identity=None):
+def file_marker(database, *, expected_identity=None):
     info = database.lstat()
     identity = (info.st_dev, info.st_ino)
     if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_ino <= 0
@@ -57,7 +59,19 @@ def marker_for(database, *, expected_identity=None):
     return {**FORMAT, "database_identity": list(identity)}
 
 
-def marker_identity(marker, database, *, allow_legacy_backup=False):
+def marker_for(database, *, expected_identity=None):
+    from paper_daily.sync_authority_control import fingerprint
+
+    before = file_marker(database, expected_identity=expected_identity)
+    with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as conn:
+        conn.execute("BEGIN")
+        digest = fingerprint(conn)
+    if file_marker(database, expected_identity=expected_identity) != before:
+        raise AuthorityMarkerError("Authority identity changed during control capture")
+    return {**before, "control_sha256": digest}
+
+
+def marker_record(marker, database, *, allow_legacy_backup=False):
     info = marker.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 256:
         raise AuthorityMarkerError("Invalid authority lifetime marker")
@@ -66,20 +80,31 @@ def marker_identity(marker, database, *, allow_legacy_backup=False):
     if len(raw) > 256:
         raise AuthorityMarkerError("Invalid authority lifetime marker")
     record = _decode(raw)
-    expected = marker_for(database)
-    if record == LEGACY_FORMAT:
-        if allow_legacy_backup:
-            return tuple(expected["database_identity"])
-        raise AuthorityMarkerError(
-            "Legacy authority has no persisted database identity. Stop serving, create a "
-            "verified backup and restore-backup into a fresh service/workspace; re-enroll devices.")
+    expected = file_marker(database)
+    old_pin = {**expected, **LEGACY_PINNED_FORMAT}
     pin = record.get("database_identity") if isinstance(record, dict) else None
-    if (not isinstance(pin, list) or len(pin) != 2
-            or any(type(value) is not int for value in pin) or record != expected):
+    valid_pin = (isinstance(pin, list) and len(pin) == 2
+                 and all(type(value) is int for value in pin))
+    if record in (LEGACY_FORMAT, old_pin) and (record == LEGACY_FORMAT or valid_pin):
+        if allow_legacy_backup:
+            return record, tuple(expected["database_identity"])
         raise AuthorityMarkerError(
-            "Authority database identity differs from its lifetime marker. Preserve state "
-            "and review recovery; do not recreate the marker or reuse old credentials.")
-    return tuple(pin)
+            "Legacy authority has no control checkpoint. Stop serving, create a verified "
+            "backup and restore-backup into a fresh service/workspace; re-enroll devices.")
+    digest = record.get("control_sha256") if isinstance(record, dict) else None
+    if (not isinstance(pin, list) or len(pin) != 2
+            or any(type(value) is not int for value in pin)
+            or not isinstance(digest, str) or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+            or record != {**expected, "control_sha256": digest}):
+        raise AuthorityMarkerError(
+            "Authority identity/control marker differs. Preserve state and review recovery; "
+            "do not recreate the marker or reuse old credentials.")
+    return record, tuple(pin)
+
+
+def marker_identity(marker, database, *, allow_legacy_backup=False):
+    return marker_record(marker, database, allow_legacy_backup=allow_legacy_backup)[1]
 
 
 def authority(state):
@@ -94,7 +119,7 @@ def authority(state):
     if "papers" in tables or not {"sync_devices", "sync_events", "sync_heads"} <= tables:
         raise ValueError("This is not a reference sync authority")
     return ReferenceService(database, blob_root=root / "blobs",
-                            expected_database_identity=identity)
+                            expected_database_identity=identity, authority_marker=marker)
 
 
 def initialize(state):
@@ -305,6 +330,11 @@ def run(args):
         return 0
     except AuthorityMarkerError as error:
         print(str(error), file=sys.stderr)
+        return 2
+    except SyncHistoryUnavailable:
+        print("Authority control/history checkpoint cannot be verified. Stop serving, "
+              "preserve state and review recovery into a fresh service/workspace. "
+              "Do not repair the marker or silently reuse old credentials.", file=sys.stderr)
         return 2
     except AuthorityInUseError:
         print("Sync service already active for this authority. Stop the existing listener "

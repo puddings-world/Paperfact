@@ -636,26 +636,35 @@ Strict HTTP selects them internally; JSON bodies cannot override receiver policy
 
 ### Persisted official-authority file lifetime (source after e5eb093)
 
-New official service directories use `paperfact-reference-service-v2` in
-`.paperfact-sync-service.json`, with an exact two-integer `database_identity`
-(device/inode). `sync-admin` validates this local pin before opening the database
-and carries it into the constructor's pre-schema check. A normal restart retains
-access/revocation; a replaced or missing database is refused across restarts.
-`init` never repairs or rewrites a mismatched marker. Marker JSON is bounded,
-closed and duplicate-safe; hard links and noninteger identities are refused.
+New official directories use `paperfact-reference-service-v3` in
+`.paperfact-sync-service.json`: exact integer `database_identity` (device/inode)
+and `control_sha256`, a deterministic digest of all supported device and pairing
+columns/rows. Marker JSON is bounded, closed and duplicate-safe. `sync-admin`
+carries the native pin into the pre-schema constructor check; replacement, missing
+files, invalid control schemas and changed control state are refused on restart.
+`init` never repairs or rewrites mismatched state.
 
-Old v1 markers have no observed lifetime and cannot serve or issue credentials.
-They remain eligible for explicit verified `backup`, then `restore-backup` into a
-new directory/workspace and explicit device enrollment. No new command or automatic
-migration is added. Preserve old research/outboxes for reviewed recovery; do not
-edit/recreate the marker or bind old clients to the new workspace by resetting
-cursors. The restored marker pins the actual new database, never the copied file
-identity from the backup. Backup capture also pins its source through observation.
+Official transactions serialize through a bounded cooperating-process local lock.
+They compare the retained checkpoint before use. A control mutation publishes and
+flushes the new marker before committing SQLite. Failure before publication rolls
+back SQL; process loss after publication and before SQL commit leaves an explicit
+mismatch and pauses access/backup. Preserve both files and review recovery into a
+fresh service/workspace; do not repair the marker or revive old credentials.
+A synthetic subprocess-exit test covers this window, not real power-loss durability.
+Read transactions retain SQLite read semantics, including backup compatibility.
 
-This is local file-lifetime evidence, not a portable authority epoch. It does not
-detect in-place SQL rollback retaining the same file identity, protect a jointly
-restored marker/database, or provide independent control-history anchoring or
-cross-host fencing. Those remain release gates. Filesystem identity can change
-after copying/restoring/moving between filesystems; refusal requires operator
-recovery review, not automatic repinning. The e5eb093 installers predate this
-source change; native candidate and hosted acceptance remain required.
+Legacy v1 (unpinned) and v2 (file-pinned only) markers are accepted for explicit
+verified backup, never serving or credential issuance. Use existing backup and
+fresh-workspace restore commands, then enroll devices explicitly. Restored v3
+markers describe the actual reconstructed database/control state. Backup verifies
+current v3 controls while holding its SQL reservation. No wire/research/backup
+format or command changes, automatic migration or client cursor reset is added.
+Bare `ReferenceService` remains a trusted prototype; official entry enables guards.
+
+This detects same-file device/pairing rollback while the current local marker is
+retained. It is not an append-only control journal, independent remote anchor,
+protection against jointly restored marker/database, all research-data rollback,
+or cross-host fencing. Those remain release gates. File identity changes across
+filesystem copies require recovery review, not automatic repinning. The e5eb093
+installers predate these guards; native, hosted and physical-device acceptance
+remain required.
