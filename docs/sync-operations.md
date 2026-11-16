@@ -267,8 +267,9 @@ Newer source after candidate2021103 separates `list-add --pdf`/desktop PDF intak
 from deliberate `repdf` replacement. Existing native originals and legacy files
 are kept whether the paper was already in this list or is joining another one.
 Positioned notes and original versions remain unchanged. An unavailable or retired
-managed original requires attachment synchronization or an explicit replacement;
-a stale legacy alias or new list membership cannot revive it.
+managed original requires attachment synchronization, exact-byte local supply
+(for an active target only), or an explicit replacement. A stale legacy alias
+or new list membership cannot revive retired ownership.
 
 The resolver must identify exactly one distinct paper. Repeated appearances of
 the same identity are deduplicated; zero or multiple identities refuse attachment.
@@ -287,7 +288,9 @@ replacement retains its existing native/legacy behavior. No new CLI flag is adde
 The desktop list context menu already offers **Supply PDF**/**Read another PDF**
 through `queue_view._supply_pdf`; its explicit URL/file choice still calls `repdf`.
 Adding or dropping a paper therefore preserves the current original, while that
-separate action deliberately changes it. First-original publication shares the
+separate action deliberately supplies or replaces it, without starting analysis.
+An exact known target keeps its version; different bytes create a new version.
+First-original publication shares the
 existing verified bytes, outbox and receipt transaction; exact retry cannot create
 another current version. Source verification is not scientific identity proof.
 
@@ -321,3 +324,41 @@ It also checks sanitized raw HTTP refusal, client-side validation and ownership
 refusal of a valid wrong-device operation. Two cases pass in2.09s pytest/6.1s
 bounded stages. This does not certify arbitrary scientific deletion/recovery,
 physical-device history or real owner data.
+
+## Supply an exact known original offline
+
+Newer source after candidate2021103 supports supplying a missing active original
+from an exact local file. `list-add --pdf` accepts only the known digest/size in
+this case; it does not turn a different file into a replacement. Explicit `repdf`
+from a file or URL also preserves the active target when the bytes match. A
+retired target is not a missing file: deliberate replacement creates a new
+incarnation even if its content matches a retained historical digest.
+
+`known_document_supply.prepare(source, path, *, request_id=None,
+expected_target=None)` requires a sealed `native_primary_publication.observe`
+result. It stages and verifies bytes for the observed desired target.
+`known_document_supply.run(prepared)` checks the workspace, paper lifetime,
+parent and exact desired operation again, then commits its applied binding and
+private retry receipt together. It creates no graph operation/outbox entry and
+retains the document version, citations and research. Cancellation/stale ownership
+can leave private verified bytes, but cannot bind them to the wrong paper. A
+receipt retry does not clear a later analysis failure or overwrite metadata edits.
+
+`BlobStore.import_file(manifest, source, *, check=lambda: None)` validates the
+full offered file before restarting owned partial staging. Its reservation is
+committed before copying; interruption retains one bounded indexed prefix.
+Existing final objects are verified and never overwritten. A corrupt final stays
+unavailable for separate operator repair. `begin(manifest, *,
+restore_missing=False, check=lambda: None)` preserves its default refusal of
+missing finalized bytes; explicit restoration is opt-in.
+`sync_document_actions.stage_file(store, path, *, restore_missing=False)` exposes
+that explicit path for reviewed native publication/legacy conversion. This is
+availability repair, not scientific proof that a selected PDF is the right paper.
+
+The desktop Supply PDF action now ends after the file operation. Analysis/retry
+is a separate user action; offline supply does not authorize an AI call or login.
+Known-original fixtures cover exact restoration/readback, rollback, stale owners,
+cancellation, wrong bytes, retries, quota, interrupted staging and deliberate
+replacement of retired content. `tests/test_pdf_supply_intent.py` checks file/URL
+success and cancellation without an AI follow-up. These source checks do not
+certify the delivered2021103 installers, live services or physical devices.

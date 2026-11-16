@@ -66,6 +66,25 @@ def reanchor(conn, paper_id: str) -> tuple[int, list[str]]:
     return placed, lost
 
 
+def _publish_native(observed, path, *, first_only, log, pdf_url=None):
+    from paper_daily import known_document_supply as supply
+    from paper_daily import native_primary_publication as native
+    from paper_daily.sync_blobs import BlobSourceMismatch
+
+    if not first_only:
+        try:
+            prepared = supply.prepare(observed, path)
+        except (supply.NoKnownOriginal, BlobSourceMismatch):
+            pass  # Explicit replacement may select a different or retired original.
+        else:
+            supply.run(prepared)
+            log("Known original supplied; version and citations retained")
+            return True
+    result = native.run(native.prepare(observed, path, pdf_url=pdf_url))
+    log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
+    return True
+
+
 def replace(
     paper_id: str, url: str | None = None, log=print, file: str | None = None,
     *, first_only: bool = False,
@@ -108,12 +127,10 @@ def replace(
     if file:
         if observed is not None:
             try:
-                result = native.run(native.prepare(observed, Path(file)))
+                return _publish_native(observed, Path(file), first_only=first_only, log=log)
             except (ValueError, OSError, sqlite3.Error) as exc:
                 log(f"PDF replacement refused: {exc}")
                 return False
-            log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
-            return True
         blob = Path(file).read_bytes()
         url = row["pdf_url"]
     else:
@@ -136,12 +153,12 @@ def replace(
             with tempfile.TemporaryDirectory(prefix="paperfact-repdf-") as temporary:
                 selected = Path(temporary) / "selected.pdf"
                 selected.write_bytes(blob)
-                result = native.run(native.prepare(observed, selected))
+                return _publish_native(
+                    observed, selected, first_only=first_only, log=log, pdf_url=url,
+                )
         except (ValueError, OSError, sqlite3.Error) as exc:
             log(f"PDF replacement refused: {exc}")
             return False
-        log(f"Versioned PDF saved ({result['size'] // 1024} KB); prior originals retained")
-        return True
 
     # A legacy request must not adopt enrollment that began during file/network
     # work, or overwrite an independently supplied first original.

@@ -1487,7 +1487,7 @@ class QueuePage(QWidget):
             self.analysis.setText("無法啟動背景工作；請確認安裝後重試。")
 
     def _supply_pdf(self, paper, source: str) -> None:
-        """Hand over a PDF no source had, then analyse the paper with it."""
+        """Supply or replace original bytes; analysis remains a separate user action."""
         if source == "url":
             url, ok = QInputDialog.getText(
                 self, "補 PDF", f"PDF 網址:\n{paper.title[:80]}"
@@ -1500,7 +1500,7 @@ class QueuePage(QWidget):
             if not path:
                 return
             args = ["repdf", paper.id, "--file", path]
-        self._start(args, then=lambda: self._start(["analyze", paper.id, "--retry"]))
+        self._start(args)
 
     @staticmethod
     def _pinned_first(rows: list, pin_order=()) -> list:

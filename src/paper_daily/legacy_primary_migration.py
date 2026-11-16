@@ -339,7 +339,7 @@ def prepare(
     )
     if registered is not None and _encoded(registered) != _encoded(registration):
         raise ValueError("Legacy migration cannot replace existing reader path ownership")
-    manifest = stage_file(store, document.path)
+    manifest = stage_file(store, document.path, restore_missing=True)
     ticket.check()
     if manifest.sha256 != document.sha256 or manifest.size != source_version[2]:
         raise ValueError("Staged bytes differ from the selected original")

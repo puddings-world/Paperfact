@@ -1,7 +1,8 @@
 # Explicit document transfer coordinator
 
-Status: private v0.5.0 library implementation. No desktop enrollment, background
-timer, hosted deployment, reader activation or automatic AI calls are enabled.
+Status: v0.5.0 transfer-library contract. Desktop enrollment and verified reader
+activation are tracked in [current status](status-0.5.0.md); hosted continuous
+synchronization remains undeployed. Transfers do not invoke AI.
 
 ## Boundaries
 
@@ -105,3 +106,14 @@ registration; explicit path changes invalidate old reader context. These paths
 are not synchronized. Registered managed documents now use the background desktop
 resolver and explicit version-switch controls; full app-writer enrollment remains
 separate from this library constructor.
+
+## Explicit retry of missing finalized bytes
+
+A requested `download(..., retry=True)` may restart bounded staging when a known
+finalized local file is absent. Workspace/device session authentication still
+precedes the blob request, and current target/session checks still precede binding.
+Ordinary `BlobStore.begin` retains its missing-final refusal. Neither retry nor
+local exact-byte supply overwrites a corrupt existing final. The original target,
+research and outbox stay unchanged during availability repair.
+`tests/test_missing_document_retry.py` exercises this through two isolated
+workspaces and the reference authority, including corrupt-file preservation.

@@ -18,7 +18,11 @@ reader/analysis first-original intake through the shared downloader and delivers
 the exact reader projection for text extraction. List/PDF intake also preserves
 existing originals across memberships, refuses ambiguous or retired ownership and
 passes first-original intent to the final publication boundary. These newer
-changes are not yet in2021103 installers. Remaining writer/runtime enrollment still requires work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
+changes are not yet in2021103 installers. Current source additionally repairs
+missing active originals from exact local bytes, retaining their version and
+citations; supplying PDFs no longer automatically starts AI. Explicit transfer
+retry can restore absent finalized bytes, while corrupt finals remain protected.
+Remaining writer/runtime enrollment still requires work. [Contract and acceptance limits](sync-operations.md#observed-native-pdf-replacement).
 
 ## Current deliverable
 

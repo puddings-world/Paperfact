@@ -9880,3 +9880,51 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   in16.07s (27.6s total), privacy9.2s. Docs60 passed24.22s (54.8s total),
   privacy23.9s. Ruff/whitespace passed. These are not historical full-suite results.
   No privacy rule, harness timeout, CPU limit or existing assertion was weakened.
+
+## 2026-11-16 exact known-original supply and missing-byte retry
+
+- Preserve the complete v0.5 target. This checkpoint closes an attachment
+  availability gap; it does not deploy hosted sync or certify installed devices.
+  Current delivered native/mobile candidates remain2021103.
+- Added the shared `known_document_supply.prepare/run` operation. Exact local
+  bytes restore an active desired original without a new document operation,
+  incarnation or outbox entry. Binding and the private retry receipt commit
+  together, guarded by workspace/paper/parent/desired ownership and verified bytes.
+  Retrying does not erase later failure state or newer metadata. Stale/cancelled
+  work may leave verified private cache bytes but cannot activate another target.
+- List PDF intake can supply the exact missing active original; a different or
+  retired original is still refused. Explicit file/URL repdf preserves a matching
+  active version; deliberate replacement of retired/different content remains a
+  new version. The existing desktop supply action no longer starts AI analysis.
+- Blob import pre-verifies the offered file, checks quota and commits its bounded
+  reservation before copying through existing indexed partial staging. An
+  interrupted copy retains one resumable prefix. Existing final objects are never
+  overwritten; corrupt finals remain unavailable for explicit operator repair.
+  Explicit authenticated transfer retry can restore absent finalized bytes.
+  Ordinary begin/stage behavior keeps its default missing-final guard.
+- Final focused selection:60 passed75.38s,79.2s Python stage/93.5s total;
+  privacy13.3s and Ruff0.7s. It covers the new shared operation, desktop action
+  intent, actual reference-authority missing/corrupt retry and existing blob tests.
+  This result covers the final indexed-partial implementation, superseding the
+  earlier unique-temporary-file prototype. No early prototype result is used as
+  evidence for this implementation.
+- Compatibility:24 passed87.74s,89.8s Python stage/104.4s total; privacy13.7s,
+  Ruff0.7s. Existing list attachment and native replacement files plus both
+  legacy-reader staging invalidation cases retain all prior assertions. The legacy
+  staging observer accepts/asserts the explicit restore flag without weakening its
+  root/generation checks. Report copies are under ignored build/known-original-evidence.
+- Existing two-logical-processor/25% CPU/below-normal/300s governor retained;
+  checks run sequentially. No owner research, live account/paid AI, real cloud
+  service, daily app or competing process was used or changed. Fixture source
+  checks are not frozen GUI/native-vault/IME or physical-device acceptance.
+- One existing operation test (two bound/unbound cases) joins the same per-OS
+  candidate stage; no new job or timeout increase. Future source selection52 is
+  not the48 cases observed in delivered2021103 installers. Critical14 unchanged.
+- Applied the canonical local-integration skill: private verified availability is
+  separate from replicated desired ownership, and metadata commit remains guarded.
+  This is evidence for an existing pattern, not a new global rule or skill install.
+  README, operation/transfer contracts, test map and current status distinguish
+  exact-byte supply, explicit replacement and undeployed continuous sync.
+- Default critical check:14 passed18.41s (26.3s total), privacy5.7s/Ruff0.3s.
+- Docs gate:60 passed9.59s (25.6s total), privacy11.5s/Ruff0.7s; whitespace clean.
+  These are scoped checks, not a historical full-suite or native-device pass.

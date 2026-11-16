@@ -235,7 +235,7 @@ def prepare(observation, path, *, request_id=None, pdf_url=None):
             raise ValueError("PDF source URL must be an HTTP(S) URL without credentials")
     with observation.actions.client.journal.transaction() as conn:
         observation.check_in(conn)
-    manifest = stage_file(observation.store, path)
+    manifest = stage_file(observation.store, path, restore_missing=True)
     with observation.actions.client.journal.transaction() as conn:
         observation.check_in(conn)
     return PreparedNativePrimary(

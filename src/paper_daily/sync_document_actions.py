@@ -11,12 +11,14 @@ from paper_daily.sync_documents import MAX_PDF_BYTES, validate_manifest, verify_
 from paper_daily.sync_journal import _identifier
 
 
-def stage_file(store: BlobStore, path: Path) -> BlobManifest:
+def stage_file(store: BlobStore, path: Path, *, restore_missing=False) -> BlobManifest:
     """Copy an explicitly selected file into owned immutable bytes, off the UI thread.
 
     This checks byte identity, not PDF readability. attach_document validates the
     actual PDF before any research intent is recorded. No URL fetching is allowed.
     """
+    if type(restore_missing) is not bool:
+        raise ValueError("Missing-object supply must be an explicit choice")
     if not isinstance(store, BlobStore):
         raise ValueError("An explicitly owned BlobStore is required")
     source = Path(path)
@@ -30,6 +32,9 @@ def stage_file(store: BlobStore, path: Path) -> BlobManifest:
                 raise ValueError("Selected file exceeds 150 MiB")
             digest.update(chunk)
     manifest = BlobManifest(digest.hexdigest(), size)
+    if restore_missing:
+        store.import_file(manifest, source)
+        return manifest
     state = store.begin(manifest)
     if not state["complete"]:
         # Read from the start so overlap is verified against the same digest.

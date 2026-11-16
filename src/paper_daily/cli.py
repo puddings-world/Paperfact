@@ -638,6 +638,27 @@ def _attach_pdf(result: dict, file: str) -> bool:
             if document.managed and fetch.document_current(document):
                 print(f"{paper_id} already has a versioned PDF; kept it")
                 return True
+            if document.managed and document.target is not None:
+                from paper_daily import known_document_supply as supply
+                from paper_daily import native_primary_publication as native
+                from paper_daily import store
+                from paper_daily.sync_blobs import BlobSourceMismatch
+
+                database = Path(store.DB_PATH).resolve()
+                source = native.observe(
+                    database, paper_id, current=lambda: Path(store.DB_PATH).resolve() == database,
+                )
+                try:
+                    prepared = supply.prepare(source, Path(file), expected_target=document.target)
+                except BlobSourceMismatch:
+                    print(
+                        "PDF differs from the known original; use workspace attachment "
+                        "synchronization or repdf for an explicit replacement"
+                    )
+                    return False
+                supply.run(prepared)
+                print(f"{paper_id} known original supplied; version and citations retained")
+                return True
             print(
                 f"{paper_id} has unavailable or ambiguous original ownership; "
                 "use workspace attachment synchronization, or repdf for an explicit replacement"

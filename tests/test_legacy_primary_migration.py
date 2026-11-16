@@ -536,8 +536,9 @@ def test_reader_change_during_maintained_staging_cannot_be_adopted(make, monkeyp
     original = migration.stage_file
     staged_bytes = []
 
-    def stage(store, path):
-        manifest = original(store, path)
+    def stage(store, path, *, restore_missing=False):
+        assert restore_missing is True
+        manifest = original(store, path, restore_missing=restore_missing)
         staged_bytes.append(manifest.sha256)
         if change == "reader-root":
             other = fixture.root / "staging-other-root"

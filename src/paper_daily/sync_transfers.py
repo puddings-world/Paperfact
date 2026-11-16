@@ -336,7 +336,10 @@ class DocumentTransfers:
                         except BlobError:
                             error_code = "repair_required"
                             raise
-                    reply = self.store.begin(manifest)
+                    reply = (
+                        self.store.begin(manifest, restore_missing=True)
+                        if retry else self.store.begin(manifest)
+                    )
                     offset = reply["offset"]
                     if not reply["complete"]:
                         if offset < manifest.size:

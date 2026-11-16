@@ -11,13 +11,17 @@ import os
 import re
 import sqlite3
 import stat
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 
 class BlobError(ValueError):
     """Invalid manifest, damaged content or inconsistent transfer state."""
+
+
+class BlobSourceMismatch(BlobError):
+    """The explicitly supplied file does not match the requested immutable bytes."""
 
 
 class BlobQuotaError(BlobError):
@@ -156,10 +160,15 @@ class BlobStore:
         if digest.hexdigest() != manifest.sha256:
             raise BlobError("Attachment hash does not match its manifest")
 
-    def begin(self, manifest: BlobManifest) -> dict:
+    def begin(self, manifest: BlobManifest, *, restore_missing=False, check=lambda: None) -> dict:
         """Reserve one object or resume it; identical calls share one reservation."""
+        if type(restore_missing) is not bool:
+            raise BlobError("Missing-object restoration must be explicit")
+        if not callable(check):
+            raise BlobError("Expected a cancellation/lifetime check")
         final, part = self._path(manifest), self._path(manifest, partial=True)
         with self._transaction() as conn:
+            check()
             row = self._row(conn, manifest)
             if not row:
                 reserved = conn.execute("SELECT COALESCE(SUM(size),0) FROM blobs").fetchone()[0]
@@ -173,7 +182,9 @@ class BlobStore:
                 conn.execute("UPDATE blobs SET complete=1 WHERE digest=?", (manifest.sha256,))
                 return {"offset": manifest.size, "complete": True}
             if row and row[1]:
-                raise BlobError("A finalized attachment is missing; restore it explicitly")
+                if not restore_missing:
+                    raise BlobError("A finalized attachment is missing; restore it explicitly")
+                conn.execute("UPDATE blobs SET complete=0 WHERE digest=?", (manifest.sha256,))
             if not part.exists():
                 with part.open("xb") as stream:
                     stream.flush()
@@ -238,6 +249,77 @@ class BlobStore:
                 self._verify(part, manifest)
                 os.replace(part, final)
             conn.execute("UPDATE blobs SET complete=1 WHERE digest=?", (manifest.sha256,))
+        return final
+
+    def import_file(self, manifest: BlobManifest, source: Path, *, check=lambda: None) -> Path:
+        """Explicitly supply exact bytes through bounded, indexed resumable staging.
+
+        Final objects are never overwritten. Only a verified full local source
+        authorizes restarting unfinished staging; interrupted prefixes retain
+        their reservation. This neither publishes research nor activates a reader.
+        """
+        if not callable(check):
+            raise BlobError("Expected a cancellation/lifetime check")
+        final = self._path(manifest)
+        incoming = Path(source)
+        check()
+        if not incoming.is_file() or incoming.stat().st_size != manifest.size:
+            raise BlobSourceMismatch("Selected file size differs from the known original")
+        with self._transaction() as conn:
+            check()
+            if self._row(conn, manifest) is None:
+                reserved = conn.execute("SELECT COALESCE(SUM(size),0) FROM blobs").fetchone()[0]
+                if reserved + manifest.size > self.quota_bytes:
+                    raise BlobQuotaError("Attachment store quota would be exceeded")
+        try:
+            self._verify(incoming, manifest)
+        except BlobError as exc:
+            raise BlobSourceMismatch("Selected file does not match the known original") from exc
+        check()
+        # Commit the reservation before writing. A killed process leaves a known,
+        # bounded partial, not an unindexed per-attempt temporary file.
+        state = self.begin(manifest, restore_missing=True, check=check)
+        if state["complete"]:
+            check()
+            return final
+        with self._transaction() as conn:
+            check()
+            final = self._path(manifest)
+            if self._row(conn, manifest) is None:
+                raise BlobError("Local supply reservation changed; retry")
+            part = self._path(manifest, partial=True)
+            if final.exists():
+                self._verify(final, manifest)
+            else:
+                if part.exists() and incoming.samefile(part):
+                    raise BlobError("Supply an external file, not the active partial itself")
+                # Unlink only the owned staging name, never truncate an inode
+                # that might also be linked to the caller's external original.
+                with incoming.open("rb") as stream:
+                    part.unlink(missing_ok=True)
+                    with part.open("xb") as output:
+                        total = 0
+                        while chunk := stream.read(1024**2):
+                            check()
+                            total += len(chunk)
+                            if total > manifest.size:
+                                raise BlobSourceMismatch("Selected file changed during supply")
+                            output.write(chunk)
+                        output.flush()
+                        os.fsync(output.fileno())
+                try:
+                    self._verify(part, manifest)
+                except BlobError as exc:
+                    raise BlobSourceMismatch("Selected file changed during supply") from exc
+                check()
+                try:
+                    os.link(part, final)
+                except FileExistsError:
+                    self._verify(final, manifest)
+            conn.execute("UPDATE blobs SET complete=1 WHERE digest=?", (manifest.sha256,))
+            # A locked private partial can remain; verified final bytes are usable.
+            with suppress(OSError):
+                part.unlink(missing_ok=True)
         return final
 
     def verified_path(self, manifest: BlobManifest) -> Path:
