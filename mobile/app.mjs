@@ -1,4 +1,5 @@
 import {browserPairingPanel} from './browser-pairing.mjs';
+import {BrowserStorageProtection,storageProtectionPanel} from './storage-protection.mjs';
 import {readWorkspaceHint,rememberWorkspace,forgetWorkspaceHint} from './workspace-startup.mjs';
 import { pinBadge } from './list-pins.mjs';
 import {parsePositionJSON} from './position-json.mjs';
@@ -53,6 +54,7 @@ let deckURLs = [];
 function clearDeckURLs() { deckURLs.forEach(url => URL.revokeObjectURL(url)); deckURLs = []; }
 let switchingWorkspace = false, connectionDialog = null;
 let language = navigator.language.toLowerCase().startsWith('zh') ? 'zh-TW': 'en', t = translator(language);
+const browserStorage=new BrowserStorageProtection();
 let noticeProgress=null;
 let engine, store, state, view = new ReaderView(), notice = 'demoHelp', busy = false, isError = false,
 demo = true, connected = false, pdfURL = null, pdfHash = null, renderSerial = 0, draftTimer;
@@ -787,6 +789,7 @@ function prepareReadingOffline(paperId) {
   },{working:true});
 }
 function renderPdf(panel, paper) {
+  const owner=engine;
   const target = documentTarget(state, paper.id),
   file = target && state.files[target.payload.sha256];
   panel.append(el(
@@ -841,7 +844,9 @@ function renderPdf(panel, paper) {
     clearPdf();
     render();
   }): null
-  )
+  ),
+  storageProtectionPanel(el,{controller:browserStorage,t,
+    current:()=>owner===engine&&view.paper===paper.id&&!switchingWorkspace}).element
   ));
   if(pdfURL && pdfHash === target?.payload.sha256) panel.append(el(
   'object',

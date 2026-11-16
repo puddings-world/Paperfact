@@ -433,3 +433,29 @@ Object.assign(messages["zh-TW"], {
   "reading_sources_unavailable": "\u7f3a\u5c11\u6709\u6548\u4f86\u6e90\u8cc7\u6599\uff0c\u8acb\u5148\u540c\u6b65\u4e26\u6aa2\u67e5\u539f\u6587\u3002",
   "reading_too_large": "\u6b64\u6b21\u95b1\u8b80\u8cc7\u6599\u8d85\u904e\u672c\u6a5f\u6e96\u5099\u7bc4\u570d\uff0c\u8acb\u5206\u5225\u4e0b\u8f09\u6240\u9700\u6a94\u6848\u3002"
 });
+
+Object.assign(messages["en"], {
+  "storageTitle": "Browser offline storage",
+  "storageProtect": "Protect offline storage",
+  "storageEnabled": "Storage protection enabled",
+  "storageChecking": "Checking browser storage...",
+  "storageRequesting": "Waiting for the browser...",
+  "storagePersistent": "This browser reports persistent storage for this site.",
+  "storageTemporary": "Storage is best effort; the browser may remove cached research.",
+  "storageUnsupported": "This browser does not expose storage protection. Keep a research backup.",
+  "storageUnknown": "Storage protection could not be confirmed. You can retry.",
+  "storageHelp": "For this site in this browser; does not download files. Keep a backup: clearing site data still removes local work."
+});
+
+Object.assign(messages["zh-TW"], {
+  "storageTitle": "\u700f\u89bd\u5668\u96e2\u7dda\u5132\u5b58",
+  "storageProtect": "\u4fdd\u7559\u96e2\u7dda\u5132\u5b58\u8cc7\u6599",
+  "storageEnabled": "\u5df2\u555f\u7528\u5132\u5b58\u4fdd\u7559",
+  "storageChecking": "\u6b63\u5728\u78ba\u8a8d\u700f\u89bd\u5668\u5132\u5b58\u72c0\u614b\u2026",
+  "storageRequesting": "\u6b63\u5728\u7b49\u5f85\u700f\u89bd\u5668\u56de\u61c9\u2026",
+  "storagePersistent": "\u6b64\u700f\u89bd\u5668\u56de\u5831\u5df2\u70ba\u672c\u7db2\u7ad9\u555f\u7528\u6301\u4e45\u5132\u5b58\u3002",
+  "storageTemporary": "\u76ee\u524d\u70ba\u4e00\u822c\u5132\u5b58\uff1b\u700f\u89bd\u5668\u53ef\u80fd\u79fb\u9664\u672c\u6a5f\u5feb\u53d6\u7814\u7a76\u8cc7\u6599\u3002",
+  "storageUnsupported": "\u6b64\u700f\u89bd\u5668\u672a\u63d0\u4f9b\u5132\u5b58\u4fdd\u7559\u529f\u80fd\uff0c\u8acb\u4fdd\u7559\u7814\u7a76\u5099\u4efd\u3002",
+  "storageUnknown": "\u76ee\u524d\u7121\u6cd5\u78ba\u8a8d\u5132\u5b58\u4fdd\u7559\u72c0\u614b\uff0c\u53ef\u518d\u6b21\u5617\u8a66\u3002",
+  "storageHelp": "\u9069\u7528\u672c\u700f\u89bd\u5668\u4e2d\u7684\u6574\u500b\u7db2\u7ad9\uff0c\u4e0d\u6703\u4e0b\u8f09\u6a94\u6848\u3002\u8acb\u4fdd\u7559\u5099\u4efd\uff1b\u6e05\u9664\u7db2\u7ad9\u8cc7\u6599\u4ecd\u6703\u79fb\u9664\u672c\u6a5f\u5167\u5bb9\u3002"
+});

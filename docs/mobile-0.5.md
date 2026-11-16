@@ -440,3 +440,57 @@ when later delivery fails. Unsupported services stop with local work preserved.
 Private recovery v3 retains these observations without activating archived devices
 or old operations. The prior delivered v29 candidate remains unchanged.
 See [migration, API and acceptance limits](sync-http.md#mobile-verified-flow-and-private-recovery).
+
+
+## Browser offline storage protection
+
+In **Original PDF**, the compact **Browser offline storage** section shows the
+browser's current retention status. Opening it only calls the read-only
+`navigator.storage.persisted()`. Choose **Protect offline storage** to explicitly
+request `navigator.storage.persist()`; repeated activation shares one pending
+request, with a disabled button and visible waiting text. No AI login, sync,
+download, database mutation or upload is part of this action.
+
+This is origin-wide storage permission for this site in this browser, not a
+per-paper offline pin, a verified file closure or a backup. It is separate from
+**Prepare offline reading**. Clearing site data, user removal and storage damage
+can still lose local work. Keep a research backup and verify the files you need
+before disconnecting. The behavior follows the
+[WHATWG Storage Standard](https://storage.spec.whatwg.org/#dom-storagemanager-persist).
+
+| State shown | Meaning / available action |
+|---|---|
+| Persistent | The browser reports persistent storage; the request button is disabled. Reopening re-reads actual browser state rather than trusting a saved grant. |
+| Best effort | The browser returnedfalse; cached research can be evicted. The explicit request remains available. This is not a failed PDF verification. |
+| Unsupported | Required APIs are unavailable; the request button is disabled, while reading remains independent. |
+| Unknown | The API failed or returned invalid data; no grant is inferred, raw errors are not displayed, and explicit retry remains possible. |
+
+An explicit request invokes the browser synchronously from the click, superseding
+an older status query. A late old query cannot overwrite a grant. Closing/switching
+panels suppresses stale UI updates; an already admitted origin-wide request may
+still complete in the browser. It cannot be canceled or revoked through this API,
+so no misleading per-paper toggle is offered. It is not an authorization to
+connect, upload research or collect analytics.
+
+![Browser storage protection, English, actual native denial](images/mobile-storage-protection-en.png)
+
+![Browser storage protection, Traditional Chinese, actual native denial](images/mobile-storage-protection-zh-TW.png)
+
+The [recorded real-browser journey](testing/mobile-storage-protection-20261116.json)
+uses a fresh isolated headless browser, actual native persistence methods and real
+IndexedDB/service-worker reloads. It observed one explicit request, actualfalse,
+`best_effort`, and zero requests after offline reopening. Research metadata hashes,
+PDF count and outbox stayed identical. Both languages fit390px with44px request
+targets and no console errors. Successful grant, old-query races, unavailable APIs
+and denial/retry are additional simulated API/DOM cases. Physical Safari/iOS/
+Android approval, installed PWA durability, quota pressure and hosted delivery remain
+gates; no physical persistence guarantee is claimed.
+
+Internal APIs: `BrowserStorageProtection(storage?)` provides `snapshot()`,
+`inspect()` (read-only shared query), and `request()` (explicit shared request).
+`storageProtectionPanel(el, {controller, t, current})` supplies the existing UI shell
+and returns `element`, `status`, `button`, `refresh()`, `request()` and `dispose()`.
+No credential or remembered grant is written into research or recovery exports.
+Raw source/dev shellv36 includes the new module; exported cache identities still
+follow content automatically. This UI is newer than the linked1875db5 mobile
+artifact and has not been deployed.

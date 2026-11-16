@@ -147,7 +147,7 @@ jobs:
         timeout-minutes: 2
         shell: bash
         run: |
-          node --test --test-concurrency=1 tests/test_mobile_artifact.mjs
+          node --test --test-concurrency=1 tests/test_mobile_artifact.mjs mobile/tests/storage-protection.test.mjs
           node scripts/build_mobile.mjs --output build/mobile-web
           node scripts/build_mobile.mjs --verify build/mobile-web
 

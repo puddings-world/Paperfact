@@ -202,8 +202,14 @@ async function offlineReadingMainHook() {
     const status=await evaluate('document.querySelector("#notice-text")?.textContent');
     throw Error('Offline reading timed out: '+label+'; status='+status);
   };
-  const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');try{const v=await s.read();return {files:Object.keys(v.files).length,outbox:v.outbox.length};}finally{s.close();}})()`;
+  const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');try{const v=await s.read(),meta={...v};delete meta.files;delete meta.artifactFiles;delete meta.selection;const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(meta)));return {files:Object.keys(v.files).length,outbox:v.outbox.length,metadata_sha256:[...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('')};}finally{s.close();}})()`;
   await send('Network.enable');
+  await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    window.__storageRequests=0;
+    if(typeof navigator.storage?.persist==='function') {
+      const native=navigator.storage.persist.bind(navigator.storage);
+      Object.defineProperty(navigator.storage,'persist',{value:()=>{window.__storageRequests++;return native();}});
+    }`});
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/index.html`});
   await wait('!!document.querySelector(".paper-card")','demo startup');
@@ -213,16 +219,37 @@ async function offlineReadingMainHook() {
   await wait(`(async()=>{const {translator}=await import('./i18n.mjs');return document.querySelector('[role=status]')?.textContent===translator(document.documentElement.lang)('reading_ready');})()`,'verified completion');
   const before=await evaluate(stateExpression);
   if(before.files!==1||before.outbox!==0)throw Error('Preparation changed research or omitted the PDF');
+  const storageSettled=`(async()=>{const {translator}=await import('./i18n.mjs');return document.querySelector('[data-storage-status]')?.textContent!==translator(document.documentElement.lang)('storageChecking');})()`;
+  await wait(storageSettled,'storage inspection');
+  const storageBefore=await evaluate(`({calls:window.__storageRequests,state:document.querySelector('[data-storage-state]')?.dataset.storageState})`);
+  if(storageBefore.calls!==0)throw Error('Opening/preparing research requested browser permission');
+  if(!['persistent','unsupported'].includes(storageBefore.state)) {
+    await evaluate(`document.querySelector('[data-storage-request]').click();document.querySelector('[data-storage-request]').click()`);
+    await wait(`document.querySelector('[data-storage-request]')?.getAttribute('aria-busy')==='false'`,'storage request');
+  }
+  const storageProtection=await evaluate(`(async()=>({calls:window.__storageRequests,
+    state:document.querySelector('[data-storage-state]').dataset.storageState,
+    actual:typeof navigator.storage?.persisted==='function'?await navigator.storage.persisted():null}))()`);
+  const expectedRequests=['persistent','unsupported'].includes(storageBefore.state)?0:1;
+  if(storageProtection.calls!==expectedRequests || storageProtection.actual===true&&storageProtection.state!=='persistent' ||
+    storageProtection.actual===false&&storageProtection.state!=='best_effort')throw Error('Storage request did not render actual browser truth');
+  if(JSON.stringify(await evaluate(stateExpression))!==JSON.stringify(before))throw Error('Storage permission changed research cache/outbox');
   const viewports=[];
   const output=process.env.PAPERFACT_TEST_SCREENSHOTS;
   if(output)await mkdir(output,{recursive:true});
   for(const language of ['en','zh-TW']){
     await evaluate(`(async()=>{const {translator}=await import('./i18n.mjs');[...document.querySelectorAll('header button')].find(n=>n.textContent===translator(document.documentElement.lang)('settings')).click();const select=document.querySelector('dialog select');select.value='${language}';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
     await evaluate('window.scrollTo(0,0)');
-    const metrics=await evaluate(`({language:document.documentElement.lang,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,prepareHeight:document.querySelector('#prepare-reading-offline').getBoundingClientRect().height})`);
-    if(metrics.language!==language||metrics.scrollWidth>metrics.width||metrics.prepareHeight<44)throw Error('Offline controls overflow or miss the touch target');
+    const metrics=await evaluate(`({language:document.documentElement.lang,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,prepareHeight:document.querySelector('#prepare-reading-offline').getBoundingClientRect().height,storageHeight:document.querySelector('[data-storage-request]').getBoundingClientRect().height})`);
+    if(metrics.language!==language||metrics.scrollWidth>metrics.width||metrics.prepareHeight<44||metrics.storageHeight<44)throw Error('Offline controls overflow or miss the touch target');
     viewports.push(metrics);
-    if(output){const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(output,'offline-reading-'+language+'.png'),Buffer.from(shot.data,'base64'));}
+    if(output){
+      const shot=await send('Page.captureScreenshot',{format:'png'});
+      await writeFile(join(output,'offline-reading-'+language+'.png'),Buffer.from(shot.data,'base64'));
+      const clip=await evaluate(`(()=>{const r=document.querySelector('.storage-protection').getBoundingClientRect();return {x:r.x+scrollX,y:r.y+scrollY,width:r.width,height:r.height,scale:1};})()`);
+      const detail=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});
+      await writeFile(join(output,'storage-protection-'+language+'.png'),Buffer.from(detail.data,'base64'));
+    }
   }
   await evaluate('navigator.serviceWorker.ready.then(()=>true)');
   // A new worker controls the next document; do not force-claim a live reader.
@@ -237,7 +264,9 @@ async function offlineReadingMainHook() {
   const persisted=await evaluate(`(async()=>{const {IndexedStore}=await import('./store.mjs');const {Engine}=await import('./engine.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');const e=new Engine(s,{});try{const v=await s.read();const id=Object.values(v.entities).find(x=>x.operation.entity_type==='paper').operation.entity_id;const r=await e.prepareOffline(id);return {ready:r.ready,verified:r.verified_targets};}finally{e.disconnect();s.close();}})()`);
   const after=await evaluate(stateExpression);
   if(!persisted.ready||persisted.verified!==1||after.files!==1||after.outbox!==0||browserErrors.length)throw Error('Offline verification failed or changed research');
-  const result={status:'passed',journey:'offline-reading',artifact:process.env.PAPERFACT_TEST_ARTIFACT_ID??null,before,persisted,after,viewports,errors:browserErrors,physical_device_verified:false};
+  const reopenStorageRequests=await evaluate('window.__storageRequests');
+  if(reopenStorageRequests!==0)throw Error('Offline reopening requested storage permission');
+  const result={status:'passed',journey:'offline-reading',artifact:process.env.PAPERFACT_TEST_ARTIFACT_ID??null,before,persisted,after,storageProtection,reopenStorageRequests,viewports,errors:browserErrors,physical_device_verified:false};
   if(output)await writeFile(join(output,'offline-reading-result.json'),JSON.stringify(result,null,2)+'\n');
   console.log('PASS actual offline reading UI, repeated activation, EN/ZH touch layout, new offline document and transport-free cached PDF verification');
 }

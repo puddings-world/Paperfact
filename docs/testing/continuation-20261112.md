@@ -9624,3 +9624,51 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Final integration gate:critical14 passed13.65s,21.2s including privacy/Ruff;
   docs60 passed5.38s,11.4s including privacy/Ruff. Exact scoped gates, no historical
   full run. No post-validation executable behavior changed; whitespace review clean.
+
+
+## 2026-11-16 mobile browser storage-protection action
+
+- Source inspection found offline preparation verifies bytes but does not expose
+  browser persistence. Verified the current WHATWG Storage Standard: persisted()
+  observes state; persist() requests origin-wide persistent storage, not one paper.
+  Added a compact status/action inside Original PDF, using existing visual tokens,
+  native button semantics,44px target and no new motion/dependency or permission
+  prompt at startup. Opening/preparing/reopening only performs read-only inspection.
+- Shared controller admits one explicit request synchronously from the click;
+  old queries cannot overwrite newer truth. Current browser state is re-read after
+  reopening; no grant is serialized into research, account, recovery or analytics.
+  API denial, unsupported, unknown/error and persistent states are separate.
+  Late closed/detached/workspace-panel delivery is suppressed; an admitted
+  origin-wide browser request itself is not cancelable. Reading stays independent.
+- First actual browser screenshot revealed question marks in new Chinese values:
+  the temporary shell-input encoding had replaced literal Chinese before JSON
+  escaping, although key-parity tests passed. Corrected the source via ASCII
+  Unicode escapes and added exact/Han/no-question-mark assertions. Visually
+  inspected corrected actual Chinese crop. No old test was weakened or removed.
+- Final targeted mobile controller+transport selection:24 passed8.734s governed
+  total, including11 new storage cases and existing transport/shell/module checks.
+  Existing artifact integrity8 passed10.937s, including exact new module closure,
+  content-derived cache identity and older numeric-cache compatibility.
+- Extended existing real-browser offline journey without removing earlier checks.
+  It wraps actual native persist(), observesfalse/best_effort and exactly one
+  explicit call, verifies unchanged canonical research metadata hashes/PDF/outbox,
+  then reopens offline with zero permission calls and no transport. Latest source
+  run passed6.938s under the same two-processor/25% governor. Earlier source runs
+  overlap; they are not extra unique coverage or physical-device proof.
+  Both languages fit390px, request target44px, no console errors. Screenshots and
+  closed result are recorded under docs/images and the dated testing JSON.
+- New11 cases join only the curated mobile release set and existing Windows
+  artifact step (same two-minute limit); regular critical14 is unchanged. Raw
+  development shellv35 becomesv36 for the new module; exports remain content-derived.
+- Storage permission is not per-paper pinning, file verification, quota management,
+  a backup, cross-device sync or proof against user/OS deletion. Successful grant
+  is simulated locally; headless denial is actual. Safari/iOS/Android approval,
+  installed PWA durability and hosted delivery remain open. No native rebuild,
+  deployment, owner research, credentials, app restart, tag/release or telemetry.
+- Frontend-motion skill applied through existing design, native controls and actual
+  browser captures; no new animation needs a motion library. Harvest evidence stays
+  project-local: bilingual key parity alone did not prove translated text or paint.
+
+- Final integration:critical14 passed12.45s,22.5s including privacy/Ruff;
+  docs60 passed3.99s,8.7s including privacy/Ruff. Existing CPU/time governor,
+  one local check at a time; no historical full suite or native installer build.

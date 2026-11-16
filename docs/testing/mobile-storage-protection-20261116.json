@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "journey": "offline-reading",
+  "artifact": null,
+  "before": {
+    "files": 1,
+    "outbox": 0,
+    "metadata_sha256": "fa96f9b22b7f19f6e227814e6bb3425ea0a5bed2718233c70c2f852bdb21d8c0"
+  },
+  "persisted": {
+    "ready": true,
+    "verified": 1
+  },
+  "after": {
+    "files": 1,
+    "outbox": 0,
+    "metadata_sha256": "fa96f9b22b7f19f6e227814e6bb3425ea0a5bed2718233c70c2f852bdb21d8c0"
+  },
+  "storageProtection": {
+    "calls": 1,
+    "state": "best_effort",
+    "actual": false
+  },
+  "reopenStorageRequests": 0,
+  "viewports": [
+    {
+      "language": "en",
+      "width": 390,
+      "scrollWidth": 390,
+      "prepareHeight": 45.59375,
+      "storageHeight": 44
+    },
+    {
+      "language": "zh-TW",
+      "width": 390,
+      "scrollWidth": 390,
+      "prepareHeight": 45.59375,
+      "storageHeight": 44
+    }
+  ],
+  "errors": [],
+  "physical_device_verified": false
+}

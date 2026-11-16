@@ -88,3 +88,10 @@ header button:active:not(:disabled) { background:var(--line); }
 .citation-analysis summary { min-height: 44px; padding: 10px 0; cursor: pointer; font-weight: 600; }
 .citation-analysis summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 4px; }
 .citation-analysis blockquote { margin: 12px 0; padding-left: 12px; border-left: 3px solid var(--gold); white-space: pre-wrap; }
+
+.storage-protection { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+.storage-protection h3 { margin:0 0 8px; font-size:16px; }
+.storage-protection p { margin:8px 0; }
+.storage-protection button { min-height:44px; }
+.storage-protection button:active:not(:disabled) { opacity:.75; }
+.storage-protection button:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }

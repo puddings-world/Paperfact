@@ -193,6 +193,7 @@ RELEASE_JOURNEYS = {
 }
 RELEASE_MOBILE = (
     "domain", "engine", "transport", "draft", "artifacts", "workspace-startup", "plain-note",
+    "storage-protection",
 )
 
 

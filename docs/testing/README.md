@@ -975,3 +975,18 @@ existing category/path/reparse and native original-owner checks. This is the exp
 legacy CLI cleaner, not automatic blob-history GC, browser quota eviction or a
 hostile/concurrent external filesystem guarantee. The current1875db5 downloadable
 candidates predate this source fix; a future build must verify it on each OS.
+
+
+### Browser offline persistence
+
+`mobile/tests/storage-protection.test.mjs` has11 small behavior cases: read-only
+inspection, explicit single-flight requests, synchronous admission, old-query
+refusal, denial/error/retry, malformed/unavailable APIs, current revocation,
+bilingual busy/disabled UI, closed/detached/workspace-stale delivery and actual Han
+translation text. The existing offline browser journey additionally wraps the real
+native API to count calls without faking its result, compares canonical research
+metadata fingerprints and reopens cached PDFs with transport disabled. It keeps
+all prior readiness, no-outbox and viewport assertions. Native headless denial
+was observed; physical approval/retention remains unverified. The default critical
+14 cases stay unchanged; these11 cases join the curated mobile release selection
+and the existing Windows mobile-artifact step, with its same two-minute budget.
