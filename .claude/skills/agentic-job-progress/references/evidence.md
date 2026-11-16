@@ -29,3 +29,22 @@
   machine-identifying paths are captured in the skill. No telemetry upload.
 - Promotion: only local project evidence; no global installation or cross-project
   reuse claim.
+
+
+## Queued delivery of verified offline files
+
+- Status: validated-local; Paperfact, 2026-11-16. No global promotion.
+- Trigger: a real isolated PDF replaced after worker completion still produced a
+  new ready timestamp. The regression failed before the delivery guard.
+- Invariant: successful byte verification is historical evidence until the exact
+  result, source/store metadata and native file proofs survive queued delivery.
+- Implementation: `workspace_offline_verification.OfflineVerification.for_delivery`
+  and `desktop/offline_dialog.py`. Metadata transitions receive at most one extra
+  worker-side source validation; native file revisions are never ignored.
+- Verification: four affected offline service/dialog files pass71 cases in152.20s
+  (158.4s including privacy/Ruff), under two processors/25% CPU. Cases include
+  after-worker PDF/research/storage changes, clearing earlier success, retry,
+  resumed proofs, no delivery SQL/rehashing, active-worker close and downloads.
+- Limits: scoped source/widget evidence, not frozen GUI, hosted synchronization,
+  physical Mac/phone, or protection against forged filesystem/kernel metadata.
+  No real research, credentials, model calls or telemetry upload.

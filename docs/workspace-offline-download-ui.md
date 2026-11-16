@@ -20,7 +20,11 @@ actual bytes for the current file when its size is available. It is not a total-
 A download clears an earlier verification timestamp. Cancellation, connection replacement,
 workspace changes and source replacement cannot produce a late success badge. Closing waits for
 both download and nested connection workers at safe boundaries. Unsent parent drafts and table
-selection are preserved. A disconnected user sees an explicit connection action, never an
+selection are preserved. Native verification proofs and database/storage versions
+are checked again at queued delivery, so changes after the worker finishes cannot
+create a fresh ready timestamp. Invalidated rows return to Not verified; retry does
+not delete originals or saved transfer progress.
+A disconnected user sees an explicit connection action, never an
 unrequested login or background transfer.
 
 Fixture evidence covers fake sessions and actual `SyncSession`/PDF/deck downloads, existing

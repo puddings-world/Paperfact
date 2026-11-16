@@ -25,7 +25,11 @@ Capture document/list/view context and a user-interaction generation when a job
 starts. Visually highlight its notice immediately. Return to the result only if
 the context and interaction generation are unchanged and no newer job superseded
 it; otherwise offer an explicit result action. Validate that the destination still
-exists. Keep typing focus in editable controls. Dialogs can mirror the shared
+exists. When success depends on verified files, retain the native verification
+observation through queued delivery and recheck it immediately before presenting
+success. Do not turn a worker's old ready dictionary into a fresh verification
+claim. Keep expensive parsing/hashing off the UI thread and invalidate stale badges.
+Keep typing focus in editable controls. Dialogs can mirror the shared
 notice so modal surfaces do not obscure it.
 
 Keep session history bounded, and keep progress reporting separate from telemetry.

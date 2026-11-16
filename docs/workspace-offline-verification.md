@@ -14,6 +14,17 @@ Source, parent, workspace or applied-manifest changes require a new verification
 mutated or missing files invalidate proof reuse. Returned dictionaries cannot
 change internal proof authority. Repeated concurrent activation is rejected.
 
+The dialog retains the session through queued worker completion and calls
+`for_delivery(result)` immediately before rendering. This checks exact result
+identity/content, database/WAL and storage-index versions, and native file proofs.
+No SQL, PDF parsing or byte hashing runs on the GUI thread. Worker-side source
+validation permits at most one additional check if its metadata observation changes;
+repeated changes fail explicitly. Replacing a PDF, editing research or changing
+storage ownership after worker completion invalidates the display. Existing ready
+rows and timestamps are cleared, the session is discarded and explicit retry stays
+available. These are local observations, not a guarantee about changes after display
+or a hostile filesystem. The returned report remains a dated selected snapshot.
+
 A pass defaults to 256 MiB, 256 assets and a soft 10-second expensive-verification
 budget. The entire selected closure is bounded to 8 GiB / 4,096 distinct assets
 and the existing 100-paper selection limit. Native PDF/closure verification is

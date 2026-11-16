@@ -138,3 +138,56 @@ def test_close_waits_for_native_stage_and_cannot_leave_a_ready_flag(window, monk
     wait(app, lambda: view.disposed)
     assert view.last_verified_at is None and view._verification_session is None
     assert not service.pins()
+
+
+@pytest.mark.parametrize("change", ["pdf", "research", "ownership"])
+def test_completed_worker_cannot_deliver_stale_offline_success(
+    window, prepared, monkeypatch, change
+):
+    import sqlite3
+
+    app, view, service, local = window
+    _service, client, _local, _portable, store, manifest, data = prepared
+    assert view.verify()
+    wait(app, lambda: not view.busy)
+    assert view.last_verified_at is not None and view._plan["ready"]
+    original = view._finished
+    observed = []
+    path = store.verified_path(manifest)
+
+    def changed_before_delivery(worker, kind):
+        if kind == "verify" and not observed:
+            assert worker.error is None and worker.result["ready"]
+            observed.append(True)
+            if change == "pdf":
+                path.write_bytes(b"replaced after verification")
+            elif change == "research":
+                service.set_pins([local], True)
+            else:
+                with sqlite3.connect(store.root / "index.sqlite") as conn:
+                    conn.execute("UPDATE transfer_binding SET research_path=?", ("changed-owner",))
+        return original(worker, kind)
+
+    monkeypatch.setattr(view, "_finished", changed_before_delivery)
+    assert view.verify()
+    wait(app, lambda: not view.busy)
+    assert observed == [True]
+    assert view.last_verified_at is None
+    assert view.status.text() == view.t["snapshot_changed"]
+    assert view._verification_session is None
+    assert not view._plan["ready"]
+    assert view.table.item(0, 1).text() == "Not verified"
+    assert view.verify_button.isEnabled()
+    if change == "pdf":
+        path.write_bytes(data)
+        monkeypatch.setattr(view, "_finished", original)
+        assert view.verify()
+        wait(app, lambda: not view.busy)
+        assert view.last_verified_at is not None and view._plan["ready"]
+    elif change == "research":
+        assert service.pins() == [{"paper_id": local, "portable_id": prepared[3]}]
+    else:
+        with sqlite3.connect(store.root / "index.sqlite") as conn:
+            row = conn.execute("SELECT research_path FROM transfer_binding").fetchone()
+            assert row == ("changed-owner",)
+    assert client.journal.path.exists()

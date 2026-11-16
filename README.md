@@ -412,6 +412,9 @@ The 0a64ec7 native candidate passes this extended frozen CLI acceptance on all t
 Legacy storage cleanup also preserves device-local offline selections and retained
 managed-original owners, with current-state checks before deletion; see
 [storage retention](docs/toolchain.md#caching-and-disk).
+Selected-file offline checks now revalidate their native observations at desktop
+delivery, rejecting files or research changed after background verification;
+[behavior and limits](docs/workspace-offline-verification.md).
 
 
 New candidate builds verify guarded-history sync and duplicate-listener refusal

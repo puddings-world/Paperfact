@@ -4,6 +4,7 @@ Downloads are explicit, selected and use an injected in-memory authenticated ses
 This dialog never syncs metadata, opens an AI connection or edits reader drafts.
 A verified result applies to the selected current manifests, never the workspace.
 """
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -450,12 +451,29 @@ class OfflineDialog(QDialog):
         valid = self._check_context()
         download_current = (kind != 'download' or self._download_current())
         self._download_context = None
+        if (kind == 'verify' and valid and not self.disposed and not self._closing
+                and not worker.error and not worker.ticket.cancelled
+                and not worker.result.get('unavailable')):
+            try:
+                worker.result = self._verification_session.for_delivery(worker.result)
+            except (OSError, ValueError):
+                worker.error = 'snapshot_changed'
+                self.last_verified_at = None
         if not self.disposed and not self._closing and valid:
             if not download_current:
                 self.status.setText(self.t['connection_changed'])
             elif worker.error:
                 if kind == 'verify' and worker.error in ('snapshot_changed', 'changed'):
                     self._verification_session = None
+                    if self._plan is not None:
+                        stale = deepcopy(self._plan)
+                        stale['ready'] = False
+                        for paper in stale['papers']:
+                            paper['ready'] = False
+                            for item in (paper['pdf'], *paper.get('artifacts', [])):
+                                if item['state'] == 'verified':
+                                    item['state'] = 'unchecked'
+                        self._show_result(stale, verified=False)
                 fallback = 'download_failed' if kind == 'download' else 'failure'
                 self.status.setText(self.t.get(worker.error, self.t[fallback]))
                 if worker.error == 'changed':

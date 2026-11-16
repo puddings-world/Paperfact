@@ -9255,3 +9255,34 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
 - Reviewed the canonical harvest workflow: this is a focused packaging correction
   recorded here, with no new global skill rule or generated skill-copy edits.
   GCP deployment details and hosted/physical convergence gates remain open.
+
+
+## 2026-11-16 queued offline-verification delivery
+
+- Reproduced actual PDF replacement after worker completion but before GUI
+  delivery: the old dialog incorrectly assigned a fresh ready timestamp. The
+  baseline stopped at the new failing PDF case (existing3 passed).
+- Retained native verification proofs and database/WAL/storage-index observations
+  through delivery. The GUI checks exact result identity/content and current
+  native observations without SQL, PDF parsing or byte hashing. Stale delivery
+  clears earlier ready rows/timestamps, discards the session and permits explicit
+  retry; originals, offline intent and downloaded bytes are not deleted.
+- A first strict metadata candidate rejected valid deck verification when the
+  database's native revision advanced across a read-only source check. Captured
+  diagnostics showed the native revision changed while other observed database
+  attributes and file proofs stayed equal. Do not infer an exact OS cause from
+  this observation. The worker now permits one additional complete source/store
+  validation, retaining the strong native revision guard and failing repeated
+  changes. No whole-byte reparse on the GUI thread or unlimited retry.
+- Four affected files pass71 cases in152.20s (158.4s including privacy/Ruff),
+  two processors/25% CPU. New cases cover after-worker PDF/research/storage changes,
+  invalidation of earlier success, retry, delivery without SQL/rehash, immutable
+  displayed copies and bounded source revalidation. Critical14 plus privacy/Ruff
+  pass20.7s. One accidentally overlapping diagnostic/check was stopped; only the
+  final single governed run supplies pass evidence. No full historical suite.
+- Updated the existing test map and canonical background-job skill evidence;
+  guarded skill synchronization touched repo copies only. Existing three-minute
+  per-OS acceptance adds the three changed-delivery cases, not a new CI job.
+- No daily app/data/account change, cloud deployment or physical-device claim.
+  Latest delivered native0a64ec7 predates this fix; a new candidate needs its own
+  source/frozen provenance and physical Windows/Mac/phone acceptance remains open.

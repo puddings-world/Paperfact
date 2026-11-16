@@ -10,13 +10,25 @@ import json
 import threading
 import time
 from copy import deepcopy
+from pathlib import Path
 
+from paper_daily import file_change
 from paper_daily import workspace_offline as offline
 from paper_daily.workspace_service import SnapshotChanged, Ticket
 
 MAX_PASS_BYTES = 256 * 1024**2
 MAX_CACHED_ASSETS = 4096
 MAX_SELECTION_BYTES = 8 * 1024**3
+
+
+def _database_stamp(database):
+    versions = []
+    for path in (database, Path(str(database) + "-wal")):
+        value = file_change.version(path) if path.exists() else None
+        if path != database and value is not None and value[2] == 0:
+            value = None  # A read-only SQLite open can create an empty WAL.
+        versions.append(value)
+    return tuple(versions)
 
 
 class OfflineVerification:
@@ -29,6 +41,24 @@ class OfflineVerification:
         self._proofs = {}
         self._running = threading.Lock()
         self._pass = 0
+        self._delivery = None
+
+    def for_delivery(self, result):
+        """Recheck native file observations only; no GUI SQL, PDF parsing or hashing."""
+        try:
+            saved, encoded, stamps, proofs = self._delivery
+            current = Path(self.service.workspace.current_path()).resolve()
+            if (result is not saved or json.dumps(result, sort_keys=True) != encoded
+                    or current != self.service.workspace.path
+                    or any(_database_stamp(path) != stamp for path, stamp in stamps)
+                    or any(not proof.matches(target) for proof, target in proofs)
+                    or any(_database_stamp(path) != stamp for path, stamp in stamps)):
+                raise ValueError("Stale offline verification delivery")
+        except (TypeError, ValueError, OSError):
+            self._delivery = None
+            self._proofs.clear()
+            raise SnapshotChanged("Selected files or research changed before delivery") from None
+        return json.loads(encoded)
 
     @staticmethod
     def _key(target):
@@ -70,6 +100,7 @@ class OfflineVerification:
             self._running.release()
 
     def _advance(self, ticket, max_bytes, max_assets, seconds, progress):
+        self._delivery = None
         self._live(ticket)
         report = self.service.plan(list(self.selection), ticket)
         if (
@@ -143,8 +174,20 @@ class OfflineVerification:
                         "verification_bytes": spent,
                     }
                 )
-        self._live(ticket)
-        self.service._store()
+        paths = [self.service.workspace.path]
+        if store is not None:
+            paths.append(store.root / "index.sqlite")
+        # Observed native revision changes require another source check. Allow
+        # one bounded worker revalidation for read-side metadata transitions;
+        # never drop the native guard or rehash all assets on the GUI thread.
+        for _attempt in range(2):
+            stamps = tuple((path, _database_stamp(path)) for path in paths)
+            self._live(ticket)
+            self.service._store()
+            if all(_database_stamp(path) == stamp for path, stamp in stamps):
+                break
+        else:
+            raise SnapshotChanged("Research storage changed during final verification")
         for item, proof, target, _rows, key in proofs:
             if not proof.matches(target):
                 item["state"] = "invalid"
@@ -179,4 +222,8 @@ class OfflineVerification:
             verification_pass=self._pass,
             resumable=True,
         )
+        self._delivery = (report, json.dumps(report, sort_keys=True), stamps,
+                          tuple((proof, target) for item, proof, target, _rows, _key in proofs
+                                if item["state"] == "verified"))
+        self.for_delivery(report)
         return report

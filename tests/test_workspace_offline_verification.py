@@ -232,3 +232,50 @@ def test_invalid_budget_cannot_produce_a_report(prepared, kwargs):
     with pytest.raises(ValueError):
         session.advance(**kwargs)
     assert session.advance()["ready"]
+
+
+def test_delivery_rechecks_native_proofs_without_sql_or_rehashing(prepared, monkeypatch):
+    from paper_daily import workspace_offline_verification as verification
+
+    service, _client, local, *_ = prepared
+    session = OfflineVerification(service, [local])
+    result = session.advance()
+    assert result["ready"]
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Delivery attempted SQL or expensive byte verification")
+
+    monkeypatch.setattr(service.workspace, "_context", forbidden)
+    monkeypatch.setattr(service, "_snapshot", forbidden)
+    monkeypatch.setattr(offline, "verify_document", forbidden)
+    monkeypatch.setattr(offline, "verify_closure", forbidden)
+    monkeypatch.setattr(verification.offline.sqlite3, "connect", forbidden)
+    delivered = session.for_delivery(result)
+    assert delivered == result and delivered is not result
+    delivered["papers"][0]["ready"] = False
+    assert session.for_delivery(result)["papers"][0]["ready"]
+    result["ready"] = False
+    with pytest.raises(SnapshotChanged):
+        session.for_delivery(result)
+
+
+def test_native_revision_transition_requires_one_fresh_source_validation(prepared, monkeypatch):
+    from paper_daily import workspace_offline_verification as verification
+
+    service, client, local, *_ = prepared
+    session = OfflineVerification(service, [local])
+    original = verification._database_stamp
+    seen = []
+
+    def transition(path):
+        value = original(path)
+        if path == client.journal.path:
+            seen.append(value)
+            if len(seen) == 1:
+                return ("earlier native revision", value)
+        return value
+
+    monkeypatch.setattr(verification, "_database_stamp", transition)
+    result = session.advance()
+    assert result["ready"] and len(seen) >= 4
+    assert session.for_delivery(result)["ready"]

@@ -43,6 +43,9 @@ A local shell-v34 artifact is built/hash-verified, not deployed; the downloadabl
 The current source builder derives exported cache identities from asset/worker
 content and verifies consistency; existing numeric-cache artifacts remain readable.
 This packaging change is not a deployed mobile update or a new native candidate.
+Source also guards offline verification at queued desktop delivery: changed
+originals, research or storage ownership clear prior readiness and require retry.
+The current native download predates this source correction.
 
 ## Requirements and actual boundaries
 
