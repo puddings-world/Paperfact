@@ -244,6 +244,8 @@ Object.assign(messages['zh-TW'], {
   legacyState_skipped:'已略過',legacyState_deferred:'已延後',legacyDownload:'離線儲存摘要',
   legacyBriefUnavailable:'這份摘要尚無可用的離線內容。'
 });
+messages.en.sync_format_unsupported = 'Sync paused: unsupported research format. Keep local work and check compatible Paperfact builds before retrying; do not reset or adopt history to bypass it.';
+messages['zh-TW'].sync_format_unsupported = '\u540c\u6b65\u66ab\u505c\uff1a\u7814\u7a76\u683c\u5f0f\u4e0d\u76f8\u5bb9\u3002\u8acb\u4fdd\u7559\u672c\u6a5f\u8cc7\u6599\uff0c\u78ba\u8a8d Paperfact \u7248\u672c\u76f8\u5bb9\u5f8c\u91cd\u8a66\uff1b\u4e0d\u8981\u91cd\u8a2d\u6216\u63a1\u7528\u6b77\u53f2\u4f86\u7565\u904e\u3002';
 messages.en.unsupported_operation = 'This history includes a newer research format. Update the reader; the sync cursor has not advanced.';
 messages['zh-TW'].unsupported_operation = '同步歷史包含較新的研究格式，請更新閱讀器；同步游標尚未前進。';
 messages.en.stale_draft = 'The synchronized note changed while you were editing. Your draft is retained; compare it before saving a new version.';

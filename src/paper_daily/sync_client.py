@@ -16,6 +16,7 @@ from paper_daily.sync_journal import (
     ID,
     MAX_BYTES,
     Journal,
+    SyncFormatUnsupported,
     SyncHistoryUnavailable,
     canonical_operation,
     history_seed,
@@ -76,23 +77,32 @@ def validate_history_page(page, workspace):
         raise SyncHistoryUnavailable("Invalid verified history page")
     before, end = _history_checkpoint(page["after"]), _history_checkpoint(page["checkpoint"])
     digest, sequence, spent, events, points = before["sha256"], before["sequence"], 1024, [], {}
+    # Check bounded byte continuity before interpreting an unfamiliar format.
     for raw in page["events"]:
         digest = history_step(digest, raw)
         spent += len(json.dumps(raw, ensure_ascii=False).encode("utf-8")) + 2
         if spent > 2 * 1024**2:
             raise SyncHistoryUnavailable("History page exceeds the verification bound")
+        sequence += 1
+        points[sequence] = digest
+    if (end != {"sequence": sequence, "sha256": digest}
+            or not page["events"] and not page["caught_up"]):
+        raise SyncHistoryUnavailable("Verified history checkpoint is inconsistent")
+    for sequence, raw in enumerate(page["events"], before["sequence"] + 1):
         try:
             event = json.loads(raw)
+            if (not isinstance(event, dict) or event.get("sequence") != sequence
+                    or json.dumps(event, ensure_ascii=False, sort_keys=True,
+                                  separators=(",", ":")) != raw):
+                raise ValueError("Noncanonical history event")
             encoded = validate_event(event, workspace)
+        except SyncFormatUnsupported:
+            raise
         except (ValueError, TypeError, RecursionError) as error:
             raise SyncHistoryUnavailable("Invalid verified history event") from error
-        sequence += 1
-        if encoded != raw or event["sequence"] != sequence:
+        if encoded != raw:
             raise SyncHistoryUnavailable("Verified history has changed or is incomplete")
         events.append(event)
-        points[sequence] = digest
-    if end != {"sequence": sequence, "sha256": digest} or not events and not page["caught_up"]:
-        raise SyncHistoryUnavailable("Verified history checkpoint is inconsistent")
     return events, before, end, points
 
 
@@ -1872,7 +1882,7 @@ class SyncClient:
     def _history_review_inputs(self, conn, check=lambda: None):
         try:
             return self._capture_history_review_inputs(conn, check)
-        except (SyncHistoryUnavailable, TimeoutError):
+        except (SyncFormatUnsupported, SyncHistoryUnavailable, TimeoutError):
             raise
         except (sqlite3.DatabaseError, ValueError, KeyError, TypeError, OSError) as error:
             raise SyncHistoryUnavailable('Retained history cannot be reviewed safely') from error
@@ -2102,6 +2112,8 @@ class SyncClient:
             event = json.loads(record)
             if validate_event(event, self.journal.workspace_id) != record:
                 raise ValueError("Noncanonical acknowledgment")
+        except SyncFormatUnsupported:
+            raise
         except (ValueError, TypeError, RecursionError) as error:
             raise SyncHistoryUnavailable("Invalid verified acknowledgment record") from error
         checkpoint = _history_checkpoint(response["checkpoint"])
@@ -2182,6 +2194,8 @@ class SyncClient:
                     ) if operation_only else event == validate_event(
                         json.loads(saved), self.journal.workspace_id,
                     ))
+            except SyncFormatUnsupported:
+                raise
             except (ValueError, TypeError, AttributeError):
                 matches = False
             if not matches:

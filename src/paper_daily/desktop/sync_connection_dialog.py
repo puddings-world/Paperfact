@@ -28,7 +28,7 @@ from paper_daily.connection_vault import (
     VaultUnavailable,
 )
 from paper_daily.sync_device_management import PairingUnavailableError
-from paper_daily.sync_journal import SyncHistoryUnavailable
+from paper_daily.sync_journal import SyncFormatUnsupported, SyncHistoryUnavailable
 from paper_daily.workspace_service import Cancelled, Ticket
 from paper_daily.workspace_sync import EnrollmentRequired, SyncStopped, local_binding
 
@@ -262,6 +262,19 @@ COPY["zh-TW"].update({
 
 
 
+COPY["en"]["format"] = (
+    "Sync paused: unsupported research format. Keep local work and use compatible "
+    "Paperfact builds on your devices and service, then retry. History adoption "
+    "cannot make this format readable."
+)
+COPY["zh-TW"]["format"] = (
+    "\u540c\u6b65\u66ab\u505c\uff1a\u6b64\u7248\u4e0d\u652f\u63f4\u6536\u5230\u7684\u7814\u7a76\u683c\u5f0f\u3002"
+    "\u8acb\u4fdd\u7559\u672c\u6a5f\u8cc7\u6599\uff0c\u78ba\u8a8d\u5404\u88dd\u7f6e\u8207\u670d\u52d9"
+    "\u4f7f\u7528\u76f8\u5bb9\u7684 Paperfact \u7248\u672c\u5f8c\u91cd\u8a66\uff1b"
+    "\u63a1\u7528\u6b77\u53f2\u4e0d\u6703\u589e\u52a0\u683c\u5f0f\u652f\u63f4\u3002"
+)
+
+
 COPY["en"]["history"] = (
     "Sync paused: shared history cannot be verified. Keep this workspace and its pending "
     "work; review the service backup with its operator before retrying. Do not reset local data."
@@ -368,7 +381,9 @@ class SyncWorker(QThread):
             self.result = self.task(self.ticket, self.progress.emit)
         except Exception as error:
             self.error = (
-                "history"
+                "format"
+                if isinstance(error, SyncFormatUnsupported)
+                else "history"
                 if isinstance(error, SyncHistoryUnavailable)
                 else "pair_unavailable"
                 if isinstance(error, PairingUnavailableError)
@@ -419,6 +434,7 @@ class SyncConnectionDialog(QDialog):
         self._remember_joined = False
         self._probed = False
         self._history_review_needed = False
+        self._format_blocked = False
         self.zh = language == "zh-TW"
         self.t = COPY.get(language, COPY["en"])
         self.v = VAULT_COPY.get(language, VAULT_COPY["en"])
@@ -697,6 +713,11 @@ class SyncConnectionDialog(QDialog):
             return
         from paper_daily.desktop.continuous_sync import status_text
 
+        if value["state"] == "format":
+            self._format_blocked = True
+            self._history_review_needed = False
+        elif value["state"] == "idle":
+            self._format_blocked = False
         self.automatic_status.setText(status_text(value, "zh-TW" if self.zh else "en"))
         self._buttons()
 
@@ -789,13 +810,15 @@ class SyncConnectionDialog(QDialog):
         self.sync_button.setEnabled(
             available and live and self.eligible and self.binding == summary["identity"]
         )
-        review = self.session.history_review_summary()
+        review = None if self._format_blocked else self.session.history_review_summary()
         self.history_review_button.setVisible(self._history_review_needed or review is not None)
-        self.history_review_button.setEnabled(self.sync_button.isEnabled())
+        self.history_review_button.setEnabled(
+            not self._format_blocked and self.sync_button.isEnabled())
         self.history_review_button.setText(
             self.h['more'] if review and not review['complete'] else self.h['review'])
         self.history_adopt_button.setVisible(bool(review and review['complete']))
-        self.history_adopt_button.setEnabled(self.sync_button.isEnabled())
+        self.history_adopt_button.setEnabled(
+            not self._format_blocked and self.sync_button.isEnabled())
         self.devices_button.setEnabled(
             available and live and self.eligible and self.binding == summary["identity"]
         )
@@ -1222,7 +1245,10 @@ class SyncConnectionDialog(QDialog):
                 key = "pair_bad" if worker.error == "incompatible" else "pair_denied"
                 self.status.setText(self.t[key])
             elif worker.error:
-                if worker.error == 'history':
+                if worker.error == 'format':
+                    self._format_blocked = True
+                    self._history_review_needed = False
+                elif worker.error == 'history':
                     self._history_review_needed = True
                 self.status.setText(
                     (
@@ -1324,6 +1350,7 @@ class SyncConnectionDialog(QDialog):
             elif kind == "forget_saved":
                 self.status.setText(self.v["forgotten"])
             elif kind == "sync":
+                self._format_blocked = False
                 result = worker.result
                 self._progress({**result, "stage": "metadata"})
                 text = (

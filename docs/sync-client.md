@@ -332,3 +332,30 @@ gate. Use the reviewed authority recovery/new-device flow; never reset the curso
 discard the outbox or blindly replay old envelopes. An unavailable legacy server
 may return a generic rejection, but it still cannot trigger pre-probe upload in
 the updated client. Real installed-device and hosted checks remain separate.
+
+
+## Unreadable research formats
+
+`sync_journal.SyncFormatUnsupported` is a `ValueError` distinct from
+`SyncHistoryUnavailable`. It identifies an unsupported positive future operation
+envelope version, a bounded unknown v2 entity kind, or a bounded unknown research
+content feature. It does not certify that the unknown record is otherwise valid,
+provide codec negotiation, or authorize skipping it. Other malformed payloads,
+unknown embedded file-codec versions and integrity failures retain their existing
+validation errors.
+
+The native and mobile history readers verify the bounded raw byte chain before
+interpreting records. A changed checkpoint remains a history-integrity error even
+when a record also uses an unreadable format. Unsupported batches cannot advance
+research/cursor/proof state or silently acknowledge queued notes. Desktop manual
+sync shows a fixed localized compatibility message and hides cached history
+adoption actions; automatic desktop sync pauses without a retry storm. Retrying
+a supported stream uses the same saved local work. The PWA has the corresponding
+fixed `sync_format_unsupported` message and preserves unsent notes on refusal.
+
+The server keeps invalid-input HTTP400 for unsupported submitted operations; no
+new wire route or protocol version is introduced. Historical checkpoint adoption
+cannot install a missing codec. Use compatible app/service builds and retry,
+keeping the existing research workspace. This source behavior is newer than the
+30b5776 installer. Physical mixed-build/device and deployment acceptance remain
+separate, as do independent authority anchoring and full capability negotiation.

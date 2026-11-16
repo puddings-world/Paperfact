@@ -508,3 +508,43 @@ def test_actual_main_window_resumes_only_the_opted_in_device(service, startup_sa
             wait(app, lambda: not controller.busy)
         window.close()
         app.processEvents()
+
+
+
+def test_unreadable_format_pauses_background_sync_without_retry_flood(
+    control, service, monkeypatch,
+):
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily.desktop.continuous_sync import status_text
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    _, _, controller, clock = control
+    connect(service)
+    session = service[0]
+    with closing(sqlite3.connect(session.workspace.path)) as conn:
+        before = list(conn.iterdump())
+    original, calls = session.sync, []
+
+    def unreadable(*_args):
+        calls.append(1)
+        raise SyncFormatUnsupported()
+
+    monkeypatch.setattr(session, "sync", unreadable)
+    assert controller.enable()
+    run(control)
+    assert controller.state == "format" and not controller.enabled
+    assert "unsupported research format" in status_text(controller.summary())
+    assert "\u683c\u5f0f" in status_text(controller.summary(), "zh-TW")
+    clock[0] += 1000
+    for _ in range(20):
+        controller.local_changed()
+        controller.tick()
+    assert calls == [1] and service[2] not in repr(controller.summary())
+    with closing(sqlite3.connect(session.workspace.path)) as conn:
+        assert list(conn.iterdump()) == before
+    monkeypatch.setattr(session, "sync", original)
+    assert controller.enable()
+    run(control)
+    assert controller.state == "idle" and controller.summary()["result"]["pending"] == 0

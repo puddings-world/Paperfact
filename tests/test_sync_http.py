@@ -717,3 +717,18 @@ def test_strict_service_refuses_prototype_writes_but_keeps_verified_retry_and_re
             assert json.loads(result) == {'workspace_id': 'workspace', 'device_id': 'new'}
         assert service.session_info(credential) == {'workspace_id': 'workspace', 'device_id': 'new'}
         assert len(service.device_catalog(token)['devices']) == 3
+
+
+
+def test_unsupported_research_push_is_invalid_input_not_history_repair(endpoint):
+    service, token, url = endpoint
+    offered = operation(body="Private research must not appear in the response")
+    offered["version"] = 3
+    code, _headers, body = request(url, token, path="/v1/push",
+                                  body=json.dumps({"operation": offered}).encode())
+    assert code == 400 and b"Private research" not in body and token.encode() not in body
+    assert service.pull(token) == []
+    offered["version"] = 1
+    code, _headers, _body = request(url, token, path="/v1/push",
+                                   body=json.dumps({"operation": offered}).encode())
+    assert code == 200 and len(service.pull(token)) == 1

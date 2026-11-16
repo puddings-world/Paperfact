@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from paper_daily.sync_documents import validate_manifest
-from paper_daily.sync_journal import FIELDS, ID, MAX_BYTES
+from paper_daily.sync_journal import FIELDS, ID, MAX_BYTES, SyncFormatUnsupported
 from paper_daily.sync_ordering import ORDER_KINDS, validate_payload
 
 REQUIRED = FIELDS | {"incarnation", "parents", "structure_revision"}
@@ -126,10 +126,11 @@ def _header(value, *, additional=()):
         "research_content",
         "research_file",
         "inbox_item",
-    ) or action not in (
-        "put",
-        "delete",
     ):
+        if isinstance(kind, str) and kind and len(kind) <= 64 and ID.fullmatch(kind):
+            raise SyncFormatUnsupported()
+        raise ValueError("Unsupported graph operation")
+    if action not in ("put", "delete"):
         raise ValueError("Unsupported graph operation")
     if not isinstance(payload, dict):
         raise ValueError("Payload must be an object")

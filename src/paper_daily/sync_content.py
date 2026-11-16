@@ -225,12 +225,16 @@ def parent_identities(payload):
 
 
 def validate_payload(payload, *, entity_id=None, parents=None):
-    from paper_daily.sync_journal import ID
+    from paper_daily.sync_journal import ID, SyncFormatUnsupported
 
     if not isinstance(payload, dict) or set(payload) != FIELDS:
         raise ValueError("Unexpected research-content fields")
     scope, feature, key = payload["scope"], payload["feature"], payload["key"]
-    if feature not in FEATURES or not isinstance(scope, dict) or set(scope) != {"kind", "id"}:
+    if not isinstance(scope, dict) or set(scope) != {"kind", "id"}:
+        raise ValueError("Unsupported research-content feature/scope")
+    if not isinstance(feature, str) or feature not in FEATURES:
+        if isinstance(feature, str) and feature and len(feature) <= 64 and ID.fullmatch(feature):
+            raise SyncFormatUnsupported()
         raise ValueError("Unsupported research-content feature/scope")
     expected = "list" if feature in {"list_survey", "reading_goal", "list_pin"} else "paper"
     if (

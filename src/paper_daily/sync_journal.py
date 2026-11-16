@@ -20,6 +20,13 @@ class SyncHistoryUnavailable(ValueError):
 
 
 
+class SyncFormatUnsupported(ValueError):
+    """Unreadable research format; history adoption cannot add codec support."""
+
+    def __init__(self):
+        super().__init__("This app cannot read a research format in this workspace")
+
+
 class SyncHistoryAdvanced(ConnectionError):
     """Another valid writer advanced history; receive again without discarding work."""
 
@@ -47,6 +54,8 @@ def _identifier(value):
 
 def canonical_operation(value: dict) -> str:
     """Validate a closed payload shape before opening a transaction or calling a writer."""
+    if isinstance(value, dict) and type(value.get("version")) is int and value["version"] > 2:
+        raise SyncFormatUnsupported()
     if isinstance(value, dict) and type(value.get("version")) is int and value["version"] == 2:
         from paper_daily.sync_schema_v2 import canonical_operation as canonical_v2
 

@@ -54,12 +54,17 @@ export async function historyStep(previous,record) {
   new DataView(linked.buffer).setUint32(36,bytes.length,false);
   linked.set(bytes,40);return sha256(linked);
 }
-function historyRecord(record,workspace) {
+function historyRecord(record,workspace,expectedSequence=null) {
   try {
     const bytes=historyEncoder.encode(record),event=artifactJSON(bytes);
+    if(expectedSequence!==null)requireThat(Number.isSafeInteger(event?.sequence) &&
+      event.sequence===expectedSequence,HISTORY_ERROR);
     parsePositionJSON(record,{strict:true,maxBytes:2*256*1024+8192});
     validateEvent(event,workspace);return event;
-  } catch {throw new Error(HISTORY_ERROR);}
+  } catch(error) {
+    const unreadable=['unsupported_version','unsupported_operation','unsupported_research_content'];
+    throw new Error(unreadable.includes(error?.message)?'sync_format_unsupported':HISTORY_ERROR);
+  }
 }
 async function historyPage(page,workspace,before,limit=100) {
   requireThat(page && typeof page==='object' && !Array.isArray(page) &&
@@ -71,15 +76,21 @@ async function historyPage(page,workspace,before,limit=100) {
   requireThat(stable(page.after)===stable(before),HISTORY_ERROR);
   let sequence=before.sequence,digest=before.sha256;
   const events=[],points=new Map();
+  // Verify the bounded byte chain before classifying an unreadable research format.
   for(const record of page.events) {
     requireThat(typeof record==='string' && record.length<=2*256*1024+8192,HISTORY_ERROR);
-    const event=historyRecord(record,workspace);
-    requireThat(Number.isSafeInteger(event.sequence) && event.sequence===sequence+1,HISTORY_ERROR);
-    digest=await historyStep(digest,record);sequence=event.sequence;
-    events.push(event);points.set(sequence,digest);
+    digest=await historyStep(digest,record);sequence++;
+    points.set(sequence,digest);
   }
   const checkpoint={sequence,sha256:digest};
-  requireThat(stable(checkpoint)===stable(page.checkpoint) && (events.length>0 || page.caught_up),HISTORY_ERROR);
+  requireThat(stable(checkpoint)===stable(page.checkpoint) &&
+    (page.events.length>0 || page.caught_up),HISTORY_ERROR);
+  sequence=before.sequence;
+  for(const record of page.events) {
+    const event=historyRecord(record,workspace,sequence+1);
+    requireThat(Number.isSafeInteger(event.sequence) && event.sequence===sequence+1,HISTORY_ERROR);
+    sequence=event.sequence;events.push(event);
+  }
   return {events,points,before:copy(before),checkpoint,caught_up:page.caught_up};
 }
 function retainedHistory(state,seed) {
@@ -391,7 +402,7 @@ export class Engine {
       requireThat(response && typeof response==='object' && !Array.isArray(response) &&
         Object.keys(response).sort().join(',')==='checkpoint,record',HISTORY_ERROR);
       historyPoint(response.checkpoint);
-      const event=historyRecord(response.record,retained.workspace);
+      const event=historyRecord(response.record,retained.workspace,anchor.sequence+1);
       requireThat(stable(event.operation)===stable(item.operation) && event.sequence===anchor.sequence+1 &&
         response.checkpoint.sequence===event.sequence,HISTORY_ERROR);
       const digest=await historyStep(anchor.sha256,response.record);this.check(generation);

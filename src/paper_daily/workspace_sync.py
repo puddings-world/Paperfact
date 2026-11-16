@@ -12,7 +12,12 @@ from pathlib import Path
 from paper_daily.sync_capture import RESEARCH, trusted_connection
 from paper_daily.sync_client import SyncClient
 from paper_daily.sync_http import HttpTransport
-from paper_daily.sync_journal import Journal, SyncHistoryUnavailable, _identifier
+from paper_daily.sync_journal import (
+    Journal,
+    SyncFormatUnsupported,
+    SyncHistoryUnavailable,
+    _identifier,
+)
 from paper_daily.sync_research import (
     research_order_writer,
     research_projection_writer,
@@ -245,6 +250,8 @@ class SyncSession:
             yield
         except BaseException as error:
             with self._state:
+                if isinstance(error, SyncFormatUnsupported):
+                    self._history_review = None
                 if self._token is not None and self.state != "reconnect":
                     self.state = (
                         "offline"
@@ -351,7 +358,7 @@ class SyncSession:
                 review = client.review_legacy_history(
                     transport, token, previous, max_pages=max_pages, check=live,
                     progress=lambda value: progress(dict(stage="history_review", **value)))
-            except SyncHistoryUnavailable:
+            except (SyncFormatUnsupported, SyncHistoryUnavailable):
                 with self._state:
                     self._history_review = None
                 raise

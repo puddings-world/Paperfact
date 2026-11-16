@@ -27,6 +27,13 @@ COPY = {
 }
 
 
+COPY["en"]["format"] = "Sync paused: unsupported research format; check compatible Paperfact builds"
+COPY["zh-TW"]["format"] = (
+    "\u540c\u6b65\u66ab\u505c\uff1a\u7814\u7a76\u683c\u5f0f\u4e0d\u76f8\u5bb9\uff1b"
+    "\u8acb\u78ba\u8a8d Paperfact \u7248\u672c"
+)
+
+
 COPY["en"]["history"] = "Sync paused: preserve local work and review service history"
 COPY["zh-TW"]["history"] = (
     "\u540c\u6b65\u66ab\u505c\uff1a\u4fdd\u7559\u672c\u6a5f\u8cc7\u6599\u4e26"
@@ -238,7 +245,7 @@ class ContinuousSync(QObject):
                 self._report("offline")
             elif worker.error:
                 self.enabled = False
-                self._report("history" if worker.error == "history" else "paused")
+                self._report(worker.error if worker.error in {"history", "format"} else "paused")
             else:
                 result = worker.result
                 self._result = {key: result[key] for key in (

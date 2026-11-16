@@ -474,3 +474,46 @@ test('mobile history matches native exact UTF-8 float and Unicode commitments',a
   assert.equal(await historyStep(seed,record),'164404784c52470482a1760d499915c6ce3d92b3799269fb1232868220205406');
   assert.notEqual(await historyStep(seed,JSON.stringify(JSON.parse(record))),await historyStep(seed,record));
 });
+
+
+for(const future of ['envelope','entity','content']) for(const damaged of [false,'checkpoint','sequence']) {
+  test(`unreadable ${future} history preserves offline work; damaged proof=${damaged}`,async()=>{
+    const {engine,store,transport}=await setup();
+    await saveCurrent(engine,'local-format-note',PAPER,'Private offline reading note');
+    const before=await store.read(),last=structuredClone(transport.events.find(e=>e.operation.entity_type==='note'));
+    const operation=last.operation;
+    operation.operation_id='unreadable-remote';operation.entity_id='unreadable-note';
+    operation.base_revision=0;operation.depends_on=null;operation.incarnation='unreadable-epoch';
+    if(future==='envelope')operation.version=3;
+    if(future==='entity')operation.entity_type='future_research';
+    if(future==='content') {
+      operation.entity_type='research_content';operation.entity_id='00000000-0000-4000-8000-000000000001';
+      operation.payload={scope:{kind:'paper',id:PAPER},feature:'future_annotation',key:'main',
+        data:{private:'Do not display research in errors'},source_document_hash:null};
+    }
+    last.sequence=transport.events.length+1;
+    if(damaged==='sequence')last.sequence+=2;
+    last.head={revision:last.sequence,operation:structuredClone(operation)};
+    transport.events.push(last);
+    const original=transport.history_page.bind(transport);
+    if(damaged==='checkpoint')transport.history_page=async(...args)=>{
+      const page=await original(...args);
+      if(page.events.some(raw=>JSON.parse(raw).operation.operation_id==='unreadable-remote'))
+        page.checkpoint.sha256='0'.repeat(64);
+      return page;
+    };
+    transport.calls.length=0;
+    await assert.rejects(engine.sync(),new RegExp(damaged?'sync_history_unavailable':'sync_format_unsupported'));
+    assert.deepEqual(await store.read(),before);
+    assert(!transport.calls.some(call=>call[0]==='push'));
+    const {translator}=await import('../i18n.mjs');
+    assert.match(translator('en')('sync_format_unsupported'),/unsupported research format/);
+    assert.match(translator('zh-TW')('sync_format_unsupported'),/\u683c\u5f0f/);
+    assert(!translator('en')('sync_format_unsupported').includes('Private offline'));
+    transport.events.pop();transport.history_page=original;
+    await engine.sync();
+    const after=await store.read();
+    assert.equal(after.outbox.length,0);
+    assert.equal(after.entities['note/local-format-note'].operation.payload.body,'Private offline reading note');
+  });
+}

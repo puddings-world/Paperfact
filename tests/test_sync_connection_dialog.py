@@ -413,3 +413,48 @@ def test_stop_or_close_during_history_review_keeps_journal_and_never_adopts(
         assert view.history_adopt_button.isEnabled() and 'Not saved yet' in view.status.text()
     with closing(sqlite3.connect(enrolled[0])) as conn:
         assert list(conn.iterdump()) == before
+
+
+
+def test_format_failure_hides_cached_history_adoption_and_allows_supported_retry(
+    dialog, service, monkeypatch,
+):
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    app, view = dialog
+    connected(dialog, service)
+    session = service[0]
+    with closing(sqlite3.connect(session.workspace.path)) as conn:
+        before = list(conn.iterdump())
+    original, calls = session.sync, []
+
+    def unreadable(*_args):
+        calls.append(1)
+        raise SyncFormatUnsupported()
+
+    monkeypatch.setattr(session, "history_review_summary", lambda: {"complete": True})
+    view._history_review_needed = True
+    view._buttons()
+    assert not view.history_adopt_button.isHidden()
+    monkeypatch.setattr(session, "sync", unreadable)
+    view.sync_button.click()
+    worker = view._worker
+    for _ in range(20):
+        view.sync_button.click()
+    assert view._worker is worker
+    wait(app, lambda: not view.busy)
+    assert calls == [1] and "unsupported research format" in view.status.text()
+    assert "History adoption" in view.status.text()
+    assert view.history_review_button.isHidden() and view.history_adopt_button.isHidden()
+    assert not view.history_review_button.isEnabled() and not view.history_adopt_button.isEnabled()
+    assert view.review_history() is False and view.adopt_history() is False
+    with closing(sqlite3.connect(session.workspace.path)) as conn:
+        assert list(conn.iterdump()) == before
+    monkeypatch.setattr(session, "sync", original)
+    monkeypatch.setattr(session, "history_review_summary", lambda: None)
+    view.sync_button.click()
+    wait(app, lambda: not view.busy)
+    assert "pending 0" in view.status.text() and not view._format_blocked

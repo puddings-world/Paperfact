@@ -453,6 +453,9 @@ delivery, rejecting files or research changed after background verification;
 Local exact-original supply also checks cancellation/workspace lifetime between
 hash-read chunks, retaining interrupted staging for explicit retry;
 [attachment behavior](docs/sync-attachments.md#api).
+Newer source also distinguishes unreadable research formats from history-integrity
+failures in desktop and mobile sync, preserving pending work;
+[compatibility behavior](docs/sync-client.md#unreadable-research-formats).
 
 
 The1875db5 Windows/Mac candidates verify guarded-history sync and duplicate-listener

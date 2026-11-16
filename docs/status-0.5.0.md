@@ -18,8 +18,11 @@ Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
 Source after30b5776 adds cooperative cancellation/workspace checks during exact
-original-supply hash reads, including staged and reused-final validation. Affected
-Windows fixtures pass; this source fix is not in the candidate linked below.
+original-supply hash reads, including staged and reused-final validation. Newer
+source also separates unsupported research formats from history-integrity errors,
+hides inappropriate desktop history-adoption controls and pauses automatic sync;
+mobile retains unsent notes with the matching fixed compatibility message.
+These source changes are not in the candidate linked below.
 
 ## Current deliverable
 

@@ -628,3 +628,91 @@ def test_conflict_index_migration_preserves_resolved_history(pair):
     assert (migrated.status(), migrated.history()) == before
     restarted = client(b.journal.path, "b")
     assert (restarted.status(), restarted.history()) == before
+
+
+@pytest.mark.parametrize("future", ["envelope", "entity", "content"])
+def test_unreadable_format_refuses_whole_batch_and_preserves_offline_work(pair, future):
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    server, sender, receiver, token, _ = pair
+    for identity, kind, payload in (
+        ("remote-list", "list", {"name": "Research", "note": ""}),
+        ("remote-note", "note", {"paper_id": "paper", "body": "Remote observation"}),
+    ):
+        server.push(token, sender.new_operation(kind, identity, payload))
+    edit(receiver, "Offline local draft", identity="local-note")
+    valid = server.pull(token)
+    events = copy.deepcopy(valid)
+    operation = events[-1]["operation"]
+    if future == "envelope":
+        operation["version"] = 3
+    else:
+        operation.update(version=2, entity_type="future_research", incarnation="epoch",
+                         structure_revision=0, parents=[])
+        if future == "content":
+            paper = "00000000-0000-4000-8000-000000000001"
+            operation.update(entity_type="research_content", entity_id=paper,
+                             parents=[dict(kind="paper", id=paper, incarnation="epoch")],
+                             payload=dict(scope=dict(kind="paper", id=paper),
+                                          feature="future_annotation", key="main", data={},
+                                          source_document_hash=None))
+    events[-1]["head"]["operation"] = copy.deepcopy(operation)
+    with closing(sqlite3.connect(receiver.journal.path)) as conn:
+        before = list(conn.iterdump())
+    with pytest.raises(SyncFormatUnsupported) as error:
+        receiver.receive(events)
+    assert "future_research" not in str(error.value) and "observation" not in str(error.value)
+    with closing(sqlite3.connect(receiver.journal.path)) as conn:
+        assert list(conn.iterdump()) == before
+    assert receiver.status()["cursor"] == 0 and receiver.status()["pending"] == 1
+    assert saved(receiver, identity="local-note")["body"] == "Offline local draft"
+    assert receiver.receive(valid)["cursor"] == 2
+    assert saved(receiver, identity="remote-note")["body"] == "Remote observation"
+    assert receiver.status()["pending"] == 1
+
+
+@pytest.mark.parametrize("damaged", [False, True])
+def test_future_format_keeps_history_integrity_failure_distinct(pair, damaged):
+    import json
+
+    from paper_daily.sync_journal import (
+        SyncFormatUnsupported,
+        SyncHistoryUnavailable,
+        history_seed,
+        history_step,
+    )
+
+    server, sender, receiver, token, _ = pair
+    operation = sender.new_operation("list", "list", {"name": "Research", "note": ""})
+    event = server.push(token, operation)
+    event["operation"]["version"] = 3
+    event["head"]["operation"] = copy.deepcopy(event["operation"])
+    raw = json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    seed = history_seed("workspace")
+    page = dict(version=1, workspace_id="workspace", after=dict(sequence=0, sha256=seed),
+                events=[raw], checkpoint=dict(sequence=1, sha256="0" * 64 if damaged
+                    else history_step(seed, raw)), caught_up=True)
+    with closing(sqlite3.connect(receiver.journal.path)) as conn:
+        before = list(conn.iterdump())
+    expected = SyncHistoryUnavailable if damaged else SyncFormatUnsupported
+    with pytest.raises(expected) as error:
+        receiver.receive_history(page)
+    assert isinstance(error.value, SyncFormatUnsupported) is (not damaged)
+    with closing(sqlite3.connect(receiver.journal.path)) as conn:
+        assert list(conn.iterdump()) == before
+
+
+def test_unknown_content_feature_is_unreadable_without_echoing_research():
+    from paper_daily.sync_content import validate_payload
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    payload = dict(scope=dict(kind="paper", id="paper"), feature="future_annotation",
+                   key="main", data={"private": "Do not display this research"},
+                   source_document_hash=None)
+    with pytest.raises(SyncFormatUnsupported) as error:
+        validate_payload(payload)
+    assert "future_annotation" not in str(error.value) and "private" not in str(error.value)
+    payload["feature"] = ["malformed"]
+    with pytest.raises(ValueError) as error:
+        validate_payload(payload)
+    assert not isinstance(error.value, SyncFormatUnsupported)

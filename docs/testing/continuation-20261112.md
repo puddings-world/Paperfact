@@ -10407,3 +10407,80 @@ stay in the existing acceptance/continuation records.
   passed. Combined final focused+critical time326.3s; no claim that both together
   fit five minutes. Each stayed below its existing300-second resource budget.
   Whitespace checked with CRLF-aware settings; docs/API updated with this fix.
+
+
+## 2026-11-16: distinguish unreadable research from history repair
+
+- Source diagnosis: native validate_history_page wrapped every format validation
+  failure as SyncHistoryUnavailable; the desktop offered history review/adoption.
+  The mobile history reader similarly replaced every codec failure with a history
+  error. Adopting a checkpoint cannot add support for an unfamiliar research format.
+- Introduce SyncFormatUnsupported(ValueError) for positive future envelope versions,
+  bounded unknown v2 entity kinds and unknown research-content feature IDs. Retain
+  malformed input/other embedded-codec validation behavior. No new wire protocol,
+  endpoint, capability grant, codec installation or skipped event is introduced.
+- Both native and mobile first check bounded raw history commitments, then interpret
+  events. A damaged checkpoint still produces the integrity error even if a record
+  also uses a future format. Format exceptions retain fixed categorical text;
+  private payloads/feature names are not included in UI errors.
+- Desktop manual synchronization hides and disables inappropriate history controls;
+  their handler guards reject activation. Session format failures invalidate cached
+  history reviews. Automatic sync pauses without an event-driven retry flood.
+  Explicitly retrying a supported stream preserves and delivers the original work.
+  The PWA uses the matching sync_format_unsupported bilingual message, without
+  advancing the failed batch or sending queued notes past an unreadable prefix.
+- The new exception is separate from history errors, not a subclass of them:
+  inspecting HTTP handling found that inheritance would convert invalid submitted
+  formats into history-repair HTTP412. Actual loopback tests retain HTTP400,
+  unchanged remote history on rejection and successful same-ID valid retry.
+- Native affected18 passed36.60s (47.6s total including privacy7.4/Ruff0.4s).
+  New cases cover future envelope/entity/content batches, exact SQL/outbox/cursor
+  preservation, good/bad linked checkpoints, non-echoing errors, manual duplicate
+  clicks/cached adoption refusal, background pause/event flood and explicit retry.
+  Existing controls cover normal convergence, history review/default-No adoption,
+  nontransient failures, proof transaction rollback, HTTP lost pull/restart and
+  changed/missing history pages. Earlier13/15 passes overlap and are not added.
+- Final UI guard strengthening:2 passed6.63s, total12.0s, existing format and
+  normal-history-review cases. Hidden controls are disabled too, including direct
+  handler invocation. Backend/mobile source remained unchanged after their passes.
+- Initial mobile engine/domain44 passed, no skipped/cancelled/todo,1.284s Node/1.516s
+  governed command. Six new cases cross future envelope/entity/content with intact
+  or damaged proofs; queued private notes/store state remain exact, no upload
+  occurs, and supported retry converges. Existing domain/session/cancellation/
+  attachment/conflict/restart/float-Unicode history-vector controls remain green.
+- Initial local-only PWA export verified54 assets/3976835 bytes in1.109s, content ID
+  4bdc694d90fddf617d6a042e54ad9befc162c53c19cdffb7a37ce96e7f5574ab.
+  Exact engine/i18n source bytes, proxy map and worker identity rechecked. Compared
+  with the prior Windows-built candidate: other differing first-party files are
+  newline-only; engine/i18n and generated worker are the semantic changes. This
+  is not cross-OS byte reproducibility, hosted delivery or phone acceptance.
+- Preparation guards stopped on an ambiguous repeated UI assignment and new
+  test/import formatting. Remaining edits were applied against inspected exact
+  contexts; lint completed before behavioral checks. No failed application result
+  was represented as a pass, and no existing assertion was weakened.
+- Evidence: ignored build/compatibility-evidence. All checks use the existing
+  two-core/25-percent governor and one job at a time. No real research/account,
+  service deployment, native rebuild or global skill change. Existing public
+  support/local-integration principles apply; no new general rule manufactured.
+- Docs/API and current source-versus-installer distinction updated. Current native
+  downloads remain30b5776. Complete writer/file adoption and retention, independent
+  authority anchoring/fencing, hosted enrollment/HTTPS/recovery, full new frozen
+  GUI/live provider/native vault/IME, old installed upgrades and physical-device
+  offline/conflict/revocation/restore still gate the original full v0.5 objective.
+
+- Final mobile negative coverage adds noncontiguous outer sequences alongside
+  future envelope/entity/content. The expected sequence is checked before the
+  unknown codec, including acknowledgments; a valid raw hash chain alone cannot
+  relabel a known event gap as a format issue. Final engine/domain47 passed,
+  no failures/skips/cancelled/todo,1.058s Node/1.250s governed command. Earlier44
+  is superseded, not added. Native source remained unchanged.
+- Final local PWA export:54 assets/3977026 bytes,1.000s; content ID
+  c10482ba08ea0737b275ac331b86b5db1911d5f66bcdc3ef43f03b51efffcc64.
+  Exact changed source assets, proxy map and generated worker identity reverified;
+  earlier4bdc694d export is retained evidence, not current delivery.
+- Critical14 passed10.36s, total15.1s (privacy3.5/Ruff0.2s). The later change was
+  mobile-only and was revalidated by the final47 plus artifact export; do not
+  repeat unchanged native tests. Documentation gate covers final committable
+  privacy/Ruff/usage inputs before commit. External gates remain unchanged.
+- Final docs60 passed4.33s, total9.3s; privacy3.4/Ruff0.3s and
+  CRLF-aware whitespace passed. Existing native/PWA evidence reused by scope.
