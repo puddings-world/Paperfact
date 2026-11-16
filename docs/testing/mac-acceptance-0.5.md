@@ -43,6 +43,10 @@ release or automatic update.
 | Windows x64 | [Setup artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14219496165) | 8m29s |
 | Linux x86-64 | [AppImage artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/43851985599/artifacts/14218331821) | 2m47s |
 
+The d14c512 Mac workflow runs against the build-directory app. Newer verifier
+source adds actual read-only DMG mount/copy/detach and runs the same checks from
+the copied app; that stronger native result is not yet recorded for this download.
+
 This candidate combines the previous source-observed PDF/reader/deck transfer
 work with reviewed package missing-byte recovery, exact nullable list descriptions,
 and saved-research cleanup protection. Preview remains separate from confirmation;
@@ -535,6 +539,7 @@ The existing CI still captures its generated fixture logs separately.
 | `instance-handoff` | Expected workspace endpoint is live; second launch returns while the primary stays open; primary then closes normally (passed for cb6ca66) |
 | `sync-protocol` | Packaged CLI service init/issue, authenticated pull, restart, HTTP 428 for the old execution and successful reconnection; only synthetic state |
 | `mac-foreground` | Native Launch Services/Cocoa activation through the Swift check |
+| `mac-dmg-preflight`, `mac-dmg-mount`, `mac-dmg-copy`, `mac-dmg-verify`, `mac-dmg-detach` | Newer verifier source: exact CI artifact/owned mount, complete copied app closure, and detach before the shared workflow uses the copy; not yet observed for d14c512 |
 
 `timeout` means a child exceeded its bounded limit (normally 90 seconds; the
 second-instance launch has a 15-second limit); `missing_file` means a

@@ -444,6 +444,9 @@ Legacy cleanup rechecks claims under a per-target writer reservation. It keeps
 remaining files when a paper gains a claim and preserves caller-owned transactions.
 A late pause reports earlier completed cleanup accurately; see [storage behavior](docs/toolchain.md#caching-and-disk).
 The d14c512 candidates include the saved-research retention and reviewed-import fixes.
+Newer Mac verifier source also supports `--dmg FILE` to exercise a verified app
+copied from the installer image; [native acceptance scope](docs/toolchain.md#packaged-local-acceptance).
+Actual Mac DMG-copy verification remains pending.
 Selected-file offline checks now revalidate their native observations at desktop
 delivery, rejecting files or research changed after background verification;
 [behavior and limits](docs/workspace-offline-verification.md).

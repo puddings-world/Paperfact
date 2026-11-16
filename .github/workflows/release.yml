@@ -182,6 +182,14 @@ jobs:
           built=dist/Paperfact
           if [ "${{ runner.os }}" = "macOS" ]; then built=dist/Paperfact.app; fi
           extra=()
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            images=(dist/Paperfact-*-macos-arm64.dmg)
+            if [ "${#images[@]}" -ne 1 ] || [ ! -f "${images[0]}" ]; then
+              echo "Expected exactly one Mac DMG artifact"
+              exit 1
+            fi
+            extra=(--dmg "${images[0]}")
+          fi
           if [ "${{ runner.os }}" = "Windows" ]; then
             installers=(dist/Paperfact-*-windows-x64-setup.exe)
             if [ "${#installers[@]}" -ne 1 ] || [ ! -f "${installers[0]}" ]; then

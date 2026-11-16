@@ -54,6 +54,16 @@ to multiple cases; the preview deliberately does not invent a case count.
 - Fixture checks do not certify live providers, installed Windows/Mac upgrades,
   physical phone behavior or a deployed sync service. Those are separate gates.
 
+## DMG copy acceptance boundary
+
+`tests/test_mac_dmg_acceptance.py` simulates only native mount/copy responses while
+checking actual synthetic file hashes, owned paths, detach on failure/interruption,
+existing-file preservation and primary/cleanup failure reporting. The existing
+full-workflow regression also requires every frozen CLI/GUI command and foreground
+probe to use the copied app. Neither source result establishes a real Mac mount.
+The Mac CI's `--dmg` path must complete before reporting native DMG acceptance;
+quarantine, notarization and older installed upgrades remain separate.
+
 ## What the native candidate actually verifies
 
 A candidate is built once from a clean source commit. Windows, Apple Silicon Mac

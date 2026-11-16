@@ -29,7 +29,12 @@ installed acceptance or dispatch a rebuild for documentation-only changes.
 
 For the first public beta, use a candidate branch and **workflow_dispatch** to
 build without publishing. Run `scripts/verify_built_app.py` against the frozen app;
-the workflow does this on each selected platform. In **Actions > Release > Run
+the workflow does this on each selected platform. The Mac job now requires exactly
+one generated DMG and passes `--dmg`: its complete existing workflow runs from the
+verified copied app after the read-only image is detached. The original build app
+is only the content comparison baseline. Native DMG success is separate from local
+controller fixtures, quarantine/notarization and a physical installed upgrade.
+In **Actions > Release > Run
 workflow**, choose `platform=macos` for an Apple Silicon candidate or `all` (the
 default) for all three platforms. Choose `platform=windows` when diagnosing a
 Windows-only packaging failure; it runs the same checks without rebuilding Mac

@@ -17,6 +17,11 @@ checks before removal. These changes are now included in d14c512 candidates.
 Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
+Newer verifier source adds CI-only Mac DMG content/copy/detach checks and routes
+the shared frozen workflow through the copied app. Local controller fixtures pass;
+actual Mac mounting is pending. The d14c512 record below remains build-app
+acceptance, not an independently verified DMG-copy journey.
+
 ## Current deliverable
 
 Integration branch: `develop/0.5`. Windows, Apple Silicon Mac and Linux share clean

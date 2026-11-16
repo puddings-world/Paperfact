@@ -65,6 +65,25 @@ research and isolated account/data homes. It checks local startup, package
 roundtrip and CLI/MCP boundaries, plus Launch Services foreground behavior on
 macOS (requires Apple Swift). It does not deploy sync or log into a real account.
 
+The Mac GitHub job passes `--dmg dist/Paperfact-<version>-macos-arm64.dmg`.
+This CI-only option requires the matching clean repository/workspace/commit and
+exact generated artifact paths. It hashes the bounded image and complete app
+closure, mounts the image read-only at its fresh owned output path, copies
+`Paperfact.app`, verifies exact content/execute permissions/internal links, then
+detaches the owned volume. The existing research/CLI/MCP/foreground workflow runs
+once from that copy, after detaching; it is not duplicated against the build app.
+Bounds are 1 GiB for the DMG, 20,000 bundle entries and 2 GiB total bundle files.
+Unexpected mount replies, changed bytes/owners, copy/detach failure and interruption
+cannot produce acceptance. Cleanup preserves a primary failure stage; a secondary
+cleanup failure is a separate categorical `cleanup_failure`, with raw logs local.
+`mac_dmg` records image/bundle hashes and copy/detach/workflow completion. It keeps
+quarantine, notarization and older-installed-upgrade checks explicitly false.
+Native commands (`hdiutil`, `ditto`) are already used by the Mac build; no new SDK
+or CI job is introduced. Programmatic mount output uses Apple's supported
+[`-plist` interface](https://developer.apple.com/forums/thread/721232).
+The first actual DMG-copy CI result is still required; source fixtures simulate
+mounts on Windows and do not establish native acceptance.
+
 The Windows GitHub job additionally passes
 `--installer dist/Paperfact-<version>-windows-x64-setup.exe`. This option refuses
 non-Windows/nonmatching CI checkouts, dirty or mismatched build identities,

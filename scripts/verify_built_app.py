@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import plistlib
 import re
 import sqlite3
 import stat
@@ -50,6 +51,8 @@ STAGES = {
     "source-aware-report",
     "appimage-integration",
     "mac-foreground",
+    "mac-dmg-preflight", "mac-dmg-mount", "mac-dmg-copy",
+    "mac-dmg-verify", "mac-dmg-detach",
     "windows-installer-preflight",
     "windows-install",
     "windows-installed-version",
@@ -461,6 +464,150 @@ def _installer_input(built, out, installer):
                 source_identity=info, version=__version__)
 
 
+def _mac_bundle_hash(root):
+    """Bounded content/permission/link closure; bundle links must remain internal."""
+    root = Path(root).absolute()
+    identity = _safe_stamp(root)
+    pending, entries, tokens, total = [root], [], {}, 0
+    while pending:
+        directory = pending.pop()
+        tokens[directory] = _safe_stamp(directory)
+        for path in directory.iterdir():
+            if len(entries) >= 20000:
+                raise ValueError("Mac bundle exceeds its file budget")
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                target = os.readlink(path)
+                if not path.resolve(strict=True).is_relative_to(root):
+                    raise ValueError("Mac bundle link escapes its app")
+                entries.append((relative, "link", target))
+            elif path.is_dir():
+                pending.append(path)
+                entries.append((relative, "directory", None))
+            elif path.is_file():
+                token = _safe_stamp(path)
+                total += token[2]
+                if total > 2 * 1024**3:
+                    raise ValueError("Mac bundle exceeds its byte budget")
+                tokens[path] = token
+                entries.append((relative, path.stat().st_mode & 0o111,
+                                _file_hash(path, 2 * 1024**3)))
+            else:
+                raise ValueError("Mac bundle contains a special file")
+    if identity != _safe_stamp(root) or any(_safe_stamp(p) != t for p, t in tokens.items()):
+        raise ValueError("Mac bundle changed while checking")
+    return hashlib.sha256(json.dumps(sorted(entries)).encode("utf-8")).hexdigest()
+
+
+def _mac_dmg_input(built, out, image):
+    """Only the exact generated repository CI image and fresh owned output."""
+    from paper_daily import __version__
+
+    root = ROOT.resolve()
+    info = packaged_identity(built)
+    image = Path(image).absolute()
+    if (sys.platform != "darwin" or os.environ.get("GITHUB_ACTIONS") != "true"
+            or os.environ.get("GITHUB_REPOSITORY", "").casefold() != "puddings-world/paperfact"
+            or Path(os.environ.get("GITHUB_WORKSPACE", "")).resolve() != root
+            or info["dirty"] is not False or not info["commit"]
+            or info["commit"] != os.environ.get("GITHUB_SHA")):
+        raise ValueError("DMG acceptance requires a matching clean Mac CI build")
+    if (built != root / "dist/Paperfact.app" or out.parent != root / "build"
+            or image != root / "dist" / f"Paperfact-{__version__}-macos-arm64.dmg"):
+        raise ValueError("DMG acceptance requires the expected CI artifact paths")
+    token = _safe_stamp(image)
+    if not token[2]:
+        raise ValueError("DMG acceptance requires a nonempty image")
+    return dict(image=image, token=token, sha256=_file_hash(image, 1024**3),
+                bundle_sha256=_mac_bundle_hash(built), source_identity=info,
+                output_identity=_safe_stamp(out)[:2], mount=out / "mac-volume",
+                copied=out / "mac-installed" / "Paperfact.app")
+
+
+def _mac_dmg_copy(plan, out, env, run, acceptance):
+    mount, copied, image = plan["mount"], plan["copied"], plan["image"]
+    if mount != out / "mac-volume" or copied != out / "mac-installed/Paperfact.app":
+        raise ValueError("DMG acceptance paths changed")
+
+    def owned(*, source=True):
+        if (_safe_stamp(out)[:2] != plan["output_identity"]
+                or source and _safe_stamp(image) != plan["token"]):
+            raise ValueError("DMG acceptance ownership changed")
+
+    owned()
+    mount.mkdir(exist_ok=False)
+    copied.parent.mkdir(exist_ok=False)
+    copy_parent = _safe_stamp(copied.parent)[:2]
+    mount_identity = None
+
+    def mounted(raw):
+        nonlocal mount_identity
+        if len(raw) > 1024**2:
+            raise ValueError("DMG mount reply exceeds its bound")
+        value = plistlib.loads(raw)
+        if (not isinstance(value, dict) or not isinstance(value.get("system-entities"), list)
+                or any(not isinstance(row, dict) for row in value["system-entities"])):
+            raise ValueError("Invalid DMG mount reply")
+        points = [row["mount-point"] for row in value.get("system-entities", [])
+                  if "mount-point" in row]
+        if points != [str(mount)] or not mount.is_mount():
+            raise ValueError("DMG did not mount only at the owned destination")
+        mount_identity = _safe_stamp(mount)[:2]
+        _safe_stamp(mount / "Paperfact.app")
+
+    def copy_owned():
+        owned()
+        if (_safe_stamp(copied.parent)[:2] != copy_parent or copied.exists()
+                or _safe_stamp(mount)[:2] != mount_identity):
+            raise ValueError("DMG copy destination or mounted volume changed")
+
+    def checked():
+        owned()
+        if (packaged_identity(copied) != plan["source_identity"]
+                or _mac_bundle_hash(copied) != plan["bundle_sha256"]
+                or _file_hash(image, 1024**3) != plan["sha256"]):
+            raise ValueError("Copied DMG contents differ from the verified build")
+
+    def detach_owned():
+        owned(source=False)
+        if mount_identity is not None and _safe_stamp(mount)[:2] != mount_identity:
+            raise ValueError("DMG mounted volume changed before detach")
+
+    def detached(_raw):
+        if mount.is_mount():
+            raise ValueError("DMG remains mounted")
+
+    failure = None
+    try:
+        run("mac-dmg-mount", ["/usr/bin/hdiutil", "attach", "-readonly", "-nobrowse",
+                              "-mountpoint", mount, "-plist", image], env,
+            before=owned, after=mounted)
+        run("mac-dmg-copy", ["/usr/bin/ditto", mount / "Paperfact.app", copied], env,
+            before=copy_owned)
+        acceptance.call("mac-dmg-verify", checked)
+    except BaseException as error:
+        failure = error
+        raise
+    finally:
+        if mount.is_mount():
+            active = acceptance.report["active_check"]
+            try:
+                run("mac-dmg-detach", ["/usr/bin/hdiutil", "detach", mount], env,
+                    before=detach_owned, after=detached)
+            except BaseException as error:
+                if failure is None:
+                    raise
+                acceptance.report["cleanup_failure"] = dict(
+                    stage="mac-dmg-detach", **failure_category(error),
+                )
+            finally:
+                if failure is not None:
+                    acceptance.report["active_check"] = active
+                    acceptance.write()
+    return copied, dict(image_sha256=plan["sha256"], bundle_sha256=plan["bundle_sha256"],
+                        copied=True, detached=True)
+
+
 def _wait_for_idle(data, *, seconds=30, now=time.monotonic, pause=time.sleep):
     """Drain known fixture producers; unknown files/errors must still fail."""
     from paper_daily.enrollment_history import ActiveResearchWork, idle_lock_files
@@ -633,13 +780,13 @@ def _instance_handoff(command, env, out):
     check_process(subprocess.CompletedProcess(command, code, log.read_bytes(), b""), label)
     return dict(primary_ready=True, second_launch_handoff=True, primary_normal_exit=True)
 
-def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
+def _verify(built, out, acceptance, *, installer=None, legacy_source=None, dmg=None):
     installation = acceptance.call(
         "windows-installer-preflight", lambda: _installer_input(built, out, installer),
     ) if installer is not None else None
-    folder = built / "Contents/MacOS" if sys.platform == "darwin" else built
-    ext = ".exe" if os.name == "nt" else ""
-    cli, gui = folder / ("paperfact-cli" + ext), folder / ("Paperfact" + ext)
+    image = acceptance.call(
+        "mac-dmg-preflight", lambda: _mac_dmg_input(built, out, dmg),
+    ) if dmg is not None else None
 
     def run(label, command, env, *, before=None, after=None):
         def execute():
@@ -679,6 +826,12 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
         "isolation",
         lambda: tuple(isolated_env(out / name) for name in ("empty", "recipient", "sender")),
     )
+    image_result = None
+    if image is not None:
+        built, image_result = _mac_dmg_copy(image, out, empty, run, acceptance)
+    folder = built / "Contents/MacOS" if sys.platform == "darwin" else built
+    ext = ".exe" if os.name == "nt" else ""
+    cli, gui = folder / ("paperfact-cli" + ext), folder / ("Paperfact" + ext)
     run("version", [cli, "--version"], empty)
     run("doctor", [cli, "doctor"], empty)
     run("first-use", [gui], empty)
@@ -840,6 +993,12 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
     }
     if sys.platform == "darwin":
         result["checks"].append("mac-launch-services-foreground")
+    if image_result is not None:
+        result["mac_dmg"] = dict(
+            **image_result, workflow_from_copy=True, quarantine_checked=False,
+            notarization_checked=False, older_installed_upgrade_checked=False,
+        )
+        result["checks"].append("mac-dmg-copy-and-detach")
     if installation is not None:
         result["windows_installer"] = _windows_install(
             installation, out, recipient, empty, run, acceptance, integration_check,
@@ -852,7 +1011,7 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None):
     return result
 
 
-def verify(built, out, *, installer=None, legacy_source=None):
+def verify(built, out, *, installer=None, legacy_source=None, dmg=None):
     # A reused output directory must never overwrite an earlier acceptance run.
     try:
         out.mkdir(parents=True, exist_ok=False)
@@ -861,7 +1020,8 @@ def verify(built, out, *, installer=None, legacy_source=None):
     acceptance = Acceptance(built, out)
     try:
         result = _verify(built, out, acceptance, installer=installer,
-                         **({'legacy_source': legacy_source} if legacy_source is not None else {}))
+                         **({'legacy_source': legacy_source} if legacy_source is not None else {}),
+                         **({'dmg': dmg} if dmg is not None else {}))
     except BaseException as error:
         acceptance.failed(error)
         # Private diagnostics stay separate from the categorical shareable report.
@@ -882,13 +1042,16 @@ def main(argv=None):
     parser.add_argument("out", type=Path)
     parser.add_argument("--installer", type=Path,
                         help="Windows CI only: verify isolated install/reinstall/uninstall")
+    parser.add_argument('--dmg', type=Path,
+                        help='Mac CI only: run acceptance from a verified DMG copy after detaching')
     parser.add_argument('--legacy-source', type=Path,
                         help='Verify preservation from the pinned 0.4.3 source archive')
     args = parser.parse_args(argv)
     try:
         verify(args.built.resolve(), args.out.resolve(),
                installer=args.installer.absolute() if args.installer else None,
-               **({'legacy_source': args.legacy_source.absolute()} if args.legacy_source else {}))
+               **({'legacy_source': args.legacy_source.absolute()} if args.legacy_source else {}),
+               **({'dmg': args.dmg.absolute()} if args.dmg else {}))
     except KeyboardInterrupt:
         print(
             "Acceptance interrupted; inspect the chosen output folder/report.json.", file=sys.stderr

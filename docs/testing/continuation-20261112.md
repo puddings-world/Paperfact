@@ -10237,3 +10237,39 @@ unchanged. This overlaps earlier selections; it is not a total feature count.
   existing two-core/25% governor; whitespace clean. Runtime remains exactlyd14c512;
   reuse its actual three-OS critical/affected/frozen results for this docs-only
   checkpoint instead of repeating unchanged source tests locally.
+
+
+## 2026-11-16: verify the Mac distribution copy, not only the build directory
+
+- Observed gap: the previous native workflow passed dist/Paperfact.app to the
+  frozen verifier. The generated DMG itself was not mounted and copied for that
+  workflow. d14c512 remains the latest recorded accepted candidate; its record
+  is not retroactively strengthened.
+- Add --dmg FILE to the existing verifier. Only the exact clean repository Mac
+  CI build/image and fresh owned output qualify. Mount read-only, parse bounded
+  plist output, copy with native ditto, compare bounded bundle content, internal
+  links and executable permissions, verify image bytes, and detach the owned
+  mount before running the existing frozen workflow once from the copy.
+- Preserve the primary failure if cleanup also fails; retain a separate categorical
+  cleanup_failure. No force detach, extra CI job, historical-suite run, user-data
+  access, real-account call, deployment or public release is introduced.
+- Focused controller checks: 14 passed in 2.30s (10.349s full scoped check).
+  They cover successful byte-preserving copy, malformed/foreign mount replies,
+  modified bundle/image, copy failure, cancellation, detach failure, combined
+  failure, CI/path refusal, existing destination preservation, public flag routing,
+  and full existing orchestration using the copied executable/Launch Services path.
+  Native mount/copy commands are simulated on Windows; this is not Mac acceptance.
+- During fixture development, patching Path.is_mount missed WindowsPath's own
+  implementation. A guarded replacement initially wrote nothing and a shell
+  continued into the same failed check. Correct the concrete path-type fixture
+  and use fail-fast orchestration; no product assertion was weakened.
+- Default critical checks: 14 passed in 31.78s, total46.6s; privacy and Ruff passed.
+  Both scoped runs use the existing two-core/25-percent/300-second governor.
+  Evidence lives under ignored build/mac-dmg-evidence. The unrelated integration
+  worktree was inspected under its actual owner without changing Git safety config.
+- Public-support verification principles are reused, not promoted to a new global
+  skill. Actual Mac CI still must prove the new route; quarantine, notarization,
+  older installed-binary upgrades and physical device acceptance stay open.
+  Hosted continuous sync remains undeployed; list package handoff is a snapshot.
+- Documentation gate: 60 passed in 3.56s, total14.7s; privacy and Ruff
+  passed. Whitespace checked with CRLF-aware Git settings. No exhaustive run.

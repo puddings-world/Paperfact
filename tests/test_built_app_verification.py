@@ -125,6 +125,7 @@ def test_failed_acceptance_reports_exact_stage_without_private_text(tmp_path, mo
 def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_path, monkeypatch):
     """Script orchestration only; fake child apps are not native package acceptance."""
     out, seen = tmp_path / "acceptance", []
+    commands = []
     incomplete = [False]
     fail_reader = [False]
     reader_launches = [0]
@@ -134,6 +135,7 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
         destination = Path(env["HOME"]).parents[1]
         progress = json.loads((destination / "report.json").read_text(encoding="utf-8"))
         seen.append(progress["active_check"])
+        commands.append(list(command))
         assert not progress["passed"] and progress["status"] == "running"
         stdout = b""
         if progress["active_check"] == "reader":
@@ -259,6 +261,29 @@ def test_running_then_successful_acceptance_keeps_full_roundtrip_contract(tmp_pa
     assert (tmp_path / "mac-intermittent/recipient/workspace/app-fault.log").read_text(
         encoding="utf-8",
     ) == "synthetic native fault stack"
+    fail_reader[0] = False
+    commands.clear()
+    copied = tmp_path / "verified-copy/Paperfact.app"
+    selected_image = tmp_path / "candidate.dmg"
+    monkeypatch.setattr(verify, "_mac_dmg_input", lambda *args: dict(image=selected_image))
+
+    def copied_image(plan, output, env, run, acceptance):
+        assert plan == dict(image=selected_image)
+        assert Path(env["PAPERFACT_DATA"]).is_relative_to(output)
+        return copied, dict(image_sha256="a" * 64, bundle_sha256="b" * 64,
+                            copied=True, detached=True)
+
+    monkeypatch.setattr(verify, "_mac_dmg_copy", copied_image)
+    distributed = verify.verify(tmp_path / "built", tmp_path / "from-dmg", dmg=selected_image)
+    assert distributed["passed"] and distributed["mac_dmg"]["workflow_from_copy"]
+    assert distributed["mac_dmg"]["detached"]
+    app_commands = [command for command in commands if Path(command[0]).name in {
+        "paperfact-cli", "Paperfact", "paperfact-cli.exe", "Paperfact.exe"}]
+    assert app_commands and all(Path(command[0]).parent == copied / "Contents/MacOS"
+                                for command in app_commands)
+    swift = next(command for command in commands if command[0] == "/usr/bin/swift")
+    assert swift[-1] == str(copied)
+
 
 
 def test_main_returns_failure_without_printing_exception_or_old_success(
