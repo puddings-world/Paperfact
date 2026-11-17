@@ -26,12 +26,20 @@ records, startup reconnect, existing conflict handling, offline outboxes,
 delta/checkpoint storage and verified PDF chunks. No paid VM was provisioned.
 [Contracts and limits](sync-architecture.md#desktop-drive-pilot-2026-11-18).
 
-A new Mac candidate is pending the final check and GitHub Actions. Older downloads
-below do not contain personal Drive sync. Real native-vault prompts, the user's
+Drive source **052d9ab** is committed, pushed and fast-forwarded into `develop/0.5`.
+The bounded critical gate passes 14 cases in 15.1 seconds; affected runtime,
+selected-list/PDF, authority, UI and build-client checks pass 19 cases in 41.4 seconds.
+An overlapping low-level/UI/scope check passes 18 cases in 12.6 seconds. These are
+separate selections, not an additive unique-case total or an exhaustive suite.
+[Mac-only run44134098189](https://github.com/puddings-world/Paperfact/actions/runs/44134098189)
+is queued awaiting a hosted runner; no installer or native report exists yet.
+Older downloads below do not contain personal Drive sync. The approved synthetic
+workspace test stopped at browser authorization timeout before any Drive file was
+created; full live round-trip acceptance remains pending authentication. Real native-vault prompts, the user's
 Google account, installed Windows/Mac journeys and the wider v0.5/mobile release
 scope remain acceptance gates. No owner research was uploaded or migrated by tests.
 
-## Current deliverable
+## Previous native deliverable (before personal Drive)
 
 Integration branch: `develop/0.5`. Latest Mac candidate source: **66855cc**. The Apple Silicon Mac
 candidate now uses that exact clean source, version `0.5.0.dev`, beta-candidate.

@@ -2,8 +2,13 @@
 
 ## Personal Drive candidate: desktop to Mac
 
-The new Drive candidate is being built; use its exact source/artifact once listed
-below. The older 66855cc download has package transfer only.
+Drive candidate source: **052d9abff145317014c8321ac6eb454f70823160**.
+[Mac-only build44134098189](https://github.com/puddings-world/Paperfact/actions/runs/44134098189)
+was dispatched from clean `develop/0.5`. At the recorded check it is **queued**,
+with no assigned runner or started steps; no installer or native acceptance report
+has been produced yet. Do not treat dispatch as acceptance. Download `build-macos`
+only after this exact run succeeds, then confirm source **052d9ab** in the app.
+The older 66855cc download below has package transfer only.
 
 1. Desktop: open the matching candidate, click the bottom-right sync button, sign
    in to Google, select the lists to take, and choose **Sync this workspace**.
@@ -48,7 +53,7 @@ report, then decide where to send it. Do not send the whole research folder.
 The [full acceptance record](#acceptance-record) below tracks release/device tests;
 service-dependent cases stay **not run** until a reachable test service exists.
 
-## Latest tested downloads
+## Previous tested downloads (before personal Drive)
 
 Latest Apple Silicon Mac: clean **66855cc9d12eeb8b9c0f163019cf3f7f9efe7d01**,
 version `0.5.0.dev`, beta-candidate. [Run43881479241](https://github.com/puddings-world/Paperfact/actions/runs/43881479241)
