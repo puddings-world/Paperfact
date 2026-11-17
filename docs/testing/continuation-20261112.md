@@ -10637,3 +10637,13 @@ stay in the existing acceptance/continuation records.
   docs updated in the same checkpoint. Reuse existing boundary methods; no new
   universal agentic skill was manufactured. No Mac/Windows rebuild is needed for
   these operator-only changes; existing source/device acceptance limits remain.
+
+- Integration discovered five newer committed changes on develop/0.5 (through
+  40b36c6), including host-authored deep-dive/context operations and the maintained
+  AI access policy. Fast-forward was refused without changing integration state.
+  Merged the committed integration branch into the feature worktree, preserving
+  all work and resolving README automatically; no source conflict or force push.
+  Changed host/reference26 cases passed in11.41s, check16.7s; combined critical14
+  passed in5.78s, check9.3s. Unchanged pilot code/tests match b37f911 byte-for-byte,
+  so their affected18 result is reused rather than rerun. Private proposed server
+  source is now the merged tested commit000a5d3, not a mutable branch name.

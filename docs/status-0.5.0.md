@@ -91,6 +91,9 @@ See [queue pin migration](queue-pin-migration.md) and
    HTTPS, coordinated mobile delivery, backup/restore rehearsal and owner enrollment
    have not been performed. An offline template renderer now prepares consistent
    operator review files; it neither verifies artifacts nor authorizes resources.
+   The2026-11-17 review now has regional prices, two concrete VM/disk envelopes
+   and a domain-free public-IPv4 HTTPS path. Only owner resource/cost approval is
+   needed to begin provisioning; host/renewal/recovery/device gates still follow.
    This page does not authorize creating cloud resources.
 5. **Installed-device acceptance:** run the maintained Windows/Mac and physical
    phone journeys, including offline edits, conflict, interrupted attachment,
