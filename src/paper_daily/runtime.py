@@ -68,7 +68,12 @@ def data_dir(env=os.environ, frozen: bool = FROZEN) -> Path:
     chosen = env.get("PAPERFACT_DATA") or env.get("PAPER_DAILY_DATA")
     if chosen:
         return Path(chosen)
-    return user_data_dir(env=env) if frozen else bundle_root() / "data"
+    if not frozen:
+        return bundle_root() / "data"
+    from paper_daily.workspace_preferences import RECORD, remembered_workspace
+
+    default = user_data_dir(env=env)
+    return remembered_workspace(default / RECORD) or default
 
 
 def read_env_file(path: Path) -> dict[str, str]:

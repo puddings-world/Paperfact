@@ -350,3 +350,21 @@ def test_drive_grant_cancellation_binding_change_and_missing_refresh_do_not_save
         with pytest.raises(WorkspaceChanged):
             vault.remember(drive, "folder", "head", "workspace")
     assert store.rows == {}
+
+
+
+def test_google_gzip_response_is_decoded_once_and_keeps_actual_byte_bounds():
+    import gzip
+
+    cloud = Cloud()
+    def compressed(request):
+        original = cloud.handle(request)
+        raw = gzip.compress(original.content)
+        return httpx.Response(original.status_code,
+                              headers={"Content-Encoding": "gzip",
+                                       "Content-Length": str(len(raw))},
+                              stream=httpx.ByteStream(raw))
+    with DriveFiles(SimpleNamespace(access_token=lambda: "synthetic-only"),
+                    client=httpx.Client(transport=httpx.MockTransport(compressed))) as drive:
+        assert drive.account()["id"] == "owner"
+        assert drive.read_small(reference(), "folder", "workspace") == cloud.media

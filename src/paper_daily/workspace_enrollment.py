@@ -42,6 +42,7 @@ MAX_FILES = 256
 MAX_BYTES = 512 * 1024**2
 PRIVATE_FILES = {
     ".env", "credentials.json", "tokens.json", "settings.json", "config.json", "llm.json",
+    "active-workspace.json",
     "google-slides-client.json", "ai-usage.jsonl", "product-events.sqlite3",
     "product-events.sqlite3-wal", "product-events.sqlite3-shm", "product-events.sqlite3-journal",
 }

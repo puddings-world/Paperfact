@@ -2,13 +2,15 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -72,6 +74,13 @@ class DriveSyncDialog(QDialog):
         self.name = QLineEdit(self.tr("My research", "我的研究"))
         self.name.setMaxLength(200)
         layout.addWidget(self.name)
+        self.scope_label = QLabel(self.tr("Lists for the new sync copy", "選擇要同步的清單"))
+        self.scope_label.setVisible(False)
+        layout.addWidget(self.scope_label)
+        self.lists = QListWidget()
+        self.lists.setMaximumHeight(112)
+        self.lists.setVisible(False)
+        layout.addWidget(self.lists)
         self.create = QPushButton(self.tr("Sync this workspace", "同步這個工作區"))
         self.create.setProperty("role", "primary")
         self.create.clicked.connect(self.create_workspace)
@@ -136,8 +145,7 @@ class DriveSyncDialog(QDialog):
     @property
     def busy(self):
         child = getattr(self, "_advanced_dialog", None)
-        return (self._worker is not None
-                or (child is not None and not child.disposed and child.busy))
+        return self._worker is not None or (child is not None and not child.disposed and child.busy)
 
     def _buttons(self):
         idle = not self.busy and not self._closing
@@ -148,6 +156,7 @@ class DriveSyncDialog(QDialog):
         self.advanced.setEnabled(idle)
         self.name.setEnabled(idle)
         self.workspaces.setEnabled(idle)
+        self.lists.setEnabled(idle)
         self.stop.setEnabled(self.busy)
         self.progress.setVisible(self.busy)
         self.progress.setRange(0, 0 if self.busy else 1)
@@ -233,20 +242,26 @@ class DriveSyncDialog(QDialog):
         )
 
     def create_workspace(self):
-        if (
-            self.busy
-            or self.service.files is None
-            or not self.name.text().strip()
-            or not self._confirm()
-        ):
+        if self.busy or self.service.files is None or not self.name.text().strip():
             return False
         name = self.name.text().strip()
+        selected = [
+            self.lists.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.lists.count())
+            if self.lists.item(i).checkState() == Qt.CheckState.Checked
+        ]
+        if self.lists.count() and not selected:
+            self.status.setText(self.tr("Select at least one list.", "請至少選擇一個清單。"))
+            return False
+
+        if not self._confirm():
+            return False
 
         def create(ticket, progress):
             from paper_daily.desktop.enrollment_dialog import current_pdfs
 
-            pdfs = current_pdfs(self.session.workspace.path, ticket, progress)
-            return self.service.create(name, ticket, progress, pdfs=pdfs)
+            pdfs = None if selected else current_pdfs(self.session.workspace.path, ticket, progress)
+            return self.service.create(name, ticket, progress, pdfs=pdfs, list_ids=selected or None)
 
         return self._start("create", create)
 
@@ -270,6 +285,25 @@ class DriveSyncDialog(QDialog):
             if kind == "login":
                 self.account.setText(result["account"]["email"])
                 self.workspaces.clear()
+                self.lists.clear()
+                available = result.get("lists", [])
+                active = getattr(self.owner, "active_list", None)
+                for index, row in enumerate(available):
+                    item = QListWidgetItem(row["name"])
+                    item.setData(Qt.ItemDataRole.UserRole, row["id"])
+                    item.setCheckState(
+                        Qt.CheckState.Checked
+                        if row["id"] == active or (active is None and index == 0)
+                        else Qt.CheckState.Unchecked
+                    )
+                    self.lists.addItem(item)
+                from paper_daily.workspace_sync import local_binding
+
+                show_scope = bool(available) and local_binding(self.session.workspace.path) is None
+                self.lists.setVisible(show_scope)
+                self.scope_label.setVisible(show_scope)
+                if not show_scope:
+                    self.lists.clear()
                 for spec in result["workspaces"]:
                     self.workspaces.addItem(spec["name"], spec)
                 self.status.setText(
@@ -285,7 +319,16 @@ class DriveSyncDialog(QDialog):
                 self.auto.setChecked(enabled)
                 self.status.setText("Automatic Drive sync " + ("on" if enabled else "off"))
             elif result["copied"]:
+                from paper_daily.workspace_preferences import remember_workspace
+
                 database = Path(result["database"])
+                try:
+                    remember_workspace(database.parent)
+                except (OSError, ValueError):
+                    self.status.setText("Workspace prepared; open " + str(database.parent))
+                    worker.deleteLater()
+                    self._buttons()
+                    return
                 try:
                     self.open_workspace(WorkspaceDestination(database.parent, database))
                 except (OSError, ValueError):
@@ -370,8 +413,9 @@ class DriveSyncDialog(QDialog):
             automatic=self.automatic,
         )
         self._advanced_dialog = dialog
-        dialog.finished.connect(lambda _: QTimer.singleShot(0, self.close)
-                                if self._closing else None)
+        dialog.finished.connect(
+            lambda _: QTimer.singleShot(0, self.close) if self._closing else None
+        )
         dialog.open()
 
     def cancel(self):

@@ -154,7 +154,12 @@ class DriveFiles:
                     if size > MAX_INLINE:
                         raise ValueError("Drive response exceeds its bounded transfer limit")
                     parts.append(chunk)
-                response = httpx.Response(reply.status_code, headers=reply.headers,
+                # iter_bytes already decoded the wire representation. Keeping gzip
+                # or its encoded length would make the reconstructed response decode twice.
+                headers = {key: value for key, value in reply.headers.items()
+                           if key.lower() not in {
+                               "content-encoding", "content-length", "transfer-encoding"}}
+                response = httpx.Response(reply.status_code, headers=headers,
                                           content=b"".join(parts), request=reply.request)
         except httpx.TransportError as exc:
             raise DriveUnavailable("Drive is unavailable; local changes are retained") from exc

@@ -20,7 +20,8 @@ file lifecycle and reference-aware immutable-store eviction remain open.
 ## Personal Drive candidate preparation
 
 The desktop Drive path is connected in source: Google account choice, workspace
-discovery/create/join, supported legacy copy plus backup, native grants/device
+discovery/create/join, selected-list intake with PDFs, supported legacy copy plus
+backup, installed-workspace persistence, native grants/device
 records, startup reconnect, existing conflict handling, offline outboxes,
 delta/checkpoint storage and verified PDF chunks. No paid VM was provisioned.
 [Contracts and limits](sync-architecture.md#desktop-drive-pilot-2026-11-18).

@@ -47,8 +47,21 @@ Public v0.5 release and installed-device acceptance are separate gates.
 | `DriveAuthority(...).invoke(method, *args, control=None, **kwargs)` | Closed existing service methods, known-schema row state, original operation IDs/base revisions and the existing `ReferenceService` conflict/control-history engine. A private derived cache, never the live research database. |
 | `DriveObjects(files, folder, workspace, cache).put(path)` / `.get(manifest, store)` | At most 150 MiB per object, 4 MiB immutable chunks, durable preallocated upload IDs, verified retry, partial-download resume, full hash verification before local ownership. |
 | `TransportFactory(workspace, ...)` | Lazy native-vault routing for stable Drive origins; ordinary endpoints still use `HttpTransport`. No constructor login or credential read. |
-| `DriveSetup(database, ...).sign_in(ticket, progress)` / `.create(name, ticket, progress, pdfs=None)` / `.join(spec, ticket, progress)` | Explicit account/coverage/target selection, resumable enrollment, native startup consent and reconnect to the same workspace/device. Login alone does not enable uploads. |
+| `DriveSetup(database, ...).sign_in(ticket, progress)` / `.create(name, ticket, progress, pdfs=None, list_ids=None)` / `.join(spec, ticket, progress)` | Explicit account/coverage/target selection, resumable enrollment, native startup consent and reconnect to the same workspace/device. Login alone does not enable uploads. |
 | `DriveSyncDialog` | Default footer/workspace entry; background progress, duplicate/cancel/stale-result guards, create/join and automatic-sync toggle. Self-hosted configuration is under Advanced. |
+
+The desktop checklist scopes first enrollment to selected lists, using the existing
+offline package exporter/importer in separately bound child processes. Selected
+originals and personal reading history are retained; unrelated catalog rows and
+credentials are excluded. Selection creates a separate workspace; it is not a
+live filter on the original database. Installed builds remember that workspace
+in device-local `active-workspace.json`, pinned to the database file identity.
+Explicit data-directory overrides and source-checkout isolation take precedence.
+
+The approved live provider check exposed double decoding of Google gzip replies.
+The streaming boundary now retains decoded bytes and strips the original transport
+encoding/length headers; a compressed-response regression covers JSON and media.
+A completed full-workspace live result is still required separately.
 
 Each accepted state change uploads a row delta, with a full known-schema checkpoint
 every 32 publications. Hash-linked immutable commits preserve ordering; a conditional

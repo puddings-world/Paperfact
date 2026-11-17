@@ -147,12 +147,14 @@ count does not certify original-source coverage. [Evidence scope](docs/analysis-
 ## Sync a desktop and laptop (v0.5 preview)
 
 1. Click the bottom-right **Sync** button and sign in to Google.
-2. On your desktop, choose **Sync this workspace**. Existing research gets a
+2. On your desktop, select the lists you want and choose **Sync this workspace**.
+   Unrelated catalog papers stay local. Selected research gets a
    separate verified copy and backup when first enrollment is needed. The new
    window reconnects automatically; keep it open until pending changes/files finish.
 3. On your Mac, install the matching preview, sign in to the **same Google account**
    and choose **Open selected Drive workspace**. Its data stays in a new local folder.
-4. Keep automatic sync on. Offline notes are saved locally and sent after reconnect.
+4. Installed builds remember the opened sync workspace on restart. Keep automatic
+   sync on. Offline notes are saved locally and sent after reconnect.
    Before a trip, use offline preparation/verification for the papers you need.
 
 ```mermaid
