@@ -1,6 +1,6 @@
 # v0.5.0 current status
 
-Updated 2026-11-16. **Development candidate; v0.5.0 is not release-approved.**
+Updated 2026-11-17. **Development candidate; v0.5.0 is not release-approved.**
 The full target remains the [release scope](roadmap-0.5.0.md), including desktop
 and mobile offline research, safe synchronization, recovery and private access.
 This page separates current evidence from unfinished implementation and external
@@ -17,9 +17,23 @@ checks before removal. These changes are now included in d14c512 candidates.
 Existing legacy files are not automatically enrolled. Complete supported writer/
 file lifecycle and reference-aware immutable-store eviction remain open.
 
+## Personal Drive work in progress
+
+The owner selected personal Drive instead of a paid VM prerequisite. The new
+storage seams now provide conditional private heads, immutable incremental
+records and explicit native-vault grants; 11 focused cases passed in 1.04s
+(bounded check 8.1s). One approved synthetic live file confirmed fresh/stale/
+competing update behavior and exact-file cleanup. See the
+[implementation boundary](sync-architecture.md#drive-storage-checkpoint-2026-11-17).
+The configured critical gate also passed: 14 cases in 7.39s (bounded check
+15.3s), covering the existing named journeys rather than the historical suite.
+These seams are not connected to desktop research transactions, large PDFs or
+onboarding yet. No personal research has been uploaded, and no new Drive-ready
+Mac candidate has been built. Existing downloads below predate this work.
+
 ## Current deliverable
 
-Integration branch: `develop/0.5`, source **66855cc**. The Apple Silicon Mac
+Integration branch: `develop/0.5`. Latest Mac candidate source: **66855cc**. The Apple Silicon Mac
 candidate now uses that exact clean source, version `0.5.0.dev`, beta-candidate.
 [Run43881479241](https://github.com/puddings-world/Paperfact/actions/runs/43881479241)
 passed in5m35s; draft/release skipped. It includes cancellable exact-original
@@ -86,15 +100,13 @@ See [queue pin migration](queue-pin-migration.md) and
 3. **Desktop completion:** verify the private AI handoff and retained-report
    review/finish flows in frozen/installed apps; source/widget tests alone do not
    close them. Finish the remaining recovery/attachment lifecycle UX and coverage.
-4. **Deployment:** review the existing [GCP pilot plan](gcp-sync-pilot-plan.md),
-   exact project/region/hostname/budget, operator and recovery boundary. Provisioning,
-   HTTPS, coordinated mobile delivery, backup/restore rehearsal and owner enrollment
-   have not been performed. An offline template renderer now prepares consistent
-   operator review files; it neither verifies artifacts nor authorizes resources.
-   The2026-11-17 review now has regional prices, two concrete VM/disk envelopes
-   and a domain-free public-IPv4 HTTPS path. Only owner resource/cost approval is
-   needed to begin provisioning; host/renewal/recovery/device gates still follow.
-   This page does not authorize creating cloud resources.
+4. **Personal Drive integration:** the owner prefers their existing Drive to a
+   separately billed VM. Reuse app-scoped Google login and implement safe native
+   authorization persistence, account-bound replica storage, attachment transfer,
+   conflict/retry and offline/reconnect acceptance. This adapter is not implemented;
+   current Google login supports Slides and package sharing only. The earlier
+   [GCP pilot](gcp-sync-pilot-plan.md) is optional and no cost approval was received.
+   See [the revised architecture](sync-architecture.md#personal-drive-first-owner-direction-2026-11-17).
 5. **Installed-device acceptance:** run the maintained Windows/Mac and physical
    phone journeys, including offline edits, conflict, interrupted attachment,
    revocation and restore. Installed old-release upgrades, native vaults/IME and

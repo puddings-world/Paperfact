@@ -1,5 +1,11 @@
 ﻿# GCP private sync pilot proposal
 
+Personal sync direction, 2026-11-17: prioritize the user's own Google Drive.
+This VM proposal is retained only as an optional backend. Do not provision it as
+a prerequisite for personal sync or treat the earlier budget choices as approved.
+The [Drive-first architecture](sync-architecture.md#personal-drive-first-owner-direction-2026-11-17)
+records the replacement work; the Drive replica adapter is not implemented yet.
+
 Status: proposal, updated 2026-11-17. The owner selected reuse of existing GCP
 for planning only. Read-only SDK inventory found an accessible Paperfact project
 with Drive, Slides and Cloud Storage APIs enabled. Compute Engine and Cloud Run

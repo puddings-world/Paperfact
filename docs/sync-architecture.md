@@ -3,6 +3,69 @@
 Status: design proposal for [v0.5.0](roadmap-0.5.0.md), not shipped behavior.
 Implementation order and decision gates: [work plan](implementation-0.5.0.md).
 
+## Personal Drive first (owner direction, 2026-11-17)
+
+Personal cross-device sync should use the user's own Google Drive as the preferred
+storage path. A separately billed Paperfact VM is not a prerequisite. The server
+architecture below remains an optional backend/reference, not a completed Drive
+implementation. No paid GCP resources have been created.
+
+Reuse the existing `drive.file` browser grant for app-created private files in a
+visible Paperfact folder. Keep colleague exports separate: publish only a reviewed
+list package with explicit Drive sharing, never the private workspace container.
+The hidden `appDataFolder` cannot be shared and would require a different scope;
+it is not needed for this visible-folder approach.
+
+Each device retains its own SQLite workspace, durable changes and verified PDF/
+deck cache. Implement a Drive-specific replica adapter for versioned changes and
+immutable attachment bytes; do not put the live SQLite file in Drive desktop sync.
+Drive change tokens identify file-feed positions, not the existing reference
+server's verified authority sequence. Ordering, conflicts, retries and missing/
+deleted remote files require explicit adapter semantics and acceptance before
+real research upload. Drive is not a drop-in HttpTransport replacement.
+
+The current desktop Google session is memory-only. Native-grant storage seams
+now exist below, but their UI/startup integration, account-switch isolation and
+launch/foreground polling still need implementation for the Drive path. Existing login alone must not enable
+cloud upload. Google credentials remain device-local and absent from packages.
+See [Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth),
+[change retrieval](https://developers.google.com/workspace/drive/api/guides/manage-changes)
+and [app-data constraints](https://developers.google.com/workspace/drive/api/guides/appdata).
+
+### Drive storage checkpoint (2026-11-17)
+
+Implemented source seams, not desktop synchronization:
+
+| Interface | Current behavior |
+|---|---|
+| `DriveFiles(session, client=None, cancelled=...)` | Captures one official Google API session. `account()`, `new_ids(count=1)`, `create_folder(id, workspace, name)` and `read_head(id, parent, workspace)` validate account-owned, private app objects. |
+| `put_small(id, parent, workspace, role, data, description=None)` / `read_small(reference, parent, workspace, role="commit")` | Bounded immutable objects, explicit retry identity, byte/hash verification; no overwrite on ID collision. |
+| `publish_head(observed, new_commit)` | Only this instance's captured head may publish. Conditional v2 metadata updates reject competing writers; failure does not replace the retained local anchor. |
+| `DriveLog(files, folder, head_id, workspace_id)` | `append(observed, object_id, payload)` publishes an immutable transaction before advancing the head. `read_since(anchor, limit=100, maximum=8388608)` verifies ancestry and returns oldest-first bytes plus the new anchor. |
+| `DriveVault(workspace, backend=..., startup_dir=...)` | `remember(files, folder_id, head_id, workspace_id, ticket=None)`, `load(ticket=None)` and `forget(ticket=None)` use the existing native-store/database-lifetime boundary. Grant storage does not enable startup access or uploads. |
+| `DriveGrant.session(client_reader=...)` | Restores a refresh-only in-memory Google session for the exact desktop OAuth client. No token refresh or network occurs until explicitly used. |
+
+Evidence: 11 focused synthetic cases in `tests/test_drive_sync_files.py` passed in
+1.04s (bounded check 8.1s). They cover competing publications, exact immutable
+bytes, wrong-account receipts, private ownership, cancellation, offline/missing/
+revoked responses, receiver restart, altered history, native-only grants and
+workspace/client changes. The owner separately authorized one live synthetic
+Drive file test: fresh metadata update returned 200, stale update 412, competing
+updates [200, 412]; exact ownership was checked before deleting that file (204).
+No research was read or uploaded. This proves the tested provider behavior, not
+all future service behavior, cryptographic fencing or complete application sync.
+
+Remaining integration is substantive: research-engine transaction mapping and
+atomic local anchor application, durable long-history catch-up/checkpoints (the
+current bounded read fails closed beyond 100 commits/8 MiB), resumable large PDF
+objects, workspace discovery/enrollment, explicit start/reconnect UI, native
+startup opt-in and the installed Windows/Mac offline/conflict journey. A losing
+publication may leave an unreferenced private immutable object; automatic remote
+garbage collection is not implemented. Do not build or label a Drive-ready Mac
+candidate from these storage seams alone. The next candidate must include the
+complete desktop path, then run the existing Mac-only GitHub Actions workflow.
+
+
 ## Existing seams
 
 | Existing component | Reuse | Missing capability |

@@ -284,6 +284,10 @@ Operators can now [create a private signing key and explicitly enable browser pa
 with `paperfact sync-admin create-browser-key --output FILE` and
 `paperfact sync-admin serve --state DIR --browser-origin URL --browser-key-file FILE`. HTTPS/static hosting and
 installed-device acceptance remain open.
+Personal cross-device sync now prioritizes the user's own Drive; the
+[Drive storage seams are implemented](docs/sync-architecture.md#drive-storage-checkpoint-2026-11-17);
+the desktop replica integration remains in development. Existing Google login already supports Slides and list-package
+sharing; it does not yet enable continuous Drive sync. A paid VM is optional.
 The [private deployment review](docs/gcp-sync-pilot-plan.md#a-domain-is-optional-for-the-private-pilot)
 can use an owned hostname or a reserved public IPv4 with trusted HTTPS; a domain
 purchase is not required. Its renderer does not create resources or certificates.
