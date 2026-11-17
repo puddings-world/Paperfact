@@ -7,6 +7,8 @@ The local stdio MCP server for offline list operations ships in 0.3.0.
 
 For the concrete local-project use case, CLI/MCP examples and
 call-flow diagrams, see [Local integration](local-integration.md).
+Which account each AI feature may use, and why, is in
+[AI access policy](ai-access-policy.md).
 
 ## One product, two execution modes
 

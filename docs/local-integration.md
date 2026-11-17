@@ -108,7 +108,22 @@ The ten list, import and research-reading operations above are **offline and use
 is not publication verification. Sources are stored as data; URLs are not fetched
 by these tools. Open the list to use the desktop's existing PDF preparation,
 or request AI analysis separately through the app or the existing `analyze` CLI.
-MCP analysis/job-control tools are not included in this release.
+MCP job-control tools are not included in this release.
+
+### Research context answered by the host
+
+The connected agent can write a paper's research context (what each reference is
+doing in it) with **its own** model account, so a Claude, Codex or Gemini
+subscription is used from its official program, never through Paperfact:
+
+| Tool / CLI operation | Result |
+|---|---|
+| `research.citations.task` | v0.5 development: `instructions`, `material` (the reference list with the sentences citing each entry) and the `keys` to answer. Paperfact makes no model call; reference metadata may be looked up at Crossref and Semantic Scholar. |
+| `research.citations.save` | v0.5 development: stores the host's JSON answer through the same checks as the app's own analysis. Unknown keys and incomplete entries are dropped, reader-edited rows are kept, and fewer than four in five answered keys add rather than replace (`complete: false`). |
+
+Ask the agent: **"Rerun the research context of the Paperfact paper I am reading."**
+See [AI access policy](ai-access-policy.md) for why this direction is the one that
+keeps every vendor's subscription terms.
 
 ### Reading a paper's research
 
