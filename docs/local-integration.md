@@ -110,18 +110,21 @@ by these tools. Open the list to use the desktop's existing PDF preparation,
 or request AI analysis separately through the app or the existing `analyze` CLI.
 MCP job-control tools are not included in this release.
 
-### Research context answered by the host
+### Research context and deep dives answered by the host
 
 The connected agent can write a paper's research context (what each reference is
-doing in it) with **its own** model account, so a Claude, Codex or Gemini
+doing in it) and its deep dive with **its own** model account, so a Claude, Codex or Gemini
 subscription is used from its official program, never through Paperfact:
 
 | Tool / CLI operation | Result |
 |---|---|
 | `research.citations.task` | v0.5 development: `instructions`, `material` (the reference list with the sentences citing each entry) and the `keys` to answer. Paperfact makes no model call; reference metadata may be looked up at Crossref and Semantic Scholar. |
 | `research.citations.save` | v0.5 development: stores the host's JSON answer through the same checks as the app's own analysis. Unknown keys and incomplete entries are dropped, reader-edited rows are kept, and fewer than four in five answered keys add rather than replace (`complete: false`). |
+| `research.dive.task` | v0.5 development: `instructions` (the deep-dive specification), `material` (the paper's briefing pack) and `full_text`. Paperfact makes no model call; preparing the pack may fetch the paper's page or PDF. |
+| `research.dive.save` | v0.5 development: publishes the host's Markdown dive like a generated one, bound to the paper's current inputs. A body under 800 characters is rejected (`dive_answer_rejected`); a paper the nightly run gave up on becomes eligible again. The close reading and highlights that the app chains after a dive are not run. |
 
-Ask the agent: **"Rerun the research context of the Paperfact paper I am reading."**
+Ask the agent: **"Rerun the research context of the Paperfact paper I am reading"**, or
+**"Write the deep dive for that paper."**
 See [AI access policy](ai-access-policy.md) for why this direction is the one that
 keeps every vendor's subscription terms.
 

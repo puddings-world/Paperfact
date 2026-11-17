@@ -62,11 +62,17 @@ State, in this order, with the first two lines emphasised:
 5. That Gemini subscriptions are used only from agy, through Paperfact's tools.
 6. Links to each vendor's terms (sources above).
 
+## Host-answered features
+
+The research context (`research.citations.task` / `.save`) and the deep dive
+(`research.dive.task` / `.save`) can be written by the agent host with its own
+account; see [Local integration](local-integration.md). Notes, claims and
+highlights already had their review tools. The close reading and highlight drafts
+that the app chains after a dive have no host tools yet.
+
 ## Gaps (not implemented)
 
-- MCP tools for the deep dive, as a task to read and an answer to save. The
-  research context has them (`research.citations.task` / `.save`, see
-  [Local integration](local-integration.md)); notes, claims and highlights already
-  had their review tools.
 - The consent screen above and a per-night budget.
+- Nightly analysis still runs from Paperfact's own scheduled task; making it
+  off by default, or moving it to the host's scheduler, is not done.
 - No `agy` backend is to be added to `llm.py`.

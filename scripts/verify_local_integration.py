@@ -76,6 +76,8 @@ def verify(command, workspace, env):
                 "review.highlights.apply",
                 "research.citations.task",
                 "research.citations.save",
+                "research.dive.task",
+                "research.dive.save",
             }
             arguments = dict(preview_id=preview, operation_id="acceptance", selected=["0"])
             first = await client.call_tool("imports.commit", arguments)

@@ -109,6 +109,8 @@ def main(argv=None):
                 "review.highlights.apply",
                 "research.citations.task",
                 "research.citations.save",
+                "research.dive.task",
+                "research.dive.save",
             ),
         )
         parser.add_argument("--file", help="UTF-8 JSON arguments; otherwise read stdin")
