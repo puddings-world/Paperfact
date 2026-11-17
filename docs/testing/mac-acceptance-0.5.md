@@ -4,10 +4,20 @@
 
 Drive candidate source: **052d9abff145317014c8321ac6eb454f70823160**.
 [Mac-only build44134098189](https://github.com/puddings-world/Paperfact/actions/runs/44134098189)
-was dispatched from clean `develop/0.5`. At the recorded check it is **queued**,
-with no assigned runner or started steps; no installer or native acceptance report
-has been produced yet. Do not treat dispatch as acceptance. Download `build-macos`
-only after this exact run succeeds, then confirm source **052d9ab** in the app.
+**Succeeded.** Download the [Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44134098189/artifacts/14351978610).
+Extract the installer ZIP, open the DMG and confirm source **052d9ab** in the app.
+The job waited about 10 minutes for a runner, then took 7m03s. No public release
+or auto-update was published. Keep the existing daily app/data until device acceptance.
+
+The downloaded provenance ZIP was independently SHA-256 matched. Its report
+confirms clean source, arm64, mounted/copied/verified/detached DMG, workflow from
+the copy, three reader launches, foreground activation, four exact research
+files, package retry/re-export and all 15 named sync-protocol outcomes.
+Mac source selections passed critical14, first-enrollment1, authority54 and
+Drive24 (five warnings per phase). Those fixture checks include synthetic
+providers; they do not prove real Drive login or native Keychain behavior.
+The native Drive dialog screenshot was also downloaded/hash-matched and viewed.
+The 280 MB installer ZIP itself was not downloaded on the source workstation.
 The older 66855cc download below has package transfer only.
 
 1. Desktop: open the matching candidate, click the bottom-right sync button, sign

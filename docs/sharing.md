@@ -29,7 +29,9 @@ This is a one-time snapshot, not continuous two-way sync. Existing receiver
 research is preserved by default; replacing it is an explicit preview choice.
 Later edits need a new export/import and review, not an assumed automatic merge.
 AI credentials/settings stay on each device; log into that device's own account
-only when continuing AI analysis. Hosted continuous workspace sync is not deployed.
+only when continuing AI analysis. For one owner's automatic desktop/laptop sync,
+use the separate [personal Drive preview](../README.md#sync-a-desktop-and-laptop-v05-preview);
+a colleague's package import does not join the sender's private workspace.
 
 ## Sender: share through your Google Drive
 
@@ -133,6 +135,8 @@ focal/peer original and selected context outside the list, without importing
 that context's unrelated notes or adding it as list membership. PDFs are required
 for this content. Same-ID bibliographic collisions require reviewed mapping;
 scientific conflicts preserve current research by default. Enrolled receivers
-still refuse Lineage until compound sync import is complete. See the
+accept supported source-complete Lineage through the same observed package
+transaction; different saved native reports require explicit comparison.
+Unowned/deleted results and unsupported scopes remain protected. See the
 [source-complete workflow and current limits](lineage-packages.md#normal-list-package-workflow).
 This is development behavior, not a claim about the installed v0.4 releases.

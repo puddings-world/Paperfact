@@ -89,10 +89,11 @@ the separate canonical artifact-wire encoding.
 
 ## Remaining integration
 
-1. Add enrolled-workspace compound source/content operations, native action
-   receipts and shared Lineage admission without capture suppression as a shortcut.
-2. Provide reviewed paper mapping for identity collisions and explicit new import
-   intent after local edits; a completed package action must not silently replay.
+1. Enrolled compound import, native receipts, paper mapping and native-result
+   comparison are now integrated; see [the current enrolled workflow](enrolled-package-import.md#source-complete-lineage-import-v05-development).
+   Finish installed-device acceptance and unsupported adoption boundaries.
+2. Finish explicit new import intent after local edits; a completed package action
+   must not silently replay. Existing reviewed mapping is not general record merging.
 3. Finish fresh editable recovery with complete provenance/history retention and
    Lineage enrollment, using the staged verified original preparation below.
 4. Connect saved-first desktop/mobile source controls and the complete research
@@ -497,5 +498,5 @@ flowchart LR
   B --> C[Off-lock PDF validation and cache]
   C --> D[One transaction: papers, reports, sources, action receipt]
   D --> E[Receiver reads exact originals and exports again]
-  B -. enrolled receiver .-> F[Refuse until compound sync import is supported]
+  B --> F[Enrolled receiver: observed transaction and native-result review]
 ```

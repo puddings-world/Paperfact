@@ -32,7 +32,12 @@ selected-list/PDF, authority, UI and build-client checks pass 19 cases in 41.4 s
 An overlapping low-level/UI/scope check passes 18 cases in 12.6 seconds. These are
 separate selections, not an additive unique-case total or an exhaustive suite.
 [Mac-only run44134098189](https://github.com/puddings-world/Paperfact/actions/runs/44134098189)
-is queued awaiting a hosted runner; no installer or native report exists yet.
+succeeded: about 10 minutes queued, 7m03s executing. The [Apple Silicon installer](https://github.com/puddings-world/Paperfact/actions/runs/44134098189/artifacts/14351978610)
+contains personal Drive sync. Independently hash-matched provenance confirms
+clean052d9ab/arm64, actual DMG copy/detach, foreground activation, three reader
+launches, package preservation and all15 named protocol outcomes. Source phases
+pass14/1/54/24 cases (five warnings each); no historical full run was performed.
+[Exact download and physical acceptance steps](testing/mac-acceptance-0.5.md#personal-drive-candidate-desktop-to-mac).
 Older downloads below do not contain personal Drive sync. The approved synthetic
 workspace test stopped at browser authorization timeout before any Drive file was
 created; full live round-trip acceptance remains pending authentication. Real native-vault prompts, the user's
@@ -67,6 +72,27 @@ full new GUI/live accounts/native vaults/IME, quarantine/notarization, older ins
 binary upgrades, hosted recovery and physical device journeys still gate v0.5.0.
 Detailed identities and previous candidate records stay in the acceptance guide and
 continuation ledger. This candidate does not authorize deployment or daily-data migration.
+
+## Branch integration review (2026-11-18)
+
+The current candidate includes the complete committed `feature/0.5-pdf-reference-list`
+performance branch (40b36c6), both minimal-update branches, and current master.
+The performance worktree is clean. Included changes reduce whole-list repaints,
+avoid full-PDF reads when opening papers/slides, reduce Lineage widget counts,
+defer heavy panels and warm parsing dependencies. Git inclusion is verified;
+no new end-to-end latency benchmark is claimed.
+
+Separate unmerged work is paper-identity/merge review (two commits) and the older
+parallel-test runner (one commit). They are not missing runtime performance fixes;
+neither was silently merged during this review. Retain the bounded serial gate.
+
+Cross-user packages already carry supported saved research and exact included
+originals into an independent recipient database. Captured/enrolled receivers use
+the observed transaction path, including source-complete Lineage and explicit
+native-result comparison. Remaining limits include unsupported legacy scopes,
+unowned/deleted result adoption, reviewed updates after later edits, package
+budgets and installed cross-user acceptance. Sharing is a snapshot, not team
+co-editing; same-owner continuous Drive sync remains a separate opt-in.
 
 ## Requirements and actual boundaries
 
