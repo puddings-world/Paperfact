@@ -21,7 +21,7 @@ class AccountStatus(QObject):
     def check(self, configs):
         for cfg in configs:
             key = ai_choices.account_key(cfg)
-            if cfg.backend not in ai_choices.LABELS or key in self.pending:
+            if cfg.backend not in ai_choices.CLI_BACKENDS or key in self.pending:
                 continue
             self.pending.add(key)
 

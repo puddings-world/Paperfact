@@ -4,7 +4,8 @@ import pytest
 from PySide6.QtWidgets import QInputDialog
 from test_ai_picker import picker as _picker
 
-from paper_daily import ai_choices, ai_providers, llm
+from paper_daily import ai_choices, ai_profiles, ai_providers, llm
+from paper_daily.desktop.ai_access import readiness
 from paper_daily.desktop.ai_dialog import AIStatusButton
 
 picker = _picker
@@ -78,8 +79,25 @@ def test_replacing_a_key_keeps_the_connection_and_its_assignments(picker, listed
         ai_choices.save_gemini_key("  ", "")
 
 
-def test_a_workspace_cli_login_is_still_offered_after_the_key(picker):
-    llm.save_settings(profile="work-gemini", backend="gemini", isolated=True)
+def test_a_saved_gemini_cli_login_is_retired_with_a_reason(picker):
+    data = ai_profiles.load(llm.SETTINGS_PATH)
+    data.setdefault("profiles", {})["work-gemini"] = {"backend": "gemini", "isolated": True}
+    ai_profiles.write(llm.SETTINGS_PATH, data)
     options = ai_choices.choices("gemini")
-    assert ai_choices.is_gemini_api(options[0]) and not options[0].api_key
-    assert [cfg.profile for cfg in options[1:]] == ["work-gemini"]
+    assert len(options) == 1 and ai_choices.is_gemini_api(options[0])
+    retired = llm.settings(profile="work-gemini")
+    assert retired.backend == "gemini"
+    reply = llm.complete_result("prompt", cfg=retired)
+    assert reply.text is None and "Gemini API 金鑰" in reply.reason and "agy" in reply.reason
+    assert readiness(retired) == ai_profiles.RETIRED["gemini"]
+    with pytest.raises(ValueError, match="2026-06-18"):
+        llm.save_settings(profile="new-gemini", backend="gemini", isolated=True)
+
+
+def test_signing_in_to_a_retired_connection_explains_instead_of_starting_a_cli():
+    from paper_daily import ai_accounts
+    from paper_daily.ai_types import Settings
+
+    retired = Settings("gemini", isolated=True)
+    assert ai_accounts.auth(retired, "status") == (None, ai_profiles.RETIRED["gemini"])
+    assert ai_accounts.auth(retired, "login")[0] is None

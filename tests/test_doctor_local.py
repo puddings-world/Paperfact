@@ -22,7 +22,7 @@ def local(tmp_path, monkeypatch):
     return tmp_path
 
 
-@pytest.mark.parametrize("backend", ["none", "cli", "codex", "gemini"])
+@pytest.mark.parametrize("backend", ["none", "cli", "codex"])
 def test_default_doctor_allows_fresh_reader_without_contacting_ai(local, monkeypatch, backend):
     monkeypatch.setattr(llm, "settings", lambda: Settings(backend))
     assert cli.cmd_doctor(SimpleNamespace(ai=False, sources=False)) == 0

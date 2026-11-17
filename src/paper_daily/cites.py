@@ -142,6 +142,79 @@ def contexts(text: str, max_per_key: int = 3, highest: int | None = None) -> dic
     return found
 
 
+_LIST_HEADING_RE = re.compile(r"\n\s*(?:references|bibliography)\s*\n", re.I)
+_LIST_ENTRY_RE = re.compile(r"(?m)^[ \t]*\[?(\d{1,3})[\].][ \t]+(?=\S)")
+_LIST_END_RE = re.compile(
+    r"(?m)^[ \t]*(?:acknowledge?ments?|author contributions?|competing interests?|"
+    r"additional information|funding|appendix|supplementary)\b",
+    re.I,
+)
+_LIST_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+)")
+_LIST_YEAR_RE = re.compile(r"\b((?:19|20)\d{2})[a-z]?\b")
+
+
+def _letters(text: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
+def listed_references(text: str) -> dict[str, dict]:
+    """Reference number -> {title, year, doi, citation}, read from the paper's own list.
+
+    A paper a few weeks old has no reference list at Crossref or Semantic Scholar
+    yet, and those are the papers read first. Without one every "13" is a bare
+    number, the model can only describe the cited work from the sentence around it,
+    and the map has nothing to draw. The list is printed at the end of the PDF.
+
+    Only a list numbered 1, 2, 3 in order is taken: a number out of turn is a page
+    number, a volume or a table cell, and one wrong pairing names the wrong paper.
+    """
+    headings = list(_LIST_HEADING_RE.finditer(text or ""))
+    if not headings:
+        return {}
+    tail = text[headings[-1].end() - 1 :]
+    starts = []
+    for m in _LIST_ENTRY_RE.finditer(tail):
+        if int(m.group(1)) == len(starts) + 1:
+            starts.append(m)
+    # The list starts under its heading. Numbered steps further on, in an appendix
+    # after an author-year bibliography, are not it.
+    if len(starts) < 3 or starts[0].start() > 200:
+        return {}
+    out: dict[str, dict] = {}
+    for position, m in enumerate(starts):
+        last = position + 1 == len(starts)
+        raw = tail[m.end() : len(tail) if last else starts[position + 1].start()]
+        if last:
+            end = _LIST_END_RE.search(raw)
+            raw = raw[: end.start() if end else len(raw)][:600]
+        citation = " ".join(raw.split())
+        doi = _LIST_DOI_RE.search(citation)
+        years = _LIST_YEAR_RE.findall(citation)
+        # A citation is short and dated. Anything else under a number is a page of
+        # appendix that happened to follow the list.
+        if not 15 <= len(citation) <= 600 or not years:
+            continue
+        # The same convention as the publisher's unstructured entries: drop a marked
+        # author block, and keep the whole string otherwise.
+        title = re.sub(r"^.{0,90}?\bet al\.\s*", "", citation).strip() or citation
+        out[m.group(1)] = {
+            "title": title[:300],
+            "year": int(years[-1]) if years else None,
+            "doi": doi.group(1).rstrip(".,;)") if doi else None,
+            "citation": citation,
+        }
+    return out
+
+
+def listed_title(known: dict, answered: str | None) -> str | None:
+    """The title to keep for a reference: the list's, or the model's when the list
+    entry is a whole citation string and the model's title is printed inside it."""
+    named = _letters(answered)
+    if len(named) >= 12 and named in _letters(known.get("citation")):
+        return str(answered).strip()
+    return known.get("title") or answered
+
+
 # The analysis specification this module writes. Bumped when the prompt or the
 # coverage rules change, so `cites --rewrite` can walk an existing shelf forward the
 # way dives.spec does rather than leaving a mix of old and new answers.
@@ -250,20 +323,82 @@ def analyse_result(
     routing with analyse. It does not turn a partial result into completion or
     issue another model request unless max_additional_calls explicitly permits it.
     """
-    from contextlib import closing
-
-    from paper_daily import llm, research_job_lock, store
-    from paper_daily import research_compound as compound
-    from paper_daily import research_generation as generation
+    from paper_daily import llm
     from paper_daily.citation_completion import budget
-    from paper_daily.config import PDF_DIR, TEXT_DIR
 
     budget(max_additional_calls)
+    with llm.connection_scope(connections):
+        return _scoped(
+            paper_id,
+            database,
+            log,
+            lambda context, text: _analyse(
+                context, text, limit, log, max_additional_calls=max_additional_calls
+            ),
+        )
+
+
+def task(paper_id: str, limit: int = 120, *, database=None) -> dict:
+    """What a model needs to analyse this paper's references, for an agent host to answer.
+
+    An official agent host (Claude Code, Codex, agy) answers with its own account
+    and hands the reply to save(). Paperfact makes no model call here. Reference
+    metadata is looked up at Crossref and Semantic Scholar, from the HTTP cache when
+    it is there.
+    """
+    out: dict = {}
+
+    def build(context, text):
+        inputs = _inputs(context.paper, text, limit, lambda _m: None)
+        if isinstance(inputs, str):
+            return 0, inputs
+        out.update(
+            paper_id=paper_id,
+            title=context.paper["title"],
+            spec=CITE_SPEC,
+            instructions=INSTRUCTIONS,
+            material=inputs["prompt"],
+            keys=inputs["sent"],
+        )
+        return len(inputs["sent"]), ""
+
+    count, reason = _scoped(paper_id, database, lambda _m: None, build)
+    if not count:
+        raise ValueError(reason or "No references to analyse")
+    return out
+
+
+def save(paper_id: str, entries: list, limit: int = 120, *, database=None) -> tuple[int, str]:
+    """Store an agent host's answer to task(), through the same checks as analyse.
+
+    The inputs are prepared again here rather than trusted from the caller, so a
+    reply can only fill the keys this paper actually has, and an edited row is kept.
+    """
+    if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+        return 0, "The answer must be a JSON list of objects"
+
+    def store(context, text):
+        from paper_daily import research_compound as compound
+
+        inputs = _inputs(context.paper, text, limit, lambda _m: None)
+        if isinstance(inputs, str):
+            return 0, inputs
+        context = compound.with_prompt(context, inputs["prompt"])
+        return _store(context, inputs, entries, lambda _m: None)
+
+    return _scoped(paper_id, database, lambda _m: None, store)
+
+
+def _scoped(paper_id, database, log, body) -> tuple[int, str]:
+    from contextlib import closing
+
+    from paper_daily import research_compound as compound
+    from paper_daily import research_generation as generation
+    from paper_daily import research_job_lock, store
+    from paper_daily.config import PDF_DIR, TEXT_DIR
+
     database = (database or store.DB_PATH).resolve()
-    with (
-        research_job_lock.claim(database, "citations", paper_id) as acquired,
-        llm.connection_scope(connections),
-    ):
+    with research_job_lock.claim(database, "citations", paper_id) as acquired:
         if not acquired:
             reason = "Citation analysis is already in progress"
             log(reason)
@@ -277,27 +412,24 @@ def analyse_result(
             reason = "No extracted text; open or download the paper first"
             log(reason)
             return 0, reason
-        return _analyse(context, text, limit, log, max_additional_calls=max_additional_calls)
+        return body(context, text)
 
 
-def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int, str]:
-    from paper_daily import llm
-    from paper_daily import research_compound as compound
+def _inputs(row, text, limit, log) -> dict | str:
+    """The reference list, citing sentences and model input for one paper, or why not."""
     from paper_daily.enrich import s2
     from paper_daily.sources import crossref
-    from paper_daily.sources.openalex import same_paper
 
-    row = context.paper
     # The publisher's own numbering, when there is a DOI to ask about. Without it a
     # superscript "17" is just a number and the model has to guess the title.
-    numbered = crossref.reference_list(row["doi"] or "")
+    numbered = crossref.reference_list(row["doi"] or "") or listed_references(text)
     highest = max((int(k) for k in numbered if k.isdigit()), default=None)
 
     ctx = contexts(text, highest=highest)
     if not ctx and not numbered:
         reason = "No citation markers found in the text"
         log("  " + reason)
-        return 0, reason
+        return reason
     refs = s2.references(row["s2_id"]) if row["s2_id"] else []
     # A DOI resolves a reference exactly; a citation string from the publisher's list
     # is a poor search query, because the author block outweighs the title in it.
@@ -306,11 +438,37 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
         f"  {len(numbered)} references listed, {len(ctx)} with a citing sentence, "
         f"{len(by_doi)} resolved by DOI, {len(refs)} on record at S2"
     )
-
     sent = sorted(set(list(ctx)[:limit] + [key for key in numbered if key not in ctx][:120]))
-    prompt = _pack(row, refs, ctx, numbered, limit)
-    context = compound.with_prompt(context, prompt)
-    body, reason = llm.complete(prompt, system=INSTRUCTIONS, timeout=900, task="citations")
+    return {
+        "numbered": numbered,
+        "ctx": ctx,
+        "refs": refs,
+        "by_doi": by_doi,
+        "sent": sent,
+        "limit": limit,
+        "prompt": _pack(row, refs, ctx, numbered, limit),
+    }
+
+
+def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int, str]:
+    from paper_daily import llm
+    from paper_daily import research_compound as compound
+    from paper_daily.citation_completion import extend
+
+    row = context.paper
+    inputs = _inputs(row, text, limit, log)
+    if isinstance(inputs, str):
+        return 0, inputs
+    numbered, ctx, refs, sent = (
+        inputs["numbered"],
+        inputs["ctx"],
+        inputs["refs"],
+        inputs["sent"],
+    )
+    context = compound.with_prompt(context, inputs["prompt"])
+    body, reason = llm.complete(
+        inputs["prompt"], system=INSTRUCTIONS, timeout=900, task="citations"
+    )
     if not body:
         reason = reason or "The AI returned no citation analysis"
         log(f"  failed: {reason}")
@@ -324,7 +482,6 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
 
     if not isinstance(entries, list):
         return 0, "The AI reply is not a citation list"
-    from paper_daily.citation_completion import extend
 
     entries = extend(
         entries,
@@ -352,6 +509,20 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
         answered=compound.citation_answered,
         log=log,
     )
+    return _store(context, inputs, entries, log)
+
+
+def _store(context, inputs, entries, log) -> tuple[int, str]:
+    from paper_daily import research_compound as compound
+    from paper_daily.sources.openalex import same_paper
+
+    numbered, ctx, refs, by_doi, sent = (
+        inputs["numbered"],
+        inputs["ctx"],
+        inputs["refs"],
+        inputs["by_doi"],
+        inputs["sent"],
+    )
     puts = {}
     originals = {r["ref_key"]: r for r in context.rows}
     for e in entries:
@@ -367,7 +538,7 @@ def _analyse(context, text, limit, log, *, max_additional_calls=0) -> tuple[int,
         ):
             continue
         known = numbered.get(key) or {}
-        title = known.get("title") or e.get("title")
+        title = listed_title(known, e.get("title"))
         match = by_doi.get(known.get("doi") or "") or {}
         if not match and title:
             match = _s2_match(refs, title, same_paper)

@@ -73,7 +73,7 @@ def test_task_login_picker_saves_task_account_without_replacing_global(tmp_path,
             monkeypatch.delenv(key)
     llm.save_settings(profile="global", backend="cli", model="global-model", isolated=True)
     llm.save_settings(
-        profile="slides-account", backend="gemini", model="slide-model", isolated=True
+        profile="slides-account", backend="codex", model="slide-model", isolated=True
     )
     llm.use_profile("global", desktop=True)
     llm.use_profile("slides-account", task="slides", desktop=True)

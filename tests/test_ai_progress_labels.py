@@ -34,7 +34,6 @@ def calls(monkeypatch, tmp_path):
     [
         ("cli", "Claude"),
         ("codex", "Codex"),
-        ("gemini", "Gemini"),
         ("custom-service", "custom-service"),
     ],
 )
@@ -55,7 +54,6 @@ def test_service_default_is_readable_and_not_a_claim_of_actual_model(calls, back
     [
         ("cli", "Claude", "fable"),
         ("codex", "Codex", "chosen-codex"),
-        ("gemini", "Gemini", "chosen-gemini"),
         ("custom-service", "custom-service", "local-model"),
         ("gateway", "AI 閘道", "gateway-model"),
     ],
@@ -95,7 +93,7 @@ def test_label_and_dispatch_stay_on_captured_cfg_when_current_choice_changes(cal
     captured = Settings("cli", model="fable")
     events = []
     monkeypatch.setattr(
-        llm, "settings", lambda **kw: replace(captured, backend="gemini", model="new")
+        llm, "settings", lambda **kw: replace(captured, backend="codex", model="new")
     )
     with observe(events.append):
         llm.complete_result("fixture", cfg=captured)

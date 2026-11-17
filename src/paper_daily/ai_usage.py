@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import subprocess
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 
@@ -13,8 +12,6 @@ from paper_daily import ai_accounts, llm
 USAGE_LINKS = {
     "cli": "https://claude.ai/settings/usage",
     "codex": "https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt",
-    "gemini": "https://developers.google.com/gemini-code-assist/docs/deprecations/"
-              "code-assist-individuals",
 }
 
 
@@ -60,32 +57,6 @@ def subscription(cfg):
         except (OSError, ValueError, TimeoutError):
             return {"windows": [], "message": "無法讀取 Claude 官方用量；請確認登入與 CLI 版本，"
                     "或按「官方用量查詢」（Claude Code 的 /usage）。"}
-    if cfg.backend == "gemini":
-        from paper_daily import gemini_cli
-
-        try:
-            raw = gemini_cli.usage(cfg)
-            windows = gemini_windows(raw.get("buckets"))
-            message = "Gemini CLI 官方模型配額；不同模型可能共用額度，不可相加。"
-            if not windows:
-                message = "官方未回傳模型配額，剩餘量未知。"
-                if raw.get("unsupported_client"):
-                    message += (
-                        " Google 拒絕此登入管道（UNSUPPORTED_CLIENT）。"
-                        "個人免費／AI Pro／AI Ultra 帳號的 Gemini CLI 服務已停止；"
-                        "Google 改提供 Antigravity，Paperfact 尚未串接。"
-                        "請先切換 Claude 或 Codex；重新登入或刷新無法解除此限制。"
-                    )
-                elif raw.get("needs_setup"):
-                    message += " 請先在 Gemini CLI 完成帳號設定。"
-            return {
-                "windows": windows, "plan": raw.get("plan"),
-                "message": message,
-                "checked_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            }
-        except (OSError, ValueError, TimeoutError, subprocess.TimeoutExpired):
-            return {"windows": [], "message": "無法讀取 Gemini 官方用量；請確認登入與 CLI 版本，"
-                    "或在 Gemini CLI 使用 /stats model 查看配額。"}
     if cfg.backend != "codex":
         return {"windows": [], "message": "此連線未提供方案額度查詢。"}
     try:
@@ -129,29 +100,6 @@ def claude_windows(raw):
             if stamp.tzinfo is not None:
                 reset = int(stamp.timestamp())
         windows.append({"label": label, "used": used, "minutes": minutes, "reset": reset})
-    return windows
-
-
-def gemini_windows(raw):
-    if not isinstance(raw, list):
-        return []
-    windows = []
-    for bucket in raw:
-        if not isinstance(bucket, dict):
-            continue
-        remaining, model = bucket.get("remainingFraction"), bucket.get("modelId")
-        if (type(remaining) not in (float, int) or not math.isfinite(remaining)
-                or not 0 <= remaining <= 1 or not isinstance(model, str) or not model.strip()):
-            continue
-        reset = None
-        with suppress(ValueError, TypeError, OverflowError):
-            stamp = datetime.fromisoformat(bucket.get("resetTime"))
-            if stamp.tzinfo is not None:
-                reset = int(stamp.timestamp())
-        token_type = bucket.get("tokenType")
-        label = model + (f" · {token_type}" if isinstance(token_type, str) and token_type else "")
-        windows.append({"label": label, "used": round((1 - remaining) * 100, 2),
-                        "minutes": None, "reset": reset})
     return windows
 
 

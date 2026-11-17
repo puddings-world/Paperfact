@@ -21,7 +21,6 @@ modules and external agent integrations are proposed in
 - `ai_types.py` defines immutable settings, requests, results and token usage.
 - `ai_providers.py` implements Claude CLI, Codex CLI, Anthropic and OpenAI-compatible adapters.
 - `ai_accounts.py` launches official CLI login/status/logout with per-account environments.
-- `gemini_cli.py` uses official ACP for Google login and headless Gemini for answers.
 - `cli_rpc.py` handles short-lived CLI authentication/model-discovery messages and
   rejects server requests for tools; it is not an agent job orchestrator.
 - `ai_choices.py` maps the simple service/account/model picker to existing profiles.
@@ -80,7 +79,7 @@ overrides. Desktop default/routing selections set `prefer_saved_profiles=true`,
 so saved routes/default win over the profile environment variable. Existing legacy
 CLI settings retain their documented precedence. Account IDs are validated opaque
 IDs; CLI homes are derived locally, never taken from list content. Named account
-directories support multiple Claude/Codex/Gemini logins; model profiles can share an account.
+directories support multiple Claude/Codex logins; model profiles can share an account.
 
 Keys supplied through the dialog or `--key` are stored locally in plain text.
 `api_key_env` / `--key-env` keeps credentials in environment variables instead.
@@ -173,8 +172,8 @@ The independent-recipient acceptance flow and shared local bundle service are
 documented in [colleague handoff](colleague-handoff.md). Versioned optional
 first-use feedback choices are described in [data choices](feedback-privacy.md).
 
-The current supported desktop agent accounts are Claude, Codex and Gemini, plus
-the existing model API/gateway adapters. Research features choose a task route;
+The current supported desktop agent accounts are Claude and Codex, plus the
+existing model API/gateway adapters (Gemini connects with an API key). Research features choose a task route;
 they do not choose a provider's login flow or quota protocol. Additional agents
 should implement explicit capabilities (`authenticate`, `list_models`, `complete`,
 `usage`) and declare unsupported capabilities. A subscription does not imply an API
@@ -185,7 +184,7 @@ The completion facade remains the common place for receipts and product events.
 flowchart LR
   UI[User action] --> Flow[Workflow / trace]
   Flow --> Router[Task route: account + model]
-  Router --> Adapter[Claude / Codex / Gemini / API adapter]
+  Router --> Adapter[Claude / Codex / API adapter]
   Adapter --> Receipt[Local operational receipt]
   Receipt --> Quota[Invalidate this account's usage cache]
   Flow --> Events[Small start / completion events]
@@ -248,17 +247,6 @@ read-only control client sends only `initialize` and `get_usage`, with tools/hoo
 disabled and `skip_behaviors=true`; it never sends a user/model turn or scans other
 Claude transcripts. The experimental response contract is from the
 [official SDK types](https://app.unpkg.com/@anthropic-ai/claude-agent-sdk@0.3.301/files/sdk.d.ts).
-
-Gemini quota uses `gemini_usage.mjs` with the installed CLI's credential handling.
-It resolves the core module from the active bundle entry rather than choosing an
-arbitrary stale chunk, disables interactive/browser authentication, and only calls
-account/quota reads. It does not call onboarding or model generation. This is a
-version-sensitive internal CLI adapter, not a guaranteed public quota API:
-incompatible releases fail explicitly. The result shape follows Google's
-[official quota types](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/types.ts).
-Only valid 0–1 remaining fractions become percentages; absent/invalid values stay
-unknown. `UNSUPPORTED_CLIENT` is propagated as a clear eligibility failure.
-No alternative client identity or account is substituted to bypass it.
 
 API schemas were checked against the [OpenAI Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 and [Anthropic Messages reference](https://platform.claude.com/docs/en/api/messages/create).

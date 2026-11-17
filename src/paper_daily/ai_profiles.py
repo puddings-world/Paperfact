@@ -109,8 +109,20 @@ def _migrate(data: dict) -> None:
     data["version"] = 2
 
 
-def validate(raw: dict, backends: tuple[str, ...]) -> None:
-    if raw.get("backend", "auto") not in (*backends, "auto"):
+# Connections a saved file may still name, though Paperfact no longer runs them.
+RETIRED = {
+    "gemini": (
+        "Google 已於 2026-06-18 停止個人帳號使用 Gemini CLI，Paperfact 也不再支援；"
+        "請在 AI 設定改用 Gemini API 金鑰，或在 agy 裡透過 MCP 使用 Paperfact。"
+    ),
+}
+
+
+def validate(raw: dict, backends: tuple[str, ...], *, retired_ok: bool = False) -> None:
+    backend = raw.get("backend", "auto")
+    if backend in RETIRED and not retired_ok:
+        raise ValueError(RETIRED[backend])
+    if backend not in (*backends, "auto") and not (retired_ok and backend in RETIRED):
         raise ValueError("Unknown AI backend")
     limit = raw.get("max_tokens", DEFAULT_MAX_TOKENS)
     if type(limit) is not int or limit < 1:
@@ -216,7 +228,7 @@ def assign(path: Path, selections: dict, backends: tuple[str, ...]) -> Path:
         if name:
             fields(data, name)
         else:
-            if cfg.backend not in ("cli", "codex", "gemini"):
+            if cfg.backend not in ("cli", "codex"):
                 raise ValueError("Sign in to an AI account first")
             raw = {"backend": cfg.backend, "isolated": True, "account_id": cfg.account_id or ""}
             validate(raw, backends)
@@ -288,7 +300,7 @@ def resolve(
         or data.get("active_profile")
     )
     raw = fields(data, profile)
-    validate(raw, backends)
+    validate(raw, backends, retired_ok=True)
     isolated = raw.get("isolated", False)
     inherited_env = env
     if isolated:

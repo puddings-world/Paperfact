@@ -446,6 +446,59 @@ def search_papers(query, list_id=None, limit=20):
     return _reading(research_read.search_papers)(query, list_id, limit)
 
 
+def dive_task(paper_id):
+    """The deep dive an agent host writes with its own model account."""
+    from paper_daily import dive
+
+    paper_id = _id(paper_id, "paper_id")
+    try:
+        return dive.task(paper_id)
+    except ValueError as error:
+        raise OperationError("dive_task_unavailable", str(error)) from None
+
+
+def dive_save(paper_id, body):
+    from paper_daily import dive
+
+    paper_id = _id(paper_id, "paper_id")
+    if not isinstance(body, str) or len(body) > 200_000:
+        raise OperationError("invalid_input", "body must be text of at most 200,000 characters")
+    try:
+        written, reason = dive.save_answer(paper_id, body)
+    except ValueError as error:
+        raise OperationError("dive_answer_rejected", str(error)) from None
+    if written is None:
+        raise OperationError("dive_answer_rejected", reason)
+    return {"saved": True, "chars": len(written), "spec": dive.DIVE_SPEC}
+
+
+def citation_task(paper_id, limit=120):
+    """The reference analysis an agent host answers with its own model account."""
+    from paper_daily import cites
+
+    _citation_limit(limit)
+    paper_id = _id(paper_id, "paper_id")
+    try:
+        return cites.task(paper_id, limit)
+    except ValueError as error:
+        raise OperationError("citation_task_unavailable", str(error)) from None
+
+
+def citation_save(paper_id, entries, limit=120):
+    from paper_daily import cites
+
+    _citation_limit(limit)
+    saved, reason = cites.save(_id(paper_id, "paper_id"), entries, limit)
+    if not saved:
+        raise OperationError("citation_answer_rejected", reason or "No reference was saved")
+    return {"saved": saved, "complete": not reason, "reason": reason}
+
+
+def _citation_limit(limit):
+    if type(limit) is not int or not 1 <= limit <= 120:
+        raise OperationError("invalid_input", "limit must be 1–120")
+
+
 OPERATIONS = {
     **NOTE_REVIEW_OPERATIONS,
     **CLAIM_REVIEW_OPERATIONS,
@@ -460,6 +513,10 @@ OPERATIONS = {
     "imports.commit": commit,
     "imports.discard": discard,
     "operations.inspect": inspect_operation,
+    "research.citations.task": citation_task,
+    "research.citations.save": citation_save,
+    "research.dive.task": dive_task,
+    "research.dive.save": dive_save,
 }
 
 
@@ -479,7 +536,14 @@ def dispatch(operation: str, arguments: dict) -> dict:
         except TypeError:
             raise OperationError("invalid_input", "Missing or unexpected arguments") from None
         if (
-            operation in {"imports.propose", "imports.commit", "imports.discard"}
+            operation
+            in {
+                "imports.propose",
+                "imports.commit",
+                "imports.discard",
+                "research.citations.save",
+                "research.dive.save",
+            }
             and _recovery_workspace()
         ):
             raise OperationError(

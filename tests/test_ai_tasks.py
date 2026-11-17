@@ -47,6 +47,13 @@ def setup(tmp_path, monkeypatch):
     app.processEvents()
 
 
+def without_saved(name):
+    """Leave that account as an unsaved terminal login, offered but not stored."""
+    data = ai_profiles.load(llm.SETTINGS_PATH)
+    data["profiles"].pop(name)
+    ai_profiles.write(llm.SETTINGS_PATH, data)
+
+
 def choose(widget, task, backend, model):
     account, picker = widget.rows[task]
     index = next(i for i in range(1, account.count()) if account.itemData(i).backend == backend)
@@ -63,11 +70,10 @@ def test_task_page_has_account_and_model_choices_without_api_fields(setup):
     for account, model in widget.rows.values():
         assert account.currentText() == "跟隨全域"
         assert not model.isEnabled()
-        assert account.count() == 4
+        assert account.count() == 3
         assert {account.itemData(i).backend for i in range(1, account.count())} == {
             "cli",
             "codex",
-            "gemini",
         }
 
 
@@ -219,7 +225,7 @@ def test_account_refresh_keeps_unsaved_task_choices(setup):
     widget = AITasksDialog()
     choose(widget, "translate", "cli", "draft-model")
     selections = widget._selections()
-    ai_choices.save(ai_choices.new_account("gemini"), "", activate=False)
+    ai_choices.save(ai_choices.new_account("codex"), "", activate=False)
     widget._refresh(selections)
     assert widget.rows["translate"][1].currentText() == "draft-model"
     assert widget.rows["translate"][0].count() == 4
@@ -243,25 +249,27 @@ def test_failed_model_discovery_keeps_manual_choice(setup, monkeypatch):
 
 
 def test_unsaved_local_service_is_selectable_without_changing_default(setup):
+    without_saved("work")
     before = llm.SETTINGS_PATH.read_bytes()
     widget = AITasksDialog()
-    choose(widget, "translate", "gemini", "chosen-gemini")
+    choose(widget, "translate", "codex", "chosen-codex")
     assert widget.rows["translate"][1].isEnabled()
     assert llm.SETTINGS_PATH.read_bytes() == before
     widget._save()
-    assert llm.settings(task="translate").backend == "gemini"
-    assert llm.settings(task="translate").model == "chosen-gemini"
+    assert llm.settings(task="translate").backend == "codex"
+    assert llm.settings(task="translate").model == "chosen-codex"
     assert llm.settings().profile == "personal"
 
 
 def test_login_does_not_discard_unsaved_local_connection_choice(setup):
+    without_saved("work")
     widget = AITasksDialog()
-    choose(widget, "translate", "gemini", "local-draft")
+    choose(widget, "translate", "codex", "local-draft")
     selections = widget._selections()
-    ai_choices.save(ai_choices.new_account("gemini"), "", activate=False)
+    ai_choices.save(ai_choices.new_account("codex"), "", activate=False)
     widget._refresh(selections)
     account, model = widget.rows["translate"]
-    assert account.currentData().backend == "gemini"
+    assert account.currentData().backend == "codex"
     assert account.currentData().account_id is None
     assert model.currentText() == "local-draft"
     assert not llm.task_routes()
@@ -292,25 +300,26 @@ def test_saved_task_choices_dispatch_to_correct_providers_and_models(setup, monk
             observed.append((request.task, cfg.backend, cfg.model, cfg.account_id))
             return Completion("answer")
 
-    for backend in ("cli", "codex", "gemini"):
+    for backend in ("cli", "codex"):
         monkeypatch.setitem(llm._PROVIDERS, backend, Provider())
+    without_saved("work")
     widget = AITasksDialog()
     choose(widget, "translate", "cli", "small")
     choose(widget, "dive", "codex", "large")
-    choose(widget, "slides", "gemini", "presentation-model")
+    choose(widget, "slides", "cli", "presentation-model")
     widget._save()
     for task in ("translate", "dive", "slides"):
         assert llm.complete_result("test", task=task).text == "answer"
     assert observed == [
         ("translate", "cli", "small", "a" * 32),
-        ("dive", "codex", "large", "b" * 32),
-        ("slides", "gemini", "presentation-model", None),
+        ("dive", "codex", "large", None),
+        ("slides", "cli", "presentation-model", "a" * 32),
     ]
     receipts = [
         json.loads(line)
         for line in (llm.SETTINGS_PATH.parent / "ai-usage.jsonl").read_text().splitlines()
     ]
-    assert [row["account_id"] for row in receipts] == ["a" * 32, "b" * 32, None]
+    assert [row["account_id"] for row in receipts] == ["a" * 32, None, "a" * 32]
 
 
 def test_claude_discovery_is_background_and_shared_by_rows_for_same_account(setup, monkeypatch):

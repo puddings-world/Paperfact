@@ -27,7 +27,7 @@ Invoke-SetupStep { & .\.venv\Scripts\python.exe -m paper_daily web-assets }
 Invoke-SetupStep { & .\.venv\Scripts\python.exe scripts\make_icon.py }
 
 Write-Host ""
-Write-Host "Open AI settings in the app to install/sign in to Claude, Codex or Gemini."
+Write-Host "Open AI settings in the app to sign in to Claude or Codex, or add an API key."
 Write-Host "Choose your account and model there; API configuration is optional."
 Write-Host "A fresh workspace starts empty. Create a list or import a colleague's research bundle."
 Write-Host "Importing research bundles and reading saved work need no AI account."

@@ -126,7 +126,7 @@ def login_path(shell: str | None = None, timeout: float = 4.0) -> str | None:
     """The PATH a terminal would have.
 
     Apps opened from Finder or a desktop launcher get a bare system PATH, which hides
-    the claude / codex / gemini CLIs that npm and Homebrew put in the user's own
+    the claude / codex CLIs that npm and Homebrew put in the user's own
     directories, and the AI features would report them as not installed.
     """
     shell = shell or os.environ.get("SHELL") or "/bin/sh"

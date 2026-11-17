@@ -20,7 +20,7 @@ mkdir -p data
 .venv/bin/python scripts/make_icon.py
 
 echo
-echo "Open AI settings in the app to install/sign in to Claude, Codex or Gemini."
+echo "Open AI settings in the app to sign in to Claude or Codex, or add an API key."
 echo "Choose your account and model there; API configuration is optional."
 echo "A fresh workspace starts empty. Create a list or import a colleague's research bundle."
 echo "Importing research bundles and reading saved work need no AI account."

@@ -46,7 +46,8 @@ src/paper_daily/
     openalex.py       every other publisher, and the open-access link they do not give
     crossref.py       the reference list, with the numbers the paper printed
   resolve.py          the PDF hunt: CVF, then arXiv, then OpenAlex
-  cites.py            what each reference is doing in the paper that cites it
+  cites.py            what each reference is doing in the paper that cites it;
+                      reads the PDF's own numbered list when Crossref has none yet
   followups.py        what came after a paper across the field, and which of it to read
   enrich/s2.py        Semantic Scholar: citations, authors, references
   rank/

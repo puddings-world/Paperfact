@@ -305,7 +305,7 @@ def collect(directory=None):
         },
         "packages": packages,
         "agent_commands_found": {
-            name: executables.which(name) is not None for name in ("claude", "codex", "gemini")
+            name: executables.which(name) is not None for name in ("claude", "codex")
         },
         "logs": sources,
         "errors": events[-MAX_EVENTS:],

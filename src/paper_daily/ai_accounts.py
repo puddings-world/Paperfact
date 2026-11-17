@@ -9,10 +9,10 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from paper_daily import executables, model_catalog
+from paper_daily import ai_profiles, executables, model_catalog
 from paper_daily.ai_types import Settings
 
-CLI_NAMES = {"cli": "claude", "codex": "codex", "gemini": "gemini"}
+CLI_NAMES = {"cli": "claude", "codex": "codex"}
 
 
 @contextmanager
@@ -57,13 +57,6 @@ def models(cfg):
             if isinstance(row, dict) and isinstance(row.get("value"), str)
             and row["value"].strip() and row["value"] != "default"
         ))
-    if cfg.backend == "gemini":
-        return [
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-3-pro-preview",
-            "gemini-3-flash-preview",
-        ]
     if cfg.backend != "codex":
         return []
     result = codex_request(cfg, "model/list", {"includeHidden": False, "limit": 100})
@@ -119,15 +112,8 @@ def command(backend: str) -> list[str]:
     exe = executables.which(name)
     if not exe:
         raise ValueError(f"尚未安裝 {name} CLI；請先安裝官方 CLI 後重新開啟 Paperfact")
-    if backend in ("codex", "gemini") and Path(exe).suffix.lower() in (".cmd", ".bat", ".ps1"):
-        relative = (
-            "@openai/codex/bin/codex.js"
-            if backend == "codex"
-            else "@google/gemini-cli/bundle/gemini.js"
-        )
-        script = Path(exe).parent / "node_modules" / relative
-        if backend == "gemini" and not script.exists():
-            script = Path(exe).parent / "node_modules/@google/gemini-cli/dist/index.js"
+    if backend == "codex" and Path(exe).suffix.lower() in (".cmd", ".bat", ".ps1"):
+        script = Path(exe).parent / "node_modules/@openai/codex/bin/codex.js"
         node = executables.which("node")
         if not node or not script.is_file():
             raise ValueError(f"找不到 {name} 的 Node 啟動程式，請重新安裝官方 CLI")
@@ -156,31 +142,22 @@ def environment(cfg: Settings) -> dict[str, str]:
         if not cfg.cli_home:
             raise ValueError("帳號儲存位置尚未設定")
         Path(cfg.cli_home).mkdir(parents=True, exist_ok=True)
-        env[
-            {"cli": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME", "gemini": "GEMINI_CLI_HOME"}[
-                cfg.backend
-            ]
-        ] = str(Path(cfg.cli_home).resolve())
-        if cfg.backend == "gemini":
-            env["GEMINI_FORCE_FILE_STORAGE"] = "true"
+        env[{"cli": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}[cfg.backend]] = str(
+            Path(cfg.cli_home).resolve()
+        )
     env["PYTHONIOENCODING"] = "utf-8"
-    if cfg.backend == "gemini":
-        # Keep the stdio protocol on the process we own, including timeout cleanup.
-        env["GEMINI_CLI_NO_RELAUNCH"] = "true"
     return env
 
 
 def auth(cfg: Settings, action: str) -> tuple[str | None, str]:
     if action not in ("login", "logout", "status"):
         raise ValueError("Unknown authentication action")
+    if cfg.backend in ai_profiles.RETIRED:
+        return None, ai_profiles.RETIRED[cfg.backend]
     if action != "status" and not cfg.account_id:
         return None, "請選擇獨立帳號後登入；沿用本機登入時，請在官方 CLI 管理帳號"
     if cfg.backend == "codex" and action == "status":
         return codex_status(cfg)
-    if cfg.backend == "gemini":
-        from paper_daily.gemini_cli import authenticate
-
-        return authenticate(cfg, action)
     try:
         argv = command(cfg.backend)
         if cfg.backend == "cli":

@@ -37,7 +37,9 @@ provider. Reading saved research needs no AI login.
 [Google AI Studio](https://aistudio.google.com/app/apikey); Gemini 4 Argon is offered when
 your key's tier includes it. Keys are billed per use; an AI Pro or Ultra subscription
 does not cover them, because Google ended Gemini CLI for personal accounts and does
-not allow third-party tools to use Antigravity's subscription login.
+not allow third-party tools to use Antigravity's subscription login. To use a Gemini
+subscription, work in agy and let it call Paperfact's MCP tools
+([AI access policy](docs/ai-access-policy.md)).
 [Account and model help](docs/ai-setup.md)
 
 For an enrolled v0.5 workspace, replacing an original with `repdf` keeps prior

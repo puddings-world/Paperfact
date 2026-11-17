@@ -165,12 +165,7 @@ The account picker shows usage inline for the selected connection. Official quot
 snapshots and Paperfact's last seven days of local call/token receipts are separate;
 missing token reports mean unknown usage, not zero. Claude quota uses the official
 CLI's structured `get_usage` control request; Codex uses its official account
-interface. Gemini uses the installed official CLI core's cached-login handling and
-read-only `loadCodeAssist` / `retrieveUserQuota` methods. Valid responses show plan,
-model buckets and percentages; buckets may share a quota and must not be added.
-Unsupported CLI versions, rejected account access or unavailable quotas remain
-explicitly unknown. A cached Google login does not prove current Code Assist access:
-`UNSUPPORTED_CLIENT` is shown as an upstream rejection, not as zero usage.
+interface. Gemini API keys have no plan quota to show.
 At startup, the app preloads saved profiles and unsaved terminal agent accounts.
 Opening the account picker shows available snapshots immediately. Completed AI
 requests (including failed requests and subprocess analyses) invalidate only their

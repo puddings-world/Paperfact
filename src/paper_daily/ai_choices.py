@@ -7,6 +7,8 @@ from paper_daily import ai_profiles, llm, model_catalog
 from paper_daily.ai_types import Settings
 
 LABELS = {"cli": "Claude", "codex": "Codex", "gemini": "Gemini"}
+# The official CLIs Paperfact signs in to. Gemini is a key connection (below).
+CLI_BACKENDS = ("cli", "codex")
 # Google ended Gemini CLI for personal accounts on 2026-06-18 and does not permit
 # third-party tools to drive Antigravity with a subscription login, so a personal
 # Gemini account reaches Paperfact through an AI Studio key on this endpoint.
@@ -34,7 +36,7 @@ def remember_identity(cfg, text):
 def account_label(cfg):
     if is_gemini_api(cfg):
         return "API 金鑰 · 按用量計費" if cfg.api_key else "尚未輸入 API 金鑰"
-    if cfg.backend not in LABELS:
+    if cfg.backend not in CLI_BACKENDS:
         return cfg.profile or "API 連線"
     return _account_labels.get(account_key(cfg)) or (
         f"{cfg.profile or '獨立帳號'}（待確認）" if cfg.account_id else "本機帳號（待確認）"
@@ -121,11 +123,6 @@ def model_hint(backend, model, *, cfg=None):
             "以 Google AI Studio 的 API 金鑰呼叫，按用量計費；Google AI Pro / Ultra 訂閱額度"
             "不適用。Gemini 4 Argon 需要付費層級。"
         )
-    if backend == "gemini":
-        return (
-            "個人 Google 帳號已無法使用 Gemini CLI，請改用「Gemini」的 API 金鑰；"
-            "此項僅供企業版 Google 帳號。模型選單為常用 ID，不代表帳號已獲授權。"
-        )
     if not model:
         return "使用此帳號目前的預設模型；也可以在上方直接選擇其他模型。"
     if cfg and model_catalog.name(cfg, model):
@@ -142,13 +139,14 @@ def connection_label(cfg):
 HELP = {
     "cli": "https://code.claude.com/docs/en/setup",
     "codex": "https://developers.openai.com/codex/cli/",
-    "gemini": "https://geminicli.com/docs/get-started/installation/",
 }
 
 
 def _under(cfg, backend):
     """Whether a connection is listed under that provider's button."""
-    return cfg.backend == backend or (backend == "gemini" and is_gemini_api(cfg))
+    if backend == "gemini":
+        return is_gemini_api(cfg)
+    return cfg.backend == backend
 
 
 def choices(backend):
@@ -160,19 +158,15 @@ def choices(backend):
     current = llm.settings()
     if _under(current, backend) and not any(cfg.profile == current.profile for cfg in result):
         result.insert(0, current)
-    if backend == "gemini":
-        # A personal account can only use a key, so that is what Gemini offers first;
-        # an existing Workspace CLI login stays listed after it.
-        result.sort(key=lambda cfg: not is_gemini_api(cfg))
-        if not any(is_gemini_api(cfg) for cfg in result):
-            result.insert(0, Settings("openai", base_url=GEMINI_API_URL))
+    if backend == "gemini" and not result:
+        result.insert(0, Settings("openai", base_url=GEMINI_API_URL))
     if not result:
         result.append(Settings(backend, isolated=True))
     return result
 
 
 def account_key(cfg):
-    if cfg.backend in LABELS:
+    if cfg.backend in CLI_BACKENDS:
         return cfg.backend, cfg.account_id or "local"
     return cfg.backend, cfg.profile
 
@@ -184,7 +178,7 @@ def accounts():
     result = {}
     used = set(llm.task_routes().values())
     for cfg in candidates:
-        if cfg.backend in LABELS or cfg.profile in used or is_gemini_api(cfg):
+        if cfg.backend in CLI_BACKENDS or cfg.profile in used or is_gemini_api(cfg):
             result.setdefault(account_key(cfg), cfg)
     return list(result.values())
 

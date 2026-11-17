@@ -309,19 +309,3 @@ def test_usage_log_records_timeouts_and_successes(isolated, monkeypatch):
     llm.complete("paper", cfg=Settings("openai", api_key="secret"))
     rows = [json.loads(line) for line in (isolated / "ai-usage.jsonl").read_text().splitlines()]
     assert [row["failure"] for row in rows] == ["timeout", None]
-
-
-def test_gemini_failure_names_the_category(isolated, monkeypatch):
-    from paper_daily import gemini_cli
-
-    monkeypatch.setattr(gemini_cli, "status", lambda cfg: (True, "ok"))
-    monkeypatch.setattr(gemini_cli.ai_accounts, "command", lambda name: ["gemini"])
-    monkeypatch.setattr(
-        gemini_cli.subprocess,
-        "run",
-        lambda argv, **kwargs: SimpleNamespace(
-            returncode=1, stdout="", stderr="Quota exceeded for quota metric (429)"
-        ),
-    )
-    result = llm.complete_result("prompt", cfg=Settings("gemini"))
-    assert result.text is None and "用量" in result.reason

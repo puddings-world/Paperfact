@@ -153,11 +153,7 @@ def _from_pack(pack: str, timeout: int = 900, *, cfg=None) -> tuple[str | None, 
     )
     if not body:
         return None, reason
-    # A refusal or an error message is short; a real dive runs to thousands of
-    # characters. Storing a stub would look like the paper had been explained.
-    if len(body) > 800:
-        return body, "ok"
-    return None, f"reply too short to be a dive: {body.splitlines()[0][:120]}"
+    return _checked(body)
 
 
 def _select(conn, count: int, paper_id: str | None, list_id: str | None, rewrite: bool):
@@ -235,6 +231,83 @@ def _generate_for(
     expected_owner=None,
 ):
     """Capture, generate and publish on the original workspace; no DB lock during AI."""
+    with llm.connection_scope(connections):
+        # The account and model are the ones chosen when the job started, not
+        # whatever the settings say once the inputs have been read.
+        cfg = llm.settings(task="dive")
+        return _publish(
+            paper_id,
+            database,
+            lambda pack: _from_pack(pack, timeout, cfg=cfg),
+            expected_owner=expected_owner,
+        )
+
+
+def task(paper_id: str, *, database=None) -> dict:
+    """What a model needs to write this paper's deep dive, for an agent host to answer.
+
+    An official agent host (Claude Code, Codex, agy) writes the dive with its own
+    account and hands it to save_answer(). Paperfact makes no model call here.
+    Preparing the pack may fetch the paper's page or PDF, as reading it would.
+    """
+    from contextlib import closing
+
+    from paper_daily import research_generation as generation
+    from paper_daily import store
+
+    database = (database or store.DB_PATH).resolve()
+    with closing(generation._connect(database)) as conn, conn:
+        row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
+        if row is None:
+            raise ValueError("The selected paper no longer exists")
+        prepared = brief.pack_text(conn, row)
+    pack, _pdf = prepared
+    document = getattr(prepared, "document", None)
+    return {
+        "paper_id": paper_id,
+        "title": row["title"],
+        "spec": DIVE_SPEC,
+        "instructions": DIVE_INSTRUCTIONS,
+        "material": pack,
+        "full_text": bool(document is not None and document.available),
+    }
+
+
+def save_answer(paper_id: str, body, *, database=None):
+    """Publish an agent host's answer to task() through the same checks as a generated dive.
+
+    The pack is prepared again so the dive is bound to the inputs current now, and
+    the same length check rejects a refusal or an error message posing as a dive.
+    """
+    from paper_daily import research_generation as generation
+    from paper_daily import store
+
+    if not isinstance(body, str):
+        return DiveResult(None, "The answer must be text")
+    body = body.strip()
+    database = (database or store.DB_PATH).resolve()
+    result = _publish(paper_id, database, lambda _pack: _checked(body))
+    if result[0] is not None:
+        from contextlib import closing
+
+        # A paper the nightly run gave up on is explained now; let it be read ahead again.
+        with closing(generation._connect(database)) as conn, conn:
+            store.set_kv(conn, f"dive.failures.{paper_id}", None)
+            store.set_kv(conn, f"dive.gave_up.{paper_id}", None)
+    return result
+
+
+def _checked(body: str) -> tuple[str | None, str]:
+    # A refusal or an error message is short; a real dive runs to thousands of
+    # characters. Storing a stub would look like the paper had been explained.
+    if len(body) > 800:
+        return body, "ok"
+    first = body.splitlines()[0][:120] if body else ""
+    return None, f"reply too short to be a dive: {first}"
+
+
+def _publish(paper_id, database, write, *, expected_owner=None):
+    """Capture inputs, let write() turn the pack into a dive, then publish it."""
     from contextlib import closing
 
     from paper_daily import research_generation as generation
@@ -248,38 +321,36 @@ def _generate_for(
     with research_job_lock.claim(database, "dive", paper_id) as acquired:
         if not acquired:
             return DiveResult(None, "deep dive is already in progress")
-        with llm.connection_scope(connections):
-            cfg = llm.settings(task="dive")
-            with closing(generation._connect(database)) as conn, conn:
-                if expected_owner is not None:
-                    try:
-                        expected_owner.check(conn)
-                    except ValueError as exc:
-                        return DiveResult(None, str(exc))
-                row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
-                if row is None:
-                    return DiveResult(None, "paper vanished between selection and writing")
-                context = generation.begin_generation(conn, table="dives", owner_id=paper_id)
-                prepared = brief.pack_text(conn, row)
-                pack, _pdf = prepared
-                if isinstance(prepared, brief.PreparedPack):
-                    context = generation.bind_inputs(
-                        context, document=prepared.document, input_snapshot=prepared.snapshot
-                    )
-                elif context.data["binding"] is not None:
-                    return DiveResult(
-                        None, "prepared input provenance is required for enrolled research"
-                    )
-            from paper_daily.manual_highlight_ops import capture_owner
+        with closing(generation._connect(database)) as conn, conn:
+            if expected_owner is not None:
+                try:
+                    expected_owner.check(conn)
+                except ValueError as exc:
+                    return DiveResult(None, str(exc))
+            row = conn.execute("SELECT * FROM papers WHERE id=?", (paper_id,)).fetchone()
+            if row is None:
+                return DiveResult(None, "paper vanished between selection and writing")
+            context = generation.begin_generation(conn, table="dives", owner_id=paper_id)
+            prepared = brief.pack_text(conn, row)
+            pack, _pdf = prepared
+            if isinstance(prepared, brief.PreparedPack):
+                context = generation.bind_inputs(
+                    context, document=prepared.document, input_snapshot=prepared.snapshot
+                )
+            elif context.data["binding"] is not None:
+                return DiveResult(
+                    None, "prepared input provenance is required for enrolled research"
+                )
+        from paper_daily.manual_highlight_ops import capture_owner
 
-            annotation = None
-            if (
-                isinstance(prepared, brief.PreparedPack)
-                and prepared.document is not None
-                and prepared.document.available
-            ):
-                annotation = (capture_owner(database, paper_id), prepared.document.sha256)
-            body, reason = _from_pack(pack, timeout, cfg=cfg)
+        annotation = None
+        if (
+            isinstance(prepared, brief.PreparedPack)
+            and prepared.document is not None
+            and prepared.document.available
+        ):
+            annotation = (capture_owner(database, paper_id), prepared.document.sha256)
+        body, reason = write(pack)
         if body is None:
             return DiveResult(None, reason)
         result = generation.publish_generated(
