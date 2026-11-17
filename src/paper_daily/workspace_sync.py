@@ -11,7 +11,6 @@ from pathlib import Path
 
 from paper_daily.sync_capture import RESEARCH, trusted_connection
 from paper_daily.sync_client import SyncClient
-from paper_daily.sync_http import HttpTransport
 from paper_daily.sync_journal import (
     Journal,
     SyncFormatUnsupported,
@@ -178,9 +177,11 @@ class SyncSession:
     session_info; private research requests require an additional explicit action.
     """
 
-    def __init__(self, database, *, current_path=None, transport_factory=HttpTransport):
+    def __init__(self, database, *, current_path=None, transport_factory=None):
         self.workspace = WorkspaceService(database, current_path=current_path)
-        self._factory = transport_factory
+        from paper_daily.drive_sync_factory import TransportFactory
+
+        self._factory = transport_factory or TransportFactory(self.workspace)
         self._state = threading.Lock()
         self._running = threading.Lock()
         self._generation = 0

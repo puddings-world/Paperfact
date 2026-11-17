@@ -44,6 +44,11 @@ def identifier(value):
     return value
 
 
+def origin(folder):
+    label = hashlib.sha256(identifier(folder).encode()).hexdigest()[:40]
+    return "https://" + label + ".paperfact-drive.invalid"
+
+
 def encode(value, maximum=MAX_JSON):
     raw = json.dumps(value, sort_keys=True, ensure_ascii=False,
                      separators=(",", ":"), allow_nan=False).encode("utf-8")
@@ -339,3 +344,36 @@ class DriveFiles:
         if len(raw) != size or hashlib.sha256(raw).hexdigest() != digest:
             raise ValueError("Drive object bytes failed verification")
         return raw
+
+
+    def workspaces(self):
+        """List only private, app-created workspace folders and their single head."""
+        query = ("trashed=false and mimeType='application/vnd.google-apps.folder' and "
+                 "appProperties has { key='pfRole' and value='workspace' }")
+        value = self.json(self.request("GET", FILES, params={
+            "q": query, "fields": "nextPageToken,files(" + _FIELDS + ")", "pageSize": 100}))
+        if value.get("nextPageToken"):
+            raise ValueError("More than 100 Drive workspaces; narrow the account first")
+        rows = value.get("files")
+        if not isinstance(rows, list):
+            raise ValueError("Drive did not return a workspace list")
+        result = []
+        for row in rows:
+            props = row.get("appProperties", {}) if isinstance(row, dict) else {}
+            workspace = props.get("pfWorkspace")
+            if not workspace or row.get("shared") is not False or row.get("ownedByMe") is not True:
+                continue
+            folder = identifier(row.get("id"))
+            self.owned(folder, workspace, "workspace")
+            heads = self.json(self.request("GET", FILES, params={
+                "q": f"trashed=false and '{folder}' in parents and "
+                     "appProperties has { key='pfRole' and value='head' }",
+                "fields": "nextPageToken,files(id)", "pageSize": 2}))
+            items = heads.get("files")
+            if not isinstance(items, list) or len(items) != 1 or heads.get("nextPageToken"):
+                continue  # Incomplete setup stays private; never guess a head.
+            head_id = identifier(items[0].get("id"))
+            self.read_head(head_id, folder, workspace)
+            result.append(dict(folder_id=folder, head_id=head_id, workspace_id=workspace,
+                               name=str(row.get("name", "Paperfact"))[:200]))
+        return sorted(result, key=lambda row: row["name"].casefold())

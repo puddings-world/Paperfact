@@ -18,7 +18,7 @@ representatives, not14 complete features or a completion percentage.
 | List package and PDFs | Preserve papers, originals, analysis, order and pins; protect receiver edits |
 | Notes and Q&A | Save/reopen edits, persist a question before answering, keep writes in their original workspace |
 | AI settings | Drop the previous provider's credentials/model and keep task overrides separate from defaults |
-| Personal Drive storage (not app sync) | Conditional competing writes; immutable byte verification; account/private ownership; offline/restart/changed-history refusal; native-only grants and workspace/client isolation. Live synthetic one-file provider probe recorded separately. | `tests/test_drive_sync_files.py`; [boundary and remaining work](../sync-architecture.md#drive-storage-checkpoint-2026-11-17) |
+| Personal Drive desktop | Two-device conflicts; copy/join; offline save/native-record restore/return sync; delta checkpoints; uncertain acknowledgment; PDF chunks; account/private ownership; GUI duplicate/cancel/stale/close; OAuth build excludes user grants. | `tests/test_drive_sync_files.py`, `tests/test_drive_sync_authority.py`, `tests/test_drive_sync_dialog.py`, `tests/test_drive_client_build.py`; [contracts and limits](../sync-architecture.md#desktop-drive-pilot-2026-11-18) |
 | Offline synchronization | Restart/retry without duplicates and preserve both concurrent note versions |
 | Backup and restore | Restore saved research without changing the source; cancellation starts no job |
 

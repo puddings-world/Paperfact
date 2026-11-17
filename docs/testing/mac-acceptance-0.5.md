@@ -1,5 +1,25 @@
 # Mac v0.5 acceptance
 
+## Personal Drive candidate: desktop to Mac
+
+The new Drive candidate is being built; use its exact source/artifact once listed
+below. The older 66855cc download has package transfer only.
+
+1. Desktop: open the matching candidate, click the bottom-right sync button, sign
+   in to Google and choose **Sync this workspace**. Review the upload consent.
+   First enrollment prepares a separate copy/backup, then opens the new reader.
+2. Wait for automatic sync to finish pending metadata/files in that reader.
+3. Mac: open the matching candidate, click sync, sign in to the same Google account,
+   select the workspace and choose **Open selected Drive workspace**.
+4. In the new Mac reader verify a note, analysis and PDF. Edit a note offline,
+   quit/reopen, reconnect and confirm the saved edit reaches the desktop.
+5. Test a simultaneous edit on both devices; both versions must remain for review.
+   Check offline preparation before taking the laptop out.
+
+Each device keeps its Google/AI authorization. List sharing still uses a reviewed
+package/link, not sharing the private workspace folder. The app must be open to sync.
+A fixture pass is not physical-device acceptance.
+
 ## Start reading on your Mac
 
 1. Download the **Apple Silicon Mac** artifact from the latest tested table below.

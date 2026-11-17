@@ -148,6 +148,15 @@ jobs:
           tests/test_known_document_supply.py::test_exact_supply_restores_known_bytes_without_new_version_or_outbox
           tests/test_missing_artifact_retry.py::test_explicit_retry_restores_exact_artifact_without_revising_deck[figure]
 
+      - name: Personal Drive sync acceptance
+        timeout-minutes: 3
+        run: >-
+          ${{ env.DISPLAY_WRAPPER }} uv run python scripts/check.py --profile focused --python
+          tests/test_drive_sync_files.py
+          tests/test_drive_sync_authority.py
+          tests/test_drive_sync_dialog.py
+          tests/test_drive_client_build.py
+
       # One shared static artifact; this never deploys or changes a running host.
       - name: Build verified mobile web artifact
         if: matrix.name == 'windows'
@@ -172,6 +181,11 @@ jobs:
           # Scoped to synthetic screenshots; installed apps retain normal graphics settings.
           QTWEBENGINE_CHROMIUM_FLAGS: --disable-gpu
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/screenshots.py shots --demo
+
+      - name: Bundle Google Desktop OAuth client
+        env:
+          PAPERFACT_GOOGLE_DESKTOP_CLIENT: ${{ secrets.PAPERFACT_GOOGLE_DESKTOP_CLIENT }}
+        run: uv run python scripts/prepare_google_client.py
 
       - name: Build
         run: ${{ env.DISPLAY_WRAPPER }} uv run python scripts/build_app.py

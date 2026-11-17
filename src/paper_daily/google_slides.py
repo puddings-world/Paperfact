@@ -92,7 +92,11 @@ class GoogleSession:
         return token
 
 
-def authorize(*, opener=webbrowser.open, timeout=180):
+def authorize(*, opener=webbrowser.open, timeout=180, cancelled=lambda: False):
+    if cancelled():
+        from paper_daily.workspace_service import Cancelled
+
+        raise Cancelled("Google login cancelled")
     cfg = read_client()
     verifier = secrets.token_urlsafe(48)
     challenge = (
@@ -139,6 +143,10 @@ def authorize(*, opener=webbrowser.open, timeout=180):
         server.timeout = 1
         deadline = time.monotonic() + timeout
         while not result and time.monotonic() < deadline:
+            if cancelled():
+                from paper_daily.workspace_service import Cancelled
+
+                raise Cancelled("Google login cancelled")
             server.handle_request()
     if not result.get("code"):
         raise ValueError("Google 登入已取消或逾時，請重新連接")

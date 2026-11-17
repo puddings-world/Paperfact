@@ -3124,7 +3124,7 @@ class MainWindow(QWidget):
         self.sync_status_btn.setObjectName("workspaceSyncStatus")
         self.sync_status_btn.setFlat(True)
         self.sync_status_btn.setToolTip("開啟工作區設定以連線及選擇同步方式")
-        self.sync_status_btn.clicked.connect(self._workspace_settings)
+        self.sync_status_btn.clicked.connect(self._sync_settings)
         footer.addWidget(self.sync_status_btn)
         footer.addStretch(1)
         self.feedback_btn = QPushButton("使用資料與回饋")
@@ -3272,6 +3272,16 @@ class MainWindow(QWidget):
             return
         self._research_activity_dialog = dialog
         dialog.open()
+
+    def _sync_settings(self):
+        from paper_daily import store
+        from paper_daily.desktop.sync_connection_dialog import open_offline_connection
+
+        if not self._workspace_owner.current():
+            self._workspace_changed_notice()
+            return
+        open_offline_connection(self, self, store.DB_PATH,
+                                current_path=lambda: store.DB_PATH, language="zh-TW")
 
     def _workspace_settings(self):
         from paper_daily import store
@@ -3714,7 +3724,8 @@ class MainWindow(QWidget):
 
         if any(worker.isRunning() for worker in self.findChildren(OperationWorker)):
             return False
-        for name in ("_workspace_dialog", "_review_dialog", "_offline_dialog", "_goal_dialog",
+        for name in ("_workspace_dialog", "_connection_dialog", "_review_dialog", "_offline_dialog",
+                     "_goal_dialog",
                      "_claim_dialog", "_research_activity_dialog", "_research_inbox_dialog"):
             dialog = getattr(self, name, None)
             if dialog is not None and not dialog.disposed:
@@ -3938,6 +3949,13 @@ class MainWindow(QWidget):
         return False
 
     def closeEvent(self, event) -> None:
+        connection = getattr(self, "_connection_dialog", None)
+        if connection is not None and not connection.disposed and not connection.close():
+            if not getattr(self, "_drive_close_pending", False):
+                self._drive_close_pending = True
+                connection.finished.connect(self.close, Qt.ConnectionType.SingleShotConnection)
+            event.ignore()
+            return
         if MainWindow._preserve_changed_drafts(self, event):
             return
         inbox = getattr(self, "_research_inbox_dialog", None)

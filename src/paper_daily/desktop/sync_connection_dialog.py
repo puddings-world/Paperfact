@@ -1515,11 +1515,13 @@ def open_offline_connection(
     *,
     current_path=None,
     language="zh-TW",
-    dialog_factory=SyncConnectionDialog,
+    dialog_factory=None,
 ):
     """Use the same process-memory session owned by WorkspaceDialog, only on a user action."""
+    from paper_daily.desktop.drive_sync_dialog import DriveSyncDialog
     from paper_daily.workspace_sync import SyncSession
 
+    dialog_factory = dialog_factory or DriveSyncDialog
     path = Path(database).resolve(strict=True)
     current_path = current_path or (lambda: path)
     if Path(current_path()).resolve() != path:
@@ -1542,13 +1544,14 @@ def open_offline_connection(
         existing.activateWindow()
         return existing
     kwargs = {"language": language}
-    if dialog_factory is SyncConnectionDialog:
+    if dialog_factory in (SyncConnectionDialog, DriveSyncDialog):
         from paper_daily.desktop.continuous_sync import controller_for
 
         kwargs["automatic"] = controller_for(
             owner, session, blocked=lambda: _background_busy(owner)
         )
     dialog = dialog_factory(session, parent, **kwargs)
+    parent._connection_dialog = dialog
     dialog.open()
     return dialog
 

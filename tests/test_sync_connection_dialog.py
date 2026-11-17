@@ -236,16 +236,20 @@ def test_real_workspace_entry_reuses_memory_session_and_nested_close(enrolled, s
     parent.show()
     wait(app, lambda: parent._ready and not parent.busy)
     parent.sync_connection_button.click()
-    child = parent._sync_dialog
+    drive = parent._sync_dialog
+    drive.open_advanced()
+    child = drive._advanced_dialog
     wait(app, lambda: child.binding is not None and not child.busy)
     assert child.session is service[0]
     fill(child, service[2])
     child.connect_session()
     wait(app, lambda: not child.busy)
     child.close()
+    drive.close()
     wait(app, lambda: not parent.busy)
     parent.sync_connection_button.click()
-    reopened = parent._sync_dialog
+    parent._sync_dialog.open_advanced()
+    reopened = parent._sync_dialog._advanced_dialog
     wait(app, lambda: reopened.binding is not None and not reopened.busy)
     assert reopened.session is service[0] and reopened.sync_button.isEnabled()
     assert reopened.credential.text() == ""

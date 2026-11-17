@@ -661,7 +661,6 @@ class WorkspaceDialog(QDialog):
         dialog.open()
 
     def _sync_settings(self):
-        from paper_daily.desktop.sync_connection_dialog import SyncConnectionDialog
         from paper_daily.workspace_sync import SyncSession
 
         if self.busy or self.disposed or self._invalid:
@@ -683,7 +682,9 @@ class WorkspaceDialog(QDialog):
         from paper_daily.desktop.sync_connection_dialog import _background_busy
 
         automatic = controller_for(owner, session, blocked=lambda: _background_busy(owner))
-        dialog = SyncConnectionDialog(session, self, language="zh-TW" if self.zh else "en",
+        from paper_daily.desktop.drive_sync_dialog import DriveSyncDialog
+
+        dialog = DriveSyncDialog(session, self, language="zh-TW" if self.zh else "en",
                                       writers_busy=self.writers_busy,
                                       open_workspace=self._open_workspace, automatic=automatic)
         self._sync_dialog = dialog

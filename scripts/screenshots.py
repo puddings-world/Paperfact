@@ -224,6 +224,12 @@ def main(argv=None):
     w.grab().save(str(out / "slides.png"))
     report.append(f"canvas hint: {r.presentation_pane.canvas.hint.text()}")
 
+    w._sync_settings()
+    pump(10)
+    w._connection_dialog.grab().save(str(out / "drive-sync.png"))
+    w._connection_dialog.close()
+    pump(5)
+
     (out / "report.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
     print("\n".join(report))
 

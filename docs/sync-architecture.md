@@ -7,7 +7,7 @@ Implementation order and decision gates: [work plan](implementation-0.5.0.md).
 
 Personal cross-device sync should use the user's own Google Drive as the preferred
 storage path. A separately billed Paperfact VM is not a prerequisite. The server
-architecture below remains an optional backend/reference, not a completed Drive
+architecture below remains an optional backend/reference, not the desktop Drive
 implementation. No paid GCP resources have been created.
 
 Reuse the existing `drive.file` browser grant for app-created private files in a
@@ -24,46 +24,68 @@ server's verified authority sequence. Ordering, conflicts, retries and missing/
 deleted remote files require explicit adapter semantics and acceptance before
 real research upload. Drive is not a drop-in HttpTransport replacement.
 
-The current desktop Google session is memory-only. Native-grant storage seams
-now exist below, but their UI/startup integration, account-switch isolation and
-launch/foreground polling still need implementation for the Drive path. Existing login alone must not enable
+Desktop Drive now persists explicit native grants and reconnects only after
+local startup opt-in. Account/workspace guards and launch/foreground polling use
+the existing session/controller boundaries; physical acceptance remains pending. Existing login alone must not enable
 cloud upload. Google credentials remain device-local and absent from packages.
 See [Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth),
 [change retrieval](https://developers.google.com/workspace/drive/api/guides/manage-changes)
 and [app-data constraints](https://developers.google.com/workspace/drive/api/guides/appdata).
 
-### Drive storage checkpoint (2026-11-17)
+### Desktop Drive pilot (2026-11-18)
 
-Implemented source seams, not desktop synchronization:
+The desktop path is implemented in source: Google login/discovery, explicit
+create/join, native grant/device-token storage, startup opt-in, the existing
+continuous-sync controller, and verified PDF/file transfers. Existing research
+first prepares a separate supported copy and backup; unsupported coverage remains
+blocked rather than omitted. Joining never merges into the active database.
+Public v0.5 release and installed-device acceptance are separate gates.
 
-| Interface | Current behavior |
+| Component | Contract |
 |---|---|
-| `DriveFiles(session, client=None, cancelled=...)` | Captures one official Google API session. `account()`, `new_ids(count=1)`, `create_folder(id, workspace, name)` and `read_head(id, parent, workspace)` validate account-owned, private app objects. |
-| `put_small(id, parent, workspace, role, data, description=None)` / `read_small(reference, parent, workspace, role="commit")` | Bounded immutable objects, explicit retry identity, byte/hash verification; no overwrite on ID collision. |
-| `publish_head(observed, new_commit)` | Only this instance's captured head may publish. Conditional v2 metadata updates reject competing writers; failure does not replace the retained local anchor. |
-| `DriveLog(files, folder, head_id, workspace_id)` | `append(observed, object_id, payload)` publishes an immutable transaction before advancing the head. `read_since(anchor, limit=100, maximum=8388608)` verifies ancestry and returns oldest-first bytes plus the new anchor. |
-| `DriveVault(workspace, backend=..., startup_dir=...)` | `remember(files, folder_id, head_id, workspace_id, ticket=None)`, `load(ticket=None)` and `forget(ticket=None)` use the existing native-store/database-lifetime boundary. Grant storage does not enable startup access or uploads. |
-| `DriveGrant.session(client_reader=...)` | Restores a refresh-only in-memory Google session for the exact desktop OAuth client. No token refresh or network occurs until explicitly used. |
+| `DriveFiles` / `DriveLog` | Account-owned, private app objects; immutable byte/hash references; strong conditional metadata publication. Failures never initialize over existing cloud data. |
+| `DriveAuthority(...).invoke(method, *args, control=None, **kwargs)` | Closed existing service methods, known-schema row state, original operation IDs/base revisions and the existing `ReferenceService` conflict/control-history engine. A private derived cache, never the live research database. |
+| `DriveObjects(files, folder, workspace, cache).put(path)` / `.get(manifest, store)` | At most 150 MiB per object, 4 MiB immutable chunks, durable preallocated upload IDs, verified retry, partial-download resume, full hash verification before local ownership. |
+| `TransportFactory(workspace, ...)` | Lazy native-vault routing for stable Drive origins; ordinary endpoints still use `HttpTransport`. No constructor login or credential read. |
+| `DriveSetup(database, ...).sign_in(ticket, progress)` / `.create(name, ticket, progress, pdfs=None)` / `.join(spec, ticket, progress)` | Explicit account/coverage/target selection, resumable enrollment, native startup consent and reconnect to the same workspace/device. Login alone does not enable uploads. |
+| `DriveSyncDialog` | Default footer/workspace entry; background progress, duplicate/cancel/stale-result guards, create/join and automatic-sync toggle. Self-hosted configuration is under Advanced. |
 
-Evidence: 11 focused synthetic cases in `tests/test_drive_sync_files.py` passed in
-1.04s (bounded check 8.1s). They cover competing publications, exact immutable
-bytes, wrong-account receipts, private ownership, cancellation, offline/missing/
-revoked responses, receiver restart, altered history, native-only grants and
-workspace/client changes. The owner separately authorized one live synthetic
-Drive file test: fresh metadata update returned 200, stale update 412, competing
-updates [200, 412]; exact ownership was checked before deleting that file (204).
-No research was read or uploaded. This proves the tested provider behavior, not
-all future service behavior, cryptographic fencing or complete application sync.
+Each accepted state change uploads a row delta, with a full known-schema checkpoint
+every 32 publications. Hash-linked immutable commits preserve ordering; a conditional
+head update is the cloud commit point. A competing/uncertain write keeps the caller's
+outbox intent. The next pass reloads accepted state and applies the original conflict
+rules; it never silently rebases a stale edit. Schema is data (known table/column rows),
+never SQL from Drive. Anchor and restored cache state commit together. Device grants
+are hashed in authority rows; Google refresh tokens and plaintext credentials stay
+in the native vault.
 
-Remaining integration is substantive: research-engine transaction mapping and
-atomic local anchor application, durable long-history catch-up/checkpoints (the
-current bounded read fails closed beyond 100 commits/8 MiB), resumable large PDF
-objects, workspace discovery/enrollment, explicit start/reconnect UI, native
-startup opt-in and the installed Windows/Mac offline/conflict journey. A losing
-publication may leave an unreferenced private immutable object; automatic remote
-garbage collection is not implemented. Do not build or label a Drive-ready Mac
-candidate from these storage seams alone. The next candidate must include the
-complete desktop path, then run the existing Mac-only GitHub Actions workflow.
+The authority proves continuity against its retained local anchor. Verified chain
+links are cached during bounded catch-up; fresh receivers load a checkpoint and at
+most 31 deltas. The primitive `DriveLog.read_since` retains its 100-commit/8 MiB
+bound; the application uses checkpoint reconstruction instead. Missing/rewritten
+prefixes pause rather than reset the workspace.
+
+Current bounds: 64 MiB / 100,000 authority metadata rows, 150 MiB per attachment;
+first legacy enrollment retains its 256-file / 512 MiB limits. These reject rather
+than truncate. Remote orphan/history garbage collection, physical storage/quota
+recovery, rehoming an already-bound workspace to another authority, and installed
+device/corpus acceptance remain open. Same-owner Drive access is the actual
+authorization boundary: app device revocation cannot stop someone who still controls
+the Google account from authorizing a fresh device. This is not independent fencing.
+
+One approved live synthetic file probe verified metadata updates (fresh 200,
+stale 412, competing [200, 412]) and exact-file deletion (204). Source fixtures
+exercise two-device conflict/restart, uncertain acknowledgment, chunked PDFs,
+create/copy/join, native-record restore, offline note round trip, checkpoint
+rollover and GUI cancellation. These do not certify real accounts or physical
+devices. Development tests did not upload real research.
+
+Native builds receive `PAPERFACT_GOOGLE_DESKTOP_CLIENT` from a repository secret.
+`scripts/prepare_google_client.py` selects only the developer Desktop client
+fields, excluding user grants. Desktop clients are public and cannot keep a client
+secret confidential; bundled configuration identifies Paperfact without logging in
+as the developer. PKCE and each user's browser consent remain required. See
+[Google's native guidance](https://developers.google.com/identity/protocols/oauth2/native-app).
 
 
 ## Existing seams

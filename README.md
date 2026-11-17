@@ -144,6 +144,31 @@ count does not certify original-source coverage. [Evidence scope](docs/analysis-
 
 <img src="docs/images/topic-research.png" width="680" alt="Topic research preview with selectable papers, research branches, and selection reasons; synthetic example">
 
+## Sync a desktop and laptop (v0.5 preview)
+
+1. Click the bottom-right **Sync** button and sign in to Google.
+2. On your desktop, choose **Sync this workspace**. Existing research gets a
+   separate verified copy and backup when first enrollment is needed. The new
+   window reconnects automatically; keep it open until pending changes/files finish.
+3. On your Mac, install the matching preview, sign in to the **same Google account**
+   and choose **Open selected Drive workspace**. Its data stays in a new local folder.
+4. Keep automatic sync on. Offline notes are saved locally and sent after reconnect.
+   Before a trip, use offline preparation/verification for the papers you need.
+
+```mermaid
+flowchart LR
+    A["Desktop: local research + pending edits"] <--> D["Your private Google Drive"]
+    D <--> B["Mac: local research + pending edits"]
+    A -. "Reviewed list package / sharing link" .-> C["Colleague: independent copy"]
+```
+
+Sync runs while Paperfact is open (local edits debounce; remote polling is every
+30 seconds). Google and AI authorizations stay on each device. Normal edits send
+row differences; PDFs use verified, retryable immutable chunks. Private workspace
+folders must remain unshared; share selected lists through research packages instead.
+[Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
+This is a test candidate; installed Windows/Mac acceptance is still required.
+
 ## Share the research, not your account
 
 ```mermaid
@@ -284,10 +309,6 @@ Operators can now [create a private signing key and explicitly enable browser pa
 with `paperfact sync-admin create-browser-key --output FILE` and
 `paperfact sync-admin serve --state DIR --browser-origin URL --browser-key-file FILE`. HTTPS/static hosting and
 installed-device acceptance remain open.
-Personal cross-device sync now prioritizes the user's own Drive; the
-[Drive storage seams are implemented](docs/sync-architecture.md#drive-storage-checkpoint-2026-11-17);
-the desktop replica integration remains in development. Existing Google login already supports Slides and list-package
-sharing; it does not yet enable continuous Drive sync. A paid VM is optional.
 The [private deployment review](docs/gcp-sync-pilot-plan.md#a-domain-is-optional-for-the-private-pilot)
 can use an owned hostname or a reserved public IPv4 with trusted HTTPS; a domain
 purchase is not required. Its renderer does not create resources or certificates.

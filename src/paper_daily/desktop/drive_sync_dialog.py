@@ -1,0 +1,398 @@
+"""Simple personal Drive enrollment, with the existing server dialog under Advanced."""
+
+from pathlib import Path
+
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+)
+
+from paper_daily.drive_sync_setup import DriveSetup
+from paper_daily.workspace_open import WorkspaceDestination, open_workspace
+
+
+class DriveSyncDialog(QDialog):
+    def __init__(
+        self,
+        session,
+        parent=None,
+        *,
+        language="zh-TW",
+        automatic=None,
+        writers_busy=lambda: False,
+        open_workspace=open_workspace,
+        service_factory=DriveSetup,
+        owner=None,
+    ):
+        super().__init__(parent)
+        self.session, self.automatic = session, automatic
+        self.owner = owner or (automatic.parent() if automatic is not None else parent)
+        self.writers_busy, self.open_workspace = writers_busy, open_workspace
+        self.service = service_factory(
+            session.workspace.path, current_path=session.workspace.current_path
+        )
+        self.disposed = self._closing = False
+        self._worker = None
+        self.zh = language == "zh-TW"
+        self.language = language
+        self.setWindowTitle(self.tr("Personal Drive sync", "個人 Drive 同步"))
+        self.resize(540, 440)
+        layout = QVBoxLayout(self)
+        intro = QLabel(
+            self.tr(
+                "Use the same Google account on your desktop and laptop. "
+                "Research stays on each device; "
+                "Enable sync to keep a private copy in your own Drive. "
+                "Sharing lists is separate.",
+                "桌機與筆電登入同一個 Google 帳號。啟用同步"
+                "後，研究資料會保存在各裝置與你自己的私人 Driv"
+                "e；分享清單是另一個操作。",
+            )
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        self.account = QLabel(self.tr("Not connected to Google", "尚未連接 Google"))
+        layout.addWidget(self.account)
+        self.login = QPushButton(
+            self.tr(
+                "Sign in / switch Google account",
+                "登入／切換 Google 帳號",
+            )
+        )
+        self.login.clicked.connect(self.sign_in)
+        layout.addWidget(self.login)
+        self.name = QLineEdit(self.tr("My research", "我的研究"))
+        self.name.setMaxLength(200)
+        layout.addWidget(self.name)
+        self.create = QPushButton(self.tr("Sync this workspace", "同步這個工作區"))
+        self.create.setProperty("role", "primary")
+        self.create.clicked.connect(self.create_workspace)
+        layout.addWidget(self.create)
+        self.workspaces = QComboBox()
+        layout.addWidget(self.workspaces)
+        self.join = QPushButton(
+            self.tr(
+                "Open selected Drive workspace",
+                "開啟選取的 Drive 工作區",
+            )
+        )
+        self.join.clicked.connect(self.join_workspace)
+        layout.addWidget(self.join)
+        self.auto = QPushButton(self.tr("Automatic sync", "自動同步"))
+        self.auto.setCheckable(True)
+        self.auto.setChecked(bool(automatic and automatic.enabled))
+        self.auto.clicked.connect(self.toggle_automatic)
+        layout.addWidget(self.auto)
+        self.status = QLabel(
+            self.tr(
+                "Sign in to create or open a workspace.",
+                "登入後即可建立或開啟同步工作區。",
+            )
+        )
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 1)
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        row = QHBoxLayout()
+        self.advanced = QPushButton(self.tr("Advanced: self-hosted service", "進階：自架服務"))
+        self.advanced.clicked.connect(self.open_advanced)
+        row.addWidget(self.advanced)
+        self.stop = QPushButton(self.tr("Stop", "停止"))
+        self.stop.clicked.connect(self.cancel)
+        row.addWidget(self.stop)
+        self.done_button = QPushButton(self.tr("Continue reading", "繼續閱讀"))
+        self.done_button.clicked.connect(self.close)
+        row.addWidget(self.done_button)
+        layout.addLayout(row)
+        factory = getattr(session, "_factory", None)
+        authority = getattr(factory, "authority", None)
+        if authority is not None:
+            self.service.files = authority.files
+            self.service.account = authority.account
+            self.account.setText(authority.account["email"])
+        if self.automatic is not None:
+            self.automatic.changed.connect(self._automatic_changed)
+        self._buttons()
+
+    def _automatic_changed(self, value):
+        if self.disposed or self._closing or self.busy:
+            return
+        self.auto.setChecked(bool(value["enabled"]))
+        self._buttons()
+
+    def tr(self, en, zh):
+        return zh if self.zh else en
+
+    @property
+    def busy(self):
+        child = getattr(self, "_advanced_dialog", None)
+        return (self._worker is not None
+                or (child is not None and not child.disposed and child.busy))
+
+    def _buttons(self):
+        idle = not self.busy and not self._closing
+        self.login.setEnabled(idle)
+        self.create.setEnabled(idle and self.service.files is not None)
+        self.join.setEnabled(idle and self.workspaces.count() > 0)
+        self.auto.setEnabled(idle and self.session.summary()["authenticated"])
+        self.advanced.setEnabled(idle)
+        self.name.setEnabled(idle)
+        self.workspaces.setEnabled(idle)
+        self.stop.setEnabled(self.busy)
+        self.progress.setVisible(self.busy)
+        self.progress.setRange(0, 0 if self.busy else 1)
+
+    def _start(self, kind, task):
+        if self.busy or self._closing or self.disposed:
+            return False
+        from paper_daily.desktop.sync_connection_dialog import SyncWorker
+
+        try:
+            self.service.binding._check()
+        except (OSError, ValueError):
+            return False
+        if kind not in {"login", "toggle"}:
+            if self.writers_busy():
+                self.status.setText(
+                    self.tr(
+                        "Wait for the current research job to finish.",
+                        "請先等目前的研究工作完成。",
+                    )
+                )
+                return False
+            if self.automatic:
+                self.automatic.stop()
+                if self.automatic.busy:
+                    return False
+        worker = SyncWorker(task, self)
+        self._worker = worker
+        worker.progress.connect(self._progress)
+        worker.finished.connect(lambda: self._finished(worker, kind))
+        self.status.setText(
+            self.tr(
+                "Working; you can stop safely.",
+                "正在處理，可安全停止。",
+            )
+        )
+        self._buttons()
+        worker.start()
+        return True
+
+    def _progress(self, value):
+        if self._closing:
+            return
+        if isinstance(value, dict) and "received" in value:
+            self.status.setText(
+                self.tr(
+                    "Receiving research records: ",
+                    "正在接收研究紀錄：",
+                )
+                + str(value.get("cursor", value["received"]))
+            )
+        else:
+            self.status.setText(
+                self.tr(
+                    "Connecting / preparing saved research and files...",
+                    "正在連接或準備已儲存的研究與檔案…",
+                )
+            )
+
+    def sign_in(self):
+        return self._start("login", self.service.sign_in)
+
+    def _confirm(self):
+        return (
+            QMessageBox.question(
+                self,
+                self.windowTitle(),
+                self.tr(
+                    "Enable continuous sync to this account's private Drive? "
+                    "On this device, the app will "
+                    "remember Google authorization in the system credential store "
+                    "and reconnect on launch. "
+                    "Existing research is copied with a backup if it needs first enrollment.",
+                    "啟用此帳號的私人 Drive 持續同步？此裝置會將"
+                    " Google 授權存在系統憑證庫，並在開啟 ap"
+                    "p 時重新連線。首次啟用的既有資料會先建立副本與備"
+                    "份。",
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            == QMessageBox.StandardButton.Yes
+        )
+
+    def create_workspace(self):
+        if (
+            self.busy
+            or self.service.files is None
+            or not self.name.text().strip()
+            or not self._confirm()
+        ):
+            return False
+        name = self.name.text().strip()
+
+        def create(ticket, progress):
+            from paper_daily.desktop.enrollment_dialog import current_pdfs
+
+            pdfs = current_pdfs(self.session.workspace.path, ticket, progress)
+            return self.service.create(name, ticket, progress, pdfs=pdfs)
+
+        return self._start("create", create)
+
+    def join_workspace(self):
+        spec = self.workspaces.currentData()
+        if self.busy or spec is None or not self._confirm():
+            return False
+        return self._start(
+            "join", lambda ticket, progress: self.service.join(spec, ticket, progress)
+        )
+
+    def _finished(self, worker, kind):
+        if worker is not self._worker:
+            return
+        self._worker = None
+        current = (
+            self.service.binding.current() and not self._closing and not worker.ticket.cancelled
+        )
+        if current and not worker.error:
+            result = worker.result
+            if kind == "login":
+                self.account.setText(result["account"]["email"])
+                self.workspaces.clear()
+                for spec in result["workspaces"]:
+                    self.workspaces.addItem(spec["name"], spec)
+                self.status.setText(
+                    self.tr(
+                        "Choose this workspace or open one from Drive.",
+                        "可同步目前工作區，或開啟 Drive 上的工作區。",
+                    )
+                )
+            elif kind == "toggle":
+                enabled = result["enabled"]
+                if enabled:
+                    self.automatic.enable()
+                self.auto.setChecked(enabled)
+                self.status.setText("Automatic Drive sync " + ("on" if enabled else "off"))
+            elif result["copied"]:
+                database = Path(result["database"])
+                try:
+                    self.open_workspace(WorkspaceDestination(database.parent, database))
+                except (OSError, ValueError):
+                    self.status.setText("Workspace prepared; open " + str(database.parent))
+                    worker.deleteLater()
+                    self._buttons()
+                    return
+                self.status.setText(
+                    self.tr(
+                        "Opened the separate sync workspace. Sync resumes there.",
+                        "已開啟獨立同步工作區，會在新視窗繼續同步。",
+                    )
+                )
+            else:
+                from paper_daily.desktop.continuous_sync import controller_for
+                from paper_daily.desktop.sync_connection_dialog import _background_busy
+
+                self.session = result["session"]
+                self.owner._workspace_sync_session = self.session
+                self.automatic = controller_for(
+                    self.owner, self.session, blocked=lambda: _background_busy(self.owner)
+                )
+                self.automatic.changed.connect(self._automatic_changed)
+                self.auto.setChecked(self.automatic.enable())
+                self.status.setText(
+                    self.tr(
+                        "Automatic Drive sync is on. Offline edits stay local until connected.",
+                        "Drive 自動同步已啟用；離線修改會保留在本機，連線後補傳。",
+                    )
+                )
+        else:
+            self.service.rollback_consent()
+            self.status.setText(
+                self.tr("Stopped or could not finish: ", "停止")
+                + str(worker.error or "cancelled")
+                + self.tr(
+                    ". Saved work and setup progress are retained; "
+                    "retry after checking the connection.",
+                    "。已保留資料與準備進度，可確認連線後重試。",
+                )
+            )
+        worker.deleteLater()
+        self._buttons()
+        if self._closing:
+            QTimer.singleShot(0, self.close)
+
+    def toggle_automatic(self, checked):
+        if self.automatic is None:
+            self.auto.setChecked(False)
+            return
+        from paper_daily.connection_vault import ConnectionVault
+
+        if checked and (self.automatic.busy or not self.session.summary()["authenticated"]):
+            self.auto.setChecked(False)
+            return False
+        if not checked:
+            self.automatic.stop()
+        session, enabled = self.session, checked
+        return self._start(
+            "toggle",
+            lambda ticket, _: (
+                ConnectionVault(session.workspace).set_startup(session, enabled, ticket),
+                {"copied": False, "session": session, "enabled": enabled},
+            )[1],
+        )
+
+    def open_advanced(self):
+        from paper_daily.desktop.sync_connection_dialog import SyncConnectionDialog
+
+        if self.busy or self._closing:
+            return
+        existing = getattr(self, "_advanced_dialog", None)
+        if existing is not None and not existing.disposed:
+            existing.show()
+            existing.raise_()
+            return
+        dialog = SyncConnectionDialog(
+            self.session,
+            self,
+            language=self.language,
+            writers_busy=self.writers_busy,
+            automatic=self.automatic,
+        )
+        self._advanced_dialog = dialog
+        dialog.finished.connect(lambda _: QTimer.singleShot(0, self.close)
+                                if self._closing else None)
+        dialog.open()
+
+    def cancel(self):
+        if self._worker:
+            self._worker.ticket.cancel()
+
+    def reject(self):
+        self.close()
+
+    def closeEvent(self, event):
+        child = getattr(self, "_advanced_dialog", None)
+        if child is not None and not child.disposed and not child.close():
+            self._closing = True
+            event.ignore()
+            return
+        if self.busy:
+            self._closing = True
+            self.cancel()
+            self._buttons()
+            event.ignore()
+            return
+        self.disposed = True
+        self.done(QDialog.DialogCode.Rejected)
+        event.accept()

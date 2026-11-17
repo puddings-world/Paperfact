@@ -479,3 +479,18 @@ scheduling dependency. Existing review directories are never overwritten;
 interrupted output is retained. [Command/options and field meanings](gcp-sync-pilot-plan.md#prepare-one-offline-configuration-review).
 Run `scripts/check_bounded.py --profile focused --python tests/test_gcp_pilot_prepare.py`
 for the small renderer/actual CLI selection; this is not Linux/GCP acceptance.
+
+## Google Desktop OAuth in native builds
+
+`python scripts/prepare_google_client.py [--output PATH]` reads
+`PAPERFACT_GOOGLE_DESKTOP_CLIENT` (Desktop OAuth JSON) and writes the ignored
+resource `src/paper_daily/google-client.json` by default. The release workflow
+supplies it from the repository secret with that name. No user refresh/access
+tokens or service account keys belong there. Only `installed.client_id` and
+`installed.client_secret` are selected; invalid input preserves existing output.
+No configuration value is logged.
+
+Packaged users click Google sign-in. Source/fork developers provide their own
+Desktop app configuration through the existing Google setup or this build command.
+It identifies the developer project; users authorize their own accounts with PKCE.
+Personal Drive sync does not require a separate server or paid GCP VM.
