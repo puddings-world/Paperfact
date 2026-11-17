@@ -366,7 +366,7 @@ def test_release_gate_is_curated_and_preserves_frontend_mobile_protocol_checks(
     expected = [test for group in CHECK["RELEASE_JOURNEYS"].values() for test in group]
     for test in expected:
         fixture_test(tmp_path, test.partition("::")[0])
-    for name in ("gemini_usage", "pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
+    for name in ("pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
         fixture_test(tmp_path, "tests/test_" + name + ".mjs")
     for name in CHECK["RELEASE_MOBILE"]:
         path = tmp_path / ("mobile/tests/" + name + ".test.mjs")
@@ -379,7 +379,7 @@ def test_release_gate_is_curated_and_preserves_frontend_mobile_protocol_checks(
     assert CHECK["run_checks"](tmp_path, execute, files=[], profile="release") == 0
     report = report_at(tmp_path)
     assert report["selection"]["python"] == expected
-    assert report["selection"]["mobile"] and len(report["selection"]["frontend"]) == 5
+    assert report["selection"]["mobile"] and len(report["selection"]["frontend"]) == 4
     assert not report["full_check_passed"]
     assert "tests" not in observed[1]
     assert observed[-2][:2] == ["node", "--test"]
@@ -399,7 +399,7 @@ def test_plan_lists_real_journeys_without_execution_runtime_or_report_changes(
         for test in tests:
             fixture_test(tmp_path, test.partition("::")[0])
     if profile == "release":
-        for name in ("gemini_usage", "pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
+        for name in ("pocket_pdfjs", "presentation_html", "web_ai", "typeset"):
             fixture_test(tmp_path, "tests/test_" + name + ".mjs")
         for name in CHECK["RELEASE_MOBILE"]:
             path = tmp_path / ("mobile/tests/" + name + ".test.mjs")

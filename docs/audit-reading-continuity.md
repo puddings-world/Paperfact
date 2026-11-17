@@ -47,7 +47,7 @@ the selected AI service controls actual generation and accounting. The compariso
 view labels that distinction. Its one explicit Paperfact request is not a promise
 of one vendor HTTP call or a billing cap. No automatic retry was added.
 
-Gemini CLI responses without a parsed provider model identity retain the requested
+Responses without a parsed provider model identity (formerly Gemini CLI) retain the requested
 identifier for compatibility but report the actual model as unknown. New consumers
 use reported_model; this does not rewrite historical research or infer a version
 from the request, service alias, usage data, or model catalog.

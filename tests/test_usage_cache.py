@@ -136,7 +136,7 @@ def test_monitor_prefetches_unsaved_terminal_accounts_once_per_identity(setup, m
     monitor = UsageMonitor(owner)
     app.processEvents()
     assert monitor._reads.wait()
-    assert requested == [("cli", "saved"), ("codex", "local"), ("gemini", "local")]
+    assert requested == [("cli", "saved"), ("codex", "local")]
     monitor.timer.stop()
     owner.deleteLater()
 

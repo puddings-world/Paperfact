@@ -175,9 +175,9 @@ def test_diagnostics_reuses_boolean_presence_without_exporting_paths(monkeypatch
     assert (
         first["agent_commands_found"]
         == second["agent_commands_found"]
-        == {"claude": True, "codex": True, "gemini": True}
+        == {"claude": True, "codex": True}
     )
-    assert calls == ["claude", "codex", "gemini"]
+    assert calls == ["claude", "codex"]
     assert "/private/fixture" not in diagnostics.render(second)
 
 

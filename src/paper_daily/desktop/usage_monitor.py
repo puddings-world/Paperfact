@@ -65,7 +65,7 @@ class UsageMonitor(QObject):
             for cfg in ai_choices.choices(backend):
                 accounts.setdefault(ai_choices.account_key(cfg), cfg)
         for cfg in accounts.values():
-            if cfg.backend in ai_choices.LABELS:
+            if cfg.backend in ai_choices.CLI_BACKENDS:
                 usage_cache.cache.refresh_background(cfg)
         return ai_choices.connection_label(llm.settings())
 

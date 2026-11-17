@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from PySide6.QtWidgets import QApplication, QProgressBar
 
-from paper_daily import ai_accounts, ai_usage, gemini_cli, llm
+from paper_daily import ai_accounts, ai_usage, llm
 from paper_daily.ai_types import Settings
 from paper_daily.desktop.ai_usage import AIUsageDialog, UsageSummary
 from paper_daily.desktop.ask import AskRunner
@@ -107,66 +107,19 @@ def test_quota_failure_is_unknown_and_error_body_not_displayed(monkeypatch):
     assert "sensitive" not in snapshot["message"]
 
 
-def test_gemini_subscription_renders_official_model_percentages(monkeypatch):
-    monkeypatch.setattr(gemini_cli, "usage", lambda cfg: {
-        "plan": "Google AI Pro",
-        "buckets": [
-            {"modelId": "gemini-pro", "remainingFraction": .73,
-             "resetTime": "2026-10-22T12:00:00Z"},
-            {"modelId": "gemini-flash", "remainingFraction": 1},
-            {"modelId": "gemini-other", "remainingFraction": 0},
-        ],
-    })
-    snapshot = ai_usage.subscription(Settings("gemini"))
-    assert snapshot["plan"] == "Google AI Pro" and snapshot["checked_at"]
-    assert [w["used"] for w in snapshot["windows"]] == [27, 0, 100]
-    assert snapshot["windows"][0]["reset"]
-    assert snapshot["windows"][1]["reset"] is None
-    assert "不可相加" in snapshot["message"]
-
-
-@pytest.mark.parametrize("fraction", [None, True, -1, 1.01, float("nan"), "0.7"])
-def test_gemini_unknown_quota_is_not_fabricated(fraction):
-    assert ai_usage.gemini_windows([{"modelId": "gemini-pro", "remainingFraction": fraction}]) == []
-
-
-def test_gemini_upstream_rejection_is_distinct_from_missing_quota(monkeypatch):
-    monkeypatch.setattr(gemini_cli, "usage", lambda cfg: {
-        "buckets": [], "needs_setup": True, "unsupported_client": True,
-    })
-    result = ai_usage.subscription(Settings("gemini"))
-    assert not result["windows"] and "UNSUPPORTED_CLIENT" in result["message"]
-    assert "完成帳號設定" not in result["message"]
-    assert "服務已停止" in result["message"]
-    assert "Paperfact 尚未串接" in result["message"]
-    assert "Claude 或 Codex" in result["message"]
-    assert "code-assist-individuals" in ai_usage.USAGE_LINKS["gemini"]
-    monkeypatch.setattr(gemini_cli, "usage", lambda cfg: {"buckets": [], "needs_setup": True})
-    assert "完成帳號設定" in ai_usage.subscription(Settings("gemini"))["message"]
-
-
-def test_gemini_network_failure_does_not_leak_account_or_http_headers(monkeypatch):
-    def fail(cfg):
-        raise ValueError("secret access token")
-    monkeypatch.setattr(gemini_cli, "usage", fail)
-    snapshot = ai_usage.subscription(Settings("gemini"))
-    assert not snapshot["windows"] and "/stats model" in snapshot["message"]
-    assert "secret" not in snapshot["message"]
-
-
 def test_model_quota_bars_match_labels_and_plan_and_reset_on_switch():
     app = QApplication.instance() or QApplication([])
     widget = UsageSummary()
-    widget.reset(Settings("gemini"))
+    widget.reset(Settings("codex"))
     widget.show_result({
-        "plan": "Google AI Pro", "message": "official",
-        "windows": ai_usage.gemini_windows([
-            {"modelId": "gemini-pro", "remainingFraction": .73},
-            {"modelId": "gemini-flash", "remainingFraction": 1},
-        ]),
+        "plan": "Pro", "message": "official",
+        "windows": [
+            {"label": "model-a", "used": 27.0, "minutes": None, "reset": None},
+            {"label": "model-b", "used": 0, "minutes": None, "reset": None},
+        ],
     }, None)
-    assert "Google AI Pro" in widget.quota_status.text()
-    assert widget.windows.itemAt(0).widget().text().startswith("gemini-pro")
+    assert "Pro" in widget.quota_status.text()
+    assert widget.windows.itemAt(0).widget().text().startswith("model-a")
     assert widget.windows.itemAt(1).widget().value() == 270
     assert not widget.windows.itemAt(1).widget().isTextVisible()
     assert widget.windows.itemAt(3).widget().value() == 0

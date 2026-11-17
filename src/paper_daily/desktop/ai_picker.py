@@ -22,7 +22,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import ai_accounts, ai_choices, ai_providers, llm, model_catalog, usage_cache
+from paper_daily import (
+    ai_accounts,
+    ai_choices,
+    ai_profiles,
+    ai_providers,
+    llm,
+    model_catalog,
+    usage_cache,
+)
 from paper_daily.desktop.ai_usage import UsageSummary
 from paper_daily.desktop.ask import AskRunner
 from paper_daily.desktop.settings_style import apply as style_settings
@@ -207,8 +215,6 @@ class AIPickerDialog(QDialog):
         self._usage_version = None
         self._cached_usage()
         self._models = model_catalog.models(self.cfg)
-        if self.cfg.backend == "gemini":
-            self._models = ai_accounts.models(self.cfg)
         if ai_choices.uses_key(self.cfg):
             self._models = []
         self._fill_models(self.cfg.model)
@@ -282,6 +288,10 @@ class AIPickerDialog(QDialog):
         cfg, epoch = self.cfg, self._epoch
         if ai_choices.uses_key(cfg):
             self._inspect_key(cfg, epoch)
+            return
+        if cfg.backend in ai_profiles.RETIRED:
+            self.account_status.setText(ai_profiles.RETIRED[cfg.backend])
+            self.usage.failed()
             return
         if not usage_cache.cache.peek(cfg):
             self.usage.reset(cfg)

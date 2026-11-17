@@ -134,7 +134,7 @@ def test_late_status_cannot_replace_another_services_account(picker, monkeypatch
 def test_first_login_can_be_saved_without_activating_it(picker):
     widget, _app = picker
     llm.SETTINGS_PATH.unlink()
-    cfg = ai_choices.new_account("gemini")
+    cfg = ai_choices.new_account("codex")
     saved = ai_choices.save(cfg, "", activate=False)
     assert llm.active_profile() != saved.profile
     assert llm.profile_fields(saved.profile)["account_id"] == cfg.account_id

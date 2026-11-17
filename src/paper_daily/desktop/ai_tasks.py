@@ -216,7 +216,7 @@ class AITasksDialog(QDialog):
         present = {cfg.backend for cfg in options}
         options += [
             Settings(backend, isolated=True)
-            for backend in ai_choices.LABELS
+            for backend in ai_choices.CLI_BACKENDS
             if backend not in present
         ]
         labels = [self._account_label(cfg) for cfg in options]
@@ -274,8 +274,6 @@ class AITasksDialog(QDialog):
         if hasattr(self, "identities"):
             self.identities.check([cfg])
         key = ai_choices.account_key(cfg)
-        if cfg.backend == "gemini" and key not in self._cache:
-            self._cache[key] = ai_accounts.models(cfg)
         self._fill(task, self._cache.get(key, model_catalog.models(cfg)), selected)
         self._resolved(task)
         if cfg.backend in ("cli", "codex") and key not in self._cache:

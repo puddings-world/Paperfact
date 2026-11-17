@@ -156,15 +156,14 @@ def test_close_flush_cannot_be_overwritten_by_an_older_worker_snapshot(tmp_path,
         assert store.get_kv(conn, "ui.regression") == "latest"
 
 
-@pytest.mark.parametrize("backend", ["codex", "gemini"])
+@pytest.mark.parametrize("backend", ["codex"])
 @pytest.mark.parametrize("exit_code", [0, 1])
 def test_other_cli_errors_never_become_answers(tmp_path, monkeypatch, backend, exit_code):
-    from paper_daily import ai_accounts, gemini_cli
+    from paper_daily import ai_accounts
 
     monkeypatch.setattr(llm, "SETTINGS_PATH", tmp_path / "llm.json")
     monkeypatch.setattr(llm, "ACCESS_CHECK", None)
     monkeypatch.setattr(ai_accounts, "command", lambda name: ["fixture-" + name])
-    monkeypatch.setattr(gemini_cli, "status", lambda cfg: ("fixture", "ok"))
 
     def run(argv, **kwargs):
         error = "API Error: rate limit reached private-account"
@@ -172,7 +171,7 @@ def test_other_cli_errors_never_become_answers(tmp_path, monkeypatch, backend, e
             Path(argv[argv.index("--output-last-message") + 1]).write_text(error, encoding="utf-8")
         return SimpleNamespace(
             returncode=exit_code,
-            stdout=json.dumps({"response": error}) if backend == "gemini" else error,
+            stdout=error,
             stderr="usage limit private-token",
         )
 

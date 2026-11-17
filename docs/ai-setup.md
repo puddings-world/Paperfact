@@ -20,9 +20,10 @@ Antigravity, with a subscription login. So **Gemini** in the picker asks for a k
 
 The key is billed per use by Google; an AI Pro or Ultra subscription does not cover
 it. It is stored only in this computer's AI settings and never exported. **更換 API
-金鑰…** replaces it in place, keeping feature assignments. Workspace accounts with
-Code Assist can still add the Gemini CLI as **Gemini CLI（企業版 Google 帳號）** in
-**進階設定 → 快速新增連線**.
+金鑰…** replaces it in place, keeping feature assignments. Paperfact no longer runs
+Gemini CLI, for any account; a Gemini CLI connection saved by an earlier version stays
+in the settings file but explains this instead of running. A Gemini subscription is
+used from agy, which calls Paperfact's MCP tools ([AI access policy](ai-access-policy.md)).
 
 1. Click the toolbar's **全域 AI** button and choose **Claude**, **Codex**, or **Gemini**
    (Gemini: see above).
@@ -51,7 +52,7 @@ overrides; **進階設定** shows each assignment. Long names shorten only on th
 Codex models come from the official `model/list` method; Claude models come from
 the official CLI initialization response, including newly available aliases such
 as `fable`. Both load in background workers for the selected account, not from a
-fixed list of model families. Gemini currently offers common model IDs.
+fixed list of model families. A Gemini API key lists the models that key can use.
 Availability still depends on the provider/account; discovery is not a successful
 inference check. Ordinary model fields are read-only selections; **自訂 ID** or
 **自訂模型 ID（進階）** enables manual entry. All selectors accept custom IDs, and
@@ -86,8 +87,8 @@ limit instead of silently generating questions from a truncated text.
 Open **進階設定** for a table of features, AI accounts and models. For example,
 translation and deep explanation can reuse one Claude login with different models.
 Choose a service/account in the middle column, then its model in the right column.
-Claude, Codex and Gemini are all offered even before a connection has been saved;
-using one requires its installed official CLI and a valid login.
+Claude and Codex are offered even before a connection has been saved; using one
+requires its installed official CLI and a valid login. Gemini needs a saved API key.
 **帳號與用量** opens the simple login screen without changing the default AI
 or discarding the table's unsaved choices. **儲存分配** applies choices together;
 **全部跟隨全域** removes overrides when saved. Cancel leaves saved choices untouched.
@@ -116,8 +117,8 @@ Codex account identity (email and plan, when provided) and quota windows come fr
 the official app-server `account/read` and `account/rateLimits/read` methods.
 The quota panel shows used percentages, reset times and the snapshot time; refresh
 it to check again. Missing data or a failed request is shown as unknown, never zero.
-Claude uses the official CLI's usage control response; Gemini uses its existing
-login and account/quota integration. Providers need not report plan names or
+Claude uses the official CLI's usage control response. An API key has no plan
+quota to show. Providers need not report plan names or
 per-model windows, so unavailable fields remain unknown. The panel also links to
 the provider's usage information. A browser usage page may have a different account
 signed in; check its account before comparing it to Paperfact.
@@ -131,8 +132,7 @@ local CLI connections do not separate historical usage after an external account
 switch. Independently signed-in Paperfact accounts have separate receipt tags.
 
 Official usage references: [Codex app-server](https://learn.chatgpt.com/docs/app-server),
-[Claude usage](https://code.claude.com/docs/en/costs),
-[Gemini stats](https://geminicli.com/docs/reference/commands/#stats).
+[Claude usage](https://code.claude.com/docs/en/costs).
 
 API connection forms are currently outside the everyday desktop flow. Existing API
 connections and task assignments keep working; the CLI examples below remain
@@ -147,16 +147,12 @@ Console login. Each person signs in to their own Claude account through the
 unmodified official CLI on their own computer; Paperfact never sees or shares the
 credentials, and requests draw on that person's own subscription limits. Anyone who
 would rather keep Paperfact off their subscription can use the `anthropic` backend
-with their own API key (see the table below). Codex accounts use the official Codex browser login. Gemini uses the
-official CLI's ACP `authenticate` method for Google login, independently of Slides
-authorization. Gemini's cached login status is local; it does not prove service
-access, and the consumer CLI path has been discontinued as described above.
-Work/school accounts have separate Code Assist eligibility and project requirements. Provider plan
-eligibility and quota still apply; these logins do not turn into general API keys.
+with their own API key (see the table below). Codex accounts use the official Codex
+browser login. Provider plan eligibility and quota still apply; these logins do not
+turn into general API keys.
 
 Official references: [Claude authentication](https://code.claude.com/docs/en/authentication),
-[Codex authentication](https://developers.openai.com/codex/auth),
-[Gemini authentication](https://geminicli.com/docs/get-started/authentication/).
+[Codex authentication](https://developers.openai.com/codex/auth).
 These CLI adapters supply research answers. They do not yet provide a coordinated
 multi-agent job system, external-host session resume, or arbitrary tool access.
 
@@ -169,7 +165,6 @@ model or other tasks. Reading lists and research records remain independent.
 | --- | --- |
 | `cli` | Claude CLI on PATH, signed in; an optional model is forwarded to the CLI |
 | `codex` | Codex CLI on PATH, signed in; an optional model is forwarded to `codex exec` |
-| `gemini` | Gemini CLI with a Workspace Google login; model passed to headless generation with tools denied |
 | `anthropic` | Anthropic Messages API with your own key and model |
 | `openai` | OpenAI-compatible API, including Gemini API keys and explicitly configured local servers |
 | `gateway` | A custom service with its own account token, endpoint and model |

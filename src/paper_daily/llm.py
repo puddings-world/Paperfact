@@ -39,14 +39,12 @@ from paper_daily.ai_types import (
     Settings,
 )
 from paper_daily.config import DATA_DIR
-from paper_daily.gemini_cli import GeminiCLI
 
 SETTINGS_PATH = DATA_DIR / "llm.json"
 TASKS = ai_profiles.TASKS
 _PROVIDERS: dict[str, Provider] = {
     "cli": ClaudeCLI(),
     "codex": CodexCLI(),
-    "gemini": GeminiCLI(),
     "anthropic": Anthropic(),
     "openai": OpenAICompatible(),
     "gateway": OpenAICompatible(),
@@ -210,7 +208,7 @@ def private_job_scope(routes):
 def describe(cfg: Settings | None = None) -> str:
     cfg = cfg or settings()
     label = f"[{cfg.profile}] " if cfg.profile else ""
-    if cfg.backend in ("cli", "codex", "gemini"):
+    if cfg.backend in ("cli", "codex"):
         name = "claude" if cfg.backend == "cli" else cfg.backend
         account = "獨立帳號" if cfg.account_id else "本機 CLI 帳號"
         model = cfg.model or "CLI 預設模型"
@@ -317,7 +315,6 @@ def _request_label(cfg: Settings) -> str:
     brand = {
         "cli": "Claude",
         "codex": "Codex",
-        "gemini": "Gemini",
         "anthropic": "Anthropic",
         "openai": "OpenAI 相容服務",
         "gateway": "AI 閘道",
@@ -368,7 +365,8 @@ def complete_result(
     if provider is None:
         return Completion(
             None,
-            "no LLM backend configured -- open AI settings or run 'paperfact llm --help'",
+            ai_profiles.RETIRED.get(cfg.backend)
+            or "no LLM backend configured -- open AI settings or run 'paperfact llm --help'",
             request_id=request_id,
             backend=cfg.backend,
             profile=cfg.profile,

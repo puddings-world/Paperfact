@@ -6,7 +6,7 @@ from functools import wraps
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from shiboken6 import isValid
 
-from paper_daily import ai_accounts, ai_choices, llm
+from paper_daily import ai_accounts, ai_choices, ai_profiles, llm
 from paper_daily.desktop.ask import AskRunner
 
 _bridge = None
@@ -14,7 +14,9 @@ ANALYSIS_TASKS = ("dive", "paper_highlights", "citations", "followups", "overvie
 
 
 def readiness(cfg):
-    if cfg.backend in ai_choices.LABELS:
+    if cfg.backend in ai_profiles.RETIRED:
+        return ai_profiles.RETIRED[cfg.backend]
+    if cfg.backend in ai_choices.CLI_BACKENDS:
         answer, reason = ai_accounts.auth(cfg, "status")
         if answer:
             ai_choices.remember_identity(cfg, answer)

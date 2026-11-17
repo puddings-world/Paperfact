@@ -236,7 +236,7 @@ def check_plan(root, profile, python_tests, frontend_tests, mobile, *, resolve_r
         ], ".py")
     if profile == "release":
         frontend_tests = selected_tests(root, [
-            "tests/test_gemini_usage.mjs", "tests/test_pocket_pdfjs.mjs",
+            "tests/test_pocket_pdfjs.mjs",
             "tests/test_presentation_html.mjs", "tests/test_web_ai.mjs", "tests/test_typeset.mjs",
         ], ".mjs")
     if profile == "docs":

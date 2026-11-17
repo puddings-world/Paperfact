@@ -17,7 +17,7 @@ import threading
 from paper_daily import diagnostics, executables
 
 DELAY_MS = 1500
-PROGRAMS = ("claude", "codex", "gemini", "node")
+PROGRAMS = ("claude", "codex", "node")
 MODULES = (
     "paper_daily.local_operations",
     "paper_daily.desktop.integration_dialog",
