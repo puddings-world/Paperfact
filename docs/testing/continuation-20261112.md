@@ -10594,3 +10594,46 @@ stay in the existing acceptance/continuation records.
 - Static follow-up: five newly changed local link targets exist and the stable
   download anchor/whitespace pass. Fifteen pre-existing optional generated-report
   links remain unavailable locally; no report was generated or claimed verified.
+
+
+## 2026-11-17 private sync deployment review and domain-free endpoint
+
+- Owner requested the complete convenient own-device flow plus independent
+  colleague sharing. Existing source remains in the same stabilization worktree;
+  no new worktree, task board, paid service or daily research mutation.
+- Read-only GCP checks confirm the candidate project has billing enabled and the
+  owner's previously requested developer account is both available and active.
+  No global SDK account/project preference changed. Google tokens used for official
+  read-only public Catalog API calls stayed in memory and were not printed/stored.
+- Collected complete regional public pricing across7 pages; official on-demand
+  E2 core/RAM and zonal balanced disk rates produce fixed730-hour estimates14.73USD
+  (e2-micro,20+20GiB disks,IPv4) or24.81USD (e2-small,20+50GiB,IPv4). Backup/egress/
+  taxes are additional;20/30USD planning budgets are not enforced spending caps.
+  A direct giant pricing-page download exceeded its bound and was refused; the
+  documented Catalog API provided the usable regional evidence instead.
+- Existing offline pilot renderer now accepts canonical global IPv4 as well as
+  DNS and records endpoint kind. No desktop/browser TLS check was weakened.
+  Existing desktop connection encoding and browser-origin validation accepted the
+  synthetic IPv4 HTTPS endpoint without network/vault access. The initial sandbox
+  invocation could not read a venv dependency; the actual-owner check succeeded.
+- Extended the existing DNS/browser template case with IPv4 and retained all old
+  assertions; loopback input is refused. Red reproduction: valid IP was rejected.
+  A new test-label line wrap failed Ruff and was corrected without changing checks.
+  Final affected18 passed in1.11s, check5.4s; critical14 passed in5.41s, check9.0s.
+  Commands: `python scripts/check_bounded.py --profile focused --python
+  tests/test_gcp_pilot_prepare.py`; `python scripts/check_bounded.py`.
+  Both use the existing two-core/25-percent governor; no historical full suite.
+- Existing PWA export independently verifies54 assets/3976520bytes, content ID
+  d207093600d81ba4c23576db30d32746d5ff859902b5f0c22968fc7c67ebc679.
+  Prepared ZIP SHA256c4bd79cf62e6f07f6a04199d68ad2d65a6836423603c8d7c150a416f539dcffb.
+  Private create-only resource/cost review and public pricing receipts are under
+  ignored build/sync-deployment-review-20261117. No certificates/resources were
+  requested and no research uploaded. Actual allocation, host setup, trusted IP
+  TLS/renewal, independent recovery and installed convergence remain open.
+- Sharing guide now distinguishes stable invited-reader Drive pages from public
+  checksum-pinned imports: changing the file requires sending the new full link.
+  Existing mismatch refusal remains unchanged. Own-device pairing grants workspace
+  access; colleague packages do not contain device/AI credentials. README/operator
+  docs updated in the same checkpoint. Reuse existing boundary methods; no new
+  universal agentic skill was manufactured. No Mac/Windows rebuild is needed for
+  these operator-only changes; existing source/device acceptance limits remain.

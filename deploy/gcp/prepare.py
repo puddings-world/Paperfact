@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import math
 import re
@@ -43,7 +44,16 @@ def load(path):
         if not isinstance(value[name], str) or not re.fullmatch(pattern, value[name]):
             raise ValueError("Invalid pilot review field: " + name)
     host = value["hostname"]
-    if (not isinstance(host, str) or len(host) > 253 or "." not in host
+    if not isinstance(host, str):
+        raise ValueError("Use a DNS hostname or canonical public IPv4 address")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        address = None
+    if address is not None:
+        if address.version != 4 or not address.is_global or str(address) != host:
+            raise ValueError("Use a canonical public IPv4 address")
+    elif (len(host) > 253 or "." not in host
             or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", part)
                    for part in host.split(".")) or host.replace(".", "").isdigit()):
         raise ValueError("Use a DNS hostname without URL, port or directive text")
@@ -81,6 +91,8 @@ def prepare(config, output):
                   template_sha256=inputs,
                   files={name: dict(sha256=hashlib.sha256(raw).hexdigest(), size=len(raw))
                          for name, raw in generated.items()},
+                  tls_endpoint_kind=("public-ipv4" if value["hostname"].replace(".", "").isdigit()
+                                     else "dns"),
                   resource_changes=False, credentials_accessed=False,
                   budget_enforced=False, artifacts_verified=False,
                   pending=["owner target and cost approval", "project/IAM/DNS/bucket review",

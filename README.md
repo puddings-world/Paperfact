@@ -282,6 +282,9 @@ Operators can now [create a private signing key and explicitly enable browser pa
 with `paperfact sync-admin create-browser-key --output FILE` and
 `paperfact sync-admin serve --state DIR --browser-origin URL --browser-key-file FILE`. HTTPS/static hosting and
 installed-device acceptance remain open.
+The [private deployment review](docs/gcp-sync-pilot-plan.md#a-domain-is-optional-for-the-private-pilot)
+can use an owned hostname or a reserved public IPv4 with trusted HTTPS; a domain
+purchase is not required. Its renderer does not create resources or certificates.
 The [PWA deployment artifact](docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
 is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 `node scripts/build_mobile.mjs --verify DIR --expect SHA256` (`--help` lists options).

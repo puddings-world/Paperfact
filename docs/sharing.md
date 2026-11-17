@@ -46,9 +46,12 @@ only when continuing AI analysis. Hosted continuous workspace sync is not deploy
 - **Anyone with the link** gets a direct download carrying the package checksum,
   which the recipient pastes into **網址匯入…**. Only use it for research you may
   redistribute: a public link with PDFs lets anyone holding it download them.
-- **Sharing the same list again** replaces the file in place, so the link you sent
-  keeps working and readers get the latest version. Readers you added before keep
-  their access; unticking **知道連結的任何人** removes the public link.
+- **Sharing the same list again** replaces the file in place. Invited readers'
+  Drive page link opens the current file and their existing access is retained.
+  Public direct-import links contain the exported version's checksum: after changing
+  the file, copy and send the newly generated full link. An older checksum link
+  intentionally refuses changed content and asks for a new link. Turning public
+  link access off removes the public grant.
 - **在 Google Drive 開啟** shows the file, where you can change or remove access.
 
 Paperfact uses Google's `drive.file` permission: it can only see and share the

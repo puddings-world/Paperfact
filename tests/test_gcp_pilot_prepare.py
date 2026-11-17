@@ -27,11 +27,13 @@ def config(tmp_path):
 
 
 @pytest.mark.parametrize("browser", [True, False])
-def test_review_files_agree_and_templates_are_unchanged(config, tmp_path, browser):
+@pytest.mark.parametrize("host", ["sync.research.test", "8.8.8.8"])
+def test_review_files_agree_and_templates_are_unchanged(config, tmp_path, browser, host):
     import hashlib
 
     path, value = config
     value["browser_enabled"] = browser
+    value["hostname"] = host
     path.write_text(json.dumps(value), encoding="utf-8")
     before = {item: item.read_bytes() for item in TEMPLATES.glob("*.example")}
     output = tmp_path / "review"
@@ -41,13 +43,14 @@ def test_review_files_agree_and_templates_are_unchanged(config, tmp_path, browse
     service = (output / "paperfact-sync.service").read_text(encoding="utf-8")
     active = [line for line in service.splitlines() if line.startswith("ExecStart=")]
     assert len(active) == 1
-    assert ("--browser-origin https://sync.research.test" in active[0]) == browser
+    assert (f"--browser-origin https://{host}" in active[0]) == browser
     assert "--require-mount /mnt/paperfact" in active[0]
-    assert "server_name sync.research.test;" in (output / "paperfact-nginx.conf").read_text()
+    assert f"server_name {host};" in (output / "paperfact-nginx.conf").read_text()
     upload = (output / "paperfact-backup-upload.service").read_text()
     assert "--bucket synthetic-private-backup" in upload and "REPLACE_WITH" not in upload
     review = json.loads((output / "review.json").read_text())
     assert review["config"] == value and not review["credentials_accessed"]
+    assert review["tls_endpoint_kind"] == ("public-ipv4" if host == "8.8.8.8" else "dns")
     assert "authority history/anchoring/fencing" in review["pending"]
     for name, identity in review["files"].items():
         raw = (output / name).read_bytes()
@@ -61,6 +64,7 @@ def test_review_files_agree_and_templates_are_unchanged(config, tmp_path, browse
 
 @pytest.mark.parametrize("field,value", [
     ("hostname", "sync.example.org; include private.conf"),
+    ("hostname", "127.0.0.1"),
     ("project_id", "project-$(gcloud auth login)"),
     ("zone", "other-region-a"),
     ("monthly_budget_usd", True),
@@ -68,8 +72,9 @@ def test_review_files_agree_and_templates_are_unchanged(config, tmp_path, browse
     ("backup_snapshot", "../../live-service"),
     ("source_commit", "HEAD"),
     ("unexpected_key", "synthetic-secret-never-print"),
-], ids=["hostname-injection", "project-injection", "zone-mismatch", "boolean-budget",
-        "nonfinite-budget", "snapshot-traversal", "unpinned-source", "unknown-field"])
+], ids=["hostname-injection", "non-public-ip", "project-injection", "zone-mismatch",
+        "boolean-budget", "nonfinite-budget", "snapshot-traversal", "unpinned-source",
+        "unknown-field"])
 def test_invalid_or_secret_input_creates_no_output(config, tmp_path, capsys, field, value):
     path, data = config
     data[field] = value

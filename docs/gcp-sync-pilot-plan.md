@@ -1,13 +1,15 @@
 ﻿# GCP private sync pilot proposal
 
-Status: proposal, updated 2026-11-16. The owner selected reuse of existing GCP
+Status: proposal, updated 2026-11-17. The owner selected reuse of existing GCP
 for planning only. Read-only SDK inventory found an accessible Paperfact project
 with Drive, Slides and Cloud Storage APIs enabled. Compute Engine and Cloud Run
 were absent from its enabled-API list at inspection. This is not proof of billing
 readiness, resource capacity, deployment permission or service availability.
 The local SDK default points elsewhere and must not select the deployment target.
-No billing, DNS, IAM, API enablement, resource or deployment was changed.
-Target confirmation, approved region, hostname and budget remain outstanding.
+A read-only billing check on2026-11-17 confirms billing is enabled for the candidate
+project. No billing, DNS, IAM, API enablement, resource or deployment was changed.
+Resource/cost approval remains outstanding. An owned DNS hostname is optional:
+a reserved public IPv4 endpoint can use a verified short-lived IP certificate.
 This is not authorization to apply infrastructure or upload research.
 
 ## Personal sync and colleague sharing are separate workflows
@@ -34,6 +36,29 @@ The present deliverable is snapshot export/import. Hosted sync still requires
 reviewed deployment and installed offline/reconnect/conflict/recovery acceptance;
 local protocol tests alone do not establish that end state. This clarification
 adds no billing resources, cloud login, research upload or public multi-user signup.
+
+## A domain is optional for the private pilot
+
+The existing offline renderer accepts a canonical public IPv4 in `hostname` and
+records `tls_endpoint_kind=public-ipv4` in review metadata. It renders the same
+exact HTTPS endpoint into Nginx and the browser origin. DNS input remains supported;
+loopback/private/noncanonical addresses and IPv6 literals are not supported by
+this deployment renderer. No network request, certificate or resource is created.
+
+Let's Encrypt's [IP certificate documentation](https://letsencrypt.org/2026/03/11/shorter-certs-certbot)
+confirms Certbot5.4+ supports webroot IP validation with the `shortlived` profile.
+Use the reserved IP, a dedicated HTTP challenge root, a working automatic-renewal
+schedule and a successful Nginx reload hook. Staging certificates are untrusted;
+normal clients must reject them. A completed trusted certificate/renewal check is
+required before pairing real devices. Never disable client certificate checking.
+Existing fixed TLS paths in the template must point at the reviewed certificate;
+rendering alone does not configure them or prove renewal works.
+
+Personal device pairing grants access to the whole owner's workspace, including
+peer management. Use it for the owner's devices. For a colleague, use the existing
+per-list research package/Drive-link workflow and import preview; no sync device
+credential, AI account or entire-workspace access is shared. That workflow creates
+an independent copy and does not silently subscribe the colleague to future edits.
 
 ## Prepare one offline configuration review
 
@@ -69,7 +94,7 @@ with a private directory mode; Windows inherits the selected parent's ACLs.
 | `project_id` | Explicit target ID; [project naming rules](https://docs.cloud.google.com/resource-manager/reference/rest/v1/projects), not inferred from OAuth or local SDK defaults |
 | `region` | Explicit region name; availability/residency is not verified offline |
 | `zone` | Zone in that region; capacity/quota is not verified |
-| `hostname` | Lowercase DNS host only; no scheme, port, wildcard or directive text |
+| `hostname` | Lowercase DNS host or canonical global IPv4; no scheme, port, wildcard or directive text. Rendering verifies syntax, not ownership, allocation or TLS. |
 | `monthly_budget_usd` | Positive finite review value; no billing budget or hard cap is created |
 | `backup_bucket` | Explicit private target name; existence/access/privacy must be verified separately |
 | `backup_snapshot` | One plain directory name below the fixed reviewed backup root |
@@ -203,10 +228,10 @@ Values below are review defaults, not provisioned resources or a measured capaci
 |---|---|---|
 | Project | Existing owner-selected project; new resources use a Paperfact-specific prefix | Exact project ID, billing and existing IAM policies |
 | Region | Prefer asia-east1 for the owner's Taiwan workflow, unless existing resources/residency favor another region | Region, zone and quota |
-| VM | One e2-small, non-Spot, ordinary Linux LTS, single authority process | Benchmark memory/CPU with representative research and concurrent transfers |
+| VM | One non-Spot Linux VM: e2-micro for a measured small private pilot, or e2-small for more memory headroom; one authority process | Owner cost choice and measured memory/CPU with representative transfers |
 | Boot disk | 20 GB, replaceable; no research state | Image and patch strategy |
-| Data disk | 50 GB balanced Persistent Disk, ext4, single writer, deletion protection | Actual PDF/asset inventory, headroom and growth |
-| Hostname | One owner-controlled sync hostname | DNS control and TLS issuance |
+| Data disk | 20 GB balanced Persistent Disk for the small pilot, or50 GB for more headroom; ext4, single writer, retained on VM deletion | Actual originals, local backup working space and growth; current attachment quota remains4 GiB per workspace |
+| Endpoint | One owner-controlled hostname or reserved public IPv4 | Allocation/control, trusted TLS and automatic renewal |
 | Public ingress | HTTPS 443; port 80 only if certificate issuance requires it | TLS proxy, renewal and firewall rules |
 | Administration | IAP/OS Login; no public SSH rule | Least-privilege operator identity |
 | Backup | Private regional GCS bucket; uniform access and public-access prevention | Location, retention and restore runbook |
@@ -321,10 +346,37 @@ never assume it covers VM, disks, IP, egress and backups together. Official refe
 [spend-cap scope](https://docs.cloud.google.com/billing/docs/how-to/budget-api-spend-cap).
 Use application quotas and upload limits alongside financial monitoring.
 
+## Regional cost review (2026-11-17)
+
+Read-only official Billing Catalog API results for `asia-east1` give on-demand
+E2 core USD0.025255380 per hour (SKU92C8-7C92-6AEF), RAM USD0.003385140 per GiB-hour
+(SKUFD4D-A383-8DAB), and zonal balanced disk USD0.10 per GiB-month
+(SKU6AE1-525F-8B80). The catalogue pages were fully read; no resource was created.
+Using the documented [shared-core allocations](https://docs.cloud.google.com/compute/docs/general-purpose-machines)
+and [in-use IPv4 price](https://cloud.google.com/vpc/network-pricing):
+
+| Option | VM / RAM | Boot + data disk | Fixed monthly estimate | Planning budget |
+|---|---|---|---:|---:|
+| Small private pilot | e2-micro /1 GiB | 20+20 GiB balanced | USD14.73 | USD20 |
+| More headroom | e2-small /2 GiB | 20+50 GiB balanced | USD24.81 | USD30 |
+
+Estimates use730 running hours and USD0.005/hour for one in-use IPv4, without
+assuming credits or discounts. Backup storage/operations, outbound traffic and
+taxes are additional; actual month length and usage change the bill. The planning
+budget is not a hard cap. The small-memory option needs a measured synthetic
+pilot before real research admission. It is not a public multi-user hosting quote.
+
+The private operator review records exact proposed network/firewall, identity,
+bucket, disk and VM creation commands, the intended developer account and pinned
+server/mobile artifacts. Those commands have not run and budget approval is still
+required. A resource-name collision must stop, not update an existing resource.
+The first pilot uses one owner's workspace; colleagues receive reviewed list
+packages rather than access to that owner's sync authority.
+
 ## Required owner inputs before an executable deployment plan
 
 - Project ID and whether its billing/IAM policies permit a private pilot.
-- Region/zone approval and an owner-controlled hostname.
+- Region/zone approval; reserve a public IPv4 or use an owner-controlled hostname.
 - Monthly budget ceiling, estimated stored GB and monthly download GB.
 - Backup retention and who may operate/recover the service.
 
