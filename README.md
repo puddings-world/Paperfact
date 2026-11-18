@@ -168,6 +168,10 @@ Sync runs while Paperfact is open (local edits debounce; remote polling is every
 30 seconds). Google and AI authorizations stay on each device. Normal edits send
 row differences; PDFs use verified, retryable immutable chunks. Private workspace
 folders must remain unshared; share selected lists through research packages instead.
+The development build can publish list names to your private Drive directory and
+remember a different selection on each device. Saving this checklist transfers
+names only. Use **Existing workspace sync** for the pilot research transfer.
+
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 This is a test candidate; installed Windows/Mac acceptance is still required.
 **Known limit:** selection currently creates a separate workspace copy. A complete

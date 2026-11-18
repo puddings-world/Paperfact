@@ -11,9 +11,12 @@ from uuid import uuid4, uuid5
 
 from paper_daily import google_slides, sync_bootstrap
 from paper_daily.connection_vault import ConnectionVault, native_backend
+from paper_daily.device_list_selection import DeviceSelection
+from paper_daily.drive_library_directory import DriveDirectory
 from paper_daily.drive_sync_credentials import DriveVault
 from paper_daily.drive_sync_factory import TransportFactory, origin
 from paper_daily.drive_sync_files import FORMAT, DriveFiles, decode, head_body
+from paper_daily.library_directory import Directory, ListEntry, checklist, inspect_lists
 from paper_daily.presentations import _atomic_json
 from paper_daily.runtime import user_cache_dir, user_data_dir
 from paper_daily.workspace_enrollment import EnrollmentService
@@ -44,6 +47,7 @@ class DriveSetup:
         self.profiles = Path(profiles or user_data_dir().with_name("Paperfact-workspaces"))
         self.cache = Path(cache or user_cache_dir() / "drive-setup")
         self.files = self.account = None
+        self._library_view = None
         self._consent = None
 
     def check(self, ticket):
@@ -52,6 +56,7 @@ class DriveSetup:
 
     def sign_in(self, ticket, progress):
         self.check(ticket)
+        self.files = self.account = self._library_view = None
         progress({"stage": "google_login"})
         session = self.authorize(cancelled=lambda: ticket.cancelled)
         self.check(ticket)
@@ -60,14 +65,91 @@ class DriveSetup:
         rows = files.workspaces()
         self.check(ticket)
         self.files, self.account = files, account
-        from paper_daily.workspace_service import _read
+        self._library_view = None
+        try:
+            library = self.read_library(ticket)
+        except Exception:
+            self.files = self.account = self._library_view = None
+            files.close()
+            raise
+        return {
+            "account": account,
+            "workspaces": rows,
+            "lists": library["local"],
+            "library": library,
+        }
 
-        with _read(self.workspace.path) as conn:
-            lists = [
-                dict(id=row[0], name=row[1])
-                for row in conn.execute("SELECT id,name FROM lists ORDER BY created_at,id")
-            ]
-        return {"account": account, "workspaces": rows, "lists": lists}
+    def read_library(self, ticket):
+        """Discover names and device intent without creating or transferring research."""
+        self.check(ticket)
+        files = self.files
+        files.cancelled = lambda: ticket.cancelled
+        directories = files.workspaces(directories=True)
+        if len(directories) > 1:
+            raise ValueError("Multiple personal library directories found; review them first")
+        library_id = "personal"
+        store = DeviceSelection(
+            self.workspace.path,
+            owner_id=self.account["id"],
+            library_id=library_id,
+            device_id=self.binding.account,
+            current_path=self.workspace.current_path,
+            root=self.profiles.parent / "Paperfact-settings" / "library-sync",
+        )
+        local = inspect_lists(self.workspace.path, library_id, ticket=ticket)
+        remote = observation = None
+        if directories:
+            spec = directories[0]
+            remote = DriveDirectory(files, spec["folder_id"], spec["head_id"], library_id)
+            observation = remote.read()
+        base = observation.directory if observation else Directory(library_id, 0, ())
+        merged = {item.id: item for item in local.lists}
+        merged.update((item.id, item) for item in base.lists)
+        visible = Directory(library_id, base.generation, tuple(merged[k] for k in sorted(merged)))
+        selection = store.load()
+        self.check(ticket)
+        self._library_view = (files, store, selection, remote, observation, local, visible)
+        return {
+            "items": checklist(
+                visible, selection.selected, local_ids=[item.id for item in local.lists]
+            ),
+            "local": [{"id": item.id, "name": item.name} for item in local.lists],
+        }
+
+    def save_library(self, selected, ticket, progress):
+        """Publish the reviewed local names and persist this device's selection."""
+        self.check(ticket)
+        if self._library_view is None:
+            raise ValueError("Sign in and review your list directory first")
+        files, store, selection, remote, observed, local, visible = self._library_view
+        if files is not self.files or not set(selected) <= {item.id for item in visible.lists}:
+            raise ValueError("List selection or Google account changed; refresh first")
+        files.cancelled = lambda: ticket.cancelled
+        latest = inspect_lists(self.workspace.path, local.library_id, ticket=ticket)
+        if latest != local:
+            raise ValueError("Local lists changed; refresh before publishing their names")
+        if remote is None:
+            if files.workspaces(directories=True):
+                raise ValueError("Another device created the directory; sign in again to refresh")
+            path = self._receipt("personal-directory")
+            if path.exists():
+                ids = decode(path.read_bytes())
+            else:
+                folder, head = files.new_ids(2)
+                ids = {"folder": folder, "head": head}
+                self.cache.mkdir(parents=True, exist_ok=True)
+                _atomic_json(path, ids)
+            remote = DriveDirectory(files, ids["folder"], ids["head"], local.library_id)
+            observed = remote.initialize("Paperfact library")
+        self.check(ticket)
+        existing = {item.id for item in observed.directory.lists}
+        additions = [
+            ListEntry(item.id, item.name, False) for item in local.lists if item.id not in existing
+        ]
+        updated = remote.upsert(observed, additions)
+        self.check(ticket)
+        store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket)
+        return self.read_library(ticket)
 
     def _receipt(self, kind, spec=None):
         if self.files is None:

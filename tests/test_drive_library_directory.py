@@ -37,3 +37,47 @@ def test_partial_device_updates_shared_directory_without_losing_other_lists(tmp_
     with pytest.raises(DriveChanged):
         right.upsert(competing, [ListEntry("a", "Stale laptop edit", True)])
     assert right.read().directory.lists == (changed, new_second)
+
+
+def test_login_and_device_choices_do_not_transfer_papers(tmp_path, monkeypatch):
+    from test_library_selection import database
+
+    from paper_daily import drive_sync_setup as setup_module
+    from paper_daily.workspace_service import Ticket
+
+    cloud = Cloud()
+    desktop, mac = (database(tmp_path / "windows"), database(tmp_path / "mac", both=False))
+    before = [path.read_bytes() for path in (desktop, mac)]
+    files = [authority(cloud, tmp_path / name).files for name in ("left", "right")]
+
+    def setup(path, i):
+        setup = setup_module.DriveSetup(
+            path,
+            profiles=tmp_path / str(i) / "profiles",
+            cache=tmp_path / str(i) / "cache",
+            authorize=lambda **_: files[i].session,
+        )
+        monkeypatch.setattr(setup_module, "DriveFiles", lambda *a, **k: files[i])
+        return setup, setup.sign_in(Ticket(), lambda _: None)["library"]["items"]
+
+    def choices(items):
+        return {item["id"]: item["selected"] for item in items}
+
+    left, initial = setup(desktop, 0)
+    assert choices(initial) == {"a": False, "b": False} and not cloud.objects
+    left.save_library(["a", "b"], Ticket(), lambda _: None)
+    right, rows = setup(mac, 1)
+    assert choices(rows) == {"a": False, "b": False}
+    assert choices(right.save_library(["b"], Ticket(), lambda _: None)["items"]) == {
+        "a": False,
+        "b": True,
+    }
+    count = len(cloud.objects)
+    assert choices(right.save_library([], Ticket(), lambda _: None)["items"]) == {
+        "a": False,
+        "b": False,
+    }
+    assert choices(left.read_library(Ticket())["items"]) == {"a": True, "b": True}
+    assert len(cloud.objects) == count
+    assert before == [path.read_bytes() for path in (desktop, mac)]
+    assert all(b"private research" not in raw for _, raw in cloud.objects.values())

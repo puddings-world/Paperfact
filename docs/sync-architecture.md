@@ -108,7 +108,10 @@ owner research or create a new public release to test this correction.
 a desktop A/B directory visible to a Mac with only A; separate device selections
 and deselection retaining research; actual concurrent/idempotent saves and stale
 revision refusal; cancellation, late workspace switching, retry and replacement.
-These contracts are not connected to the current Drive dialog/replication path.
+The desktop sign-in flow reads the private directory and overlays local list
+names. Saving the reviewed checklist publishes new local names after confirmation
+and stores selection on this device. The existing workspace transfer is a
+separate collapsible section. The checklist does not yet transfer research.
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.
@@ -118,7 +121,7 @@ a competing write can leave an unreferenced snapshot. Storage reclamation and
 real-device acceptance remain open. Directory folders use a distinct Drive role
 so installed pilot readers ignore them.
 
-Desktop enrollment, scoped byte/history transport, original-library
+Scoped byte/history transport, original-library
 adoption and pilot migration remain required before a new installer can satisfy
 the whole-library selection journey. No owner data were uploaded to test them.
 
