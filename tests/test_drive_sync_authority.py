@@ -52,6 +52,8 @@ class Cloud:
         if method == "GET" and identity == "files":
             query = request.url.params.get("q", "")
             role = "head" if "parents" in query else "workspace"
+            if "value='directory'" in query:
+                role = "directory"
             values = [info for info, _ in self.objects.values()
                       if info["appProperties"]["pfRole"] == role]
             return httpx.Response(200, json={"files": [

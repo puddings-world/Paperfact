@@ -227,25 +227,27 @@ class DriveFiles:
             raise ValueError("Drive workspace location changed")
         return value
 
-    def create_folder(self, file_id, workspace_id, name):
+    def create_folder(self, file_id, workspace_id, name, *, directory=False):
         from paper_daily.sync_journal import _identifier
 
         _identifier(workspace_id)
         identifier(file_id)
         if not isinstance(name, str) or not name.strip() or len(name) > 200:
             raise ValueError("Choose a short workspace name")
+        role = "directory" if directory else "workspace"
         metadata = {"id": file_id, "name": name,
                     "mimeType": "application/vnd.google-apps.folder",
                     "appProperties": {"pfWorkspace": workspace_id,
-                                      "pfRole": "workspace", "pfVersion": "1"}}
+                                      "pfRole": role, "pfVersion": "1"}}
         response = self.request("POST", FILES, params={"fields": "id"}, json=metadata)
         if response.status_code == 409:
-            return self.owned(file_id, workspace_id, "workspace")
+            return self.owned(file_id, workspace_id, role)
         if self.json(response).get("id") != file_id:
             raise ValueError("Drive created another workspace identity")
-        return self.owned(file_id, workspace_id, "workspace")
+        return self.owned(file_id, workspace_id, role)
 
-    def put_small(self, file_id, parent, workspace_id, role, data, *, description=None):
+    def put_small(self, file_id, parent, workspace_id, role, data, *, description=None,
+                  folder_role="workspace"):
         from paper_daily.sync_journal import _identifier
 
         _identifier(workspace_id)
@@ -271,7 +273,7 @@ class DriveFiles:
             metadata["description"] = validated.decode("utf-8")
         elif role == "head":
             raise ValueError("A new Drive head requires its initial metadata")
-        self.owned(parent, workspace_id, "workspace")
+        self.owned(parent, workspace_id, folder_role)
         boundary = "paperfact-" + hashlib.sha256(file_id.encode()).hexdigest()
         body = (b"--" + boundary.encode() + b"\r\nContent-Type: application/json\r\n\r\n"
                 + encode(metadata) + b"\r\n--" + boundary.encode()
@@ -289,8 +291,8 @@ class DriveFiles:
                 raise ValueError("Drive object bytes differ from the captured upload")
         return value
 
-    def read_head(self, file_id, parent, workspace_id):
-        self.owned(parent, workspace_id, "workspace")
+    def read_head(self, file_id, parent, workspace_id, *, folder_role="workspace"):
+        self.owned(parent, workspace_id, folder_role)
         self.owned(file_id, workspace_id, "head", parent=parent)
         value = self.json(self.request("GET", METADATA + "/" + identifier(file_id),
                                       params={"fields": "id,etag,description"}))
@@ -312,9 +314,9 @@ class DriveFiles:
             raise ValueError("Read this account's current Drive head before publishing")
         return self._heads[observed.file_id][1]
 
-    def publish_head(self, observed, new_commit):
+    def publish_head(self, observed, new_commit, *, folder_role="workspace"):
         parent = self.check_head(observed)
-        self.owned(parent, observed.workspace_id, "workspace")
+        self.owned(parent, observed.workspace_id, folder_role)
         self.owned(observed.file_id, observed.workspace_id, "head", parent=parent)
         value = observed.value()
         replacement = head_body({**value, "generation": value["generation"] + 1,
@@ -351,10 +353,11 @@ class DriveFiles:
         return raw
 
 
-    def workspaces(self):
+    def workspaces(self, *, directories=False):
         """List only private, app-created workspace folders and their single head."""
+        role = "directory" if directories else "workspace"
         query = ("trashed=false and mimeType='application/vnd.google-apps.folder' and "
-                 "appProperties has { key='pfRole' and value='workspace' }")
+                 f"appProperties has {{ key='pfRole' and value='{role}' }}")
         value = self.json(self.request("GET", FILES, params={
             "q": query, "fields": "nextPageToken,files(" + _FIELDS + ")", "pageSize": 100}))
         if value.get("nextPageToken"):
@@ -369,7 +372,7 @@ class DriveFiles:
             if not workspace or row.get("shared") is not False or row.get("ownedByMe") is not True:
                 continue
             folder = identifier(row.get("id"))
-            self.owned(folder, workspace, "workspace")
+            self.owned(folder, workspace, role)
             heads = self.json(self.request("GET", FILES, params={
                 "q": f"trashed=false and '{folder}' in parents and "
                      "appProperties has { key='pfRole' and value='head' }",
@@ -378,7 +381,7 @@ class DriveFiles:
             if not isinstance(items, list) or len(items) != 1 or heads.get("nextPageToken"):
                 continue  # Incomplete setup stays private; never guess a head.
             head_id = identifier(items[0].get("id"))
-            self.read_head(head_id, folder, workspace)
+            self.read_head(head_id, folder, workspace, folder_role=role)
             result.append(dict(folder_id=folder, head_id=head_id, workspace_id=workspace,
                                name=str(row.get("name", "Paperfact"))[:200]))
         return sorted(result, key=lambda row: row["name"].casefold())

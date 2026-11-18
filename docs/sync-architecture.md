@@ -109,7 +109,16 @@ a desktop A/B directory visible to a Mac with only A; separate device selections
 and deselection retaining research; actual concurrent/idempotent saves and stale
 revision refusal; cancellation, late workspace switching, retry and replacement.
 These contracts are not connected to the current Drive dialog/replication path.
-Remote directory publication, scoped byte/history transport, original-library
+The Drive directory adapter can now initialize and discover a private directory,
+read its current catalog and publish explicit list additions or renames with a
+conditional write. A device with a partial library retains all other entries.
+The directory contains no paper bodies or attachments. Unchanged publications
+allocate no file. Each changed publication currently stores a directory snapshot;
+a competing write can leave an unreferenced snapshot. Storage reclamation and
+real-device acceptance remain open. Directory folders use a distinct Drive role
+so installed pilot readers ignore them.
+
+Desktop enrollment, scoped byte/history transport, original-library
 adoption and pilot migration remain required before a new installer can satisfy
 the whole-library selection journey. No owner data were uploaded to test them.
 
