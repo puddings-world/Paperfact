@@ -32,6 +32,52 @@ See [Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-
 [change retrieval](https://developers.google.com/workspace/drive/api/guides/manage-changes)
 and [app-data constraints](https://developers.google.com/workspace/drive/api/guides/appdata).
 
+### Whole-library list selection: required correction (2026-11-18)
+
+The owner expects one logical research database with a complete list directory,
+visible on every paired device, and selectable list synchronization. The current
+pilot does **not** implement this: login queries the active device's SQL lists,
+while creation enrolls a selected-list copy as another workspace. Thus a Mac
+containing only one imported list cannot offer the desktop's other lists.
+
+Required behavior, not an implementation claim:
+
+- Keep one stable logical library identity across devices. A selection change
+  must not create another database or require abandoning the reader's database.
+- After explicit directory-publication consent, discover the library's complete
+  list IDs/names through private Drive metadata. Directory visibility is separate
+  from permission to publish paper text, notes, analysis or attachment bytes.
+- Show each list's selection, availability and sync state in one checklist.
+  Remote-only lists must not be presented as absent. An original that has never
+  been published requires the source device; login cannot recover nonexistent
+  cloud bytes. Expose that waiting state rather than imply completion.
+- Apply selection through a versioned subscription contract. Whether selection
+  belongs to each device or the entire library is awaiting owner clarification.
+  Unselected research must not be uploaded/downloaded merely to fill the picker.
+- Preserve shared-paper and exact-source dependencies when a selected list needs
+  them, without including unrelated research belonging only to unselected lists.
+- Deselecting pauses that selection; it must not delete remote research, erase
+  retained local content, discard drafts/outboxes or revoke another device.
+  Downloaded-but-unselected content needs an explicit local retention indicator.
+- Refresh the directory incrementally when a list is created/renamed/retired.
+  Avoid a periodic full scan/export of every paper or repeated whole-library copies.
+- Preserve the existing one-list pilot, old IDs, credentials and pending edits
+  through an explicit reviewed migration; do not auto-merge same-named libraries.
+
+Implementation constraints: the existing reference pull/history/cursor protocol
+replicates an entire workspace. Dropping unselected events in the client would
+falsely acknowledge unapplied research and break parent/source closure. Add
+proper scoped history/receipts and selection-change catch-up, retaining the
+existing conditional Drive publication and conflict engine. A remote list index
+alone would fix discovery but would not implement selective replication.
+
+Acceptance should cover desktop lists A/B, Mac initially containing only A,
+directory discovery of B, selecting B and its exact originals, offline edits,
+new/renamed lists, deselection without deletion, shared-paper dependencies,
+duplicate/retry/cancellation and stale account/library delivery. Reuse bounded
+fixtures; physical two-device acceptance remains required. Do not silently upload
+owner research or create a new public release to test this correction.
+
 ### Desktop Drive pilot (2026-11-18)
 
 The desktop path is implemented in source: Google login/discovery, explicit

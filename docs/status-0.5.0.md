@@ -116,6 +116,17 @@ Typed queue pins are implemented; their historical unsupported label is obsolete
 See [queue pin migration](queue-pin-migration.md) and
 [recovery UI](recovery-adoption-ui.md) for the supported boundary.
 
+## Whole-library selection gap (owner clarification, 2026-11-18)
+
+Mac's checklist currently shows only lists in its active local database. Source
+052d9ab creates a separate selected-list sync workspace; it does not expose the
+complete source-library directory or let another device subscribe to arbitrary
+lists in that library. This fails the clarified whole-database list-selection
+requirement. The candidate is available for the existing pilot, not acceptance
+of this broader workflow. See the [required correction](sync-architecture.md#whole-library-list-selection-required-correction-2026-11-18).
+No source database, cloud directory, selection or research bytes were changed
+while documenting this gap.
+
 ## Work still required before v0.5.0
 
 1. **Authority safety:** source v4 now retains transactional control history;
