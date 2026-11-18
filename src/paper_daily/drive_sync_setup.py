@@ -116,7 +116,7 @@ class DriveSetup:
             "local": [{"id": item.id, "name": item.name} for item in local.lists],
         }
 
-    def save_library(self, selected, ticket, progress):
+    def save_library(self, selected, ticket, progress, *, intermediate=False):
         """Publish the reviewed local names and persist this device's selection."""
         self.check(ticket)
         if self._library_view is None:
@@ -148,7 +148,21 @@ class DriveSetup:
         ]
         updated = remote.upsert(observed, additions)
         self.check(ticket)
-        store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket)
+        store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket,
+                   intermediate=intermediate)
+        return self.read_library(ticket)
+
+    def apply_library(self, selected, ticket, progress):
+        from paper_daily.drive_list_records import exchange_list
+
+        result = self.save_library(selected, ticket, progress, intermediate=True)
+        if local_binding(self.workspace.path):
+            return result
+        _, store, selection, directory, *_ = self._library_view
+        for index, list_id in enumerate(sorted(selection.selected)):
+            ticket.check()
+            progress({"stage": "selected_lists", "completed": index, "total": len(selected)})
+            exchange_list(directory, store, list_id, selection.revision, ticket)
         return self.read_library(ticket)
 
     def _receipt(self, kind, spec=None):

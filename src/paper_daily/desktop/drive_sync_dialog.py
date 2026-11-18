@@ -265,9 +265,10 @@ class DriveSyncDialog(QDialog):
             self.windowTitle(),
             self.tr(
                 "Publish local list names to your private Drive directory and save this "
-                "device's selection? This step transfers names only.",
+                "device's selection? Selected lists also exchange their names "
+                "and descriptions in ordinary workspaces.",
                 "將本機清單名稱加入你的私人 Drive 目錄，並儲存這台裝置的勾選？"
-                "這個步驟只傳送清單名稱。",
+                "一般工作區也會交換已選清單的名稱與說明。",
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -276,7 +277,7 @@ class DriveSyncDialog(QDialog):
             return False
         return self._start(
             "selection",
-            lambda ticket, progress: self.service.save_library(selected, ticket, progress),
+            lambda ticket, progress: self.service.apply_library(selected, ticket, progress),
         )
 
     def sign_in(self):

@@ -111,7 +111,13 @@ revision refusal; cancellation, late workspace switching, retry and replacement.
 The desktop sign-in flow reads the private directory and overlays local list
 names. Saving the reviewed checklist publishes new local names after confirmation
 and stores selection on this device. The existing workspace transfer is a
-separate collapsible section. The checklist does not yet transfer research.
+separate collapsible section. In ordinary databases, the checklist can exchange
+list names and descriptions using independent per-list history and device-local
+receipts. Divergent edits are retained on their originating devices for review.
+The cloud directory carries list history pointers, never list descriptions.
+Reading list B does not fetch list A's operations. This path currently accepts
+list operations only. Paper membership, annotations, attachments, background
+transfer and adoption of existing enrolled workspaces remain open.
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.

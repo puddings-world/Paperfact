@@ -129,7 +129,7 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
                           for item in library["items"]]}
 
     setup.sign_in = sign_in
-    setup.save_library = save
+    setup.apply_library = save
     setup.release.set()
     view.sign_in()
     wait(app, lambda: not view.busy)

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from paper_daily.drive_sync_files import decode, encode
+from paper_daily.drive_sync_files import MAX_INLINE, decode, encode, identifier
 from paper_daily.sync_journal import _identifier
 from paper_daily.workspace_service import Ticket, _read
 
@@ -16,10 +17,34 @@ MAX_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True)
+class ScopeHead:
+    generation: int
+    id: str
+    sha256: str
+    size: int
+
+    def __post_init__(self):
+        if type(self.generation) is not int or not 1 <= self.generation < 2**53:
+            raise ValueError("Invalid list history generation")
+        identifier(self.id)
+        if not isinstance(self.sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValueError("Invalid list history checksum")
+        if type(self.size) is not int or not 1 <= self.size <= MAX_INLINE:
+            raise ValueError("Invalid list history size")
+
+    def reference(self):
+        return {"id": self.id, "size": self.size, "sha256": self.sha256}
+
+    def record(self):
+        return {"generation": self.generation, **self.reference()}
+
+
+@dataclass(frozen=True)
 class ListEntry:
     id: str
     name: str
     published: bool
+    head: ScopeHead | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +64,8 @@ class Directory:
             if not isinstance(item, ListEntry):
                 raise ValueError("Invalid library directory entry")
             _identifier(item.id)
+            if item.head is not None and (not isinstance(item.head, ScopeHead)):
+                raise ValueError("Invalid published list history")
             if item.id in seen:
                 raise ValueError("Duplicate library list identity")
             seen.add(item.id)
@@ -57,11 +84,14 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format=FORMAT,
+                format="paperfact.library-directory.v2"
+                if any(e.head for e in self.lists)
+                else FORMAT,
                 library_id=self.library_id,
                 generation=self.generation,
                 lists=[
                     dict(id=item.id, name=item.name, published=item.published)
+                    | ({"head": item.head.record()} if item.head is not None else {})
                     for item in self.lists
                 ],
             ),
@@ -78,7 +108,7 @@ class Directory:
         if (
             not isinstance(value, dict)
             or set(value) != {"format", "library_id", "generation", "lists"}
-            or value["format"] != FORMAT
+            or value["format"] not in (FORMAT, "paperfact.library-directory.v2")
             or value["library_id"] != library_id
             or not isinstance(value["lists"], list)
             or len(value["lists"]) > MAX_LISTS
@@ -86,8 +116,21 @@ class Directory:
             raise ValueError("Directory belongs to another library or unsupported format")
         entries = []
         for item in value["lists"]:
-            if not isinstance(item, dict) or set(item) != {"id", "name", "published"}:
+            if not isinstance(item, dict) or set(item) not in (
+                {"id", "name", "published"},
+                {"id", "name", "published", "head"},
+            ):
                 raise ValueError("Directory entries contain unsupported fields")
+            if "head" in item:
+                head = item["head"]
+                if not isinstance(head, dict) or set(head) != {
+                    "generation",
+                    "id",
+                    "size",
+                    "sha256",
+                }:
+                    raise ValueError("Invalid directory list history")
+                item = {**item, "head": ScopeHead(**head)}
             entries.append(ListEntry(**item))
         directory = cls(library_id, value["generation"], tuple(entries))
         if directory.to_bytes() != raw:

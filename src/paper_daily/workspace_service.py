@@ -54,6 +54,12 @@ class Ticket:
         if self.cancelled:
             raise Cancelled()
 
+    def checkpoint(self, action):
+        """Finish one durable step; later steps can still be cancelled."""
+        with self._lock:
+            self.check()
+            action()
+
     def publish(self, action):
         with self._lock:
             self.check()

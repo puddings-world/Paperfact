@@ -1,6 +1,6 @@
 """Publish list discovery separately from research content in a private Drive folder."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from paper_daily.drive_sync_files import FORMAT, DriveChanged, Head, head_body, identifier
 from paper_daily.drive_sync_log import reference
@@ -78,7 +78,14 @@ class DriveDirectory:
             raise ValueError("Unexpected initial directory entries")
         updates = Directory(self.library_id, before.generation, tuple(entries))
         merged = {item.id: item for item in before.lists}
-        merged.update((item.id, item) for item in updates.lists)
+        for item in updates.lists:
+            previous = merged.get(item.id)
+            if previous and previous.head and previous.head != item.head:
+                if item.head is None:
+                    item = replace(item, head=previous.head)
+                elif item.head.generation != previous.head.generation + 1:
+                    raise DriveChanged("List history must advance from its observed head")
+            merged[item.id] = item
         rows = tuple(sorted(merged.values(), key=lambda item: item.id))
         if rows == before.lists:
             current = self.read()
