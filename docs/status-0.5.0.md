@@ -124,8 +124,13 @@ complete source-library directory or let another device subscribe to arbitrary
 lists in that library. This fails the clarified whole-database list-selection
 requirement. The candidate is available for the existing pilot, not acceptance
 of this broader workflow. See the [required correction](sync-architecture.md#whole-library-list-selection-required-correction-2026-11-18).
-No source database, cloud directory, selection or research bytes were changed
-while documenting this gap.
+The owner confirmed independent selection on each device. Local directory and
+revision-checked selection services now exist with bounded fixture coverage,
+including cancellation/concurrency and no research mutation. They are not wired
+to the existing dialog or transport. Complete cloud discovery, scoped history/
+bytes and reviewed pilot migration remain unfinished; Mac052d9ab does not
+contain these new contracts or fix this journey. No owner database/cloud data
+were changed during this implementation.
 
 ## Work still required before v0.5.0
 

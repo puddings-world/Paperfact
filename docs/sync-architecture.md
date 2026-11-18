@@ -51,9 +51,9 @@ Required behavior, not an implementation claim:
   Remote-only lists must not be presented as absent. An original that has never
   been published requires the source device; login cannot recover nonexistent
   cloud bytes. Expose that waiting state rather than imply completion.
-- Apply selection through a versioned subscription contract. Whether selection
-  belongs to each device or the entire library is awaiting owner clarification.
-  Unselected research must not be uploaded/downloaded merely to fill the picker.
+- Apply selection through a versioned subscription contract. The owner confirmed
+  independent selection on each device. Unselected research must not be
+  uploaded/downloaded merely to fill the picker.
 - Preserve shared-paper and exact-source dependencies when a selected list needs
   them, without including unrelated research belonging only to unselected lists.
 - Deselecting pauses that selection; it must not delete remote research, erase
@@ -77,6 +77,41 @@ new/renamed lists, deselection without deletion, shared-paper dependencies,
 duplicate/retry/cancellation and stale account/library delivery. Reuse bounded
 fixtures; physical two-device acceptance remains required. Do not silently upload
 owner research or create a new public release to test this correction.
+
+#### Implemented local contracts (not yet a cloud subscription)
+
+- `library_directory.inspect_lists(database, library_id, *, generation=0,
+  published=(), ticket=None) -> Directory` reads only list IDs/names through one
+  bounded read-only query. It reads no paper text, notes, files or credentials.
+- `Directory.from_bytes(raw, *, library_id)` validates a closed canonical v1
+  directory: library ID, generation, and sorted unique ID/name/published entries.
+  `to_bytes()` is the wire representation; `digest` identifies that observation,
+  not remote authorization. Generation must eventually come from verified cloud
+  publication, not a device timestamp. Bounds are 10,000 lists / 1 MiB.
+- `library_directory.checklist(directory, selected, *, local_ids=())` separates
+  retained local data, pending download, and waiting for a source to publish.
+  Published metadata is never labeled complete file synchronization.
+- `DeviceSelection(database, *, owner_id, library_id, device_id,
+  current_path=None, root=None)` provides `load() -> Selection` and
+  `save(directory, selected, *, expected_revision, ticket=None) -> Selection`.
+  SQLite commits selection intent under a revision check. Identical concurrent
+  retries return one revision; stale differing choices or directory rollback refuse.
+  Cancellation or a late database switch preserves earlier settings.
+- Selection stores are outside research: the sibling `Paperfact-settings/library-sync`
+  of the platform's default Paperfact data directory. Explicit test stores must also
+  be outside the research root. Keys bind owner, library, device and physical
+  database lifetime. No provider credentials or account emails are stored.
+  Losing this device-local setting means no selection; it grants no startup
+  consent and never deletes research. `current()` checks the captured binding.
+
+`tests/test_library_selection.py` contains four bounded behavior journeys:
+a desktop A/B directory visible to a Mac with only A; separate device selections
+and deselection retaining research; actual concurrent/idempotent saves and stale
+revision refusal; cancellation, late workspace switching, retry and replacement.
+These contracts are not connected to the current Drive dialog/replication path.
+Remote directory publication, scoped byte/history transport, original-library
+adoption and pilot migration remain required before a new installer can satisfy
+the whole-library selection journey. No owner data were uploaded to test them.
 
 ### Desktop Drive pilot (2026-11-18)
 

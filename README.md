@@ -170,6 +170,10 @@ row differences; PDFs use verified, retryable immutable chunks. Private workspac
 folders must remain unshared; share selected lists through research packages instead.
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 This is a test candidate; installed Windows/Mac acceptance is still required.
+**Known limit:** selection currently creates a separate workspace copy. A complete
+library directory with independent per-device list subscriptions is
+[under development](docs/sync-architecture.md#whole-library-list-selection-required-correction-2026-11-18);
+the current Mac picker does not list unpublished desktop lists.
 
 ## Share the research, not your account
 
