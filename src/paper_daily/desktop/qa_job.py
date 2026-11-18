@@ -3,7 +3,7 @@
 import json
 from contextlib import suppress
 
-from paper_daily import llm, research_chat
+from paper_daily import answer_content, llm, research_chat
 
 
 class ChatJob:
@@ -52,6 +52,7 @@ class ChatJob:
                         self.answer, reason = llm.complete(
                             prompt, cfg=self.cfg, timeout=300, task="ask"
                         )
+                    self.answer = answer_content.tagged_answer(self.answer)
                     if not self.answer:
                         return None, reason or "AI 暫時無法回覆，問題已保留，可重試。"
             report("正在儲存原論文的回答")
