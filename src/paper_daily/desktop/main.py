@@ -59,6 +59,7 @@ from paper_daily import (
     llm,
     pdf_highlights,
     pocket,
+    research_chat,
     resources,
     runtime,
     store,
@@ -2694,7 +2695,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                     page=page,
                     anchor=anchor,
                     document=getattr(self, "_active_document", None),
-                    style=self._answer_style(),
+                    style=research_chat.style_for(question, self._answer_style()),
                 )
                 self.follow_btn.setChecked(False)
                 job = ChatJob(request, connections, cfg, replacement=replacement)

@@ -116,6 +116,22 @@ def make_style(answer="concise", turns=0):
     return {"answer": answer, "turns": turns}
 
 
+# A request to have something explained wants more than 精要's ~250 characters,
+# so it is answered in full even while 精要 is on.
+EXPLAIN_WORDS = ("講解", "解釋", "說明", "explain")
+
+
+def style_for(question, style):
+    """The style a question is answered in, given the style the reader chose."""
+    if (
+        style is not None
+        and style["answer"] == "concise"
+        and any(word in question.lower() for word in EXPLAIN_WORDS)
+    ):
+        return {**style, "answer": "detailed"}
+    return style
+
+
 def _inputs(conn, paper_id, exclude=None, turns=6):
     rows = history(conn, paper_id)
     rows = [row for row in rows if exclude is None or row["message_id"] != exclude]
