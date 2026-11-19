@@ -159,6 +159,35 @@ def open_workspace(value, *, launch=None, environ=None, executable=None, frozen=
     return chosen
 
 
+def relaunch_detached(*, launch=None, executable=None, frozen=None, environ=None):
+    """Start a fresh reader that no terminal owns, for `app --restart`.
+
+    The command asking for the restart often runs in a console: an agent's shell,
+    or uv's pythonw.exe, which re-runs the console python.exe. A reader started in
+    that process would close when its console is closed.
+    """
+    packaged = getattr(sys, "frozen", False) if frozen is None else frozen
+    command = [str(executable or sys.executable)]
+    if not packaged:
+        command += ["-m", "paper_daily", "app"]
+    kwargs = {
+        "env": dict(os.environ if environ is None else environ),
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    launch = launch or subprocess.Popen
+    if os.name != "nt":
+        return launch(command, start_new_session=True, **kwargs)
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    try:
+        # Leave the caller's job too, so closing an agent session does not end it.
+        return launch(command, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **kwargs)
+    except OSError:
+        # The caller's job forbids breaking away; the reader still has no console.
+        return launch(command, creationflags=flags, **kwargs)
+
+
 def consume_startup(database_path, *, environ=None):
     """Validate before startup migrations; remove inherited routing after use."""
     environment = os.environ if environ is None else environ

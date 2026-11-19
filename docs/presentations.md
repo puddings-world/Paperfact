@@ -330,4 +330,6 @@ drag a chosen item to insert it. It does not insert an image immediately.
 (or preserve an incomplete presentation recovery draft), close gracefully, and reopen
 with its paper, editing views and unfinished note/question inputs restored. Active
 work or a modal dialog blocks restart. Older running builds need one manual restart
-to load this command. It never force-kills a process.
+to load this command. It never force-kills a process. The reopened reader is a new
+process with no console window, so closing the terminal that ran the command leaves
+it open.

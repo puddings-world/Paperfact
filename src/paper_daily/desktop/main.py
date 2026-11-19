@@ -5002,6 +5002,13 @@ def run(
 
     if _hand_off_to_running_instance(open_next, restart, paper, destination, pdf):
         return 0
+    if restart:
+        # The old reader has closed. Its successor must not belong to this
+        # process, which may sit in a console the user then closes.
+        from paper_daily.workspace_open import relaunch_detached
+
+        relaunch_detached()
+        return 0
 
     smoke = os.environ.get("PAPERFACT_SMOKE_SECONDS")
     if smoke:
