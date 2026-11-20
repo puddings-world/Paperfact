@@ -123,6 +123,8 @@ subscription is used from its official program, never through Paperfact:
 | `research.dive.task` | v0.5 development: `instructions` (the deep-dive specification), `material` (the paper's briefing pack) and `full_text`. Paperfact makes no model call; preparing the pack may fetch the paper's page or PDF. |
 | `research.dive.save` | v0.5 development: publishes the host's Markdown dive like a generated one, bound to the paper's current inputs. A body under 800 characters is rejected (`dive_answer_rejected`); a paper the nightly run gave up on becomes eligible again. The close reading and highlights that the app chains after a dive are not run. |
 
+| `research.ask.task` | v0.5 development: with `paper_id` and `question`, stores the question in the paper's Q&A and returns `request_id`, `instructions` and `material` (answering rules, the paper's text, earlier turns, the question); with `request_id` alone, reopens a question that has no answer. Paperfact makes no model call. |
+| `research.ask.save` | v0.5 development: publishes the host's answer as the reply to that question through the same checks as the app's own Q&A. Text outside `<answer>` tags is dropped; an empty answer or an already answered question is rejected (`ask_answer_rejected`). `status` is `accepted`, or `candidate` when the inputs changed meanwhile. |
 | `research.tasks.pending` | v0.5 development: the requests the reader left for an agent host, oldest first, each with `feature`, `paper_id`, `title`, `task_tool` and `save_tool`. A saved answer closes its request; a partial reference analysis leaves it open. The queue is local to the device. Nothing in the app adds to it yet. |
 
 Ask the agent: **"Rerun the research context of the Paperfact paper I am reading"**, or

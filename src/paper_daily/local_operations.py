@@ -498,6 +498,37 @@ def citation_save(paper_id, entries, limit=120):
     return {"saved": saved, "complete": not reason, "reason": reason}
 
 
+def ask_task(paper_id=None, question=None, request_id=None):
+    """A question about a paper that an agent host answers with its own model account."""
+    from paper_daily import ask_host
+
+    if (request_id is None) == (paper_id is None and question is None):
+        raise OperationError("invalid_input", "Give paper_id and question, or request_id alone")
+    if request_id is None:
+        paper_id = _id(paper_id, "paper_id")
+        if not isinstance(question, str) or not question.strip() or len(question) > 4000:
+            raise OperationError("invalid_input", "question must be 1–4,000 characters")
+    elif not isinstance(request_id, str):
+        raise OperationError("invalid_input", "request_id must be text")
+    try:
+        return ask_host.task(paper_id, question, request_id=request_id)
+    except ValueError as error:
+        raise OperationError("ask_task_unavailable", str(error)) from None
+
+
+def ask_save(request_id, answer):
+    from paper_daily import ask_host
+
+    if not isinstance(request_id, str):
+        raise OperationError("invalid_input", "request_id must be text")
+    if not isinstance(answer, str) or len(answer) > 100_000:
+        raise OperationError("invalid_input", "answer must be text of at most 100,000 characters")
+    try:
+        return ask_host.save(request_id, answer)
+    except ValueError as error:
+        raise OperationError("ask_answer_rejected", str(error)) from None
+
+
 def pending_tasks(limit=20):
     """What the reader left for an agent host to answer."""
     from paper_daily import host_requests
@@ -531,6 +562,8 @@ OPERATIONS = {
     "research.dive.task": dive_task,
     "research.dive.save": dive_save,
     "research.tasks.pending": pending_tasks,
+    "research.ask.task": ask_task,
+    "research.ask.save": ask_save,
 }
 
 
@@ -557,6 +590,8 @@ def dispatch(operation: str, arguments: dict) -> dict:
                 "imports.discard",
                 "research.citations.save",
                 "research.dive.save",
+                "research.ask.task",
+                "research.ask.save",
             }
             and _recovery_workspace()
         ):

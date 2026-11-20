@@ -112,6 +112,8 @@ def main(argv=None):
                 "research.dive.task",
                 "research.dive.save",
                 "research.tasks.pending",
+                "research.ask.task",
+                "research.ask.save",
             ),
         )
         parser.add_argument("--file", help="UTF-8 JSON arguments; otherwise read stdin")

@@ -21,7 +21,8 @@ came from, and can be reused by a later feature.
 | Release | In scope |
 | --- | --- |
 | 0.5.0 | One definition per AI feature and a host task queue; the settings page below; removal of the Gemini key option; single-paper tasks; notes as cards |
-| 0.5.1 or 0.5.2 | Cross-paper features |
+| 0.5.1 | Cross-paper features; sub-lists and topic convergence |
+| Later | Research gaps, writing export, tracking new papers |
 
 ## 1. One definition per AI feature (0.5.0)
 
@@ -44,8 +45,9 @@ Two runners use the same definition:
 - **Host runner**: an agent host (agy, Claude Code, Codex) calls the feature's
   MCP `task` tool, answers with its own account, and calls the `save` tool.
 
-Features still to convert: 論文問答, 精讀, the highlight drafts chained after a
-deep dive, AI 翻譯.
+Done: `research.dive`, `research.citations`, `research.ask` (host tools only;
+the app's own 論文問答 already used the same request and publication).
+Still to convert: 精讀, the highlight drafts chained after a deep dive, AI 翻譯.
 
 ### Host task queue
 
@@ -61,6 +63,10 @@ and the open reader refreshes.
 - Nightly analysis moves to this queue: the host's scheduler drains it, and
   Paperfact's own scheduled task is no longer needed for AI work.
 - A pending request can be cancelled in the app.
+
+Done: the queue and `research.tasks.pending`, for deep dives and reference
+analyses. Not done: assigning a feature to a host in settings, so nothing in the
+app adds to the queue yet; questions are not queued.
 
 ## 2. Settings page (0.5.0, layout proposed)
 
@@ -153,3 +159,27 @@ bounded and every statement has a source.
 
 The tasks `compare`, `survey`, `overview` and `lineage` exist today in a
 shallower form; read them before designing these.
+
+## 6. Lists (0.5.1 and later)
+
+A list today is flat: a name, a note, papers in order, one reading goal and one
+survey. Research narrows over time, and the list should be able to follow.
+
+In 0.5.1, with the cross-paper features:
+
+1. **Sub-lists.** Select papers in a list, or let AI propose groups by topic
+   for the reader to confirm, and save them as a sub-list. A sub-list remembers
+   its parent. A paper can be in both; its read state is shared. Two levels
+   only: no deeper tree.
+2. **Topic convergence.** A list's reading goal gains a stage (exploring,
+   focusing, decided) and, per stage, the question being asked and why other
+   directions were dropped. AI points out papers that no longer fit the goal
+   and directions still missing; the reader decides what to move out.
+
+Later:
+
+3. **Research gaps.** Collect what no paper in the list has done, from each
+   paper's limitations and open questions (section 3).
+4. **Writing export.** A decided list becomes a related-work outline and BibTeX.
+5. **New papers.** For a decided list, look periodically for new papers citing
+   its core papers and hold them for review; never add them automatically.
