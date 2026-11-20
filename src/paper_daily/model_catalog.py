@@ -29,6 +29,12 @@ def remember(cfg, rows):
         _catalogs[key(cfg)] = names
 
 
+def remember_names(cfg, names, default=""):
+    """Store model names directly; `default` is the model an empty choice runs."""
+    with _lock:
+        _catalogs[key(cfg)] = {**names, "": names.get(default, "")}
+
+
 def name(cfg, model):
     with _lock:
         return _catalogs.get(key(cfg), {}).get(model or "") or None

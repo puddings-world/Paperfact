@@ -59,15 +59,36 @@ def models(cfg):
         ))
     if cfg.backend != "codex":
         return []
-    result = codex_request(cfg, "model/list", {"includeHidden": False, "limit": 100})
-    return [
-        row["model"]
-        for row in result.get("data", [])
+    with _codex_client(cfg) as client:
+        result = _codex_call(client, "model/list", {"includeHidden": False, "limit": 100})
+        try:
+            config = _codex_call(client, "config/read", {"includeLayers": False}).get("config")
+        except (ValueError, OSError, TimeoutError):
+            config = None
+    rows = [
+        row for row in result.get("data", [])
         if isinstance(row, dict) and isinstance(row.get("model"), str) and not row.get("hidden")
     ]
+    # An empty choice runs the model in the reader's Codex config, else the catalog
+    # default. When the config cannot be read the default stays unnamed, not guessed.
+    default = ""
+    if isinstance(config, dict):
+        default = config.get("model") or next(
+            (row["model"] for row in rows if row.get("isDefault") is True), ""
+        )
+    model_catalog.remember_names(
+        cfg,
+        {
+            row["model"]: row["displayName"] for row in rows
+            if isinstance(row.get("displayName"), str) and 0 < len(row["displayName"]) < 160
+        },
+        default if isinstance(default, str) else "",
+    )
+    return [row["model"] for row in rows]
 
 
-def codex_request(cfg, method, params):
+@contextmanager
+def _codex_client(cfg):
     """Let the official CLI own credentials; only consume its public protocol."""
     from paper_daily.cli_rpc import Client
 
@@ -77,10 +98,19 @@ def codex_request(cfg, method, params):
     with Client([*argv, "app-server"], env=environment(cfg), cwd=cfg.cli_home) as client:
         client.request("initialize", {"clientInfo": {"name": "paperfact", "version": "0.1.0"}})
         client.send({"method": "initialized", "params": {}})
-        result = client.request(method, params)
-        if not isinstance(result, dict):
-            raise ValueError("Official CLI returned an invalid response")
-        return result
+        yield client
+
+
+def _codex_call(client, method, params):
+    result = client.request(method, params)
+    if not isinstance(result, dict):
+        raise ValueError("Official CLI returned an invalid response")
+    return result
+
+
+def codex_request(cfg, method, params):
+    with _codex_client(cfg) as client:
+        return _codex_call(client, method, params)
 
 
 def codex_identity(cfg):

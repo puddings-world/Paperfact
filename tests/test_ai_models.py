@@ -103,7 +103,72 @@ def test_codex_model_choices_come_from_official_service(monkeypatch):
     monkeypatch.setattr(cli_rpc, "Client", Client)
     monkeypatch.setattr(ai_accounts, "command", lambda backend: ["official-codex"])
     assert ai_accounts.models(Settings("codex")) == ["available"]
-    assert calls == ["initialize", "initialized", "model/list"]
+    # The config read names the default model; it is metadata, not a model turn.
+    assert calls == ["initialize", "initialized", "model/list", "config/read"]
+
+
+CODEX_ROWS = [
+    {"model": "big", "displayName": "Big", "isDefault": True},
+    {"model": "small", "displayName": "Small", "isDefault": False},
+    {"model": "plain"},
+]
+
+
+def _codex(monkeypatch, config):
+    from paper_daily import ai_accounts, cli_rpc
+
+    class Client:
+        def __init__(self, argv, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def send(self, message):
+            pass
+
+        def request(self, method, params):
+            if method == "config/read":
+                if isinstance(config, Exception):
+                    raise config
+                return {"config": config}
+            return {"data": CODEX_ROWS}
+
+    monkeypatch.setattr(cli_rpc, "Client", Client)
+    monkeypatch.setattr(ai_accounts, "command", lambda backend: ["official-codex"])
+    cfg = Settings("codex")
+    assert ai_accounts.models(cfg) == ["big", "small", "plain"]
+    return cfg
+
+
+def test_codex_models_show_official_names_and_the_configured_default(monkeypatch):
+    from paper_daily import ai_choices
+
+    cfg = _codex(monkeypatch, {"model": "small"})
+    assert ai_choices.model_option_label("codex", "big", cfg=cfg) == "Big"
+    assert ai_choices.model_option_label("codex", "plain", cfg=cfg) == "plain"
+    # The reader's own Codex config wins over the catalog's default.
+    assert ai_choices.model_option_label("codex", "", cfg=cfg) == "Codex 預設：Small"
+
+
+def test_codex_default_is_the_catalog_default_when_the_config_names_none(monkeypatch):
+    from paper_daily import ai_choices
+
+    cfg = _codex(monkeypatch, {"model": None})
+    assert ai_choices.model_option_label("codex", "", cfg=cfg) == "Codex 預設：Big"
+
+
+def test_codex_default_stays_unnamed_when_the_config_cannot_be_read(monkeypatch):
+    from paper_daily import ai_choices
+
+    cfg = _codex(monkeypatch, ValueError("unsupported"))
+    assert ai_choices.model_option_label("codex", "", cfg=cfg) == "使用 Codex 預設模型"
+    assert ai_choices.model_option_label("codex", "small", cfg=cfg) == "Small"
+    other = _codex(monkeypatch, {"model": "not-listed"})
+    assert ai_choices.model_option_label("codex", "", cfg=other) == "使用 Codex 預設模型"
 
 
 def test_claude_discovery_reads_live_catalog_without_a_model_turn(monkeypatch, tmp_path):
