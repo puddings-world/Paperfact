@@ -24,6 +24,10 @@ SYSTEM_RULES = (
     "只根據提供的內容作答,內容不足以回答就直說,不要編造數字。\n"
 )
 
+# Without extended thinking the Claude CLI sometimes writes its planning, or a stray
+# tag, ahead of the answer; the tags let qa_job keep only the answer itself.
+ANSWER_RULE = "只把給讀者看的回答放在 <answer> 與 </answer> 之間;標籤外不要寫任何東西。\n"
+
 
 class AskWorker(QObject):
     """Runs one model call and emits the answer."""
@@ -101,7 +105,7 @@ def build_prompt(title: str, venue: str, year: int, abstract: str | None,
                  full_text: str | None, history: list[tuple[str, str]],
                  question: str, text_budget: int = 45000, *, concise: bool = False) -> str:
     """Assemble the prompt: rules, paper, prior turns, then the question."""
-    parts = [SYSTEM_RULES + (CONCISE_RULES if concise else ""),
+    parts = [SYSTEM_RULES + (CONCISE_RULES if concise else "") + ANSWER_RULE,
              f"\n論文:{title}\n會議:{venue} {year}"]
     if abstract:
         parts.append(f"\n摘要:\n{abstract}")

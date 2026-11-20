@@ -11,6 +11,29 @@ import re
 
 _OPEN = re.compile(r"\A\s*<(think|thinking|thinking_mode|analysis)\s*>", re.I)
 _TAG = re.compile(r"<(\/?)(think|thinking|thinking_mode|analysis)\s*>", re.I)
+_ANSWER_OPEN = re.compile(r"<answer\s*>", re.I)
+_ANSWER_CLOSE = re.compile(r"</answer\s*>", re.I)
+
+
+def tagged_answer(text: str | None) -> str | None:
+    """The reader-facing part of a reply that was asked to wrap it in <answer> tags.
+
+    Without extended thinking, the Claude CLI sometimes writes its planning, or a
+    stray tag such as </reasoning_effort>, before the answer. Asking for the answer
+    inside <answer> tags keeps that outside, where it is dropped here. A reply with
+    no tags (another backend that ignored the request) is returned whole; one whose
+    closing tag was cut off keeps everything after the last opening tag.
+    """
+    if not text:
+        return None
+    openings = list(_ANSWER_OPEN.finditer(text))
+    if not openings:
+        return text.strip() or None
+    body = text[openings[-1].end() :]
+    closing = _ANSWER_CLOSE.search(body)
+    if closing:
+        body = body[: closing.start()]
+    return body.strip() or None
 
 
 def final_text(text: str | None) -> str | None:

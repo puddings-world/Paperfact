@@ -402,7 +402,8 @@ window — navigation, ticking, pinning — stays blue or grey.
   figure, and an 不確定 line only when the paper leaves it open, in about 250
   characters. Earlier turns are left out so the answer cannot drift toward them; a
   question that is really several gets the first answered and the rest listed under
-  也可以問. **接續上一題** brings the last exchange back for one follow-up and turns
+  也可以問. A question asking for an explanation (講解, 解釋, 說明 or "explain") is
+  answered in full even with 精要 on; the button itself stays as set. **接續上一題** brings the last exchange back for one follow-up and turns
   itself off after sending. With 精要 off, answers are full and see the last six turns,
   as before.
 

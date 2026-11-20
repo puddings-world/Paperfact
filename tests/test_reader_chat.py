@@ -282,6 +282,26 @@ def test_concise_is_on_by_default_and_a_follow_up_applies_to_one_question(reader
     assert "回答格式(精要)" not in prompts[-1] and "Unrelated" in prompts[-1]
 
 
+def test_asking_for_an_explanation_is_answered_in_full_while_concise_is_on(reader, monkeypatch):
+    _, _, view = reader
+    deferred = Deferred()
+    monkeypatch.setattr(view, "runner", deferred)
+    llm.save_settings(profile="a", backend="openai", model="m", isolated=True)
+    prompts = []
+    monkeypatch.setattr(llm, "complete",
+                        lambda prompt, cfg, **k: (prompts.append(prompt) or "Answer", "ok"))
+    assert view.concise_btn.isChecked()
+
+    for question in ("講解這技術", "解釋這段在說什麼", "請說明 Fig. 2", "Explain the loss"):
+        view._ask(question)
+        deferred.run()
+        assert "回答格式(精要)" not in prompts[-1], question
+    view._ask("What dataset?")
+    deferred.run()
+    assert "回答格式(精要)" in prompts[-1]
+    assert view.concise_btn.isChecked()  # The reader's choice is unchanged.
+
+
 def test_an_answer_becomes_a_key_note_only_after_the_reader_saves_it(reader, monkeypatch):
     from PySide6.QtCore import QUrl
     from PySide6.QtWidgets import QDialog

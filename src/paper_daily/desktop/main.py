@@ -59,6 +59,7 @@ from paper_daily import (
     llm,
     pdf_highlights,
     pocket,
+    research_chat,
     resources,
     runtime,
     store,
@@ -2694,7 +2695,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
                     page=page,
                     anchor=anchor,
                     document=getattr(self, "_active_document", None),
-                    style=self._answer_style(),
+                    style=research_chat.style_for(question, self._answer_style()),
                 )
                 self.follow_btn.setChecked(False)
                 job = ChatJob(request, connections, cfg, replacement=replacement)
@@ -5000,6 +5001,13 @@ def run(
     app.setWindowIcon(QIcon(str(ROOT / "assets" / "paper-daily.ico")))
 
     if _hand_off_to_running_instance(open_next, restart, paper, destination, pdf):
+        return 0
+    if restart:
+        # The old reader has closed. Its successor must not belong to this
+        # process, which may sit in a console the user then closes.
+        from paper_daily.workspace_open import relaunch_detached
+
+        relaunch_detached()
         return 0
 
     smoke = os.environ.get("PAPERFACT_SMOKE_SECONDS")
