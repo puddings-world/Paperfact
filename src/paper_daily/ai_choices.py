@@ -6,27 +6,32 @@ from uuid import uuid4
 from paper_daily import ai_profiles, llm, model_catalog
 from paper_daily.ai_types import Settings
 
-LABELS = {"cli": "Claude", "codex": "Codex", "gemini": "Gemini"}
-# The official CLIs Paperfact signs in to. Gemini is a key connection (below).
+# The picker's three kinds of source. "api" is every connection made with a key or
+# an endpoint address; a Gemini subscription is not here because Google permits it
+# only from agy, which reaches Paperfact through MCP instead.
+API = "api"
+LABELS = {"cli": "Claude", "codex": "Codex", API: "API 端點"}
+# The official CLIs Paperfact signs in to.
 CLI_BACKENDS = ("cli", "codex")
-# Google ended Gemini CLI for personal accounts on 2026-06-18 and does not permit
-# third-party tools to drive Antigravity with a subscription login, so a personal
-# Gemini account reaches Paperfact through an AI Studio key on this endpoint.
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-GEMINI_API_PROFILE = "gemini-api"
 _account_labels = {}
-
-
-def is_gemini_api(cfg):
-    return cfg.backend == "openai" and (cfg.base_url or "").rstrip("/") == GEMINI_API_URL
 
 
 def uses_key(cfg):
     return cfg.backend in ("anthropic", "openai", "gateway")
 
 
+def provider(cfg):
+    """The picker button a connection is listed under."""
+    return API if uses_key(cfg) else cfg.backend
+
+
 def brand(cfg):
-    return "Gemini" if is_gemini_api(cfg) else LABELS.get(cfg.backend, cfg.backend)
+    return "API" if uses_key(cfg) else LABELS.get(cfg.backend, cfg.backend)
+
+
+def ready(cfg):
+    """Whether an endpoint has what it needs to be called; a local one needs no key."""
+    return bool(cfg.api_key) or not cfg.requires_key
 
 
 def remember_identity(cfg, text):
@@ -34,10 +39,9 @@ def remember_identity(cfg, text):
 
 
 def account_label(cfg):
-    if is_gemini_api(cfg):
-        return "API 金鑰 · 按用量計費" if cfg.api_key else "尚未輸入 API 金鑰"
     if cfg.backend not in CLI_BACKENDS:
-        return cfg.profile or "API 連線"
+        name = cfg.profile or "API 連線"
+        return name if ready(cfg) else f"{name} · 尚未輸入金鑰"
     return _account_labels.get(account_key(cfg)) or (
         f"{cfg.profile or '獨立帳號'}（待確認）" if cfg.account_id else "本機帳號（待確認）"
     )
@@ -118,11 +122,8 @@ def model_option_label(backend, model, *, cfg=None):
 
 
 def model_hint(backend, model, *, cfg=None):
-    if cfg and is_gemini_api(cfg):
-        return (
-            "以 Google AI Studio 的 API 金鑰呼叫，按用量計費；Google AI Pro / Ultra 訂閱額度"
-            "不適用。Gemini 4 Argon 需要付費層級。"
-        )
+    if cfg and uses_key(cfg):
+        return "由這個端點的服務商按用量計費，或在本機執行；Claude、Codex 等訂閱額度不適用。"
     if not model:
         return "使用此帳號目前的預設模型；也可以在上方直接選擇其他模型。"
     if cfg and model_catalog.name(cfg, model):
@@ -144,9 +145,7 @@ HELP = {
 
 def _under(cfg, backend):
     """Whether a connection is listed under that provider's button."""
-    if backend == "gemini":
-        return is_gemini_api(cfg)
-    return cfg.backend == backend
+    return provider(cfg) == backend
 
 
 def choices(backend):
@@ -158,9 +157,8 @@ def choices(backend):
     current = llm.settings()
     if _under(current, backend) and not any(cfg.profile == current.profile for cfg in result):
         result.insert(0, current)
-    if backend == "gemini" and not result:
-        result.insert(0, Settings("openai", base_url=GEMINI_API_URL))
-    if not result:
+    # An endpoint cannot be guessed; with none saved the picker offers to add one.
+    if not result and backend != API:
         result.append(Settings(backend, isolated=True))
     return result
 
@@ -178,7 +176,7 @@ def accounts():
     result = {}
     used = set(llm.task_routes().values())
     for cfg in candidates:
-        if cfg.backend in CLI_BACKENDS or cfg.profile in used or is_gemini_api(cfg):
+        if cfg.backend in CLI_BACKENDS or cfg.profile in used or uses_key(cfg):
             result.setdefault(account_key(cfg), cfg)
     return list(result.values())
 
@@ -194,33 +192,11 @@ def new_account(backend, model=None):
     )
 
 
-def save_gemini_key(key, model, *, profile=None):
-    """Store an AI Studio key as its own connection; replacing a key keeps its name."""
-    key = key.strip()
-    if not key or any(char.isspace() for char in key):
-        raise ValueError("請貼上 Google AI Studio 的 API 金鑰。")
-    name = profile
-    if not name:
-        name, number = GEMINI_API_PROFILE, 2
-        while name in llm.profile_names():
-            name = f"{GEMINI_API_PROFILE}-{number}"
-            number += 1
-    llm.save_settings(
-        profile=name,
-        backend="openai",
-        base_url=GEMINI_API_URL,
-        api_key=key,
-        requires_key=True,
-        model=model or "",
-    )
-    return llm.settings(profile=name)
-
-
 def save(cfg, model, *, activate=True):
     """Save one choice without silently discarding task overrides or legacy defaults."""
     if uses_key(cfg):
         if not cfg.profile:
-            raise ValueError("請先輸入 API 金鑰。")
+            raise ValueError("請先新增 API 端點。")
         llm.save_settings(profile=cfg.profile, model=model or "")
         if activate:
             llm.use_profile(cfg.profile, desktop=True)

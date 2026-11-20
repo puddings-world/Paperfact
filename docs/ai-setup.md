@@ -7,26 +7,28 @@ Run terminal examples from the repository root.
 
 ## Choose your AI
 
-**Gemini uses an API key.** Google ended Gemini CLI service for individual free,
-AI Pro and AI Ultra accounts on June 18, 2026
+The picker offers three kinds of source: **Claude** and **Codex** sign in with your
+subscription, and **API 端點** is any service reached with a key or an address.
+
+**API 端點.** **全域 AI → API 端點 → 新增 API 端點…** opens the connection form:
+choose a preset (Anthropic key, OpenAI-compatible API, local Ollama, custom
+service), give the connection a name, and fill in its address and key. Back in the
+picker, Paperfact lists the models the endpoint reports; choose one, then **設為全域
+預設** or assign it to single features under **進階設定**. A service that charges
+bills you per use and no subscription covers it; a local model needs no key. Keys
+are stored only in this computer's AI settings and never exported.
+
+**Gemini has no button.** Google ended Gemini CLI service for individual free, AI
+Pro and AI Ultra accounts on June 18, 2026
 ([notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)),
-and Google staff have said that third-party tools may not drive its successor,
-Antigravity, with a subscription login. So **Gemini** in the picker asks for a key:
+and does not allow third-party tools to drive its successor, Antigravity (agy),
+with a subscription login. A Gemini subscription is therefore used from agy, which
+calls Paperfact's MCP tools ([AI access policy](ai-access-policy.md)). A Gemini CLI
+connection saved by an earlier version stays in the settings file but explains this
+instead of running; a Gemini API key saved earlier is listed under **API 端點**.
 
-1. Create a key at [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. **全域 AI → Gemini → 輸入 API 金鑰…**, paste it. Paperfact lists the models the
-   key can use and preselects the strongest (Gemini 4 Argon when the key's tier has it).
-3. **設為全域預設**, or assign it to single features under **進階設定**.
-
-The key is billed per use by Google; an AI Pro or Ultra subscription does not cover
-it. It is stored only in this computer's AI settings and never exported. **更換 API
-金鑰…** replaces it in place, keeping feature assignments. Paperfact no longer runs
-Gemini CLI, for any account; a Gemini CLI connection saved by an earlier version stays
-in the settings file but explains this instead of running. A Gemini subscription is
-used from agy, which calls Paperfact's MCP tools ([AI access policy](ai-access-policy.md)).
-
-1. Click the toolbar's **全域 AI** button and choose **Claude**, **Codex**, or **Gemini**
-   (Gemini: see above).
+1. Click the toolbar's **全域 AI** button and choose **Claude** or **Codex**
+   (for an API endpoint, see above).
 2. Press **新增帳號** and complete the provider's browser flow. If its official
    CLI is missing, the button opens the installation instructions. An existing local
    login can also be used; signing in again creates a separate account and keeps it.
@@ -52,11 +54,11 @@ overrides; **進階設定** shows each assignment. Long names shorten only on th
 Codex models come from the official `model/list` method; Claude models come from
 the official CLI initialization response, including newly available aliases such
 as `fable`. Both load in background workers for the selected account, not from a
-fixed list of model families. A Gemini API key lists the models that key can use.
+fixed list of model families. An API endpoint lists the models it reports.
 Availability still depends on the provider/account; discovery is not a successful
 inference check. Ordinary model fields are read-only selections; **自訂 ID** or
 **自訂模型 ID（進階）** enables manual entry. All selectors accept custom IDs, and
-**使用 Claude / Codex / Gemini 預設模型** lets the CLI choose. Claude's official
+**使用 Claude / Codex 預設模型** lets the CLI choose. Claude's official
 `displayName` supplies readable names such as **Fable 5.1** while the saved routing
 ID remains `fable`. When the default description matches a returned model name,
 the label shows that name too. Metadata is cached per account/home; unavailable
@@ -88,7 +90,7 @@ Open **進階設定** for a table of features, AI accounts and models. For examp
 translation and deep explanation can reuse one Claude login with different models.
 Choose a service/account in the middle column, then its model in the right column.
 Claude and Codex are offered even before a connection has been saved; using one
-requires its installed official CLI and a valid login. Gemini needs a saved API key.
+requires its installed official CLI and a valid login. Saved API endpoints are listed too.
 **帳號與用量** opens the simple login screen without changing the default AI
 or discarding the table's unsaved choices. **儲存分配** applies choices together;
 **全部跟隨全域** removes overrides when saved. Cancel leaves saved choices untouched.

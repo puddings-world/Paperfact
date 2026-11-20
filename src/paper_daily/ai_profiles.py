@@ -113,7 +113,7 @@ def _migrate(data: dict) -> None:
 RETIRED = {
     "gemini": (
         "Google 已於 2026-06-18 停止個人帳號使用 Gemini CLI，Paperfact 也不再支援；"
-        "請在 AI 設定改用 Gemini API 金鑰，或在 agy 裡透過 MCP 使用 Paperfact。"
+        "Gemini 訂閱請在 agy 裡透過 MCP 使用 Paperfact；app 內請改用 Claude、Codex 或 API 端點。"
     ),
 }
 

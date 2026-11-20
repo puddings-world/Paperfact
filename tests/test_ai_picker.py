@@ -47,7 +47,7 @@ def picker(tmp_path, monkeypatch):
 
 def test_home_has_three_services_and_only_one_text_input(picker):
     widget, _app = picker
-    assert list(widget.providers) == ["cli", "codex", "gemini"]
+    assert list(widget.providers) == ["cli", "codex", "api"]
     assert [w for w in widget.findChildren(QLineEdit) if w.isVisible()] == [widget.model.lineEdit()]
     assert not widget.accounts.isVisible()
     assert "me@example.org" in widget.account_status.text()
@@ -57,10 +57,10 @@ def test_browsing_services_does_not_change_active_account(picker):
     widget, _app = picker
     before = llm.SETTINGS_PATH.read_bytes()
     widget.providers["codex"].click()
-    widget.providers["gemini"].click()
+    widget.providers["api"].click()
     assert llm.SETTINGS_PATH.read_bytes() == before
-    # Gemini opens on the API-key connection: personal accounts can no longer use the CLI.
-    assert ai_choices.is_gemini_api(widget.cfg)
+    # No endpoint is saved, and none is assumed.
+    assert widget.cfg is None
 
 
 def test_select_model_then_use_preserves_account_and_task_overrides(picker):

@@ -114,7 +114,6 @@ class AISettingsDialog(QDialog):
         for label, preset in (
             ("Claude 帳號登入", "cli"),
             ("Codex / ChatGPT 帳號登入", "codex"),
-            ("Gemini API 金鑰（Google AI Studio）", "gemini_api"),
             ("Anthropic API 金鑰", "anthropic"),
             ("OpenAI 相容 API", "openai"),
             ("Ollama 本機模型", "local"),
@@ -304,13 +303,10 @@ class AISettingsDialog(QDialog):
         if not preset:
             return
         self.profile_picker.setCurrentIndex(self.profile_picker.count() - 1)
-        backend = "openai" if preset in ("local", "gemini_api") else preset
+        backend = "openai" if preset == "local" else preset
         self.backend_picker.setCurrentIndex(self.backend_picker.findData(backend))
         self.model_edit.clear()
-        self.base_edit.setText(
-            "http://localhost:11434/v1" if preset == "local"
-            else ai_choices.GEMINI_API_URL if preset == "gemini_api" else ""
-        )
+        self.base_edit.setText("http://localhost:11434/v1" if preset == "local" else "")
         self.requires_key.setChecked(preset != "local")
         self.key_edit.clear()
         self.key_env_edit.clear()

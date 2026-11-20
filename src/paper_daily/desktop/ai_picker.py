@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
-    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -179,7 +178,7 @@ class AIPickerDialog(QDialog):
 
     @staticmethod
     def _provider(cfg):
-        return "gemini" if ai_choices.is_gemini_api(cfg) else cfg.backend
+        return ai_choices.provider(cfg)
 
     def _cached_usage(self):
         if self.cfg and self._authenticated is not False:
@@ -208,7 +207,24 @@ class AIPickerDialog(QDialog):
     def _account_changed(self, _index=0, *, check=True):
         self._epoch += 1
         self.cfg = self.accounts.currentData()
+        self.use_button.setText(
+            "完成" if self.accounts_only else f"僅套用至{self.task_label}" if self.task
+            else "設為全域預設"
+        )
+        for widget in (self.model_row, self.model_hint, self.usage, self.manage_button):
+            widget.setVisible(self.cfg is not None and (
+                not self.accounts_only or widget in (self.usage, self.manage_button)
+            ))
+        self.use_button.setEnabled(self.cfg is not None or self.accounts_only)
         if self.cfg is None:
+            # Only the API button can be empty: an endpoint is added, never assumed.
+            self.account_status.setText(
+                "尚未新增 API 端點。可填入 Anthropic 金鑰、OpenAI 相容服務的網址與金鑰，"
+                "或本機 Ollama；按用量計費的服務由該服務商收費。"
+            )
+            self.login_button.setText("新增 API 端點…")
+            self.notice.clear()
+            self.route_hint.clear()
             return
         self.usage.reset(self.cfg)
         self._authenticated = None
@@ -222,9 +238,7 @@ class AIPickerDialog(QDialog):
         self.account_status.setText(
             ai_choices.account_title(self.cfg) if keyed else "帳號尚未確認"
         )
-        self.login_button.setText(
-            ("更換 API 金鑰…" if self.cfg.api_key else "輸入 API 金鑰…") if keyed else "新增帳號"
-        )
+        self.login_button.setText("新增或編輯端點…" if keyed else "新增帳號")
         self.logout_action.setEnabled(bool(self.cfg.account_id))
         self.manage_button.setToolTip(
             "暱稱、登出與移除連線" if self.cfg.account_id
@@ -237,10 +251,6 @@ class AIPickerDialog(QDialog):
             f"{count} 個功能另有指定 AI，可在「進階設定」修改。" if count else ""
         )
         self.route_hint.setVisible(bool(count) and not self.accounts_only)
-        self.use_button.setText(
-            "完成" if self.accounts_only else f"僅套用至{self.task_label}" if self.task
-            else "設為全域預設"
-        )
         if check:
             self._inspect()
 
@@ -372,13 +382,11 @@ class AIPickerDialog(QDialog):
             {"windows": [], "message": "API 金鑰按用量計費；費用請在服務商的帳單頁查看。"},
             None,
         )
-        self._authenticated = bool(cfg.api_key)
-        if not cfg.api_key:
-            self.account_status.setText(
-                "請按「輸入 API 金鑰…」，貼上 Google AI Studio（aistudio.google.com）的金鑰。"
-            )
+        self._authenticated = ai_choices.ready(cfg)
+        if not self._authenticated:
+            self.account_status.setText("這個端點尚未輸入金鑰；請按「新增或編輯端點…」填入。")
             return
-        self.account_status.setText("正在確認 API 金鑰…")
+        self.account_status.setText("正在向這個端點取得模型清單…")
 
         def check(_prompt):
             models, message = ai_providers.list_models(cfg)
@@ -405,11 +413,7 @@ class AIPickerDialog(QDialog):
 
     @staticmethod
     def _suggested(models):
-        """The strongest model the key lists, so "use" works without a choice first."""
-        for wanted in ("argon", "pro", "flash"):
-            match = next((m for m in models if wanted in m and "preview" not in m), None)
-            if match:
-                return match
+        """The first model the endpoint lists, so "use" works without a choice first."""
         return models[0] if models else ""
 
     def _refresh_usage(self):
@@ -446,8 +450,8 @@ class AIPickerDialog(QDialog):
             return
         self.runner.cancel_read()
         self._epoch += 1
-        if ai_choices.uses_key(self.cfg):
-            self._enter_key()
+        if self.cfg is None or ai_choices.uses_key(self.cfg):
+            self._edit_endpoints()
             return
         try:
             ai_accounts.command(self.cfg.backend)
@@ -482,26 +486,20 @@ class AIPickerDialog(QDialog):
             "", done, failed, call=lambda _prompt: ai_accounts.auth(cfg, "login")
         )
 
-    def _enter_key(self):
-        key, accepted = QInputDialog.getText(
-            self,
-            "Gemini API 金鑰",
-            "到 aistudio.google.com 建立 API 金鑰後貼上。\n"
-            "按用量計費；Google AI Pro / Ultra 訂閱額度不適用。金鑰只存在這台電腦。",
-            QLineEdit.EchoMode.Password,
-        )
-        if not accepted or not key.strip():
-            return
-        try:
-            saved = ai_choices.save_gemini_key(key, self._model(), profile=self.cfg.profile)
-        except (ValueError, OSError) as exc:
-            self.notice.setText(str(exc))
-            return
-        self._select("gemini", selected=saved.profile)
-        self.notice.setText(
-            "金鑰已保存，可回到功能頁選用。" if self.accounts_only
-            else f"選好模型後，按「{self.use_button.text()}」。"
-        )
+    def _edit_endpoints(self):
+        """Endpoints are added and edited in the connection form, then listed here."""
+        from paper_daily.desktop.ai_dialog import AISettingsDialog
+
+        before = set(llm.profile_names())
+        selected = self.cfg.profile if self.cfg else None
+        AISettingsDialog(self).exec()
+        added = [name for name in llm.profile_names() if name not in before]
+        self._select(ai_choices.API, selected=added[-1] if added else selected)
+        if self.cfg is not None:
+            self.notice.setText(
+                "端點已保存，可回到功能頁選用。" if self.accounts_only
+                else f"選好模型後，按「{self.use_button.text()}」。"
+            )
 
     def _rename(self):
         if self.auth_runner.busy:
@@ -579,9 +577,15 @@ class AIPickerDialog(QDialog):
         if self.accounts_only:
             self.accept()
             return
-        if ai_choices.uses_key(self.cfg) and not (self.cfg.api_key and self._model()):
+        if self.cfg is None:
+            self.notice.setText("請先新增 API 端點。")
+            return
+        if ai_choices.uses_key(self.cfg) and not (
+            ai_choices.ready(self.cfg) and self._model()
+        ):
             self.notice.setText(
-                "請先輸入 API 金鑰。" if not self.cfg.api_key else "請選擇要使用的模型。"
+                "請先輸入 API 金鑰。" if not ai_choices.ready(self.cfg)
+                else "請選擇要使用的模型。"
             )
             return
         try:
@@ -604,6 +608,9 @@ class AIPickerDialog(QDialog):
         cfg, model = self.cfg, self._model()
         dialog = AITasksDialog(self)
         dialog.exec()
+        if cfg is None:
+            self._select(ai_choices.API)
+            return
         self._select(self._provider(cfg), selected=cfg.profile)
         self._fill_models(model)
 

@@ -49,24 +49,24 @@ Done: `research.dive`, `research.citations`, `research.ask` (host tools only;
 the app's own 論文問答 already used the same request and publication).
 Still to convert: 精讀, the highlight drafts chained after a deep dive, AI 翻譯.
 
+### In the app, or from an agent host
+
+Decided 2026-11-20: the two are separate. A button in the app runs only what
+Paperfact can start itself (Claude Code, Codex, an API endpoint), and shows its
+result when the job ends. An agent host uses Paperfact through MCP while the
+reader works in that host. A feature is never assigned to a host in settings:
+a button that only leaves a request for another program is confusing.
+
 ### Host task queue
 
-A reader can assign a feature to an agent host instead of an in-app account.
-Starting that feature in the app then records a pending request instead of
-running anything. The host picks it up through one new MCP tool that lists
-pending requests, answers each through the feature's `task` and `save` tools,
-and the open reader refreshes.
-
-- Paperfact cannot wake a host. The request waits until the reader asks the
-  host to work, or until the host's own scheduler runs. The app says so where
-  the request is shown.
-- Nightly analysis moves to this queue: the host's scheduler drains it, and
-  Paperfact's own scheduled task is no longer needed for AI work.
-- A pending request can be cancelled in the app.
+The queue has one use: scheduled analysis. Papers due for ahead-of-time
+analysis are queued, and the host's own scheduler lists them
+(`research.tasks.pending`) and answers each through the feature's `task` and
+`save` tools. Paperfact's own scheduled task is then not needed for AI work.
+Paperfact cannot wake a host.
 
 Done: the queue and `research.tasks.pending`, for deep dives and reference
-analyses. Not done: assigning a feature to a host in settings, so nothing in the
-app adds to the queue yet; questions are not queued.
+analyses. Not done: scheduled analysis adding to the queue.
 
 ## 2. Settings page (0.5.0, layout proposed)
 
@@ -77,21 +77,23 @@ third dialog.
 
 Proposed: one page, two parts.
 
-**AI sources**, three groups whose rows have the same shape (name, state, one
-action):
+**AI sources** for the app's own buttons:
 
 | Group | Rows | Billing shown |
 | --- | --- | --- |
-| Subscription sign-in (runs in the app) | Claude, Codex | Counts against the plan |
-| Agent host (picks up tasks through MCP) | agy, Claude Code, Codex | The host's own account |
+| Subscription sign-in | Claude, Codex | Counts against the plan |
 | API endpoint | Anthropic key; OpenAI-compatible endpoint | Billed per use |
 
 **Features**, one table: feature, source, model. The first row is the default;
 every other row follows it until changed.
 
-- For an agent-host source the model column reads "chosen by the host".
-- A feature without host tools cannot be assigned to a host; the option is
-  disabled and says why.
+**Connect an agent host**, a separate section that only gives connection
+settings and instructions for agy, Claude Code and Codex. It is not a source in
+the table above.
+
+Done: the picker's three buttons are Claude, Codex and **API 端點**; the last
+lists every saved endpoint and opens the connection form to add one. Not done:
+merging the three dialogs into one page, and the agent-host section.
 
 ### OpenAI-compatible endpoint
 
@@ -101,8 +103,8 @@ self-hosted services.
 
 ### Gemini
 
-- The "Gemini API 金鑰" button and preset are removed. No Gemini CLI or agy
-  backend exists or will be added.
+- Done: the "Gemini API 金鑰" button and preset are removed. No Gemini CLI or
+  agy backend exists or will be added.
 - A Gemini subscription is used from agy, as an agent host.
 - A Gemini key connection saved earlier keeps working and is listed as an
   ordinary OpenAI-compatible endpoint.
@@ -110,11 +112,10 @@ self-hosted services.
 ### Connecting agy
 
 Paperfact never handles the agy sign-in; the reader signs in inside agy. The
-"agy" row offers:
+agent-host section offers:
 
 - the MCP server entry to add to agy's configuration,
-- a short instruction file for agy describing the queue and the tools,
-- the time of the last request agy picked up, as the connection state.
+- a short instruction file for agy describing the tools.
 
 Check agy's current MCP configuration path against its documentation before
 writing the instructions; this has not been tested with agy yet.

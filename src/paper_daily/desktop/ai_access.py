@@ -23,7 +23,7 @@ def readiness(cfg):
             return ""
         return reason
     if cfg.backend == "none":
-        return "尚未選擇 AI 服務，請先登入 Claude、Codex 或 Gemini。"
+        return "尚未選擇 AI 服務，請先登入 Claude 或 Codex，或新增 API 端點。"
     if cfg.requires_key and not cfg.api_key:
         return "此 API 連線尚未設定金鑰；也可以改用已登入的 AI 帳號。"
     return ""

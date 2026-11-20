@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from paper_daily import ai_accounts, ai_choices, llm, model_catalog
+from paper_daily import ai_accounts, ai_choices, ai_providers, llm, model_catalog
 from paper_daily.ai_types import Settings
 from paper_daily.desktop.ai_dialog import TASK_LABELS
 from paper_daily.desktop.ask import AskRunner
@@ -175,7 +175,8 @@ class AITasksDialog(QDialog):
     def _queue_default(self):
         cfg = llm.settings()
         key = ai_choices.account_key(cfg)
-        if cfg.backend in ("cli", "codex") and key not in self._cache:
+        listed = cfg.backend in ("cli", "codex") or ai_choices.uses_key(cfg)
+        if listed and key not in self._cache:
             self._queue.setdefault(key, cfg)
             self._schedule()
 
@@ -276,7 +277,8 @@ class AITasksDialog(QDialog):
         key = ai_choices.account_key(cfg)
         self._fill(task, self._cache.get(key, model_catalog.models(cfg)), selected)
         self._resolved(task)
-        if cfg.backend in ("cli", "codex") and key not in self._cache:
+        listed = cfg.backend in ("cli", "codex") or ai_choices.uses_key(cfg)
+        if listed and key not in self._cache:
             self._queue[key] = cfg
             self._schedule()
 
@@ -300,10 +302,12 @@ class AITasksDialog(QDialog):
         if key in self._cache:
             self._schedule()
             return
-        self.status.setText(f"正在取得 {ai_choices.LABELS[cfg.backend]} 模型清單…")
+        self.status.setText(f"正在取得 {ai_choices.brand(cfg)} 模型清單…")
 
         def fetch(_prompt):
             try:
+                if ai_choices.uses_key(cfg):
+                    return json.dumps(ai_providers.list_models(cfg)[0]), "ok"
                 return json.dumps(ai_accounts.models(cfg)), "ok"
             except (ValueError, OSError, TimeoutError):
                 return None, "模型清單暫時無法取得；可保留原模型或自行輸入名稱。"

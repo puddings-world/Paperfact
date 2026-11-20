@@ -33,13 +33,11 @@ sources, export a PDF, or create an editable Google Slides copy. [Slides guide �
 AI screenshots use demo accounts and simulated usage; model access depends on your
 provider. Reading saved research needs no AI login.
 
-**Gemini:** choose **Gemini → 輸入 API 金鑰…** and paste a key from
-[Google AI Studio](https://aistudio.google.com/app/apikey); Gemini 4 Argon is offered when
-your key's tier includes it. Keys are billed per use; an AI Pro or Ultra subscription
-does not cover them, because Google ended Gemini CLI for personal accounts and does
-not allow third-party tools to use Antigravity's subscription login. To use a Gemini
-subscription, work in agy and let it call Paperfact's MCP tools
-([AI access policy](docs/ai-access-policy.md)).
+**Three kinds of source:** **Claude** and **Codex** use your subscription sign-in;
+**API 端點** adds any key or address (Anthropic, an OpenAI-compatible service, local
+Ollama), billed by that service. **Gemini subscriptions** are used from agy, which
+calls Paperfact's MCP tools, because Google does not allow third-party tools to use
+Antigravity's subscription login ([AI access policy](docs/ai-access-policy.md)).
 [Account and model help](docs/ai-setup.md)
 
 For an enrolled v0.5 workspace, replacing an original with `repdf` keeps prior
