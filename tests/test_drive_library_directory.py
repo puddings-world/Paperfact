@@ -188,6 +188,15 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
     assert db(win_path, "SELECT note FROM lists WHERE id='b'") == [("Changed offline on the Mac",)]
     count = len(cloud.objects)
     assert sync(win) == "current" and len(cloud.objects) == count
+    db(win_path, "UPDATE lists SET name='Renamed on desktop' WHERE id='b'")
+    db(mac_path, "UPDATE lists SET note='Description from laptop' WHERE id='b'")
+    sync(mac)
+    sync(win)
+    sync(mac)
+    for path in (win_path, mac_path):
+        assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
+            ("Renamed on desktop", "Description from laptop")
+        ]
     db(win_path, "UPDATE lists SET note='Local candidate' WHERE id='b'")
     db(mac_path, "UPDATE lists SET note='Remote candidate' WHERE id='b'")
     sync(mac)

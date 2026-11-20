@@ -88,6 +88,42 @@ class DriveListHistory:
         )
         return head
 
+    def _read_entry(self, current):
+        directory = self.directory
+        raw = directory.files.read_small(current.reference(), directory.folder, directory.key)
+        item = decode(raw, MAX_INLINE)
+        if (
+            not isinstance(item, dict)
+            or set(item)
+            != {"format", "library_id", "list_id", "generation", "previous", "operations"}
+            or item["format"] != FORMAT
+            or item["list_id"] != self.list_id
+            or item["library_id"] != directory.library_id
+            or item["generation"] != current.generation
+            or encode(item, MAX_INLINE) != raw
+        ):
+            raise ValueError("Invalid selected list history")
+        operations = self._operations(item["operations"])
+        previous = item["previous"]
+        if previous is not None and (
+            not isinstance(previous, dict)
+            or set(previous) != {"generation", "id", "size", "sha256"}
+        ):
+            raise ValueError("Invalid previous list history")
+        parent = ScopeHead(**previous) if previous is not None else None
+        if current.generation != (parent.generation if parent else 0) + 1:
+            raise SyncHistoryUnavailable("List history has a generation gap")
+        return parent, operations
+
+    def applied_payload(self, anchor, *, revision):
+        """Read the exact common version only when both copies have changed."""
+        self._check(revision)
+        if self.directory.files.account()["id"] != self.store.owner_id:
+            raise PermissionError("The selected Google account changed")
+        _, operations = self._read_entry(anchor)
+        self._check(revision)
+        return operations[-1]["payload"] if operations[-1]["action"] == "put" else None
+
     def changes(self, anchor, *, revision):
         self._check(revision)
         if anchor is not None and not isinstance(anchor, ScopeHead):
@@ -110,30 +146,9 @@ class DriveListHistory:
                 or used + current.size > 8 * 1024**2
             ):
                 raise SyncHistoryUnavailable("Cannot prove the selected list history prefix")
-            raw = directory.files.read_small(current.reference(), directory.folder, directory.key)
-            used += len(raw)
-            item = decode(raw, MAX_INLINE)
-            if (
-                not isinstance(item, dict)
-                or set(item)
-                != {"format", "library_id", "list_id", "generation", "previous", "operations"}
-                or item["format"] != FORMAT
-                or item["list_id"] != self.list_id
-                or item["library_id"] != directory.library_id
-                or item["generation"] != current.generation
-                or encode(item, MAX_INLINE) != raw
-            ):
-                raise ValueError("Invalid selected list history")
-            result.append(self._operations(item["operations"]))
-            previous = item["previous"]
-            if previous is not None and (
-                not isinstance(previous, dict)
-                or set(previous) != {"generation", "id", "size", "sha256"}
-            ):
-                raise ValueError("Invalid previous list history")
-            parent = ScopeHead(**previous) if previous is not None else None
-            if current.generation != (parent.generation if parent else 0) + 1:
-                raise SyncHistoryUnavailable("List history has a generation gap")
+            parent, operations = self._read_entry(current)
+            used += current.size
+            result.append(operations)
             current = parent
         self._check(revision)
         return entry.head, [op for batch in reversed(result) for op in batch]

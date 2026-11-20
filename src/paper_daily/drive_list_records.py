@@ -51,13 +51,22 @@ def exchange_list(directory, store, list_id, revision, ticket):
     remote = changes[-1]["payload"] if changes else None
     if local is None and base is not None:
         raise ValueError("A retained list was removed locally; review before restoring")
-    if remote is not None and local is not None and remote != local and _digest(local) != base:
-        raise ValueError("Both copies have different list details; both versions were retained")
     target = remote if remote is not None else local
+    if remote is not None and local is not None and remote != local and _digest(local) != base:
+        original = history.applied_payload(anchor, revision=revision) if anchor else None
+        if original is None or _digest(original) != base:
+            raise ValueError("No verified common list details; both versions were retained")
+        target = dict(remote)
+        for field in ("name", "note"):
+            if local[field] == original[field]:
+                continue
+            if remote[field] != original[field] and remote[field] != local[field]:
+                raise ValueError(f"Conflicting list {field}; both versions were retained")
+            target[field] = local[field]
     if target is None:
         return "waiting_source"
     digest = _digest(target)
-    if remote is None and digest != base:
+    if (remote is None and digest != base) or (remote is not None and target != remote):
         token = _digest([store.context, list_id, head.record() if head else None, digest])
         op = dict(
             version=1,
@@ -71,7 +80,7 @@ def exchange_list(directory, store, list_id, revision, ticket):
             depends_on=None,
             payload=target,
         )
-        head = history.append(anchor, [op], revision=revision)
+        head = history.append(head, [op], revision=revision)
     if head == anchor and digest == base:
         return "current"
     # A receipt is committed last. After a crash the exact local payload can be
