@@ -243,6 +243,38 @@ Additional AI analysis is a separate action. The older `import-list` command sti
 uses Paperfact's configured AI to parse rough references.
 [How MCP works here, with a call-flow diagram →](docs/local-integration.md)
 
+### Who runs the model
+
+The same analysis can be produced in two ways. Either way the result passes the
+same checks and is stored in the same place.
+
+```mermaid
+flowchart TB
+    subgraph App["A. You click a button in Paperfact"]
+        direction LR
+        Button["深入分析 / 問 AI"] --> Run["Paperfact starts Claude Code or Codex,<br/>or calls your API endpoint"]
+    end
+    subgraph Host["B. You ask an agent host (v0.5 development)"]
+        direction LR
+        Ask["agy / Claude Code / Codex"] --> Task["MCP: get the task<br/>(prompt and paper text)"]
+        Task --> Own["The host answers<br/>with its own account"]
+    end
+    Run --> Save["Checks and saves the answer"]
+    Own --> Save
+    Save --> Data[("Your local workspace")]
+    Data -. "notice: saved text changed" .-> Reader["Open reader"]
+```
+
+| | A. In the app | B. From an agent host |
+|---|---|---|
+| Who starts it | You, with a button | You, by asking the agent, or the agent's own scheduler |
+| Whose account answers | The one chosen in Paperfact's AI settings | The agent host's own sign-in |
+| When the result appears | In the open paper when the job ends | A notice in the open paper; **載入已存更新** shows it |
+| Available for | Every AI feature | Deep dive, reference analysis, Q&A |
+
+Use B when a subscription may only be used from its own program, such as a Gemini
+subscription in agy ([AI access policy](docs/ai-access-policy.md)).
+
 ## Version, updates and support
 
 Click the bottom-right version label to copy build details, check for updates,
