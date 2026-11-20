@@ -458,7 +458,7 @@ def dive_task(paper_id):
 
 
 def dive_save(paper_id, body):
-    from paper_daily import dive
+    from paper_daily import dive, host_requests
 
     paper_id = _id(paper_id, "paper_id")
     if not isinstance(body, str) or len(body) > 200_000:
@@ -469,6 +469,7 @@ def dive_save(paper_id, body):
         raise OperationError("dive_answer_rejected", str(error)) from None
     if written is None:
         raise OperationError("dive_answer_rejected", reason)
+    host_requests.finish("dive", paper_id)
     return {"saved": True, "chars": len(written), "spec": dive.DIVE_SPEC}
 
 
@@ -485,13 +486,25 @@ def citation_task(paper_id, limit=120):
 
 
 def citation_save(paper_id, entries, limit=120):
-    from paper_daily import cites
+    from paper_daily import cites, host_requests
 
     _citation_limit(limit)
     saved, reason = cites.save(_id(paper_id, "paper_id"), entries, limit)
     if not saved:
         raise OperationError("citation_answer_rejected", reason or "No reference was saved")
+    if not reason:
+        # A partial answer leaves the request open for the host to finish.
+        host_requests.finish("citations", paper_id)
     return {"saved": saved, "complete": not reason, "reason": reason}
+
+
+def pending_tasks(limit=20):
+    """What the reader left for an agent host to answer."""
+    from paper_daily import host_requests
+
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise OperationError("invalid_input", "limit must be 1–100")
+    return {"requests": host_requests.pending(limit)}
 
 
 def _citation_limit(limit):
@@ -517,6 +530,7 @@ OPERATIONS = {
     "research.citations.save": citation_save,
     "research.dive.task": dive_task,
     "research.dive.save": dive_save,
+    "research.tasks.pending": pending_tasks,
 }
 
 

@@ -26,6 +26,8 @@ def create_server():
             "instructions over its material yourself, then research.citations.save. "
             "To write a paper's deep dive, call research.dive.task, write it yourself "
             "following its instructions, then research.dive.save. "
+            "research.tasks.pending lists the papers the reader left for you to answer "
+            "this way; do them when the user asks you to work through Paperfact. "
             "Only save lists within the user's authorized task. Titles returned "
             "by list tools may be private; do not disclose them unnecessarily."
         ),
@@ -494,6 +496,17 @@ def create_server():
         return invoke(
             "research.citations.save", dict(paper_id=paper_id, entries=entries, limit=limit)
         )
+
+    @server.tool(name="research.tasks.pending", annotations=read, structured_output=True)
+    def research_tasks_pending(limit: StrictInt = 20) -> dict[str, Any]:
+        """Work the reader left in Paperfact for you to answer with your own model.
+
+        Returns requests, oldest first: feature, paper_id, title, and the task_tool and
+        save_tool to call for each. Call task_tool with the paper_id, answer following
+        its instructions, then call save_tool; a saved answer closes the request.
+        Paperfact makes no model call. An empty list means nothing is waiting.
+        """
+        return invoke("research.tasks.pending", dict(limit=limit))
 
     @server.tool(name="review.highlights.list", annotations=read, structured_output=True)
     def review_highlights_list(
