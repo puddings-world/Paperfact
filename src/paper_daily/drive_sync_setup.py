@@ -342,12 +342,39 @@ class DriveSetup:
         )
         return self._exchange_saved(result, ticket, progress, selection=accepted)
 
+    def adopt_membership_sync(self, list_id, proposal, ticket, progress):
+        """Upgrade this directory only for the reviewed, still-pending local removals."""
+        from paper_daily.drive_membership_history import DriveMembershipChanges, removal_operation
+
+        self.check(ticket)
+        if self._library_view is None:
+            raise ValueError("Review the list settings before upgrading")
+        files, store, saved, remote, *_ = self._library_view
+        if (remote is None or remote.membership_changes or files is not self.files
+                or local_binding(self.workspace.path) or store.owner_id != self.account["id"]
+                or list_id not in saved.selected or proposal["binding"] != (
+                    store.context, remote.folder, remote.head, list_id, saved.revision)):
+            raise ValueError("The reviewed library changed; sync again")
+        files.cancelled = lambda: ticket.cancelled
+        upgraded = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
+                                  membership_changes=True)
+        history = DriveMembershipChanges(upgraded, store, list_id, revision=saved.revision)
+        operations = [removal_operation(history.creations[key], store.context)
+                      for key in proposal["members"] if key in history.creations]
+        if (not operations or [op["operation_id"] for op in operations] != proposal["ids"]
+                or any(e.membership_changes_head for e in upgraded.read().directory.lists)):
+            raise ValueError("The reviewed removals changed; sync again")
+        ticket.check()
+        history.append(None, operations[:history.max_operations], revision=saved.revision)
+        return self.sync_saved_library(ticket, progress)
+
     def _exchange_saved(self, result, ticket, progress, *, selection=None):
         from paper_daily.drive_list_records import (
             ListDetailsConflict,
             ListReviewRequired,
             exchange_list,
         )
+        from paper_daily.drive_membership_intent import MembershipRemovalReview
 
         _, store, saved, directory, *_ = self._library_view
         selection = saved if selection is None else selection
@@ -356,6 +383,7 @@ class DriveSetup:
         from paper_daily.drive_reader_notes import NoteEditConflict, exchange_reader_notes
 
         reviews = {}
+        upgrades = {}
         list_conflicts = []
         reading_conflicts = set()
         note_conflicts = []
@@ -404,6 +432,15 @@ class DriveSetup:
                             reviews[list_id] = " · ".join(filter(None, reasons))
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
+            except MembershipRemovalReview as exc:
+                reviews[list_id] = str(exc)
+                if not directory.membership_changes and exc.missing == len(exc.operations):
+                    upgrades[list_id] = {
+                        "binding": (store.context, directory.folder, directory.head,
+                                    list_id, selection.revision),
+                        "ids": [op["operation_id"] for op in exc.operations],
+                        "members": [op["entity_id"] for op in exc.operations],
+                    }
             except ListDetailsConflict as exc:
                 reviews[list_id] = str(exc)
                 list_conflicts.append(list_id)
@@ -417,7 +454,8 @@ class DriveSetup:
                 reviews[list_id] = str(exc)
         self.check(ticket)
         self._pdf_review_titles = pdf_titles
-        return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
+        return {**self.read_library(ticket), "reviews": reviews, "membership_upgrades": upgrades,
+                "note_conflicts": note_conflicts,
                 "list_conflicts": list_conflicts, "reading_conflicts": sorted(reading_conflicts),
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 

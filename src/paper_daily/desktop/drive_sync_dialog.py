@@ -155,6 +155,10 @@ class DriveSyncDialog(QDialog):
         content_row.addWidget(self.pdf_toggle)
         content_row.addWidget(self.dive_toggle)
         layout.addLayout(content_row)
+        self._membership_upgrades = {}
+        self.upgrade_removals = QPushButton(self.tr("Sync paper removals…", "同步論文移除…"))
+        self.upgrade_removals.clicked.connect(self._adopt_removals)
+        layout.addWidget(self.upgrade_removals)
         self.compare_list = QPushButton(self.tr("Compare list details", "比較清單名稱與說明"))
         self.compare_list.clicked.connect(lambda: self._review_notes(feature="list"))
         layout.addWidget(self.compare_list)
@@ -369,6 +373,7 @@ class DriveSyncDialog(QDialog):
         previous = self.directory_lists.currentItem()
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)
+        self._membership_upgrades = library.get("membership_upgrades", {})
         self._note_lists = set(library.get("note_lists", ()))
         self._pdf_lists = set(library.get("pdf_lists", ()))
         self._pdf_review_titles = library.get("pdf_review_titles", {})
@@ -438,6 +443,9 @@ class DriveSyncDialog(QDialog):
         self.dive_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.upgrade_removals.setVisible(
+            self._ordinary_library and list_id in self._membership_upgrades)
+        self.upgrade_removals.setEnabled(self.sync_lists.isEnabled())
         self.compare_list.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.compare_list.setEnabled(self.sync_lists.isEnabled())
         self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists)
@@ -452,6 +460,28 @@ class DriveSyncDialog(QDialog):
         self.keep_syncing.setEnabled(
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
+
+    def _adopt_removals(self):
+        item = self.directory_lists.currentItem()
+        if not item or not self.sync_lists.isEnabled():
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        proposal = self._membership_upgrades.get(key)
+        if not proposal:
+            return
+        count = len(proposal["ids"])
+        if QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr(f"Sync {count} paper removal(s) from this list? This upgrades your whole "
+                    "Drive library. Update Paperfact on every device first. Older versions "
+                    "will stop syncing. Papers and notes stay in your library.",
+                    f"同步這份清單的 {count} 筆移除？這會升級整個 Drive 研究資料庫。"
+                    "請先更新每台裝置上的 Paperfact，舊版將無法同步。論文及筆記會保留。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes:
+            self._start("sync_saved", lambda ticket, progress:
+                        self.service.adopt_membership_sync(key, proposal, ticket, progress))
 
     def _review_notes(self, *, feature="note"):
         item = self.directory_lists.currentItem()

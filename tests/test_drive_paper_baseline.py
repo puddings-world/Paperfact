@@ -576,6 +576,62 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                             (peer_id,)).fetchone() == (4,)
 
 
+def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+    from test_sync_connection_dialog import wait
+
+    from paper_daily import drive_sync_setup
+    from paper_daily.desktop.drive_sync_dialog import DriveSyncDialog
+    from paper_daily.drive_membership_intent import remove_selected
+    from paper_daily.workspace_sync import SyncSession
+
+    app = QApplication.instance() or QApplication([])
+    cloud = Cloud()
+    files = authority(cloud, tmp_path / "authority").files
+    monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **kw: files)
+    setup = drive_sync_setup.DriveSetup(
+        source, profiles=tmp_path / "profiles", cache=tmp_path / "cache",
+        authorize=lambda **kw: files.session,
+    )
+    owner = QWidget()
+    view = DriveSyncDialog(SyncSession(source), owner, owner=owner,
+                           service_factory=lambda *a, **kw: setup)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
+    try:
+        view.show()
+        view.login.click()
+        wait(app, lambda: not view.busy)
+        view.directory_lists.item(0).setCheckState(Qt.CheckState.Checked)
+        view.save_selection.click()
+        wait(app, lambda: not view.busy)
+        view.sync_lists.click()
+        wait(app, lambda: not view.busy)
+        assert not view.upgrade_removals.isVisible()
+        with closing(sqlite3.connect(source)) as conn, conn:
+            assert remove_selected(conn, "list", ["paper"]) == 1
+        view.sync_lists.click()
+        wait(app, lambda: not view.busy)
+        assert view.upgrade_removals.isVisible()
+        before = dict(cloud.objects)
+        with monkeypatch.context() as cancel:
+            cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+            view.upgrade_removals.click()
+        assert not view.busy and cloud.objects == before
+        view.upgrade_removals.click()
+        view.upgrade_removals.click()
+        wait(app, lambda: not view.busy)
+        assert not view.upgrade_removals.isVisible(), view.status.text()
+        directory = setup._library_view[3]
+        assert directory.read().directory.lists[0].membership_changes_head.generation == 1
+        with closing(sqlite3.connect(source)) as conn:
+            assert not conn.execute("SELECT 1 FROM list_papers").fetchone()
+            assert conn.execute("SELECT 1 FROM notes WHERE paper_id='paper'").fetchone()
+    finally:
+        view.close()
+        owner.close()
+
+
 def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
     source, tmp_path, monkeypatch
 ):
