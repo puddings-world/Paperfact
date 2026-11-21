@@ -1,6 +1,8 @@
 # Paperfact mobile reader
 
 Dependency-free PWA implementation for the private v0.5 development protocol.
+The list shows how many current PDFs are saved on this device and marks each paper individually. These indicators use the locally verified copy of the current original.
+
 Native Lineage cards offer exact-original PDF links, verified offline reading and
 explicit download. Imported saved-report metadata alone grants no source bytes.
 See [source-reading evidence and limits](../docs/testing/mobile-lineage-originals-candidate.md).

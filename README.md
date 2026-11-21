@@ -344,6 +344,7 @@ installed-device acceptance remain open.
 The [private deployment review](docs/gcp-sync-pilot-plan.md#a-domain-is-optional-for-the-private-pilot)
 can use an owned hostname or a reserved public IPv4 with trusted HTTPS; a domain
 purchase is not required. Its renderer does not create resources or certificates.
+The mobile list shows a verified offline PDF count and marks which originals are saved on this device.
 The [PWA deployment artifact](docs/sync-service-admin.md#build-and-verify-the-public-pwa-artifact)
 is built with `node scripts/build_mobile.mjs --output DIR`; verify using
 `node scripts/build_mobile.mjs --verify DIR --expect SHA256` (`--help` lists options).

@@ -282,6 +282,7 @@ function render() {
   if(paper) {
     main.append(
     button('← ' + t('back'), () => select(view.list), {
+      id: 'back-to-list',
       class: 'quiet'
     }),
     el('p', {
@@ -389,6 +390,13 @@ function render() {
     }, el('div', {
       class: 'empty-symbol'
     }, '◇'), t('empty')));
+    const localPdfs = new Set();
+    for (const entry of selected) {
+      const original = documentTarget(state, entry.id);
+      if (original && state.files[original.payload.sha256]?.verified) localPdfs.add(entry.id);
+    }
+    if (selected.length) main.append(el('p', {class:'subtitle', 'data-offline-summary':''},
+      t('pdfsOnDevice') + ' · ' + localPdfs.size + '/' + selected.length));
     selected.forEach((entry, index) => {
       const owner = collection ?? data.lists.find(l => l.members.some(m => m.paper_id === entry.id));
       const member = owner?.members.find(m => m.paper_id === entry.id);
@@ -403,13 +411,13 @@ function render() {
       }, entry.title, pinBadge(member, el, t)),
       el('div', {
         class: 'paper-meta'
-      }, [entry.authors?.[0], entry.year].filter(Boolean).join(' · '))
+      }, [entry.authors?.[0], entry.year, t(localPdfs.has(entry.id) ? 'pdfSaved' : 'pdfNotSaved')].filter(Boolean).join(' · '))
       ), el('span', {
         class: 'pill'
       }, t(member?.state === 'read' ? 'read': 'pendingLabel'))],
       () => select(owner?.id ?? null, entry.id),
       {
-        class: 'paper-card'
+        class: 'paper-card', 'data-pdf-local': String(localPdfs.has(entry.id))
       }
       ));
     });

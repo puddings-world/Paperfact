@@ -213,6 +213,9 @@ async function offlineReadingMainHook() {
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/index.html`});
   await wait('!!document.querySelector(".paper-card")','demo startup');
+  if (!await evaluate(`document.querySelector('.paper-card').dataset.pdfLocal === 'false' &&
+      document.querySelector('[data-offline-summary]').textContent.includes('0/')`))
+    throw Error('An original appeared to be saved before preparation');
   await evaluate('document.querySelector(".paper-card").click();document.querySelector("#tab-pdf").click()');
   await wait('!!document.querySelector("#prepare-reading-offline:not(:disabled)")','preparation enabled');
   await evaluate('document.querySelector("#prepare-reading-offline").click();document.querySelector("#prepare-reading-offline").click()');
@@ -264,6 +267,10 @@ async function offlineReadingMainHook() {
   const persisted=await evaluate(`(async()=>{const {IndexedStore}=await import('./store.mjs');const {Engine}=await import('./engine.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');const e=new Engine(s,{});try{const v=await s.read();const id=Object.values(v.entities).find(x=>x.operation.entity_type==='paper').operation.entity_id;const r=await e.prepareOffline(id);return {ready:r.ready,verified:r.verified_targets};}finally{e.disconnect();s.close();}})()`);
   const after=await evaluate(stateExpression);
   if(!persisted.ready||persisted.verified!==1||after.files!==1||after.outbox!==0||browserErrors.length)throw Error('Offline verification failed or changed research');
+  await evaluate("document.querySelector('#back-to-list').click()");
+  await wait(`document.querySelector('.paper-card')?.dataset.pdfLocal === 'true' &&
+      document.querySelector('[data-offline-summary]')?.textContent.includes('1/')`,
+      'saved PDF on the offline list');
   const reopenStorageRequests=await evaluate('window.__storageRequests');
   if(reopenStorageRequests!==0)throw Error('Offline reopening requested storage permission');
   const result={status:'passed',journey:'offline-reading',artifact:process.env.PAPERFACT_TEST_ARTIFACT_ID??null,before,persisted,after,storageProtection,reopenStorageRequests,viewports,errors:browserErrors,physical_device_verified:false};
