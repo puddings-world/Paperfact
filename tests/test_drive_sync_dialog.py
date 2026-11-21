@@ -578,3 +578,31 @@ def test_linked_workspace_opens_original_library_without_exchanging_research(
     view.open_library.click()
     assert [target.database_path for target in opened] == [original / "papers.db"]
     assert view.disposed and view.session.workspace.path == linked
+
+
+def test_minimized_sync_keeps_polling_and_restore_brings_next_exchange_forward(dialog):
+    app, view, setup = dialog
+    owner = view.owner
+    runner = view.background
+    setup.files = object()
+    calls = []
+
+    def exchange(ticket, progress):
+        calls.append(ticket)
+        return {"items": [{"id": "a", "selected": True}]}
+
+    setup.sync_saved_library = exchange
+    view.hide()
+    owner.showMinimized()
+    app.processEvents()
+    assert runner.enable(setup)
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert len(calls) == 1 and runner.timer.isActive() and runner.timer.interval() == 120000
+    owner.showNormal()
+    app.processEvents()
+    assert 0 <= runner.timer.remainingTime() <= 1100
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert len(calls) == 2 and runner.timer.interval() == 30000
+    runner.stop()

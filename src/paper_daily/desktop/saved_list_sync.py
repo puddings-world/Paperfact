@@ -4,6 +4,9 @@ from PySide6.QtCore import QEvent, QObject, QTimer, Signal, Slot
 
 from paper_daily.desktop.sync_connection_dialog import SyncWorker, _background_busy
 
+READING_INTERVAL_MS = 30_000
+MINIMIZED_INTERVAL_MS = 120_000
+
 
 class SavedListSync(QObject):
     changed = Signal()
@@ -169,13 +172,19 @@ class SavedListSync(QObject):
                 self.state = "waiting"
                 if conflicts:
                     self.state = (conflicts[0] if len(conflicts) == 1 else "mixed") + "_conflict"
-                self.timer.start(30000)
+                self.timer.start(MINIMIZED_INTERVAL_MS if self.parent().isMinimized()
+                                 else READING_INTERVAL_MS)
         worker.deleteLater()
         self.changed.emit()
         if self.closing:
             QTimer.singleShot(0, self.parent().close)
 
     def eventFilter(self, obj, event):
+        if (obj is self.parent() and event.type() == QEvent.Type.WindowStateChange
+                and not obj.isMinimized() and self.timer.isActive()
+                and self.timer.interval() == MINIMIZED_INTERVAL_MS
+                and self.timer.remainingTime() > 1000):
+            self.timer.start(1000)
         if (obj is self.parent() and event.type() == QEvent.Type.Close
                 and (self.worker is not None or self.service is not None)):
             self.closing = self.worker is not None

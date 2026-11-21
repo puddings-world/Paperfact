@@ -12,6 +12,7 @@ from paper_daily import (
     source_snapshots,
 )
 from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_paper_baseline import published_bindings
 from paper_daily.reading_position_ops import validate_receipt
 from paper_daily.research_lifecycle import parent_lifecycle
 from paper_daily.sync_files import canonical_json
@@ -36,9 +37,8 @@ def publish_recorded(history, tips, revision, ticket):
                 raise ListReviewRequired("Research changed during PDF page sync; sync again")
 
         with _read(store.path) as settings:
-            bindings = {local: remote for remote, local in settings.execute(
-                "SELECT remote_id,local_id FROM published_paper_ids"
-            ) if remote in active} if active else {}
+            bindings = {local: remote for remote, local in
+                        published_bindings(settings, active).items()}
         rows = conn.execute(
             "SELECT p.paper_id,p.document_hash,p.page,p.recorded_at,p.method "
             "FROM list_papers m JOIN reading_positions p ON m.paper_id=p.paper_id "

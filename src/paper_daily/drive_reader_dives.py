@@ -8,6 +8,7 @@ from dataclasses import replace
 from paper_daily.drive_content_receipts import confirmed_sends, remember_batch
 from paper_daily.drive_list_history import DriveListHistory, DriveListPapers
 from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_paper_baseline import published_bindings
 from paper_daily.drive_sync_files import MAX_INLINE, encode
 from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
 from paper_daily.sync_content import content_id
@@ -127,7 +128,7 @@ def _reconcile(history, records, revision, ticket, sent=()):
                 raise ListReviewRequired("Use enrolled workspace sync for saved explanations")
             conn.execute("CREATE TABLE IF NOT EXISTS drive_dive_bases(context TEXT,list_id TEXT,"
                          "paper TEXT,op TEXT NOT NULL,PRIMARY KEY(context,list_id,paper))")
-            local_ids = dict(settings.execute("SELECT remote_id,local_id FROM published_paper_ids"))
+            local_ids = published_bindings(settings, history.members)
             largest, total = conn.execute(
                 "SELECT max(length(CAST(body AS BLOB))),sum(length(CAST(body AS BLOB))) "
                 "FROM dives d JOIN list_papers m ON m.paper_id=d.paper_id WHERE m.list_id=?",

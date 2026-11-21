@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from paper_daily.drive_content_receipts import matches_upload
 from paper_daily.drive_list_history import DriveListReading
 from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_paper_baseline import published_bindings
 from paper_daily.drive_sync_files import encode
 from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
 from paper_daily.sync_journal import canonical_operation
@@ -162,7 +163,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(revision)
-        local_ids = dict(settings.execute("SELECT remote_id,local_id FROM published_paper_ids"))
+        local_ids = published_bindings(settings, {m[0] for m in history.memberships.values()})
         uri = store.workspace.path.as_uri() + "?mode=rw"
         with closing(sqlite3.connect(uri, uri=True, timeout=0.5)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")

@@ -22,6 +22,14 @@ class BibliographyAdvanced(DriveChanged):
     """A peer published between the receive and publish steps."""
 
 
+def published_bindings(settings, paper_ids):
+    """Resolve only this list's remote paper IDs through the binding index."""
+    from paper_daily.document_reader import _matching
+
+    return dict(_matching(settings, "SELECT remote_id,local_id FROM published_paper_ids "
+                          "WHERE remote_id IN ({})", paper_ids, whole=True))
+
+
 def _put(store, kind, identity, incarnation, payload, parents):
     op = dict(
         version=2,

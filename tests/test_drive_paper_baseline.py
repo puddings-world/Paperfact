@@ -1977,3 +1977,16 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(
         conn.commit()
         assert not for_original(*scope, local_id, digest)
         assert not jump(updated) and visited == [1]
+
+
+def test_published_bindings_read_only_requested_papers_across_query_batches():
+    from paper_daily.drive_paper_baseline import published_bindings
+
+    with closing(sqlite3.connect(":memory:")) as settings:
+        assert published_bindings(settings, []) == {}
+        settings.execute("CREATE TABLE published_paper_ids("
+                         "remote_id TEXT PRIMARY KEY,local_id TEXT)")
+        rows = {str(i): f"local-{i}" for i in range(3000)}
+        settings.executemany("INSERT INTO published_paper_ids VALUES(?,?)", rows.items())
+        wanted = list(rows)[::4]
+        assert published_bindings(settings, wanted + ["absent"]) == {k: rows[k] for k in wanted}

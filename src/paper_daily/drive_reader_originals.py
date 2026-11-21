@@ -12,6 +12,7 @@ from pathlib import Path, PureWindowsPath
 from paper_daily.document_reader import _owned_path, _safe_name
 from paper_daily.drive_list_originals import DriveListOriginals
 from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_paper_baseline import published_bindings
 from paper_daily.drive_sync_objects import MAX_OBJECT
 from paper_daily.file_change import version
 from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
@@ -96,9 +97,8 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
             "SELECT paper_id FROM list_papers WHERE list_id=?", (list_id,)
         )}
         with _read(store.path) as settings:
-            bindings = {local: paper for paper, local in settings.execute(
-                "SELECT remote_id,local_id FROM published_paper_ids"
-            ) if local in selected} if index.members else {}
+            bindings = {local: paper for paper, local in
+                        published_bindings(settings, index.members).items()}
         if set(bindings) != selected or set(bindings.values()) != set(index.members):
             raise ListReviewRequired("Refresh the bibliography before synchronizing originals")
         # A single enumeration avoids one failed filesystem lookup per missing original.
