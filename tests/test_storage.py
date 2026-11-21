@@ -91,6 +91,29 @@ def test_a_paper_claimed_after_planning_is_not_deleted(workspace):
     assert (root / "pdf" / "ref_stray.pdf").exists()
 
 
+@pytest.mark.parametrize("report", ["folders", "by_list"])
+def test_storage_report_survives_a_file_disappearing_after_stat(workspace, monkeypatch, report):
+    conn, root = workspace
+    pdf = root / "pdf" / "ref_listed.pdf"
+    path_type = type(pdf)
+    original = path_type.stat
+
+    def disappearing_stat(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        if path == pdf:
+            path.unlink()
+        return result
+
+    monkeypatch.setattr(path_type, "stat", disappearing_stat)
+    if report == "folders":
+        sizes = {name: size for name, size, _ in storage.folders(root)}
+        assert sizes["pdf"] >= 4 * 400
+    else:
+        sizes = {name: size for name, _, size in storage.by_list(conn)}
+        assert sizes["Cataract"] >= 7
+    assert not pdf.exists()
+
+
 def test_disk_use_is_reported_per_list(workspace, monkeypatch):
     conn, root = workspace
     rows = {name: (papers, size) for name, papers, size in storage.by_list(conn)}

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import stat
 import time
 from dataclasses import dataclass, field
 from functools import cache
@@ -44,12 +45,26 @@ _CLAIMS = (
 )
 
 
+def _file_size(path: Path) -> int | None:
+    try:
+        info = path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    return info.st_size if stat.S_ISREG(info.st_mode) else None
+
+
 def _size(path: Path) -> tuple[int, int]:
     """(bytes, files) under a file or folder."""
-    if path.is_file():
-        return path.stat().st_size, 1
-    files = [p for p in path.rglob("*") if p.is_file()]
-    return sum(p.stat().st_size for p in files), len(files)
+    size = _file_size(path)
+    if size is not None:
+        return size, 1
+    total = count = 0
+    for child in path.rglob("*"):
+        size = _file_size(child)
+        if size is not None:
+            total += size
+            count += 1
+    return total, count
 
 
 def folders(data_dir: Path = DATA_DIR) -> list[tuple[str, int, int]]:
@@ -145,7 +160,7 @@ def claimed(conn: sqlite3.Connection) -> set[str]:
 def _paper_bytes(paper_id: str) -> int:
     paths = [PDF_DIR / f"{_safe_name(paper_id)}.pdf"]
     paths += [DATA_DIR / p for p in bundle._paper_files(paper_id)]
-    return sum(p.stat().st_size for p in paths if p.is_file())
+    return sum(size for path in paths if (size := _file_size(path)) is not None)
 
 
 def by_list(conn: sqlite3.Connection) -> list[tuple[str, int, int]]:
