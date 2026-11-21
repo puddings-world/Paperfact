@@ -48,6 +48,7 @@ class DriveSetup:
         self.cache = Path(cache or user_cache_dir() / "drive-setup")
         self.files = self.account = None
         self._library_view = None
+        self._list_target = None
         self._consent = None
         self._pdf_versions = {}
         self._pdf_review_titles = {}
@@ -60,6 +61,7 @@ class DriveSetup:
         self.check(ticket)
         self.files = self.account = self._library_view = None
         self._pdf_review_titles.clear()
+        self._list_target = None
         progress({"stage": "google_login"})
         session = self.authorize(cancelled=lambda: ticket.cancelled)
         self.check(ticket)
@@ -90,7 +92,7 @@ class DriveSetup:
             "library": library,
         }
 
-    def read_library(self, ticket):
+    def read_library(self, ticket, *, expected_directory=None):
         """Discover names and device intent without creating or transferring research."""
         self.check(ticket)
         files = self.files
@@ -98,6 +100,12 @@ class DriveSetup:
         directories = files.workspaces(directories=True)
         if len(directories) > 1:
             raise ValueError("Multiple personal library directories found; review them first")
+        expected_directory = expected_directory or self._list_target
+        if expected_directory is not None and (
+            not directories or files.account()["id"] != self.account["id"]
+            or (directories[0]["folder_id"], directories[0]["head_id"]) != expected_directory
+        ):
+            raise ValueError("The selected Drive directory changed; reopen the list settings")
         library_id = "personal"
         store = DeviceSelection(
             self.workspace.path,
@@ -120,6 +128,8 @@ class DriveSetup:
         selection = store.load()
         self.check(ticket)
         self._library_view = (files, store, selection, remote, observation, local, visible)
+        if remote is not None:
+            self._list_target = (remote.folder, remote.head)
         pdf_lists = store.pdf_lists()
         return {
             "ordinary": local_binding(self.workspace.path) is None,
@@ -223,7 +233,7 @@ class DriveSetup:
         self.check(ticket)
         store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket,
                    intermediate=intermediate)
-        return self.read_library(ticket)
+        return self.read_library(ticket, expected_directory=(remote.folder, remote.head))
 
     def apply_library(self, selected, ticket, progress):
         result = self.save_library(selected, ticket, progress, intermediate=True)
@@ -234,6 +244,14 @@ class DriveSetup:
         self.check(ticket)
         if self.files is None or self.account is None:
             raise PermissionError("Sign in to Google Drive first")
+        view = self._library_view
+        if view is None or view[0] is not self.files or view[1].owner_id != self.account["id"]:
+            raise ValueError("Review the list settings before syncing this Google account")
+        remote = view[3]
+        if remote is None:
+            if view[2].selected:
+                raise ValueError("Drive directory missing; reopen the list settings")
+            return {**self.read_library(ticket), "reviews": {}}
         result = self.read_library(ticket)
         _, store, selection, _, observed, *_ = self._library_view
         if not selection.selected or local_binding(self.workspace.path):

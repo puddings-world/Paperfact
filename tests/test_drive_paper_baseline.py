@@ -109,6 +109,22 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
 
     win = login(source, "desktop")
     assert sync(win) == {}
+    # A replacement with the same owner and list IDs still needs a fresh review.
+    find = win.files.workspaces
+    for field in ("folder_id", "head_id"):
+        def replaced(*, directories=False, field=field):
+            rows = find(directories=directories)
+            return [{**row, field: "different-id"} for row in rows] if directories else rows
+
+        with monkeypatch.context() as patch:
+            patch.setattr(win.files, "workspaces", replaced)
+            before = dict(cloud.objects)
+            with pytest.raises(ValueError, match="directory changed"):
+                win.sync_saved_library(Ticket(), lambda _: None)
+            with pytest.raises(ValueError, match="directory changed"):
+                win.read_library(Ticket())
+            assert cloud.objects == before
+    assert not win.sync_saved_library(Ticket(), lambda _: None)["reviews"]
     mac = login(laptop, "laptop-settings")
     assert sync(mac) == {}
     with closing(sqlite3.connect(laptop)) as conn, conn:
