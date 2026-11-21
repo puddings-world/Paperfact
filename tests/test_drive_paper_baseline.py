@@ -270,6 +270,18 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                 "ON r.paper_id=original.paper_id WHERE r.list_id='return' "
                 "AND original.list_id='list'"
             ).fetchone() == (count,)
+    # The same paper added back later must not inherit the retired membership's reading state.
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return','paper',2,'2026-12-01T14:00:00+00:00')")
+    before = dict(cloud.objects)
+    report = win.sync_saved_library(Ticket(), lambda _: None)
+    assert "added again" in report["reviews"]["return"]
+    assert cloud.objects == before
+    with closing(sqlite3.connect(source)) as conn:
+        assert conn.execute("SELECT state,added_at FROM list_papers WHERE list_id='return' "
+                            "AND paper_id='paper'").fetchone() == (
+                                "pending", "2026-12-01T14:00:00+00:00")
 
 
 def test_two_windows_exchange_offline_additions_after_closing_drive_settings(

@@ -86,7 +86,7 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
                 raise ListReviewRequired("Restore the missing paper before publishing its list")
             identity = row["portable"] or str(uuid5(namespace, row["id"]))
             if bindings is not None:
-                bindings.append((identity, row["id"]))
+                bindings.append((identity, row["id"], row["added_at"]))
             member = membership_id(list_id, identity)
             paper = _put(store, "paper", identity, identity, _payload(conn, "papers", row), [])
             link = _put(
@@ -121,12 +121,13 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
     return batches
 
 
-def _membership_digest(ids):
-    digest = hashlib.sha256()
-    for identity in ids:
+def _membership_digest(members):
+    # The prefix invalidates older ID-only caches on their first exchange.
+    digest = hashlib.sha256(b"paperfact.membership-cache.v2")
+    for identity, added_at in members:
         if identity is None:
             raise ListReviewRequired("Restore the missing paper before publishing its list")
-        raw = identity.encode("utf-8")
+        raw = encode([identity, added_at])
         digest.update(len(raw).to_bytes(8, "big"))
         digest.update(raw)
     return digest.digest()
@@ -150,10 +151,10 @@ def _unchanged(store, list_id, head, ticket):
         ).fetchone():
             raise ListReviewRequired("Use the existing enrolled workspace for this library")
         ids = conn.execute(
-            "SELECT p.id FROM list_papers m LEFT JOIN papers p ON p.id=m.paper_id "
+            "SELECT p.id,m.added_at FROM list_papers m LEFT JOIN papers p ON p.id=m.paper_id "
             "WHERE m.list_id=? ORDER BY m.paper_id", (list_id,)
         )
-        digest = _membership_digest(identity for (identity,) in ids)
+        digest = _membership_digest(ids)
     ticket.check()
     return digest == row[0]
 
@@ -174,15 +175,20 @@ def publish_initial(
     if append_new and received_head is not _UNOBSERVED and head != received_head:
         raise BibliographyAdvanced("Another device added papers; receive its new revision")
     if append_new and received:
-        remote_ids = {op["entity_id"] for op in received[::2]}
-        if not remote_ids <= {identity for identity, _ in bindings}:
+        remote_dates = {op["payload"]["paper_id"]: op["payload"]["added_at"]
+                        for op in received[1::2]}
+        if not remote_dates.keys() <= {identity for identity, _, _ in bindings}:
             raise ListReviewRequired("Selected bibliography changed or has removed papers; review")
         list_parent = next(p for p in received[1]["parents"] if p["kind"] == "list")
         pending = []
         for batch in batches:
             additions = []
             for paper, member in zip(batch[::2], batch[1::2], strict=True):
-                if paper["entity_id"] in remote_ids:
+                if paper["entity_id"] in remote_dates:
+                    if remote_dates[paper["entity_id"]] != member["payload"]["added_at"]:
+                        raise ListReviewRequired(
+                            "A paper was added again or its membership date changed; review"
+                        )
                     continue
                 parents = [list_parent if p["kind"] == "list" else p for p in member["parents"]]
                 member = _put(
@@ -232,7 +238,7 @@ def publish_initial(
         )
         for start in range(0, len(bindings), 400):
             ticket.check()
-            group = bindings[start : start + 400]
+            group = [(identity, local) for identity, local, _ in bindings[start : start + 400]]
             slots = ",".join("?" for _ in group)
             known = dict(
                 settings.execute(
@@ -259,7 +265,7 @@ def publish_initial(
     if append_new and head:
         # Cache the exact source snapshot, including when a local edit raced the upload.
         # This is a disposable optimization. Authority and receive receipts stay separate.
-        digest = _membership_digest(sorted(local for _, local in bindings))
+        digest = _membership_digest(sorted((local, added_at) for _, local, added_at in bindings))
         with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
             settings.execute("BEGIN IMMEDIATE")
             store._check()
