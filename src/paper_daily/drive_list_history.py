@@ -324,18 +324,27 @@ class DriveListReading(DriveListHistory):
             raise ValueError("Ambiguous membership history for reading progress")
 
         self.retired = {}
+        self.restored = {}
+        self.prior_lifetimes = set()
         self.removal_head = None
         if directory.membership_changes:
             from paper_daily.drive_membership_history import (
-                DriveMembershipChanges,
+                membership_history,
                 membership_versions,
             )
 
-            changes = DriveMembershipChanges(directory, store, list_id, revision=revision)
+            changes = membership_history(directory, store, list_id, revision=revision)
             if changes.paper_head != self.paper_head:
                 raise DriveChanged("Bibliography changed before reading progress")
             self.removal_head, removals = changes.changes(None, revision=revision)
-            _, retired = membership_versions(changes.creations, removals)
+            latest, retired = membership_versions(changes.creations, removals)
+            self.restored = {m: op for m, op in latest.items() if op != changes.creations[m]}
+            if self.restored:
+                self.memberships = dict(self.memberships)
+                for m, op in self.restored.items():
+                    self.memberships[m] = (*self.memberships[m][:3], op["incarnation"])
+                self.prior_lifetimes = {(op["entity_id"], op["incarnation"]) for op in removals
+                                        if op["action"] == "delete"}
             self.retired = {member: op["operation_id"] for member, op in retired.items()}
 
     def _entry(self, observation):
@@ -349,6 +358,8 @@ class DriveListReading(DriveListHistory):
 
     def _check_publication(self, revision, records):
         super()._check_publication(revision, records)
+        if any(op["incarnation"] != self.memberships[op["entity_id"]][3] for op in records):
+            raise ValueError("Cannot publish reading progress for an earlier membership lifetime")
         if any(op["entity_id"] in self.retired for op in records):
             raise ValueError("Cannot publish reading progress for a retired membership")
 
@@ -371,8 +382,14 @@ class DriveListReading(DriveListHistory):
         for op in records:
             if (op["version"] != 2 or op["entity_type"] != "reading_state"
                     or op["action"] != "put" or op["entity_id"] not in self.memberships
-                    or self.parents_for(op["entity_id"])
-                    != {p["kind"]: p for p in op["parents"]}):
+            ):
+                raise ValueError("Reading progress requires the selected membership parents")
+            identity = op["entity_id"]
+            expected = self.parents_for(identity)
+            if (identity, op["incarnation"]) in self.prior_lifetimes:
+                expected["membership"]["incarnation"] = op["incarnation"]
+            if (expected["membership"]["incarnation"] != op["incarnation"]
+                    or expected != {p["kind"]: p for p in op["parents"]}):
                 raise ValueError("Reading progress requires the selected membership parents")
 
     def _advance(self, entry, head, records):

@@ -128,6 +128,18 @@ def _schema(conn):
                      "WHERE list_id=OLD.list_id AND local_id=OLD.paper_id AND live=1; END")
 
 
+def _reset_reading_receipts(conn, store, list_id, member, local):
+    tables = _tables(conn)
+    for table in ("drive_reading_bases", "drive_reading_sends"):
+        if table in tables:
+            conn.execute(f"DELETE FROM {table} WHERE context=? AND list_id=? AND member=?",
+                         (store.context, list_id, member))
+    if "drive_reading_members" in tables:
+        conn.execute("DELETE FROM drive_reading_members WHERE context=? AND list_id=? "
+                     "AND paper_id=?",
+                     (store.context, list_id, local))
+
+
 def _adopt_kept(conn, store, list_id, creation, local):
     key = (store.context, list_id, creation["entity_id"])
     approved = conn.execute(
@@ -215,12 +227,14 @@ def receive_membership_changes(history, revision, ticket, *, accept_removal=None
                         and "drive_membership_keeps" in tables
                         and creation["device_id"] == store.context
                         and _adopt_kept(conn, store, list_id, creation, local)):
+                    _reset_reading_receipts(conn, store, list_id, member, local)
                     applied += 1
                     continue
                 if (local and watch and watch[1] == local and watch[4]
                         and watch[4] == creation["depends_on"] and not removal
                         and not accept_removal):
                     _restore_removed(conn, store, list_id, member, creation, local)
+                    _reset_reading_receipts(conn, store, list_id, member, local)
                     applied += 1
                     continue
                 if not local or (watch and watch[:2] != (creation["operation_id"], local)):

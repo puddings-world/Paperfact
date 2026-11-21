@@ -365,6 +365,10 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                      "VALUES('preserve',?,0,?)", (peer_id, STAMP))
         conn.execute("UPDATE list_papers SET state='read' WHERE list_id='return' AND paper_id=?",
                      (peer_id,))
+    from paper_daily.drive_list_history import DriveListReading
+    from paper_daily.drive_reader_progress import _operation, exchange_reading
+
+    restore_cloud = copy.deepcopy(fork)
     commit = writer.append(None, operations, revision=revision)
     count = len(fork.objects)
     assert writer.append(None, operations, revision=revision) == commit
@@ -379,23 +383,32 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     from paper_daily.drive_membership_history import DriveMembershipRestores
     from paper_daily.drive_paper_receive import exchange_bibliography
 
-    restore_cloud = copy.deepcopy(fork)
     restore_files = authority(restore_cloud, tmp_path / "v10").files
     transport = DriveDirectory(restore_files, reader.directory.folder, reader.directory.head,
                                reader.directory.library_id, membership_restores=True)
+    previous_grant = reader.store.reading_grant("return", peer_revision)
+    reader.store.set_reading_sync("return", True, revision=peer_revision, ticket=Ticket())
+    old_history = DriveListReading(transport, reader.store, "return", revision=peer_revision)
+    old_read = _operation(old_history, original["entity_id"], ("read", None, STAMP), None)
+    old_head = old_history._current_head()
+    old_history.append(old_head, [old_read], revision=peer_revision)
+    if not previous_grant:
+        reader.store.set_reading_sync("return", False, revision=peer_revision, ticket=Ticket())
+    fork_writer = DriveMembershipChanges(transport, writer.store, "return", revision=revision)
+    tomb = fork_writer.append(None, operations, revision=revision)
     changes = DriveMembershipRestores(transport, reader.store, "return", revision=peer_revision)
     def review_changed():
         raise ListReviewRequired("review changed")
     before_restore = transport.read()
     with pytest.raises(ListReviewRequired, match="review changed"):
-        changes.restore(commit, restored, revision=peer_revision, check_review=review_changed)
+        changes.restore(tomb, restored, revision=peer_revision, check_review=review_changed)
     assert transport.read() == before_restore
 
     with monkeypatch.context() as limited:
-        limited.setattr(changes, "max_bytes", commit.size)
+        limited.setattr(changes, "max_bytes", tomb.size)
         stored = dict(restore_cloud.objects)
         with pytest.raises(ValueError, match="readable history budget"):
-            changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+            changes.restore(tomb, restored, revision=peer_revision, check_review=lambda: None)
         assert restore_cloud.objects == stored
 
     def changed_after_upload():
@@ -403,7 +416,7 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             raise ListReviewRequired("local entry edited during upload")
 
     with pytest.raises(ListReviewRequired, match="edited during upload"):
-        changes.restore(commit, restored, revision=peer_revision, check_review=changed_after_upload)
+        changes.restore(tomb, restored, revision=peer_revision, check_review=changed_after_upload)
     assert transport.read() == before_restore
     from paper_daily.drive_membership_apply import (
         MembershipConflict,
@@ -458,7 +471,7 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         conn.execute("UPDATE list_papers SET citation=?,added_at=? WHERE list_id='return' "
                      "AND paper_id=?", (fields["citation"], fields["added_at"], peer_id))
     uploaded = dict(restore_cloud.objects)
-    replayed = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+    replayed = changes.restore(tomb, restored, revision=peer_revision, check_review=lambda: None)
     assert replayed == after
     assert restore_cloud.objects == uploaded
     other = DriveMembershipRestores(transport, writer.store, "return", revision=revision)
@@ -551,6 +564,33 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                                 (original["entity_id"],)).fetchall() == [
                                     ("pending", restored["payload"]["citation"],
                                      restored["payload"]["added_at"], restored["operation_id"])]
+
+    for device in (returning, joining):
+        exchange_bibliography(transport, device, "return", 1, Ticket())
+        device.set_reading_sync("return", True, revision=1, ticket=Ticket())
+        assert exchange_reading(transport, device, "return", 1, Ticket()) == []
+    with closing(sqlite3.connect(joined_db)) as conn, conn:
+        local, = conn.execute("SELECT id FROM papers WHERE title='Desktop discovery'").fetchone()
+        assert conn.execute("SELECT state FROM list_papers WHERE list_id='return' AND paper_id=?",
+                            (local,)).fetchone() == ("pending",)
+        conn.execute("UPDATE list_papers SET state='read',read_at=? WHERE list_id='return' "
+                     "AND paper_id=?", (STAMP, local))
+    assert exchange_reading(transport, joining, "return", 1, Ticket()) == []
+    assert exchange_reading(transport, returning, "return", 1, Ticket()) == []
+    with closing(sqlite3.connect(restored_db)) as conn, conn:
+        assert conn.execute("SELECT state,read_at FROM list_papers WHERE list_id='return' "
+                            "AND paper_id=?", (local_id,)).fetchone() == ("read", STAMP)
+        conn.execute("UPDATE list_papers SET state='pending',read_at=NULL WHERE list_id='return' "
+                     "AND paper_id=?", (local_id,))
+    assert exchange_reading(transport, returning, "return", 1, Ticket()) == []
+    assert exchange_reading(transport, joining, "return", 1, Ticket()) == []
+    with closing(sqlite3.connect(joined_db)) as conn:
+        assert conn.execute("SELECT state,read_at FROM list_papers WHERE list_id='return' "
+                            "AND paper_id=?", (local,)).fetchone() == ("pending", None)
+
+    current_reading = DriveListReading(transport, joining, "return", revision=1)
+    with pytest.raises(ValueError, match="earlier membership lifetime"):
+        current_reading.append(current_reading._current_head(), [old_read], revision=1)
 
     # The originating device may lose the reply after Drive accepts its deletion.
     from paper_daily.drive_membership_intent import remove_selected

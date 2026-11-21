@@ -81,11 +81,12 @@ def _operation(history, identity, values, previous):
     return op
 
 
-def _versions(records):
+def _versions(records, memberships):
     latest, versions = {}, {}
     for op in records:
         identity = op["entity_id"]
-        prev = latest.get(identity)
+        lifetime = (identity, op["incarnation"])
+        prev = latest.get(lifetime)
         if (
             op["depends_on"] != (prev["operation_id"] if prev else None)
             or op["base_revision"] != (prev["base_revision"] + 1 if prev else 0)
@@ -93,8 +94,9 @@ def _versions(records):
             or op["operation_id"] in versions
         ):
             raise ListReviewRequired("Reading progress history needs review")
-        latest[identity] = versions[op["operation_id"]] = op
-    return latest, versions
+        latest[lifetime] = versions[op["operation_id"]] = op
+    active = {m: op for (m, inc), op in latest.items() if memberships[m][3] == inc}
+    return active, versions
 
 
 @dataclass(frozen=True)
@@ -109,12 +111,12 @@ def _observe(history, revision):
     head = history._current_head()
     files = history.directory.files
     key = (history.store.context, history.directory.folder, history.directory.head,
-           history.list_id, history.paper_head, history.grant, revision, head)
+           history.list_id, history.paper_head, history.removal_head, history.grant, revision, head)
     with files.membership_lock:
         snapshot = files.reading_cache.get(key)
     if snapshot is None:
         records = history._since(head, None, revision)
-        latest, versions = _versions(records)
+        latest, versions = _versions(records, history.memberships)
         size = sum(len(encode(op)) + 1 for op in records)
         snapshot = _ObservedReading(latest, versions, size)
         if records and size <= 2 * 1024**2:
@@ -135,6 +137,19 @@ def _divergent(values, current, base, context):
         return False
     lost_receipt = base is None and current["device_id"] == context
     return lost_receipt or values != (_values(base) if base else DEFAULT)
+
+
+def _check_restored(conn, history):
+    if not history.restored:
+        return
+    if "drive_membership_watches" not in _tables(conn):
+        raise ListReviewRequired("Receive the restored list entry before reading progress")
+    rows = conn.execute("SELECT member,creation,live,applied FROM drive_membership_watches "
+                        "WHERE context=? AND list_id=?", (history.store.context, history.list_id))
+    active = {m: creation for m, creation, live, applied in rows if live and not applied}
+    if any(active.get(m) != op["operation_id"] for m, op in history.restored.items()
+           if m not in history.retired):
+        raise ListReviewRequired("Receive the restored list entry before reading progress")
 
 
 def exchange_reading(directory, store, list_id, revision, ticket):
@@ -197,6 +212,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     (list_id,),
                 )
             }
+            _check_restored(conn, history)
             active = history.memberships
             if history.retired:
                 tables = _tables(conn)
@@ -301,6 +317,11 @@ def exchange_reading(directory, store, list_id, revision, ticket):
             _check_retired(conn, store.context, list_id)
             for _, op in pending:
                 key = (store.context, list_id, op["entity_id"])
+                acknowledged = conn.execute(
+                    "DELETE FROM drive_reading_sends WHERE context=? AND list_id=? AND member=? "
+                    "AND op=?", (*key, op["operation_id"])).rowcount
+                if not acknowledged:
+                    continue
                 existing = conn.execute(
                     "SELECT op FROM drive_reading_bases WHERE context=? AND list_id=? AND member=?",
                     key,
@@ -310,8 +331,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                         "INSERT OR REPLACE INTO drive_reading_bases VALUES(?,?,?,?)",
                         (*key, op["operation_id"]),
                     )
-                conn.execute("DELETE FROM drive_reading_sends WHERE context=? AND list_id=? "
-                             "AND member=? AND op=?", (*key, op["operation_id"]))
+
             store._check()
             ticket.checkpoint(conn.commit)
     return conflicts
@@ -333,6 +353,7 @@ def review_reading(directory, store, list_id, revision, ticket, decision=None):
             tables = _tables(conn)
             if tables & _WORKSPACE_MARKERS:
                 raise ListReviewRequired("Workspace binding changed")
+            _check_restored(conn, history)
             if "drive_reading_members" in tables:
                 _check_retired(conn, store.context, list_id)
             if "drive_reading_bases" in tables:

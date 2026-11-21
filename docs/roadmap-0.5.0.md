@@ -60,8 +60,9 @@ matching removal was acknowledged, reusing the paper ID and updating its receipt
 in one transaction. A new receiver installs the latest verified membership and citation
 directly, including its creation receipt. The device that chose to keep its entry
 records the decision before upload and adopts the confirmed membership on receipt
-without changing its local reading state or position. Exchanging reading progress
-across lifetimes and the desktop UI remain pending.
+without changing its local reading state or position. Reading progress uses a separate revision chain for
+each verified membership lifetime. The desktop keep action and installed-device
+acceptance remain pending.
 
 ## Release goal
 
