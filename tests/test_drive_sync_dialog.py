@@ -370,3 +370,21 @@ def test_startup_sync_retries_offline_and_honors_withdrawal(dialog):
     stamp[0] = None
     runner.tick()
     assert not runner.timer.isActive() and runner.service is None and exchanges == [1]
+
+
+def test_list_comparison_displays_versions_and_requires_a_choice(dialog):
+    from PySide6.QtWidgets import QPlainTextEdit, QPushButton
+
+    from paper_daily.desktop.drive_note_compare import NoteComparison
+
+    _, parent, _ = dialog
+    card = dict(feature="list", fields=["note"], base={"note": "original"},
+                local={"note": "desktop"}, remote={"note": "laptop"})
+    for label, expected in (("Decide later", None), ("Use Drive version", (card, "remote")),
+                            ("Keep this device's version", (card, "local"))):
+        view = NoteComparison([card], parent)
+        assert [box.toPlainText().splitlines() for box in view.findChildren(QPlainTextEdit)] == [
+            ["Description", value] for value in ("original", "desktop", "laptop")]
+        next(button for button in view.findChildren(QPushButton) if button.text() == label).click()
+        assert view.decision == expected
+        view.deleteLater()

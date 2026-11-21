@@ -24,10 +24,16 @@ class NoteComparison(QDialog):
         reading = cards[0].get("feature") == "reading"
         if reading:
             self.setWindowTitle(tr("Compare reading progress", "比較閱讀進度"))
+        details = cards[0].get("feature") == "list"
+        if details:
+            self.setWindowTitle(tr("Compare list details", "比較清單名稱與說明"))
         self.resize(900, 450)
         layout = QVBoxLayout(self)
         picker = QComboBox()
         for card in cards:
+            if details:
+                picker.addItem(tr("Conflicting list details", "有衝突的清單欄位"))
+                continue
             picker.addItem(card["title"] if guides or reading
                            else f"{card['title']} · #{card['key']}")
         layout.addWidget(picker)
@@ -50,6 +56,11 @@ class NoteComparison(QDialog):
                 payload = card[key]
                 if payload is None:
                     view.setPlainText(tr("No common version", "尚無共同版本"))
+                    continue
+                if details:
+                    labels = {"name": tr("Name", "名稱"), "note": tr("Description", "說明")}
+                    view.setPlainText("\n\n".join(
+                        f"{labels[field]}\n{payload[field]}" for field in card["fields"]))
                     continue
                 if reading:
                     states = {"pending": tr("Pending", "待讀"), "read": tr("Read", "已讀"),

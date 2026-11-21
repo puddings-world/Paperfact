@@ -65,7 +65,12 @@ def _acknowledged(conn, changes, store, list_id, local):
     return None, local
 
 
-def exchange_list(directory, store, list_id, revision, ticket):
+def review_list(directory, store, list_id, revision, ticket, decision=None):
+    return exchange_list(directory, store, list_id, revision, ticket,
+                         preview=decision is None, decision=decision)
+
+
+def exchange_list(directory, store, list_id, revision, ticket, *, preview=False, decision=None):
     """Transfer only a list's name/description, retaining both sides on conflict."""
     history = DriveListHistory(directory, store, list_id)
     history._check(revision)
@@ -88,6 +93,7 @@ def exchange_list(directory, store, list_id, revision, ticket):
     merge_base = _digest(original) if original is not None else base
     if local is None and base is not None:
         raise ListReviewRequired("A retained list was removed locally; review before restoring")
+    conflicts = []
     target = remote if remote is not None else local
     if (remote is not None and effective is not None
             and remote != effective and _digest(effective) != merge_base):
@@ -100,8 +106,31 @@ def exchange_list(directory, store, list_id, revision, ticket):
             if effective[field] == original[field]:
                 continue
             if remote[field] != original[field] and remote[field] != effective[field]:
-                raise ListReviewRequired(f"Conflicting list {field}; both versions were retained")
+                conflicts.append(field)
             target[field] = effective[field]
+    if conflicts:
+        # Bind the choice to both complete observations, including independent edits.
+        card = dict(feature="list", list_id=list_id, fields=conflicts,
+                    observation=_digest([directory.library_id, store.context, revision,
+                                         head.record(), local, original, remote]),
+                    base={key: original[key] for key in conflicts},
+                    local={key: effective[key] for key in conflicts},
+                    remote={key: remote[key] for key in conflicts})
+        ticket.check()
+        if preview:
+            return [card]
+        if decision is None:
+            fields = ", ".join(conflicts)
+            raise ListReviewRequired(f"Conflicting list {fields}; both versions were retained")
+        shown, choice = decision
+        if shown != card or choice not in ("local", "remote"):
+            raise ListReviewRequired("List versions changed; compare again")
+        target.update(card[choice])
+    elif decision is not None:
+        raise ListReviewRequired("List versions changed; compare again")
+    elif preview:
+        ticket.check()
+        return []
     if target is None:
         return "waiting_source"
     digest = _digest(target)

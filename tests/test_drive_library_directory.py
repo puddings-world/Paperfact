@@ -347,6 +347,25 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
     with pytest.raises(ValueError, match="both versions"):
         sync(win)
     assert db(win_path, "SELECT note FROM lists WHERE id='b'") == [("Local candidate",)]
+    from paper_daily.drive_list_records import review_list
+
+    def review(decision=None):
+        return review_list(remote, win, "b", win.load().revision, Ticket(), decision)
+
+    card, = review()
+    assert card["fields"] == ["note"]
+    assert card["local"]["note"] == "Local candidate"
+    assert card["remote"]["note"] == "Remote candidate"
+    db(win_path, "UPDATE lists SET name='Independent desktop rename' WHERE id='b'")
+    with pytest.raises(ValueError, match="compare again"):
+        review((card, "remote"))
+    card, = review()
+    review((card, "remote"))
+    sync(mac)
+    for path in (win_path, mac_path):
+        assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
+            ("Independent desktop rename", "Remote candidate")]
+    assert review() == []
 
 
 def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monkeypatch):
