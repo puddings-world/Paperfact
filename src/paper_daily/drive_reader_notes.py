@@ -88,7 +88,7 @@ def publish_reader_notes(directory, store, list_id, revision, ticket):
     return _publish(history, head, records, ticket)
 
 
-def _publish(history, head, records, ticket):
+def _publish(history, head, records, ticket, bases=None):
     local = reader_notes(history, ticket)
     remote = {op["entity_id"]: op for op in records}
     batches, batch, batch_size = [], [], 0
@@ -96,10 +96,17 @@ def _publish(history, head, records, ticket):
     for identity, op in local.items():
         existing = remote.get(identity)
         if existing is not None:
-            fields = ("action", "parents", "incarnation", "payload")
+            fields = ("action", "parents", "incarnation")
             if any(existing[key] != op[key] for key in fields):
+                raise ListReviewRequired("Existing note identity changed; review both copies")
+            if existing["payload"] == op["payload"]:
+                continue
+            if not bases or bases.get(identity) != existing["operation_id"]:
                 raise ListReviewRequired("Existing note changed; retain both copies for review")
-            continue
+            op.pop("operation_id")
+            op.update(base_revision=existing["base_revision"] + 1,
+                      depends_on=existing["operation_id"])
+            op["operation_id"] = hashlib.sha256(encode(op, MAX_INLINE)).hexdigest()
         length = len(encode(op, MAX_INLINE)) + 1
         size += length
         if len(batch) == 100 or batch_size + length > MAX_INLINE - 2048:
@@ -116,16 +123,32 @@ def _publish(history, head, records, ticket):
     for batch in batches:
         ticket.check()
         head = history.append(head, batch, revision=history.revision)
+        if bases is not None:
+            records = [*records, *batch]
+            receive_reader_notes(history, records, ticket,
+                                 published={op["operation_id"] for op in batch})
     return head
 
 
-def receive_reader_notes(history, records, ticket):
+def receive_reader_notes(history, records, ticket, *, published=()):
     """Install a checked batch atomically, keeping a paper-wide mapping across lists."""
+    bases = {}
     if not records:
-        return
+        return bases
     store = history.store
-    if len({op["entity_id"] for op in records}) != len(records):
-        raise ListReviewRequired("Revised note history needs reconciliation")
+    chains = {}
+    edits = history.grant.startswith("edits-v1:")
+    for op in records:
+        chain = chains.setdefault(op["entity_id"], [])
+        if op["action"] != "put":
+            raise ListReviewRequired("Note removal requires review")
+        previous = chain[-1] if chain else None
+        if (op["structure_revision"] != 0 or op["base_revision"] != len(chain)
+                or op["depends_on"] != (previous["operation_id"] if previous else None)
+                or previous and (not edits or previous["parents"] != op["parents"]
+                                 or previous["incarnation"] != op["incarnation"])):
+            raise ListReviewRequired("Revised note history needs reconciliation")
+        chain.append(op)
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(history.revision)
@@ -139,14 +162,35 @@ def receive_reader_notes(history, records, ticket):
                 "incarnation TEXT NOT NULL,paper TEXT NOT NULL,local_id INTEGER NOT NULL,"
                 "PRIMARY KEY(context,remote_id),UNIQUE(context,local_id))"
             )
-            for op in records:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS drive_library_note_bases(context TEXT,list_id TEXT,"
+                "remote_id TEXT,operation_id TEXT NOT NULL,PRIMARY KEY(context,list_id,remote_id))"
+            )
+            for identity, chain in chains.items():
                 ticket.check()
-                _receive_one(history, settings, conn, op)
+                key = (store.context, history.list_id, identity)
+                receipt = conn.execute(
+                    "SELECT operation_id FROM drive_library_note_bases "
+                    "WHERE context=? AND list_id=? AND remote_id=?", key
+                ).fetchone()
+                base = next((item for item in chain if receipt and
+                             item["operation_id"] == receipt[0]), None)
+                if receipt and base is None:
+                    raise ListReviewRequired("Note history lost its previously accepted revision")
+                latest = chain[-1]
+                _receive_one(history, settings, conn, latest, base if edits else None,
+                             latest["operation_id"] in published)
+                if edits:
+                    bases[identity] = latest["operation_id"]
+                    if not receipt or receipt[0] != latest["operation_id"]:
+                        conn.execute("INSERT OR REPLACE INTO drive_library_note_bases "
+                                     "VALUES(?,?,?,?)", (*key, latest["operation_id"]))
             store._check()
             ticket.checkpoint(conn.commit)
+    return bases
 
 
-def _receive_one(history, settings, conn, op):
+def _receive_one(history, settings, conn, op, base, published):
     store, payload = history.store, op["payload"]
     if op["action"] != "put":
         raise ListReviewRequired("Note removal requires review")
@@ -167,9 +211,20 @@ def _receive_one(history, settings, conn, op):
     if mapped:
         row = conn.execute("SELECT body,kind,created_at,page,anchor FROM notes "
                            "WHERE id=? AND paper_id=?", (mapped[0], local_paper)).fetchone()
-        if (mapped[1:] != (paper, op["incarnation"]) or row is None
-                or _payload(paper, row) != payload):
+        if mapped[1:] != (paper, op["incarnation"]) or row is None:
             raise ListReviewRequired("Existing note changed; retain both copies for review")
+        if published:
+            # Drive confirmed the snapshot; the user may already be editing it again.
+            return
+        local_payload = _payload(paper, row)
+        if local_payload == payload or base and base["operation_id"] == op["operation_id"]:
+            return
+        if not base or local_payload != base["payload"]:
+            raise ListReviewRequired("Existing note changed; retain both copies for review")
+        conn.execute("UPDATE notes SET body=?,kind=?,created_at=?,page=?,anchor=? WHERE id=?",
+                     (payload["body"], payload["kind"], payload["created_at"], payload["page"],
+                      json.dumps(payload["anchor"]) if payload["anchor"] is not None else None,
+                      mapped[0]))
         return
     key = None
     for candidate, body, kind, page, anchor in conn.execute(
@@ -178,7 +233,7 @@ def _receive_one(history, settings, conn, op):
     ):
         same = _payload(paper, (body, kind, payload["created_at"], page, anchor)) == payload
         if _identity(store, candidate, local_paper, payload["created_at"]) == identity:
-            if not same:
+            if not same and not published:
                 raise ListReviewRequired("Published note was edited; retain both versions")
             key = candidate
             break
@@ -203,5 +258,5 @@ def _receive_one(history, settings, conn, op):
 def exchange_reader_notes(directory, store, list_id, revision, ticket):
     history = DriveListNotes(directory, store, list_id, revision=revision)
     head, records = history.changes(None, revision=revision)
-    receive_reader_notes(history, records, ticket)
-    return _publish(history, head, records, ticket)
+    bases = receive_reader_notes(history, records, ticket)
+    return _publish(history, head, records, ticket, bases)

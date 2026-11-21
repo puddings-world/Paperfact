@@ -235,7 +235,7 @@ class DeviceSelection:
                          "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
             if enabled:
                 conn.execute("INSERT OR IGNORE INTO note_grants VALUES(?,?)",
-                             (list_id, str(uuid4())))
+                             (list_id, "edits-v1:" + str(uuid4())))
             else:
                 conn.execute("DELETE FROM note_grants WHERE list_id=?", (list_id,))
             self._check()

@@ -351,9 +351,9 @@ class DriveSyncDialog(QDialog):
         list_id = item.data(Qt.ItemDataRole.UserRole)
         if checked and QMessageBox.question(
             self, self.windowTitle(),
-            self.tr("Sync new paper notes for this list through your private Drive? Enable it "
-                    "on both devices. Older builds cannot read the upgraded directory.",
-                    "透過私人 Drive 同步這份清單新增的論文筆記？請在兩台裝置啟用。"
+            self.tr("Sync new and edited paper notes for this list through your private Drive? "
+                    "Enable it on both devices. Older builds cannot read the upgraded directory.",
+                    "透過私人 Drive 同步這份清單新增與修改的論文筆記？請在兩台裝置啟用。"
                     "首次傳送筆記後，舊版無法讀取升級後的清單目錄。"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,

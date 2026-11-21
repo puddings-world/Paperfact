@@ -182,20 +182,20 @@ The ordinary reader exchanges new cards after bibliography exchange. Each device
 can opt in for a highlighted saved list. Native card identity survives delivery
 and cross-list reuse; body, creation time, kind, page and validated anchor travel
 with the card. Receivers install incoming records transactionally against a
-verified paper binding. A divergent or missing previously mapped card, or an
-ambiguous pre-existing card, requires review. Editing and deleting existing
-cards, conflict-resolution UI, verified attachments and pilot migration remain
-open. Synthetic desktop tests exercise both devices; installed-device acceptance
-and live Google Drive remain separate gates.
+verified paper binding. Each device stores its last accepted operation ID for
+each list and note. The immutable operation contains the corresponding payload.
+An edit identifies its predecessor. A receiver with unchanged local content
+applies the edit. A writer publishes against the observed Drive head and
+acknowledges the uploaded snapshot without replacing subsequent typing.
+Previously issued new-card permissions retain their original scope. Renew the
+list's permission on each device to exchange edits.
 
-For the next revision, track an accepted operation ID and payload digest for each
-portable note in each selected list. A device that still has the accepted payload
-can apply a remote edit; a device that alone changed it can publish against that
-operation. When both sides changed the same card, retain the common base and
-both candidates for review. A resolution must name the versions it reviewed,
-and an unrelated note should continue syncing. Test a lost acknowledgement, two
-offline edits, a delete versus an edit, and the same note shared by two lists
-before enabling updates or deletion in the ordinary reader.
+Divergent changes remain on their respective devices and stop the list's note
+exchange for review. Missing mapped cards and ambiguous matches also require
+review. Independent per-card conflict handling, resolution UI, deletion,
+verified attachments and pilot migration remain open. Outstanding acceptance
+includes lost acknowledgements with subsequent offline edits, deletion versus
+editing, shared-card changes across lists, live Drive and installed devices.
 
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a

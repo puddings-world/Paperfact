@@ -173,10 +173,12 @@ exchange new papers. Enable **Sync saved lists while Paperfact is open** for bac
 exchange every 30 seconds during this session. You can close settings and continue
 reading. Reopen Drive settings to see the connected account and change your saved
 selection. Sign in and enable it again after restarting Paperfact. Newly created local list names stay private until you save the selection again. Both readers need
-bibliography support. To exchange new note cards, highlight a saved list and turn on
+bibliography support. To exchange new and edited note cards, highlight a saved list and turn on
 **Sync notes for this list** on both devices. The first note upgrades the directory
 format; update all devices before enabling it. New cards carry their page and source
-anchor. Changed or removed cards require review. Use a research package for PDFs
+anchor. Edits on one device propagate to the other. Conflicting edits and removals
+require review. For a list enabled before edit support, turn note sync off and back
+on on each device to grant permission for edits. Use a research package for PDFs
 and deep analyses. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).

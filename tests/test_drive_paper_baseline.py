@@ -355,12 +355,51 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             wait(app, lambda: reopened.directory_lists.count() > 0 and not reopened.busy)
             assert reopened.account.text() == setup.account["email"]
             assert reopened.keep_syncing.isChecked()
+            devices = (windows[0][1].service, reopened.service)
+            from paper_daily.drive_list_history import DriveListNotes
+
+            original_append = DriveListNotes.append
+
+            def edit_during_upload(history, *args, **kwargs):
+                head = original_append(history, *args, **kwargs)
+                with closing(sqlite3.connect(laptop)) as conn, conn:
+                    conn.execute("UPDATE notes SET body='Typing again' WHERE page=5")
+                return head
+
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Sent snapshot' WHERE page=5")
+            with monkeypatch.context() as midflight:
+                midflight.setattr(DriveListNotes, "append", edit_during_upload)
+                assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(laptop)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Typing again",
+                )
+            assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(source)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Typing again",
+                )
+            for writer, path, text in ((1, laptop, "Edited on laptop"),
+                                       (0, source, "Edited on desktop")):
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute("UPDATE notes SET body=? WHERE page=5", (text,))
+                for index in (writer, 1 - writer):
+                    result = devices[index].sync_saved_library(Ticket(), lambda _: None)
+                    assert not result["reviews"]
+                for copy in (source, laptop):
+                    with closing(sqlite3.connect(copy)) as conn:
+                        [(body, saved_anchor)] = conn.execute(
+                            "SELECT body,anchor FROM notes WHERE page=5"
+                        ).fetchall()
+                        assert body == text and json.loads(saved_anchor) == anchor
             for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
                 with closing(sqlite3.connect(path)) as conn, conn:
-                    conn.execute("UPDATE notes SET body=? WHERE body='Laptop note'", (edit,))
-            for owner_view in (windows[0][1], reopened):
-                report = owner_view.service.sync_saved_library(Ticket(), lambda _: None)
-                assert "retain both" in report["reviews"]["list"]
+                    conn.execute("UPDATE notes SET body=? WHERE page=5", (edit,))
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            report = devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert "retain both" in report["reviews"]["list"]
             for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
                 with closing(sqlite3.connect(path)) as conn:
                     rows = conn.execute("SELECT body FROM notes WHERE page=5").fetchall()
@@ -436,11 +475,19 @@ def test_ordinary_note_publication_keeps_anchor_scope_and_identity(source, tmp_p
         )
         ids.append(records[0]["entity_id"])
     assert ids[0] == ids[1]
+    from paper_daily.drive_reader_notes import exchange_reader_notes
+
+    # Pre-edit clients stored a plain grant ID. Refreshing must retain that consent scope.
+    with closing(sqlite3.connect(store.path)) as settings, settings:
+        settings.execute("UPDATE note_grants SET grant_id='original-grant' WHERE list_id='list'")
+    exchange_reader_notes(directory, store, "list", 1, Ticket())
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("UPDATE notes SET body='Offline edit' WHERE paper_id='paper'")
     count = len(cloud.objects)
     with pytest.raises(ListReviewRequired, match="retain both"):
         publish_reader_notes(directory, store, "list", 1, Ticket())
+    with pytest.raises(ListReviewRequired, match="retain both"):
+        exchange_reader_notes(directory, store, "list", 1, Ticket())
     assert len(cloud.objects) == count
     with closing(sqlite3.connect(source)) as conn:
         assert conn.execute("SELECT body FROM notes WHERE paper_id='paper'").fetchone() == (
