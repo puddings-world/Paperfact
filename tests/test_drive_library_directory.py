@@ -641,3 +641,50 @@ def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path, m
     with pytest.raises(PermissionError):
         mac.changes(None, revision=1)
     assert win.changes(None, revision=1) == (observed, [progress])
+
+def test_devices_exchange_source_bound_positions_only_with_current_grants(tmp_path):
+    from test_library_selection import database, selection
+    from test_sync_graph_research import PAPER, STAMP, membership, metadata, operation, parent
+
+    from paper_daily.drive_list_history import DriveListPapers, DriveListPositions
+    from paper_daily.sync_content import content_id
+    from paper_daily.workspace_service import Ticket
+
+    cloud = Cloud()
+    files = [authority(cloud, tmp_path / name).files for name in ("left", "right")]
+    folder, head = files[0].new_ids(2)
+    dirs = [DriveDirectory(f, folder, head, "personal", positions=True) for f in files]
+    first = dirs[0].initialize("Personal library")
+    catalog = dirs[0].upsert(first, [ListEntry("a", "Travel", True)]).directory
+    stores = [selection(database(tmp_path / name), tmp_path / (name + "-settings"),
+                        library_id="personal", device_id=name) for name in ("desktop", "laptop")]
+    for store in stores:
+        store.save(catalog, ["a"], expected_revision=0)
+    paper = dict(operation("paper", PAPER, metadata()), workspace_id="personal")
+    member = dict(membership("a"), workspace_id="personal")
+    DriveListPapers(dirs[0], stores[0], "a").append(None, [paper, member], revision=1)
+    with pytest.raises(PermissionError):
+        DriveListPositions(dirs[0], stores[0], "a", revision=1)
+    for store in stores:
+        store.set_position_sync("a", True, revision=1, ticket=Ticket())
+    writers = [DriveListPositions(d, s, "a", revision=1) for d, s in zip(dirs, stores, strict=True)]
+    scope = {"kind": "paper", "id": PAPER}
+    digest = "a" * 64
+    identity = content_id(scope, "reading_position", digest)
+    records = []
+    for device, page in zip(stores, (8, 15), strict=True):
+        payload = dict(feature="reading_position", scope=scope, source_document_hash=digest,
+                       key=digest, data=dict(page=page, recorded_at=STAMP, method="entered"))
+        records.append(dict(operation("research_content", identity, payload,
+                                      op_id=f"position-{page}", parents=[parent("paper", PAPER)]),
+                            workspace_id="personal", device_id=device.context))
+    with pytest.raises(ValueError, match="local position"):
+        writers[0].append(None, [records[1]], revision=1)
+    first = writers[0].append(None, records[:1], revision=1)
+    assert writers[0].append(None, records[:1], revision=1) == first
+    assert writers[1].changes(None, revision=1) == (first, records[:1])
+    latest = writers[1].append(first, records[1:], revision=1)
+    assert writers[0].changes(None, revision=1) == (latest, records)
+    stores[1].set_position_sync("a", False, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError):
+        writers[1].changes(first, revision=1)

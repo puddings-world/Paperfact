@@ -305,17 +305,12 @@ class DriveListNotes(DriveListHistory):
         return replace(entry, notes_head=head)
 
 
-class DriveListReading(DriveListHistory):
-    """Reading progress belongs to the observed membership, including its lifetime."""
-
-    format = "paperfact.list-reading-history.v1"
-    head_field = "reading_head"
-
+class _MembershipHistory(DriveListHistory):
     def __init__(self, directory, store, list_id, *, revision):
         super().__init__(directory, store, list_id)
         self.check_source = None
         self.revision = revision
-        self.grant = store.reading_grant(list_id, revision)
+        self.grant = self._grant(revision)
         self._check(revision)
         papers = DriveListPapers(directory, store, list_id)
         self.paper_head, _, self.memberships = papers.membership_snapshot(revision)
@@ -356,13 +351,6 @@ class DriveListReading(DriveListHistory):
             raise DriveChanged("List membership changed; retry reading progress")
         return entry
 
-    def _check_publication(self, revision, records):
-        super()._check_publication(revision, records)
-        if any(op["incarnation"] != self.memberships[op["entity_id"]][3] for op in records):
-            raise ValueError("Cannot publish reading progress for an earlier membership lifetime")
-        if any(op["entity_id"] in self.retired for op in records):
-            raise ValueError("Cannot publish reading progress for a retired membership")
-
     def parents_for(self, identity):
         paper, paper_inc, list_inc, member_inc = self.memberships[identity]
         return {
@@ -375,8 +363,26 @@ class DriveListReading(DriveListHistory):
         if self.check_source:
             self.check_source()
         if (not self.grant or revision != self.revision
-                or self.store.reading_grant(self.list_id, revision) != self.grant):
-            raise PermissionError("Enable reading progress sync for this list on this device")
+                or self._grant(revision) != self.grant):
+            raise PermissionError("Enable this content type for the selected list on this device")
+
+
+
+class DriveListReading(_MembershipHistory):
+    """Reading progress belongs to the observed membership, including its lifetime."""
+
+    format = "paperfact.list-reading-history.v1"
+    head_field = "reading_head"
+
+    def _grant(self, revision):
+        return self.store.reading_grant(self.list_id, revision)
+
+    def _check_publication(self, revision, records):
+        super()._check_publication(revision, records)
+        if any(op["incarnation"] != self.memberships[op["entity_id"]][3] for op in records):
+            raise ValueError("Cannot publish reading progress for an earlier membership lifetime")
+        if any(op["entity_id"] in self.retired for op in records):
+            raise ValueError("Cannot publish reading progress for a retired membership")
 
     def _validate_scope(self, records):
         for op in records:
@@ -394,3 +400,52 @@ class DriveListReading(DriveListHistory):
 
     def _advance(self, entry, head, records):
         return replace(entry, reading_head=head)
+
+class DriveListPositions(_MembershipHistory):
+    """Source-bound page suggestions from devices sharing this list."""
+
+    format = "paperfact.list-position-history.v1"
+    head_field = "positions_head"
+
+    def _grant(self, revision):
+        if not self.directory.positions:
+            raise PermissionError("Enable directory support for PDF positions")
+        return self.store.position_grant(self.list_id, revision)
+
+    def append(self, expected, records, *, revision):
+        # Bound each page so a complete history always fits the reader's byte limit.
+        if isinstance(expected, ScopeHead) and expected.generation >= self.max_pages:
+            raise ValueError("PDF position history reached its page limit")
+        return self._append(expected, records, revision,
+                            lambda: self._check_publication(revision, records),
+                            remaining_bytes=self.max_bytes // self.max_pages)
+
+    def _member(self, op):
+        from paper_daily.sync_schema_v2 import membership_id
+
+        return membership_id(self.list_id, op["payload"]["scope"]["id"])
+
+    def _validate_scope(self, records):
+        for op in records:
+            if (op["version"] != 2 or op["entity_type"] != "research_content"
+                    or op["action"] != "put" or op["payload"]["feature"] != "reading_position"):
+                raise ValueError("Expected a source-bound PDF position")
+            member = self._member(op)
+            if member not in self.memberships:
+                raise ValueError("Position paper is outside the selected list")
+            refs = self.parents_for(member)
+            if (op["parents"] != [refs["paper"]]
+                    or (op["incarnation"] != refs["membership"]["incarnation"]
+                        and (member, op["incarnation"]) not in self.prior_lifetimes)):
+                raise ValueError("Position belongs to another paper or membership lifetime")
+
+    def _check_publication(self, revision, records):
+        self._check(revision)
+        for op in records:
+            member = self._member(op)
+            if (op["device_id"] != self.store.context or member in self.retired
+                    or op["incarnation"] != self.memberships[member][3]):
+                raise ValueError("Publish a local position for an active membership")
+
+    def _advance(self, entry, head, records):
+        return replace(entry, positions_head=head)
