@@ -119,6 +119,9 @@ class DriveSyncDialog(QDialog):
         self.compare_notes = QPushButton(self.tr("Compare conflicting notes", "比較衝突筆記"))
         self.compare_notes.clicked.connect(self._review_notes)
         layout.addWidget(self.compare_notes)
+        self.compare_dives = QPushButton(self.tr("Compare conflicting guides", "比較衝突講解"))
+        self.compare_dives.clicked.connect(lambda: self._review_notes(feature="dive"))
+        layout.addWidget(self.compare_dives)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
@@ -363,6 +366,8 @@ class DriveSyncDialog(QDialog):
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
         self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists)
         self.compare_notes.setEnabled(self.sync_lists.isEnabled())
+        self.compare_dives.setVisible(self._ordinary_library and list_id in self._dive_lists)
+        self.compare_dives.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
         self.keep_syncing.setVisible(active or self._ordinary_library)
         self.keep_syncing.setChecked(active)
@@ -370,18 +375,18 @@ class DriveSyncDialog(QDialog):
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
 
-    def _review_notes(self):
+    def _review_notes(self, *, feature="note"):
         item = self.directory_lists.currentItem()
-        if item is None or not self.compare_notes.isEnabled():
+        if item is None or not self.sync_lists.isEnabled():
             return
         key = item.data(Qt.ItemDataRole.UserRole)
         self._start("compare", lambda ticket, progress: self.service.review_notes(
-            key, ticket, progress))
+            key, ticket, progress, feature=feature))
 
     def _show_note_review(self, cards):
         if not cards:
             self.status.setText(self.tr("No conflicting edits in this list.",
-                                        "這份清單目前沒有雙方修改的筆記。"))
+                                        "這份清單目前沒有需要比對的版本。"))
             return
         from paper_daily.desktop.drive_note_compare import NoteComparison
 
@@ -390,7 +395,8 @@ class DriveSyncDialog(QDialog):
             if dialog.exec() and dialog.decision:
                 card, choice = dialog.decision
                 self._start("resolve", lambda ticket, progress: self.service.review_notes(
-                    card["list_id"], ticket, progress, decision=(card, choice)))
+                    card["list_id"], ticket, progress, decision=(card, choice),
+                    feature=card.get("feature", "note")))
             else:
                 self.status.setText(self.tr("Both versions retained.", "已保留兩個版本。"))
         finally:

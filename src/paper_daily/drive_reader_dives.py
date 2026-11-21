@@ -98,8 +98,7 @@ def _operation(history, paper, data, previous):
     return op
 
 
-def _reconcile(history, records, revision, ticket, sent=()):
-    store, list_id = history.store, history.list_id
+def _versions(records):
     latest, versions = {}, {}
     for op in records:
         paper = op["payload"]["scope"]["id"]
@@ -110,6 +109,12 @@ def _reconcile(history, records, revision, ticket, sent=()):
             raise ListReviewRequired("Explanation history needs review")
         latest[paper] = op
         versions[op["operation_id"]] = op
+    return latest, versions
+
+
+def _reconcile(history, records, revision, ticket, sent=()):
+    store, list_id = history.store, history.list_id
+    latest, versions = _versions(records)
     pending, conflicts = [], 0
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
@@ -171,6 +176,70 @@ def _reconcile(history, records, revision, ticket, sent=()):
             store._check()
             ticket.checkpoint(conn.commit)
     return pending, conflicts
+
+
+def review_dives(directory, store, list_id, revision, ticket, decision=None):
+    history = DiveHistory(directory, store, list_id, revision)
+    _, records = history.changes(None, revision=revision)
+    latest, versions = _versions(records)
+    if decision is not None and decision[1] not in ("local", "remote"):
+        raise ValueError("Choose an observed explanation version")
+    cards = []
+    with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+        settings.execute("BEGIN IMMEDIATE")
+        history._check(revision)
+        with closing(sqlite3.connect(store.workspace.path.as_uri() + "?mode=rw", uri=True,
+                                     timeout=0.5)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE" if decision else "BEGIN")
+            tables = _tables(conn)
+            if tables & _WORKSPACE_MARKERS:
+                raise ListReviewRequired("Workspace binding changed")
+            if "drive_dive_bases" in tables:
+                for paper, op in latest.items():
+                    ticket.check()
+                    if decision and decision[0]["identity"] != paper:
+                        continue
+                    mapped = settings.execute("SELECT local_id FROM published_paper_ids "
+                                              "WHERE remote_id=?", (paper,)).fetchone()
+                    if not mapped:
+                        continue
+                    row = conn.execute(
+                        "SELECT p.title,d.body,d.written_at,d.spec,b.op FROM list_papers m "
+                        "JOIN papers p ON p.id=m.paper_id JOIN dives d ON d.paper_id=p.id "
+                        "LEFT JOIN drive_dive_bases b ON b.context=? AND b.list_id=m.list_id "
+                        "AND b.paper=? WHERE m.list_id=? AND p.id=? "
+                        "AND length(CAST(d.body AS BLOB))<=204800",
+                        (store.context, paper, list_id, mapped[0]),
+                    ).fetchone()
+                    if not row or row[4] == op["operation_id"]:
+                        continue
+                    base = versions.get(row[4])
+                    if row[4] and (not base or base["payload"]["scope"]["id"] != paper):
+                        raise ListReviewRequired("Common explanation revision is unavailable")
+                    local = dict(body=row[1], written_at=row[2], spec=row[3])
+                    remote = op["payload"]["data"]
+                    common = base["payload"]["data"] if base else None
+                    if local in (remote, common):
+                        continue
+                    cards.append(dict(feature="dive", title=row[0], identity=paper, key=mapped[0],
+                                      context=store.context, grant=history.grant, list_id=list_id,
+                                      remote_id=op["operation_id"], base_id=row[4],
+                                      base=common, local=local, remote=remote))
+            store._check()
+            ticket.check()
+            if decision is None:
+                return cards
+            if cards != [decision[0]]:
+                raise ValueError("Explanation changed after review. Compare its current versions.")
+            card = cards[0]
+            if decision[1] == "remote":
+                data = card["remote"]
+                conn.execute("UPDATE dives SET body=?,written_at=?,spec=? WHERE paper_id=?",
+                             (data["body"], data["written_at"], data["spec"], card["key"]))
+            conn.execute("INSERT OR REPLACE INTO drive_dive_bases(context,list_id,paper,op) "
+                         "VALUES(?,?,?,?)", (store.context, list_id, card["identity"],
+                                              card["remote_id"]))
+            ticket.checkpoint(conn.commit)
 
 
 def exchange_dives(directory, store, list_id, revision, ticket):

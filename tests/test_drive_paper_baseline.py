@@ -550,6 +550,41 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert saved(laptop, local) == ("Mac interpretation",)
             assert saved(source, "paper") == ("Windows interpretation",)
             reopened.show()
+            key = "list", Ticket(), lambda _: None
+            [card] = devices[1].review_notes(*key, feature="dive")
+            assert card["base"]["body"] == "Revised explanation"
+            rewrite(laptop, local, "Newer Mac version")
+            with pytest.raises(ValueError, match="changed after review"):
+                devices[1].review_notes(*key, feature="dive", decision=(card, "remote"))
+            for button in ("稍後決定", "採用 Drive 版本"):
+                observed = []
+
+                def compare(dialog, observed=observed, button=button):
+                    observed.extend(v.toPlainText() for v in dialog.findChildren(QPlainTextEdit))
+                    next(b for b in dialog.findChildren(QPushButton) if b.text() == button).click()
+                    return dialog.result()
+
+                with monkeypatch.context() as interaction:
+                    interaction.setattr(NoteComparison, "exec", compare)
+                    reopened.compare_dives.click()
+                    wait(app, lambda seen=observed: seen and not reopened.busy)
+                assert observed == ["Revised explanation", "Newer Mac version",
+                                    "Windows interpretation"]
+            assert saved(laptop, local) == ("Windows interpretation",)
+            assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            rewrite(source, "paper", "Later desktop edit")
+            rewrite(laptop, local, "Later Mac edit")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            [card] = devices[1].review_notes(*key, feature="dive")
+            rewrite(source, "paper", "Desktop edit during review")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            with pytest.raises(ValueError, match="changed after review"):
+                devices[1].review_notes(*key, feature="dive", decision=(card, "local"))
+            [fresh] = devices[1].review_notes(*key, feature="dive")
+            devices[1].review_notes(*key, feature="dive", decision=(fresh, "local"))
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert saved(source, "paper") == saved(laptop, local) == ("Later Mac edit",)
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
             mac_pdf.write_bytes(other_pdf)

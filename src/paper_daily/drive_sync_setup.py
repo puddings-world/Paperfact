@@ -129,8 +129,13 @@ class DriveSetup:
             "local": [{"id": item.id, "name": item.name} for item in local.lists],
         }
 
-    def review_notes(self, list_id, ticket, progress, *, decision=None):
-        from paper_daily.drive_note_review import review
+    def review_notes(self, list_id, ticket, progress, *, decision=None, feature="note"):
+        if feature == "dive":
+            from paper_daily.drive_reader_dives import review_dives as review
+        elif feature == "note":
+            from paper_daily.drive_note_review import review
+        else:
+            raise ValueError("Unknown review feature")
 
         self.check(ticket)
         if self._library_view is None:

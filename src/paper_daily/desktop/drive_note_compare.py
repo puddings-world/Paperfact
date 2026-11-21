@@ -18,12 +18,14 @@ class NoteComparison(QDialog):
         super().__init__(parent)
         tr = parent.tr
         self.decision = None
-        self.setWindowTitle(tr("Compare note versions", "比較筆記版本"))
+        guides = cards[0].get("feature") == "dive"
+        self.setWindowTitle(tr("Compare guide versions", "比較講解版本") if guides
+                            else tr("Compare note versions", "比較筆記版本"))
         self.resize(900, 450)
         layout = QVBoxLayout(self)
         picker = QComboBox()
         for card in cards:
-            picker.addItem(f"{card['title']} · #{card['key']}")
+            picker.addItem(card["title"] if guides else f"{card['title']} · #{card['key']}")
         layout.addWidget(picker)
         columns = QHBoxLayout()
         layout.addLayout(columns)
@@ -42,8 +44,14 @@ class NoteComparison(QDialog):
             card = cards[index]
             for key, view in views.items():
                 payload = card[key]
-                fields = [name for name in ("kind", "page", "created_at", "anchor")
-                          if any(card[k][name] != card["base"][name] for k in ("local", "remote"))]
+                if payload is None:
+                    view.setPlainText(tr("No common version", "尚無共同版本"))
+                    continue
+                names = ("spec", "written_at") if guides else (
+                    "kind", "page", "created_at", "anchor")
+                fields = [name for name in names if any(
+                    card[k][name] != (card["base"] or {}).get(name) for k in ("local", "remote")
+                )]
                 metadata = [f"{name}: {json.dumps(payload[name], ensure_ascii=False)}"
                             for name in fields]
                 view.setPlainText("\n\n".join([payload["body"], *metadata]))
