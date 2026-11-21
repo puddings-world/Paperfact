@@ -1063,6 +1063,16 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     row.setCheckState(Qt.CheckState.Checked)
             view.save_selection.click()
             wait(app, lambda v=view: not v.busy)
+            assert not view.notes_toggle.isVisible()
+            view.content_options.click()
+            for toggle in (view.notes_toggle, view.position_toggle, view.reading_toggle,
+                           view.pdf_toggle, view.dive_toggle):
+                assert toggle.isVisible() and toggle.isChecked()
+                toggle.click()
+                wait(app, lambda v=view: not v.busy)
+                assert not toggle.isChecked()
+            if view.keep_syncing.isChecked():
+                view.keep_syncing.click()
             assert view.notes_toggle.isVisible() and not view.notes_toggle.isChecked()
             with monkeypatch.context() as cancel:
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)

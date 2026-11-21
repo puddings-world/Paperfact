@@ -17,6 +17,11 @@ from paper_daily.sync_blobs import _no_link
 from paper_daily.sync_journal import _identifier
 from paper_daily.workspace_service import Ticket, WorkspaceChanged, WorkspaceService
 
+CONTENT_GRANTS = {
+    "note_grants": "edits-v1:", "pdf_grants": "pdf-v1:", "dive_grants": "dives-v1:",
+    "reading_grants": "reading-v1:", "position_grants": "position-v1:",
+}
+
 MAX_FILE_BYTES = 8 * 1024 * 1024
 
 
@@ -101,7 +106,8 @@ class DeviceSelection:
         self._check()
         return result
 
-    def save(self, directory, selected, *, expected_revision, ticket=None, intermediate=False):
+    def save(self, directory, selected, *, expected_revision, ticket=None, intermediate=False,
+             include_new_content=False):
         """CAS-save intent. Deselect retains research; callers schedule transfer separately."""
         if not isinstance(directory, Directory) or directory.library_id != self.library_id:
             raise ValueError("Selection belongs to another library")
@@ -169,9 +175,13 @@ class DeviceSelection:
                         ),
                     )
 
+                if include_new_content:
+                    for table in CONTENT_GRANTS:
+                        for list_id in chosen - previous.selected:
+                            self._enable_grant(conn, table, list_id)
+
                 removed = previous.selected - chosen
-                for table in ("note_grants", "pdf_grants", "dive_grants", "reading_grants",
-                              "position_grants"):
+                for table in CONTENT_GRANTS:
                     if removed and self._has_grants(conn, table):
                         conn.executemany(f"DELETE FROM {table} WHERE list_id=?",
                                          ((identity,) for identity in removed))
@@ -229,7 +239,7 @@ class DeviceSelection:
         return self._grant("reading_grants", list_id, revision)
 
     def set_reading_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("reading_grants", "reading-v1:", list_id, enabled, revision, ticket)
+        self._set_grant("reading_grants", list_id, enabled, revision, ticket)
 
     def position_lists(self):
         return self._grant_lists("position_grants")
@@ -238,7 +248,7 @@ class DeviceSelection:
         return self._grant("position_grants", list_id, revision)
 
     def set_position_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("position_grants", "position-v1:", list_id, enabled, revision, ticket)
+        self._set_grant("position_grants", list_id, enabled, revision, ticket)
 
     def pdf_grant(self, list_id, revision):
         return self._grant("pdf_grants", list_id, revision)
@@ -259,15 +269,22 @@ class DeviceSelection:
         return row[0] if row else None
 
     def set_note_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("note_grants", "edits-v1:", list_id, enabled, revision, ticket)
+        self._set_grant("note_grants", list_id, enabled, revision, ticket)
 
     def set_dive_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("dive_grants", "dives-v1:", list_id, enabled, revision, ticket)
+        self._set_grant("dive_grants", list_id, enabled, revision, ticket)
 
     def set_pdf_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("pdf_grants", "pdf-v1:", list_id, enabled, revision, ticket)
+        self._set_grant("pdf_grants", list_id, enabled, revision, ticket)
 
-    def _set_grant(self, table, prefix, list_id, enabled, revision, ticket):
+    @staticmethod
+    def _enable_grant(conn, table, list_id):
+        conn.execute(f"CREATE TABLE IF NOT EXISTS {table}("
+                     "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
+        conn.execute(f"INSERT OR IGNORE INTO {table} VALUES(?,?)",
+                     (list_id, CONTENT_GRANTS[table] + str(uuid4())))
+
+    def _set_grant(self, table, list_id, enabled, revision, ticket):
         """Choices are local to one account, device, database, list and content type."""
         self._check()
         ticket.check()
@@ -278,12 +295,9 @@ class DeviceSelection:
             saved = self._load(conn)
             if saved.revision != revision or list_id not in saved.selected:
                 raise SelectionChanged("Device selection changed; review it again")
-            conn.execute(f"CREATE TABLE IF NOT EXISTS {table}("
-                         "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
             if enabled:
-                conn.execute(f"INSERT OR IGNORE INTO {table} VALUES(?,?)",
-                             (list_id, prefix + str(uuid4())))
-            else:
+                self._enable_grant(conn, table, list_id)
+            elif self._has_grants(conn, table):
                 conn.execute(f"DELETE FROM {table} WHERE list_id=?", (list_id,))
             self._check()
             ticket.publish(conn.commit)

@@ -196,3 +196,21 @@ def test_cancel_failure_and_late_workspace_switch_preserve_saved_selection(tmp_p
     assert not store.current()
     with pytest.raises(WorkspaceChanged):
         store.load()
+
+
+def test_confirming_new_lists_enables_content_without_resetting_existing_choices(tmp_path):
+    path = database(tmp_path / "research")
+    store = selection(path, tmp_path / "settings")
+    directory = inspect_lists(path, "library", generation=1, published=["a", "b"])
+    first = store.save(directory, ["a"], expected_revision=0, include_new_content=True)
+    grant = store.note_grant("a", first.revision)
+    assert grant.startswith("edits-v1:")
+    store.set_pdf_sync("a", False, revision=first.revision, ticket=Ticket())
+    second = store.save(directory, ["a", "b"], expected_revision=first.revision,
+                        include_new_content=True)
+    assert store.pdf_lists() == ["b"]
+    assert store.note_grant("a", second.revision) == grant
+    for scope in (store.note_lists, store.dive_lists, store.reading_lists, store.position_lists):
+        assert scope() == ["a", "b"]
+    store.save(directory, ["a"], expected_revision=second.revision, include_new_content=True)
+    assert store.pdf_lists() == [] and store.note_lists() == ["a"]

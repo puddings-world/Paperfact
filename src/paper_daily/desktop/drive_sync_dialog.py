@@ -149,6 +149,10 @@ class DriveSyncDialog(QDialog):
         self.keep_syncing.clicked.connect(self._background_clicked)
         layout.addWidget(self.keep_syncing)
         self._ordinary_library = False
+        self.content_options = QToolButton()
+        self.content_options.setCheckable(True)
+        self.content_options.toggled.connect(self._list_buttons)
+        layout.addWidget(self.content_options)
         self._note_lists = set()
         self.notes_toggle = QPushButton(self.tr("Sync notes for this list", "同步這份清單的筆記"))
         self.notes_toggle.setCheckable(True)
@@ -477,7 +481,13 @@ class DriveSyncDialog(QDialog):
         )
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
-        self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        selected_list = self._ordinary_library and list_id in self._saved_ids
+        self.content_options.setVisible(selected_list)
+        if selected_list:
+            self.content_options.setText(
+                self.tr("Sync contents", "同步內容") + " · " + current.text())
+        expanded = selected_list and self.content_options.isChecked()
+        self.notes_toggle.setVisible(expanded)
         self.notes_toggle.setChecked(list_id in self._note_lists)
         self.notes_toggle.setEnabled(self.sync_lists.isEnabled())
         titles = self._pdf_review_titles.get(list_id, ())
@@ -487,16 +497,16 @@ class DriveSyncDialog(QDialog):
             self._shown_pdf_titles = titles
         self.pdf_review_label.setVisible(bool(titles))
         self.pdf_reviews.setVisible(bool(titles))
-        self.pdf_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.pdf_toggle.setVisible(expanded)
         self.pdf_toggle.setChecked(list_id in self._pdf_lists)
         self.pdf_toggle.setEnabled(self.sync_lists.isEnabled())
-        self.position_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.position_toggle.setVisible(expanded)
         self.position_toggle.setChecked(list_id in self._position_lists)
         self.position_toggle.setEnabled(self.sync_lists.isEnabled())
-        self.reading_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.reading_toggle.setVisible(expanded)
         self.reading_toggle.setChecked(list_id in self._reading_lists)
         self.reading_toggle.setEnabled(self.sync_lists.isEnabled())
-        self.dive_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.dive_toggle.setVisible(expanded)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
         conflict = self._membership_conflicts.get(list_id) if self._ordinary_library else None
@@ -789,6 +799,7 @@ class DriveSyncDialog(QDialog):
             for i in range(self.directory_lists.count())
             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
         ]
+        with_content = self._ordinary_library and bool(set(selected) - self._saved_ids)
         enroll = bool(selected) and self._first_selection
         consent = QMessageBox.question(
             self,
@@ -801,11 +812,12 @@ class DriveSyncDialog(QDialog):
                 "when Paperfact is open, including after restart.",
                 "在這台裝置記住帳號。每次開啟 Paperfact，都會自動同步勾選的清單。",
             ) if enroll else "") + ("\n\n" + self.tr(
-                "Selected lists exchange their bibliography and list details. For notes, PDFs "
-                "and saved explanations, enable each type for the list on both devices.",
-                "已勾選的清單會交換書目與清單資訊。若要同步筆記、PDF 或深度講解，"
-                "請在兩台裝置上為該清單開啟對應選項。",
-            ) if self._ordinary_library else ""),
+                "Newly checked lists will sync papers, notes, original PDFs, saved explanations, "
+                "reading status and page numbers. Update Paperfact on both devices before syncing "
+                "because older versions may not read the upgraded Drive library.",
+                "新勾選的清單會同步書目、筆記、原文 PDF、深度講解、閱讀狀態與頁碼。"
+                "請先更新兩台裝置的 Paperfact，舊版可能無法讀取升級後的 Drive 清單。",
+            ) if with_content else ""),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -813,7 +825,8 @@ class DriveSyncDialog(QDialog):
             return False
         return self._start(
             "enroll_selection" if enroll else "selection",
-            lambda ticket, progress: self.service.apply_library(selected, ticket, progress),
+            lambda ticket, progress: self.service.apply_library(
+                selected, ticket, progress, include_new_content=with_content),
         )
 
     def sign_in(self):

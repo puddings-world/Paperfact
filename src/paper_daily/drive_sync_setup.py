@@ -292,7 +292,8 @@ class DriveSetup:
             self._pdf_review_titles.pop(list_id, None)
         return self.read_library(ticket)
 
-    def save_library(self, selected, ticket, progress, *, intermediate=False):
+    def save_library(self, selected, ticket, progress, *, intermediate=False,
+                     include_new_content=False):
         """Publish the reviewed local names and persist this device's selection."""
         self.check(ticket)
         if self._library_view is None:
@@ -333,11 +334,12 @@ class DriveSetup:
                 raise ValueError("Directory history changed; review before syncing")
         self.check(ticket)
         store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket,
-                   intermediate=intermediate)
+                   intermediate=intermediate, include_new_content=include_new_content)
         return self.read_library(ticket, expected_directory=(remote.folder, remote.head))
 
-    def apply_library(self, selected, ticket, progress):
-        result = self.save_library(selected, ticket, progress, intermediate=True)
+    def apply_library(self, selected, ticket, progress, *, include_new_content=False):
+        result = self.save_library(selected, ticket, progress, intermediate=True,
+                                   include_new_content=include_new_content)
         return self._exchange_saved(result, ticket, progress)
 
     def sync_saved_library(self, ticket, progress):

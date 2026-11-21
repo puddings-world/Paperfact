@@ -147,7 +147,8 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
 
     saved = []
 
-    def save(selected, ticket, progress):
+    def save(selected, ticket, progress, *, include_new_content):
+        assert include_new_content
         saved.append(selected)
         return {
             "items": [{**item, "selected": item["id"] in selected} for item in library["items"]],
@@ -505,7 +506,8 @@ def test_first_enrollment_remembers_only_confirmed_lists(dialog, monkeypatch):
     second.setCheckState(Qt.CheckState.Unchecked)
     events = []
 
-    def apply(selected, ticket, progress):
+    def apply(selected, ticket, progress, *, include_new_content):
+        assert include_new_content
         events.append(selected)
         return {"ordinary": True, "items": [dict(row, selected=row["id"] in selected)
                                              for row in rows]}
