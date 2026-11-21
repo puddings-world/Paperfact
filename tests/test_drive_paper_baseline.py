@@ -92,8 +92,8 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         conn.executescript(db.SCHEMA)
     cloud = Cloud()
 
-    def login(path, label):
-        files = authority(cloud, tmp_path / label / "authority").files
+    def login(path, label, transport=cloud):
+        files = authority(transport, tmp_path / label / "authority").files
         monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **k: files)
         service = drive_sync_setup.DriveSetup(
             path,
@@ -417,6 +417,21 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             assert conn.execute("SELECT applied FROM drive_membership_watches WHERE "
                                 "member=?", (own_removal["entity_id"],)).fetchone() == (
                                     own_removal["operation_id"],)
+    assert origin_cloud.objects == accepted
+
+    # A new desktop uses the ordinary sign-in/checklist and then its saved selection.
+    device_db = tmp_path / "new-desktop" / "papers.db"
+    device_db.parent.mkdir()
+    with closing(sqlite3.connect(device_db)) as conn:
+        conn.executescript(db.SCHEMA)
+    device = login(device_db, "new-desktop-settings", origin_cloud)
+    assert not device.apply_library(["return"], Ticket(), lambda _: None)["reviews"]
+    reopened = login(device_db, "new-desktop-settings", origin_cloud)
+    assert not reopened.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    with closing(sqlite3.connect(device_db)) as conn:
+        assert {r[0] for r in conn.execute("SELECT title FROM papers JOIN list_papers "
+                                           "ON papers.id=list_papers.paper_id")} == {
+            "Offline local title", "Laptop discovery"}
     assert origin_cloud.objects == accepted
 
     from paper_daily.drive_sync_files import decode, encode

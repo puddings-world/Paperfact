@@ -39,12 +39,12 @@ The d579b1b directory decoder rejected a synthetic v9 directory and an unexpecte
 membership-history field under v8. This verifies the format boundary only.
 An opt-in v9 transport fixture now publishes a native membership delete tied to
 the verified creation, receives it on a second device, and retries the original
-upload without a second Drive record. Normal desktop clients still reject v9.
+upload without a second Drive record.
 The gated receiver applies a verified removal and records its operation ID in
 the same SQLite transaction. A two-device fixture retained an edited reading
 state for review, rolled back a failed receipt write, preserved shared paper
 research, and ignored redelivery after a local re-add. A fresh device can replay a list with existing removals without inserting the retired membership.
-The first-import transaction and retry are covered with a third isolated database. Desktop adoption, conflict resolution, and installed-device acceptance remain open.
+The first-import transaction and retry are covered with a third isolated database. The desktop checklist and saved-selection sync now receive existing v9 histories, including after reopening. The originating device can recover an accepted deletion after a lost reply. Publishing explicit removals from the desktop, resolving conflicting membership edits, and installed-device acceptance remain open.
 
 ## Release goal
 

@@ -187,8 +187,13 @@ class DriveSetup:
         remote = observation = None
         if directories:
             spec = directories[0]
-            remote = DriveDirectory(files, spec["folder_id"], spec["head_id"], library_id)
+            args = files, spec["folder_id"], spec["head_id"], library_id
+            remote = DriveDirectory(*args, membership_changes=True)
             observation = remote.read()
+            # Ordinary directories keep their inexpensive unchanged-bibliography path.
+            # A concurrent upgrade will invalidate a legacy snapshot on its next read.
+            if not any(entry.membership_changes_head for entry in observation.directory.lists):
+                remote = DriveDirectory(*args)
         base = observation.directory if observation else Directory(library_id, 0, ())
         merged = {item.id: item for item in local.lists}
         merged.update((item.id, item) for item in base.lists)
