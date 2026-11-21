@@ -137,6 +137,9 @@ class DriveSyncDialog(QDialog):
         self.compare_dives = QPushButton(self.tr("Compare conflicting guides", "比較衝突講解"))
         self.compare_dives.clicked.connect(lambda: self._review_notes(feature="dive"))
         layout.addWidget(self.compare_dives)
+        self.compare_reading = QPushButton(self.tr("Compare reading progress", "比較閱讀進度"))
+        self.compare_reading.clicked.connect(lambda: self._review_notes(feature="reading"))
+        layout.addWidget(self.compare_reading)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
@@ -402,6 +405,8 @@ class DriveSyncDialog(QDialog):
         self.compare_notes.setEnabled(self.sync_lists.isEnabled())
         self.compare_dives.setVisible(self._ordinary_library and list_id in self._dive_lists)
         self.compare_dives.setEnabled(self.sync_lists.isEnabled())
+        self.compare_reading.setVisible(self._ordinary_library and list_id in self._reading_lists)
+        self.compare_reading.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
         self.keep_syncing.setVisible(active or self._ordinary_library)
         self.keep_syncing.setChecked(active)

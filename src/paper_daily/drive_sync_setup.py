@@ -138,6 +138,8 @@ class DriveSetup:
     def review_notes(self, list_id, ticket, progress, *, decision=None, feature="note"):
         if feature == "dive":
             from paper_daily.drive_reader_dives import review_dives as review
+        elif feature == "reading":
+            from paper_daily.drive_reader_progress import review_reading as review
         elif feature == "note":
             from paper_daily.drive_note_review import review
         else:

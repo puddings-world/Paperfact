@@ -615,6 +615,37 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             report = devices[1].sync_saved_library(Ticket(), lambda _: None)
             assert report["reading_conflicts"] == ["list"]
             assert state_of(source, "paper") == "pending" and state_of(laptop, local) == "deferred"
+            assert reopened.compare_reading.isVisible()
+            [stale] = devices[1].review_notes(*key, feature="reading")
+            mark(laptop, local, "read")
+            with pytest.raises(ValueError, match="changed after review"):
+                devices[1].review_notes(*key, feature="reading", decision=(stale, "remote"))
+            [stale] = devices[1].review_notes(*key, feature="reading")
+            mark(source, "paper", "delivered")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            with pytest.raises(ValueError, match="changed after review"):
+                devices[1].review_notes(*key, feature="reading", decision=(stale, "local"))
+            for button in ("稍後決定", "採用本機版本"):
+                observed = []
+                def compare_progress(dialog, observed=observed, button=button):
+                    observed.extend(v.toPlainText() for v in dialog.findChildren(QPlainTextEdit))
+                    next(b for b in dialog.findChildren(QPushButton) if b.text() == button).click()
+                    return dialog.result()
+                with monkeypatch.context() as interaction:
+                    interaction.setattr(NoteComparison, "exec", compare_progress)
+                    reopened.compare_reading.click()
+                    wait(app, lambda seen=observed: seen and not reopened.busy)
+                assert observed == ["已略過", "已讀", "已推送"]
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert state_of(source, "paper") == "read"
+            mark(source, "paper", "deferred")
+            mark(laptop, local, "pending")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            [card] = devices[1].review_notes(*key, feature="reading")
+            devices[1].review_notes(*key, feature="reading", decision=(card, "remote"))
+            assert state_of(laptop, local) == "deferred"
+            assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
             devices[1].choose_reading_sync("list", False, Ticket(), lambda _: None)
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()

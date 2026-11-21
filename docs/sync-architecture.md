@@ -493,5 +493,7 @@ The ordinary reader uses a separate per-list opt-in on each device. The last
 accepted operation for each membership is recorded with the applied state in
 the local research transaction. Unchanged default markers need no upload.
 Single-sided edits travel in either direction; divergent edits retain both values
-and flag the list. Conflict choice and installed two-device acceptance remain open.
+and flag the list. The reader compares the common, local and Drive states and
+timestamps. A choice is accepted against the observed versions and device grant.
+Installed two-device acceptance remains open.
 List recency and PDF page position are separate from this state.

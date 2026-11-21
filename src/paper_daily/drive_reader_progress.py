@@ -45,9 +45,7 @@ def _operation(history, identity, values, previous):
     return op
 
 
-def exchange_reading(directory, store, list_id, revision, ticket):
-    history = DriveListReading(directory, store, list_id, revision=revision)
-    head, records = history.changes(None, revision=revision)
+def _versions(records):
     latest, versions = {}, {}
     for op in records:
         identity = op["entity_id"]
@@ -60,6 +58,20 @@ def exchange_reading(directory, store, list_id, revision, ticket):
         ):
             raise ListReviewRequired("Reading progress history needs review")
         latest[identity] = versions[op["operation_id"]] = op
+    return latest, versions
+
+
+def _divergent(values, current, base, context):
+    if current is None or current is base or values == _values(current):
+        return False
+    lost_receipt = base is None and current["device_id"] == context
+    return lost_receipt or values != (_values(base) if base else DEFAULT)
+
+
+def exchange_reading(directory, store, list_id, revision, ticket):
+    history = DriveListReading(directory, store, list_id, revision=revision)
+    head, records = history.changes(None, revision=revision)
+    latest, versions = _versions(records)
     if not history.parents:
         return []
     pending, conflicts = [], []
@@ -106,8 +118,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                         pending.append((local, _operation(history, identity, values, current)))
                     continue
                 if values != _values(current):
-                    lost_receipt = base is None and current["device_id"] == store.context
-                    if lost_receipt or values != (_values(base) if base else DEFAULT):
+                    if _divergent(values, current, base, store.context):
                         conflicts.append(local)
                         continue
                     conn.execute(
@@ -177,3 +188,81 @@ def exchange_reading(directory, store, list_id, revision, ticket):
             store._check()
             ticket.checkpoint(conn.commit)
     return conflicts
+
+
+def review_reading(directory, store, list_id, revision, ticket, decision=None):
+    if decision is not None and decision[1] not in ("local", "remote"):
+        raise ValueError("Choose an observed reading progress version")
+    history = DriveListReading(directory, store, list_id, revision=revision)
+    _, records = history.changes(None, revision=revision)
+    latest, versions = _versions(records)
+    cards = []
+    uri = store.workspace.path.as_uri() + ("?mode=rw" if decision else "?mode=ro")
+    with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+        settings.execute("BEGIN IMMEDIATE")
+        history._check(revision)
+        with closing(sqlite3.connect(uri, uri=True, timeout=0.5)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE" if decision else "BEGIN")
+            tables = _tables(conn)
+            if tables & _WORKSPACE_MARKERS:
+                raise ListReviewRequired("Workspace binding changed")
+            if "drive_reading_bases" in tables:
+                for identity, op in latest.items():
+                    ticket.check()
+                    if decision and decision[0]["identity"] != identity:
+                        continue
+                    mapped = settings.execute(
+                        "SELECT local_id FROM published_paper_ids WHERE remote_id=?",
+                        (op["payload"]["paper_id"],),
+                    ).fetchone()
+                    if not mapped:
+                        continue
+                    row = conn.execute(
+                        "SELECT p.title,m.state,m.delivered_at,m.read_at,b.op FROM list_papers m "
+                        "JOIN papers p ON p.id=m.paper_id LEFT JOIN drive_reading_bases b "
+                        "ON b.context=? AND b.list_id=m.list_id AND b.member=? "
+                        "WHERE m.list_id=? AND m.paper_id=?",
+                        (store.context, identity, list_id, mapped[0]),
+                    ).fetchone()
+                    if not row:
+                        continue
+                    base = versions.get(row[4])
+                    if row[4] and (not base or base["entity_id"] != identity):
+                        raise ListReviewRequired("Common reading revision is missing")
+                    if not _divergent(row[1:4], op, base, store.context):
+                        continue
+                    cards.append(
+                        dict(
+                            feature="reading",
+                            title=row[0],
+                            identity=identity,
+                            key=mapped[0],
+                            list_id=list_id,
+                            context=store.context,
+                            grant=history.grant,
+                            remote_id=op["operation_id"],
+                            base_id=row[4],
+                            base=dict(zip(FIELDS, _values(base), strict=True)) if base else None,
+                            local=dict(zip(FIELDS, row[1:4], strict=True)),
+                            remote=dict(zip(FIELDS, _values(op), strict=True)),
+                        )
+                    )
+            store._check()
+            ticket.check()
+            if decision is None:
+                return cards
+            if cards != [decision[0]]:
+                raise ValueError("Reading progress changed after review; compare again")
+            card = cards[0]
+            if decision[1] == "remote":
+                data = card["remote"]
+                conn.execute(
+                    "UPDATE list_papers SET state=?,delivered_at=?,read_at=? "
+                    "WHERE list_id=? AND paper_id=?",
+                    (data["state"], data["delivered_at"], data["read_at"], list_id, card["key"]),
+                )
+            conn.execute(
+                "INSERT OR REPLACE INTO drive_reading_bases VALUES(?,?,?,?)",
+                (store.context, list_id, card["identity"], card["remote_id"]),
+            )
+            ticket.checkpoint(conn.commit)

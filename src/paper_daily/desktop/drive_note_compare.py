@@ -21,11 +21,15 @@ class NoteComparison(QDialog):
         guides = cards[0].get("feature") == "dive"
         self.setWindowTitle(tr("Compare guide versions", "比較講解版本") if guides
                             else tr("Compare note versions", "比較筆記版本"))
+        reading = cards[0].get("feature") == "reading"
+        if reading:
+            self.setWindowTitle(tr("Compare reading progress", "比較閱讀進度"))
         self.resize(900, 450)
         layout = QVBoxLayout(self)
         picker = QComboBox()
         for card in cards:
-            picker.addItem(card["title"] if guides else f"{card['title']} · #{card['key']}")
+            picker.addItem(card["title"] if guides or reading
+                           else f"{card['title']} · #{card['key']}")
         layout.addWidget(picker)
         columns = QHBoxLayout()
         layout.addLayout(columns)
@@ -46,6 +50,18 @@ class NoteComparison(QDialog):
                 payload = card[key]
                 if payload is None:
                     view.setPlainText(tr("No common version", "尚無共同版本"))
+                    continue
+                if reading:
+                    states = {"pending": tr("Pending", "待讀"), "read": tr("Read", "已讀"),
+                              "skipped": tr("Skipped", "已略過"),
+                              "deferred": tr("Deferred", "稍後讀"),
+                              "delivered": tr("Delivered", "已推送")}
+                    lines = [states[payload["state"]]]
+                    for name, label in (("delivered_at", tr("Delivered", "推送時間")),
+                                        ("read_at", tr("Read at", "已讀時間"))):
+                        if payload[name]:
+                            lines.append(f"{label}  {payload[name]}")
+                    view.setPlainText("\n".join(lines))
                     continue
                 names = ("spec", "written_at") if guides else (
                     "kind", "page", "created_at", "anchor")
