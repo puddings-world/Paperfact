@@ -103,6 +103,12 @@ class DriveSyncDialog(QDialog):
         self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
         self.directory_lists.setVisible(False)
         layout.addWidget(self.directory_lists)
+        self._membership_conflicts = {}
+        self.membership_detail = QLabel()
+        self.membership_detail.setTextFormat(Qt.TextFormat.PlainText)
+        self.membership_detail.setWordWrap(True)
+        self.membership_detail.hide()
+        layout.addWidget(self.membership_detail)
         self.save_selection = QPushButton(
             self.tr("Save this device's list selection", "儲存這台裝置的清單選擇")
         )
@@ -373,6 +379,7 @@ class DriveSyncDialog(QDialog):
         previous = self.directory_lists.currentItem()
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)
+        self._membership_conflicts = library.get("membership_conflicts", {})
         self._membership_upgrades = library.get("membership_upgrades", {})
         self._note_lists = set(library.get("note_lists", ()))
         self._pdf_lists = set(library.get("pdf_lists", ()))
@@ -384,7 +391,8 @@ class DriveSyncDialog(QDialog):
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
             label = row["name"]
-            if reason or row["id"] in self._pdf_review_titles:
+            if (reason or row["id"] in self._pdf_review_titles
+                    or row["id"] in self._membership_conflicts):
                 label += self.tr(" — needs review", " — 需核對")
             item = QListWidgetItem(label)
             if reason:
@@ -443,6 +451,26 @@ class DriveSyncDialog(QDialog):
         self.dive_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
+        conflict = self._membership_conflicts.get(list_id) if self._ordinary_library else None
+        self.membership_detail.setVisible(bool(conflict))
+        if conflict:
+            explanations = {
+                "replaced": self.tr("This paper was added again on this device.",
+                                    "這台裝置曾重新加入這篇論文。"),
+                "unverified": self.tr("The original list entry could not be verified.",
+                                      "無法核對本機最初加入清單的紀錄。"),
+                "absent": self.tr("This device also removed a paper, but the entries could differ.",
+                                  "這台裝置也移除了論文，但無法核對為同一次加入。"),
+                "changed": self.tr("The local list entry has changed.", "本機清單項目已變更。"),
+                "edited": self.tr("The local position, pin or reading history needs review.",
+                                  "需核對本機的排序、釘選或閱讀紀錄。"),
+            }
+            self.membership_detail.setText(
+                conflict["title"] + "\n" + self.tr("Removed from this list on Drive. ",
+                                                    "Drive 已從這份清單移除此篇。")
+                + explanations[conflict["kind"]])
+        else:
+            self.membership_detail.clear()
         self.upgrade_removals.setVisible(
             self._ordinary_library and list_id in self._membership_upgrades)
         self.upgrade_removals.setEnabled(self.sync_lists.isEnabled())

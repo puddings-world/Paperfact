@@ -9,6 +9,13 @@ from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
 from paper_daily.workspace_service import _tables
 
 
+class MembershipConflict(ListReviewRequired):
+    def __init__(self, conn, local_id, kind, reason):
+        title = conn.execute("SELECT title FROM papers WHERE id=?", (local_id,)).fetchone()
+        self.detail = {"title": title[0] if title else "", "kind": kind}
+        super().__init__(reason)
+
+
 def _schema(conn):
     conn.execute(
         "CREATE TABLE IF NOT EXISTS drive_membership_watches("
@@ -113,6 +120,9 @@ def receive_membership_changes(history, revision, ticket):
                     # Publication checks the local intent against the observed bibliography.
                     continue
                 if not row or row[1:3] != (payload["citation"], payload["added_at"]):
+                    if removal:
+                        raise MembershipConflict(conn, local, "changed" if row else "absent",
+                                                 "Local membership differs; both versions retained")
                     raise ListReviewRequired("Local membership differs; both versions retained")
                 if not removal:
                     conn.execute("INSERT INTO drive_membership_watches"
@@ -132,7 +142,9 @@ def receive_membership_changes(history, revision, ticket):
                 )
                 if (not watch or not watch[3] or row[0] != watch[2] or pinned or reading_history
                         or row[3:] != ("pending", None, None)):
-                    raise ListReviewRequired("Review local reading edits or replacement membership")
+                    kind = "unverified" if not watch else "replaced" if not watch[3] else "edited"
+                    raise MembershipConflict(conn, local, kind,
+                                             "Review local reading edits or replacement membership")
                 deleted = conn.execute("DELETE FROM list_papers WHERE list_id=? AND paper_id=?",
                                        (list_id, local))
                 if deleted.rowcount != 1:

@@ -52,6 +52,7 @@ class DriveSetup:
         self._consent = None
         self._pdf_versions = {}
         self._pdf_review_titles = {}
+        self._membership_conflicts = {}
 
     def check(self, ticket):
         ticket.check()
@@ -63,6 +64,7 @@ class DriveSetup:
             self.disable_library_startup(ticket)
         self.files = self.account = self._library_view = None
         self._pdf_review_titles.clear()
+        self._membership_conflicts.clear()
         self._list_target = None
         progress({"stage": "google_login"})
         session = self.authorize(cancelled=lambda: ticket.cancelled)
@@ -204,8 +206,13 @@ class DriveSetup:
         if remote is not None:
             self._list_target = (remote.folder, remote.head)
         pdf_lists = store.pdf_lists()
+        self._membership_conflicts = {
+            key: value for key, value in self._membership_conflicts.items()
+            if key[0] is files and key[1] == store.context and key[2] in selection.selected
+        }
         return {
             "ordinary": local_binding(self.workspace.path) is None,
+            "membership_conflicts": {k[2]: v for k, v in self._membership_conflicts.items()},
             "reading_lists": store.reading_lists(),
             "note_lists": store.note_lists(),
             "pdf_lists": pdf_lists,
@@ -374,6 +381,7 @@ class DriveSetup:
             ListReviewRequired,
             exchange_list,
         )
+        from paper_daily.drive_membership_apply import MembershipConflict
         from paper_daily.drive_membership_intent import MembershipRemovalReview
 
         _, store, saved, directory, *_ = self._library_view
@@ -384,6 +392,7 @@ class DriveSetup:
 
         reviews = {}
         upgrades = {}
+        membership_conflicts = {}
         list_conflicts = []
         reading_conflicts = set()
         note_conflicts = []
@@ -432,6 +441,9 @@ class DriveSetup:
                             reviews[list_id] = " · ".join(filter(None, reasons))
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
+            except MembershipConflict as exc:
+                reviews[list_id] = str(exc)
+                membership_conflicts[list_id] = exc.detail
             except MembershipRemovalReview as exc:
                 reviews[list_id] = str(exc)
                 if not directory.membership_changes and exc.missing == len(exc.operations):
@@ -453,6 +465,8 @@ class DriveSetup:
                 dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
         self.check(ticket)
+        self._membership_conflicts = {(self.files, store.context, key): detail
+                                      for key, detail in membership_conflicts.items()}
         self._pdf_review_titles = pdf_titles
         return {**self.read_library(ticket), "reviews": reviews, "membership_upgrades": upgrades,
                 "note_conflicts": note_conflicts,

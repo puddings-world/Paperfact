@@ -662,7 +662,18 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         directory = setup._library_view[3]
         assert directory.read().directory.lists[0].membership_changes_head.generation == 1
         for index, (peer, path) in enumerate(peers):
-            report = peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            result = peer.sync_saved_library(Ticket(), lambda _: None)
+            report = result["reviews"]
+            refreshed = peer.read_library(Ticket())
+            assert refreshed["membership_conflicts"] == result["membership_conflicts"]
+            view._show_directory(refreshed)
+            assert view.membership_detail.isVisible() == (index in (1, 3))
+            if index in (1, 3):
+                assert result["membership_conflicts"]["list"]["kind"] == (
+                    "replaced" if index == 1 else "absent")
+                assert "Research paper" in view.membership_detail.text()
+            else:
+                assert view.membership_detail.text() == ""
             if index == 3:
                 assert "both versions retained" in report["list"]
             elif index == 1:
