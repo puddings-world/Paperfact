@@ -457,6 +457,29 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             keep_reviewed_membership(changes, peer_revision, current_review(), Ticket())
     changes = DriveMembershipRestores(transport, reader.store, "return", revision=peer_revision)
     after, _, _ = changes.versions(peer_revision)
+    # A lookalike replacement cannot inherit the cloud decision. An ordinary
+    # offline reading edit on the reviewed row survives the same lost reply.
+    saved = tmp_path / "after-lost-reply.db"
+    with closing(sqlite3.connect(laptop)) as conn, closing(sqlite3.connect(saved)) as backup:
+        conn.backup(backup)
+        with conn:
+            row = conn.execute("SELECT * FROM list_papers WHERE list_id='return' AND paper_id=?",
+                               (peer_id,)).fetchone()
+            conn.execute(f"INSERT OR REPLACE INTO list_papers VALUES({','.join('?' for _ in row)})",
+                         row)
+        with pytest.raises(ListReviewRequired):
+            receive_membership_changes(changes, peer_revision, Ticket())
+        backup.backup(conn)
+        with conn:
+            conn.execute("UPDATE OR REPLACE list_papers SET list_id='return',citation=?,added_at=? "
+                         "WHERE list_id='preserve' AND paper_id=?",
+                         (revised["citation"], revised["added_at"], peer_id))
+        with pytest.raises(ListReviewRequired):
+            receive_membership_changes(changes, peer_revision, Ticket())
+        backup.backup(conn)
+        with conn:
+            conn.execute("UPDATE list_papers SET state='pending',position=position+10 "
+                         "WHERE list_id='return' AND paper_id=?", (peer_id,))
     assert receive_membership_changes(changes, peer_revision, Ticket()) == 1
     assert receive_membership_changes(changes, peer_revision, Ticket()) == 0
     with closing(sqlite3.connect(laptop)) as conn, closing(sqlite3.connect(snapshot)) as backup:
@@ -464,7 +487,7 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                             "JOIN drive_membership_watches w ON w.local_id=m.paper_id "
                             "AND w.list_id=m.list_id WHERE w.member=?",
                             (original["entity_id"],)).fetchall() == [
-                                ("read", observed["row"][0], restored["operation_id"])]
+                                ("pending", observed["row"][0] + 10, restored["operation_id"])]
         backup.backup(conn)
     # The remaining v9 scenarios use their original local snapshot.
     with closing(sqlite3.connect(laptop)) as conn, conn:

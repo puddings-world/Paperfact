@@ -98,6 +98,21 @@ def keep_reviewed_membership(history, revision, observation, ticket):
         conn.execute("CREATE TABLE IF NOT EXISTS drive_membership_keeps("
                      "context TEXT,list_id TEXT,member TEXT,operation TEXT,token TEXT,"
                      "PRIMARY KEY(context,list_id,member))")
+        conn.execute("CREATE TABLE IF NOT EXISTS drive_keep_entries("
+                     "list_id TEXT,local_id TEXT,token TEXT,PRIMARY KEY(list_id,local_id))")
+        # Preserve the confirmed row across reading edits. A replacement, including
+        # SQLite REPLACE with deletion triggers disabled, must lose its proof.
+        for event, suffix, refs in (("INSERT", "insert", ("NEW",)), ("DELETE", "delete", ("OLD",)),
+                                    ("UPDATE OF paper_id,list_id", "move", ("OLD", "NEW"))):
+            condition = " OR ".join(f"(list_id={ref}.list_id AND local_id={ref}.paper_id)"
+                                    for ref in refs)
+            changed = (" WHEN OLD.list_id IS NOT NEW.list_id OR OLD.paper_id IS NOT NEW.paper_id"
+                       if suffix == "move" else "")
+            conn.execute(f"CREATE TRIGGER IF NOT EXISTS drive_keep_{suffix} AFTER {event} "
+                         f"ON list_papers{changed} BEGIN DELETE FROM drive_keep_entries "
+                         f"WHERE {condition}; END")
+        conn.execute("INSERT OR REPLACE INTO drive_keep_entries VALUES(?,?,?)",
+                     (list_id, local, observation["token"]))
         conn.execute("INSERT OR REPLACE INTO drive_membership_keeps VALUES(?,?,?,?,?)",
                      (store.context, list_id, member, operation["operation_id"],
                       observation["token"]))
@@ -140,13 +155,17 @@ def _reset_reading_receipts(conn, store, list_id, member, local):
                      (store.context, list_id, local))
 
 
-def _adopt_kept(conn, store, list_id, creation, local):
+def _adopt_kept(conn, store, list_id, creation, local, tables):
     key = (store.context, list_id, creation["entity_id"])
-    approved = conn.execute(
-        "SELECT 1 FROM drive_membership_keeps k JOIN drive_member_reviews r "
+    # Older pending keeps have only the strict pre-publication review token.
+    proofs = ["drive_member_reviews"]
+    if "drive_keep_entries" in tables:
+        proofs.append("drive_keep_entries")
+    approved = any(conn.execute(
+        f"SELECT 1 FROM drive_membership_keeps k JOIN {table} r "
         "ON r.list_id=k.list_id AND r.token=k.token WHERE k.context=? AND k.list_id=? "
         "AND k.member=? AND k.operation=? AND r.local_id=?", (*key, creation["operation_id"], local)
-    ).fetchone()
+    ).fetchone() for table in proofs)
     if not approved:
         return False
     row = conn.execute("SELECT position,citation,added_at FROM list_papers "
@@ -159,6 +178,9 @@ def _adopt_kept(conn, store, list_id, creation, local):
                  (*key, creation["operation_id"], local, row[0]))
     conn.execute("DELETE FROM drive_membership_keeps WHERE context=? AND list_id=? AND member=?",
                  key)
+    if "drive_keep_entries" in proofs:
+        conn.execute("DELETE FROM drive_keep_entries WHERE list_id=? AND local_id=?",
+                     (list_id, local))
     return True
 
 
@@ -224,9 +246,9 @@ def receive_membership_changes(history, revision, ticket, *, accept_removal=None
                 if accept_removal and member != accept_removal["member"]:
                     continue
                 if (local and not removal and not accept_removal
-                        and "drive_membership_keeps" in tables
+                        and creation["depends_on"] and "drive_membership_keeps" in tables
                         and creation["device_id"] == store.context
-                        and _adopt_kept(conn, store, list_id, creation, local)):
+                        and _adopt_kept(conn, store, list_id, creation, local, tables)):
                     _reset_reading_receipts(conn, store, list_id, member, local)
                     applied += 1
                     continue

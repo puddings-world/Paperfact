@@ -60,7 +60,9 @@ matching removal was acknowledged, reusing the paper ID and updating its receipt
 in one transaction. A new receiver installs the latest verified membership and citation
 directly, including its creation receipt. The device that chose to keep its entry
 records the decision before upload and adopts the confirmed membership on receipt
-without changing its local reading state or position. Reading progress uses a separate revision chain for
+without changing its local reading state or position. If the cloud reply is lost,
+later offline reading and position edits survive reconnection. Replacing the row
+locally still requires review. Reading progress uses a separate revision chain for
 each verified membership lifetime. The desktop conflict panel offers both removal and restoration.
 A synthetic two-device run covered cancellation, repeat clicks, restoration,
 and a later removal of the restored entry. Installed-device acceptance remains pending.

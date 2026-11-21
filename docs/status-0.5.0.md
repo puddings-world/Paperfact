@@ -122,24 +122,18 @@ Typed queue pins are implemented; their historical unsupported label is obsolete
 See [queue pin migration](queue-pin-migration.md) and
 [recovery UI](recovery-adoption-ui.md) for the supported boundary.
 
-## Whole-library selection gap (owner clarification, 2026-11-18)
+## Which lists a second device can see
 
-The installed Mac candidate at 052d9ab shows only lists in its active local database. Source
-052d9ab creates a separate selected-list sync workspace; it does not expose the
-complete source-library directory or let another device subscribe to arbitrary
-lists in that library. This fails the clarified whole-database list-selection
-requirement. The candidate is available for the existing pilot, not acceptance
-of this broader workflow. See the [required correction](sync-architecture.md#whole-library-list-selection-required-correction-2026-11-18).
-The owner confirmed independent selection on each device. Local directory and
-revision-checked selection services now exist with bounded fixture coverage,
-including cancellation/concurrency and no research mutation. The development dialog now discovers the
-private directory, saves device choices and exchanges list names/descriptions
-in ordinary local databases. Saving the selection also publishes an initial bibliography
-or receives it into an empty list, then exchanges additions from either device on save. Subsequent metadata
-edits, research notes, attachments, background replication and reviewed pilot
-migration remain unfinished; Mac052d9ab does not contain
-this directory flow. No owner database/cloud data
-were changed during this implementation.
+Build 7211313 reads the private Drive library directory. Each device chooses
+its own lists, including lists that have never been downloaded on that device.
+Selecting a list exchanges its bibliography and details. Reading progress,
+notes, original PDFs and saved guides have per-list controls. Background sync
+while the app is open and reconnect on startup are device settings. See the
+[desktop sync guide](../README.md#sync-a-desktop-and-laptop-v05-preview).
+
+The earlier 052d9ab pilot used an isolated selected-list workspace. Migration
+from that pilot and the installed Windows/Mac round trip with a personal Drive
+account still require acceptance. See the [device checklist](testing/mac-acceptance-0.5.md).
 
 ## Work still required before v0.5.0
 
