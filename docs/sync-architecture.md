@@ -523,8 +523,10 @@ list on this device and revokes it on deselection. The desktop offers this grant
 saved list. The transport can exchange source-bound operations for active
 list memberships. Selected-list sync caches received peer positions locally for
 offline lookup under the same grant. Revoking and renewing the grant prevents
-reuse of the previous cache. Automatic capture and the reader action for
-opening a suggested page remain open.
+reuse of the previous cache. List sync publishes current locally saved positions backed by a matching reader
+receipt and verified original, including moves to earlier pages. Imported positions
+and restored memberships are excluded from automatic publication. Opening a
+suggested page in the reader remains open.
 
 1. **Authorize and identify.** Add an explicit page-sharing grant per selected
    list on each device. Publish a versioned optional directory head only on the

@@ -1848,14 +1848,29 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
 
     desktop = service("desktop")
     desktop.choose_position_sync("list", True, Ticket(), lambda _: None)
+    from test_reading_positions import prepared, view
+
+    from paper_daily import reading_position_ops, reading_positions
+
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("BEGIN")
+        reading_positions.initialize(conn)
+    original = pdf_bytes(3)
+    path = source.parent / "paper.pdf"
+    path.write_bytes(original)
+    native = view(source, path, paper="paper")
+    assert reading_position_ops.save(prepared(native, page=2))["status"] == "saved"
+    desktop.sync_saved_library(Ticket(), lambda _: None)
     files, store, saved, remote, *_ = desktop._library_view
     sender = DriveDirectory(files, remote.folder, remote.head, remote.library_id, positions=True)
     history = DriveListPositions(sender, store, "list", revision=saved.revision)
-    paper = next(iter(history.memberships.values()))[0]
-    original = pdf_bytes(3)
-    sent = history.publish_page(paper, hashlib.sha256(original).hexdigest(),
-                                dict(page=2, recorded_at=STAMP, method="entered"), original,
-                                predecessor=None, revision=saved.revision)
+    before, (sent,) = history.suggestions(revision=saved.revision)
+    assert sent["payload"]["data"]["page"] == 2
+    assert sent["payload"]["key"] == hashlib.sha256(original).hexdigest()
+    desktop.sync_saved_library(Ticket(), lambda _: None)
+    _, store, saved, *_ = desktop._library_view
+    history = DriveListPositions(sender, store, "list", revision=saved.revision)
+    assert history.suggestions(revision=saved.revision) == (before, [sent])
     laptop = service("laptop")
 
     def sync():
@@ -1879,3 +1894,10 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
     assert not sync()["position_suggestions"]
     laptop.choose_position_sync("list", True, Ticket(), lambda _: None)
     assert not offline()
+    assert reading_position_ops.save(prepared(view(source, path, paper="paper"), page=1))[
+        "status"
+    ] == "saved"
+    desktop.sync_saved_library(Ticket(), lambda _: None)
+    (updated,) = sync()["position_suggestions"]["list"]
+    assert updated["depends_on"] == sent["operation_id"]
+    assert updated["payload"]["data"]["page"] == 1

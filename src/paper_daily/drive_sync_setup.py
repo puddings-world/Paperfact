@@ -478,14 +478,24 @@ class DriveSetup:
                             reason = f"Reading progress differs on {len(differing)} papers"
                             reasons = (reviews.get(list_id), reason)
                             reviews[list_id] = " · ".join(filter(None, reasons))
-                    if directory.positions and list_id in result.get("position_lists", ()):
+                    if list_id in result.get("position_lists", ()):
                         from paper_daily.drive_list_history import DriveListPositions
                         from paper_daily.drive_position_cache import retain
+                        from paper_daily.drive_position_publish import publish_recorded
 
+                        if not directory.positions:
+                            directory = DriveDirectory(
+                                directory.files, directory.folder, directory.head,
+                                directory.library_id, positions=True,
+                                membership_changes=directory.membership_changes,
+                                membership_restores=directory.membership_restores,
+                            )
                         history = DriveListPositions(directory, store, list_id,
                                                      revision=selection.revision)
                         history.check_source = ticket.check
                         head, tips = history.suggestions(revision=selection.revision)
+                        if publish_recorded(history, tips, selection.revision, ticket):
+                            head, tips = history.suggestions(revision=selection.revision)
                         position_grants[list_id] = history.grant
                         position_suggestions[list_id] = retain(
                             history, head, tips, selection.revision, ticket
