@@ -387,6 +387,8 @@ def test_startup_sync_retries_offline_and_honors_withdrawal(dialog):
 
     def reconnect(ticket, progress, *, startup_record):
         attempts.append(startup_record)
+        progress({"stage": "local_page_scopes", "stamp": startup_record,
+                  "scopes": {"test-list": ("device", "folder", "head", "test-list", 1)}})
         if len(attempts) == 1:
             raise ConnectionError("offline")
         setup.files = object()
@@ -410,6 +412,7 @@ def test_startup_sync_retries_offline_and_honors_withdrawal(dialog):
     runner.tick()
     wait(app, lambda: runner.worker is None)
     assert runner.state == "offline" and not exchanges
+    assert "test-list" in runner.position_scopes
     runner.tick()
     wait(app, lambda: runner.worker is None)
     assert attempts == ["saved", "saved"] and runner.state == "waiting" and not exchanges

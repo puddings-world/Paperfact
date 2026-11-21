@@ -527,7 +527,7 @@ reuse of the previous cache. List sync publishes current locally saved positions
 receipt and verified original, including moves to earlier pages. Imported positions
 and restored memberships are excluded from automatic publication. The reader can open cached suggestions in an active selected-list session after
 checking its current grant, local membership, exact loaded original and page.
-Cold-start discovery before reconnecting remains open.
+On startup the worker can restore local page scopes from the matching native-vault grant before contacting Drive. This requires the startup opt-in and a current per-list page grant. Physical offline-restart acceptance remains open.
 
 
 1. **Authorize and identify.** Add an explicit page-sharing grant per selected

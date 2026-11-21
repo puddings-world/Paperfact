@@ -126,6 +126,15 @@ class DriveSetup:
             or vault.binding.startup_record() != startup_record
         ):
             raise PermissionError("The saved library startup authorization changed")
+        if startup_record is not None:
+            store = self._device_selection(grant.owner_id)
+            selection = store.load()
+            scopes = {key: (store, grant.folder_id, grant.head_id, key, selection.revision)
+                      for key in store.position_lists() if key in selection.selected}
+            self.check(ticket)
+            if vault.binding.startup_record() != startup_record:
+                raise PermissionError("Automatic library reconnect is disabled")
+            progress({"stage": "local_page_scopes", "stamp": startup_record, "scopes": scopes})
         files = DriveFiles(grant.session(), cancelled=lambda: ticket.cancelled)
         try:
             owner = files.account()
@@ -162,6 +171,13 @@ class DriveSetup:
             "library": library,
         }
 
+    def _device_selection(self, owner_id):
+        return DeviceSelection(
+            self.workspace.path, owner_id=owner_id, library_id="personal",
+            device_id=self.binding.account, current_path=self.workspace.current_path,
+            root=self.profiles.parent / "Paperfact-settings" / "library-sync",
+        )
+
     def read_library(self, ticket, *, expected_directory=None):
         """Discover names and device intent without creating or transferring research."""
         self.check(ticket)
@@ -177,14 +193,7 @@ class DriveSetup:
         ):
             raise ValueError("The selected Drive directory changed; reopen the list settings")
         library_id = "personal"
-        store = DeviceSelection(
-            self.workspace.path,
-            owner_id=self.account["id"],
-            library_id=library_id,
-            device_id=self.binding.account,
-            current_path=self.workspace.current_path,
-            root=self.profiles.parent / "Paperfact-settings" / "library-sync",
-        )
+        store = self._device_selection(self.account["id"])
         local = inspect_lists(self.workspace.path, library_id, ticket=ticket)
         remote = observation = None
         if directories:

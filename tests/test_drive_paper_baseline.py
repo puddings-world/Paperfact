@@ -1794,6 +1794,7 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
     first.remember_library(Ticket(), startup=True)
     stamp = first.library_startup_record()
     assert stamp and len(native.rows) == 1
+    first.choose_position_sync("list", True, Ticket(), progress)
     before, objects = source.read_bytes(), dict(cloud.objects)
 
     def unexpected(**kwargs):
@@ -1801,6 +1802,18 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
 
     second = drive_sync_setup.DriveSetup(source, **options, authorize=unexpected)
     assert second.files is None
+    events = []
+    def offline():
+        assert events and events[0]["stage"] == "local_page_scopes"
+        raise ConnectionError("offline")
+    with monkeypatch.context() as patch:
+        patch.setattr(files, "account", offline)
+        with pytest.raises(ConnectionError, match="offline"):
+            second.reconnect_library(Ticket(), events.append, startup_record=stamp)
+    local, folder, head, list_id, revision = events[0]["scopes"]["list"]
+    directory = first._library_view[3]
+    assert (folder, head, list_id) == (directory.folder, directory.head, "list")
+    assert local.position_grant(list_id, revision) and not second.files
     overview = second.reconnect_library(Ticket(), progress, startup_record=stamp)
     assert [row["id"] for row in overview["library"]["items"] if row["selected"]] == ["list"]
     assert before == source.read_bytes() and objects == cloud.objects
@@ -1823,15 +1836,18 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
         third.reconnect_library(Ticket(), progress)
     assert not native.rows and before == source.read_bytes() and objects == cloud.objects
 
-def test_saved_library_receives_peer_position_only_after_separate_grant(source, tmp_path):
+def test_saved_library_receives_peer_position_only_after_separate_grant(
+    source, tmp_path, monkeypatch
+):
     import hashlib
 
+    from test_drive_sync_files import GrantStore
     from test_reading_positions import pdf_bytes
 
     from paper_daily.drive_list_history import DriveListPositions
     from paper_daily.drive_sync_setup import DriveSetup
 
-    cloud = Cloud()
+    cloud, vault = Cloud(), GrantStore()
     def service(label):
         path = source
         if label == "laptop":
@@ -1841,7 +1857,8 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
             with closing(sqlite3.connect(path)) as conn:
                 conn.executescript(SCHEMA)
         instance = DriveSetup(path, profiles=tmp_path / label / "profiles",
-                              cache=tmp_path / label / "cache")
+                              cache=tmp_path / label / "cache", backend=lambda: vault,
+                              startup_dir=tmp_path / label / "startup")
         instance.files = authority(cloud, tmp_path / label / "authority").files
         instance.account = instance.files.account()
         instance.read_library(Ticket())
@@ -1906,9 +1923,27 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
     from paper_daily.drive_position_cache import for_original
 
     _, local, saved, remote, *_ = laptop._library_view
+    from paper_daily import drive_sync_setup
+    from paper_daily.drive_sync_credentials import DriveGrant
+
+    laptop.files.session.client = {"client_id": "fixture.apps.googleusercontent.com"}
+    laptop.files.session.token = {"refresh_token": "fixture-refresh"}
+    laptop.remember_library(Ticket(), startup=True)
+    cold = DriveSetup(local.workspace.path, profiles=laptop.profiles, cache=laptop.cache,
+                      **laptop.vault_options)
+    events = []
+    with monkeypatch.context() as patch:
+        patch.setattr(DriveGrant, "session", lambda self: laptop.files.session)
+        def offline_transport(*args, **kwargs):
+            raise ConnectionError("fixture offline")
+        patch.setattr(drive_sync_setup, "DriveFiles", offline_transport)
+        with pytest.raises(ConnectionError):
+            cold.reconnect_library(Ticket(), events.append,
+                                   startup_record=cold.library_startup_record())
+    scope = events[0]["scopes"]["list"]
+    assert scope[0] is not local and cold.files is None
     with closing(sqlite3.connect(local.workspace.path)) as conn:
         local_id, = conn.execute("SELECT paper_id FROM list_papers WHERE list_id='list'").fetchone()
-        scope = local, remote.folder, remote.head, "list", saved.revision
         digest = sent["payload"]["key"]
         assert for_original(*scope, local_id, digest) == [updated]
         assert not for_original(*scope, local_id, "0" * 64)

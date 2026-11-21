@@ -1,6 +1,6 @@
 """Window-owned polling of an explicitly selected, signed-in personal library."""
 
-from PySide6.QtCore import QEvent, QObject, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QTimer, Signal, Slot
 
 from paper_daily.desktop.sync_connection_dialog import SyncWorker, _background_busy
 
@@ -103,6 +103,7 @@ class SavedListSync(QObject):
             self.timer.start(5000)
             return
         if self.startup_stamp and self.service.library_startup_record() != self.startup_stamp:
+            self.position_scopes.clear()
             self.stop()
             return
         service, stamp = self.service, self.startup_stamp
@@ -112,15 +113,26 @@ class SavedListSync(QObject):
         else:
             task = service.sync_saved_library
         self.worker = SyncWorker(task, self)
+        if stamp and self.files is None:
+            self.worker.progress.connect(self._startup_progress)
         self.worker.finished.connect(self._finished)
         self.state = "working"
         self.changed.emit()
         self.worker.start()
 
+    @Slot(object)
+    def _startup_progress(self, update):
+        if (self.sender() is self.worker and self.worker and not self.worker.ticket.cancelled
+                and self.service and self.startup_stamp and isinstance(update, dict)
+                and update.get("stage") == "local_page_scopes"
+                and update["stamp"] == self.startup_stamp == self.service.library_startup_record()):
+            self.position_scopes = update["scopes"]
+
     def _finished(self):
         worker, self.worker = self.worker, None
         if self.service is not None and not worker.ticket.cancelled:
             if self.startup_stamp and self.service.library_startup_record() != self.startup_stamp:
+                self.position_scopes.clear()
                 self.stop()
             elif self.startup_stamp and self.files is None and not worker.error:
                 self.files = self.service.files
