@@ -227,3 +227,84 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             ).fetchall()
             assert len(titles) == 3
             assert {("Desktop discovery",), ("Laptop discovery",)} <= set(titles)
+
+
+def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
+    source, tmp_path, monkeypatch
+):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
+    from test_sync_connection_dialog import wait
+
+    from paper_daily import drive_sync_setup, store
+    from paper_daily.desktop.drive_sync_dialog import DriveSyncDialog
+    from paper_daily.workspace_sync import SyncSession
+
+    app = QApplication.instance() or QApplication([])
+    cloud = Cloud()
+    laptop = tmp_path / "mac-research" / "papers.db"
+    laptop.parent.mkdir()
+    with closing(sqlite3.connect(laptop)) as conn:
+        conn.executescript(store.SCHEMA)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
+    windows = []
+    try:
+        for label, path in (("win", source), ("mac", laptop)):
+            files = authority(cloud, tmp_path / label / "authority").files
+            monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, f=files, **kw: f)
+            setup = drive_sync_setup.DriveSetup(
+                path, profiles=tmp_path / label / "profiles", cache=tmp_path / label / "cache",
+                authorize=lambda f=files, **kw: f.session,
+            )
+            owner = QWidget()
+            view = DriveSyncDialog(SyncSession(path), owner, owner=owner,
+                                   service_factory=lambda *a, s=setup, **kw: s)
+            windows.append((owner, view))
+            view.show()
+            view.login.click()
+            wait(app, lambda v=view: not v.busy)
+            for i in range(view.directory_lists.count()):
+                row = view.directory_lists.item(i)
+                if row.data(Qt.ItemDataRole.UserRole) == "list":
+                    row.setCheckState(Qt.CheckState.Checked)
+            view.save_selection.click()
+            wait(app, lambda v=view: not v.busy)
+            view.keep_syncing.click()
+            assert view.background.service is setup, (label, view.status.text())
+            assert view.close()
+            view.background.timer.stop()
+
+        for path, key in ((source, "desktop-add"), (laptop, "laptop-add")):
+            with closing(sqlite3.connect(path)) as conn, conn:
+                conn.execute(
+                    "INSERT INTO papers(id,title,title_key,venue,year,source) "
+                    "VALUES(?,?,?,'Fixture',2026,'fixture')", (key, key, key),
+                )
+                conn.execute(
+                    "INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                    "VALUES('list',?,1,?)", (key, STAMP),
+                )
+        with closing(sqlite3.connect(source)) as conn, conn:
+            conn.execute("INSERT INTO lists VALUES('private','Keep local',NULL,?)", (STAMP,))
+
+        for index in (0, 1, 0):
+            runner = windows[index][1].background
+            # Deliver a real timer event now instead of waiting half a minute.
+            runner.timer.start(1)
+            wait(app, lambda r=runner: r.state == "working")
+            wait(app, lambda r=runner: r.worker is None)
+            assert runner.state == "waiting" and runner.timer.interval() == 30000
+        for path in (source, laptop):
+            with closing(sqlite3.connect(path)) as conn:
+                assert sorted(row[0] for row in conn.execute(
+                    "SELECT title FROM papers JOIN list_papers ON papers.id=list_papers.paper_id "
+                    "WHERE list_id='list'"
+                )) == ["Research paper", "desktop-add", "laptop-add"]
+        visible = windows[1][1].service.read_library(Ticket())
+        assert all(item["id"] != "private" for item in visible["items"])
+    finally:
+        for owner, view in windows:
+            view.background.stop()
+            wait(app, lambda v=view: v.background.worker is None)
+            view.close()
+            owner.close()

@@ -1,5 +1,34 @@
 # Mac v0.5 acceptance
 
+## Background exchange with settings closed
+
+[Download the 0a06ab1 Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44866074184/artifacts/14692485781).
+The copied app passed three native reader launches after DMG detach. Image SHA-256:
+`a09a93f50524e1f488db9aef1e9b18fa0d9f02f0add031f59620f014f05695b9`.
+Use commit **0a06ab1** on both computers. Start with disposable workspaces,
+one shared test account and one saved test list containing a single paper.
+
+1. In personal Drive sync on each desktop, enable **Sync saved lists while
+   Paperfact is open**, then close settings and leave both readers open.
+2. Disconnect both computers. Add a different paper to the selected list on
+   each while offline. Create a second local list on Windows. Reconnect without
+   clicking Save or Sync. Let both background workers finish. A successful
+   pass normally schedules the next check in 30 seconds; offline retries back
+   off to five minutes. Check the reader on both devices for all three papers.
+3. Reopen settings on Mac and disable background sync. Add a paper on Windows.
+   Sign in again on Mac to inspect the directory: the private Windows list
+   name should be absent. The new paper should arrive only after explicitly
+   syncing or enabling background sync and closing settings again.
+4. Restart Paperfact and confirm session-only sync is off. Sign in and opt in
+   again. Record both build IDs, whether each device resumed, and how long
+   convergence took. If sync pauses, open settings and use **Sync saved lists
+   now** after signing in to inspect per-list review messages.
+
+The Windows synthetic two-window journey uses the real Qt login/selection
+buttons, timer events and separate SQLite databases against an in-memory Drive.
+It verifies ordinary list convergence and private-name exclusion. Physical
+network outages, Google consent and Mac sleep/wake still need device testing.
+
 ## Sync saved lists on Apple Silicon
 
 [Download the 3ab306e Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44864991557/artifacts/14691935547).
