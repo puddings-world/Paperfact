@@ -162,6 +162,10 @@ class DriveSyncDialog(QDialog):
                                               "允許同步這份清單的 PDF"))
         self.pdf_toggle.setCheckable(True)
         self.pdf_toggle.clicked.connect(self._choose_pdfs)
+        self._position_lists = set()
+        self.position_toggle = QPushButton(self.tr("Sync PDF page numbers", "同步 PDF 續讀頁碼"))
+        self.position_toggle.setCheckable(True)
+        self.position_toggle.clicked.connect(self._choose_positions)
         self._reading_lists = set()
         self.reading_toggle = QPushButton(self.tr("Sync reading status", "同步閱讀狀態"))
         self.reading_toggle.setCheckable(True)
@@ -172,6 +176,7 @@ class DriveSyncDialog(QDialog):
         self.dive_toggle.clicked.connect(self._choose_dives)
         content_row = QHBoxLayout()
         content_row.addWidget(self.reading_toggle)
+        content_row.addWidget(self.position_toggle)
         content_row.addWidget(self.pdf_toggle)
         content_row.addWidget(self.dive_toggle)
         layout.addLayout(content_row)
@@ -329,7 +334,7 @@ class DriveSyncDialog(QDialog):
             self.background.stop()
         if kind not in {"login", "restore", "remember", "forget", "refresh", "toggle", "selection",
                         "sync_saved", "notes", "startup_on", "startup_off",
-                        "compare", "resolve", "pdfs", "dives", "reading"}:
+                        "compare", "resolve", "pdfs", "dives", "reading", "positions"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -399,6 +404,7 @@ class DriveSyncDialog(QDialog):
         self._pdf_lists = set(library.get("pdf_lists", ()))
         self._pdf_review_titles = library.get("pdf_review_titles", {})
         self._shown_pdf_titles = None
+        self._position_lists = set(library.get("position_lists", ()))
         self._reading_lists = set(library.get("reading_lists", ()))
         self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
@@ -462,6 +468,9 @@ class DriveSyncDialog(QDialog):
         self.pdf_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.pdf_toggle.setChecked(list_id in self._pdf_lists)
         self.pdf_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.position_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.position_toggle.setChecked(list_id in self._position_lists)
+        self.position_toggle.setEnabled(self.sync_lists.isEnabled())
         self.reading_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.reading_toggle.setChecked(list_id in self._reading_lists)
         self.reading_toggle.setEnabled(self.sync_lists.isEnabled())
@@ -595,6 +604,27 @@ class DriveSyncDialog(QDialog):
                 self.status.setText(self.tr("Both versions retained.", "已保留兩個版本。"))
         finally:
             dialog.deleteLater()
+
+    def _choose_positions(self, checked):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.position_toggle.isEnabled():
+            self._list_buttons()
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        if checked and QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr("Share PDF page numbers for this list through your private Drive? "
+                    "Enable on both updated devices. First upload upgrades the directory to v11.",
+                    "透過私人 Drive 分享這份清單的 PDF 續讀頁碼？請在兩台裝置更新後分別啟用。"
+                    "首次上傳頁碼會將目錄升級至 v11。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            self._list_buttons()
+            return
+        if not self._start("positions", lambda ticket, progress:
+                           self.service.choose_position_sync(key, checked, ticket, progress)):
+            self._list_buttons()
 
     def _choose_reading(self, checked):
         item = self.directory_lists.currentItem()
@@ -878,6 +908,10 @@ class DriveSyncDialog(QDialog):
             elif kind == "resolve":
                 self.status.setText(self.tr("Choice saved. Sync to exchange the selected version.",
                                             "已儲存選擇，下次同步時會交換選定的版本。"))
+            elif kind == "positions":
+                self._show_directory(result)
+                self.status.setText(self.tr("Page number preference saved.",
+                                            "已儲存續讀頁碼同步設定。"))
             elif kind == "reading":
                 self._show_directory(result)
                 self.status.setText(self.tr("Reading status preference saved.",

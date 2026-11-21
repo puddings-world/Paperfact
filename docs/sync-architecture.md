@@ -519,12 +519,12 @@ Proposed for ordinary selected lists. Today a full list package can carry a
 recorded page with its matching original. Drive exchanges list reading status.
 The optional v11 positions head is implemented in the directory codec and Drive
 transport. The setup service stores a separate position grant for each selected
-list on this device and revokes it on deselection. The desktop does not offer
-the switch yet. The transport can exchange source-bound operations for active
+list on this device and revokes it on deselection. The desktop offers this grant for the currently selected
+saved list. The transport can exchange source-bound operations for active
 list memberships. Selected-list sync caches received peer positions locally for
 offline lookup under the same grant. Revoking and renewing the grant prevents
-reuse of the previous cache. Automatic capture and the desktop controls for
-sharing and opening a suggested page remain open.
+reuse of the previous cache. Automatic capture and the reader action for
+opening a suggested page remain open.
 
 1. **Authorize and identify.** Add an explicit page-sharing grant per selected
    list on each device. Publish a versioned optional directory head only on the
