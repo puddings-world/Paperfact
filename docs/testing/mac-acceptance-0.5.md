@@ -2,20 +2,30 @@
 
 ## Start here on Apple Silicon
 
-Use build **eefb42b** on both devices for a paired installation test. This candidate recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **c256275** on both devices for a paired installation test. This candidate can reconnect an explicitly remembered library sign-in. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44888445891/artifacts/14700759222) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44888445891/artifacts/14700652559) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44890331702/artifacts/14701348834) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44890331702/artifacts/14700804642) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44888445891) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44890331702) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
+## Reopen a library with a saved Google sign-in
+
+Run this check independently on Windows and macOS in a disposable workspace.
+
+1. Sign in to personal Drive, select a test list and save the selection. Open the arrow beside **Sign in / switch Google account** and choose **Remember list sign-in on this device**. Confirm the app reports that the system credential store saved it.
+2. Quit Paperfact completely and reopen the same workspace. Open the Drive dialog and choose **Reconnect saved library**. Verify the account and selected list match, no browser login opens, and background sync is still off.
+3. Enable **Sync saved lists while Paperfact is open** to test an exchange. Then choose **Forget saved list sign-in on this device**, quit and reopen. Reconnect should now ask you to sign in. Confirm the list and its downloaded research remain available offline.
+
+Record the build ID, operating system and first failing step. Mention whether the system credential store prompted or denied access. Keep account and token values out of the report.
+
 ## Verify a large bibliography round trip
 
-1. Confirm both installed apps show **eefb42b**. Publishing a large bibliography upgrades the shared directory to v8. All devices using that directory need v8 support.
+1. Confirm both installed apps show **c256275**. Publishing a large bibliography upgrades the shared directory to v8. All devices using that directory need v8 support.
 2. In the disposable Windows workspace, choose a list with over 5,000 papers. Record its count and a few titles near the start, middle and end. Select the list for sync and leave PDF transfer off during this check.
 3. On the Mac, sign in to the same Google account, select that list and synchronize. Compare counts and titles in list order. Disconnect, reopen Paperfact and confirm the received bibliography is readable.
 4. Add a uniquely titled paper to that list on the offline Mac. Reconnect, sync the Mac and then Windows. Both counts should increase by one and the new title should appear once. Sync again and confirm the counts stay unchanged.
