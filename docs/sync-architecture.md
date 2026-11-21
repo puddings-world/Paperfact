@@ -525,8 +525,10 @@ list memberships. Selected-list sync caches received peer positions locally for
 offline lookup under the same grant. Revoking and renewing the grant prevents
 reuse of the previous cache. List sync publishes current locally saved positions backed by a matching reader
 receipt and verified original, including moves to earlier pages. Imported positions
-and restored memberships are excluded from automatic publication. Opening a
-suggested page in the reader remains open.
+and restored memberships are excluded from automatic publication. The reader can open cached suggestions in an active selected-list session after
+checking its current grant, local membership, exact loaded original and page.
+Cold-start discovery before reconnecting remains open.
+
 
 1. **Authorize and identify.** Add an explicit page-sharing grant per selected
    list on each device. Publish a versioned optional directory head only on the

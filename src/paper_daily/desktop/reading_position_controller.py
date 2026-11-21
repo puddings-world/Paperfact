@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import Event
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QLabel, QMenu, QPushButton
 from shiboken6 import isValid
 
 from paper_daily import reading_position_ops as operations
@@ -22,6 +22,9 @@ MESSAGES = {
     "remember": ("記住此頁", "Remember page"),
     "resume": ("前往記錄頁", "Resume page"),
     "check": ("檢查頁碼記錄", "Check page record"),
+    "peers": ("其他裝置的頁碼…", "Pages from other devices…"),
+    "no_peers": ("此原文尚未收到其他裝置的頁碼。", "No shared pages for this PDF yet."),
+    "peer_page": ("裝置 {device} · 第 {page} 頁", "Device {device} · page {page}"),
     "stop": ("停止", "Stop"),
     "checking": ("正在核對原文與頁碼…", "Checking original and page…"),
     "saving": ("正在記錄閱讀頁碼…", "Recording reading page…"),
@@ -127,8 +130,14 @@ class _Worker(QThread):
                 committed = operations.save(prepared, cancelled=self._cancelled, with_proof=True)
                 if committed is not None:
                     self.result = (operations.refresh(prepared.view), committed.result, committed)
-            elif self.kind == "resume":
-                view, expected = self.data
+            elif self.kind == "peer_choices":
+                from paper_daily.drive_position_cache import for_original
+
+                view, scope = self.data
+                self.result = for_original(*scope, view.highlight.owner.paper_id,
+                                           view.highlight.fingerprint)
+            elif self.kind in ("resume", "peer_resume"):
+                view, expected, *extra = self.data
 
                 def visit(page):
                     decision = {
@@ -139,12 +148,14 @@ class _Worker(QThread):
                     self.visit.emit(decision)
                     return decision["accepted"]
 
-                self.result = operations.navigate(
-                    view,
-                    expected,
-                    visit,
-                    cancelled=self._cancelled,
-                )
+                if self.kind == "peer_resume":
+                    from paper_daily.drive_position_cache import navigate
+
+                    self.result = navigate(*extra[0], view, expected, visit,
+                                           cancelled=self._cancelled)
+                else:
+                    self.result = operations.navigate(
+                        view, expected, visit, cancelled=self._cancelled)
         except Exception as exc:
             self.error = True
             self.exception = exc
@@ -185,6 +196,8 @@ class ReadingPositionController(QObject):
         self.remember_button = QPushButton(message("remember", locale))
         self.resume_button = QPushButton(message("resume", locale))
         self.check_button = QPushButton(message("check", locale))
+        self.peer_button = QPushButton(message("peers", locale))
+        self.peer_menu = QMenu(self.peer_button)
         self.stop_button = QPushButton(message("stop", locale))
         self.status = QLabel(message("unavailable", locale))
         self.status.setWordWrap(True)
@@ -195,6 +208,7 @@ class ReadingPositionController(QObject):
             (self.remember_button, self.remember),
             (self.resume_button, self.resume),
             (self.check_button, self.check),
+            (self.peer_button, self._check_peers),
             (self.stop_button, self.cancel),
         ):
             button.clicked.connect(callback)
@@ -255,6 +269,8 @@ class ReadingPositionController(QObject):
         self.remember_button.setEnabled(ready and not self.busy)
         self.resume_button.setEnabled(ready and self.suggestion is not None and not self.busy)
         self.check_button.setEnabled(not self.busy and self._context() is not None)
+        self.peer_button.setVisible(self._peer_scope() is not None)
+        self.peer_button.setEnabled(ready and not self.busy)
         self.stop_button.setVisible(self.busy and not self._quiet)
 
     def invalidate(self):
@@ -314,7 +330,7 @@ class ReadingPositionController(QObject):
             return True
         self._text(
             "resuming"
-            if kind == "resume"
+            if kind in ("resume", "peer_resume")
             else "saving"
             if kind in ("remember", "observed")
             else "checking"
@@ -364,8 +380,26 @@ class ReadingPositionController(QObject):
                 self._text("retained", page=result["position"]["page"])
             else:
                 self._show_suggestion()
-        elif worker.kind == "resume":
-            self._show_suggestion() if worker.result else self._text("cancelled")
+        elif worker.kind == "peer_choices" and self._peer_scope() == worker.data[1]:
+            self.peer_menu.clear()
+            for op in worker.result:
+                text = message("peer_page", self.locale, device=op["device_id"][:8],
+                               page=op["payload"]["data"]["page"])
+                action = self.peer_menu.addAction(text)
+                action.triggered.connect(lambda _, selected=op, args=worker.data:
+                                         self._choose_peer(selected, *args))
+            if self.peer_menu.actions():
+                corner = self.peer_button.rect().bottomLeft()
+                self.peer_menu.popup(self.peer_button.mapToGlobal(corner))
+            else:
+                self._text("no_peers")
+        elif worker.kind in ("resume", "peer_resume"):
+            if worker.result and worker.kind == "peer_resume":
+                self.status.setText(message("peer_page", self.locale,
+                                            device=worker.data[1]["device_id"][:8],
+                                            page=worker.data[1]["payload"]["data"]["page"]))
+            else:
+                self._show_suggestion() if worker.result else self._text("cancelled")
         self._update()
         if self._pending is not None:
             self.timer.start()
@@ -406,11 +440,38 @@ class ReadingPositionController(QObject):
         return self._start("remember", (self.view, page, None, None))
 
     def check(self, *, quiet=False):
-        if self.busy or self._pending is not None or self.observer.pending_input:
+        if (self.busy or self._pending is not None or self.observer.pending_input
+                or (quiet and self.peer_menu.isVisible())):
             return False
         if self.view is None or not self._valid():
             return self.bind()
         return self._start("check", self.view, quiet=quiet)
+
+    def _peer_scope(self):
+        win = getattr(self.reader, "win", None)
+        background = getattr(win, "_saved_list_sync", None)
+        service = getattr(background, "service", None)
+        library = getattr(service, "_library_view", None)
+        if not library or service.files is not background.files:
+            return None
+        files, store, selection, directory, *_ = library
+        list_id = getattr(win, "_reader_list_id", None) or getattr(win, "active_list", None)
+        if not directory or files is not service.files or list_id not in selection.selected:
+            return None
+        return store, directory.folder, directory.head, list_id, selection.revision
+
+    def _check_peers(self):
+        scope = self._peer_scope()
+        if scope and self.view is not None and not self.busy:
+            self._start("peer_choices", (self.view, scope))
+
+    def _choose_peer(self, op, view, scope):
+        if scope != self._peer_scope() or self.view is not view or self._pending is not None:
+            return
+        if self._draft():
+            self._text("draft")
+            return
+        self._start("peer_resume", (view, op, scope))
 
     def resume(self):
         if self.busy or self._pending is not None or self.view is None or not self._valid():
@@ -428,6 +489,7 @@ class ReadingPositionController(QObject):
             self._disposed
             or self._thread is None
             or self._thread.cancelled.is_set()
+            or (self._thread.kind == "peer_resume" and self._thread.data[2] != self._peer_scope())
             or self._epoch != self._started_epoch
             or not self._valid()
             or self._draft()

@@ -585,3 +585,30 @@ def test_an_asked_check_still_shows_that_it_is_working(reader, monkeypatch):
     release.set()
     idle(app, controller)
     assert not controller.stop_button.isVisible()
+
+
+def test_peer_choice_waits_for_explicit_action_and_preserves_local_record(reader, monkeypatch):
+    from paper_daily import drive_position_cache
+
+    app, widget, controller, database, _, _ = reader
+    scope = object(), "folder", "head", "list", 1
+    monkeypatch.setattr(controller, "_peer_scope", lambda: scope)
+    op = dict(device_id="abcdef012345", payload=dict(data=dict(page=3)))
+    monkeypatch.setattr(drive_position_cache, "for_original", lambda *args: [op])
+    monkeypatch.setattr(drive_position_cache, "navigate",
+                        lambda *args, cancelled: not cancelled() and args[-1](3))
+    controller._update()
+    controller.peer_button.click()
+    idle(app, controller)
+    assert widget.pdf.current_page() == 0
+    action, = controller.peer_menu.actions()
+    assert "page 3" in action.text()
+    widget.ask_box.setText("keep draft")
+    action.trigger()
+    assert widget.pdf.current_page() == 0 and not controller.busy
+    widget.ask_box.clear()
+    controller.peer_menu.close()
+    action.trigger()
+    idle(app, controller)
+    assert widget.pdf.current_page() == 2
+    assert records(database, positions.TABLE) == []

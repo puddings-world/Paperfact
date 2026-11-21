@@ -1901,3 +1901,32 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
     (updated,) = sync()["position_suggestions"]["list"]
     assert updated["depends_on"] == sent["operation_id"]
     assert updated["payload"]["data"]["page"] == 1
+    from paper_daily.drive_position_cache import for_original
+
+    _, local, saved, remote, *_ = laptop._library_view
+    with closing(sqlite3.connect(local.workspace.path)) as conn:
+        local_id, = conn.execute("SELECT paper_id FROM list_papers WHERE list_id='list'").fetchone()
+        scope = local, remote.folder, remote.head, "list", saved.revision
+        digest = sent["payload"]["key"]
+        assert for_original(*scope, local_id, digest) == [updated]
+        assert not for_original(*scope, local_id, "0" * 64)
+        assert not for_original(*scope, "another-local-paper", digest)
+        from paper_daily.drive_position_cache import navigate
+
+        path = local.workspace.path.parent / "downloaded.pdf"
+        path.write_bytes(original)
+        conn.execute("BEGIN")
+        reading_positions.initialize(conn)
+        conn.commit()
+        loaded = reading_position_ops.capture(view(local.workspace.path, path, paper=local_id))
+        visited = []
+        def jump(choice):
+            return navigate(*scope, loaded, choice, lambda page: visited.append(page) or True,
+                            cancelled=lambda: False)
+        assert not jump(sent)
+        assert jump(updated) and visited == [1]
+        conn.execute("INSERT OR REPLACE INTO list_papers SELECT * FROM list_papers "
+                     "WHERE list_id='list' AND paper_id=?", (local_id,))
+        conn.commit()
+        assert not for_original(*scope, local_id, digest)
+        assert not jump(updated) and visited == [1]
