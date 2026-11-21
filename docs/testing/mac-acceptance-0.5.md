@@ -2,14 +2,14 @@
 
 ## Start here on Apple Silicon
 
-Use build **bf3a9b8** on both devices for a paired installation test. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **7211313** on both devices for a paired installation test. In sync settings, choose a marked list and keep or remove the affected paper. A restored entry can exchange reading progress in both directions. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44901217420/artifacts/14705544180) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44901217420/artifacts/14706346365) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44906699841/artifacts/14707679153) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44906699841/artifacts/14708082894) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44901217420) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44906699841) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
@@ -32,10 +32,16 @@ A separate local data folder alone does not isolate the remote directory.
    Both readers should show only C in the first list. Open B from the second
    list on each device and verify its note. Quit and reopen both applications,
    sync again and confirm the counts stay the same.
-5. If a previously installed device retained an edited or unverified membership,
-   record the review message and check that its local research is intact. A
-   retained conflict is a separate outcome from a converged list. Record both
-   build IDs, the sync order and the first unexpected result in the report.
+5. With background sync off, mark C as read on Mac. On Windows, remove C
+   and sync. Sync Mac, select the affected list, and verify the review names C.
+   Cancel **Keep in this list** once. The decision should remain available.
+6. Choose **Keep in this list** again and confirm. Sync Windows twice. Each
+   device should show C exactly once. On Mac it should retain its local
+   position and read status. Verify B and its note still open in the second list.
+7. Enable reading-progress sync on both devices and sync Mac, Windows, then Mac.
+   Both should show C as read. Mark C unread on Windows, sync both, and verify
+   the Mac reflects the change. Record both build IDs and the first step whose
+   result differs.
 
 ## Reopen a library with a saved Google sign-in
 
