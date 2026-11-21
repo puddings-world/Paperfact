@@ -31,6 +31,8 @@ class SavedListSync(QObject):
         }
         labels["note_conflict"] = "部分筆記需核對，其他內容持續同步"
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
+        labels["pdf_conflict"] = "PDF 版本不同，已保留原檔；其他內容持續同步"
+        labels["mixed_conflict"] = "多種內容版本不同，請查看清單；其他內容持續同步"
         button.setText(labels[self.state])
         button.setToolTip(labels[self.state])
 
@@ -84,15 +86,18 @@ class SavedListSync(QObject):
                 self.timer.start(min(300, 10 * 2 ** min(5, self.failures - 1)) * 1000)
             elif worker.error or (worker.result.get("reviews", {}).keys()
                                   - set(worker.result.get("note_conflicts", ()))
-                                  - set(worker.result.get("dive_conflicts", ()))):
+                                  - set(worker.result.get("dive_conflicts", ()))
+                                  - set(worker.result.get("pdf_conflicts", ()))):
                 self.stop("review")
             elif not any(item["selected"] for item in worker.result["items"]):
                 self.stop()
             else:
                 self.failures = 0
-                self.state = "note_conflict" if worker.result.get("note_conflicts") else "waiting"
-                if worker.result.get("dive_conflicts"):
-                    self.state = "dive_conflict"
+                conflicts = [kind for kind in ("note", "dive", "pdf")
+                             if worker.result.get(kind + "_conflicts")]
+                self.state = "waiting"
+                if conflicts:
+                    self.state = (conflicts[0] if len(conflicts) == 1 else "mixed") + "_conflict"
                 self.timer.start(30000)
         worker.deleteLater()
         self.changed.emit()

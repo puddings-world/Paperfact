@@ -247,6 +247,7 @@ class DriveSetup:
         reviews = {}
         note_conflicts = []
         dive_conflicts = set()
+        pdf_conflicts = set()
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
@@ -260,24 +261,32 @@ class DriveSetup:
                     if list_id in result.get("pdf_lists", ()):
                         from paper_daily.drive_reader_originals import exchange_originals
 
-                        exchange_originals(directory, self.cache, store, list_id,
-                                           selection.revision, ticket, self._pdf_versions)
+                        differing = exchange_originals(
+                            directory, self.cache, store, list_id, selection.revision, ticket,
+                            self._pdf_versions,
+                        )
+                        if differing:
+                            pdf_conflicts.add(list_id)
+                            reviews[list_id] = f"The local PDF differs from Drive ({differing})"
                     if list_id in result.get("dive_lists", ()):
                         from paper_daily.drive_reader_dives import exchange_dives
 
                         if exchange_dives(directory, store, list_id, selection.revision, ticket):
                             dive_conflicts.add(list_id)
-                            reviews[list_id] = "Saved explanations differ; review both versions"
+                            reason = "Saved explanations differ; review both versions"
+                            reasons = (reviews.get(list_id), reason)
+                            reviews[list_id] = " · ".join(filter(None, reasons))
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except NoteEditConflict as exc:
                 reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id), str(exc))))
                 note_conflicts.append(list_id)
             except ListReviewRequired as exc:
+                pdf_conflicts.discard(list_id)
                 dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
         return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
-                "dive_conflicts": sorted(dive_conflicts)}
+                "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 
     def _receipt(self, kind, spec=None):
         if self.files is None:

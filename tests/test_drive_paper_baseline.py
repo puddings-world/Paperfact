@@ -588,8 +588,31 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
             mac_pdf.write_bytes(other_pdf)
+            rewrite(laptop, local, "Guide edited beside a divergent PDF")
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Reading on Mac' WHERE page=5")
             report = devices[1].sync_saved_library(Ticket(), lambda _: None)
             assert "local PDF differs" in report["reviews"]["list"]
+            assert report["pdf_conflicts"] == ["list"]
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert saved(source, "paper") == ("Guide edited beside a divergent PDF",)
+            reopened.hide()
+            runner.tick()
+            wait(app, lambda: runner.worker is None)
+            assert runner.state == "pdf_conflict" and runner.timer.isActive()
+            with closing(sqlite3.connect(source)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Reading on Mac",
+                )
+            rewrite(source, "paper", "Competing desktop guide")
+            rewrite(laptop, local, "Competing laptop guide")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            runner.tick()
+            wait(app, lambda: runner.worker is None)
+            assert runner.state == "mixed_conflict" and runner.timer.isActive()
+            assert saved(laptop, local) == ("Competing laptop guide",)
+            assert saved(source, "paper") == ("Competing desktop guide",)
+            reopened.show()
             assert mac_pdf.read_bytes() == other_pdf
             with pymupdf.open(source.parent / "pdf" / "paper.pdf") as document:
                 assert document[0].get_text().strip() == "paper"

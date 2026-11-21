@@ -112,6 +112,7 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                 present = set()
         names = None
         blobs = None
+        conflicts = 0
         for local, paper in bindings.items():
             ticket.check()
             name = _safe_name(local)
@@ -133,7 +134,8 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
             if exists:
                 found = _document(path, memory)
                 if expected and found != expected:
-                    raise ListReviewRequired("The local PDF differs from its Drive original")
+                    conflicts += 1
+                    continue
                 if not expected:
                     index.publish(paper, index.members[paper], path, found)
             else:
@@ -141,3 +143,4 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                     blobs = BlobStore(cache / directory.folder / "verified")
                 _install(index, path, blobs, item["manifest"], expected)
         index.check()
+        return conflicts

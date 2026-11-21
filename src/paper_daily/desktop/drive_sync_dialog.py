@@ -483,6 +483,11 @@ class DriveSyncDialog(QDialog):
             elif self.background.state == "dive_conflict":
                 self.status.setText(self.tr("Guides differ. Other content keeps syncing.",
                                             "講解版本需核對，其他內容持續同步。"))
+            elif self.background.state in ("pdf_conflict", "mixed_conflict"):
+                self.status.setText(self.tr(
+                    "Conflicting versions retained. Sync saved lists now to see affected lists.",
+                    "已保留有差異的版本。按「立即同步已勾選清單」可查看受影響的清單。",
+                ))
             elif self.background.state == "review":
                 self.status.setText(self.tr(
                     "Sync paused. Check the connection and sync saved lists to review.",

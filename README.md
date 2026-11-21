@@ -155,7 +155,7 @@ Use the same preview on both computers. [Apple Silicon download and offline acce
 |---|---|---|
 | Paper list | Save the list selection | Open the list and find a paper added on the other computer. |
 | Paper notes | **Sync notes for this list** | Open a note and check its text and page. Conflicting edits can be reviewed under **Compare conflicting notes**. For older grants covering only new cards, toggle note sync off and on to allow edits. |
-| Original PDFs | **Allow PDF sync for this list** | Open a received original and turn a page. Different local originals are preserved for review. |
+| Original PDFs | **Allow PDF sync for this list** | Open a received original and turn a page. Different local originals are preserved for review while other PDFs, notes and guides continue syncing. |
 | Saved deep guides | **Sync saved explanations** | Open a received guide before its PDF arrives. The retry link reloads saved text locally. Use **編輯講解** on the guide to edit its Markdown offline. Open **Compare conflicting guides** to read both edits and their common version. Keep either version or decide later while other papers continue syncing. |
 
 For figures, highlights, slides or handing a colleague an independent copy, export a research package.
