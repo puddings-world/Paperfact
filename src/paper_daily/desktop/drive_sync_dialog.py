@@ -228,6 +228,10 @@ class DriveSyncDialog(QDialog):
         self.chat_toggle.setCheckable(True)
         self.chat_toggle.clicked.connect(self._choose_chat)
         layout.addWidget(self.chat_toggle)
+        self._linked_only_chat = {}
+        self.include_old_chat = QPushButton(self.tr("Include older Q&A", "也同步舊問答"))
+        self.include_old_chat.clicked.connect(lambda: self._choose_chat(True, upgrade=True))
+        layout.addWidget(self.include_old_chat)
         self._dive_lists = set()
         self.dive_toggle = QPushButton(self.tr("Sync saved explanations", "同步已儲存的深度講解"))
         self.dive_toggle.setCheckable(True)
@@ -486,6 +490,7 @@ class DriveSyncDialog(QDialog):
         self._position_lists = set(library.get("position_lists", ()))
         self._reading_lists = set(library.get("reading_lists", ()))
         self._chat_lists = set(library.get("chat_lists", ()))
+        self._linked_only_chat = library.get("linked_only_chat", {})
         self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
@@ -571,6 +576,8 @@ class DriveSyncDialog(QDialog):
         self.chat_toggle.setVisible(expanded)
         self.chat_toggle.setChecked(list_id in self._chat_lists)
         self.chat_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.include_old_chat.setVisible(expanded and list_id in self._linked_only_chat)
+        self.include_old_chat.setEnabled(self.chat_toggle.isEnabled())
         self.dive_toggle.setVisible(expanded)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
@@ -745,24 +752,28 @@ class DriveSyncDialog(QDialog):
         self._start("reading", lambda ticket, progress:
                     self.service.choose_reading_sync(key, checked, ticket, progress))
 
-    def _choose_chat(self, checked):
+    def _choose_chat(self, checked, *, upgrade=False):
         item = self.directory_lists.currentItem()
         if item is None or not self.chat_toggle.isEnabled():
             self._list_buttons()
             return
         key = item.data(Qt.ItemDataRole.UserRole)
+        previous = self._linked_only_chat.get(key) if upgrade else None
+        if upgrade and previous is None:
+            return
         if checked and QMessageBox.question(
             self, self.windowTitle(),
-            self.tr("Sync saved questions and answers to your private Drive? "
+            self.tr("Sync all saved questions and answers, including older conversations, "
+                    "to your private Drive? "
                     "Update both devices before exchanging messages.",
-                    "將此清單的問答同步到私人 Drive？請先更新兩台裝置。"),
+                    "將此清單的所有問答（含舊對話）同步到私人 Drive？請先更新兩台裝置。"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         ) != QMessageBox.StandardButton.Yes:
             self._list_buttons()
             return
-        self._start("chat", lambda ticket, progress:
-                    self.service.choose_chat_sync(key, checked, ticket, progress))
+        self._start("chat", lambda ticket, progress: self.service.choose_chat_sync(
+            key, checked, ticket, progress, previous=previous))
 
     def _choose_dives(self, checked):
         item = self.directory_lists.currentItem()

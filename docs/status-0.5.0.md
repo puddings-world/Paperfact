@@ -2,7 +2,7 @@
 
 Updated 2026-11-22. **Development candidate. Physical device acceptance is pending.**
 
-The [67ee253 desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) support automatic selected-list sync after confirming device enrollment. Newly checked lists include notes, linked Q&A, original PDFs, guides, reading status and page numbers. Previously saved lists retain their individual settings. Windows, Apple Silicon and Linux passed the [packaged research workflow](https://github.com/puddings-world/Paperfact/actions/runs/44932461721). The same run produced the [mobile web artifact for staging](https://github.com/puddings-world/Paperfact/actions/runs/44932461721/artifacts/14717618988). Physical personal Drive exchange and offline mobile acceptance over HTTPS are still pending.
+The [933e64e desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) support automatic selected-list sync after confirming device enrollment. Newly checked lists include notes, linked Q&A, original PDFs, guides, reading status and page numbers. Previously saved lists retain their individual settings. Windows, Apple Silicon and Linux passed the [packaged research workflow](https://github.com/puddings-world/Paperfact/actions/runs/44937128216). The same run produced the [mobile web artifact for staging](https://github.com/puddings-world/Paperfact/actions/runs/44937128216/artifacts/14720126087). Physical personal Drive exchange and offline mobile acceptance over HTTPS are still pending.
 
 The downloaded mobile artifact for **297c7a3** (content digest `9f5a5bb4a0de`) passed the offline reading and two-way plain-note journeys in Windows Chrome with isolated profiles. The reader reopened a cached PDF offline. A synthetic note survived an offline reload, queued once and reached an isolated desktop database through a loopback service. The desktop revision returned to the mobile reader. Real phone storage eviction, mobile HTTPS pairing and physical device sleep/wake still need testing.
 
@@ -72,7 +72,7 @@ one-sided text edits. A two-database test on Windows uses the real reader schema
 and simulated Drive. It verifies a reply from the second database, a later edit,
 conflicting offline edits and preservation of a local removal. The reader offers
 to reload externally changed Q&A. Previously enabled Q&A keeps its linked-only scope
-until the user turns it off and back on. Historical rows receive stable per-paper IDs
+until the user selects **Include older Q&A** for that list on that device. Historical rows receive stable per-paper IDs
 without inferred reply links. The in-app comparison can resolve divergent text edits on either side and
 rejects stale choices. A reader can restore a locally deleted message with its
 original reply link, or keep that version deleted only on this device. A later

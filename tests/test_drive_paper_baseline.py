@@ -1304,6 +1304,28 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             wait(app, lambda v=view: not v.busy)
             assert not view.notes_toggle.isVisible()
             view.content_options.click()
+            assert not view.include_old_chat.isVisible()
+            if label == "win":
+                settings = setup._library_view[1]
+                with closing(sqlite3.connect(settings.path)) as conn, conn:
+                    conn.execute("UPDATE chat_grants SET grant_id='chat-v1:fixture' "
+                                 "WHERE list_id='list'")
+                view._show_directory(setup.read_library(Ticket()))
+                assert view.chat_toggle.isChecked() and view.include_old_chat.isVisible()
+                with monkeypatch.context() as cancel:
+                    cancel.setattr(QMessageBox, "question",
+                                   lambda *a: QMessageBox.StandardButton.No)
+                    view.include_old_chat.click()
+                    assert settings.chat_records()["list"] == "chat-v1:fixture"
+                view.include_old_chat.click()
+                wait(app, lambda v=view: not v.busy)
+                renewed = settings.chat_records()["list"]
+                assert renewed.startswith("chat-v2:")
+                assert view.chat_toggle.isChecked() and not view.include_old_chat.isVisible()
+                with pytest.raises(ValueError, match="changed"):
+                    setup.choose_chat_sync("list", True, Ticket(), lambda _: None,
+                                           previous="chat-v1:fixture")
+                assert settings.chat_records()["list"] == renewed
             for toggle in (view.notes_toggle, view.position_toggle, view.reading_toggle,
                            view.pdf_toggle, view.dive_toggle, view.chat_toggle):
                 assert toggle.isVisible() and toggle.isChecked()

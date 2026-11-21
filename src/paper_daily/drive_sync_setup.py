@@ -223,6 +223,7 @@ class DriveSetup:
         selection = store.load()
         self.check(ticket)
         self._library_view = (files, store, selection, remote, observation, local, visible)
+        chat = store.chat_records()
         if remote is not None:
             self._list_target = (remote.folder, remote.head)
         pdf_lists = store.pdf_lists()
@@ -240,7 +241,9 @@ class DriveSetup:
             "pdf_lists": pdf_lists,
             "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
                                   if key in selection.selected and key in self._pdf_review_titles},
-            "chat_lists": store.chat_lists(),
+            "chat_lists": sorted(chat),
+            "linked_only_chat": {key: grant for key, grant in chat.items()
+                                 if grant.startswith("chat-v1:")},
             "remote_chat_lists": [entry.id for entry in base.lists if entry.chat_head],
             "dive_lists": store.dive_lists(),
             "items": checklist(
@@ -284,13 +287,13 @@ class DriveSetup:
     def choose_pdf_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="pdfs")
 
-    def choose_chat_sync(self, list_id, enabled, ticket, progress):
-        return self._choose_list_content(list_id, enabled, ticket, kind="chat")
+    def choose_chat_sync(self, list_id, enabled, ticket, progress, *, previous=None):
+        return self._choose_list_content(list_id, enabled, ticket, kind="chat", previous=previous)
 
     def choose_dive_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="dives")
 
-    def _choose_list_content(self, list_id, enabled, ticket, *, kind):
+    def _choose_list_content(self, list_id, enabled, ticket, *, kind, previous=None):
         self.check(ticket)
         if self._library_view is None or local_binding(self.workspace.path):
             raise ValueError("Review the ordinary library first")
@@ -300,7 +303,8 @@ class DriveSetup:
         save = {"reading": store.set_reading_sync, "notes": store.set_note_sync,
                 "positions": store.set_position_sync, "pdfs": store.set_pdf_sync,
                 "chat": store.set_chat_sync, "dives": store.set_dive_sync}[kind]
-        save(list_id, enabled, revision=saved.revision, ticket=ticket)
+        options = {"previous": previous} if previous is not None else {}
+        save(list_id, enabled, revision=saved.revision, ticket=ticket, **options)
         if kind == "pdfs" and not enabled:
             self._pdf_review_titles.pop(list_id, None)
         return self.read_library(ticket)

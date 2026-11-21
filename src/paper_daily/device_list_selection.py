@@ -241,17 +241,20 @@ class DeviceSelection:
     def pdf_lists(self):
         return self._grant_lists("pdf_grants")
 
-    def _grant_lists(self, table):
+    def _grant_records(self, table):
         self._check()
         if not self.path.exists():
-            return []
+            return {}
         with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as conn:
             conn.execute("BEGIN")
             selected = self._load(conn).selected
             if not self._has_grants(conn, table):
-                return []
-            return sorted(key for (key,) in conn.execute(f"SELECT list_id FROM {table}")
-                          if key in selected)
+                return {}
+            rows = conn.execute(f"SELECT list_id,grant_id FROM {table}")
+            return {key: grant for key, grant in rows if key in selected}
+
+    def _grant_lists(self, table):
+        return sorted(self._grant_records(table))
 
     def note_grant(self, list_id, revision):
         return self._grant("note_grants", list_id, revision)
@@ -277,14 +280,17 @@ class DeviceSelection:
     def set_position_sync(self, list_id, enabled, *, revision, ticket):
         self._set_grant("position_grants", list_id, enabled, revision, ticket)
 
+    def chat_records(self):
+        return self._grant_records("chat_grants")
+
     def chat_lists(self):
         return self._grant_lists("chat_grants")
 
     def chat_grant(self, list_id, revision):
         return self._grant("chat_grants", list_id, revision)
 
-    def set_chat_sync(self, list_id, enabled, *, revision, ticket):
-        self._set_grant("chat_grants", list_id, enabled, revision, ticket=ticket)
+    def set_chat_sync(self, list_id, enabled, *, revision, ticket, previous=None):
+        self._set_grant("chat_grants", list_id, enabled, revision, ticket, previous=previous)
 
     def pdf_grant(self, list_id, revision):
         return self._grant("pdf_grants", list_id, revision)
@@ -320,7 +326,7 @@ class DeviceSelection:
         conn.execute(f"INSERT OR IGNORE INTO {table} VALUES(?,?)",
                      (list_id, CONTENT_GRANTS[table] + str(uuid4())))
 
-    def _set_grant(self, table, list_id, enabled, revision, ticket):
+    def _set_grant(self, table, list_id, enabled, revision, ticket, *, previous=None):
         """Choices are local to one account, device, database, list and content type."""
         self._check()
         ticket.check()
@@ -331,7 +337,13 @@ class DeviceSelection:
             saved = self._load(conn)
             if saved.revision != revision or list_id not in saved.selected:
                 raise SelectionChanged("Device selection changed; review it again")
-            if enabled:
+            if previous is not None:
+                if (table != "chat_grants" or not enabled or not previous.startswith("chat-v1:")
+                        or not self._has_grants(conn, table) or not conn.execute(
+                            "UPDATE chat_grants SET grant_id=? WHERE list_id=? AND grant_id=?",
+                            (CONTENT_GRANTS[table] + str(uuid4()), list_id, previous)).rowcount):
+                    raise SelectionChanged("Q&A sync changed; reopen the list settings")
+            elif enabled:
                 self._enable_grant(conn, table, list_id)
             elif self._has_grants(conn, table):
                 conn.execute(f"DELETE FROM {table} WHERE list_id=?", (list_id,))
