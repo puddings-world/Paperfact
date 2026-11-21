@@ -61,8 +61,9 @@ in one transaction. A new receiver installs the latest verified membership and c
 directly, including its creation receipt. The device that chose to keep its entry
 records the decision before upload and adopts the confirmed membership on receipt
 without changing its local reading state or position. Reading progress uses a separate revision chain for
-each verified membership lifetime. The desktop keep action and installed-device
-acceptance remain pending.
+each verified membership lifetime. The desktop conflict panel offers both removal and restoration.
+A synthetic two-device run covered cancellation, repeat clicks, restoration,
+and a later removal of the restored entry. Installed-device acceptance remains pending.
 
 ## Release goal
 

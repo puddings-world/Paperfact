@@ -113,6 +113,10 @@ class DriveSyncDialog(QDialog):
                                                  "確認此篇已從清單移除"))
         self.accept_removal.clicked.connect(self._accept_removal)
         layout.addWidget(self.accept_removal)
+        self.keep_member = QPushButton(self.tr("Keep in this list…", "保留在此清單…"))
+        self.keep_member.hide()
+        self.keep_member.clicked.connect(lambda: self._accept_removal(keep=True))
+        layout.addWidget(self.keep_member)
         self.save_selection = QPushButton(
             self.tr("Save this device's list selection", "儲存這台裝置的清單選擇")
         )
@@ -463,6 +467,9 @@ class DriveSyncDialog(QDialog):
             self.tr("Remove from this list…", "從此清單移除…") if present
             else self.tr("Confirm removal from this list", "確認此篇已從清單移除"))
         self.accept_removal.setEnabled(self.sync_lists.isEnabled())
+        observation = (conflict or {}).get("observation") or {}
+        self.keep_member.setVisible(bool(present and observation.get("token")))
+        self.keep_member.setEnabled(self.sync_lists.isEnabled())
         if conflict:
             explanations = {
                 "replaced": self.tr("This paper was added again on this device.",
@@ -499,14 +506,25 @@ class DriveSyncDialog(QDialog):
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
 
-    def _accept_removal(self):
+    def _accept_removal(self, *, keep=False):
         item = self.directory_lists.currentItem()
         if not item or not self.sync_lists.isEnabled():
             return
         key = item.data(Qt.ItemDataRole.UserRole)
         detail = self._membership_conflicts.get(key)
         if detail and detail.get("observation"):
-            if detail["kind"] != "absent" and QMessageBox.question(
+            if keep:
+                if not detail["observation"].get("token") or QMessageBox.question(
+                    self, self.windowTitle(), self.tr(
+                        f"Keep {detail['title']} in this list on your synced devices? "
+                        "Update Paperfact on all devices first to sync the restored entry.",
+                        f"要在同步此清單的裝置上保留《{detail['title']}》嗎？"
+                        "請先更新每台裝置上的 Paperfact，讓它們能讀取恢復後的項目。"),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                ) != QMessageBox.StandardButton.Yes:
+                    return
+            elif detail["kind"] != "absent" and QMessageBox.question(
                 self, self.windowTitle(), self.tr(
                     f"Remove {detail['title']} from this list on this device? Its list position, "
                     "pin and reading status will be removed. The paper, PDF and notes stay.",
@@ -517,7 +535,8 @@ class DriveSyncDialog(QDialog):
             ) != QMessageBox.StandardButton.Yes:
                 return
             self._start("sync_saved", lambda ticket, progress:
-                        self.service.accept_membership_removal(key, detail, ticket, progress))
+                        self.service.accept_membership_removal(
+                            key, detail, ticket, progress, keep=keep))
 
     def _adopt_removals(self):
         item = self.directory_lists.currentItem()

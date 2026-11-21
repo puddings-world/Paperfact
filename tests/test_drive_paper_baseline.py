@@ -847,7 +847,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         from paper_daily import store as db
 
         peers = []
-        for label in ("unchanged", "replaced", "also-removed", "replacement-removed"):
+        for label in ("unchanged", "replaced", "also-removed", "replacement-removed", "keep"):
             root = tmp_path / label
             root.mkdir()
             path = root / "research" / "papers.db"
@@ -866,6 +866,9 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                 row = conn.execute("SELECT * FROM list_papers WHERE list_id='list'").fetchone()
                 conn.execute("DELETE FROM list_papers WHERE list_id='list'")
                 conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})", row)
+        keeper, keeper_path = peers.pop()
+        with closing(sqlite3.connect(keeper_path)) as conn, conn:
+            conn.execute("UPDATE list_papers SET state='read' WHERE list_id='list'")
         for _, path in peers[2:]:
             with closing(sqlite3.connect(path)) as conn, conn:
                 local, = conn.execute("SELECT paper_id FROM list_papers").fetchone()
@@ -968,6 +971,28 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         with closing(sqlite3.connect(source)) as conn:
             assert not conn.execute("SELECT 1 FROM list_papers").fetchone()
             assert conn.execute("SELECT 1 FROM notes WHERE paper_id='paper'").fetchone()
+        view.service = keeper
+        view._show_directory(keeper.sync_saved_library(Ticket(), lambda _: None))
+        assert view.keep_member.isVisible()
+        before = dict(cloud.objects)
+        with monkeypatch.context() as cancel:
+            cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+            view.keep_member.click()
+        assert not view.busy and cloud.objects == before
+        view.keep_member.click()
+        view.keep_member.click()
+        wait(app, lambda: not view.busy)
+        assert not view.membership_detail.isVisible(), view.status.text()
+        assert not keeper.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+        assert not peers[0][0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+        with closing(sqlite3.connect(keeper_path)) as conn, conn:
+            local, state = conn.execute("SELECT paper_id,state FROM list_papers").fetchone()
+            assert state == "read"
+            assert remove_selected(conn, "list", [local]) == 1
+        assert not keeper.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+        assert not peers[0][0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+        with closing(sqlite3.connect(peers[0][1])) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (0,)
     finally:
         view.close()
         owner.close()

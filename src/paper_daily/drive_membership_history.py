@@ -117,13 +117,16 @@ class DriveMembershipChanges(DriveListHistory):
         return super().append(expected, records, revision=revision)
 
     def _check_publication(self, revision, records):
+        self._check_removals(revision, records, self.creations)
+
+    def _check_removals(self, revision, records, creations):
         from paper_daily.drive_list_records import ListReviewRequired
         from paper_daily.drive_membership_intent import observed_removals
 
         super()._check_publication(revision, records)
         members = {op["entity_id"] for op in records}
         candidates = {member["payload"]["paper_id"]: (index * 2 + 1, member)
-                      for index, member in enumerate(self.creations.values())
+                      for index, member in enumerate(creations.values())
                       if member["entity_id"] in members}
         pending = observed_removals(self.store, self.list_id, self.boundaries, candidates)
         if {op["operation_id"] for op in pending} != {op["operation_id"] for op in records}:
@@ -149,28 +152,36 @@ class DriveMembershipRestores(DriveMembershipChanges):
                 raise ValueError("Membership change belongs to a different list or paper")
 
     def append(self, expected, records, *, revision):
-        raise ValueError("Restoration requires a reviewed local membership")
+        records = self._operations(records)
+        if any(op["action"] != "delete" or op["device_id"] != self.store.context for op in records):
+            raise ValueError("Restoration requires a reviewed local membership")
+        return self._change(expected, records, revision,
+                            lambda latest: self._check_removals(revision, records, latest))
 
     def restore(self, expected, operation, *, revision, check_review):
         records = self._operations([operation])
         if operation["action"] != "put" or operation["device_id"] != self.store.context:
             raise ValueError("Restore only an entry reviewed by this device")
+        return self._change(expected, records, revision, lambda latest: check_review())
+
+    def _change(self, expected, records, revision, check_decision):
         self._check(revision)
         head = self._current_head()
         pages = list(self._pages_since(head, None, revision))
         prior = [op for _, batch in pages for op in batch]
         remaining = self.max_bytes - sum(page.size for page, _ in pages)
-        membership_versions(self.creations, prior)
+        latest, _ = membership_versions(self.creations, prior)
         if head == expected:
-            membership_versions(self.creations, [*prior, operation])
-            if head is None or head.generation >= self.max_pages:
+            membership_versions(self.creations, [*prior, *records])
+            if head and head.generation >= self.max_pages:
                 raise ValueError("Restoration exceeds the readable history budget")
 
         def check():
             self._check(revision)
-            check_review()
+            check_decision(latest)
 
         return self._append(expected, records, revision, check, remaining_bytes=remaining)
 
     def _advance(self, entry, head, records):
-        return replace(entry, membership_changes_head=head, restored_memberships=True)
+        restored = entry.restored_memberships or any(op["action"] == "put" for op in records)
+        return replace(entry, membership_changes_head=head, restored_memberships=restored)

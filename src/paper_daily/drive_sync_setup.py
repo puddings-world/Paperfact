@@ -190,10 +190,12 @@ class DriveSetup:
         if directories:
             spec = directories[0]
             args = files, spec["folder_id"], spec["head_id"], library_id
-            remote = DriveDirectory(*args, membership_changes=True)
+            remote = DriveDirectory(*args, membership_restores=True)
             observation = remote.read()
             # Ordinary directories keep their inexpensive unchanged-bibliography path.
             # A concurrent upgrade will invalidate a legacy snapshot on its next read.
+            if not any(entry.restored_memberships for entry in observation.directory.lists):
+                remote = DriveDirectory(*args, membership_changes=True)
             if not any(entry.membership_changes_head for entry in observation.directory.lists):
                 remote = DriveDirectory(*args)
         base = observation.directory if observation else Directory(library_id, 0, ())
@@ -349,9 +351,12 @@ class DriveSetup:
         )
         return self._exchange_saved(result, ticket, progress, selection=accepted)
 
-    def accept_membership_removal(self, list_id, detail, ticket, progress):
-        from paper_daily.drive_membership_apply import receive_membership_changes
-        from paper_daily.drive_membership_history import DriveMembershipChanges
+    def accept_membership_removal(self, list_id, detail, ticket, progress, *, keep=False):
+        from paper_daily.drive_membership_apply import (
+            keep_reviewed_membership,
+            receive_membership_changes,
+        )
+        from paper_daily.drive_membership_history import membership_history
 
         self.check(ticket)
         if not self._library_view:
@@ -363,9 +368,15 @@ class DriveSetup:
                 or self._membership_conflicts.get((files, store.context, list_id)) != detail):
             raise ValueError("The reviewed membership changed; sync again")
         files.cancelled = lambda: ticket.cancelled
-        history = DriveMembershipChanges(remote, store, list_id, revision=saved.revision)
-        receive_membership_changes(history, saved.revision, ticket,
-                                   accept_removal=detail["observation"])
+        if keep:
+            remote = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
+                                    membership_restores=True)
+        history = membership_history(remote, store, list_id, revision=saved.revision)
+        if keep:
+            keep_reviewed_membership(history, saved.revision, detail["observation"], ticket)
+        else:
+            receive_membership_changes(history, saved.revision, ticket,
+                                       accept_removal=detail["observation"])
         return self.sync_saved_library(ticket, progress)
 
     def adopt_membership_sync(self, list_id, proposal, ticket, progress):
