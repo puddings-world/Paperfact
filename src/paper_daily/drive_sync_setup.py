@@ -239,6 +239,7 @@ class DriveSetup:
             "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
                                   if key in selection.selected and key in self._pdf_review_titles},
             "chat_lists": store.chat_lists(),
+            "remote_chat_lists": [entry.id for entry in base.lists if entry.chat_head],
             "dive_lists": store.dive_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
@@ -461,8 +462,8 @@ class DriveSetup:
         from paper_daily.drive_membership_apply import MembershipConflict, arm_present_review
         from paper_daily.drive_membership_intent import MembershipRemovalReview
 
-        _, store, saved, directory, observed, *_ = self._library_view
-        remote_chats = {entry.id for entry in observed.directory.lists if entry.chat_head}
+        _, store, saved, directory, *_ = self._library_view
+        remote_chats = set(result.get("remote_chat_lists", ()))
         selection = saved if selection is None else selection
         if local_binding(self.workspace.path) or not selection.selected:
             return {**result, "reviews": {}}
