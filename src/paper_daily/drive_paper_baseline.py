@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from contextlib import closing
 from uuid import NAMESPACE_URL, uuid5
 
 from paper_daily.drive_list_history import DriveListPapers
@@ -35,7 +36,7 @@ def _put(store, kind, identity, incarnation, payload, parents):
     return op
 
 
-def initial_batches(store, list_id, revision, ticket):
+def initial_batches(store, list_id, revision, ticket, *, bindings=None):
     """Validate the whole snapshot before the first upload. Never enroll or edit the source."""
     selection = store.load()
     if selection.revision != revision or list_id not in selection.selected:
@@ -55,17 +56,27 @@ def initial_batches(store, list_id, revision, ticket):
         if not conn.execute("SELECT 1 FROM lists WHERE id=?", (list_id,)).fetchone():
             raise ListReviewRequired("The selected source list is missing")
         columns = ",".join("p." + key for key in sorted(PAPER_COLUMNS))
+        has_received = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='drive_library_papers'"
+        ).fetchone()
+        remote_id, mapping, params = "NULL", "", (list_id,)
+        if has_received:
+            remote_id = "d.remote_id"
+            mapping = "LEFT JOIN drive_library_papers d ON d.context=? AND d.local_id=p.id "
+            params = (store.context, list_id)
         rows = conn.execute(
-            f"SELECT {columns},m.citation,m.added_at FROM list_papers m "
-            "LEFT JOIN papers p ON p.id=m.paper_id WHERE m.list_id=? "
+            f"SELECT {columns},m.citation,m.added_at,{remote_id} AS portable FROM list_papers m "
+            f"LEFT JOIN papers p ON p.id=m.paper_id {mapping}WHERE m.list_id=? "
             "ORDER BY m.position,m.paper_id",
-            (list_id,),
+            params,
         )
         for row in rows:
             ticket.check()
             if row["id"] is None:
                 raise ListReviewRequired("Restore the missing paper before publishing its list")
-            identity = str(uuid5(namespace, row["id"]))
+            identity = row["portable"] or str(uuid5(namespace, row["id"]))
+            if bindings is not None:
+                bindings.append((identity, row["id"]))
             member = membership_id(list_id, identity)
             paper = _put(store, "paper", identity, identity, _payload(conn, "papers", row), [])
             link = _put(
@@ -100,13 +111,49 @@ def initial_batches(store, list_id, revision, ticket):
 def publish_initial(directory, store, list_id, revision, ticket):
     """Publish a first bibliography or resume its exact acknowledged prefix after interruption."""
     history = DriveListPapers(directory, store, list_id)
-    batches = initial_batches(store, list_id, revision, ticket)
+    bindings = []
+    batches = initial_batches(store, list_id, revision, ticket, bindings=bindings)
     head, received = history.changes(None, revision=revision)
     expected = [op for batch in batches for op in batch]
     if received != expected[: len(received)]:
         raise ListReviewRequired(
             "Existing bibliography has other edits; reconcile before publishing"
         )
+    # Bind local IDs before the first remote write so a lost acknowledgement
+    # cannot turn the source paper into an unknown duplicate on a return trip.
+    with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+        settings.execute("BEGIN IMMEDIATE")
+        store._check()
+        current = store._load(settings)
+        if current.revision != revision or list_id not in current.selected:
+            raise ValueError("This device changed its list selection")
+        settings.execute(
+            "CREATE TABLE IF NOT EXISTS published_paper_ids("
+            "remote_id TEXT PRIMARY KEY,local_id TEXT NOT NULL UNIQUE)"
+        )
+        for start in range(0, len(bindings), 400):
+            ticket.check()
+            group = bindings[start : start + 400]
+            slots = ",".join("?" for _ in group)
+            known = dict(
+                settings.execute(
+                    "SELECT remote_id,local_id FROM published_paper_ids "
+                    f"WHERE remote_id IN ({slots})",
+                    [identity for identity, _ in group],
+                )
+            )
+            if any(identity in known and known[identity] != local for identity, local in group):
+                raise ListReviewRequired("Published paper identity has a different local binding")
+            try:
+                settings.executemany(
+                    "INSERT INTO published_paper_ids VALUES(?,?)",
+                    ((identity, local) for identity, local in group if identity not in known),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ListReviewRequired(
+                    "Local paper already has a different published ID"
+                ) from exc
+        ticket.checkpoint(settings.commit)
     offset = 0
     for batch in batches:
         ticket.check()

@@ -161,3 +161,22 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         )
         assert not conn.execute("SELECT 1 FROM papers WHERE title='New record'").fetchone()
         assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (2,)
+    # Put a received paper into a new list on the laptop. Its return to the
+    # desktop must reuse the original paper even though the titles now differ.
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('return','Return',?)", (STAMP,))
+        conn.execute(
+            "INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+            "SELECT 'return',paper_id,0,? FROM list_papers WHERE list_id='list' AND position=0",
+            (STAMP,),
+        )
+    for device in (mac, win):
+        device.read_library(Ticket())
+        result = device.apply_library(["return"], Ticket(), lambda _: None)
+        assert result["reviews"] == {}
+    with closing(sqlite3.connect(source)) as conn:
+        assert conn.execute(
+            "SELECT p.id,p.title FROM list_papers m JOIN papers p ON p.id=m.paper_id "
+            "WHERE m.list_id='return'"
+        ).fetchall() == [("paper", "Research paper")]
+        assert conn.execute("SELECT COUNT(*) FROM notes WHERE paper_id='paper'").fetchone() == (1,)

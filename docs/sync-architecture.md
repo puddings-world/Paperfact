@@ -47,8 +47,10 @@ and separate memberships. The publisher validates the entire bounded baseline
 before uploading and resumes only a matching acknowledged prefix. A divergent
 history requires reconciliation. These checks have synthetic Drive coverage.
 The ordinary reader now writes a received bibliography and its checkpoint in one
-transaction, preserving order and previously received local papers. Source appends
-resume from the checkpoint. Pre-existing overlapping bibliographies need review.
+transaction, preserving order and previously received local papers. Device-private publication bindings retain the originating
+paper ID before upload. When a receiving device includes that paper in a new
+list, the original device reuses its paper and notes on the return trip.
+Independent lookalikes still require review. Source appends resume from the checkpoint. Pre-existing overlapping bibliographies need review.
 Offline edits remain local. Saving the selection triggers this exchange.
 
 The owner expects one logical research database with a complete list directory,

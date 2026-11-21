@@ -12,12 +12,15 @@ from paper_daily.store import title_key
 from paper_daily.workspace_service import _read
 
 
-def _local_paper(conn, store, paper):
+def _local_paper(conn, store, paper, published):
     identity, payload = paper["entity_id"], paper["payload"]
     known = conn.execute(
         "SELECT local_id FROM drive_library_papers WHERE context=? AND remote_id=?",
         (store.context, identity),
     ).fetchone()
+    if known and published and known != published:
+        raise ListReviewRequired("Incoming paper has conflicting local identity records")
+    known = known or published
     if known:
         if not conn.execute("SELECT 1 FROM papers WHERE id=?", known).fetchone():
             raise ListReviewRequired("Previously received paper was removed locally")
@@ -108,18 +111,32 @@ def receive_initial(directory, store, list_id, revision, ticket):
             ).fetchone()
             if current != prior:
                 raise ValueError("Bibliography changed while receiving; retry")
-            if not prior and conn.execute(
-                "SELECT 1 FROM list_papers WHERE list_id=? LIMIT 1", (list_id,)
-            ).fetchone():
+            if (
+                not prior
+                and conn.execute(
+                    "SELECT 1 FROM list_papers WHERE list_id=? LIMIT 1", (list_id,)
+                ).fetchone()
+            ):
                 raise ListReviewRequired(
                     "Keep existing local bibliography; review incoming changes"
                 )
             first = conn.execute(
                 "SELECT COALESCE(MAX(position),-1)+1 FROM list_papers WHERE list_id=?", (list_id,)
             ).fetchone()[0]
+            has_published = settings.execute(
+                "SELECT 1 FROM sqlite_master WHERE name='published_paper_ids'"
+            ).fetchone()
             for position, (paper, member) in enumerate(pairs, first):
                 ticket.check()
-                local_id = _local_paper(conn, store, paper)
+                published = (
+                    settings.execute(
+                        "SELECT local_id FROM published_paper_ids WHERE remote_id=?",
+                        (paper["entity_id"],),
+                    ).fetchone()
+                    if has_published
+                    else None
+                )
+                local_id = _local_paper(conn, store, paper, published)
                 if conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
                 ).fetchone():
@@ -144,6 +161,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
             store._check()
             ticket.checkpoint(conn.commit)
     return "received"
+
 
 def exchange_bibliography(directory, store, list_id, revision, ticket):
     from paper_daily.drive_paper_baseline import publish_initial
