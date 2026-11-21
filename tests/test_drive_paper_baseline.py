@@ -686,6 +686,20 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                     local, = conn.execute("SELECT paper_id FROM list_papers").fetchone()
                     assert remove_selected(conn, "list", [local]) == 1
                 updated = peer.sync_saved_library(Ticket(), lambda _: None)
+                confirmation = updated["membership_conflicts"]["list"]
+                def unavailable(*args):
+                    raise ConnectionError("offline after local confirmation")
+                before_retry = dict(cloud.objects)
+                with monkeypatch.context() as interrupted:
+                    interrupted.setattr(peer, "sync_saved_library", unavailable)
+                    with pytest.raises(ConnectionError, match="offline after local confirmation"):
+                        peer.accept_absent_membership(
+                            "list", confirmation, Ticket(), lambda _: None)
+                with closing(sqlite3.connect(path)) as conn:
+                    query = "SELECT applied FROM drive_membership_watches"
+                    receipt = conn.execute(query).fetchone()
+                    assert receipt == (
+                        confirmation["observation"]["removal"],)
                 view.service = peer
                 view._show_directory(updated)
                 assert view.accept_absent.isVisible()
@@ -693,6 +707,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                 wait(app, lambda: not view.busy)
                 assert not view.membership_detail.isVisible(), view.status.text()
                 assert not peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+                assert cloud.objects == before_retry
             elif index == 1:
                 assert "replacement membership" in report["list"]
             else:

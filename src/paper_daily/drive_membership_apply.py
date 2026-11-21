@@ -75,6 +75,7 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                 "FROM drive_membership_watches "
                 "WHERE context=? AND list_id=?", (store.context, list_id))}
             applied = 0
+            already_confirmed = False
             for index, (member, creation) in enumerate(history.creations.items()):
                 ticket.check()
                 payload = creation["payload"]
@@ -88,6 +89,15 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                 if watch and watch[4] is not None:
                     if not removal or watch[4] != removal["operation_id"]:
                         raise ListReviewRequired("Membership receipt differs from Drive")
+                    if accept_absent:
+                        # A previous confirmation can commit before the follow-up sync fails.
+                        restored = conn.execute("SELECT 1 FROM list_papers WHERE list_id=? "
+                                                "AND paper_id=?", (list_id, local)).fetchone()
+                        already_confirmed = (
+                            not restored and accept_absent["revision"] == revision
+                            and accept_absent["removal"] == watch[4]
+                            and accept_absent["local"] == local
+                        )
                     continue
                 if watch and not removal:
                     continue
@@ -168,7 +178,7 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                              "WHERE context=? AND list_id=? AND member=?",
                              (removal["operation_id"], store.context, list_id, member))
                 applied += 1
-            if accept_absent and not applied:
+            if accept_absent and not (applied or already_confirmed):
                 raise ListReviewRequired("List entry changed; review again")
             store._check(conn)
             ticket.checkpoint(conn.commit)
