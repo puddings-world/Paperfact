@@ -2,20 +2,29 @@
 
 ## Start here on Apple Silicon
 
-Use build **dfe8102** on both devices for a paired installation test. This candidate recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **eefb42b** on both devices for a paired installation test. This candidate recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44886869301/artifacts/14700541662) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44886869301/artifacts/14700159655) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44888445891/artifacts/14700759222) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44888445891/artifacts/14700652559) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44886869301) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44888445891) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
+## Verify a large bibliography round trip
+
+1. Confirm both installed apps show **eefb42b**. Publishing a large bibliography upgrades the shared directory to v8. All devices using that directory need v8 support.
+2. In the disposable Windows workspace, choose a list with over 5,000 papers. Record its count and a few titles near the start, middle and end. Select the list for sync and leave PDF transfer off during this check.
+3. On the Mac, sign in to the same Google account, select that list and synchronize. Compare counts and titles in list order. Disconnect, reopen Paperfact and confirm the received bibliography is readable.
+4. Add a uniquely titled paper to that list on the offline Mac. Reconnect, sync the Mac and then Windows. Both counts should increase by one and the new title should appear once. Sync again and confirm the counts stay unchanged.
+
+The synthetic test covers 5,010 papers, a lost acknowledgment on page two, exact ordering and a return edit. Record physical device results separately.
+
 ## Test reading progress on both devices
 
-1. Install this build on both devices before publishing progress. The first upload upgrades the shared directory to v7, which older builds cannot open.
+1. Install this build on both devices before publishing progress. Reading progress requires directory v7 or later. A directory already using v8 retains that format.
 2. Select the same disposable list and enable **Sync reading progress** on each device. Mark a paper read on Windows, sync Windows then Mac, and verify its state on Mac.
 3. Disconnect the Mac and change that paper's state. Reconnect, sync Mac then Windows, with that paper open on Windows. Verify the read button updates without reopening the paper and that any unsaved note draft stays intact.
 4. Choose different states on the two devices while offline. Reconnect and sync each. On the device reporting the conflict, open **Compare reading progress**, inspect all three versions, and choose **Decide later**. Verify both edits survive. Then choose a version, sync both devices and confirm they converge.
