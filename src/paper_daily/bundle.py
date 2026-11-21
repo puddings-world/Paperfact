@@ -325,7 +325,8 @@ def export(
         _validate_queue_pins(tables["queue_pins"], set(ids))
         if notes:
             for table in ("notes", "chat"):
-                rows = _rows(conn, f"SELECT * FROM {table} WHERE paper_id IN ({marks_sql})", ids)
+                rows = _rows(conn, f"SELECT * FROM {table} WHERE paper_id IN ({marks_sql}) "
+                             "ORDER BY id", ids)
                 tables[table] = [{k: v for k, v in r.items() if k != "id"} for r in rows]
                 if table == "chat":
                     from paper_daily.research_chat import history
@@ -1139,15 +1140,12 @@ def import_(path: Path, replace: bool = False, pdfs: bool = True, log=lambda _m:
                 talked = {r[0] for r in conn.execute("SELECT DISTINCT paper_id FROM chat")}
                 from paper_daily.research_chat import import_shared_turn
 
-                fresh = [
-                    r
-                    for r in tables.get("chat", [])
-                    if not r.get("message_id") and r["paper_id"] not in talked
-                ]
-                report["chat"] = _insert(conn, "chat", fresh, replace=False)
+                report["chat"] = 0
                 for turn in tables.get("chat", []):
                     if turn.get("message_id"):
                         report["chat"] += import_shared_turn(conn, turn)
+                    elif turn["paper_id"] not in talked:
+                        report["chat"] += _insert(conn, "chat", [turn], replace=False)
                 from paper_daily.document_reader import document_current
 
                 if any(

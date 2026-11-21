@@ -91,6 +91,29 @@ def test_import_into_an_empty_workspace_keeps_reading_state_behind(sharer, monke
     assert again["papers"] == 0 and again["chat"] == 0 and again["files"] == 0
 
 
+def test_mixed_chat_keeps_order_and_repeated_messages(sharer, monkeypatch):
+    from paper_daily.research_chat import import_shared_turn
+
+    _, tmp = sharer
+    with sqlite3.connect(tmp / "sharer" / "papers.db") as source:
+        import_shared_turn(source, dict(
+            paper_id="ref:a", role="user", body="Follow up?", created_at="2026-10-01T12:00:00Z",
+            page=None, anchor=None, message_id="a1111111-1111-4111-8111-111111111111",
+            exchange_id="b1111111-1111-4111-8111-111111111111", reply_to=None, source_hash=None,
+        ))
+        source.execute("INSERT INTO chat(paper_id,role,body,created_at) "
+                       "VALUES ('ref:a','assistant','A.','now')")
+    package = bundle.export("cat", tmp / "mixed.zip")
+    root = tmp / "receiver"
+    root.mkdir()
+    conn = _workspace(root, monkeypatch)
+    assert bundle.import_(package["out"])["chat"] == 4
+    assert bundle.import_(package["out"])["chat"] == 0
+    assert conn.execute("SELECT body FROM chat ORDER BY id").fetchall() == [
+        ("Q?",), ("A.",), ("Follow up?",), ("A.",)
+    ]
+
+
 def test_the_receivers_own_work_wins_unless_asked(sharer, monkeypatch):
     made, tmp = sharer
     root = tmp / "colleague"
