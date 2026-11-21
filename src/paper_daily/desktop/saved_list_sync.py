@@ -31,6 +31,7 @@ class SavedListSync(QObject):
             "changed": "工作區已切換，請重新啟用同步", "review": "清單同步已暫停，請核對",
         }
         labels["list_conflict"] = "清單名稱或說明需核對，其他清單持續同步"
+        labels["format"] = "同步已暫停，請更新 Paperfact 以讀取此資料庫格式"
         labels["reading_conflict"] = "閱讀進度不同，已保留兩端狀態"
         labels["note_conflict"] = "部分筆記需核對，其他內容持續同步"
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
@@ -113,6 +114,8 @@ class SavedListSync(QObject):
                     self.stop()
             elif self.files is not self.service.files or not self.service.binding.current():
                 self.stop("changed")
+            elif worker.error == "format":
+                self.stop("format")
             elif worker.error == "offline":
                 self.failures += 1
                 self.state = "offline"

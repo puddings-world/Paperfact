@@ -594,6 +594,9 @@ class DriveSyncDialog(QDialog):
                     "Conflicting versions retained. Sync saved lists now to see affected lists.",
                     "已保留有差異的版本。按「立即同步已勾選清單」可查看受影響的清單。",
                 ))
+            elif self.background.state == "format":
+                self.status.setText(self.tr("Update Paperfact on this device, then reconnect.",
+                                            "請更新這台裝置的 Paperfact，再重新連線。"))
             elif self.background.state == "review":
                 self.status.setText(self.tr(
                     "Sync paused. Check the connection and sync saved lists to review.",
@@ -869,6 +872,9 @@ class DriveSyncDialog(QDialog):
                     "。已保留資料與準備進度，可確認連線後重試。",
                 )
             )
+        if current and worker.error == "format":
+            self.status.setText(self.tr("Update Paperfact on this device, then reconnect.",
+                                        "請更新這台裝置的 Paperfact，再重新連線。"))
         if current and kind == "restore" and worker.error == "authorization":
             self.status.setText(self.tr("Sign in to Google to reconnect this library.",
                                         "請登入 Google 以重新連接清單。"))

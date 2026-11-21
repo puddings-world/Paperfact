@@ -9,6 +9,36 @@ mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
 See the implementation ledger for exact coverage rather than inferring release readiness.
 
+## Personal Drive membership removal
+
+**Planned for ordinary selected lists.** The current bibliography exchanges additions.
+A local removal can require review. The enrolled workspace journal already models
+membership retirement and restoration. Personal Drive needs the following adapter.
+
+1. In the same local transaction as removal, retain the intent for the selected
+   list, the verified paper and membership incarnations, and the last observed
+   membership operation. A missing local row, a deselected list or an incomplete
+   import alone supplies no deletion intent.
+2. Publish a native membership delete with its original list and paper parents.
+   A proposed v9 directory advertises a per-list membership change history.
+   Bind each change to the observed bibliography and predecessor. Advance the
+   private directory with a conditional write. Retry a lost acknowledgement
+   using the same operation ID. Upgrade the directory only on explicit adoption.
+3. On receive, verify the history before opening a write transaction. Apply the
+   deletion and its receipt atomically to the matching membership. Preserve the
+   paper, PDF, notes, and other lists. If a device has unsent reading edits,
+   retain them for review. Re-adding the paper creates a fresh incarnation even
+   with an identical timestamp. An old delete must never target the new one.
+4. Before enabling publication, exercise two disconnected devices, removal and
+   re-addition on opposite devices, duplicate delivery, failure between receipt
+   and commit, and removal from one of two lists sharing the same paper. Verify
+   that a v8 client stops at v9, a fresh client can replay the full list, and
+   recovery preserves both the old history and the current reader state.
+
+The d579b1b directory decoder rejected a synthetic v9 directory and an unexpected
+membership-history field under v8. This verifies the format boundary only.
+Publication, receipt application and installed-device removal remain open.
+
 ## Release goal
 
 - Continue the same research on Windows, macOS, and a phone.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from paper_daily.drive_sync_files import MAX_INLINE, decode, encode, identifier
-from paper_daily.sync_journal import _identifier
+from paper_daily.sync_journal import SyncFormatUnsupported, _identifier
 from paper_daily.workspace_service import Ticket, _read
 
 FORMAT = "paperfact.library-directory.v1"
@@ -134,18 +134,17 @@ class Directory:
         if (
             not isinstance(value, dict)
             or set(value) != {"format", "library_id", "generation", "lists"}
-            or value["format"] not in (FORMAT, "paperfact.library-directory.v2",
-                                        "paperfact.library-directory.v3",
-                                        "paperfact.library-directory.v4",
-                                        "paperfact.library-directory.v5",
-                                        "paperfact.library-directory.v6",
-                                        "paperfact.library-directory.v7",
-                                        "paperfact.library-directory.v8")
             or value["library_id"] != library_id
             or not isinstance(value["lists"], list)
             or len(value["lists"]) > MAX_LISTS
         ):
             raise ValueError("Directory belongs to another library or unsupported format")
+        version = re.fullmatch(r"paperfact\.library-directory\.v([1-9][0-9]{0,8})",
+                               value["format"]) if isinstance(value["format"], str) else None
+        if not version:
+            raise ValueError("Invalid library directory format")
+        if int(version[1]) > 8:
+            raise SyncFormatUnsupported()
         entries = []
         for item in value["lists"]:
             required = {"id", "name", "published"}

@@ -408,3 +408,28 @@ def test_background_keeps_polling_after_list_details_conflict(dialog):
         wait(app, lambda: runner.worker is None)
         assert runner.state == expected
         assert runner.timer.isActive() == (expected != "review")
+
+
+def test_newer_library_prompts_upgrade_and_stops_background_retry(dialog):
+    from paper_daily.drive_sync_files import encode
+    from paper_daily.library_directory import Directory
+
+    app, view, setup = dialog
+    raw = encode(dict(format="paperfact.library-directory.v9", generation=1,
+                      library_id="library", lists=[]))
+
+    def read_newer(*args):
+        return Directory.from_bytes(raw, library_id="library")
+
+    setup.sign_in = read_newer
+    assert view.sign_in()
+    wait(app, lambda: not view.busy)
+    assert "Update Paperfact" in view.status.text()
+    setup.files = object()
+    setup.sync_saved_library = read_newer
+    runner = view.background
+    assert runner.enable(setup)
+    view.hide()
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert runner.state == "format" and not runner.timer.isActive()
