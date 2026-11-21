@@ -149,8 +149,9 @@ class DriveFiles:
             raise ValueError("Drive credentials require an official API destination")
         if any(key.lower() == "authorization" for key in (headers or {})):
             raise ValueError("Drive authorization is owned by the captured session")
-        auth = {"Authorization": "Bearer " + self.session.access_token()}
         try:
+            auth = {"Authorization": "Bearer " + self.session.access_token()}
+            self.check()
             with self.client.stream(method, url, headers=auth | (headers or {}), **kwargs) as reply:
                 parts, size = [], 0
                 for chunk in reply.iter_bytes():

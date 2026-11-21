@@ -149,7 +149,7 @@ Use the same preview on both computers. [Apple Silicon download and offline acce
 1. On Windows, open **Sync**, sign in to Google, check the lists to exchange and choose **Save this device's list selection**. This publishes your local list names to your private directory. Save again when you want a newly created list to appear on the Mac.
 2. On the Mac, open **Sync** and sign in to the same Google account. Check the lists you want on this device and save its selection. Each computer remembers its own choices. For a two-way transfer, select the list on both.
 3. Highlight a saved list on each device and enable the content you want from the table below. Update both devices before granting transfers. The first published PDF upgrades the private directory to v5 and the first published explanation upgrades it to v6.
-4. Choose **Sync saved lists now** on Windows, then on the Mac. After editing on the Mac, sync the Mac and then Windows to receive the change. For automatic exchange while reading, enable **Sync saved lists while Paperfact is open** on both. It checks every 30 seconds during that session. After restarting, sign in and enable it again.
+4. Choose **Sync saved lists now** on Windows, then on the Mac. After editing on the Mac, sync the Mac and then Windows to receive the change. For automatic exchange while reading, enable **Sync saved lists while Paperfact is open** on both. It checks every 30 seconds during that session. If a connection drops during Google token renewal, the app retries automatically with increasing delays up to five minutes. After restarting, sign in and enable it again.
 
 | To bring along | Control on each device | What to check offline |
 |---|---|---|

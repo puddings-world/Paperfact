@@ -81,6 +81,8 @@ class GoogleSession:
                 },
                 timeout=30,
             )
+            if response.status_code == 429 or 500 <= response.status_code < 600:
+                raise ConnectionError("Google token refresh is temporarily unavailable")
             if response.status_code != 200:
                 raise ValueError("Google 登入已失效，請重新連接")
             refreshed = response.json()

@@ -238,6 +238,8 @@ def test_google_notes_failure_preserves_created_cloud_link(deck, monkeypatch):
 
 def test_deployment_oauth_config_does_not_require_user_json(tmp_path, monkeypatch):
     monkeypatch.setattr(google_slides, "CLIENT_FILE", tmp_path / "missing.json")
+    bundle = tmp_path / "bundled.json"
+    monkeypatch.setattr(google_slides, "BUNDLED_CLIENT_FILE", bundle)
     monkeypatch.delenv("PAPERFACT_GOOGLE_CLIENT_ID", raising=False)
     with pytest.raises(ValueError, match="尚未啟用"):
         google_slides.read_client()
@@ -245,3 +247,7 @@ def test_deployment_oauth_config_does_not_require_user_json(tmp_path, monkeypatc
     monkeypatch.setenv("PAPERFACT_GOOGLE_CLIENT_SECRET", "deployment-secret")
     assert google_slides.read_client()["client_id"] == "paperfact.apps.googleusercontent.com"
     assert not list(tmp_path.iterdir())
+    monkeypatch.delenv("PAPERFACT_GOOGLE_CLIENT_ID")
+    bundle.write_text('{"installed":{"client_id":"bundled.apps.googleusercontent.com"}}',
+                      encoding="utf-8")
+    assert google_slides.read_client()["client_id"] == "bundled.apps.googleusercontent.com"

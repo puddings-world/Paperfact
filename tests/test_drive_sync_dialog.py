@@ -200,6 +200,52 @@ def test_saved_list_background_survives_dialog_close_and_backs_off(dialog):
     assert len(calls) == 2
 
 
+def test_background_sync_recovers_when_google_token_expires_offline(dialog, monkeypatch):
+    import httpx
+
+    from paper_daily.drive_sync_files import ABOUT, DriveFiles
+    from paper_daily.google_slides import GoogleSession
+
+    app, view, setup = dialog
+    refresh = iter([httpx.ConnectError("offline"), httpx.Response(503), httpx.Response(429),
+                    httpx.Response(200, json={"access_token": "renewed", "expires_in": 3600})])
+    calls = []
+
+    def token_response(*args, **kwargs):
+        reply = next(refresh)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    def drive_reply(request):
+        calls.append(request.headers["authorization"])
+        return httpx.Response(200, json={})
+
+    monkeypatch.setattr(httpx, "post", token_response)
+    session = GoogleSession({}, {"refresh_token": "fixture"})
+    with httpx.Client(transport=httpx.MockTransport(drive_reply)) as client:
+        setup.files = DriveFiles(session, client=client)
+
+        def exchange(ticket, progress):
+            setup.files.request("GET", ABOUT)
+            return {"items": [{"selected": True}], "reviews": {}}
+
+        setup.sync_saved_library = exchange
+        runner = view.background
+        assert runner.enable(setup)
+        view.hide()
+        for delay in (10000, 20000, 40000):
+            runner.tick()
+            wait(app, lambda: runner.worker is None)
+            assert runner.state == "offline" and runner.timer.interval() == delay
+            assert not calls and runner.service is setup
+        runner.tick()
+        wait(app, lambda: runner.worker is None)
+        assert runner.state == "waiting" and runner.timer.interval() == 30000
+        assert calls == ["Bearer renewed"]
+        runner.stop()
+
+
 def test_saved_list_background_serializes_foreground_and_drains_on_close(dialog):
     app, view, setup = dialog
     setup.files = object()
