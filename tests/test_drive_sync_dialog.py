@@ -462,6 +462,30 @@ def test_chat_comparison_shows_question_and_returns_only_the_chosen_version(dial
         view.deleteLater()
 
 
+def test_deleted_answer_comparison_labels_only_the_selected_card(dialog):
+    from PySide6.QtWidgets import QComboBox, QPlainTextEdit, QPushButton
+
+    from paper_daily.desktop.drive_note_compare import NoteComparison
+
+    _, parent, _ = dialog
+    edited = dict(feature="chat", title="Study", question="Which sample?",
+                  base={"body": "Initial"}, local={"body": "Local"}, remote={"body": "Updated"})
+    missing = dict(edited, local=None)
+    view = NoteComparison([edited, missing], parent)
+    picker = view.findChild(QComboBox)
+    picker.setCurrentIndex(1)
+    assert [box.toPlainText() for box in view.findChildren(QPlainTextEdit)] == [
+        "Initial", "Deleted on this device", "Updated"]
+    button = next(b for b in view.findChildren(QPushButton)
+                  if b.text() == "Keep deleted on this device")
+    picker.setCurrentIndex(0)
+    assert button.text() == "Keep this device's version"
+    picker.setCurrentIndex(1)
+    button.click()
+    assert view.decision == (missing, "local")
+    view.deleteLater()
+
+
 def test_background_keeps_polling_after_list_details_conflict(dialog):
     app, view, setup = dialog
     setup.files = object()

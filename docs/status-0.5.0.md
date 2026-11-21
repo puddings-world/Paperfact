@@ -70,7 +70,9 @@ and simulated Drive. It verifies a reply from the second database, a later edit,
 conflicting offline edits and preservation of a local removal. The reader offers
 to reload externally changed Q&A. Older unlinked history still needs a list
 package. The in-app comparison can resolve divergent text edits on either side and
-rejects stale choices. Propagation of confirmed deletions remains open. Continuing a conversation in the installed Windows and
+rejects stale choices. A reader can restore a locally deleted message with its
+original reply link, or keep that version deleted only on this device. A later
+remote revision reopens review. Propagation of confirmed deletions remains open. Continuing a conversation in the installed Windows and
 Mac apps through the user's Drive remains an acceptance gate.
 
 ## Previous native deliverable (before personal Drive)

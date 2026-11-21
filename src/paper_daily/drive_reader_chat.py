@@ -107,6 +107,18 @@ def has_local_messages(store, list_id):
         ).fetchone() is not None
 
 
+def _kept_deletions(conn, scope):
+    if "drive_chat_local_removals" not in _tables(conn):
+        return {}
+    return dict(conn.execute("SELECT message,op FROM drive_chat_local_removals "
+                             "WHERE context=? AND list_id=?", scope))
+
+
+def _previously_seen(conn, context, key):
+    return conn.execute("SELECT 1 FROM drive_chat_bases WHERE context=? AND message=? LIMIT 1",
+                        (context, key)).fetchone() is not None
+
+
 def _concurrent_edit(value, remote, common):
     return (value is not None and remote["payload"] != value
             and (not common or value != common["payload"] and remote != common))
@@ -133,34 +145,44 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
             bases = (dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE "
                                        "context=? AND list_id=?", (store.context, list_id)))
                      if "drive_chat_bases" in _tables(conn) else {})
+            kept = _kept_deletions(conn, (store.context, list_id))
             for key, remote in latest.items():
                 ticket.check()
-                if key not in local or decision and key != decision[0]["identity"]:
+                if decision and key != decision[0]["identity"]:
                     continue
-                idx, value = local[key]
+                other = remote["payload"]
+                paper = mapping.get(other["scope"]["id"])
+                if not paper or not conn.execute(
+                    "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, paper)
+                ).fetchone():
+                    continue
+                idx, value = local.get(key, (None, None))
                 common = versions.get(bases.get(key))
                 if bases.get(key) and (not common or common["payload"]["key"] != key):
                     raise ListReviewRequired("Accepted conversation version is missing")
-                if not _concurrent_edit(value, remote, common):
+                if value is None:
+                    if ("drive_chat_bases" not in _tables(conn)
+                            or not _previously_seen(conn, store.context, key)
+                            or kept.get(key) == remote["operation_id"]):
+                        continue
+                elif not _concurrent_edit(value, remote, common):
                     continue
-                other = remote["payload"]
-                if value != dict(other, data=dict(other["data"], body=value["data"]["body"])):
+                elif value != dict(other, data=dict(other["data"], body=value["data"]["body"])):
                     raise ListReviewRequired("Conversation identity or source changed")
-                paper = mapping[value["scope"]["id"]]
                 title, = conn.execute("SELECT title FROM papers WHERE id=?", (paper,)).fetchone()
                 prompt = conn.execute(
                     "SELECT substr(c.body,1,100) FROM research_chat_links l JOIN chat c "
                     "ON c.id=l.local_id WHERE l.message_id=? AND c.paper_id=? AND c.role='user'",
-                    (value["data"]["reply_to"] or key, paper)
+                    (other["data"]["reply_to"] or key, paper)
                 ).fetchone()
-                excerpt = " ".join((prompt[0] if prompt else value["data"]["body"][:100]).split())
+                excerpt = " ".join((prompt[0] if prompt else other["data"]["body"][:100]).split())
                 cards.append(dict(feature="chat", title=title, question=excerpt,
                                   identity=key, key=idx,
                                   context=store.context, grant=history.grant, list_id=list_id,
                                   revision=revision, base_id=bases.get(key),
                                   remote_id=remote["operation_id"], paper=paper,
                                   base=common["payload"]["data"] if common else None,
-                                  local=value["data"], remote=other["data"]))
+                                  local=value["data"] if value else None, remote=other["data"]))
             store._check()
             ticket.check()
             if decision is None:
@@ -169,7 +191,19 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
                 raise ValueError("Conversation changed after review; compare both versions again")
             card = cards[0]
             conn.execute(BASE_TABLE)
-            if decision[1] == "remote":
+            if card["local"] is None:
+                if decision[1] == "remote":
+                    _receive(conn, card["paper"], latest[card["identity"]]["payload"], None)
+                    if card["identity"] in kept:
+                        conn.execute("DELETE FROM drive_chat_local_removals WHERE context=? "
+                                     "AND list_id=? AND message=?",
+                                     (store.context, list_id, card["identity"]))
+                else:
+                    conn.execute("CREATE TABLE IF NOT EXISTS drive_chat_local_removals("
+                                 "context,list_id,message,op,PRIMARY KEY(context,list_id,message))")
+                    conn.execute("INSERT OR REPLACE INTO drive_chat_local_removals VALUES(?,?,?,?)",
+                                 (store.context, list_id, card["identity"], card["remote_id"]))
+            elif decision[1] == "remote":
                 conn.execute("UPDATE chat SET body=? WHERE id=? AND paper_id=?",
                              (card["remote"]["body"], card["key"], card["paper"]))
             conn.execute("INSERT OR REPLACE INTO drive_chat_bases VALUES(?,?,?,?)",
@@ -198,6 +232,7 @@ def exchange_chat(directory, store, list_id, revision, ticket):
             scope = (store.context, list_id)
             bases = dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE context=? "
                                       "AND list_id=?", scope))
+            kept = _kept_deletions(conn, scope)
             for key in dict.fromkeys([*latest, *local, *bases]):
                 ticket.check()
                 turn, remote = local.get(key), latest.get(key)
@@ -208,10 +243,9 @@ def exchange_chat(directory, store, list_id, revision, ticket):
                 if remote and remote["payload"]["scope"]["id"] not in history.active_papers:
                     continue
                 if remote and remote["payload"] != value:
-                    if not turn and conn.execute("SELECT 1 FROM drive_chat_bases WHERE context=? "
-                                                 "AND message=? LIMIT 1",
-                                                 (store.context, key)).fetchone():
-                        conflicts += 1
+                    if not turn and _previously_seen(conn, store.context, key):
+                        if kept.get(key) != remote["operation_id"]:
+                            conflicts += 1
                         continue
                     if _concurrent_edit(value, remote, common):
                         conflicts += 1
@@ -227,6 +261,9 @@ def exchange_chat(directory, store, list_id, revision, ticket):
                         value = remote["payload"]
                 if value is not None and (not remote or remote["payload"] != value):
                     pending.append(_operation(history, value, remote))
+                if turn and key in kept:
+                    conn.execute("DELETE FROM drive_chat_local_removals WHERE context=? "
+                                 "AND list_id=? AND message=?", (*scope, key))
                 if remote or turn:
                     anchor = remote["operation_id"] if remote else None
                     if key not in bases or bases[key] != anchor:

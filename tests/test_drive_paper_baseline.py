@@ -95,11 +95,31 @@ def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypat
     review((current, "remote"))
     assert not poll(mac) and not poll(desktop)
     assert read(source)[key] == read(mac_db)[key] == "Reviewed desktop answer"
-    with closing(sqlite3.connect(mac_db)) as conn, conn:
-        conn.execute("DELETE FROM chat WHERE id=(SELECT local_id FROM research_chat_links "
-                     "WHERE message_id=?)", (key,))
+    from paper_daily.desktop.main import Data
+
+    with monkeypatch.context() as reader:
+        reader.setattr(store, "DB_PATH", mac_db)
+        data = Data()
+        local_id = next(row["id"] for row in data.chat(paper) if row["message_id"] == key)
+        data.delete_chat([local_id], expected=data.chat_snapshot(paper, [local_id]))
     assert "review" in poll(mac)["list"]
     assert key not in read(mac_db) and read(source)[key] == "Reviewed desktop answer"
+    removed, = review()
+    assert removed["local"] is None and removed["remote"]["body"] == "Reviewed desktop answer"
+    review((removed, "local"))
+    assert not poll(mac) and review() == []
+    assert key not in read(mac_db) and read(source)[key] == "Reviewed desktop answer"
+    edit(source, key, "Updated after Mac deletion")
+    assert not poll(desktop) and "review" in poll(mac)["list"]
+    with pytest.raises(ValueError, match="changed after review"):
+        review((removed, "remote"))
+    refreshed, = review()
+    review((refreshed, "remote"))
+    assert not poll(mac) and review() == []
+    with closing(sqlite3.connect(mac_db)) as conn:
+        assert conn.execute("SELECT c.body,l.reply_to FROM chat c JOIN research_chat_links l "
+                            "ON c.id=l.local_id WHERE message_id=?", (key,)).fetchall() == [
+            ("Updated after Mac deletion", question["message_id"])]
 
 
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):

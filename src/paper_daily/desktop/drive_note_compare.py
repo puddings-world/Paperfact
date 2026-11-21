@@ -61,7 +61,9 @@ class NoteComparison(QDialog):
             for key, view in views.items():
                 payload = card[key]
                 if payload is None:
-                    view.setPlainText(tr("No common version", "尚無共同版本"))
+                    view.setPlainText(tr("Deleted on this device", "這則問答已在本機刪除")
+                                      if chat and key == "local" else
+                                      tr("No common version", "尚無共同版本"))
                     continue
                 if details:
                     labels = {"name": tr("Name", "名稱"), "note": tr("Description", "說明")}
@@ -92,8 +94,6 @@ class NoteComparison(QDialog):
                             for name in fields]
                 view.setPlainText("\n\n".join([payload["body"], *metadata]))
 
-        picker.currentIndexChanged.connect(display)
-        display(0)
         row = QHBoxLayout()
         layout.addLayout(row)
         for choice, label in (("local", tr("Keep this device's version", "採用本機版本")),
@@ -102,6 +102,17 @@ class NoteComparison(QDialog):
             button.setAutoDefault(False)
             button.clicked.connect(lambda _, value=choice: choose(value))
             row.addWidget(button)
+            if choice == "local":
+                local_button = button
+
+        def select_card(index):
+            display(index)
+            removed = chat and cards[index]["local"] is None
+            local_button.setText(tr("Keep deleted on this device", "只在本機保留刪除狀態")
+                                 if removed else tr("Keep this device's version", "採用本機版本"))
+
+        picker.currentIndexChanged.connect(select_card)
+        select_card(0)
         cancel = QPushButton(tr("Decide later", "稍後決定"))
         cancel.setDefault(True)
         cancel.clicked.connect(self.reject)
