@@ -72,6 +72,25 @@ def test_remote_directory_lists_all_without_copying_research_or_claiming_sync(tm
         )
 
 
+def test_pdf_position_directory_requires_matching_reader_and_bibliography():
+    from paper_daily.library_directory import ScopeHead
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    head = ScopeHead(1, "position_object", "a" * 64, 123)
+    paper_head = replace(head, id="papers_object")
+    base = ListEntry("a", "List A", True, papers_head=paper_head)
+    directory = Directory("library", 2, (base,))
+    assert b"library-directory.v3" in directory.to_bytes()
+    published = replace(directory, lists=(replace(base, positions_head=head),))
+    wire = published.to_bytes()
+    assert b"library-directory.v11" in wire
+    assert Directory.from_bytes(wire, library_id="library", positions=True) == published
+    with pytest.raises(SyncFormatUnsupported):
+        Directory.from_bytes(wire, library_id="library", membership_restores=True)
+    with pytest.raises(ValueError, match="bibliography"):
+        replace(directory, lists=(replace(base, papers_head=None, positions_head=head),))
+
+
 def test_each_device_selects_independently_and_deselect_keeps_research(tmp_path):
     path = database(tmp_path / "research")
     before = path.read_bytes()

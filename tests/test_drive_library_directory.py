@@ -8,6 +8,32 @@ from paper_daily.drive_sync_files import DriveChanged
 from paper_daily.library_directory import ListEntry
 
 
+def test_position_head_is_opt_in_and_survives_list_rename(tmp_path):
+    from dataclasses import replace
+
+    from paper_daily.library_directory import ScopeHead
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    cloud = Cloud()
+    files = authority(cloud, tmp_path / "desktop").files
+    folder, head = files.new_ids(2)
+    old = DriveDirectory(files, folder, head, "personal", membership_restores=True)
+    enabled = DriveDirectory(files, folder, head, "personal", positions=True)
+    before = old.initialize("Library")
+    bibliography = ScopeHead(1, "papers_object", "a" * 64, 80)
+    positions = ScopeHead(1, "position_object", "b" * 64, 100)
+    entry = ListEntry("a", "Travel", True, papers_head=bibliography, positions_head=positions)
+    count = len(cloud.objects)
+    with pytest.raises(ValueError, match="PDF position"):
+        old.upsert(before, [entry])
+    assert len(cloud.objects) == count
+    enabled.upsert(before, [entry])
+    with pytest.raises(SyncFormatUnsupported):
+        old.read()
+    enabled.upsert(enabled.read(), [ListEntry("a", "Renamed", True)])
+    assert enabled.read().directory.lists == (replace(entry, name="Renamed"),)
+
+
 def test_partial_device_updates_shared_directory_without_losing_other_lists(tmp_path):
     cloud = Cloud()
     left_files = authority(cloud, tmp_path / "left").files
