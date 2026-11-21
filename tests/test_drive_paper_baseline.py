@@ -276,6 +276,15 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
                 view.notes_toggle.click()
                 assert not view.notes_toggle.isChecked()
+            assert view.pdf_toggle.isVisible() and not view.pdf_toggle.isChecked()
+            with monkeypatch.context() as cancel:
+                cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+                view.pdf_toggle.click()
+                assert not view.pdf_toggle.isChecked()
+            if label == "mac":
+                view.pdf_toggle.click()
+                wait(app, lambda v=view: not v.busy)
+                assert view.pdf_toggle.isChecked() and not view.notes_toggle.isChecked()
             view.notes_toggle.click()
             wait(app, lambda v=view: not v.busy)
             assert view.notes_toggle.isChecked()
@@ -482,6 +491,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert not reopened.background.timer.isActive()
             assert reopened._saved_ids == set()
             assert not setup._library_view[1].load().selected
+            assert setup._library_view[1].pdf_lists() == []
             with closing(sqlite3.connect(laptop)) as conn:
                 assert conn.execute(
                     "SELECT count(*) FROM list_papers WHERE list_id='list'"

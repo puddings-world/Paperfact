@@ -120,6 +120,7 @@ class DriveSetup:
         return {
             "ordinary": local_binding(self.workspace.path) is None,
             "note_lists": store.note_lists(),
+            "pdf_lists": store.pdf_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
             ),
@@ -139,13 +140,20 @@ class DriveSetup:
         return review(remote, store, list_id, saved.revision, ticket, decision)
 
     def choose_note_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, pdf=False)
+
+    def choose_pdf_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, pdf=True)
+
+    def _choose_list_content(self, list_id, enabled, ticket, *, pdf):
         self.check(ticket)
         if self._library_view is None or local_binding(self.workspace.path):
             raise ValueError("Review the ordinary library first")
         files, store, saved, *_ = self._library_view
         if files is not self.files or store.owner_id != self.account["id"]:
             raise ValueError("The reviewed account changed")
-        store.set_note_sync(list_id, enabled, revision=saved.revision, ticket=ticket)
+        save = store.set_pdf_sync if pdf else store.set_note_sync
+        save(list_id, enabled, revision=saved.revision, ticket=ticket)
         return self.read_library(ticket)
 
     def save_library(self, selected, ticket, progress, *, intermediate=False):

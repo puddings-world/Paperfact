@@ -170,9 +170,10 @@ class DeviceSelection:
                     )
 
                 removed = previous.selected - chosen
-                if removed and self._has_note_grants(conn):
-                    conn.executemany("DELETE FROM note_grants WHERE list_id=?",
-                                     ((identity,) for identity in removed))
+                for table in ("note_grants", "pdf_grants"):
+                    if removed and self._has_grants(conn, table):
+                        conn.executemany(f"DELETE FROM {table} WHERE list_id=?",
+                                         ((identity,) for identity in removed))
 
                 def commit():
                     self._check()
@@ -188,24 +189,36 @@ class DeviceSelection:
         return result
 
     @staticmethod
-    def _has_note_grants(conn):
+    def _has_grants(conn, table):
         return conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_grants'"
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
         ).fetchone() is not None
 
     def note_lists(self):
+        return self._grant_lists("note_grants")
+
+    def pdf_lists(self):
+        return self._grant_lists("pdf_grants")
+
+    def _grant_lists(self, table):
         self._check()
         if not self.path.exists():
             return []
         with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as conn:
             conn.execute("BEGIN")
             selected = self._load(conn).selected
-            if not self._has_note_grants(conn):
+            if not self._has_grants(conn, table):
                 return []
-            return sorted(key for (key,) in conn.execute("SELECT list_id FROM note_grants")
+            return sorted(key for (key,) in conn.execute(f"SELECT list_id FROM {table}")
                           if key in selected)
 
     def note_grant(self, list_id, revision):
+        return self._grant("note_grants", list_id, revision)
+
+    def pdf_grant(self, list_id, revision):
+        return self._grant("pdf_grants", list_id, revision)
+
+    def _grant(self, table, list_id, revision):
         self._check()
         if not self.path.exists():
             return None
@@ -214,30 +227,36 @@ class DeviceSelection:
             saved = self._load(conn)
             if saved.revision != revision or list_id not in saved.selected:
                 raise SelectionChanged("Device selection changed; review it again")
-            if not self._has_note_grants(conn):
+            if not self._has_grants(conn, table):
                 return None
-            row = conn.execute("SELECT grant_id FROM note_grants WHERE list_id=?",
+            row = conn.execute(f"SELECT grant_id FROM {table} WHERE list_id=?",
                                (list_id,)).fetchone()
         return row[0] if row else None
 
     def set_note_sync(self, list_id, enabled, *, revision, ticket):
-        """An explicit note choice is local to this account, device, database and list."""
+        self._set_grant("note_grants", "edits-v1:", list_id, enabled, revision, ticket)
+
+    def set_pdf_sync(self, list_id, enabled, *, revision, ticket):
+        self._set_grant("pdf_grants", "pdf-v1:", list_id, enabled, revision, ticket)
+
+    def _set_grant(self, table, prefix, list_id, enabled, revision, ticket):
+        """Choices are local to one account, device, database, list and content type."""
         self._check()
         ticket.check()
         if type(enabled) is not bool:
-            raise ValueError("Expected a yes/no choice for notes")
+            raise ValueError("Expected a yes/no sync choice")
         with closing(sqlite3.connect(self.path.as_uri() + "?mode=rw", uri=True)) as conn:
             conn.execute("BEGIN IMMEDIATE")
             saved = self._load(conn)
             if saved.revision != revision or list_id not in saved.selected:
                 raise SelectionChanged("Device selection changed; review it again")
-            conn.execute("CREATE TABLE IF NOT EXISTS note_grants("
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table}("
                          "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
             if enabled:
-                conn.execute("INSERT OR IGNORE INTO note_grants VALUES(?,?)",
-                             (list_id, "edits-v1:" + str(uuid4())))
+                conn.execute(f"INSERT OR IGNORE INTO {table} VALUES(?,?)",
+                             (list_id, prefix + str(uuid4())))
             else:
-                conn.execute("DELETE FROM note_grants WHERE list_id=?", (list_id,))
+                conn.execute(f"DELETE FROM {table} WHERE list_id=?", (list_id,))
             self._check()
             ticket.publish(conn.commit)
 

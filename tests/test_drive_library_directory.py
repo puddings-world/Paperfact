@@ -39,7 +39,7 @@ def test_partial_device_updates_shared_directory_without_losing_other_lists(tmp_
     assert right.read().directory.lists == (changed, new_second)
 
 
-def test_private_directory_attachment_roundtrip_and_retry(tmp_path):
+def test_private_directory_attachment_roundtrip_and_retry(tmp_path, monkeypatch):
     import hashlib
 
     from paper_daily.drive_sync_files import MAX_INLINE
@@ -49,11 +49,35 @@ def test_private_directory_attachment_roundtrip_and_retry(tmp_path):
     left, right = (authority(cloud, tmp_path / device).files for device in ("win", "mac"))
     folder, head = left.new_ids(2)
     directory = DriveDirectory(left, folder, head, "personal")
-    directory.initialize("Private library")
-    sender = directory.attachment_objects(tmp_path / "left-receipts")
-    receiver = DriveDirectory(right, folder, head, "personal").attachment_objects(
-        tmp_path / "right-receipts"
-    )
+    from test_library_selection import database, selection
+    from test_sync_graph_research import PAPER, membership, metadata, operation
+
+    from paper_daily.drive_list_history import DriveListPapers
+    from paper_daily.workspace_service import Ticket
+
+    catalog = directory.upsert(directory.initialize("Private library"),
+                               [ListEntry("a", "A", False)]).directory
+    stores = [selection(database(tmp_path / label), tmp_path / (label + "-settings"),
+                        library_id="personal") for label in ("desktop", "laptop")]
+    paper = dict(operation("paper", PAPER, metadata()), workspace_id="personal")
+    member = dict(membership("a"), workspace_id="personal")
+    for store in stores:
+        store.save(catalog, ["a"], expected_revision=0)
+    DriveListPapers(directory, stores[0], "a").append(None, [paper, member], revision=1)
+    remote = DriveDirectory(right, folder, head, "personal")
+
+    def transfer(directory, device):
+        return directory.attachment_objects(tmp_path / f"receipts-{device}", stores[device], "a",
+                                            PAPER, paper["incarnation"], 1, Ticket())
+
+    with pytest.raises(PermissionError, match="Enable PDF"):
+        transfer(directory, 0)
+    stores[0].set_pdf_sync("a", True, revision=1, ticket=Ticket())
+    sender = transfer(directory, 0)
+    with pytest.raises(PermissionError, match="Enable PDF"):
+        transfer(remote, 1)
+    stores[1].set_pdf_sync("a", True, revision=1, ticket=Ticket())
+    receiver = transfer(remote, 1)
     pdf = tmp_path / "synthetic.pdf"
     data = b"%PDF-1.7" + bytes(MAX_INLINE) + b"%%EOF"
     pdf.write_bytes(data)
@@ -63,6 +87,20 @@ def test_private_directory_attachment_roundtrip_and_retry(tmp_path):
     with pytest.raises(ValueError, match="selected attachment"):
         sender.put(pdf, expected=different)
     assert len(cloud.objects) == count
+    original_put = left.put_small
+
+    def revoke_after_chunk(*args, **kwargs):
+        result = original_put(*args, **kwargs)
+        stores[0].set_pdf_sync("a", False, revision=1, ticket=Ticket())
+        return result
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(left, "put_small", revoke_after_chunk)
+        with pytest.raises(PermissionError, match="permission"):
+            sender.put(pdf, expected=owner)
+    assert len(cloud.objects) == count + 1
+    stores[0].set_pdf_sync("a", True, revision=1, ticket=Ticket())
+    sender = transfer(directory, 0)
     manifest = sender.put(pdf, expected=owner)
     assert len(manifest["chunks"]) == 2
     assert sender.put(pdf, expected=owner) == manifest
@@ -74,6 +112,12 @@ def test_private_directory_attachment_roundtrip_and_retry(tmp_path):
     restored = receiver.get(manifest, store, expected=owner)
     assert restored.read_bytes() == data
     assert receiver.put(restored, expected=owner) == manifest
+    stores[1].set_pdf_sync("a", False, revision=1, ticket=Ticket())
+    stores[1].set_pdf_sync("a", True, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError, match="permission"):
+        receiver.get(manifest, store, expected=owner)
+    with pytest.raises(ValueError, match="outside"):
+        remote.attachment_objects(tmp_path / "cache", stores[1], "a", PAPER, "old", 1, Ticket())
     assert len(cloud.objects) == count + 2
 
 

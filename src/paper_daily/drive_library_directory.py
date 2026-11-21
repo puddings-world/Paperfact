@@ -28,14 +28,31 @@ class DriveDirectory:
         self.folder = identifier(folder_id)
         self.head = identifier(head_id)
 
-    def attachment_objects(self, cache):
-        """Share immutable bytes across lists under this one private directory."""
+    def attachment_objects(self, cache, store, list_id, paper, incarnation, revision, ticket):
+        """Open a transfer for a verified bibliography member under a live device grant."""
         from pathlib import Path
 
+        from paper_daily.drive_list_history import DriveListPapers
         from paper_daily.drive_sync_objects import DriveObjects
 
+        grant = store.pdf_grant(list_id, revision)
+        if not grant:
+            raise PermissionError("Enable PDF sync for this list on this device")
+
+        def check():
+            ticket.check()
+            if store.pdf_grant(list_id, revision) != grant:
+                raise PermissionError("This device changed its PDF sync permission")
+
+        check()
+        bibliography = DriveListPapers(self, store, list_id)
+        _, records = bibliography.changes(None, revision=revision)
+        if not any(op["entity_id"] == paper and op["incarnation"] == incarnation
+                   for op in records[::2]):
+            raise ValueError("Original is outside this selected bibliography")
+        check()
         return DriveObjects(self.files, self.folder, self.key, Path(cache) / self.folder,
-                            folder_role="directory")
+                            folder_role="directory", check=check)
 
     def initialize(self, name):
         """Reuse caller-retained object IDs after interrupted explicit setup."""

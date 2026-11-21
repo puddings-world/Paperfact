@@ -180,7 +180,9 @@ anchor. Edits on one device propagate to the other. When both devices edit a car
 each keeps its version for review and other cards continue syncing. Select that list,
 open **Compare conflicting notes**, then choose the local or Drive version. The next
 sync exchanges your choice. You can also close the comparison to keep both versions. Removals require review. For a list enabled before edit support, turn note sync off and back
-on on each device to grant permission for edits. Use a research package for PDFs
+on on each device to grant permission for edits. **Allow PDF sync for this list** saves
+a separate preference for that device. Deselecting a list clears its PDF permission.
+Use research packages to move originals until automatic PDF exchange ships. Use a research package for PDFs
 and deep analyses. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).

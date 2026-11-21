@@ -205,8 +205,12 @@ Directory attachment transport uses verified private-folder chunks. Uploads boun
 to an original's SHA-256 and size reject mismatches before allocating Drive
 objects. After a full verified download, the receiving device can reuse the
 same remote chunks when publishing the same bytes from another list. This is
-transport support; ordinary list sync still needs a scoped paper-to-PDF manifest,
-per-device permission, and verified installation in the reader.
+transport support. Each device can grant or revoke PDF permission for a saved list
+independently of notes. Deselecting the list clears that grant. Directory transfer
+checks the paper incarnation in the selected bibliography and rechecks the captured
+grant during chunk transfer. A revoked and reissued grant invalidates the old
+transfer. The ordinary reader still needs a paper-to-PDF manifest exchange and
+verified installation before a saved preference triggers an automatic transfer.
 
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
