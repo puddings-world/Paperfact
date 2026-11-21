@@ -22,6 +22,11 @@ def remove_selected(conn, list_id, paper_ids):
 
     removed = 0
     for key in keys:
+        witnessed = {}
+        if "drive_membership_watches" in tables:
+            witnessed = dict(conn.execute(
+                "SELECT context,creation FROM drive_membership_watches WHERE list_id=? "
+                "AND local_id=? AND live=1 AND applied IS NULL", (list_id, key)))
         row = conn.execute(delete + " RETURNING added_at", (list_id, key)).fetchone()
         if row is None:
             continue
@@ -52,7 +57,8 @@ def remove_selected(conn, list_id, paper_ids):
         action_id = f"v2-{uuid4()}"
         conn.executemany(
             "INSERT INTO drive_membership_removals VALUES(?,?,?,?,?,?)",
-            ((context, list_id, action_id, key, row[0], head) for context, head in scopes),
+            ((context, list_id, action_id + "-" + witnessed[context] if context in witnessed
+              else action_id, key, row[0], head) for context, head in scopes),
         )
         removed += 1
     return removed
@@ -74,20 +80,25 @@ def observed_removals(store, list_id, boundaries, candidates):
     from paper_daily.workspace_service import _read
 
     with _read(store.workspace.path) as conn:
-        if "drive_membership_removals" not in _tables(conn):
+        tables = _tables(conn)
+        if "drive_membership_removals" not in tables:
             return []
         requested = {tuple(row) for row in conn.execute(
-            "SELECT local_id,added_at,observed_head FROM drive_membership_removals "
+            "SELECT local_id,added_at,observed_head,action_id FROM drive_membership_removals "
             "WHERE context=? AND list_id=? AND action_id GLOB 'v2-*'",
             (store.context, list_id),
         )}
+        watched = {row[0] for row in conn.execute(
+            "SELECT local_id FROM drive_membership_watches WHERE context=? AND list_id=?",
+            (store.context, list_id),
+        )} if requested and "drive_membership_watches" in tables else set()
     if not requested:
         return []
     with _read(store.path) as settings:
         if "published_paper_ids" not in _tables(settings):
             return []
         matched = {}
-        for local_id, added_at, observed_head in requested:
+        for local_id, added_at, observed_head, action_id in requested:
             end = boundaries.get(observed_head)
             if end is None:
                 continue
@@ -96,5 +107,7 @@ def observed_removals(store, list_id, boundaries, candidates):
             ).fetchone()
             member = candidates.get(binding[0]) if binding else None
             if member and member[0] < end and member[1]["payload"]["added_at"] == added_at:
+                if local_id in watched and not action_id.endswith("-" + member[1]["operation_id"]):
+                    continue
                 matched[binding[0]] = removal_operation(member[1], store.context)
         return [matched[key] for key in sorted(matched)]

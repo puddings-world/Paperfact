@@ -85,8 +85,7 @@ def receive_membership_changes(history, revision, ticket):
                 row = conn.execute(
                     "SELECT position,citation,added_at,state,read_at,delivered_at FROM list_papers "
                     "WHERE list_id=? AND paper_id=?", (list_id, local)).fetchone()
-                if (not row and removal and removal["device_id"] == store.context
-                        and "drive_membership_removals" in tables):
+                if not row and removal and "drive_membership_removals" in tables:
                     intents = conn.execute(
                         "SELECT action_id,observed_head FROM drive_membership_removals "
                         "WHERE context=? AND list_id=? AND local_id=? AND added_at=? "
@@ -94,7 +93,10 @@ def receive_membership_changes(history, revision, ticket):
                         (store.context, list_id, local, payload["added_at"]),
                     ).fetchall()
                     end = history.boundaries.get(intents[0][1], 0) if len(intents) == 1 else 0
-                    if end > 2 * index + 1:
+                    if end > 2 * index + 1 and (
+                        removal["device_id"] == store.context
+                        or intents[0][0].endswith("-" + creation["operation_id"])
+                    ):
                         conn.execute(
                             "INSERT INTO drive_membership_watches "
                             "(context,list_id,member,creation,local_id,position,live,applied) "

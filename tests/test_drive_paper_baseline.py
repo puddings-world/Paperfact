@@ -398,6 +398,10 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         publish_initial(origin_dir, fresh, "return", 1, Ticket(), append_new=True)
     [own_removal] = prepared.value.operations
     # Withdrawing a removal while its immutable blob uploads must leave the head intact.
+    # Fork local state so the lost-reply case below still uses the original lifetime.
+    snapshot = tmp_path / "before-restoration.db"
+    with closing(sqlite3.connect(fresh_db)) as conn, closing(sqlite3.connect(snapshot)) as copy_db:
+        conn.backup(copy_db)
     original_put = origin_dir.files.put_small
     def restore_during_upload(*args, **kwargs):
         result = original_put(*args, **kwargs)
@@ -414,6 +418,11 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     assert origin_history.changes(commit, revision=1) == (commit, [])
     with closing(sqlite3.connect(fresh_db)) as conn, conn:
         assert remove_selected(conn, "return", [local]) == 1
+    with pytest.raises(ListReviewRequired, match="Local removal changed"):
+        origin_history.append(commit, [own_removal], revision=1)
+    assert origin_history.changes(commit, revision=1) == (commit, [])
+    with closing(sqlite3.connect(snapshot)) as copy_db, closing(sqlite3.connect(fresh_db)) as conn:
+        copy_db.backup(conn)
     origin_history.append(commit, [own_removal], revision=1)
     with closing(sqlite3.connect(fresh_db)) as conn, conn:
         saved_head, = conn.execute("SELECT observed_head FROM drive_membership_removals").fetchone()
@@ -611,7 +620,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         from paper_daily import store as db
 
         peers = []
-        for label in ("unchanged", "replaced"):
+        for label in ("unchanged", "replaced", "also-removed", "replacement-removed"):
             root = tmp_path / label
             root.mkdir()
             path = root / "research" / "papers.db"
@@ -625,10 +634,17 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
             peer.sign_in(Ticket(), lambda _: None)
             assert not peer.apply_library(["list"], Ticket(), lambda _: None)["reviews"]
             peers.append((peer, path))
-        with closing(sqlite3.connect(peers[1][1])) as conn, conn:
-            row = conn.execute("SELECT * FROM list_papers WHERE list_id='list'").fetchone()
-            conn.execute("DELETE FROM list_papers WHERE list_id='list'")
-            conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})", row)
+        for _, path in (peers[1], peers[3]):
+            with closing(sqlite3.connect(path)) as conn, conn:
+                row = conn.execute("SELECT * FROM list_papers WHERE list_id='list'").fetchone()
+                conn.execute("DELETE FROM list_papers WHERE list_id='list'")
+                conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})", row)
+        for _, path in peers[2:]:
+            with closing(sqlite3.connect(path)) as conn, conn:
+                local, = conn.execute("SELECT paper_id FROM list_papers").fetchone()
+                assert remove_selected(conn, "list", [local]) == 1
+        replacement = peers[3][0].sync_saved_library(Ticket(), lambda _: None)
+        assert "list" in replacement["reviews"] and not replacement["membership_upgrades"]
         with closing(sqlite3.connect(source)) as conn, conn:
             assert remove_selected(conn, "list", ["paper"]) == 1
         view.sync_lists.click()
@@ -647,12 +663,19 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         assert directory.read().directory.lists[0].membership_changes_head.generation == 1
         for index, (peer, path) in enumerate(peers):
             report = peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
-            if index:
+            if index == 3:
+                assert "both versions retained" in report["list"]
+            elif index == 1:
                 assert "replacement membership" in report["list"]
             else:
                 assert not report
             with closing(sqlite3.connect(path)) as conn:
-                assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (index,)
+                count = int(index == 1)
+                assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (count,)
+                if index == 2:
+                    assert not conn.execute("SELECT 1 FROM drive_membership_removals").fetchone()
+                    assert conn.execute("SELECT 1 FROM drive_membership_watches "
+                                        "WHERE applied IS NOT NULL").fetchone()
                 assert conn.execute("SELECT COUNT(*) FROM papers").fetchone() == (1,)
         with closing(sqlite3.connect(source)) as conn:
             assert not conn.execute("SELECT 1 FROM list_papers").fetchone()
