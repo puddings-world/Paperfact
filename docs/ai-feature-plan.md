@@ -21,7 +21,7 @@ came from, and can be reused by a later feature.
 | Release | In scope |
 | --- | --- |
 | 0.5.0 | One definition per AI feature and a host task queue; the settings page below; removal of the Gemini key option; single-paper tasks; notes as cards |
-| 0.5.1 | Cross-paper features; sub-lists and topic convergence |
+| 0.5.1 | Cross-paper features; sections inside a list, the list map and topic convergence |
 | Later | Research gaps, writing export, tracking new papers |
 
 ## 1. One definition per AI feature (0.5.0)
@@ -171,21 +171,59 @@ shallower form; read them before designing these.
 A list today is flat: a name, a note, papers in order, one reading goal and one
 survey. Research narrows over time, and the list should be able to follow.
 
+Changed 2026-11-22 (owner): sections inside a list replace the earlier
+"sub-lists, two levels" plan. A list is collected mostly as the references for
+one research topic, so it needs classification inside it and a view of how its
+papers relate, without opening each paper's context in turn. A sub-list would
+be another place to enter and leave; a section is a heading in the same list,
+so there is one level of navigation and no tree to limit.
+
 In 0.5.1, with the cross-paper features:
 
-1. **Sub-lists.** Select papers in a list, or let AI propose groups by topic
-   for the reader to confirm, and save them as a sub-list. A sub-list remembers
-   its parent. A paper can be in both; its read state is shared. Two levels
-   only: no deeper tree.
-2. **Topic convergence.** A list's reading goal gains a stage (exploring,
+1. **Sections.** A list has a main line and any number of named sections. A
+   section is either a category of the topic (for example "phase recognition
+   models") or a side question (for example "which Jaccard variant is
+   comparable?"); a side question stores the question it answers.
+   - A paper can be in the main line and in sections at once; its read state is
+     shared, and it is shown once with its other places named.
+   - The list's count, progress and next paper follow the main line. A side
+     question is collapsed by default and does not dilute them.
+   - A side question ends in one of three ways: closed with a conclusion card
+     (section 4) while its papers stay; merged into the main line; or promoted
+     to a list of its own that records the list and question it came from.
+   - No hard limit. Past about 20 papers in a section, or 5 sections, the app
+     suggests promotion.
+   - Sections are made by selecting papers, or by AI proposing groups for the
+     reader to confirm. AI never moves a paper without confirmation.
+   - An agent host adding papers for a side question offers "new section in
+     this list" first, then the main line, then a new list.
+2. **List map.** A second view of the same list, beside the paper rows, for
+   reading the list as a whole:
+   - One lane per section, papers placed by year within the lane, each showing
+     read state and its one-line role in the list.
+   - Relations between papers in the list, each from a stored source: a
+     citation (`refs`, `cites`) or a statement in a paper's context
+     (`paper_context`, which today stores a title, earlier or later, and a
+     reason; the kinds in section 5, item 1 refine it). Selecting a
+     paper shows its relations; nothing is drawn that has no source, and no
+     relation is inferred from titles.
+   - A paper with no relation to the rest is marked, as a prompt to check
+     whether it belongs.
+   - The comparison table (section 5, item 2) is the map's other form: the
+     same sections as row groups.
+   The map reads stored results only. Papers without a context or reference
+   analysis appear without relations and are counted, so the reader can see how
+   complete the picture is and start the missing analyses explicitly.
+3. **Topic convergence.** A list's reading goal gains a stage (exploring,
    focusing, decided) and, per stage, the question being asked and why other
    directions were dropped. AI points out papers that no longer fit the goal
    and directions still missing; the reader decides what to move out.
 
 Later:
 
-3. **Research gaps.** Collect what no paper in the list has done, from each
+4. **Research gaps.** Collect what no paper in the list has done, from each
    paper's limitations and open questions (section 3).
-4. **Writing export.** A decided list becomes a related-work outline and BibTeX.
-5. **New papers.** For a decided list, look periodically for new papers citing
+5. **Writing export.** A decided list becomes a related-work outline and BibTeX,
+   with the sections as its headings.
+6. **New papers.** For a decided list, look periodically for new papers citing
    its core papers and hold them for review; never add them automatically.
