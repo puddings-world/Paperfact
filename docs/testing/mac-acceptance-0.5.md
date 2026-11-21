@@ -1,5 +1,36 @@
 # Mac v0.5 acceptance
 
+## Selected bibliographies in the ordinary reader
+
+[Download the Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44862445247/artifacts/14690378158).
+The native report records clean 0d127b4, execution from the copied DMG app,
+three reader launches and four preserved synthetic research files.
+Physical devices and actual Google authorization still require acceptance.
+
+Use source **0d127b4** on both desktops. The private Drive directory gains
+a v3 record when a bibliography is published. Earlier readers can reject
+the upgraded directory. For an isolated trial use a test Google account and
+a disposable local workspace on each device.
+
+1. Create two lists on Windows. Add different papers to each; put two papers
+   in the list you will take. Sign in to Drive and save both selections.
+2. On the Mac sign in to the same account. Select just the list you will take
+   and save. Open it in the ordinary reader. Check both titles and their order.
+   The other list may appear in the directory; its papers should stay off the Mac.
+3. On the Mac mark one paper read. Leave the Mac Drive settings open. On Windows
+   append another paper and save the selection. Save the selection on the Mac.
+   The third title should appear after the first two; the read mark should remain.
+4. Repeat the save. Confirm no extra memberships. Uncheck the list and save.
+   Previously received local papers should remain available.
+5. In a disposable second Mac workspace, pre-create a paper with the same DOI
+   as a later incoming paper. Save the selection and confirm the review label.
+   Check the local paper and notes survived and no partial batch was applied.
+
+Save triggers transfer. Source appends are supported; later reorders, deletions
+and receiver-side edits do not yet propagate. Use a research package for notes,
+analysis and PDF originals. Record the two source revisions and the first failed
+step for any physical-device report.
+
 ## Per-device list selection candidate
 
 Source **fe82ae9**, [Mac build 44860029456](https://github.com/puddings-world/Paperfact/actions/runs/44860029456).
