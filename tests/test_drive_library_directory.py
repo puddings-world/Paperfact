@@ -718,6 +718,19 @@ def test_devices_exchange_source_bound_positions_only_with_current_grants(tmp_pa
         publish(PAPER, digest, dict(page, page=2), original, predecessor=None, revision=1)
     assert len(cloud.objects) == count
     assert sent in writers[1].suggestions(revision=1)[1]
+    resume = writers[1].resume_page
+    assert resume(PAPER, sent, original, revision=1) == 3
+    with pytest.raises(ValueError, match="open paper"):
+        resume("other-paper", sent, original, revision=1)
+    with pytest.raises(ValueError, match="exact hash"):
+        resume(PAPER, sent, pdf_bytes(3, "Other PDF"), revision=1)
+    with pytest.raises(ValueError, match="another device"):
+        writers[0].resume_page(PAPER, sent, original, revision=1)
+    newer = publish(PAPER, digest, dict(page, page=2), original,
+                    predecessor=sent["operation_id"], revision=1)
+    with pytest.raises(DriveChanged):
+        resume(PAPER, sent, original, revision=1)
+    assert resume(PAPER, newer, original, revision=1) == 2
     stores[1].set_position_sync("a", False, revision=1, ticket=Ticket())
     with pytest.raises(PermissionError):
         writers[1].changes(first, revision=1)

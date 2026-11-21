@@ -453,6 +453,24 @@ class DriveListPositions(_MembershipHistory):
                             lambda: self._check_publication(revision, records),
                             remaining_bytes=self.max_bytes // self.max_pages)
 
+    def resume_page(self, paper, chosen, original, *, revision):
+        """Resolve an explicit peer choice for the supplied paper and local PDF bytes."""
+        from paper_daily.reading_positions import verify_page
+
+        head, tips = self.suggestions(revision=revision)
+        selected = next((op for op in tips if op == chosen), None)
+        if selected is None:
+            raise DriveChanged("PDF position changed; choose a current suggestion")
+        payload = selected["payload"]
+        if payload["scope"]["id"] != paper or selected["device_id"] == self.store.context:
+            raise ValueError("Choose another device's position for the open paper")
+        row = dict(paper_id=paper, document_hash=payload["source_document_hash"], **payload["data"])
+        verify_page(row, original)
+        if self._current_head() != head and selected not in self.suggestions(revision=revision)[1]:
+            raise DriveChanged("PDF position changed while verifying the original")
+        self._check(revision)
+        return row["page"]
+
     def publish_page(self, paper, digest, data, original, *, predecessor, revision):
         """Publish an explicitly observed position against its exact PDF and device tip."""
         from paper_daily import reading_positions
