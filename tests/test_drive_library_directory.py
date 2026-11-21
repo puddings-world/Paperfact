@@ -120,6 +120,36 @@ def test_private_directory_attachment_roundtrip_and_retry(tmp_path, monkeypatch)
         remote.attachment_objects(tmp_path / "cache", stores[1], "a", PAPER, "old", 1, Ticket())
     assert len(cloud.objects) == count + 2
 
+    from paper_daily.drive_list_originals import DriveListOriginals
+
+    desk = DriveListOriginals(directory, tmp_path / "receipts-0", stores[0], "a", 1, Ticket())
+    mac = DriveListOriginals(remote, tmp_path / "receipts-1", stores[1], "a", 1, Ticket())
+    offline = BlobStore(tmp_path / "mac-reader-originals")
+    assert mac.download(PAPER, paper["incarnation"], offline) is None
+    publish_head = directory.upsert
+
+    def rename_during_publish(observed, entries, **kwargs):
+        remote.upsert(remote.read(), [ListEntry("a", "Changed on laptop", True)])
+        return publish_head(observed, entries, **kwargs)
+
+    with monkeypatch.context() as racing:
+        racing.setattr(directory, "upsert", rename_during_publish)
+        with pytest.raises(DriveChanged):
+            desk.publish(PAPER, paper["incarnation"], pdf, owner)
+    assert remote.read().directory.lists[0].name == "Changed on laptop"
+    assert mac.download(PAPER, paper["incarnation"], offline) is None
+    assert desk.publish(PAPER, paper["incarnation"], pdf, owner) == manifest
+    published = len(cloud.objects)
+    assert b"directory.v5" in remote.read().directory.to_bytes()
+    assert owner.sha256.encode() not in remote.read().directory.to_bytes()
+    assert mac.download(PAPER, paper["incarnation"], offline).read_bytes() == data
+    assert mac.publish(PAPER, paper["incarnation"], restored, owner) == manifest
+    with pytest.raises(ValueError, match="different original"):
+        desk.publish(PAPER, paper["incarnation"], pdf, different)
+    assert len(cloud.objects) == published
+    remote.upsert(remote.read(), [ListEntry("a", "Renamed", True)])
+    assert mac.download(PAPER, paper["incarnation"], offline).read_bytes() == data
+
 
 def test_login_and_device_choices_do_not_transfer_papers(tmp_path, monkeypatch):
     from test_library_selection import database

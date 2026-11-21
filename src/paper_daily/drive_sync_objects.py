@@ -17,6 +17,36 @@ MAX_OBJECT = 150 * 1024**2
 FORMAT = "paperfact.drive-bytes.v1"
 
 
+def checked_manifest(manifest):
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != {"format", "sha256", "size", "chunks"}
+        or manifest["format"] != FORMAT
+    ):
+        raise ValueError("Unsupported Drive byte manifest")
+    blob = BlobManifest(manifest["sha256"], manifest["size"])
+    chunks = manifest["chunks"]
+    if (
+        not 0 < blob.size <= MAX_OBJECT
+        or not isinstance(chunks, list)
+        or len(chunks) != (blob.size + MAX_INLINE - 1) // MAX_INLINE
+    ):
+        raise ValueError("Invalid Drive chunk count")
+    boundaries = []
+    for index, ref in enumerate(chunks):
+        length = min(MAX_INLINE, blob.size - index * MAX_INLINE)
+        if (
+            not isinstance(ref, dict)
+            or set(ref) != {"id", "sha256", "size"}
+            or ref["size"] != length
+        ):
+            raise ValueError("Invalid Drive chunk boundary")
+        identifier(ref["id"])
+        BlobManifest(ref["sha256"], ref["size"])
+        boundaries.append((ref, length))
+    return blob, boundaries
+
+
 class DriveObjects:
     def __init__(self, files, folder, workspace, cache, *, folder_role="workspace", check=None):
         if folder_role not in {"workspace", "directory"}:
@@ -132,36 +162,12 @@ class DriveObjects:
 
     def get(self, manifest, store, *, expected: BlobManifest | None = None):
         self._check()
-        if (
-            not isinstance(manifest, dict)
-            or set(manifest) != {"format", "sha256", "size", "chunks"}
-            or manifest["format"] != FORMAT
-        ):
-            raise ValueError("Unsupported Drive byte manifest")
-        blob = BlobManifest(manifest["sha256"], manifest["size"])
+        blob, boundaries = checked_manifest(manifest)
         if expected is not None and expected != blob:
             raise ValueError("Drive manifest differs from the selected attachment")
         if self.folder_role == "directory":
             self.files.owned(self.folder, self.workspace, self.folder_role)
         chunks = manifest["chunks"]
-        if (
-            blob.size > MAX_OBJECT
-            or not isinstance(chunks, list)
-            or len(chunks) != (blob.size + MAX_INLINE - 1) // MAX_INLINE
-        ):
-            raise ValueError("Invalid Drive chunk count")
-        boundaries = []
-        for index, ref in enumerate(chunks):
-            length = min(MAX_INLINE, blob.size - index * MAX_INLINE)
-            if (
-                not isinstance(ref, dict)
-                or set(ref) != {"id", "sha256", "size"}
-                or ref["size"] != length
-            ):
-                raise ValueError("Invalid Drive chunk boundary")
-            identifier(ref["id"])
-            BlobManifest(ref["sha256"], ref["size"])
-            boundaries.append((ref, length))
         if store.available(blob):
             return store.verified_path(blob)
         status = store.begin(blob)

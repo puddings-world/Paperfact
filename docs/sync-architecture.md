@@ -209,8 +209,14 @@ transport support. Each device can grant or revoke PDF permission for a saved li
 independently of notes. Deselecting the list clears that grant. Directory transfer
 checks the paper incarnation in the selected bibliography and rechecks the captured
 grant during chunk transfer. A revoked and reissued grant invalidates the old
-transfer. The ordinary reader still needs a paper-to-PDF manifest exchange and
-verified installation before a saved preference triggers an automatic transfer.
+transfer. A selected list now has a private, bounded index of paper incarnations
+and verified original manifests. The first publication upgrades the directory
+to v5. Its directory entry exposes only an immutable index reference. Discovery
+and downloads verify the bibliography and grant, and conditional publication
+preserves concurrent catalog changes. Publishing a different digest for an
+existing original requires review. The ordinary reader still needs to discover
+eligible local originals and install received bytes before this exchange runs
+from its saved preference.
 
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
