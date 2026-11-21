@@ -146,7 +146,15 @@ class DriveSetup:
         additions = [
             ListEntry(item.id, item.name, False) for item in local.lists if item.id not in existing
         ]
-        updated = remote.upsert(observed, additions)
+        if additions:
+            updated = remote.upsert(observed, additions)
+        else:
+            updated = remote.read()
+            before, after = observed.directory, updated.directory
+            if after.generation < before.generation or (
+                after.generation == before.generation and after.digest != before.digest
+            ):
+                raise ValueError("Directory history changed; review before syncing")
         self.check(ticket)
         store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket,
                    intermediate=intermediate)

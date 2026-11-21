@@ -80,39 +80,44 @@ def test_shared_paper_identity_and_interrupted_source_publication(source, tmp_pa
     assert history.changes(accepted, revision=1) == (accepted, [])
 
 
-def test_reader_selection_publishes_receives_and_preserves_local_edits(source, tmp_path):
+def test_reader_selection_publishes_receives_and_preserves_local_edits(
+    source, tmp_path, monkeypatch
+):
+    from paper_daily import drive_sync_setup
     from paper_daily import store as db
-    from paper_daily.drive_paper_receive import exchange_bibliography
 
     laptop = tmp_path / "laptop" / "papers.db"
     laptop.parent.mkdir()
     with closing(sqlite3.connect(laptop)) as conn, conn:
         conn.executescript(db.SCHEMA)
-        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('list','L',?)", (STAMP,))
-    files = authority(Cloud(), tmp_path / "authority").files
-    directory = DriveDirectory(files, *files.new_ids(2), "library")
-    cat = directory.upsert(
-        directory.initialize("Library"), [ListEntry("list", "L", False)]
-    ).directory
-    win, mac = [
-        selection(path, tmp_path / folder)
-        for path, folder in ((source, "win-settings"), (laptop, "mac-settings"))
-    ]
-    for device in (win, mac):
-        device.save(cat, ["list"], expected_revision=0)
+    cloud = Cloud()
+
+    def login(path, label):
+        files = authority(cloud, tmp_path / label / "authority").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **k: files)
+        service = drive_sync_setup.DriveSetup(
+            path,
+            profiles=tmp_path / label / "profiles",
+            cache=tmp_path / label / "cache",
+            authorize=lambda **kwargs: files.session,
+        )
+        service.sign_in(Ticket(), lambda _: None)
+        return service
 
     def sync(device):
-        return exchange_bibliography(directory, device, "list", 1, Ticket())
+        return device.apply_library(["list"], Ticket(), lambda _: None)["reviews"]
 
-    sync(win)
-    assert sync(mac) == "received"
+    win = login(source, "desktop")
+    assert sync(win) == {}
+    mac = login(laptop, "laptop-settings")
+    assert sync(mac) == {}
     with closing(sqlite3.connect(laptop)) as conn, conn:
         assert conn.execute(
             "SELECT title,position FROM papers JOIN list_papers ON papers.id=list_papers.paper_id"
         ).fetchall() == [("Research paper", 0)]
         conn.execute("UPDATE list_papers SET state='read'")
         conn.execute("UPDATE papers SET title='Offline local title'")
-    assert sync(mac) == "current"
+    assert sync(mac) == {}
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute(
             "INSERT INTO papers(id,title,title_key,venue,year,source) "
@@ -124,7 +129,7 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(source, t
             (STAMP,),
         )
     sync(win)
-    assert sync(mac) == "received"
+    assert sync(mac) == {}
     with closing(sqlite3.connect(laptop)) as conn:
         assert conn.execute(
             "SELECT title,state FROM papers JOIN list_papers "
@@ -149,8 +154,7 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(source, t
                 (str(index), index, STAMP),
             )
     sync(win)
-    with pytest.raises(ListReviewRequired, match="Possible existing paper"):
-        sync(mac)
+    assert "Possible existing paper" in sync(mac)["list"]
     with closing(sqlite3.connect(laptop)) as conn:
         assert (
             conn.execute("SELECT head FROM drive_library_bibliographies").fetchone() == checkpoint
