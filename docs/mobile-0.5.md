@@ -73,6 +73,7 @@ switches the browser offline/online. It verifies exactly one enrollment, durable
 outbox -> received note, reload without background authentication, identity-preserving
 reconnect and cancellation/confirmation of Forget. New view tests separately hold
 requests to check close/stop/workspace-switch delivery and errors in both languages.
+With `PAPERFACT_TEST_PAIRING_REVOCATION=1`, the same journey also revokes the paired browser from the synthetic desktop. An active reader loses server access, reconnect is denied and the unsent note remains in IndexedDB.
 The shell-upgrade scenario evicts old shell code without touching research caches.
 
 Local evidence: the final six affected mobile files passed **45 Node cases in

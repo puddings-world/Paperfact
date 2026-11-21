@@ -1,6 +1,7 @@
 """Synthetic authority behind the existing isolated Chromium fixture proxy."""
 
 import json
+import os
 import secrets
 import sqlite3
 import sys
@@ -90,6 +91,7 @@ def main():
                     workspace=workspace,
                     paper=paper,
                     invitation=packet,
+                    test_revocation=os.environ.get("PAPERFACT_TEST_PAIRING_REVOCATION") == "1",
                 )
             ),
             flush=True,
@@ -98,6 +100,16 @@ def main():
             for command in sys.stdin:
                 if command.strip() == "quit":
                     break
+                if command.strip() == "revoke":
+                    catalog = service.device_catalog(token)["devices"]
+                    peers = [row["device_id"] for row in catalog if row["device_id"] != device]
+                    if len(peers) != 1:
+                        raise ValueError("Expected exactly one paired fixture browser")
+                    result = service.revoke_peer(
+                        token, peers[0], checkpoint=service.history_page(token)["checkpoint"]
+                    )
+                    print(json.dumps(result), flush=True)
+                    continue
                 if command.strip() != "inspect":
                     raise ValueError("Unknown fixture command")
                 catalog = service.device_catalog(token)["devices"]

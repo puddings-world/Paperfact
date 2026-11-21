@@ -7,8 +7,9 @@ const results=[],errors=[],output=document.querySelector('#result'),assert=(valu
 const until=async(check,label='UI')=>{const end=performance.now()+8000;while(!await check()){
  assert(performance.now()<end,'Timed out '+label);await new Promise(resolve=>setTimeout(resolve,20));}};
 const fixture=await (await fetch('/__position_fixture')).json();
-const inspect=async()=>(await fetch('/__position_command',{method:'POST',headers:{'Content-Type':'application/json'},
- body:JSON.stringify({command:'inspect'})})).json();
+const authorityCommand=async(command)=>(await fetch('/__position_command',{method:'POST',headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({command})})).json();
+const inspect=()=>authorityCommand('inspect');
 let frame,doc,identity;
 const named=(root,label)=>[...root.querySelectorAll('button')].find(node=>node.textContent===label);
 async function check(name,run){try{await run();results.push('PASS '+name);}catch(error){
@@ -108,6 +109,24 @@ await check('Traditional Chinese forget confirmation preserves cached research a
  const before=JSON.stringify(await scoped());
  dialog.querySelector('[data-pairing=forget]').click();assert(doc.activeElement===dialog.querySelector('[data-pairing=keep]'),'forget does not default to keep');
  dialog.querySelector('[data-pairing=keep]').click();assert(JSON.stringify(await scoped())===before,'cancel changed research');
+ if(fixture.test_revocation){
+  const {CookieTransport,COOKIE_SESSION}=await import('./transport.mjs');
+  const session=new CookieTransport();
+  await session.completePairing();
+  assert((await session.pull(COOKIE_SESSION)).length>0,'paired browser could not read fixture research');
+  const revoked=await authorityCommand('revoke');
+  assert(revoked.changed && revoked.revoked && revoked.device_id===identity.device,'wrong revoked device');
+  let denial;
+  try {await session.pull(COOKIE_SESSION);} catch(error){denial=error.message;}
+  assert(denial==='session_denied','previously connected browser could still read after revocation');
+  dialog.querySelector('[data-pairing=resume]').click();
+  await until(()=>dialog.querySelector('.pairing-status').textContent===PAIRING_COPY['zh-TW'].denied,
+    'still-paired browser refused after desktop revocation');
+  assert(JSON.stringify(await scoped())===before,'desktop revocation changed offline work');
+  const after=await inspect();
+  assert(after.devices===2 && !after.notes.includes(body),'revoked session enrolled or sent a note');
+  results.push('PASS desktop revocation denies an active browser and preserves its unsent note');
+ }
  dialog.querySelector('[data-pairing=forget]').click();dialog.querySelector('[data-pairing=confirm]').click();
  await until(()=>dialog.querySelector('.pairing-status').textContent===PAIRING_COPY['zh-TW'].forgotten,'forget completion');
  assert(JSON.stringify(await scoped())===before,'forget changed research');
