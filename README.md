@@ -28,7 +28,7 @@ sources, export a PDF, or create an editable Google Slides copy. [Slides guide �
 | Choose your everyday AI | Override only the features you want |
 |---|---|
 | ![The global AI picker with account, model and quota in one view](docs/images/ai-accounts.png) | ![Per-feature account and model assignments, filtered to overrides](docs/images/ai-tasks.png) |
-| **全域 AI → account → model → 設為全域預設** | **進階設定 → feature → account + model → 儲存分配** |
+| **全域 AI → 全域預設 → account → model → 設為全域預設** | **全域 AI → 各功能的 AI → feature → account + model → 儲存分配** |
 
 AI screenshots use demo accounts and simulated usage; model access depends on your
 provider. Reading saved research needs no AI login.

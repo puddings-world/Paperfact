@@ -82,7 +82,7 @@ def test_function_ai_label_tracks_overrides_through_repeated_model_changes(works
 
 def test_compact_ai_button_opens_settings_without_changing_routes(workspace, monkeypatch):
     fonts.load()
-    from paper_daily.desktop import ai_picker
+    from paper_daily.desktop import ai_settings
     from paper_daily.desktop.account_status import AccountStatus
 
     llm.save_settings(profile="global", backend="cli", model="fable", isolated=True)
@@ -100,7 +100,7 @@ def test_compact_ai_button_opens_settings_without_changing_routes(workspace, mon
         def exec(self):
             opened.append(self.parent)
 
-    monkeypatch.setattr(ai_picker, "AIPickerDialog", Picker)
+    monkeypatch.setattr(ai_settings, "AISettingsPage", Picker)
     widget = MainWindow()
     widget.show()
     try:

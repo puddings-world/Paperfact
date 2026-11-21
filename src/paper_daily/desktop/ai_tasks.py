@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -28,8 +28,15 @@ from paper_daily.desktop.settings_style import apply as style_settings
 
 
 class AITasksDialog(QDialog):
-    def __init__(self, parent=None):
+    default_requested = Signal()
+
+    def __init__(self, parent=None, *, embedded=False):
         super().__init__(parent)
+        # Embedded, this is a tab of the settings window: saving keeps it open.
+        self.embedded = embedded
+        self.dirty = False
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
         style_settings(self)
         self.setWindowTitle("Paperfact · 進階設定")
         self.resize(900, 760)
@@ -51,7 +58,9 @@ class AITasksDialog(QDialog):
         self.default_label.setWordWrap(True)
         default_layout.addWidget(self.default_label, 1)
         self.default_button = QPushButton("變更全域預設…")
-        self.default_button.clicked.connect(self._default)
+        self.default_button.clicked.connect(
+            self.default_requested.emit if embedded else self._default
+        )
         default_layout.addWidget(self.default_button)
         layout.addWidget(default_box)
         instruction = QLabel(
@@ -63,6 +72,8 @@ class AITasksDialog(QDialog):
         self.accounts_button = QPushButton("帳號與用量…")
         self.accounts_button.clicked.connect(self._accounts)
         bar.addWidget(self.accounts_button)
+        # Accounts are managed on the settings window's first tab.
+        self.accounts_button.setVisible(not embedded)
         self.refresh_button = QPushButton("重新取得模型")
         self.refresh_button.clicked.connect(self._retry_models)
         bar.addWidget(self.refresh_button)
@@ -116,6 +127,10 @@ class AITasksDialog(QDialog):
             self.row_widgets[task] = (label_widget, account, model, resolved)
             model.currentTextChanged.connect(lambda _text, task=task: self._resolved(task))
             account.currentIndexChanged.connect(lambda _i, task=task: self._changed(task))
+            # Only the reader's own choices count as unsaved, not lists being filled.
+            account.activated.connect(self._edited)
+            model.activated.connect(self._edited)
+            model.lineEdit().textEdited.connect(self._edited)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(body)
@@ -129,6 +144,7 @@ class AITasksDialog(QDialog):
         self.save_button.setProperty("role", "primary")
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setVisible(not embedded)
         layout.addWidget(buttons)
         routes = llm.task_routes()
         selections = {
@@ -339,10 +355,19 @@ class AITasksDialog(QDialog):
             for task, (account, model) in self.rows.items()
         }
 
+    def _edited(self, *_):
+        self.dirty = True
+
     def _follow(self):
         for account, _model in self.rows.values():
             account.setCurrentIndex(0)
         self.only_overrides.setChecked(False)
+        self._edited()
+
+    def default_changed(self):
+        """The global default was changed elsewhere; rows that follow it show the new one."""
+        self._refresh(self._selections())
+        self._queue_default()
 
     def _accounts(self):
         from paper_daily.desktop.ai_picker import AIPickerDialog
@@ -361,20 +386,34 @@ class AITasksDialog(QDialog):
         self._refresh(selections)
         self._queue_default()
 
-    def _save(self):
+    def save(self):
         try:
             llm.save_task_choices(self._selections())
         except (ValueError, OSError) as exc:
             self.status.setText(f"未儲存：{exc}")
+            return False
+        self.dirty = False
+        return True
+
+    def _save(self):
+        if not self.save():
+            return
+        if self.embedded:
+            self.status.setText("已儲存分配；只影響之後開始的工作。")
             return
         self.accept()
 
-    def accept(self):
+    def shutdown(self):
         self.runner.cancel_read()
         self._queue.clear()
+
+    def accept(self):
+        self.shutdown()
         super().accept()
 
     def reject(self):
-        self.runner.cancel_read()
-        self._queue.clear()
+        if self.embedded:
+            self.window().reject()
+            return
+        self.shutdown()
         super().reject()

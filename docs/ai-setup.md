@@ -49,8 +49,12 @@ used by the global default or an explicit feature route. Removing a connection
 does not erase vendor-owned login files; sign out first if needed.
 
 The compact toolbar button shows the saved service and model; clicking it opens
-the account/model picker. Its short tooltip shows the account and number of task
-overrides; **進階設定** shows each assignment. Long names shorten only on the toolbar.
+the AI settings window, which has three tabs: **全域預設** (account, model and
+usage), **各功能的 AI** (the feature table) and **連接外部 agent** (the MCP entry
+for agy, Claude Code or Codex; it changes no setting in Paperfact). The button's
+short tooltip shows the account and number of task overrides. Long names shorten
+only on the toolbar. A feature's own picker, opened from that feature, still has
+**進階設定** for the same table.
 Codex models come from the official `model/list` method; Claude models come from
 the official CLI initialization response, including newly available aliases such
 as `fable`. Both load in background workers for the selected account, not from a
@@ -86,7 +90,7 @@ Manual refresh uses tokens. **帶入提問** only fills a draft; the user still 
 The full-text request is capped at 240,000 characters; larger inputs report the
 limit instead of silently generating questions from a truncated text.
 
-Open **進階設定** for a table of features, AI accounts and models. For example,
+Open the **各功能的 AI** tab for a table of features, AI accounts and models. For example,
 translation and deep explanation can reuse one Claude login with different models.
 Choose a service/account in the middle column, then its model in the right column.
 Claude and Codex are offered even before a connection has been saved; using one
@@ -158,7 +162,7 @@ Official references: [Claude authentication](https://code.claude.com/docs/en/aut
 These CLI adapters supply research answers. They do not yet provide a coordinated
 multi-agent job system, external-host session resume, or arbitrary tool access.
 
-Open **AI 設定** to choose the default account/model, then **進階設定** to assign
+Open **AI 設定** to choose the default account/model, then **各功能的 AI** to assign
 different models to questions, translation, deep dives and other research tasks.
 Accounts are reusable; a task's model choice does not edit its account's default
 model or other tasks. Reading lists and research records remain independent.

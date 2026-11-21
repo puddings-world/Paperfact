@@ -92,8 +92,13 @@ settings and instructions for agy, Claude Code and Codex. It is not a source in
 the table above.
 
 Done: the picker's three buttons are Claude, Codex and **API 端點**; the last
-lists every saved endpoint and opens the connection form to add one. Not done:
-merging the three dialogs into one page, and the agent-host section.
+lists every saved endpoint and opens the connection form to add one. The toolbar
+opens one window with three tabs: **全域預設**, **各功能的 AI** and **連接外部
+agent**; setting the default or saving feature choices keeps it open, and closing
+with unsaved feature choices asks first. The agent-host tab gives the MCP entry
+and changes no setting. Not done: per-host instructions (agy, Claude Code, Codex
+each store the entry differently), and the connection form is still a separate
+dialog opened from **API 端點**.
 
 ### OpenAI-compatible endpoint
 

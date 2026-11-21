@@ -3644,16 +3644,16 @@ class MainWindow(QWidget):
         from paper_daily import feedback
 
         feedback.safe_record("ui.action", "ai_settings")
-        from paper_daily.desktop.ai_picker import AIPickerDialog
+        from paper_daily.desktop.ai_settings import AISettingsPage
 
         try:
-            dialog = AIPickerDialog(self)
+            dialog = AISettingsPage(self)
         except (ValueError, OSError):
             from paper_daily.desktop.ai_recovery import offer
 
             if not offer(self):
                 return
-            dialog = AIPickerDialog(self)
+            dialog = AISettingsPage(self)
         dialog.exec()
         self.ai_picker.refresh()
         self._refresh_ai_summary(check=True)

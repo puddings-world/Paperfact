@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -36,8 +36,16 @@ from paper_daily.desktop.settings_style import apply as style_settings
 
 
 class AIPickerDialog(QDialog):
-    def __init__(self, parent=None, *, accounts_only=False, task=None, show_advanced=True):
+    saved = Signal()
+
+    def __init__(
+        self, parent=None, *, accounts_only=False, task=None, show_advanced=True, embedded=False
+    ):
         super().__init__(parent)
+        # Embedded, this is a tab of the settings window: it never closes by itself.
+        self.embedded = embedded
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
         style_settings(self)
         self.accounts_only = accounts_only
         self.task = task
@@ -598,6 +606,13 @@ class AIPickerDialog(QDialog):
         except (ValueError, OSError) as exc:
             self.notice.setText(str(exc))
             return
+        if self.embedded:
+            self.notice.setText(
+                "已設為全域預設：" + ai_choices.connection_label(llm.settings())
+                + "。只影響之後開始的工作。"
+            )
+            self.saved.emit()
+            return
         self.accept()
 
     def _advanced(self):
@@ -619,17 +634,21 @@ class AIPickerDialog(QDialog):
 
         FeedbackDialog(self).exec()
 
-    def accept(self):
+    def shutdown(self):
         self.runner.cancel_read()
         self._epoch += 1
         self.usage_timer.stop()
+
+    def accept(self):
+        self.shutdown()
         super().accept()
 
     def reject(self):
+        if self.embedded:
+            self.window().reject()
+            return
         if self.auth_runner.busy:
             self.notice.setText("正在完成帳號登入，請稍候；一般資料查詢可直接關閉。")
             return
-        self.runner.cancel_read()
-        self._epoch += 1
-        self.usage_timer.stop()
+        self.shutdown()
         super().reject()
