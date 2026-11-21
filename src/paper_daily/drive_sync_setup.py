@@ -164,7 +164,11 @@ class DriveSetup:
             ticket.check()
             progress({"stage": "selected_lists", "completed": index, "total": len(selected)})
             try:
-                exchange_list(directory, store, list_id, selection.revision, ticket)
+                state = exchange_list(directory, store, list_id, selection.revision, ticket)
+                if state in ("updated", "current"):
+                    from paper_daily.drive_paper_receive import exchange_bibliography
+
+                    exchange_bibliography(directory, store, list_id, selection.revision, ticket)
             except ListReviewRequired as exc:
                 reviews[list_id] = str(exc)
         return {**self.read_library(ticket), "reviews": reviews}

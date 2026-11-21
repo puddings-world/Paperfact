@@ -46,8 +46,10 @@ uses the native paper payload. A paper shared by two source lists has one UUID
 and separate memberships. The publisher validates the entire bounded baseline
 before uploading and resumes only a matching acknowledged prefix. A divergent
 history requires reconciliation. These checks have synthetic Drive coverage.
-Receiver-side projection, later edits and verified files still need to be
-connected before enabling this path in the ordinary desktop reader.
+The ordinary reader now writes a received bibliography and its checkpoint in one
+transaction, preserving order and previously received local papers. Source appends
+resume from the checkpoint. Pre-existing overlapping bibliographies need review.
+Offline edits remain local. Saving the selection triggers this exchange.
 
 The owner expects one logical research database with a complete list directory,
 visible on every paired device, and selectable list synchronization. The current
@@ -130,8 +132,8 @@ separate collapsible section. In ordinary databases, the checklist can exchange
 list names and descriptions using independent per-list history and device-local
 receipts. Divergent edits are retained on their originating devices for review.
 The cloud directory carries list history pointers, never list descriptions.
-Reading list B does not fetch list A's operations. This path currently accepts
-list operations only. Paper membership, annotations, attachments, background
+Reading list B does not fetch list A's operations. This path accepts list details and initial paper/membership pairs.
+Subsequent membership edits, annotations, attachments, background
 transfer and adoption of existing enrolled workspaces remain open.
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a

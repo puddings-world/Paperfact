@@ -273,9 +273,12 @@ class DriveSyncDialog(QDialog):
             self.tr(
                 "Publish local list names to your private Drive directory and save this "
                 "device's selection? Selected lists also exchange their names "
-                "and descriptions in ordinary workspaces.",
+                "and descriptions, plus bibliography metadata and membership. Both devices need "
+                "a version supporting bibliography sync. Offline edits stay local. Use a package "
+                "for notes and PDFs.",
                 "將本機清單名稱加入你的私人 Drive 目錄，並儲存這台裝置的勾選？"
-                "一般工作區也會交換已選清單的名稱與說明。",
+                "一般工作區會交換清單名稱、說明、書目及論文順序。"
+                "兩台裝置都需要支援書目同步的版本。離線編輯保留在本機。PDF 與筆記請用研究包傳送。",
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -392,7 +395,7 @@ class DriveSyncDialog(QDialog):
                 self._show_directory(result)
                 self.status.setText(
                     self.tr(
-                        "List names and device selection saved.", "已儲存清單名稱與這台裝置的勾選。"
+                        "Device selection saved.", "已儲存這台裝置的清單選擇。"
                     )
                 )
                 if result.get("reviews"):

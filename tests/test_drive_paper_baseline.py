@@ -78,3 +78,82 @@ def test_shared_paper_identity_and_interrupted_source_publication(source, tmp_pa
     with pytest.raises(ListReviewRequired, match="reconcile"):
         publish_initial(directory, store, "list", 1, Ticket())
     assert history.changes(accepted, revision=1) == (accepted, [])
+
+
+def test_reader_selection_publishes_receives_and_preserves_local_edits(source, tmp_path):
+    from paper_daily import store as db
+    from paper_daily.drive_paper_receive import exchange_bibliography
+
+    laptop = tmp_path / "laptop" / "papers.db"
+    laptop.parent.mkdir()
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.executescript(db.SCHEMA)
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('list','L',?)", (STAMP,))
+    files = authority(Cloud(), tmp_path / "authority").files
+    directory = DriveDirectory(files, *files.new_ids(2), "library")
+    cat = directory.upsert(
+        directory.initialize("Library"), [ListEntry("list", "L", False)]
+    ).directory
+    win, mac = [
+        selection(path, tmp_path / folder)
+        for path, folder in ((source, "win-settings"), (laptop, "mac-settings"))
+    ]
+    for device in (win, mac):
+        device.save(cat, ["list"], expected_revision=0)
+
+    def sync(device):
+        return exchange_bibliography(directory, device, "list", 1, Ticket())
+
+    sync(win)
+    assert sync(mac) == "received"
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        assert conn.execute(
+            "SELECT title,position FROM papers JOIN list_papers ON papers.id=list_papers.paper_id"
+        ).fetchall() == [("Research paper", 0)]
+        conn.execute("UPDATE list_papers SET state='read'")
+        conn.execute("UPDATE papers SET title='Offline local title'")
+    assert sync(mac) == "current"
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute(
+            "INSERT INTO papers(id,title,title_key,venue,year,source) "
+            "VALUES('extra','Another','another','Fixture',2026,'fixture')"
+        )
+        conn.execute(
+            "INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+            "VALUES('list','extra',1,?)",
+            (STAMP,),
+        )
+    sync(win)
+    assert sync(mac) == "received"
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute(
+            "SELECT title,state FROM papers JOIN list_papers "
+            "ON papers.id=list_papers.paper_id ORDER BY position"
+        ).fetchall() == [("Offline local title", "read"), ("Another", "pending")]
+    # An overlap on the last record must roll back earlier rows and the checkpoint.
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        checkpoint = conn.execute("SELECT head FROM drive_library_bibliographies").fetchone()
+        conn.execute(
+            "INSERT INTO papers(id,title,title_key,venue,year,source) "
+            "VALUES('independent','Overlap','overlap','Fixture',2026,'fixture')"
+        )
+    with closing(sqlite3.connect(source)) as conn, conn:
+        for index, title in enumerate(("New record", "Overlap"), 2):
+            conn.execute(
+                "INSERT INTO papers(id,title,title_key,venue,year,source) "
+                "VALUES(?,?,?,'Fixture',2026,'fixture')",
+                (str(index), title, db.title_key(title)),
+            )
+            conn.execute(
+                "INSERT INTO list_papers(list_id,paper_id,position,added_at) VALUES('list',?,?,?)",
+                (str(index), index, STAMP),
+            )
+    sync(win)
+    with pytest.raises(ListReviewRequired, match="Possible existing paper"):
+        sync(mac)
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert (
+            conn.execute("SELECT head FROM drive_library_bibliographies").fetchone() == checkpoint
+        )
+        assert not conn.execute("SELECT 1 FROM papers WHERE title='New record'").fetchone()
+        assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (2,)
