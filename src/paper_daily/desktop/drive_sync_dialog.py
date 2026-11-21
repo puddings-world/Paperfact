@@ -286,7 +286,11 @@ class DriveSyncDialog(QDialog):
     def _progress(self, value):
         if self._closing:
             return
-        if isinstance(value, dict) and "received" in value:
+        if isinstance(value, dict) and value.get("stage") == "selected_lists":
+            current, total = value["completed"] + 1, value["total"]
+            self.status.setText(self.tr(f"Syncing list {current} of {total}…",
+                                        f"正在同步第 {current} 份清單，共 {total} 份…"))
+        elif isinstance(value, dict) and "received" in value:
             self.status.setText(
                 self.tr(
                     "Receiving research records: ",
@@ -501,16 +505,14 @@ class DriveSyncDialog(QDialog):
             self,
             self.windowTitle(),
             self.tr(
-                "Publish local list names to your private Drive directory and save this "
-                "device's selection? Selected lists also exchange their names "
-                "and descriptions, plus bibliography metadata and membership. Both devices need "
-                "bibliography sync support. Notes have a separate per-list switch. "
-                "Use a package for PDFs.",
-                "將本機清單名稱加入你的私人 Drive 目錄，並儲存這台裝置的勾選？"
-                "一般工作區會交換清單名稱、說明、書目及論文順序。"
-                "兩台裝置都需要支援書目同步的版本。儲存時交換新增論文。"
-                "筆記另有清單開關，PDF 請用研究包傳送。",
-            ),
+                "Publish local list names to your private Drive and save this device's selection?",
+                "要將本機清單名稱發佈到私人 Drive，並儲存這台裝置的勾選嗎？",
+            ) + ("\n\n" + self.tr(
+                "Selected lists exchange their bibliography and list details. For notes, PDFs "
+                "and saved explanations, enable each type for the list on both devices.",
+                "已勾選的清單會交換書目與清單資訊。若要同步筆記、PDF 或深度講解，"
+                "請在兩台裝置上為該清單開啟對應選項。",
+            ) if self._ordinary_library else ""),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -618,6 +620,9 @@ class DriveSyncDialog(QDialog):
                     self._show_pilot(self.pilot.isChecked())
                 self.status.setText(
                     self.tr(
+                        "Select the lists for this device and save your selection.",
+                        "勾選要在這台裝置同步的清單，再儲存選擇。",
+                    ) if self._ordinary_library else self.tr(
                         "Choose this workspace or open one from Drive.",
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )

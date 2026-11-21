@@ -114,7 +114,7 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     from PySide6.QtWidgets import QMessageBox
 
     app, view, setup = dialog
-    library = {"items": [{"id": "a", "name": "Cataract", "selected": False},
+    library = {"ordinary": True, "items": [{"id": "a", "name": "Cataract", "selected": False},
                          {"id": "b", "name": "Other research", "selected": False}]}
     login = setup.sign_in
 
@@ -137,9 +137,22 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     wait(app, lambda: not view.busy)
     assert view.directory_lists.count() == 2 and view.directory_lists.isVisible()
     assert not view.create.isVisible()
+    assert "Select the lists" in view.status.text()
+    view._progress({"stage": "selected_lists", "completed": 1, "total": 3})
+    assert "list 2 of 3" in view.status.text()
     view.directory_lists.item(1).setCheckState(Qt.CheckState.Checked)
-    monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
-    view.save_selection.click()
+    prompts = []
+
+    def decline(parent, title, message, *args):
+        prompts.append(message)
+        return QMessageBox.StandardButton.No
+
+    monkeypatch.setattr(QMessageBox, "question", decline)
+    for zh, expected in ((False, "on both devices"), (True, "兩台裝置")):
+        view.zh = zh
+        view.save_selection.click()
+        assert expected in prompts[-1] and "PDF" in prompts[-1]
+    view.zh = False
     assert not saved
     monkeypatch.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes)
     view.save_selection.click()
