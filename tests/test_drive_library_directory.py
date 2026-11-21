@@ -8,6 +8,90 @@ from paper_daily.drive_sync_files import DriveChanged
 from paper_daily.library_directory import ListEntry
 
 
+def test_chat_head_survives_peer_rename_and_rejects_stale_publication(tmp_path):
+    from dataclasses import replace
+
+    from paper_daily.library_directory import Directory, ScopeHead
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    cloud = Cloud()
+    left = authority(cloud, tmp_path / "desktop").files
+    right = authority(cloud, tmp_path / "laptop").files
+    folder, head = left.new_ids(2)
+    desktop = DriveDirectory(left, folder, head, "personal", chat=True)
+    mac = DriveDirectory(right, folder, head, "personal", chat=True)
+    older = DriveDirectory(right, folder, head, "personal", positions=True)
+    initial = desktop.initialize("Library")
+    first = ScopeHead(1, "conversation_object", "a" * 64, 64)
+    paper = ScopeHead(1, "paper_object", "b" * 64, 64)
+    entry = ListEntry("a", "Shared", True, papers_head=paper, chat_head=first)
+    with pytest.raises(ValueError, match="bibliography"):
+        Directory("personal", 1, (replace(entry, papers_head=None),))
+    with pytest.raises(ValueError, match="conversation"):
+        older.upsert(older.read(), [entry])
+    desktop.upsert(initial, [entry])
+    with pytest.raises(SyncFormatUnsupported):
+        older.read()
+    before = mac.read()
+    newer = replace(first, generation=2, id="next_object")
+    desktop.upsert(desktop.read(), [replace(entry, chat_head=newer)])
+    with pytest.raises(DriveChanged):
+        mac.upsert(before, [replace(entry, name="Renamed")])
+    mac.upsert(mac.read(), [ListEntry("a", "Renamed", True)])
+    assert desktop.read().directory.lists == (replace(entry, name="Renamed", chat_head=newer),)
+
+
+def test_selected_chat_exchange_keeps_reply_identity_and_requires_a_current_grant(tmp_path):
+    from uuid import uuid4
+
+    from test_library_selection import database, selection
+    from test_sync_graph_research import PAPER, STAMP, membership, metadata, operation, parent
+
+    from paper_daily.drive_list_history import DriveListChat, DriveListPapers
+    from paper_daily.sync_content import content_id
+    from paper_daily.workspace_service import Ticket
+
+    cloud = Cloud()
+    files = [authority(cloud, tmp_path / device).files for device in ("win", "mac")]
+    folder, head = files[0].new_ids(2)
+    directories = [DriveDirectory(f, folder, head, "personal", chat=True) for f in files]
+    first, second = directories
+    cat = first.upsert(first.initialize("Library"), [ListEntry("a", "Shared", False)]).directory
+    stores = [selection(database(tmp_path / label), tmp_path / (label + "-settings"),
+                        library_id="personal") for label in ("desktop", "laptop")]
+    for store in stores:
+        store.save(cat, ["a"], expected_revision=0)
+    paper = dict(operation("paper", PAPER, metadata()), workspace_id="personal")
+    member = dict(membership("a"), workspace_id="personal")
+    DriveListPapers(first, stores[0], "a").append(None, [paper, member], revision=1)
+    with pytest.raises(PermissionError):
+        DriveListChat(second, stores[1], "a", revision=1)
+    for store in stores:
+        store.set_chat_sync("a", True, revision=1, ticket=Ticket())
+    sender, receiver = (DriveListChat(d, s, "a", revision=1)
+                        for d, s in zip(directories, stores, strict=True))
+    question_id, exchange_id = str(uuid4()), str(uuid4())
+
+    def message(key, reply, text):
+        scope = {"kind": "paper", "id": PAPER}
+        data = dict(role="assistant" if reply else "user", body=text, created_at=STAMP,
+                    page=None, anchor=None, exchange_id=exchange_id, reply_to=reply)
+        payload = dict(scope=scope, feature="chat", key=key, data=data, source_document_hash=None)
+        return dict(operation("research_content", content_id(scope, "chat", key), payload,
+                              parents=[parent("paper", PAPER)]), workspace_id="personal")
+
+    question = message(question_id, None, "How was the outcome measured?")
+    first_head = sender.append(None, [question], revision=1)
+    assert receiver.changes(None, revision=1) == (first_head, [question])
+    answer = message(str(uuid4()), question_id, "By independent assessment.")
+    next_head = receiver.append(first_head, [answer], revision=1)
+    assert sender.changes(first_head, revision=1) == (next_head, [answer])
+    assert sender.changes(next_head, revision=1) == (next_head, [])
+    stores[1].set_chat_sync("a", False, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError):
+        receiver.changes(None, revision=1)
+
+
 def test_position_head_is_opt_in_and_survives_list_rename(tmp_path):
     from dataclasses import replace
 

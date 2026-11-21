@@ -56,6 +56,23 @@ def pairs(path, paper="local-paper"):
         ]
 
 
+def test_replayed_message_uses_its_identity_and_preserves_a_local_edit(legacy, monkeypatch):
+    import pytest
+
+    question, _, answer, _ = linked_rows()
+    with store.connect() as conn:
+        chat.import_shared_turn(conn, question)
+        chat.import_shared_turn(conn, answer)
+        # Replaying a message must not load every other question and answer.
+        monkeypatch.setattr(chat, "history", lambda *args: pytest.fail("full paper scan"))
+        assert chat.import_shared_turn(conn, answer) == 0
+        conn.execute("UPDATE chat SET body=? WHERE role='assistant'", ("Local revision",))
+        with pytest.raises(ValueError, match="conflicting content"):
+            chat.import_shared_turn(conn, answer)
+        assert conn.execute("SELECT body FROM chat WHERE role='assistant'").fetchone()[0] == (
+            "Local revision")
+
+
 def test_interleaved_bundle_import_and_reexport_preserves_ids_without_duplicates(
     legacy, tmp_path, monkeypatch
 ):

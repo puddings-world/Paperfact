@@ -57,8 +57,17 @@ and resuming after restart with the native credential stores still need acceptan
 
 The personal Drive path exchanges list membership, original PDFs, saved notes,
 explanations, reading status and page suggestions. The reader's chat history is
-stored separately. Resuming that conversation through personal Drive still needs
-implementation and two-device testing.
+stored separately. The scoped Drive transport now carries native message IDs,
+reply links and source hashes in an independently permissioned conversation
+history. Its two-client fixture sends a question from one device and returns
+the reply from another. Directory format v12 appears only when a conversation
+head is published. Older readers stop on this format. A concurrent rename must
+refresh before retrying and preserves the latest message-history head.
+
+The ordinary desktop sync cycle still needs to capture and project reader chat,
+reconcile offline edits and deletions, and refresh the open conversation. The
+transport test uses synthetic operations and a simulated Drive. Continuing a
+question in the installed Windows and Mac apps remains an acceptance gate.
 
 ## Previous native deliverable (before personal Drive)
 

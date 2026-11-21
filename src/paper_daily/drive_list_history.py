@@ -368,6 +368,52 @@ class _MembershipHistory(DriveListHistory):
 
 
 
+class DriveListChat(_MembershipHistory):
+    """Portable message operations under an explicitly authorized list bibliography."""
+
+    format = "paperfact.list-chat-history.v1"
+    head_field = "chat_head"
+
+    def __init__(self, directory, store, list_id, *, revision):
+        if not directory.chat:
+            raise PermissionError("Enable conversation history on this directory first")
+        super().__init__(directory, store, list_id, revision=revision)
+        self.paper_parents = {paper: incarnation
+                              for paper, incarnation, _, _ in self.memberships.values()}
+        self.active_papers = {values[0] for key, values in self.memberships.items()
+                              if key not in self.retired}
+
+    def _grant(self, revision):
+        return self.store.chat_grant(self.list_id, revision)
+
+    def _entry(self, observation):
+        entry = super()._entry(observation)
+        if not entry or entry.papers_head != self.paper_head:
+            raise DriveChanged("Bibliography changed during conversation sync")
+        return entry
+
+    def _validate_scope(self, records):
+        for op in records:
+            payload = op["payload"]
+            if (op["version"] != 2 or op["entity_type"] != "research_content"
+                    or op["action"] != "put" or payload.get("feature") != "chat"
+                    or payload["scope"]["kind"] != "paper"):
+                raise ValueError("Expected a conversation message")
+            paper = payload["scope"]["id"]
+            if paper not in self.paper_parents or op["parents"] != [
+                dict(kind="paper", id=paper, incarnation=self.paper_parents[paper])
+            ]:
+                raise ValueError("Conversation is outside the selected bibliography")
+
+    def _check_publication(self, revision, records):
+        super()._check_publication(revision, records)
+        if any(op["payload"]["scope"]["id"] not in self.active_papers for op in records):
+            raise ValueError("Cannot send a conversation for a removed paper")
+
+    def _advance(self, entry, head, records):
+        return replace(entry, chat_head=head)
+
+
 class DriveListReading(_MembershipHistory):
     """Reading progress belongs to the observed membership, including its lifetime."""
 

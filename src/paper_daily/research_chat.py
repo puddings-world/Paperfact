@@ -987,11 +987,14 @@ def import_shared_turn(conn, row):
             "TEXT)"
         )
     prior = conn.execute(
-        "SELECT local_id FROM research_chat_links WHERE message_id=?", (row["message_id"],)
+        "SELECT c.paper_id,c.role,c.body,c.created_at,c.page,c.anchor,"
+        "l.message_id,l.exchange_id,l.reply_to,l.source_hash FROM research_chat_links l "
+        "LEFT JOIN chat c ON c.id=l.local_id WHERE l.message_id=?", (row["message_id"],)
     ).fetchone()
     if prior:
-        actual = next((r for r in history(conn, row["paper_id"]) if r["id"] == prior[0]), None)
-        if actual is None or {key: actual[key] for key in row} != row:
+        fields = ("paper_id", "role", "body", "created_at", "page", "anchor",
+                  "message_id", "exchange_id", "reply_to", "source_hash")
+        if tuple(prior) != tuple(row[field] for field in fields):
             raise ValueError("Shared conversation identity has conflicting content")
         return 0
     local_id = (

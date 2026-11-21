@@ -54,6 +54,7 @@ class ListEntry:
     membership_changes_head: ScopeHead | None = None
     restored_memberships: bool = False
     positions_head: ScopeHead | None = None
+    chat_head: ScopeHead | None = None
 
 
 @dataclass(frozen=True)
@@ -76,8 +77,10 @@ class Directory:
             if any(h is not None and not isinstance(h, ScopeHead)
                    for h in (item.head, item.papers_head, item.notes_head,
                              item.originals_head, item.dives_head, item.reading_head,
-                             item.membership_changes_head, item.positions_head)):
+                             item.membership_changes_head, item.positions_head, item.chat_head)):
                 raise ValueError("Invalid published list history")
+            if item.chat_head and not item.papers_head:
+                raise ValueError("Conversation history requires a bibliography")
             if item.positions_head and not item.papers_head:
                 raise ValueError("PDF positions require a bibliography")
             if type(item.restored_memberships) is not bool or (
@@ -108,7 +111,8 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format="paperfact.library-directory.v11" if any(
+                format="paperfact.library-directory.v12" if any(e.chat_head for e in self.lists)
+                else "paperfact.library-directory.v11" if any(
                     e.positions_head for e in self.lists)
                 else "paperfact.library-directory.v10" if any(
                     e.restored_memberships for e in self.lists)
@@ -130,6 +134,7 @@ class Directory:
                     dict(id=item.id, name=item.name, published=item.published)
                     | ({"head": item.head.record()} if item.head is not None else {})
                     | ({"papers_head": item.papers_head.record()} if item.papers_head else {})
+                    | ({"chat_head": item.chat_head.record()} if item.chat_head else {})
                     | ({"notes_head": item.notes_head.record()} if item.notes_head else {})
                     | ({"originals_head": item.originals_head.record()}
                        if item.originals_head else {})
@@ -153,7 +158,7 @@ class Directory:
 
     @classmethod
     def from_bytes(cls, raw, *, library_id, membership_changes=False, membership_restores=False,
-                   positions=False):
+                   positions=False, chat=False):
         value = decode(raw, MAX_BYTES)
         if (
             not isinstance(value, dict)
@@ -167,7 +172,7 @@ class Directory:
                                value["format"]) if isinstance(value["format"], str) else None
         if not version:
             raise ValueError("Invalid library directory format")
-        supported = (11 if positions else 10 if membership_restores
+        supported = (12 if chat else 11 if positions else 10 if membership_restores
                      else 9 if membership_changes else 8)
         if int(version[1]) > supported:
             raise SyncFormatUnsupported()
@@ -175,7 +180,7 @@ class Directory:
         for item in value["lists"]:
             required = {"id", "name", "published"}
             heads = ("head", "papers_head", "notes_head", "originals_head", "dives_head",
-                     "reading_head", "membership_changes_head", "positions_head")
+                     "reading_head", "membership_changes_head", "positions_head", "chat_head")
             allowed = required.union(heads, {"extended_papers", "restored_memberships"})
             if not isinstance(item, dict) or not required <= item.keys() <= allowed:
                 raise ValueError("Directory entries contain unsupported fields")
@@ -192,6 +197,13 @@ class Directory:
                     raise ValueError("Invalid directory list history")
                 item = {**item, key: ScopeHead(**head)}
             entries.append(ListEntry(**item))
+        if chat and (
+            (not positions and any(e.positions_head for e in entries))
+            or (not membership_restores and any(e.restored_memberships for e in entries))
+            or (not (membership_changes or membership_restores)
+                and any(e.membership_changes_head for e in entries))
+        ):
+            raise SyncFormatUnsupported()
         directory = cls(library_id, value["generation"], tuple(entries))
         if directory.to_bytes() != raw:
             raise ValueError("Library directory bytes must be canonical")

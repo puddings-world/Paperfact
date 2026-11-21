@@ -20,7 +20,8 @@ class DriveDirectory:
     """One dedicated directory head, shared by devices in the same library."""
 
     def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False,
-                 membership_restores=False, positions=False):
+                 membership_restores=False, positions=False, chat=False):
+        self.chat = chat
         self.positions = positions
         self.membership_restores = membership_restores
         self.membership_changes = membership_changes or self.membership_restores
@@ -69,7 +70,7 @@ class DriveDirectory:
             directory = Directory.from_bytes(raw, library_id=self.library_id,
                                              membership_changes=self.membership_changes,
                                              membership_restores=self.membership_restores,
-                                             positions=self.positions)
+                                             positions=self.positions, chat=self.chat)
             if directory.generation != generation:
                 raise ValueError("Drive directory generation differs from its head")
         return Observation(head, directory)
@@ -98,13 +99,15 @@ class DriveDirectory:
             e.restored_memberships for e in (*updates.lists, *before.lists)
         ):
             raise ValueError("Enable membership restoration before updating this directory")
+        if not self.chat and any(e.chat_head for e in (*updates.lists, *before.lists)):
+            raise ValueError("Enable conversation history before updating this directory")
         if not self.positions and any(e.positions_head for e in (*updates.lists, *before.lists)):
             raise ValueError("Enable PDF position support before updating this directory")
         merged = {item.id: item for item in before.lists}
         for item in updates.lists:
             previous = merged.get(item.id)
             for field in ("head", "papers_head", "notes_head", "originals_head", "dives_head",
-                     "reading_head", "membership_changes_head", "positions_head"):
+                     "reading_head", "membership_changes_head", "positions_head", "chat_head"):
                 prior = getattr(previous, field) if previous else None
                 current = getattr(item, field)
                 if prior and current != prior:
