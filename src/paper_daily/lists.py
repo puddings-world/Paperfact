@@ -334,23 +334,31 @@ def remove_paper(list_id: str, paper_id: str) -> bool:
     The paper itself stays: it may be in the nightly queue or another list, and its
     notes and dive are worth keeping even if this list was wrong about wanting it.
     """
+    return bool(remove_papers(list_id, [paper_id]))
+
+
+def remove_papers(list_id: str, paper_ids: list[str]) -> int:
+    """Remove the selected memberships together, keeping paper research and relative order."""
+    if not paper_ids:
+        return 0
     with connect() as conn:
-        cur = conn.execute(
-            "DELETE FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, paper_id)
-        )
-        if not cur.rowcount:
-            return False
+        removed = conn.executemany(
+            "DELETE FROM list_papers WHERE list_id=? AND paper_id=?",
+            ((list_id, key) for key in dict.fromkeys(paper_ids)),
+        ).rowcount
+        if not removed:
+            return 0
         # Positions are what "the order someone chose" means; leaving holes in them
         # makes the next insert land in the middle of the list.
         rows = conn.execute(
-            "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
+            "SELECT paper_id,position FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
             (list_id,),
         ).fetchall()
         conn.executemany(
             "UPDATE list_papers SET position=? WHERE list_id=? AND paper_id=?",
-            [(i, list_id, r["paper_id"]) for i, r in enumerate(rows)],
+            ((i, list_id, r["paper_id"]) for i, r in enumerate(rows) if r["position"] != i),
         )
-        return True
+        return removed
 
 
 def all_lists() -> list[dict]:

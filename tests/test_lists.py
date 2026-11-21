@@ -167,6 +167,42 @@ def test_remove_closes_the_gap_in_the_order(tmp_path, monkeypatch):
     assert [r[0] for r in rows] == ids[1:]
 
 
+def test_bulk_removal_is_atomic_and_preserves_other_memberships(tmp_path, monkeypatch):
+    import sqlite3
+
+    import pytest
+
+    from paper_daily.store import connect
+
+    lists = _list_fixture(tmp_path, monkeypatch)
+    with connect() as conn:
+        ids = [r[0] for r in conn.execute(
+            "SELECT paper_id FROM list_papers WHERE list_id='refs' ORDER BY position")]
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "SELECT 'also-reading',paper_id,position,added_at FROM list_papers")
+        conn.execute("CREATE TRIGGER refuse_second BEFORE DELETE ON list_papers "
+                     "WHEN old.position=1 BEGIN SELECT RAISE(ABORT,'fixture refusal'); END")
+
+    with pytest.raises(sqlite3.IntegrityError, match="fixture refusal"):
+        lists.remove_papers("refs", ids[:2])
+    with connect() as conn:
+        assert [tuple(r) for r in conn.execute(
+            "SELECT paper_id,position FROM list_papers WHERE list_id='refs' ORDER BY position"
+        )] == list(zip(ids, range(3), strict=True))
+        conn.execute("DROP TRIGGER refuse_second")
+    assert lists.remove_papers("refs", [ids[0], ids[0], ids[1], "absent"]) == 2
+    assert lists.remove_papers("refs", ids[:2]) == 0
+    assert lists.remove_papers("refs", []) == 0
+    with connect() as conn:
+        assert [tuple(r) for r in conn.execute(
+            "SELECT paper_id,position FROM list_papers WHERE list_id='refs'"
+        )] == [(ids[2], 0)]
+        assert [r[0] for r in conn.execute(
+            "SELECT paper_id FROM list_papers WHERE list_id='also-reading' ORDER BY position"
+        )] == ids
+        assert conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0] == 3
+
+
 def test_remove_leaves_the_paper_in_the_corpus(tmp_path, monkeypatch):
     from paper_daily.store import connect
 

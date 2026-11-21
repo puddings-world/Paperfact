@@ -4855,8 +4855,8 @@ class MainWindow(QWidget):
         if self.active_list:
             from paper_daily import lists as lists_mod
 
-            for paper_id in paper_ids:
-                lists_mod.remove_paper(self.active_list, paper_id)
+            if not lists_mod.remove_papers(self.active_list, paper_ids):
+                return False
             self.refresh_lists()
         else:
             with connect() as conn:
