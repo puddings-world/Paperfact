@@ -715,9 +715,15 @@ class DriveSyncDialog(QDialog):
 
     def _background_clicked(self, checked):
         if checked:
-            self.background.enable(self.service)
+            if self.background.enable(self.service):
+                self.status.setText(self.tr(
+                    "Choose Continue reading to start background sync. To sync here, "
+                    "choose Sync saved lists now.",
+                    "按「繼續閱讀」後開始背景同步。若要留在這裡同步，請按「立即同步已勾選清單」。",
+                ))
         else:
             self.background.stop()
+            self.status.setText(self.tr("Background sync is off.", "背景同步已關閉。"))
         self._buttons()
 
     def _background_changed(self):

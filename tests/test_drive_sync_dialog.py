@@ -238,6 +238,11 @@ def test_saved_list_background_survives_dialog_close_and_backs_off(dialog):
         {"id": "a", "name": "Synthetic", "selected": True}
     ]})
     view.keep_syncing.click()
+    assert view.done_button.text() in view.status.text()
+    assert view.sync_lists.text() in view.status.text()
+    view.keep_syncing.click()
+    assert not view.keep_syncing.isChecked() and "off" in view.status.text()
+    view.keep_syncing.click()
     runner = view.background
     assert runner.service is setup and runner.timer.isActive()
     runner.tick()
