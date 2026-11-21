@@ -79,6 +79,20 @@ def decode(raw, maximum=MAX_JSON):
         raise ValueError("Unreadable Drive record") from exc
 
 
+def _rate_limited(raw):
+    try:
+        payload = decode(raw, MAX_HEAD)
+    except ValueError:
+        return False
+    error = payload.get("error") if isinstance(payload, dict) else None
+    details = error.get("errors") if isinstance(error, dict) else None
+    reasons = ("rateLimitExceeded", "userRateLimitExceeded")
+    return isinstance(details, list) and bool(details) and all(
+        isinstance(item, dict) and item.get("reason") in reasons
+        for item in details
+    )
+
+
 def head_body(value):
     from paper_daily.sync_journal import _identifier
 
@@ -174,6 +188,8 @@ class DriveFiles:
             raise DriveChanged("Drive changed before publication")
         if response.status_code == 404:
             raise DriveMissing("Expected Drive file is missing")
+        if response.status_code == 403 and _rate_limited(response.content):
+            raise DriveUnavailable("Drive rate limit reached; retry later")
         if response.status_code in (401, 403):
             raise PermissionError("Drive authorization or access needs attention")
         if response.status_code == 429 or response.status_code >= 500:

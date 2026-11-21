@@ -117,6 +117,25 @@ def test_immutable_download_checks_location_metadata_and_actual_bytes():
             bad.read_small(captured, "folder", "workspace")
 
 
+def test_drive_rate_limits_retry_without_treating_access_denials_as_transient():
+    with files(Cloud()) as drive:
+        for status, reasons, expected in (
+            (403, ["rateLimitExceeded"], DriveUnavailable),
+            (403, ["userRateLimitExceeded"], DriveUnavailable),
+            (401, ["rateLimitExceeded"], PermissionError),
+            (403, ["storageQuotaExceeded"], PermissionError),
+            (403, ["rateLimitExceeded", "forbidden"], PermissionError),
+            (403, [], PermissionError),
+        ):
+            error = {"error": {"errors": [{"reason": reason} for reason in reasons]}}
+            with httpx.Client(transport=httpx.MockTransport(
+                lambda _, code=status, body=error: httpx.Response(code, json=body)
+            )) as client:
+                drive.client = client
+                with pytest.raises(expected):
+                    drive.account()
+
+
 def test_offline_missing_and_revoked_are_not_empty_remote_state():
     cloud = Cloud()
     with files(cloud) as drive:
