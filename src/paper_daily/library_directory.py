@@ -45,6 +45,7 @@ class ListEntry:
     name: str
     published: bool
     head: ScopeHead | None = None
+    papers_head: ScopeHead | None = None
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,8 @@ class Directory:
             if not isinstance(item, ListEntry):
                 raise ValueError("Invalid library directory entry")
             _identifier(item.id)
-            if item.head is not None and (not isinstance(item.head, ScopeHead)):
+            if any(h is not None and not isinstance(h, ScopeHead)
+                   for h in (item.head, item.papers_head)):
                 raise ValueError("Invalid published list history")
             if item.id in seen:
                 raise ValueError("Duplicate library list identity")
@@ -84,7 +86,8 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format="paperfact.library-directory.v2"
+                format="paperfact.library-directory.v3" if any(e.papers_head for e in self.lists)
+                else "paperfact.library-directory.v2"
                 if any(e.head for e in self.lists)
                 else FORMAT,
                 library_id=self.library_id,
@@ -92,6 +95,7 @@ class Directory:
                 lists=[
                     dict(id=item.id, name=item.name, published=item.published)
                     | ({"head": item.head.record()} if item.head is not None else {})
+                    | ({"papers_head": item.papers_head.record()} if item.papers_head else {})
                     for item in self.lists
                 ],
             ),
@@ -108,7 +112,8 @@ class Directory:
         if (
             not isinstance(value, dict)
             or set(value) != {"format", "library_id", "generation", "lists"}
-            or value["format"] not in (FORMAT, "paperfact.library-directory.v2")
+            or value["format"] not in (FORMAT, "paperfact.library-directory.v2",
+                                        "paperfact.library-directory.v3")
             or value["library_id"] != library_id
             or not isinstance(value["lists"], list)
             or len(value["lists"]) > MAX_LISTS
@@ -119,10 +124,14 @@ class Directory:
             if not isinstance(item, dict) or set(item) not in (
                 {"id", "name", "published"},
                 {"id", "name", "published", "head"},
+                {"id", "name", "published", "papers_head"},
+                {"id", "name", "published", "head", "papers_head"},
             ):
                 raise ValueError("Directory entries contain unsupported fields")
-            if "head" in item:
-                head = item["head"]
+            for key in ("head", "papers_head"):
+                if key not in item:
+                    continue
+                head = item[key]
                 if not isinstance(head, dict) or set(head) != {
                     "generation",
                     "id",
@@ -130,7 +139,7 @@ class Directory:
                     "sha256",
                 }:
                     raise ValueError("Invalid directory list history")
-                item = {**item, "head": ScopeHead(**head)}
+                item = {**item, key: ScopeHead(**head)}
             entries.append(ListEntry(**item))
         directory = cls(library_id, value["generation"], tuple(entries))
         if directory.to_bytes() != raw:

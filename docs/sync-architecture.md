@@ -34,6 +34,16 @@ and [app-data constraints](https://developers.google.com/workspace/drive/api/gui
 
 ### Whole-library list selection: required correction (2026-11-18)
 
+The private directory has an optional, independent paper-history head per list.
+It uses directory format v3 only after a paper head exists. Older clients reject
+the unfamiliar format before writing. Each paper batch carries shared-operation
+v2 paper and membership pairs. Both ends validate the selected list, paper UUID
+and incarnation, and the local selection revision. Updating a list name leaves
+its paper history intact. Retrying an identical acknowledged batch reuses the
+same head. This transport has synthetic two-device coverage. The ordinary
+reader database still needs publication, conflict-aware application, and
+separate verified file transfer before this becomes an end-user sync path.
+
 The owner expects one logical research database with a complete list directory,
 visible on every paired device, and selectable list synchronization. The current
 pilot does **not** implement this: login queries the active device's SQL lists,

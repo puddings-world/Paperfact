@@ -14,6 +14,9 @@ FORMAT = "paperfact.list-history.v1"
 class DriveListHistory:
     """One list, one local subscription store and one captured account directory."""
 
+    format = FORMAT
+    head_field = "head"
+
     def __init__(self, directory, store, list_id):
         if store.library_id != directory.library_id:
             raise ValueError("List subscription belongs to another library")
@@ -38,10 +41,15 @@ class DriveListHistory:
             if op["workspace_id"] != self.directory.library_id or op["operation_id"] in seen:
                 raise ValueError("Unexpected library or duplicate operation")
             seen.add(op["operation_id"])
-            # Publishing more entity kinds requires a verified membership/source closure.
-            if op["entity_type"] != "list" or op["entity_id"] != self.list_id:
-                raise ValueError("Operation is outside the selected list")
+        self._validate_scope(records)
         return records
+
+    def _validate_scope(self, records):
+        if any(op["entity_type"] != "list" or op["entity_id"] != self.list_id for op in records):
+            raise ValueError("Operation is outside the selected list")
+
+    def _advance(self, entry, head, records):
+        return replace(entry, head=head, name=records[-1]["payload"].get("name", entry.name))
 
     def append(self, expected, records, *, revision):
         self._check(revision)
@@ -58,7 +66,7 @@ class DriveListHistory:
         generation = 1 if expected is None else expected.generation + 1
         raw = encode(
             dict(
-                format=FORMAT,
+                format=self.format,
                 library_id=directory.library_id,
                 list_id=self.list_id,
                 generation=generation,
@@ -67,13 +75,14 @@ class DriveListHistory:
             ),
             MAX_INLINE,
         )
-        if entry.head != expected:
+        current = getattr(entry, self.head_field)
+        if current != expected:
             if (
-                entry.head
-                and entry.head.generation == generation
-                and (entry.head.sha256 == hashlib.sha256(raw).hexdigest())
+                current
+                and current.generation == generation
+                and current.sha256 == hashlib.sha256(raw).hexdigest()
             ):
-                return entry.head
+                return current
             raise DriveChanged("List history changed; reload before publishing")
         (identity,) = directory.files.new_ids()
         self._check(revision)
@@ -84,7 +93,7 @@ class DriveListHistory:
         self._check(revision)
         directory.upsert(
             observed,
-            [replace(entry, head=head, name=records[-1]["payload"].get("name", entry.name))],
+            [self._advance(entry, head, records)],
         )
         return head
 
@@ -96,7 +105,7 @@ class DriveListHistory:
             not isinstance(item, dict)
             or set(item)
             != {"format", "library_id", "list_id", "generation", "previous", "operations"}
-            or item["format"] != FORMAT
+            or item["format"] != self.format
             or item["list_id"] != self.list_id
             or item["library_id"] != directory.library_id
             or item["generation"] != current.generation
@@ -135,7 +144,7 @@ class DriveListHistory:
         entry = self._entry(observed)
         if entry is None:
             raise SyncHistoryUnavailable("Selected list is missing from this directory")
-        current = entry.head
+        head = current = getattr(entry, self.head_field)
         result, used = [], 0
         while current != anchor:
             self._check(revision)
@@ -151,4 +160,33 @@ class DriveListHistory:
             result.append(operations)
             current = parent
         self._check(revision)
-        return entry.head, [op for batch in reversed(result) for op in batch]
+        return head, [op for batch in reversed(result) for op in batch]
+
+
+class DriveListPapers(DriveListHistory):
+    """Transfer native paper metadata only alongside its selected-list membership."""
+
+    format = "paperfact.list-paper-history.v1"
+    head_field = "papers_head"
+
+    def _validate_scope(self, records):
+        if len(records) % 2:
+            raise ValueError("Each paper requires a selected-list membership")
+        seen = set()
+        for paper, member in zip(records[::2], records[1::2], strict=True):
+            if (
+                paper["version"] != 2 or member["version"] != 2
+                or paper["entity_type"] != "paper" or member["entity_type"] != "membership"
+                or paper["action"] != "put" or member["action"] != "put"
+                or member["payload"]["list_id"] != self.list_id
+                or member["payload"]["paper_id"] != paper["entity_id"]
+                or paper["entity_id"] in seen
+            ):
+                raise ValueError("Paper does not belong to this selected membership")
+            parent = next(p for p in member["parents"] if p["kind"] == "paper")
+            if parent["incarnation"] != paper["incarnation"]:
+                raise ValueError("Membership refers to another paper incarnation")
+            seen.add(paper["entity_id"])
+
+    def _advance(self, entry, head, records):
+        return replace(entry, papers_head=head)

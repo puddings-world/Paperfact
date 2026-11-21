@@ -238,3 +238,45 @@ def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monke
     monkeypatch.setattr(drive_list_records, "exchange_list", account_changed)
     with pytest.raises(PermissionError, match="account changed"):
         apply(setup, ["a", "b"], Ticket(), lambda _: None)
+
+def test_paper_metadata_requires_membership_and_travels_independently(tmp_path):
+    from test_library_selection import database, selection
+    from test_sync_graph_research import PAPER, membership, metadata, operation
+
+    from paper_daily.drive_list_history import DriveListHistory, DriveListPapers
+
+    cloud = Cloud()
+    one, two = [authority(cloud, tmp_path / name).files for name in ("left", "right")]
+    folder, head = one.new_ids(2)
+    left, right = [DriveDirectory(f, folder, head, "workspace") for f in (one, two)]
+    cat = left.upsert(left.initialize("Library"), [ListEntry("a", "A", False)]).directory
+    win, mac = [
+        selection(database(tmp_path / name), tmp_path / (name + "-settings"),
+                  library_id="workspace")
+        for name in ("windows", "mac")
+    ]
+    for store in (win, mac):
+        store.save(cat, ["a"], expected_revision=0)
+    send, receive = DriveListPapers(left, win, "a"), DriveListPapers(right, mac, "a")
+    paper = operation("paper", PAPER, metadata())
+    member = membership("a")
+    before = len(cloud.objects)
+    for bad in ([paper], [paper, membership("b")],
+                [dict(paper, incarnation="different"), member]):
+        with pytest.raises(ValueError, match="membership|incarnation"):
+            send.append(None, bad, revision=1)
+    assert len(cloud.objects) == before
+    accepted = send.append(None, [paper, member], revision=1)
+    assert receive.changes(None, revision=1) == (accepted, [paper, member])
+    details = DriveListHistory(right, mac, "a")
+    assert details.changes(None, revision=1) == (None, [])
+    edited = operation("list", "a", {"name": "Renamed", "note": None})
+    details.append(None, [edited], revision=1)
+    assert send.changes(accepted, revision=1) == (accepted, [])
+    assert left.read().directory.lists[0].name == "Renamed"
+    count = len(cloud.objects)
+    assert send.append(None, [paper, member], revision=1) == accepted
+    assert len(cloud.objects) == count
+    mac.save(left.read().directory, [], expected_revision=1)
+    with pytest.raises(ValueError, match="selection"):
+        receive.changes(None, revision=1)

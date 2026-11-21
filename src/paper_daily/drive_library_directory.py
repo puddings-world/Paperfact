@@ -85,6 +85,11 @@ class DriveDirectory:
                     item = replace(item, head=previous.head)
                 elif item.head.generation != previous.head.generation + 1:
                     raise DriveChanged("List history must advance from its observed head")
+            if previous and previous.papers_head and previous.papers_head != item.papers_head:
+                if item.papers_head is None:
+                    item = replace(item, papers_head=previous.papers_head)
+                elif item.papers_head.generation != previous.papers_head.generation + 1:
+                    raise DriveChanged("Paper history must advance from its observed head")
             merged[item.id] = item
         rows = tuple(sorted(merged.values(), key=lambda item: item.id))
         if rows == before.lists:
