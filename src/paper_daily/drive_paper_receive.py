@@ -189,9 +189,17 @@ def receive_initial(directory, store, list_id, revision, ticket):
 
 
 def exchange_bibliography(directory, store, list_id, revision, ticket):
-    from paper_daily.drive_paper_baseline import publish_initial
+    from paper_daily.drive_paper_baseline import BibliographyAdvanced, publish_initial
 
-    head = receive_initial(directory, store, list_id, revision, ticket)
-    return publish_initial(
-        directory, store, list_id, revision, ticket, append_new=True, received_head=head
-    )
+    def exchange():
+        head = receive_initial(directory, store, list_id, revision, ticket)
+        return publish_initial(
+            directory, store, list_id, revision, ticket, append_new=True, received_head=head
+        )
+
+    try:
+        return exchange()
+    except BibliographyAdvanced:
+        # Retry once. Continued contention is handled by the background scheduler.
+        ticket.check()
+        return exchange()

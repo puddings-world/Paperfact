@@ -9,11 +9,17 @@ from uuid import NAMESPACE_URL, uuid5
 
 from paper_daily.drive_list_history import DriveListPapers
 from paper_daily.drive_list_records import ListReviewRequired
-from paper_daily.drive_sync_files import MAX_INLINE, encode
+from paper_daily.drive_sync_files import MAX_INLINE, DriveChanged, encode
 from paper_daily.sync_capture import PAPER_COLUMNS, _payload
 from paper_daily.sync_journal import canonical_operation
 from paper_daily.sync_schema_v2 import membership_id
 from paper_daily.workspace_service import _read
+
+_UNOBSERVED = object()
+
+
+class BibliographyAdvanced(DriveChanged):
+    """A peer published between the receive and publish steps."""
 
 
 def _put(store, kind, identity, incarnation, payload, parents):
@@ -153,16 +159,20 @@ def _unchanged(store, list_id, head, ticket):
 
 
 def publish_initial(
-    directory, store, list_id, revision, ticket, *, append_new=False, received_head=None
+    directory, store, list_id, revision, ticket, *, append_new=False, received_head=_UNOBSERVED
 ):
     """Publish a first bibliography or resume its exact acknowledged prefix after interruption."""
     history = DriveListPapers(directory, store, list_id)
-    if append_new and received_head and _unchanged(store, list_id, received_head, ticket):
+    if append_new and received_head not in (_UNOBSERVED, None) and _unchanged(
+        store, list_id, received_head, ticket
+    ):
         history._check(revision)
         return received_head
     bindings = []
     batches = initial_batches(store, list_id, revision, ticket, bindings=bindings)
     head, received = history.changes(None, revision=revision)
+    if append_new and received_head is not _UNOBSERVED and head != received_head:
+        raise BibliographyAdvanced("Another device added papers; receive its new revision")
     if append_new and received:
         remote_ids = {op["entity_id"] for op in received[::2]}
         if not remote_ids <= {identity for identity, _ in bindings}:

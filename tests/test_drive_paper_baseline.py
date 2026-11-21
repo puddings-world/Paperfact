@@ -233,6 +233,21 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                 "VALUES('return',?,1,?)",
                 (title, STAMP),
             )
+    # The peer publishes just after Windows received its history and before it publishes.
+    publish = drive_paper_baseline.publish_initial
+    peer_finished = False
+
+    def interleave(directory, store, *args, **kwargs):
+        nonlocal peer_finished
+        if not peer_finished and store.workspace.path == source:
+            peer_finished = True
+            assert mac.sync_saved_library(Ticket(), lambda _: None)["reviews"] == {}
+        return publish(directory, store, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(drive_paper_baseline, "publish_initial", interleave)
+        assert win.sync_saved_library(Ticket(), lambda _: None)["reviews"] == {}
+    assert peer_finished
     for device in (win, mac, win, mac):
         assert device.apply_library(["return"], Ticket(), lambda _: None)["reviews"] == {}
     for path in (source, laptop):
@@ -243,6 +258,18 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             ).fetchall()
             assert len(titles) == 3
             assert {("Desktop discovery",), ("Laptop discovery",)} <= set(titles)
+    # A real local removal must still require review and keep the shared paper on its peer.
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id='paper'")
+    assert "removed papers" in win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
+    assert not mac.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    for path, count in ((source, 0), (laptop, 1)):
+        with closing(sqlite3.connect(path)) as conn:
+            assert conn.execute(
+                "SELECT COUNT(*) FROM list_papers r JOIN list_papers original "
+                "ON r.paper_id=original.paper_id WHERE r.list_id='return' "
+                "AND original.list_id='list'"
+            ).fetchone() == (count,)
 
 
 def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
