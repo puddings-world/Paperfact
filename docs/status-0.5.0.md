@@ -63,6 +63,9 @@ history. Its two-client fixture sends a question from one device and returns
 the reply from another. Directory format v12 appears only when a conversation
 head is published. Older readers stop on this format. A concurrent rename must
 refresh before retrying and preserves the latest message-history head.
+An explicit v13 transport capability permits historical messages without reply
+links. A directory advances to v13 when one is published and preserves this
+requirement across list renames. Desktop historical-message migration is pending.
 
 The ordinary desktop sync cycle transfers linked reader questions, answers and
 one-sided text edits. A two-database test on Windows uses the real reader schema

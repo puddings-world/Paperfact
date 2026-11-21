@@ -55,6 +55,7 @@ class ListEntry:
     restored_memberships: bool = False
     positions_head: ScopeHead | None = None
     chat_head: ScopeHead | None = None
+    unlinked_chat: bool = False
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,8 @@ class Directory:
                              item.originals_head, item.dives_head, item.reading_head,
                              item.membership_changes_head, item.positions_head, item.chat_head)):
                 raise ValueError("Invalid published list history")
+            if type(item.unlinked_chat) is not bool or (item.unlinked_chat and not item.chat_head):
+                raise ValueError("Historical messages require a conversation history")
             if item.chat_head and not item.papers_head:
                 raise ValueError("Conversation history requires a bibliography")
             if item.positions_head and not item.papers_head:
@@ -111,7 +114,8 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format="paperfact.library-directory.v12" if any(e.chat_head for e in self.lists)
+                format="paperfact.library-directory.v13" if any(e.unlinked_chat for e in self.lists)
+                else "paperfact.library-directory.v12" if any(e.chat_head for e in self.lists)
                 else "paperfact.library-directory.v11" if any(
                     e.positions_head for e in self.lists)
                 else "paperfact.library-directory.v10" if any(
@@ -134,6 +138,7 @@ class Directory:
                     dict(id=item.id, name=item.name, published=item.published)
                     | ({"head": item.head.record()} if item.head is not None else {})
                     | ({"papers_head": item.papers_head.record()} if item.papers_head else {})
+                    | ({"unlinked_chat": True} if item.unlinked_chat else {})
                     | ({"chat_head": item.chat_head.record()} if item.chat_head else {})
                     | ({"notes_head": item.notes_head.record()} if item.notes_head else {})
                     | ({"originals_head": item.originals_head.record()}
@@ -158,7 +163,7 @@ class Directory:
 
     @classmethod
     def from_bytes(cls, raw, *, library_id, membership_changes=False, membership_restores=False,
-                   positions=False, chat=False):
+                   positions=False, chat=False, unlinked_chat=False):
         value = decode(raw, MAX_BYTES)
         if (
             not isinstance(value, dict)
@@ -172,8 +177,8 @@ class Directory:
                                value["format"]) if isinstance(value["format"], str) else None
         if not version:
             raise ValueError("Invalid library directory format")
-        supported = (12 if chat else 11 if positions else 10 if membership_restores
-                     else 9 if membership_changes else 8)
+        supported = (13 if chat and unlinked_chat else 12 if chat else 11 if positions
+                     else 10 if membership_restores else 9 if membership_changes else 8)
         if int(version[1]) > supported:
             raise SyncFormatUnsupported()
         entries = []
@@ -181,7 +186,8 @@ class Directory:
             required = {"id", "name", "published"}
             heads = ("head", "papers_head", "notes_head", "originals_head", "dives_head",
                      "reading_head", "membership_changes_head", "positions_head", "chat_head")
-            allowed = required.union(heads, {"extended_papers", "restored_memberships"})
+            allowed = required.union(heads, {"extended_papers", "restored_memberships",
+                                             "unlinked_chat"})
             if not isinstance(item, dict) or not required <= item.keys() <= allowed:
                 raise ValueError("Directory entries contain unsupported fields")
             for key in heads:

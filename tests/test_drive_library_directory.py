@@ -87,6 +87,20 @@ def test_selected_chat_exchange_keeps_reply_identity_and_requires_a_current_gran
     next_head = receiver.append(first_head, [answer], revision=1)
     assert sender.changes(first_head, revision=1) == (next_head, [answer])
     assert sender.changes(next_head, revision=1) == (next_head, [])
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    old = message(str(uuid4()), None, "A historical question")
+    del old["payload"]["data"]["exchange_id"], old["payload"]["data"]["reply_to"]
+    with pytest.raises(ValueError, match="historical"):
+        sender.append(next_head, [old], revision=1)
+    modern = DriveDirectory(files[0], folder, head, "personal", chat=True, unlinked_chat=True)
+    writer = DriveListChat(modern, stores[0], "a", revision=1)
+    legacy_head = writer.append(next_head, [old], revision=1)
+    assert writer.changes(next_head, revision=1) == (legacy_head, [old])
+    with pytest.raises(SyncFormatUnsupported):
+        second.read()
+    renamed = modern.upsert(modern.read(), [ListEntry("a", "Renamed", True)])
+    assert renamed.directory.lists[0].unlinked_chat
     stores[1].set_chat_sync("a", False, revision=1, ticket=Ticket())
     with pytest.raises(PermissionError):
         receiver.changes(None, revision=1)

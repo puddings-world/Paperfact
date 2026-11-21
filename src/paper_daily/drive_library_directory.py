@@ -20,7 +20,8 @@ class DriveDirectory:
     """One dedicated directory head, shared by devices in the same library."""
 
     def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False,
-                 membership_restores=False, positions=False, chat=False):
+                 membership_restores=False, positions=False, chat=False, unlinked_chat=False):
+        self.unlinked_chat = unlinked_chat and chat
         self.chat = chat
         self.positions = positions
         self.membership_restores = membership_restores
@@ -70,7 +71,8 @@ class DriveDirectory:
             directory = Directory.from_bytes(raw, library_id=self.library_id,
                                              membership_changes=self.membership_changes,
                                              membership_restores=self.membership_restores,
-                                             positions=self.positions, chat=self.chat)
+                                             positions=self.positions, chat=self.chat,
+                                             unlinked_chat=self.unlinked_chat)
             if directory.generation != generation:
                 raise ValueError("Drive directory generation differs from its head")
         return Observation(head, directory)
@@ -99,6 +101,8 @@ class DriveDirectory:
             e.restored_memberships for e in (*updates.lists, *before.lists)
         ):
             raise ValueError("Enable membership restoration before updating this directory")
+        if not self.unlinked_chat and any(e.unlinked_chat for e in (*updates.lists, *before.lists)):
+            raise ValueError("Enable historical messages before updating this directory")
         if not self.chat and any(e.chat_head for e in (*updates.lists, *before.lists)):
             raise ValueError("Enable conversation history before updating this directory")
         if not self.positions and any(e.positions_head for e in (*updates.lists, *before.lists)):
@@ -115,6 +119,8 @@ class DriveDirectory:
                         item = replace(item, **{field: prior})
                     elif current.generation != prior.generation + 1:
                         raise DriveChanged("List history must advance from its observed head")
+            if previous and previous.unlinked_chat:
+                item = replace(item, unlinked_chat=True)
             if previous and previous.restored_memberships:
                 item = replace(item, restored_memberships=True)
             if previous and previous.extended_papers:

@@ -407,11 +407,16 @@ class DriveListChat(_MembershipHistory):
 
     def _check_publication(self, revision, records):
         super()._check_publication(revision, records)
+        if not self.directory.unlinked_chat and any(
+            "exchange_id" not in op["payload"]["data"] for op in records
+        ):
+            raise ValueError("Enable historical messages before sending them")
         if any(op["payload"]["scope"]["id"] not in self.active_papers for op in records):
             raise ValueError("Cannot send a conversation for a removed paper")
 
     def _advance(self, entry, head, records):
-        return replace(entry, chat_head=head)
+        unlinked = any("exchange_id" not in op["payload"]["data"] for op in records)
+        return replace(entry, chat_head=head, unlinked_chat=entry.unlinked_chat or unlinked)
 
 
 class DriveListReading(_MembershipHistory):
