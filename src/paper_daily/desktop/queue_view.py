@@ -796,7 +796,7 @@ class QueuePage(QWidget):
         scopes(pal["accent"]).add(
             self.view,
             "論文列表",
-            "↑↓ 選擇 · Enter 開啟 · A 勾選 · Ctrl+A 全選 · T 置頂 · M 已讀 · "
+            "↑↓ 選擇 · Enter／→ 開啟 · ← 回到清單總覽 · A 勾選 · Ctrl+A 全選 · T 置頂 · M 已讀 · "
             "Shift+T／M 套用到勾選的",
         )
 

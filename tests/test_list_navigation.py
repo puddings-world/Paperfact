@@ -75,3 +75,15 @@ def test_enter_opens_a_list_even_where_the_view_does_not_activate_on_enter(windo
     widget.lists_page.view.blockSignals(True)
     QTest.keyClick(widget.lists_page.view, Qt.Key.Key_Return)
     assert widget.stack.currentWidget() is widget.queue_page
+
+
+def test_the_paper_list_names_the_arrow_keys_it_answers_to(window):
+    from paper_daily.desktop.focus_scope import scopes
+
+    widget, app = window
+    widget.show_queue()
+    keys = scopes().region_of(widget.queue_page.view).keys
+    assert "← 回到清單總覽" in keys and "Enter／→ 開啟" in keys
+    QTest.keyClick(widget.queue_page.view, Qt.Key.Key_Left)
+    app.processEvents()
+    assert widget.stack.currentWidget() is widget.lists_page
