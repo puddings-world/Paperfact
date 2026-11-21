@@ -1,7 +1,7 @@
 # v0.5.0 current status
 
 Updated 2026-11-21. **Development candidate; v0.5.0 is not release-approved.**
-The [5a7c8bc paired desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) include offline guide editing and version comparison. The [same-source candidate run](https://github.com/puddings-world/Paperfact/actions/runs/44879419382) passed the packaged research workflow on Windows x64, Apple Silicon and Linux. Its [verified mobile web build](https://github.com/puddings-world/Paperfact/actions/runs/44879419382/artifacts/14697705152) is available for staging. Physical Windows/Mac exchange through personal Drive, mobile HTTPS deployment and real-browser offline acceptance remain pending.
+The [611bed2 paired desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) include offline guide editing and version comparison. The [same-source candidate run](https://github.com/puddings-world/Paperfact/actions/runs/44881962537) passed the packaged research workflow on Windows x64, Apple Silicon and Linux. Its [verified mobile web build](https://github.com/puddings-world/Paperfact/actions/runs/44881962537/artifacts/14698393142) is available for staging. Physical Windows/Mac exchange through personal Drive, mobile HTTPS deployment and real-browser offline acceptance remain pending.
 
 The full target remains the [release scope](roadmap-0.5.0.md), including desktop
 and mobile offline research, safe synchronization, recovery and private access.
