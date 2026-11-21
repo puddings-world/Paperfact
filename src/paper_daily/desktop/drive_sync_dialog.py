@@ -37,6 +37,9 @@ class DriveSyncDialog(QDialog):
         super().__init__(parent)
         self.session, self.automatic = session, automatic
         self.owner = owner or (automatic.parent() if automatic is not None else parent)
+        from paper_daily.desktop.saved_list_sync import for_window
+
+        self.background = for_window(self.owner or self)
         self.writers_busy, self.open_workspace = writers_busy, open_workspace
         self.service = service_factory(
             session.workspace.path, current_path=session.workspace.current_path
@@ -87,6 +90,14 @@ class DriveSyncDialog(QDialog):
         self.sync_lists.clicked.connect(self._sync_saved)
         self.directory_lists.itemChanged.connect(self._list_buttons)
         layout.addWidget(self.sync_lists)
+        self.keep_syncing = QPushButton(
+            self.tr("Sync saved lists while Paperfact is open", "本次開啟期間自動同步已勾選清單")
+        )
+        self.keep_syncing.setCheckable(True)
+        self.keep_syncing.clicked.connect(self._background_clicked)
+        layout.addWidget(self.keep_syncing)
+        self._ordinary_library = False
+        self.background.changed.connect(self._background_changed)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
         self.pilot.setCheckable(True)
         self.pilot.hide()
@@ -169,7 +180,7 @@ class DriveSyncDialog(QDialog):
         return self._worker is not None or (child is not None and not child.disposed and child.busy)
 
     def _buttons(self):
-        idle = not self.busy and not self._closing
+        idle = not self.busy and not self._closing and self.background.worker is None
         self.login.setEnabled(idle)
         self.create.setEnabled(idle and self.service.files is not None)
         self.join.setEnabled(idle and self.workspaces.count() > 0)
@@ -194,6 +205,10 @@ class DriveSyncDialog(QDialog):
             self.service.binding._check()
         except (OSError, ValueError):
             return False
+        if self.background.worker is not None:
+            return False
+        if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
+            self.background.stop()
         if kind not in {"login", "toggle", "selection", "sync_saved"}:
             if self.writers_busy():
                 self.status.setText(
@@ -248,6 +263,7 @@ class DriveSyncDialog(QDialog):
         self.lists.setVisible(show_scope)
 
     def _show_directory(self, library):
+        self._ordinary_library = library.get("ordinary", False)
         self.directory_lists.clear()
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
@@ -277,8 +293,30 @@ class DriveSyncDialog(QDialog):
         }
         self.sync_lists.setEnabled(
             bool(self._saved_ids) and checked == self._saved_ids and self.service.files is not None
-            and not self._closing and not self.busy
+            and not self._closing and not self.busy and self.background.worker is None
         )
+        active = self.background.service is not None
+        self.keep_syncing.setVisible(active or self._ordinary_library)
+        self.keep_syncing.setChecked(active)
+        self.keep_syncing.setEnabled(
+            active or (self._ordinary_library and self.sync_lists.isEnabled())
+        )
+
+    def _background_clicked(self, checked):
+        if checked:
+            self.background.enable(self.service)
+        else:
+            self.background.stop()
+        self._buttons()
+
+    def _background_changed(self):
+        if not self.disposed:
+            self._buttons()
+            if self.background.state == "review":
+                self.status.setText(self.tr(
+                    "Sync paused. Check the connection and sync saved lists to review.",
+                    "同步已暫停。請檢查連線並立即同步以核對清單。",
+                ))
 
     def _sync_saved(self):
         if self.sync_lists.isEnabled() and self.sync_lists.isVisible():
@@ -488,6 +526,7 @@ class DriveSyncDialog(QDialog):
                 self.pilot.hide()
                 self._show_pilot(True)
                 self.directory_lists.clear()
+                self._ordinary_library = False
                 self.directory_lists.hide()
                 self.save_selection.hide()
                 self.lists.clear()

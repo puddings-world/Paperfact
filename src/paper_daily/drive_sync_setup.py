@@ -110,6 +110,7 @@ class DriveSetup:
         self.check(ticket)
         self._library_view = (files, store, selection, remote, observation, local, visible)
         return {
+            "ordinary": local_binding(self.workspace.path) is None,
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
             ),

@@ -166,3 +166,63 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     wait(app, lambda: not view.busy)
     assert calls == [True] and saved == [["b"]]
     assert view.status.text() == "Saved lists synced."
+
+def test_saved_list_background_survives_dialog_close_and_backs_off(dialog):
+    app, view, setup = dialog
+    setup.files = object()
+    calls = []
+
+    def exchange(ticket, progress):
+        calls.append(ticket)
+        if len(calls) == 1:
+            raise ConnectionError("offline")
+        return {"items": [{"selected": True}], "reviews": {}}
+
+    setup.sync_saved_library = exchange
+    view._show_directory({"ordinary": True, "items": [
+        {"id": "a", "name": "Synthetic", "selected": True}
+    ]})
+    view.keep_syncing.click()
+    runner = view.background
+    assert runner.service is setup and runner.timer.isActive()
+    runner.tick()
+    assert not calls and runner.worker is None
+    assert view.close()
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert runner.state == "offline" and runner.timer.interval() == 10000
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert len(calls) == 2 and runner.state == "waiting" and runner.timer.interval() == 30000
+    setup.files = object()
+    runner.tick()
+    assert runner.state == "changed" and not runner.timer.isActive()
+    assert len(calls) == 2
+
+
+def test_saved_list_background_serializes_foreground_and_drains_on_close(dialog):
+    app, view, setup = dialog
+    setup.files = object()
+    entered = threading.Event()
+    released = threading.Event()
+    seen = []
+
+    def exchange(ticket, progress):
+        seen.append(ticket)
+        entered.set()
+        released.wait(5)
+        ticket.check()
+        return {"items": [], "reviews": {}}
+
+    setup.sync_saved_library = exchange
+    runner = view.background
+    assert runner.enable(setup)
+    view.hide()
+    runner.tick()
+    wait(app, entered.is_set)
+    runner.tick()
+    assert not view.sign_in() and setup.calls == 0
+    assert not view.owner.close() and seen[0].cancelled
+    released.set()
+    wait(app, lambda: runner.worker is None)
+    assert len(seen) == 1 and runner.service is None and not runner.timer.isActive()

@@ -169,7 +169,9 @@ folders must remain unshared; share selected lists through research packages ins
 The development build can publish list names to your private Drive directory and
 remember a different selection on each device. Save the selection on the source desktop,
 then save it on the laptop to receive the bibliography into an empty list. Choose **Sync saved lists now** on either device to
-exchange new papers. Newly created local list names stay private until you save the selection again. Both readers need
+exchange new papers. Enable **Sync saved lists while Paperfact is open** for background
+exchange every 30 seconds during this session. You can close settings and continue
+reading. Sign in and enable it again after restarting Paperfact. Newly created local list names stay private until you save the selection again. Both readers need
 bibliography support. Use a research package for notes, analysis and PDFs. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).

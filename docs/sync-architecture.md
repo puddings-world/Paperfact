@@ -147,13 +147,13 @@ new local list name. Concurrent additions converge as a set; each device keeps
 its local reading order. Removing a paper, reordering an existing membership,
 and editing a paper's existing metadata still need reconciliation.
 
-### Background sync for ordinary lists (planned)
+### Background sync for ordinary lists
 
-- The main window should own a single worker across settings and reader views.
+- The main window owns a single worker across settings and reader views.
   A pass must use the same saved-selection operation as **Sync saved lists now**.
   Account switches, changing the workspace, and disabling sync must cancel or drain
   the worker before another session takes ownership.
-- A session-only opt-in may reuse the current Google login while the app is open.
+- The session-only opt-in reuses the current Google login while the app is open.
   Reconnecting after restart requires separate device-local consent and a native
   grant bound to the Google owner, library folder, directory head and local database.
   The existing Drive vault requires an enrolled workspace. An ordinary reader needs
