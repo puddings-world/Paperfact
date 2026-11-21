@@ -320,15 +320,17 @@ class DriveListReading(DriveListHistory):
         self.retired = {}
         self.removal_head = None
         if directory.membership_changes:
-            from paper_daily.drive_membership_history import DriveMembershipChanges
+            from paper_daily.drive_membership_history import (
+                DriveMembershipChanges,
+                membership_versions,
+            )
 
             changes = DriveMembershipChanges(directory, store, list_id, revision=revision)
             if changes.paper_head != self.paper_head:
                 raise DriveChanged("Bibliography changed before reading progress")
             self.removal_head, removals = changes.changes(None, revision=revision)
-            self.retired = {op["entity_id"]: op["operation_id"] for op in removals}
-            if len(self.retired) != len(removals):
-                raise ValueError("Duplicate membership removal in reading history")
+            _, retired = membership_versions(changes.creations, removals)
+            self.retired = {member: op["operation_id"] for member, op in retired.items()}
 
     def _entry(self, observation):
         entry = super()._entry(observation)

@@ -21,6 +21,46 @@ def removal_operation(member, device):
     return op
 
 
+def restoration_operation(creation, retirement, device, *, citation, added_at):
+    """Restore only the observed retired lifetime, keeping its list and paper parents."""
+    if retirement != removal_operation(creation, retirement["device_id"]):
+        raise ValueError("Restoration requires the matching membership removal")
+    payload = dict(creation["payload"], citation=citation, added_at=added_at)
+    op = dict(creation, device_id=device, payload=payload, depends_on=retirement["operation_id"],
+              base_revision=retirement["base_revision"] + 1)
+    del op["operation_id"], op["incarnation"]
+    # A retry has the same incarnation. A later retirement has a different predecessor.
+    identity = hashlib.sha256(encode(op)).hexdigest()
+    op.update(incarnation=identity, operation_id=identity)
+    canonical_operation(op)
+    return op
+
+
+def membership_versions(creations, changes):
+    """Fold a verified bibliography and ordered changes into the latest put and open removal."""
+    active_versions = dict(creations)
+    retired = {}
+    for op in changes:
+        member = op["entity_id"]
+        previous = active_versions.get(member)
+        if not previous:
+            raise ValueError("Unknown membership in change history")
+        if op["action"] == "delete":
+            if member in retired or op != removal_operation(previous, op["device_id"]):
+                raise ValueError("Removal does not match the current membership lifetime")
+            retired[member] = op
+        else:
+            removal = retired.get(member)
+            if not removal or op != restoration_operation(
+                previous, removal, op["device_id"], citation=op["payload"].get("citation"),
+                added_at=op["payload"].get("added_at"),
+            ):
+                raise ValueError("Restoration does not follow the current membership removal")
+            active_versions[member] = op
+            del retired[member]
+    return active_versions, retired
+
+
 class DriveMembershipChanges(DriveListHistory):
     format = "paperfact.membership-changes.v1"
     head_field = "membership_changes_head"
@@ -49,12 +89,8 @@ class DriveMembershipChanges(DriveListHistory):
                 raise ValueError("Removal does not match the observed membership creation")
 
     def retirements(self, revision):
-        from paper_daily.drive_list_records import ListReviewRequired
-
         _, changes = self.changes(None, revision=revision)
-        retired = {op["entity_id"]: op for op in changes}
-        if len(retired) != len(changes):
-            raise ListReviewRequired("Duplicate membership retirement; review the history")
+        _, retired = membership_versions(self.creations, changes)
         return retired
 
     def append(self, expected, records, *, revision):

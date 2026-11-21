@@ -327,6 +327,33 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(ValueError, match="creation"):
         writer.append(None, [dict(operations[0], incarnation="wrong")], revision=revision)
     from paper_daily.drive_membership_apply import receive_membership_changes
+    from paper_daily.drive_membership_history import (
+        membership_versions,
+        removal_operation,
+        restoration_operation,
+    )
+
+    original = writer.creations[operations[0]["entity_id"]]
+    fields = {key: original["payload"][key] for key in ("added_at", "citation")}
+    restored = restoration_operation(original, operations[0], reader.store.context, **fields)
+    retry = restoration_operation(original, operations[0], reader.store.context, **fields)
+    assert retry == restored
+    assert restored["parents"] == original["parents"] and restored["payload"] == original["payload"]
+    assert restored["incarnation"] != original["incarnation"]
+    chain = [operations[0], restored]
+    latest, retired = membership_versions(writer.creations, chain)
+    assert latest[original["entity_id"]] == restored and not retired
+    with pytest.raises(ValueError, match="current membership lifetime"):
+        membership_versions(writer.creations, [*chain, operations[0]])
+    later = removal_operation(restored, writer.store.context)
+    _, retired = membership_versions(writer.creations, [*chain, later])
+    assert retired == {original["entity_id"]: later}
+    with pytest.raises(ValueError, match="current membership removal"):
+        membership_versions(writer.creations, [*chain, later, restored])
+    # Existing v9 readers must continue to reject restores on their removal-only stream.
+    with pytest.raises(ValueError, match="creation"):
+        writer.append(None, [restored], revision=revision)
+
     from paper_daily.drive_paper_receive import receive_initial
 
     receive_initial(reader.directory, reader.store, "return", peer_revision, Ticket())
