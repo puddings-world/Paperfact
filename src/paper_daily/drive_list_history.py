@@ -155,6 +155,9 @@ class DriveListHistory:
         return getattr(entry, self.head_field)
 
     def _since(self, head, anchor, revision):
+        return [op for _, batch in self._pages_since(head, anchor, revision) for op in batch]
+
+    def _pages_since(self, head, anchor, revision):
         current = head
         result, used = [], 0
         while current != anchor:
@@ -168,10 +171,10 @@ class DriveListHistory:
                 raise SyncHistoryUnavailable("Cannot prove the selected list history prefix")
             parent, operations = self._read_entry(current)
             used += current.size
-            result.append(operations)
+            result.append((current, operations))
             current = parent
         self._check(revision)
-        return [op for batch in reversed(result) for op in batch]
+        return reversed(result)
 
 
 class DriveListPapers(DriveListHistory):
@@ -183,6 +186,16 @@ class DriveListPapers(DriveListHistory):
     max_pages = 256
     max_bytes = 64 * 1024**2
     extended = False
+
+    def bibliography(self, revision):
+        """Return ordered records and the verified record boundary at each immutable head."""
+        self._check(revision)
+        head = self._current_head()
+        records, boundaries = [], {}
+        for page, operations in self._pages_since(head, None, revision):
+            records.extend(operations)
+            boundaries[encode(page.record())] = len(records)
+        return head, records, boundaries
 
     def members(self, revision):
         head, members, _ = self.membership_snapshot(revision)

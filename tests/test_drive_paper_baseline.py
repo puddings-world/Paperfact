@@ -220,6 +220,8 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "WHERE m.list_id='return'"
         ).fetchall() == [("paper", "Research paper")]
         assert conn.execute("SELECT COUNT(*) FROM notes WHERE paper_id='paper'").fetchone() == (1,)
+        first_head, = conn.execute("SELECT head FROM drive_library_bibliographies "
+                                   "WHERE list_id='return'").fetchone()
     # Both devices independently extend the same selected list while disconnected.
     for path, title in ((source, "Desktop discovery"), (laptop, "Laptop discovery")):
         with closing(sqlite3.connect(path)) as conn, conn:
@@ -285,11 +287,29 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
                      "VALUES('return','Desktop discovery',1,?)", (STAMP,))
         conn.rollback()
+    # A later addition advances the remote head but leaves the removed incarnation intact.
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source) "
+                     "VALUES('peer-new','Peer new','peer new','Fixture',2026,'fixture')")
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return','peer-new',3,?)", (STAMP,))
+    assert not mac.sync_saved_library(Ticket(), lambda _: None)["reviews"]
     # An unrelated raw deletion does not create a second user intent.
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id='paper'")
     review = win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
     assert "2 removed papers; 1 explicitly removed" in review
+    from paper_daily.drive_sync_files import decode, encode
+
+    unrelated_head = encode({**decode(anchor), "sha256": "0" * 64})
+    for ineligible in (first_head, unrelated_head):
+        with closing(sqlite3.connect(source)) as conn, conn:
+            conn.execute("UPDATE drive_membership_removals SET observed_head=?", (ineligible,))
+        result = win.sync_saved_library(Ticket(), lambda _: None)
+        assert "removed papers" in result["reviews"]["return"]
+        assert "explicitly removed" not in result["reviews"]["return"]
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("UPDATE drive_membership_removals SET observed_head=?", (anchor,))
     assert not mac.sync_saved_library(Ticket(), lambda _: None)["reviews"]
     for path, count in ((source, 0), (laptop, 1)):
         with closing(sqlite3.connect(path)) as conn:

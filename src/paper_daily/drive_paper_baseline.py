@@ -171,7 +171,7 @@ def publish_initial(
         return received_head
     bindings = []
     batches = initial_batches(store, list_id, revision, ticket, bindings=bindings)
-    head, received = history.changes(None, revision=revision)
+    head, received, boundaries = history.bibliography(revision)
     if append_new and received_head is not _UNOBSERVED and head != received_head:
         raise BibliographyAdvanced("Another device added papers; receive its new revision")
     if append_new and received:
@@ -181,8 +181,13 @@ def publish_initial(
         if missing:
             from paper_daily.drive_membership_intent import observed_removals
 
-            dates = {key: remote_dates[key] for key in missing}
-            explicit = observed_removals(store, list_id, head, dates)
+            # Only a unique creation already present at the observed boundary can be removed.
+            if len(remote_dates) * 2 != len(received):
+                raise ListReviewRequired("Ambiguous bibliography membership; review")
+            candidates = {op["payload"]["paper_id"]: (index, op["payload"]["added_at"])
+                          for index, op in enumerate(received) if op["entity_type"] == "membership"
+                          and op["payload"]["paper_id"] in missing}
+            explicit = observed_removals(store, list_id, boundaries, candidates)
             if explicit:
                 raise ListReviewRequired(
                     f"List has {len(missing)} removed papers; {explicit} explicitly removed "

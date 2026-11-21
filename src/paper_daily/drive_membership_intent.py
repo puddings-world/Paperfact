@@ -57,18 +57,17 @@ def remove_selected(conn, list_id, paper_ids):
     return removed
 
 
-def observed_removals(store, list_id, head, missing_dates):
-    """Match local requests to missing members of this exact verified Drive revision."""
-    from paper_daily.drive_sync_files import encode
+def observed_removals(store, list_id, boundaries, candidates):
+    """Count explicit removals only when the recorded prefix contains the original member."""
     from paper_daily.workspace_service import _read
 
     with _read(store.workspace.path) as conn:
         if "drive_membership_removals" not in _tables(conn):
             return 0
         requested = {tuple(row) for row in conn.execute(
-            "SELECT local_id,added_at FROM drive_membership_removals "
-            "WHERE context=? AND list_id=? AND observed_head=? AND action_id GLOB 'v2-*'",
-            (store.context, list_id, encode(head.record())),
+            "SELECT local_id,added_at,observed_head FROM drive_membership_removals "
+            "WHERE context=? AND list_id=? AND action_id GLOB 'v2-*'",
+            (store.context, list_id),
         )}
     if not requested:
         return 0
@@ -76,10 +75,14 @@ def observed_removals(store, list_id, head, missing_dates):
         if "published_paper_ids" not in _tables(settings):
             return 0
         matched = set()
-        for local_id, added_at in requested:
+        for local_id, added_at, observed_head in requested:
+            end = boundaries.get(observed_head)
+            if end is None:
+                continue
             binding = settings.execute(
                 "SELECT remote_id FROM published_paper_ids WHERE local_id=?", (local_id,)
             ).fetchone()
-            if binding and missing_dates.get(binding[0]) == added_at:
+            member = candidates.get(binding[0]) if binding else None
+            if member and member[0] < end and member[1] == added_at:
                 matched.add(binding[0])
         return len(matched)
