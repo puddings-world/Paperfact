@@ -269,6 +269,7 @@ class DriveListReading(DriveListHistory):
 
     def __init__(self, directory, store, list_id, *, revision):
         super().__init__(directory, store, list_id)
+        self.check_source = None
         self.revision = revision
         self.grant = store.reading_grant(list_id, revision)
         self._check(revision)
@@ -285,6 +286,8 @@ class DriveListReading(DriveListHistory):
             }
 
     def _check(self, revision):
+        if self.check_source:
+            self.check_source()
         if (not self.grant or revision != self.revision
                 or self.store.reading_grant(self.list_id, revision) != self.grant):
             raise PermissionError("Enable reading progress sync for this list on this device")

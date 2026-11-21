@@ -29,6 +29,7 @@ class SavedListSync(QObject):
             "working": "正在同步已勾選清單", "offline": "離線，稍後重試",
             "changed": "工作區已切換，請重新啟用同步", "review": "清單同步已暫停，請核對",
         }
+        labels["reading_conflict"] = "閱讀進度不同，已保留兩端狀態"
         labels["note_conflict"] = "部分筆記需核對，其他內容持續同步"
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
         labels["pdf_conflict"] = "PDF 版本不同，已保留原檔；其他內容持續同步"
@@ -87,13 +88,14 @@ class SavedListSync(QObject):
             elif worker.error or (worker.result.get("reviews", {}).keys()
                                   - set(worker.result.get("note_conflicts", ()))
                                   - set(worker.result.get("dive_conflicts", ()))
+                                  - set(worker.result.get("reading_conflicts", ()))
                                   - set(worker.result.get("pdf_conflicts", ()))):
                 self.stop("review")
             elif not any(item["selected"] for item in worker.result["items"]):
                 self.stop()
             else:
                 self.failures = 0
-                conflicts = [kind for kind in ("note", "dive", "pdf")
+                conflicts = [kind for kind in ("note", "dive", "pdf", "reading")
                              if worker.result.get(kind + "_conflicts")]
                 self.state = "waiting"
                 if conflicts:

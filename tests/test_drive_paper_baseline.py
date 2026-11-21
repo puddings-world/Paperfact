@@ -276,6 +276,14 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
                 view.notes_toggle.click()
                 assert not view.notes_toggle.isChecked()
+            assert view.reading_toggle.isVisible() and not view.reading_toggle.isChecked()
+            with monkeypatch.context() as cancel:
+                cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+                view.reading_toggle.click()
+                assert not view.reading_toggle.isChecked()
+            view.reading_toggle.click()
+            wait(app, lambda v=view: not v.busy)
+            assert view.reading_toggle.isChecked()
             assert view.pdf_toggle.isVisible() and not view.pdf_toggle.isChecked()
             with monkeypatch.context() as cancel:
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
@@ -585,6 +593,29 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             for device in reversed(devices):
                 assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             assert saved(source, "paper") == saved(laptop, local) == ("Later Mac edit",)
+            def mark(path, key, state):
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute("UPDATE list_papers SET state=? WHERE list_id='list' "
+                                 "AND paper_id=?", (state, key))
+            def state_of(path, key):
+                with closing(sqlite3.connect(path)) as conn:
+                    return conn.execute("SELECT state FROM list_papers WHERE list_id='list' "
+                                        "AND paper_id=?", (key,)).fetchone()[0]
+            mark(source, "paper", "read")
+            for device in devices:
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert state_of(laptop, local) == "read"
+            mark(laptop, local, "skipped")
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert state_of(source, "paper") == "skipped"
+            mark(laptop, local, "deferred")
+            mark(source, "paper", "pending")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            report = devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert report["reading_conflicts"] == ["list"]
+            assert state_of(source, "paper") == "pending" and state_of(laptop, local) == "deferred"
+            devices[1].choose_reading_sync("list", False, Ticket(), lambda _: None)
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
             mac_pdf.write_bytes(other_pdf)

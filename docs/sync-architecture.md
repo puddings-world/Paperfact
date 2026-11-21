@@ -489,7 +489,9 @@ one keep their existing canonical format. Older clients cannot open a v7 directo
 
 The transport fixture exchanges a read marker for a paper in two lists, checks
 the other list stays untouched and revokes the receiving device's grant.
-The ordinary reader does not yet publish or apply these records. Connecting
-the reader requires a common per-membership receipt, safe handling of divergent
-offline edits, a visible device opt-in and installed two-device acceptance.
+The ordinary reader uses a separate per-list opt-in on each device. The last
+accepted operation for each membership is recorded with the applied state in
+the local research transaction. Unchanged default markers need no upload.
+Single-sided edits travel in either direction; divergent edits retain both values
+and flag the list. Conflict choice and installed two-device acceptance remain open.
 List recency and PDF page position are separate from this state.

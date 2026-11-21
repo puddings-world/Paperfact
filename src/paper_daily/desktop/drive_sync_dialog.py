@@ -118,11 +118,16 @@ class DriveSyncDialog(QDialog):
                                               "允許同步這份清單的 PDF"))
         self.pdf_toggle.setCheckable(True)
         self.pdf_toggle.clicked.connect(self._choose_pdfs)
+        self._reading_lists = set()
+        self.reading_toggle = QPushButton(self.tr("Sync reading progress", "同步閱讀進度"))
+        self.reading_toggle.setCheckable(True)
+        self.reading_toggle.clicked.connect(self._choose_reading)
         self._dive_lists = set()
         self.dive_toggle = QPushButton(self.tr("Sync saved explanations", "同步已儲存的深度講解"))
         self.dive_toggle.setCheckable(True)
         self.dive_toggle.clicked.connect(self._choose_dives)
         content_row = QHBoxLayout()
+        content_row.addWidget(self.reading_toggle)
         content_row.addWidget(self.pdf_toggle)
         content_row.addWidget(self.dive_toggle)
         layout.addLayout(content_row)
@@ -266,7 +271,7 @@ class DriveSyncDialog(QDialog):
         if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
             self.background.stop()
         if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes",
-                        "compare", "resolve", "pdfs", "dives"}:
+                        "compare", "resolve", "pdfs", "dives", "reading"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -333,6 +338,7 @@ class DriveSyncDialog(QDialog):
         self._pdf_lists = set(library.get("pdf_lists", ()))
         self._pdf_review_titles = library.get("pdf_review_titles", {})
         self._shown_pdf_titles = None
+        self._reading_lists = set(library.get("reading_lists", ()))
         self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
@@ -386,6 +392,9 @@ class DriveSyncDialog(QDialog):
         self.pdf_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.pdf_toggle.setChecked(list_id in self._pdf_lists)
         self.pdf_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.reading_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.reading_toggle.setChecked(list_id in self._reading_lists)
+        self.reading_toggle.setEnabled(self.sync_lists.isEnabled())
         self.dive_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
@@ -426,6 +435,26 @@ class DriveSyncDialog(QDialog):
                 self.status.setText(self.tr("Both versions retained.", "已保留兩個版本。"))
         finally:
             dialog.deleteLater()
+
+    def _choose_reading(self, checked):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.reading_toggle.isEnabled():
+            self._list_buttons()
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        if checked and QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr("Exchange reading status and timestamps for this list? Update both devices "
+                    "first. Publishing progress upgrades the private directory to v7.",
+                    "同步這份清單的已讀、待讀等狀態與時間？請先更新兩台裝置，"
+                    "首次傳送進度會將私人目錄升級至 v7。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            self._list_buttons()
+            return
+        self._start("reading", lambda ticket, progress:
+                    self.service.choose_reading_sync(key, checked, ticket, progress))
 
     def _choose_dives(self, checked):
         item = self.directory_lists.currentItem()
@@ -504,7 +533,7 @@ class DriveSyncDialog(QDialog):
             elif self.background.state == "dive_conflict":
                 self.status.setText(self.tr("Guides differ. Other content keeps syncing.",
                                             "講解版本需核對，其他內容持續同步。"))
-            elif self.background.state in ("pdf_conflict", "mixed_conflict"):
+            elif self.background.state in ("pdf_conflict", "mixed_conflict", "reading_conflict"):
                 self.status.setText(self.tr(
                     "Conflicting versions retained. Sync saved lists now to see affected lists.",
                     "已保留有差異的版本。按「立即同步已勾選清單」可查看受影響的清單。",
@@ -658,6 +687,10 @@ class DriveSyncDialog(QDialog):
             elif kind == "resolve":
                 self.status.setText(self.tr("Choice saved. Sync to exchange the selected version.",
                                             "已儲存選擇，下次同步時會交換選定的版本。"))
+            elif kind == "reading":
+                self._show_directory(result)
+                self.status.setText(self.tr("Reading progress preference saved.",
+                                            "已儲存閱讀進度同步設定。"))
             elif kind == "dives":
                 self._show_directory(result)
                 self.status.setText(self.tr("Explanation sync preference saved.",

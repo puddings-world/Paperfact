@@ -123,6 +123,7 @@ class DriveSetup:
         pdf_lists = store.pdf_lists()
         return {
             "ordinary": local_binding(self.workspace.path) is None,
+            "reading_lists": store.reading_lists(),
             "note_lists": store.note_lists(),
             "pdf_lists": pdf_lists,
             "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
@@ -151,6 +152,9 @@ class DriveSetup:
         files.cancelled = lambda: ticket.cancelled
         return review(remote, store, list_id, saved.revision, ticket, decision)
 
+    def choose_reading_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, kind="reading")
+
     def choose_note_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="notes")
 
@@ -167,7 +171,8 @@ class DriveSetup:
         files, store, saved, *_ = self._library_view
         if files is not self.files or store.owner_id != self.account["id"]:
             raise ValueError("The reviewed account changed")
-        save = {"notes": store.set_note_sync, "pdfs": store.set_pdf_sync,
+        save = {"reading": store.set_reading_sync, "notes": store.set_note_sync,
+                "pdfs": store.set_pdf_sync,
                 "dives": store.set_dive_sync}[kind]
         save(list_id, enabled, revision=saved.revision, ticket=ticket)
         if kind == "pdfs" and not enabled:
@@ -252,6 +257,7 @@ class DriveSetup:
         from paper_daily.drive_reader_notes import NoteEditConflict, exchange_reader_notes
 
         reviews = {}
+        reading_conflicts = set()
         note_conflicts = []
         dive_conflicts = set()
         pdf_conflicts = set()
@@ -286,18 +292,30 @@ class DriveSetup:
                             reason = "Saved explanations differ; review both versions"
                             reasons = (reviews.get(list_id), reason)
                             reviews[list_id] = " · ".join(filter(None, reasons))
+                    if list_id in result.get("reading_lists", ()):
+                        from paper_daily.drive_reader_progress import exchange_reading
+
+                        differing = exchange_reading(directory, store, list_id, selection.revision,
+                                                     ticket)
+                        if differing:
+                            reading_conflicts.add(list_id)
+                            reason = f"Reading progress differs on {len(differing)} papers"
+                            reasons = (reviews.get(list_id), reason)
+                            reviews[list_id] = " · ".join(filter(None, reasons))
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except NoteEditConflict as exc:
                 reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id), str(exc))))
                 note_conflicts.append(list_id)
             except ListReviewRequired as exc:
+                reading_conflicts.discard(list_id)
                 pdf_conflicts.discard(list_id)
                 dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
         self.check(ticket)
         self._pdf_review_titles = pdf_titles
         return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
+                "reading_conflicts": sorted(reading_conflicts),
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 
     def _receipt(self, kind, spec=None):

@@ -221,6 +221,9 @@ class DeviceSelection:
     def dive_grant(self, list_id, revision):
         return self._grant("dive_grants", list_id, revision)
 
+    def reading_lists(self):
+        return self._grant_lists("reading_grants")
+
     def reading_grant(self, list_id, revision):
         return self._grant("reading_grants", list_id, revision)
 
