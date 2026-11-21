@@ -38,7 +38,7 @@ handles = []
 def open_reader():
     stack.setCurrentWidget(view)
     view.setHtml("<!--" + "x" * 2_200_000 + "--><p>A paper</p>")
-    QTimer.singleShot(1500, finish)
+    QTimer.singleShot(100, finish)
 
 def finish():
     view.view.page().toPlainText(check_text)
@@ -46,11 +46,14 @@ def finish():
 def check_text(text):
     if text.strip() == "A paper":
         handles.append(int(win.winId()))
-    app.quit()
+        app.quit()
+    else:
+        QTimer.singleShot(100, finish)
 
+QTimer.singleShot(15000, app.quit)
 QTimer.singleShot(500, open_reader)
 app.exec()
-print("same" if handles == [first] else f"recreated {first} -> {handles}")
+print("same" if handles == [first] else f"expected {first}, observed {handles}")
 """
 
 
