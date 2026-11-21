@@ -288,7 +288,7 @@ class Data:
         "       EXISTS(SELECT 1 FROM kv WHERE kv.key = 'analyze.failed.pdf.' || p.id "
         "              AND kv.value != 'null') pdf_failed "
         "FROM list_papers lp JOIN papers p ON p.id = lp.paper_id "
-        "WHERE lp.list_id = ? ORDER BY lp.position LIMIT ?"
+        "WHERE lp.list_id = ? ORDER BY lp.position,lp.paper_id LIMIT ?"
     )
 
     def queue(self, limit: int = 100_000, list_id: str | None = None) -> list[Paper]:
@@ -4454,7 +4454,7 @@ class MainWindow(QWidget):
             return
         with connect() as conn:
             ids = [r[0] for r in conn.execute(
-                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
                 (self.active_list,),
             )]
             results = notes_export.export(conn, ids, Path(folder))
@@ -4695,7 +4695,7 @@ class MainWindow(QWidget):
 
             with connect() as conn:
                 ids = [r[0] for r in conn.execute(
-                    "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+                    "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
                     (self.active_list,),
                 )]
             if paper_id in ids:

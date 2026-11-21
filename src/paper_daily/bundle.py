@@ -239,7 +239,7 @@ def export(
         members = _rows(
             conn,
             "SELECT paper_id, position, citation, added_at FROM list_papers "
-            "WHERE list_id=? ORDER BY position",
+            "WHERE list_id=? ORDER BY position,paper_id",
             (list_id,),
         )
         ids = [m["paper_id"] for m in members]

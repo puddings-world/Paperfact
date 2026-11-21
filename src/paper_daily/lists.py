@@ -343,7 +343,7 @@ def remove_paper(list_id: str, paper_id: str) -> bool:
         # Positions are what "the order someone chose" means; leaving holes in them
         # makes the next insert land in the middle of the list.
         rows = conn.execute(
-            "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+            "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
             (list_id,),
         ).fetchall()
         conn.executemany(
@@ -391,7 +391,7 @@ def up_next(list_id: str, limit: int = 5) -> list[dict]:
             "FROM list_papers lp JOIN papers p ON p.id = lp.paper_id "
             "LEFT JOIN pins pin ON pin.scope = lp.list_id AND pin.paper_id = lp.paper_id "
             "WHERE lp.list_id = ? AND lp.state != 'read' "
-            "ORDER BY pinned DESC, pin.pinned_at, lp.position LIMIT ?",
+            "ORDER BY pinned DESC, pin.pinned_at, lp.position,lp.paper_id LIMIT ?",
             (list_id, limit),
         ).fetchall()
     return [{"id": r["id"], "title": r["title"], "pinned": bool(r["pinned"])} for r in rows]

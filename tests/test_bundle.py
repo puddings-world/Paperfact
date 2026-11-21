@@ -264,3 +264,30 @@ def test_export_refuses_optional_view_instead_of_silently_omitting_research(tmp_
     with closing(sqlite3.connect(source / 'papers.db')) as check:
         assert list(check.iterdump()) == before
     assert not output.exists()
+
+
+def test_equal_positions_have_the_same_order_in_reader_and_package(sharer, monkeypatch):
+    from contextlib import closing
+
+    from paper_daily import cli, lists
+
+    _, tmp = sharer
+    with closing(sqlite3.connect(tmp / "sharer" / "papers.db")) as source, source:
+        # A legacy import used the same position for two entries. Force the
+        # opposite tie order in the index to expose reliance on a query plan.
+        source.execute("UPDATE list_papers SET position=0,state='pending' WHERE list_id='cat'")
+        source.execute(
+            "CREATE INDEX legacy_order ON list_papers(list_id,position,paper_id DESC)"
+        )
+    expected = ["ref:a", "ref:b"]
+    assert [item["id"] for item in lists.up_next("cat")] == expected
+    assert cli._list_ids("cat") == expected
+    assert cli._list_ids("all") == expected
+    package = bundle.export("cat", tmp / "ties.zip")["out"]
+    receiver = tmp / "receiver"
+    receiver.mkdir()
+    with closing(_workspace(receiver, monkeypatch)) as conn:
+        bundle.import_(package)
+        assert conn.execute(
+            "SELECT paper_id,position FROM list_papers WHERE list_id='cat' ORDER BY position"
+        ).fetchall() == [("ref:a", 0), ("ref:b", 1)]

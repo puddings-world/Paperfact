@@ -469,7 +469,7 @@ def cmd_prefetch(args) -> int:
         with connect() as conn:
             rows = conn.execute(
                 "SELECT p.* FROM list_papers lp JOIN papers p ON p.id = lp.paper_id "
-                f"{scope}GROUP BY p.id ORDER BY lp.list_id, lp.position LIMIT ?",
+                f"{scope}GROUP BY p.id ORDER BY lp.list_id, lp.position,lp.paper_id LIMIT ?",
                 (*scope_args, args.n),
             ).fetchall()
     else:
@@ -747,13 +747,14 @@ def _list_ids(list_id: str) -> list[str]:
     with connect() as conn:
         if list_id == "all":
             rows = conn.execute(
-                "SELECT DISTINCT paper_id FROM list_papers ORDER BY list_id, position"
+                "SELECT paper_id FROM list_papers ORDER BY list_id,position,paper_id"
             )
         else:
             rows = conn.execute(
-                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position", (list_id,)
+                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
+                (list_id,),
             )
-        return [r[0] for r in rows]
+        return list(dict.fromkeys(r[0] for r in rows))
 
 
 def cmd_venues(args) -> int:
@@ -1044,7 +1045,7 @@ def cmd_notes_export(args) -> int:
         ids = list(args.paper or [])
         if args.list_id:
             ids += [r[0] for r in conn.execute(
-                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position",
+                "SELECT paper_id FROM list_papers WHERE list_id=? ORDER BY position,paper_id",
                 (args.list_id,),
             )]
         if not ids:
