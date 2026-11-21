@@ -480,15 +480,16 @@ class DriveSetup:
                             reviews[list_id] = " · ".join(filter(None, reasons))
                     if directory.positions and list_id in result.get("position_lists", ()):
                         from paper_daily.drive_list_history import DriveListPositions
+                        from paper_daily.drive_position_cache import retain
 
                         history = DriveListPositions(directory, store, list_id,
                                                      revision=selection.revision)
                         history.check_source = ticket.check
-                        _, tips = history.suggestions(revision=selection.revision)
+                        head, tips = history.suggestions(revision=selection.revision)
                         position_grants[list_id] = history.grant
-                        position_suggestions[list_id] = [
-                            op for op in tips if op["device_id"] != store.context
-                        ]
+                        position_suggestions[list_id] = retain(
+                            history, head, tips, selection.revision, ticket
+                        )
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except MembershipConflict as exc:

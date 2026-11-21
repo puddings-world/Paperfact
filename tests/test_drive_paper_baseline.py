@@ -1854,5 +1854,19 @@ def test_saved_library_receives_peer_position_only_after_separate_grant(source, 
     assert not sync()["position_suggestions"]
     laptop.choose_position_sync("list", True, Ticket(), lambda _: None)
     assert sync()["position_suggestions"] == {"list": [sent]}
+    from paper_daily.device_list_selection import DeviceSelection
+    from paper_daily.drive_position_cache import cached
+
+    _, local, selection, directory, *_ = laptop._library_view
+    reopened = DeviceSelection(local.workspace.path, owner_id=local.owner_id,
+                               library_id=local.library_id, device_id=laptop.binding.account,
+                               root=local.path.parent)
+    def offline():
+        return cached(reopened, directory.folder, directory.head, "list", selection.revision)
+    assert offline() == [sent]
+    assert not cached(reopened, "different-folder", directory.head, "list", selection.revision)
     laptop.choose_position_sync("list", False, Ticket(), lambda _: None)
+    assert not offline()
     assert not sync()["position_suggestions"]
+    laptop.choose_position_sync("list", True, Ticket(), lambda _: None)
+    assert not offline()
