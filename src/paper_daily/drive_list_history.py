@@ -412,10 +412,43 @@ class DriveListPositions(_MembershipHistory):
             raise PermissionError("Enable directory support for PDF positions")
         return self.store.position_grant(self.list_id, revision)
 
+    def _latest(self, records):
+        tips, seen = {}, set()
+        for op in records:
+            key = (op["device_id"], op["entity_id"], op["incarnation"])
+            previous = tips.get(key)
+            predecessor = previous["operation_id"] if previous else None
+            version = previous["base_revision"] + 1 if previous else 0
+            if (op["operation_id"] in seen or op["depends_on"] != predecessor
+                    or op["base_revision"] != version):
+                raise SyncHistoryUnavailable("PDF position does not follow its device history")
+            seen.add(op["operation_id"])
+            tips[key] = op
+        return tips.values()
+
+    def suggestions(self, *, revision):
+        """Read current membership suggestions in verified history order, independent of clocks."""
+        head, records = self.changes(None, revision=revision)
+        result = []
+        for op in self._latest(records):
+            member = self._member(op)
+            if member not in self.retired and op["incarnation"] == self.memberships[member][3]:
+                result.append(op)
+        self._check(revision)
+        return head, result
+
     def append(self, expected, records, *, revision):
         # Bound each page so a complete history always fits the reader's byte limit.
         if isinstance(expected, ScopeHead) and expected.generation >= self.max_pages:
             raise ValueError("PDF position history reached its page limit")
+        self._check(revision)
+        if expected is not None and not isinstance(expected, ScopeHead):
+            raise ValueError("Invalid observed position history")
+        self._operations(records)
+        self._check_publication(revision, records)
+        if self.directory.files.account()["id"] != self.store.owner_id:
+            raise PermissionError("The selected Google account changed")
+        self._latest(self._since(expected, None, revision) + records)
         return self._append(expected, records, revision,
                             lambda: self._check_publication(revision, records),
                             remaining_bytes=self.max_bytes // self.max_pages)

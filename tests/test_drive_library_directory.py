@@ -685,6 +685,18 @@ def test_devices_exchange_source_bound_positions_only_with_current_grants(tmp_pa
     assert writers[1].changes(None, revision=1) == (first, records[:1])
     latest = writers[1].append(first, records[1:], revision=1)
     assert writers[0].changes(None, revision=1) == (latest, records)
+    updated = dict(records[0], operation_id="position-update", base_revision=1,
+                   depends_on=records[0]["operation_id"])
+    payload = records[0]["payload"]
+    updated["payload"] = dict(payload, data=dict(payload["data"], page=12,
+                                                 recorded_at="2001-01-01T00:00:00Z"))
+    from paper_daily.sync_journal import SyncHistoryUnavailable
+    count = len(cloud.objects)
+    with pytest.raises(SyncHistoryUnavailable):
+        writers[0].append(latest, [dict(updated, depends_on="unknown")], revision=1)
+    assert len(cloud.objects) == count
+    tip = writers[0].append(latest, [updated], revision=1)
+    assert writers[1].suggestions(revision=1) == (tip, [updated, records[1]])
     stores[1].set_position_sync("a", False, revision=1, ticket=Ticket())
     with pytest.raises(PermissionError):
         writers[1].changes(first, revision=1)
