@@ -17,6 +17,40 @@ FIELDS = ("state", "delivered_at", "read_at")
 DEFAULT = ("pending", None, None)
 
 
+def _check_retired(conn, context, list_id):
+    if conn.execute(
+        "SELECT 1 FROM drive_reading_members WHERE context=? AND list_id=? AND retired=1 LIMIT 1",
+        (context, list_id),
+    ).fetchone():
+        raise ListReviewRequired("A reading membership was removed; review before syncing progress")
+
+
+def _track_members(conn, context, list_id, members):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS drive_reading_members(context TEXT NOT NULL,"
+        "list_id TEXT NOT NULL,paper_id TEXT NOT NULL,retired INTEGER NOT NULL DEFAULT 0,"
+        "PRIMARY KEY(list_id,paper_id,context))"
+    )
+    for event, name, condition in (
+        ("DELETE", "deleted", ""),
+        ("UPDATE OF paper_id,list_id", "moved",
+         " WHEN OLD.paper_id IS NOT NEW.paper_id OR OLD.list_id IS NOT NEW.list_id"),
+    ):
+        conn.execute(
+            f"CREATE TRIGGER IF NOT EXISTS drive_reading_member_{name} AFTER {event} "
+            f"ON list_papers{condition} BEGIN UPDATE drive_reading_members SET retired=1 "
+            "WHERE list_id=OLD.list_id AND paper_id=OLD.paper_id AND retired=0; END"
+        )
+    _check_retired(conn, context, list_id)
+    observed = {row[0] for row in conn.execute(
+        "SELECT paper_id FROM drive_reading_members WHERE context=? AND list_id=?",
+        (context, list_id))}
+    conn.executemany(
+        "INSERT INTO drive_reading_members(context,list_id,paper_id) VALUES(?,?,?)",
+        ((context, list_id, paper) for paper in members if paper not in observed),
+    )
+
+
 def _values(op):
     return tuple(op["payload"][field] for field in FIELDS)
 
@@ -163,6 +197,10 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     (list_id,),
                 )
             }
+            _track_members(conn, store.context, list_id, (
+                local_ids[member[0]] for member in history.memberships.values()
+                if member[0] in local_ids
+            ))
             for identity, membership in history.memberships.items():
                 ticket.check()
                 local = local_ids.get(membership[0])
@@ -218,6 +256,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
 
         if _tables(conn) & _WORKSPACE_MARKERS:
             raise ListReviewRequired("Workspace changed during reading sync")
+        _check_retired(conn, store.context, list_id)
         history.check_source = check_source
         for start in range(0, len(pending), 100):
             batch = pending[start : start + 100]
@@ -240,6 +279,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
             conn.execute("BEGIN IMMEDIATE")
             if _tables(conn) & _WORKSPACE_MARKERS:
                 raise ListReviewRequired("Workspace changed before acknowledging reading progress")
+            _check_retired(conn, store.context, list_id)
             for _, op in pending:
                 key = (store.context, list_id, op["entity_id"])
                 existing = conn.execute(
@@ -274,6 +314,8 @@ def review_reading(directory, store, list_id, revision, ticket, decision=None):
             tables = _tables(conn)
             if tables & _WORKSPACE_MARKERS:
                 raise ListReviewRequired("Workspace binding changed")
+            if "drive_reading_members" in tables:
+                _check_retired(conn, store.context, list_id)
             if "drive_reading_bases" in tables:
                 for identity, op in latest.items():
                     ticket.check()

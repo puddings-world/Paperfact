@@ -796,6 +796,26 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             devices[1].review_notes(*key, feature="reading", decision=(card, "remote"))
             assert state_of(laptop, local) == "deferred"
             assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            # Roll back the fixture after checking an identical, same-timestamp replacement.
+            backup = laptop.with_name("before-reading-replacement.db")
+            with closing(sqlite3.connect(laptop)) as src, closing(sqlite3.connect(backup)) as dst:
+                src.backup(dst)
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                old = conn.execute("SELECT * FROM list_papers WHERE list_id='list' AND paper_id=?",
+                                   (local,)).fetchone()
+                conn.execute("DELETE FROM list_papers WHERE list_id='list' AND paper_id=?",
+                             (local,))
+                conn.execute("INSERT INTO list_papers VALUES(?,?,?,?,?,?,?,?)", old)
+            mark(source, "paper", "read")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            objects = dict(cloud.objects)
+            report = devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert "membership was removed" in report["reviews"]["list"]
+            assert state_of(laptop, local) == "deferred" and cloud.objects == objects
+            with pytest.raises(ListReviewRequired, match="membership was removed"):
+                devices[1].review_notes(*key, feature="reading")
+            with closing(sqlite3.connect(backup)) as src, closing(sqlite3.connect(laptop)) as dst:
+                src.backup(dst)
             devices[1].choose_reading_sync("list", False, Ticket(), lambda _: None)
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
