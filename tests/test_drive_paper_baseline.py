@@ -403,6 +403,13 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert reopened.keep_syncing.isChecked()
             devices = (windows[0][1].service, reopened.service)
             from paper_daily.drive_list_history import DriveListNotes
+            from paper_daily.drive_reader_dives import DiveHistory
+
+            def interrupt_after_publish(method):
+                def lose_reply(*args, **kwargs):
+                    method(*args, **kwargs)
+                    raise ConnectionError("Acknowledgement lost after upload")
+                return lose_reply
 
             original_append = DriveListNotes.append
 
@@ -423,6 +430,26 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 )
             assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
             assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(source)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Typing again",
+                )
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Offline draft' WHERE page=5")
+            with monkeypatch.context() as disconnect:
+                disconnect.setattr(DriveListNotes, "append",
+                                   interrupt_after_publish(original_append))
+                with pytest.raises(ConnectionError, match="Acknowledgement lost"):
+                    devices[1].sync_saved_library(Ticket(), lambda _: None)
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            with closing(sqlite3.connect(source)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Offline draft",
+                )
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Typing again' WHERE page=5")
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             with closing(sqlite3.connect(source)) as conn:
                 assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
                     "Typing again",
@@ -535,6 +562,38 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             for device in reversed(devices):
                 assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             assert saved(source, "paper") == ("Revised explanation",)
+            rewrite(laptop, local, "Sent before disconnect")
+            with monkeypatch.context() as disconnect:
+                disconnect.setattr(DiveHistory, "publish_batch",
+                                   interrupt_after_publish(DiveHistory.publish_batch))
+                with pytest.raises(ConnectionError, match="Acknowledgement lost"):
+                    devices[1].sync_saved_library(Ticket(), lambda _: None)
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            assert saved(source, "paper") == ("Sent before disconnect",)
+            rewrite(laptop, local, "Revised explanation")
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert saved(source, "paper") == saved(laptop, local) == ("Revised explanation",)
+            rewrite(laptop, local, "Last common guide before both edits")
+            with monkeypatch.context() as disconnect:
+                disconnect.setattr(DiveHistory, "publish_batch",
+                                   interrupt_after_publish(DiveHistory.publish_batch))
+                with pytest.raises(ConnectionError, match="Acknowledgement lost"):
+                    devices[1].sync_saved_library(Ticket(), lambda _: None)
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            rewrite(source, "paper", "Desktop edit after lost reply")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            rewrite(laptop, local, "Revised explanation")
+            assert devices[1].sync_saved_library(Ticket(), lambda _: None)["dive_conflicts"]
+            [card] = devices[1].review_notes("list", Ticket(), lambda _: None, feature="dive")
+            assert [card[k]["body"] for k in ("base", "local", "remote")] == [
+                "Last common guide before both edits", "Revised explanation",
+                "Desktop edit after lost reply",
+            ]
+            devices[1].review_notes("list", Ticket(), lambda _: None, feature="dive",
+                                    decision=(card, "local"))
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             rewrite(source, "paper", "Windows interpretation")
             rewrite(laptop, local, "Mac interpretation")
             assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]

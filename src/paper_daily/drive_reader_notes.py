@@ -6,6 +6,7 @@ import sqlite3
 from contextlib import closing
 from uuid import NAMESPACE_URL, uuid5
 
+from paper_daily.drive_content_receipts import confirmed_sends, remember_batch
 from paper_daily.drive_list_history import DriveListNotes
 from paper_daily.drive_list_records import ListReviewRequired
 from paper_daily.drive_sync_files import MAX_INLINE, encode
@@ -128,6 +129,8 @@ def _publish(history, head, records, ticket, bases=None, conflicts=None):
         raise ListReviewRequired("Adding these notes would exceed the readable history budget")
     for batch in batches:
         ticket.check()
+        if bases is not None:
+            remember_batch(history, batch, history.revision, ticket)
         head = history.append(head, batch, revision=history.revision)
         if bases is not None:
             records = [*records, *batch]
@@ -179,6 +182,7 @@ def receive_reader_notes(history, records, ticket, *, published=(), conflicts=No
                 "CREATE TABLE IF NOT EXISTS drive_library_note_bases(context TEXT,list_id TEXT,"
                 "remote_id TEXT,operation_id TEXT NOT NULL,PRIMARY KEY(context,list_id,remote_id))"
             )
+            confirmed = confirmed_sends(conn, history, records)
             for identity, chain in chains.items():
                 ticket.check()
                 key = (store.context, history.list_id, identity)
@@ -190,6 +194,12 @@ def receive_reader_notes(history, records, ticket, *, published=(), conflicts=No
                              item["operation_id"] == receipt[0]), None)
                 if receipt and base is None:
                     raise ListReviewRequired("Note history lost its previously accepted revision")
+                acknowledged = confirmed.get((identity, receipt[0] if receipt else None))
+                if acknowledged and edits:
+                    _receive_one(history, settings, conn, acknowledged, base, published=True)
+                    base = acknowledged
+                    conn.execute("INSERT OR REPLACE INTO drive_library_note_bases VALUES(?,?,?,?)",
+                                 (*key, base["operation_id"]))
                 latest = chain[-1]
                 try:
                     _receive_one(history, settings, conn, latest, base if edits else None,

@@ -190,6 +190,11 @@ acknowledges the uploaded snapshot without replacing subsequent typing.
 Previously issued new-card permissions retain their original scope. Renew the
 list's permission on each device to exchange edits.
 
+For notes and saved explanations, an ordinary list sender stores the scoped operation
+ID and predecessor locally before upload. After a lost reply the next exchange
+verifies the uploaded content hash and chain, then records the common version in
+the same transaction as reconciliation. Receipts contain no note or guide text.
+
 When two devices edit the same mapped card from a known common revision, each
 retains its version. Other cards continue to upload and download during background
 polling. A missing mapping, ambiguous match or invalid history still requires

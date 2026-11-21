@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 
+from paper_daily.drive_content_receipts import matches_upload
 from paper_daily.drive_list_history import DriveListReading
 from paper_daily.drive_list_records import ListReviewRequired
 from paper_daily.drive_sync_files import encode
@@ -147,7 +148,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                         raise ListReviewRequired("A reading upload predecessor is missing")
                     # A different operation advanced past the same expected version.
                 elif (observed["entity_id"] != member or observed["device_id"] != store.context
-                      or observed["depends_on"] != parent):
+                      or observed["depends_on"] != parent or not matches_upload(observed, sent)):
                     raise ListReviewRequired("Reading upload receipt does not match its operation")
                 elif parent == bases.get(member):
                     bases[member] = sent

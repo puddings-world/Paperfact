@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import replace
 
+from paper_daily.drive_content_receipts import confirmed_sends, remember_batch
 from paper_daily.drive_list_history import DriveListHistory, DriveListPapers
 from paper_daily.drive_list_records import ListReviewRequired
 from paper_daily.drive_sync_files import MAX_INLINE, encode
@@ -141,6 +142,7 @@ def _reconcile(history, records, revision, ticket, sent=()):
             )}
             bases = dict(conn.execute("SELECT paper,op FROM drive_dive_bases WHERE context=? "
                                       "AND list_id=?", (store.context, list_id)))
+            confirmed = confirmed_sends(conn, history, records)
             for paper in history.members:
                 ticket.check()
                 local = local_ids.get(paper)
@@ -150,6 +152,12 @@ def _reconcile(history, records, revision, ticket, sent=()):
                 base = versions.get(bases.get(paper))
                 if paper in bases and (not base or base["payload"]["scope"]["id"] != paper):
                     raise ListReviewRequired("A previously accepted explanation is missing")
+                acknowledged = (confirmed.get((current["entity_id"], bases.get(paper)))
+                                if current else None)
+                if acknowledged:
+                    base = acknowledged
+                    conn.execute("INSERT OR REPLACE INTO drive_dive_bases VALUES(?,?,?,?)",
+                                 (store.context, list_id, paper, base["operation_id"]))
                 if current:
                     remote = current["payload"]["data"]
                     same_head = base and base["operation_id"] == current["operation_id"]
@@ -265,6 +273,7 @@ def exchange_dives(directory, store, list_id, revision, ticket):
         raise ListReviewRequired("The selected explanations exceed the readable history budget")
     for batch in batches:
         ticket.check()
+        remember_batch(history, batch, revision, ticket)
         head = history.publish_batch(head, batch, revision, ticket)
         records.extend(batch)
         _reconcile(history, records, revision, ticket, {op["operation_id"] for op in batch})
