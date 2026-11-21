@@ -37,7 +37,11 @@ membership retirement and restoration. Personal Drive needs the following adapte
 
 The d579b1b directory decoder rejected a synthetic v9 directory and an unexpected
 membership-history field under v8. This verifies the format boundary only.
-Publication, receipt application and installed-device removal remain open.
+An opt-in v9 transport fixture now publishes a native membership delete tied to
+the verified creation, receives it on a second device, and retries the original
+upload without a second Drive record. Normal desktop clients still reject v9.
+Desktop adoption, transactional receipt application, and installed-device
+removal remain open.
 
 ## Release goal
 

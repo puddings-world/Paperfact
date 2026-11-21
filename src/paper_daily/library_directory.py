@@ -51,6 +51,7 @@ class ListEntry:
     dives_head: ScopeHead | None = None
     reading_head: ScopeHead | None = None
     extended_papers: bool = False
+    membership_changes_head: ScopeHead | None = None
 
 
 @dataclass(frozen=True)
@@ -72,8 +73,11 @@ class Directory:
             _identifier(item.id)
             if any(h is not None and not isinstance(h, ScopeHead)
                    for h in (item.head, item.papers_head, item.notes_head,
-                             item.originals_head, item.dives_head, item.reading_head)):
+                             item.originals_head, item.dives_head, item.reading_head,
+                             item.membership_changes_head)):
                 raise ValueError("Invalid published list history")
+            if item.membership_changes_head and not item.papers_head:
+                raise ValueError("Membership changes require a bibliography")
             if type(item.extended_papers) is not bool or (
                 item.extended_papers and not item.papers_head
             ):
@@ -96,7 +100,9 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format="paperfact.library-directory.v8"
+                format="paperfact.library-directory.v9"
+                if any(e.membership_changes_head for e in self.lists)
+                else "paperfact.library-directory.v8"
                 if any(e.extended_papers for e in self.lists)
                 else "paperfact.library-directory.v7" if any(e.reading_head for e in self.lists)
                 else "paperfact.library-directory.v6" if any(e.dives_head for e in self.lists)
@@ -118,6 +124,8 @@ class Directory:
                     | ({"dives_head": item.dives_head.record()} if item.dives_head else {})
                     | ({"extended_papers": True} if item.extended_papers else {})
                     | ({"reading_head": item.reading_head.record()} if item.reading_head else {})
+                    | ({"membership_changes_head": item.membership_changes_head.record()}
+                       if item.membership_changes_head else {})
                     for item in self.lists
                 ],
             ),
@@ -129,7 +137,7 @@ class Directory:
         return hashlib.sha256(self.to_bytes()).hexdigest()
 
     @classmethod
-    def from_bytes(cls, raw, *, library_id):
+    def from_bytes(cls, raw, *, library_id, membership_changes=False):
         value = decode(raw, MAX_BYTES)
         if (
             not isinstance(value, dict)
@@ -143,13 +151,13 @@ class Directory:
                                value["format"]) if isinstance(value["format"], str) else None
         if not version:
             raise ValueError("Invalid library directory format")
-        if int(version[1]) > 8:
+        if int(version[1]) > (9 if membership_changes else 8):
             raise SyncFormatUnsupported()
         entries = []
         for item in value["lists"]:
             required = {"id", "name", "published"}
             heads = ("head", "papers_head", "notes_head", "originals_head", "dives_head",
-                     "reading_head")
+                     "reading_head", "membership_changes_head")
             allowed = required.union(heads, {"extended_papers"})
             if not isinstance(item, dict) or not required <= item.keys() <= allowed:
                 raise ValueError("Directory entries contain unsupported fields")

@@ -179,20 +179,20 @@ def publish_initial(
                         for op in received[1::2]}
         missing = remote_dates.keys() - {identity for identity, _, _ in bindings}
         if missing:
-            from paper_daily.drive_membership_intent import observed_removals
+            from paper_daily.drive_membership_intent import (
+                MembershipRemovalReview,
+                observed_removals,
+            )
 
             # Only a unique creation already present at the observed boundary can be removed.
             if len(remote_dates) * 2 != len(received):
                 raise ListReviewRequired("Ambiguous bibliography membership; review")
-            candidates = {op["payload"]["paper_id"]: (index, op["payload"]["added_at"])
+            candidates = {op["payload"]["paper_id"]: (index, op)
                           for index, op in enumerate(received) if op["entity_type"] == "membership"
                           and op["payload"]["paper_id"] in missing}
             explicit = observed_removals(store, list_id, boundaries, candidates)
             if explicit:
-                raise ListReviewRequired(
-                    f"List has {len(missing)} removed papers; {explicit} explicitly removed "
-                    "on this device. Drive retains its copy pending review"
-                )
+                raise MembershipRemovalReview(len(missing), explicit)
             raise ListReviewRequired("Selected bibliography changed or has removed papers; review")
         list_parent = next(p for p in received[1]["parents"] if p["kind"] == "list")
         pending = []

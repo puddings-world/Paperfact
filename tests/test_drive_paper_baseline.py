@@ -299,6 +299,44 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id='paper'")
     review = win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
     assert "2 removed papers; 1 explicitly removed" in review
+    # Fork the synthetic transport so the rest of the journey stays on the v8 client.
+    import copy
+
+    from paper_daily.drive_membership_history import DriveMembershipChanges
+    from paper_daily.drive_membership_intent import MembershipRemovalReview
+    from paper_daily.sync_journal import SyncFormatUnsupported
+
+    fork = copy.deepcopy(cloud)
+    streams = []
+    legacy = None
+    for device, label in ((win, "win"), (mac, "mac")):
+        _, store, saved, original, *_ = device._library_view
+        files = authority(fork, tmp_path / ("v9-" + label)).files
+        args = (files, original.folder, original.head, original.library_id)
+        v9 = DriveDirectory(*args, membership_changes=True)
+        legacy = DriveDirectory(*args)
+        streams.append(DriveMembershipChanges(v9, store, "return", revision=saved.revision))
+    writer, reader = streams
+    with pytest.raises(MembershipRemovalReview) as review_error:
+        publish_initial(writer.directory, writer.store, "return", writer.store.load().revision,
+                        Ticket(), append_new=True)
+    operations = review_error.value.operations
+    assert len(operations) == 1 and operations[0]["action"] == "delete"
+    revision = writer.store.load().revision
+    peer_revision = reader.store.load().revision
+    with pytest.raises(ValueError, match="creation"):
+        writer.append(None, [dict(operations[0], incarnation="wrong")], revision=revision)
+    commit = writer.append(None, operations, revision=revision)
+    count = len(fork.objects)
+    assert writer.append(None, operations, revision=revision) == commit
+    with pytest.raises(ValueError, match="already retired"):
+        writer.append(commit, operations, revision=revision)
+    assert len(fork.objects) == count
+    assert reader.changes(None, revision=peer_revision) == (commit, operations)
+    assert reader.changes(commit, revision=peer_revision) == (commit, [])
+    with pytest.raises(SyncFormatUnsupported):
+        legacy.read()
+
     from paper_daily.drive_sync_files import decode, encode
 
     unrelated_head = encode({**decode(anchor), "sha256": "0" * 64})

@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+from paper_daily.drive_list_records import ListReviewRequired
 from paper_daily.workspace_service import _tables
 
 
@@ -57,24 +58,34 @@ def remove_selected(conn, list_id, paper_ids):
     return removed
 
 
+class MembershipRemovalReview(ListReviewRequired):
+    def __init__(self, missing, operations):
+        self.operations = operations
+        super().__init__(
+            f"List has {missing} removed papers; {len(operations)} explicitly removed "
+            "on this device. Drive retains its copy pending review"
+        )
+
+
 def observed_removals(store, list_id, boundaries, candidates):
-    """Count explicit removals only when the recorded prefix contains the original member."""
+    """Prepare removals only when the recorded prefix contains the original member."""
+    from paper_daily.drive_membership_history import removal_operation
     from paper_daily.workspace_service import _read
 
     with _read(store.workspace.path) as conn:
         if "drive_membership_removals" not in _tables(conn):
-            return 0
+            return []
         requested = {tuple(row) for row in conn.execute(
             "SELECT local_id,added_at,observed_head FROM drive_membership_removals "
             "WHERE context=? AND list_id=? AND action_id GLOB 'v2-*'",
             (store.context, list_id),
         )}
     if not requested:
-        return 0
+        return []
     with _read(store.path) as settings:
         if "published_paper_ids" not in _tables(settings):
-            return 0
-        matched = set()
+            return []
+        matched = {}
         for local_id, added_at, observed_head in requested:
             end = boundaries.get(observed_head)
             if end is None:
@@ -83,6 +94,6 @@ def observed_removals(store, list_id, boundaries, candidates):
                 "SELECT remote_id FROM published_paper_ids WHERE local_id=?", (local_id,)
             ).fetchone()
             member = candidates.get(binding[0]) if binding else None
-            if member and member[0] < end and member[1] == added_at:
-                matched.add(binding[0])
-        return len(matched)
+            if member and member[0] < end and member[1]["payload"]["added_at"] == added_at:
+                matched[binding[0]] = removal_operation(member[1], store.context)
+        return [matched[key] for key in sorted(matched)]

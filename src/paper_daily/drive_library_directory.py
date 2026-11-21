@@ -19,7 +19,8 @@ class Observation:
 class DriveDirectory:
     """One dedicated directory head, shared by devices in the same library."""
 
-    def __init__(self, files, folder_id, head_id, library_id):
+    def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False):
+        self.membership_changes = membership_changes
         _identifier(library_id)
         self.key = PREFIX + library_id
         _identifier(self.key)
@@ -62,7 +63,8 @@ class DriveDirectory:
             if ref["size"] > MAX_BYTES:
                 raise ValueError("Drive directory exceeds its byte budget")
             raw = self.files.read_small(ref, self.folder, self.key)
-            directory = Directory.from_bytes(raw, library_id=self.library_id)
+            directory = Directory.from_bytes(raw, library_id=self.library_id,
+                                             membership_changes=self.membership_changes)
             if directory.generation != generation:
                 raise ValueError("Drive directory generation differs from its head")
         return Observation(head, directory)
@@ -85,11 +87,13 @@ class DriveDirectory:
         elif before.lists:
             raise ValueError("Unexpected initial directory entries")
         updates = Directory(self.library_id, before.generation, tuple(entries))
+        if not self.membership_changes and any(e.membership_changes_head for e in updates.lists):
+            raise ValueError("Enable membership change support before updating this directory")
         merged = {item.id: item for item in before.lists}
         for item in updates.lists:
             previous = merged.get(item.id)
             for field in ("head", "papers_head", "notes_head", "originals_head", "dives_head",
-                     "reading_head"):
+                     "reading_head", "membership_changes_head"):
                 prior = getattr(previous, field) if previous else None
                 current = getattr(item, field)
                 if prior and current != prior:
