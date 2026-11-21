@@ -8,6 +8,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from paper_daily.connection_vault import ConnectionVault
 from paper_daily.library_directory import MAX_BYTES, MAX_LISTS, Directory
@@ -168,6 +169,11 @@ class DeviceSelection:
                         ),
                     )
 
+                removed = previous.selected - chosen
+                if removed and self._has_note_grants(conn):
+                    conn.executemany("DELETE FROM note_grants WHERE list_id=?",
+                                     ((identity,) for identity in removed))
+
                 def commit():
                     self._check()
                     conn.commit()
@@ -180,6 +186,48 @@ class DeviceSelection:
                 conn.rollback()
                 raise
         return result
+
+    @staticmethod
+    def _has_note_grants(conn):
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_grants'"
+        ).fetchone() is not None
+
+    def note_grant(self, list_id, revision):
+        self._check()
+        if not self.path.exists():
+            return None
+        with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as conn:
+            conn.execute("BEGIN")
+            saved = self._load(conn)
+            if saved.revision != revision or list_id not in saved.selected:
+                raise SelectionChanged("Device selection changed; review it again")
+            if not self._has_note_grants(conn):
+                return None
+            row = conn.execute("SELECT grant_id FROM note_grants WHERE list_id=?",
+                               (list_id,)).fetchone()
+        return row[0] if row else None
+
+    def set_note_sync(self, list_id, enabled, *, revision, ticket):
+        """An explicit note choice is local to this account, device, database and list."""
+        self._check()
+        ticket.check()
+        if type(enabled) is not bool:
+            raise ValueError("Expected a yes/no choice for notes")
+        with closing(sqlite3.connect(self.path.as_uri() + "?mode=rw", uri=True)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            saved = self._load(conn)
+            if saved.revision != revision or list_id not in saved.selected:
+                raise SelectionChanged("Device selection changed; review it again")
+            conn.execute("CREATE TABLE IF NOT EXISTS note_grants("
+                         "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
+            if enabled:
+                conn.execute("INSERT OR IGNORE INTO note_grants VALUES(?,?)",
+                             (list_id, str(uuid4())))
+            else:
+                conn.execute("DELETE FROM note_grants WHERE list_id=?", (list_id,))
+            self._check()
+            ticket.publish(conn.commit)
 
     def current(self):
         try:

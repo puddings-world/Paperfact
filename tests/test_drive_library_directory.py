@@ -281,3 +281,62 @@ def test_paper_metadata_requires_membership_and_travels_independently(tmp_path):
     mac.save(left.read().directory, [], expected_revision=1)
     with pytest.raises(ValueError, match="selection"):
         receive.changes(None, revision=1)
+
+
+def test_note_history_uses_verified_members_and_preserves_other_streams(tmp_path):
+    from test_library_selection import database, selection
+    from test_sync_graph_research import OTHER_PAPER, PAPER, membership, metadata, note, operation
+
+    from paper_daily.drive_list_history import DriveListNotes, DriveListPapers
+    from paper_daily.workspace_service import Ticket
+
+    cloud = Cloud()
+    files = [authority(cloud, tmp_path / name).files for name in ("one", "two")]
+    folder, head = files[0].new_ids(2)
+    win, mac = [DriveDirectory(f, folder, head, "workspace") for f in files]
+    catalog = win.upsert(win.initialize("Research"), [ListEntry("a", "A", False)]).directory
+    stores = [
+        selection(database(tmp_path / name), tmp_path / (name + "-settings"),
+                  library_id="workspace")
+        for name in ("desktop", "laptop")
+    ]
+    for store in stores:
+        store.save(catalog, ["a"], expected_revision=0)
+    papers = DriveListPapers(win, stores[0], "a")
+    paper_head = papers.append(None, [operation("paper", PAPER, metadata()), membership("a")],
+                               revision=1)
+    assert b"library-directory.v3" in win.read().directory.to_bytes()
+    before = len(cloud.objects)
+    with pytest.raises(PermissionError, match="Enable note sync"):
+        DriveListNotes(win, stores[0], "a", revision=1)
+    assert len(cloud.objects) == before
+    for store in stores:
+        store.set_note_sync("a", True, revision=1, ticket=Ticket())
+    sender, receiver = [
+        DriveListNotes(d, s, "a", revision=1) for d, s in zip((win, mac), stores, strict=True)
+    ]
+    before = len(cloud.objects)
+    for bad in (note(OTHER_PAPER), note(OTHER_PAPER, action="delete"),
+                dict(note(), parents=[dict(note()["parents"][0], incarnation="unrelated")])):
+        with pytest.raises(ValueError, match="outside"):
+            sender.append(None, [bad], revision=1)
+    assert len(cloud.objects) == before
+    accepted = sender.append(None, [note()], revision=1)
+    assert receiver.changes(None, revision=1) == (accepted, [note()])
+    catalog = mac.read().directory
+    assert b"library-directory.v4" in catalog.to_bytes()
+    assert b"Observation" not in catalog.to_bytes()
+    before = len(cloud.objects)
+    assert sender.append(None, [note()], revision=1) == accepted
+    assert len(cloud.objects) == before
+    renamed = mac.upsert(mac.read(), [ListEntry("a", "New name", False)]).directory
+    assert renamed.lists[0].notes_head == accepted and renamed.lists[0].papers_head == paper_head
+    stores[1].set_note_sync("a", False, revision=1, ticket=Ticket())
+    stores[1].set_note_sync("a", True, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError, match="permission"):
+        receiver.changes(accepted, revision=1)
+    stores[1].save(renamed, [], expected_revision=1)
+    with pytest.raises(ValueError, match="selection"):
+        receiver.changes(accepted, revision=1)
+    current = stores[1].save(renamed, ["a"], expected_revision=2)
+    assert stores[1].note_grant("a", current.revision) is None

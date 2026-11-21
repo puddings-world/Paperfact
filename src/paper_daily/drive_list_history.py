@@ -190,3 +190,38 @@ class DriveListPapers(DriveListHistory):
 
     def _advance(self, entry, head, records):
         return replace(entry, papers_head=head)
+
+
+class DriveListNotes(DriveListHistory):
+    """A note stream tied to paper incarnations in a verified bibliography snapshot."""
+
+    format = "paperfact.list-note-history.v1"
+    head_field = "notes_head"
+
+    def __init__(self, directory, store, list_id, *, revision):
+        super().__init__(directory, store, list_id)
+        self.revision = revision
+        self.grant = store.note_grant(list_id, revision)
+        if self.grant is None:
+            raise PermissionError("Enable note sync on this device before transferring notes")
+        papers = DriveListPapers(directory, store, list_id)
+        _, operations = papers.changes(None, revision=revision)
+        self._members = {(p["entity_id"], p["incarnation"]) for p in operations[::2]}
+
+    def _check(self, revision):
+        if revision != self.revision:
+            raise ValueError("Review the changed list selection before exchanging notes")
+        if self.store.note_grant(self.list_id, revision) != self.grant:
+            raise PermissionError("This device changed its note sync permission")
+
+    def _validate_scope(self, records):
+        for op in records:
+            if op["version"] != 2 or op["entity_type"] != "note" or len(op["parents"]) != 1:
+                raise ValueError("Expected a native paper note")
+            parent = op["parents"][0]
+            identity = (parent["id"], parent["incarnation"])
+            if parent["kind"] != "paper" or identity not in self._members:
+                raise ValueError("Note parent is outside the selected bibliography")
+
+    def _advance(self, entry, head, records):
+        return replace(entry, notes_head=head)

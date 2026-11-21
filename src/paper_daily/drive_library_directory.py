@@ -80,16 +80,14 @@ class DriveDirectory:
         merged = {item.id: item for item in before.lists}
         for item in updates.lists:
             previous = merged.get(item.id)
-            if previous and previous.head and previous.head != item.head:
-                if item.head is None:
-                    item = replace(item, head=previous.head)
-                elif item.head.generation != previous.head.generation + 1:
-                    raise DriveChanged("List history must advance from its observed head")
-            if previous and previous.papers_head and previous.papers_head != item.papers_head:
-                if item.papers_head is None:
-                    item = replace(item, papers_head=previous.papers_head)
-                elif item.papers_head.generation != previous.papers_head.generation + 1:
-                    raise DriveChanged("Paper history must advance from its observed head")
+            for field in ("head", "papers_head", "notes_head"):
+                prior = getattr(previous, field) if previous else None
+                current = getattr(item, field)
+                if prior and current != prior:
+                    if current is None:
+                        item = replace(item, **{field: prior})
+                    elif current.generation != prior.generation + 1:
+                        raise DriveChanged("List history must advance from its observed head")
             merged[item.id] = item
         rows = tuple(sorted(merged.values(), key=lambda item: item.id))
         if rows == before.lists:

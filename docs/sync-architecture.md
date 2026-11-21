@@ -165,6 +165,24 @@ and editing a paper's existing metadata still need reconciliation.
   and closing settings allows the worker to finish. Verify that revoking the
   grant or switching accounts stops transfers with the old identity.
 
+### Selected paper notes
+
+The transport supports a per-list native note history. A device must explicitly
+enable notes for a selected list. Existing bibliography choices carry no note
+grant. Deselecting the list removes its local grant in the same transaction.
+Turning notes off and back on invalidates previously opened note streams.
+
+Each native note references a portable paper and its incarnation in the list's
+verified bibliography. The first published note head upgrades the directory to
+v4. Note bodies stay in the scoped history records. Readers retain v1-v3
+compatibility; an older app can refuse a v4 directory. Directory updates for
+names or papers preserve the other streams.
+
+This transport is exercised with synthetic native operations. Desktop note
+capture, mapping received notes back to local rows, per-note conflict review
+and the user-facing opt-in remain open. Ordinary-list polling sends no notes
+until these paths are connected. Use list packages for notes in the meantime.
+
 Notes, verified attachments and migration of existing enrolled workspaces still
 need to reach this ordinary-list path.
 
