@@ -54,7 +54,8 @@ The v9 Drive stream still accepts deletions only. In a synthetic transport test,
 an explicit v10 writer advertised the first restoration with the directory's
 conditional head update. A second device verified the ordered chain, a retry
 created no second object, and a v9 client rejected the upgraded directory.
-Desktop publication still needs a locally verified review decision. Receiving
+The keep decision now rechecks the local entry, pin, paper binding and review token
+before publication. Desktop UI delivery remains pending. Receiving
 readers and their reading-progress histories must adopt the new lifetime before
 ordinary desktops can enable the format.
 

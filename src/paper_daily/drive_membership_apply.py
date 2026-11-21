@@ -44,6 +44,50 @@ def arm_present_review(store, list_id, detail, ticket):
         detail["observation"]["token"] = token
 
 
+def keep_reviewed_membership(history, revision, observation, ticket):
+    """Publish the reviewed local membership only while its row and binding still match."""
+    from paper_daily.drive_membership_history import restoration_operation
+    from paper_daily.workspace_service import _read
+
+    store, list_id = history.store, history.list_id
+    if observation.get("revision") != revision or not observation.get("token"):
+        raise ListReviewRequired("Review the current local entry before keeping it")
+    head, latest, retired = history.versions(revision)
+    member = observation["member"]
+    removal = retired.get(member)
+    if not removal or removal["operation_id"] != observation["removal"]:
+        raise ListReviewRequired("The remote removal changed; review again")
+    creation = latest[member]
+    local = observation["local"]
+
+    def check_review():
+        ticket.check()
+        with _read(store.path) as settings:
+            binding = settings.execute("SELECT local_id FROM published_paper_ids WHERE remote_id=?",
+                                       (creation["payload"]["paper_id"],)).fetchone()
+        with _read(store.workspace.path) as conn:
+            store._check(conn)
+            tables = _tables(conn)
+            if tables & _WORKSPACE_MARKERS or "drive_member_reviews" not in tables:
+                raise ListReviewRequired("The reviewed workspace changed")
+            token = conn.execute("SELECT token FROM drive_member_reviews WHERE list_id=? "
+                                 "AND local_id=?", (list_id, local)).fetchone()
+            row = conn.execute("SELECT position,citation,added_at,state,read_at,delivered_at "
+                               "FROM list_papers WHERE list_id=? AND paper_id=?",
+                               (list_id, local)).fetchone()
+            pin = conn.execute("SELECT pinned_at FROM pins WHERE scope=? AND paper_id=?",
+                               (list_id, local)).fetchone()
+        if (binding != (local,) or token != (observation["token"],) or not row
+                or row != observation["row"] or pin != observation["pin"]):
+            raise ListReviewRequired("Local entry changed; review again")
+
+    check_review()
+    row = observation["row"]
+    operation = restoration_operation(creation, removal, store.context,
+                                      citation=row[1], added_at=row[2])
+    return history.restore(head, operation, revision=revision, check_review=check_review)
+
+
 def _schema(conn):
     conn.execute(
         "CREATE TABLE IF NOT EXISTS drive_membership_watches("

@@ -405,7 +405,27 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(ListReviewRequired, match="edited during upload"):
         changes.restore(commit, restored, revision=peer_revision, check_review=changed_after_upload)
     assert transport.read() == before_restore
-    after = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+    from paper_daily.drive_membership_apply import (
+        MembershipConflict,
+        arm_present_review,
+        keep_reviewed_membership,
+    )
+
+    def current_review():
+        with pytest.raises(MembershipConflict) as conflict:
+            receive_membership_changes(reader, peer_revision, Ticket())
+        detail = conflict.value.detail
+        arm_present_review(reader.store, "return", detail, Ticket())
+        return detail["observation"]
+
+    observed = current_review()
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("UPDATE list_papers SET state=state WHERE list_id='return' AND paper_id=?",
+                     (peer_id,))
+    with pytest.raises(ListReviewRequired, match="Local entry changed"):
+        keep_reviewed_membership(changes, peer_revision, observed, Ticket())
+    assert transport.read() == before_restore
+    after = keep_reviewed_membership(changes, peer_revision, current_review(), Ticket())
     uploaded = dict(restore_cloud.objects)
     replayed = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
     assert replayed == after
