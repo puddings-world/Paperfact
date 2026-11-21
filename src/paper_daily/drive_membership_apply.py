@@ -39,7 +39,7 @@ def _schema(conn):
                      "WHERE list_id=OLD.list_id AND local_id=OLD.paper_id AND live=1; END")
 
 
-def receive_membership_changes(history, revision, ticket):
+def receive_membership_changes(history, revision, ticket, *, accept_absent=None):
     """Watch current memberships before retirement; commit each batch with its receipts."""
     store, list_id = history.store, history.list_id
     retiring = history.retirements(revision)
@@ -81,6 +81,8 @@ def receive_membership_changes(history, revision, ticket):
                 local = bindings.get(payload["paper_id"])
                 watch = watches.get(member)
                 removal = retiring.get(member)
+                if accept_absent and member != accept_absent["member"]:
+                    continue
                 if not local or (watch and watch[:2] != (creation["operation_id"], local)):
                     raise ListReviewRequired("Membership identity changed; review before applying")
                 if watch and watch[4] is not None:
@@ -92,6 +94,7 @@ def receive_membership_changes(history, revision, ticket):
                 row = conn.execute(
                     "SELECT position,citation,added_at,state,read_at,delivered_at FROM list_papers "
                     "WHERE list_id=? AND paper_id=?", (list_id, local)).fetchone()
+                intents = []
                 if not row and removal and "drive_membership_removals" in tables:
                     intents = conn.execute(
                         "SELECT action_id,observed_head FROM drive_membership_removals "
@@ -99,8 +102,14 @@ def receive_membership_changes(history, revision, ticket):
                         "AND action_id GLOB 'v2-*'",
                         (store.context, list_id, local, payload["added_at"]),
                     ).fetchall()
+                observed = {"member": member, "removal": removal["operation_id"],
+                            "local": local, "intents": sorted(i[0] for i in intents),
+                            "revision": revision} if removal and not row else None
+                if accept_absent and accept_absent != observed:
+                    raise ListReviewRequired("List entry changed; review again")
+                if observed:
                     end = history.boundaries.get(intents[0][1], 0) if len(intents) == 1 else 0
-                    if end > 2 * index + 1 and (
+                    if accept_absent or end > 2 * index + 1 and (
                         removal["device_id"] == store.context
                         or intents[0][0].endswith("-" + creation["operation_id"])
                     ):
@@ -112,17 +121,23 @@ def receive_membership_changes(history, revision, ticket):
                             (store.context, list_id, member, creation["operation_id"], local,
                              removal["operation_id"]),
                         )
-                        conn.execute("DELETE FROM drive_membership_removals WHERE context=? "
-                                     "AND list_id=? AND action_id=?",
-                                     (store.context, list_id, intents[0][0]))
+                        if intents:
+                            conn.executemany("DELETE FROM drive_membership_removals "
+                                             "WHERE context=? AND list_id=? AND action_id=?",
+                                             ((store.context, list_id, i[0]) for i in intents))
+                        applied += 1
                         continue
                 if not row and not removal:
                     # Publication checks the local intent against the observed bibliography.
                     continue
                 if not row or row[1:3] != (payload["citation"], payload["added_at"]):
                     if removal:
-                        raise MembershipConflict(conn, local, "changed" if row else "absent",
-                                                 "Local membership differs; both versions retained")
+                        conflict = MembershipConflict(
+                            conn, local, "changed" if row else "absent",
+                            "Local membership differs; both versions retained")
+                        if observed:
+                            conflict.detail["observation"] = observed
+                        raise conflict
                     raise ListReviewRequired("Local membership differs; both versions retained")
                 if not removal:
                     conn.execute("INSERT INTO drive_membership_watches"
@@ -153,6 +168,8 @@ def receive_membership_changes(history, revision, ticket):
                              "WHERE context=? AND list_id=? AND member=?",
                              (removal["operation_id"], store.context, list_id, member))
                 applied += 1
+            if accept_absent and not applied:
+                raise ListReviewRequired("List entry changed; review again")
             store._check(conn)
             ticket.checkpoint(conn.commit)
     return applied

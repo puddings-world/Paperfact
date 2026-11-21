@@ -676,6 +676,23 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                 assert view.membership_detail.text() == ""
             if index == 3:
                 assert "both versions retained" in report["list"]
+                detail = refreshed["membership_conflicts"]["list"]
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})",
+                                 row)
+                with pytest.raises(ListReviewRequired, match="review again"):
+                    peer.accept_absent_membership("list", detail, Ticket(), lambda _: None)
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    local, = conn.execute("SELECT paper_id FROM list_papers").fetchone()
+                    assert remove_selected(conn, "list", [local]) == 1
+                updated = peer.sync_saved_library(Ticket(), lambda _: None)
+                view.service = peer
+                view._show_directory(updated)
+                assert view.accept_absent.isVisible()
+                view.accept_absent.click()
+                wait(app, lambda: not view.busy)
+                assert not view.membership_detail.isVisible(), view.status.text()
+                assert not peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             elif index == 1:
                 assert "replacement membership" in report["list"]
             else:

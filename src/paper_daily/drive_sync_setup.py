@@ -349,6 +349,25 @@ class DriveSetup:
         )
         return self._exchange_saved(result, ticket, progress, selection=accepted)
 
+    def accept_absent_membership(self, list_id, detail, ticket, progress):
+        from paper_daily.drive_membership_apply import receive_membership_changes
+        from paper_daily.drive_membership_history import DriveMembershipChanges
+
+        self.check(ticket)
+        if not self._library_view:
+            raise ValueError("Open the list settings and review again")
+        files, store, saved, remote, *_ = self._library_view
+        if (not remote or not remote.membership_changes or files is not self.files
+                or store.owner_id != self.account["id"] or list_id not in saved.selected
+                or detail.get("kind") != "absent" or not detail.get("observation")
+                or self._membership_conflicts.get((files, store.context, list_id)) != detail):
+            raise ValueError("The reviewed membership changed; sync again")
+        files.cancelled = lambda: ticket.cancelled
+        history = DriveMembershipChanges(remote, store, list_id, revision=saved.revision)
+        receive_membership_changes(history, saved.revision, ticket,
+                                   accept_absent=detail["observation"])
+        return self.sync_saved_library(ticket, progress)
+
     def adopt_membership_sync(self, list_id, proposal, ticket, progress):
         """Upgrade this directory only for the reviewed, still-pending local removals."""
         from paper_daily.drive_membership_history import DriveMembershipChanges, removal_operation
