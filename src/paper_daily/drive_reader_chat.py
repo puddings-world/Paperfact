@@ -14,6 +14,9 @@ from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
 from paper_daily.sync_content import content_id
 from paper_daily.workspace_service import _tables
 
+BASE_TABLE = ("CREATE TABLE IF NOT EXISTS drive_chat_bases(context,list_id,message,"
+              "op,PRIMARY KEY(context,list_id,message))")
+
 FIELDS = ("role", "body", "created_at", "page", "anchor", "exchange_id", "reply_to")
 
 
@@ -104,6 +107,76 @@ def has_local_messages(store, list_id):
         ).fetchone() is not None
 
 
+def _concurrent_edit(value, remote, common):
+    return (value is not None and remote["payload"] != value
+            and (not common or value != common["payload"] and remote != common))
+
+
+def review_chat(directory, store, list_id, revision, ticket, decision=None):
+    """Re-read both versions and the exact device grant before applying a choice."""
+    if decision is not None and decision[1] not in {"local", "remote"}:
+        raise ValueError("Choose a displayed conversation version")
+    history = DriveListChat(directory, store, list_id, revision=revision)
+    _, records = history.changes(None, revision=revision)
+    latest, versions = _versions(records)
+    cards = []
+    with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+        settings.execute("BEGIN IMMEDIATE" if decision else "BEGIN")
+        history._check(revision)
+        with closing(sqlite3.connect(store.workspace.path.as_uri() + "?mode=rw", uri=True,
+                                     timeout=0.5)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE" if decision else "BEGIN")
+            if _tables(conn) & _WORKSPACE_MARKERS:
+                raise ListReviewRequired("Workspace changed before conversation review")
+            mapping = published_bindings(settings, history.active_papers)
+            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()})
+            bases = (dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE "
+                                       "context=? AND list_id=?", (store.context, list_id)))
+                     if "drive_chat_bases" in _tables(conn) else {})
+            for key, remote in latest.items():
+                ticket.check()
+                if key not in local or decision and key != decision[0]["identity"]:
+                    continue
+                idx, value = local[key]
+                common = versions.get(bases.get(key))
+                if bases.get(key) and (not common or common["payload"]["key"] != key):
+                    raise ListReviewRequired("Accepted conversation version is missing")
+                if not _concurrent_edit(value, remote, common):
+                    continue
+                other = remote["payload"]
+                if value != dict(other, data=dict(other["data"], body=value["data"]["body"])):
+                    raise ListReviewRequired("Conversation identity or source changed")
+                paper = mapping[value["scope"]["id"]]
+                title, = conn.execute("SELECT title FROM papers WHERE id=?", (paper,)).fetchone()
+                prompt = conn.execute(
+                    "SELECT substr(c.body,1,100) FROM research_chat_links l JOIN chat c "
+                    "ON c.id=l.local_id WHERE l.message_id=? AND c.paper_id=? AND c.role='user'",
+                    (value["data"]["reply_to"] or key, paper)
+                ).fetchone()
+                excerpt = " ".join((prompt[0] if prompt else value["data"]["body"][:100]).split())
+                cards.append(dict(feature="chat", title=title, question=excerpt,
+                                  identity=key, key=idx,
+                                  context=store.context, grant=history.grant, list_id=list_id,
+                                  revision=revision, base_id=bases.get(key),
+                                  remote_id=remote["operation_id"], paper=paper,
+                                  base=common["payload"]["data"] if common else None,
+                                  local=value["data"], remote=other["data"]))
+            store._check()
+            ticket.check()
+            if decision is None:
+                return cards
+            if cards != [decision[0]]:
+                raise ValueError("Conversation changed after review; compare both versions again")
+            card = cards[0]
+            conn.execute(BASE_TABLE)
+            if decision[1] == "remote":
+                conn.execute("UPDATE chat SET body=? WHERE id=? AND paper_id=?",
+                             (card["remote"]["body"], card["key"], card["paper"]))
+            conn.execute("INSERT OR REPLACE INTO drive_chat_bases VALUES(?,?,?,?)",
+                         (store.context, list_id, card["identity"], card["remote_id"]))
+            ticket.checkpoint(conn.commit)
+
+
 def exchange_chat(directory, store, list_id, revision, ticket):
     history = DriveListChat(directory, store, list_id, revision=revision)
     head, records = history.changes(None, revision=revision)
@@ -121,8 +194,7 @@ def exchange_chat(directory, store, list_id, revision, ticket):
             local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()})
             if not local and not latest:
                 return 0
-            conn.execute("CREATE TABLE IF NOT EXISTS drive_chat_bases(context,list_id,message,"
-                         "op,PRIMARY KEY(context,list_id,message))")
+            conn.execute(BASE_TABLE)
             scope = (store.context, list_id)
             bases = dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE context=? "
                                       "AND list_id=?", scope))
@@ -141,11 +213,10 @@ def exchange_chat(directory, store, list_id, revision, ticket):
                                                  (store.context, key)).fetchone():
                         conflicts += 1
                         continue
-                    if turn and (not common or value != common["payload"]):
-                        if not common or remote != common:
-                            conflicts += 1
-                            continue
-                    else:
+                    if _concurrent_edit(value, remote, common):
+                        conflicts += 1
+                        continue
+                    if not turn or value == common["payload"]:
                         paper = mapping.get(remote["payload"]["scope"]["id"])
                         if not paper or not conn.execute(
                             "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?",

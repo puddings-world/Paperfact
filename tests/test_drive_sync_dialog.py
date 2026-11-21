@@ -443,11 +443,31 @@ def test_list_comparison_displays_versions_and_requires_a_choice(dialog):
         view.deleteLater()
 
 
+def test_chat_comparison_shows_question_and_returns_only_the_chosen_version(dialog):
+    from PySide6.QtWidgets import QComboBox, QPlainTextEdit, QPushButton
+
+    from paper_daily.desktop.drive_note_compare import NoteComparison
+
+    _, parent, _ = dialog
+    card = dict(feature="chat", title="Study", question="Why adjust for age?",
+                base={"body": "Initial"}, local={"body": "Windows"}, remote={"body": "Mac"})
+    for label, choice in (("Decide later", None), ("Use Drive version", (card, "remote"))):
+        view = NoteComparison([card], parent)
+        assert view.windowTitle() == "Compare Q&A versions"
+        assert view.findChild(QComboBox).currentText() == "Study · Why adjust for age?"
+        assert [box.toPlainText() for box in view.findChildren(QPlainTextEdit)] == [
+            "Initial", "Windows", "Mac"]
+        next(button for button in view.findChildren(QPushButton) if button.text() == label).click()
+        assert view.decision == choice
+        view.deleteLater()
+
+
 def test_background_keeps_polling_after_list_details_conflict(dialog):
     app, view, setup = dialog
     setup.files = object()
     reports = iter([
         {"reviews": {"a": "Compare list details"}, "list_conflicts": ["a"]},
+        {"reviews": {"a": "Compare saved answers"}, "chat_conflicts": ["a"]},
         {"reviews": {}},
         {"reviews": {"a": "Compare list details", "b": "Unknown history"}, "list_conflicts": ["a"]},
     ])
@@ -456,7 +476,7 @@ def test_background_keeps_polling_after_list_details_conflict(dialog):
     runner = view.background
     assert runner.enable(setup)
     view.hide()
-    for expected in ("list_conflict", "waiting", "review"):
+    for expected in ("list_conflict", "chat_conflict", "waiting", "review"):
         runner.tick()
         wait(app, lambda: runner.worker is None)
         assert runner.state == expected

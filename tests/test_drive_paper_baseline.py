@@ -75,11 +75,31 @@ def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypat
     assert not poll(desktop)
     assert "review" in poll(mac)["list"]
     assert read(source)[key] == "Desktop revision" and read(mac_db)[key] == "Laptop revision"
+    def review(choice=None):
+        return mac.review_notes("list", Ticket(), lambda _: None, feature="chat", decision=choice)
+
+    card, = review()
+    assert [card[k]["body"] for k in ("base", "local", "remote")] == [
+        "Updated while away", "Laptop revision", "Desktop revision"]
+    edit(mac_db, key, "Latest laptop revision")
+    with pytest.raises(ValueError, match="changed after review"):
+        review((card, "remote"))
+    current, = review()
+    review((current, "local"))
+    assert not poll(mac) and not poll(desktop)
+    assert read(source)[key] == "Latest laptop revision"
+    edit(source, key, "Reviewed desktop answer")
+    edit(mac_db, key, "Another laptop edit")
+    assert not poll(desktop) and "review" in poll(mac)["list"]
+    current, = review()
+    review((current, "remote"))
+    assert not poll(mac) and not poll(desktop)
+    assert read(source)[key] == read(mac_db)[key] == "Reviewed desktop answer"
     with closing(sqlite3.connect(mac_db)) as conn, conn:
         conn.execute("DELETE FROM chat WHERE id=(SELECT local_id FROM research_chat_links "
                      "WHERE message_id=?)", (key,))
     assert "review" in poll(mac)["list"]
-    assert key not in read(mac_db) and read(source)[key] == "Desktop revision"
+    assert key not in read(mac_db) and read(source)[key] == "Reviewed desktop answer"
 
 
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):

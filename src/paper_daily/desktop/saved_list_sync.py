@@ -53,6 +53,7 @@ class SavedListSync(QObject):
         labels["format"] = "同步已暫停，請更新 Paperfact 以讀取此資料庫格式"
         labels["reading_conflict"] = "閱讀進度不同，已保留兩端狀態"
         labels["note_conflict"] = "部分筆記需核對，其他內容持續同步"
+        labels["chat_conflict"] = "部分問答需核對，其他內容持續同步"
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
         labels["pdf_conflict"] = "PDF 版本不同，已保留原檔；其他內容持續同步"
         labels["mixed_conflict"] = "多種內容版本不同，請查看清單；其他內容持續同步"
@@ -157,6 +158,7 @@ class SavedListSync(QObject):
             elif worker.error or (worker.result.get("reviews", {}).keys()
                                   - set(worker.result.get("list_conflicts", ()))
                                   - set(worker.result.get("note_conflicts", ()))
+                                  - set(worker.result.get("chat_conflicts", ()))
                                   - set(worker.result.get("dive_conflicts", ()))
                                   - set(worker.result.get("reading_conflicts", ()))
                                   - set(worker.result.get("pdf_conflicts", ()))):
@@ -167,7 +169,7 @@ class SavedListSync(QObject):
             else:
                 self.failures = 0
                 self.update_position_scopes(self.service, worker.result)
-                conflicts = [kind for kind in ("list", "note", "dive", "pdf", "reading")
+                conflicts = [kind for kind in ("list", "note", "chat", "dive", "pdf", "reading")
                              if worker.result.get(kind + "_conflicts")]
                 self.state = "waiting"
                 if conflicts:

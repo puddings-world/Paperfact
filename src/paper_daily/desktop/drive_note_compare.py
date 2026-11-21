@@ -21,6 +21,9 @@ class NoteComparison(QDialog):
         guides = cards[0].get("feature") == "dive"
         self.setWindowTitle(tr("Compare guide versions", "比較講解版本") if guides
                             else tr("Compare note versions", "比較筆記版本"))
+        chat = cards[0].get("feature") == "chat"
+        if chat:
+            self.setWindowTitle(tr("Compare Q&A versions", "比較問答版本"))
         reading = cards[0].get("feature") == "reading"
         if reading:
             self.setWindowTitle(tr("Compare reading status", "比較閱讀狀態"))
@@ -31,6 +34,9 @@ class NoteComparison(QDialog):
         layout = QVBoxLayout(self)
         picker = QComboBox()
         for card in cards:
+            if chat:
+                picker.addItem(f"{card['title']} · {card['question']}")
+                continue
             if details:
                 picker.addItem(tr("Conflicting list details", "有衝突的清單欄位"))
                 continue
@@ -73,6 +79,9 @@ class NoteComparison(QDialog):
                         if payload[name]:
                             lines.append(f"{label}  {payload[name]}")
                     view.setPlainText("\n".join(lines))
+                    continue
+                if chat:
+                    view.setPlainText(payload["body"])
                     continue
                 names = ("spec", "written_at") if guides else (
                     "kind", "page", "created_at", "anchor")

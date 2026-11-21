@@ -248,7 +248,9 @@ class DriveSetup:
         }
 
     def review_notes(self, list_id, ticket, progress, *, decision=None, feature="note"):
-        if feature == "dive":
+        if feature == "chat":
+            from paper_daily.drive_reader_chat import review_chat as review
+        elif feature == "dive":
             from paper_daily.drive_reader_dives import review_dives as review
         elif feature == "list":
             from paper_daily.drive_list_records import review_list as review
@@ -475,6 +477,7 @@ class DriveSetup:
         list_conflicts = []
         reading_conflicts = set()
         note_conflicts = []
+        chat_conflicts = set()
         dive_conflicts = set()
         pdf_conflicts = set()
         pdf_titles = {}
@@ -535,6 +538,7 @@ class DriveSetup:
                             )
                         count = exchange_chat(directory, store, list_id, selection.revision, ticket)
                         if count:
+                            chat_conflicts.add(list_id)
                             reason = f"Conversation edits or removals need review ({count})"
                             reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id),
                                                                        reason)))
@@ -585,6 +589,7 @@ class DriveSetup:
             except ListReviewRequired as exc:
                 reading_conflicts.discard(list_id)
                 pdf_conflicts.discard(list_id)
+                chat_conflicts.discard(list_id)
                 dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
         self.check(ticket)
@@ -598,7 +603,7 @@ class DriveSetup:
                 del position_suggestions[key]
         return {**refreshed, "position_suggestions": position_suggestions,
                 "reviews": reviews, "membership_upgrades": upgrades,
-                "note_conflicts": note_conflicts,
+                "note_conflicts": note_conflicts, "chat_conflicts": sorted(chat_conflicts),
                 "list_conflicts": list_conflicts, "reading_conflicts": sorted(reading_conflicts),
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 
