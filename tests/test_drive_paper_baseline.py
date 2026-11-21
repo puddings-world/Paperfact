@@ -983,7 +983,10 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
         first.remember_library(cancelled)
     assert not native.rows
     first.remember_library(Ticket())
-    assert len(native.rows) == 1
+    assert first.library_startup_record() is None
+    first.remember_library(Ticket(), startup=True)
+    stamp = first.library_startup_record()
+    assert stamp and len(native.rows) == 1
     before, objects = source.read_bytes(), dict(cloud.objects)
 
     def unexpected(**kwargs):
@@ -991,7 +994,7 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
 
     second = drive_sync_setup.DriveSetup(source, **options, authorize=unexpected)
     assert second.files is None
-    overview = second.reconnect_library(Ticket(), progress)
+    overview = second.reconnect_library(Ticket(), progress, startup_record=stamp)
     assert [row["id"] for row in overview["library"]["items"] if row["selected"]] == ["list"]
     assert before == source.read_bytes() and objects == cloud.objects
 
@@ -1001,6 +1004,13 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
         with pytest.raises(PermissionError, match="account changed"):
             third.reconnect_library(Ticket(), progress)
     assert third.files is None and third.account is None
+    third.disable_library_startup(Ticket())
+    assert third.library_startup_record() is None and native.rows
+    with pytest.raises(PermissionError, match="disabled"):
+        third.reconnect_library(Ticket(), progress, startup_record=stamp)
+    first.remember_library(Ticket(), startup=True)
+    first.sign_in(Ticket(), progress)
+    assert first.library_startup_record() is None
     third.forget_library(Ticket())
     with pytest.raises(PermissionError, match="Sign in"):
         third.reconnect_library(Ticket(), progress)

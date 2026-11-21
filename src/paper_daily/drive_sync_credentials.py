@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 
@@ -82,6 +83,8 @@ class DriveVault:
                 raise ValueError("Use workspace authorization for an enrolled workspace")
             self.workspace_id = "directory.personal"
             self.service = SERVICE + ".library"
+            path = self.binding.startup_path
+            self.binding.startup_path = path.with_suffix(".library.json")
             self.folder_role = "directory"
             return
         if not bindings:
@@ -150,11 +153,30 @@ class DriveVault:
                 raise
         return grant
 
+    def library_startup(self, grant, ticket):
+        from paper_daily.presentations import _atomic_json
+
+        with _LOCK:
+            if self.folder_role != "directory" or self.load(ticket) != grant or grant is None:
+                raise PermissionError("Review the saved library before enabling startup sync")
+            fingerprint = hashlib.sha256(grant.encoded().encode()).hexdigest()
+            ticket.check()
+            path = self.binding.startup_path
+            _atomic_json(path, {"format": 1, "connection": fingerprint})
+            try:
+                self.binding._check()
+                ticket.check()
+            except BaseException:
+                path.unlink(missing_ok=True)
+                raise
+
     def forget(self, ticket=None):
         ticket = ticket or Ticket()
         with _LOCK:
             self.binding._check()
             ticket.check()
+            if self.folder_role == "directory":
+                self.binding.startup_path.unlink(missing_ok=True)
             try:
                 backend = self.binding._backend()
                 if backend.get_password(self.service, self.binding.account) is not None:

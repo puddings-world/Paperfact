@@ -90,6 +90,12 @@ class DriveSyncDialog(QDialog):
             "remember", lambda ticket, progress: self.service.remember_library(ticket)))
         self.remove_login.triggered.connect(lambda: self._start(
             "forget", lambda ticket, progress: self.service.forget_library(ticket)))
+        self.startup_sync = menu.addAction(self.tr("Sync selected lists when Paperfact starts",
+                                                   "啟動 Paperfact 時同步已勾選清單"))
+        self.startup_sync.setCheckable(True)
+        read_startup = getattr(self.service, "library_startup_record", lambda: None)
+        self.startup_sync.setChecked(bool(read_startup()))
+        self.startup_sync.triggered.connect(self._toggle_library_startup)
         self.login.setMenu(menu)
         self.login.clicked.connect(self.sign_in)
         layout.addWidget(self.login)
@@ -227,7 +233,8 @@ class DriveSyncDialog(QDialog):
         if (authority is None and active is not None
                 and active.workspace.path == session.workspace.path
                 and active.workspace.identity == session.workspace.identity
-                and active.binding.current() and active.files is self.background.files):
+                and active.files is not None and active.binding.current()
+                and active.files is self.background.files):
             self.service = active
             self.account.setText(active.account["email"])
             self._resume_pending = True
@@ -294,7 +301,7 @@ class DriveSyncDialog(QDialog):
         if kind in {"login", "restore", "create", "join", "toggle"} and self.background.service:
             self.background.stop()
         if kind not in {"login", "restore", "remember", "forget", "refresh", "toggle", "selection",
-                        "sync_saved", "notes",
+                        "sync_saved", "notes", "startup_on", "startup_off",
                         "compare", "resolve", "pdfs", "dives", "reading"}:
             if self.writers_busy():
                 self.status.setText(
@@ -309,6 +316,7 @@ class DriveSyncDialog(QDialog):
                 if self.automatic.busy:
                     return False
         if kind == "login":
+            self.startup_sync.setChecked(False)
             self._pdf_review_titles = {}
         worker = SyncWorker(task, self)
         self._worker = worker
@@ -402,6 +410,10 @@ class DriveSyncDialog(QDialog):
             and not self._closing and not self.busy and self.background.worker is None
         )
         self.save_login.setEnabled(self._ordinary_library and self.sync_lists.isEnabled())
+        self.startup_sync.setEnabled(
+            self.login.isEnabled()
+            and (self.startup_sync.isChecked() or self.save_login.isEnabled())
+        )
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
@@ -542,6 +554,13 @@ class DriveSyncDialog(QDialog):
             return
         self._start("notes", lambda ticket, progress:
                     self.service.choose_note_sync(list_id, checked, ticket, progress))
+
+    def _toggle_library_startup(self, checked):
+        self.startup_sync.setChecked(not checked)
+        if checked:
+            self._start("startup_on", lambda t, _: self.service.remember_library(t, startup=True))
+        else:
+            self._start("startup_off", lambda t, _: self.service.disable_library_startup(t))
 
     def _background_clicked(self, checked):
         if checked:
@@ -709,10 +728,20 @@ class DriveSyncDialog(QDialog):
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
                 )
+            elif kind in {"startup_on", "startup_off"}:
+                enabled = kind == "startup_on"
+                self.startup_sync.setChecked(enabled)
+                if enabled:
+                    self.background.enable(self.service)
+                elif self.background.service is self.service:
+                    self.background.stop()
+                self.status.setText(self.tr("Startup sync enabled.", "已啟用開機同步。") if enabled
+                                    else self.tr("Startup sync disabled.", "已關閉開機同步。"))
             elif kind == "remember":
                 self.status.setText(self.tr("Saved list sign-in in the system credential store.",
                                             "已將清單登入儲存在系統憑證庫。"))
             elif kind == "forget":
+                self.startup_sync.setChecked(False)
                 self.status.setText(self.tr("Removed the saved list sign-in from this device.",
                                             "已移除這台裝置記住的清單登入。"))
             elif kind == "compare":
@@ -818,7 +847,8 @@ class DriveSyncDialog(QDialog):
                 self.scope_label.hide()
                 self.workspaces.clear()
                 self.account.setText(self.tr("Not connected to Google", "尚未連接 Google"))
-            if kind not in {"restore", "remember", "forget", "refresh", "compare", "resolve"}:
+            if kind not in {"restore", "remember", "forget", "refresh", "compare", "resolve",
+                            "startup_on", "startup_off"}:
                 self.service.rollback_consent()
             self.status.setText(
                 self.tr("Stopped or could not finish: ", "停止")

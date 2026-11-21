@@ -11,6 +11,7 @@ class SavedListSync(QObject):
     def __init__(self, owner):
         super().__init__(owner)
         self.service = self.files = self.worker = None
+        self.startup_stamp = None
         self.state = "off"
         self.failures = 0
         self.closing = False
@@ -40,6 +41,7 @@ class SavedListSync(QObject):
     def enable(self, service):
         if self.worker or self.closing or service.files is None or not service.binding.current():
             return False
+        self.startup_stamp = None
         self.service, self.files = service, service.files
         self.failures = 0
         self.state = "waiting"
@@ -47,8 +49,18 @@ class SavedListSync(QObject):
         self.changed.emit()
         return True
 
+    def resume(self, service, stamp):
+        if self.worker or self.service or self.closing or stamp is None:
+            return False
+        self.startup_stamp, self.service = stamp, service
+        self.state = "waiting"
+        self.timer.start(1000)
+        self.changed.emit()
+        return True
+
     def stop(self, state="off"):
         self.timer.stop()
+        self.startup_stamp = None
         self.service = self.files = None
         if self.worker:
             self.worker.ticket.cancel()
@@ -70,7 +82,16 @@ class SavedListSync(QObject):
         ):
             self.timer.start(5000)
             return
-        self.worker = SyncWorker(self.service.sync_saved_library, self)
+        if self.startup_stamp and self.service.library_startup_record() != self.startup_stamp:
+            self.stop()
+            return
+        service, stamp = self.service, self.startup_stamp
+        if stamp and self.files is None:
+            def task(ticket, progress):
+                return service.reconnect_library(ticket, progress, startup_record=stamp)
+        else:
+            task = service.sync_saved_library
+        self.worker = SyncWorker(task, self)
         self.worker.finished.connect(self._finished)
         self.state = "working"
         self.changed.emit()
@@ -79,7 +100,17 @@ class SavedListSync(QObject):
     def _finished(self):
         worker, self.worker = self.worker, None
         if self.service is not None and not worker.ticket.cancelled:
-            if self.files is not self.service.files or not self.service.binding.current():
+            if self.startup_stamp and self.service.library_startup_record() != self.startup_stamp:
+                self.stop()
+            elif self.startup_stamp and self.files is None and not worker.error:
+                self.files = self.service.files
+                if self.files and any(row["selected"] for row in worker.result["library"]["items"]):
+                    self.failures = 0
+                    self.state = "waiting"
+                    self.timer.start(1000)
+                else:
+                    self.stop()
+            elif self.files is not self.service.files or not self.service.binding.current():
                 self.stop("changed")
             elif worker.error == "offline":
                 self.failures += 1
@@ -115,6 +146,21 @@ class SavedListSync(QObject):
                 event.ignore()
                 return True
         return False
+
+
+def resume_on_open(owner, database, *, current_path, factory=None):
+    import sqlite3
+
+    from paper_daily.drive_sync_setup import DriveSetup
+
+    try:
+        service = (factory or DriveSetup)(database, current_path=current_path)
+        stamp = service.library_startup_record()
+        if stamp:
+            return for_window(owner).resume(service, stamp)
+    except (OSError, ValueError, sqlite3.Error):
+        pass
+    return False
 
 
 def for_window(owner):

@@ -308,6 +308,65 @@ def test_saved_login_menu_reconnects_without_enabling_transfer(dialog):
     view.save_login.trigger()
     wait(app, lambda: not view.busy)
     assert remembered == ["saved"] and "credential store" in view.status.text()
+    def remember(ticket, *, startup=False):
+        remembered.append("startup on" if startup else "saved")
+
+    setup.remember_library = remember
+    setup.disable_library_startup = lambda ticket: remembered.append("startup off")
+    view.startup_sync.trigger()
+    wait(app, lambda: not view.busy)
+    assert view.startup_sync.isChecked() and view.background.service is setup
+    view.startup_sync.trigger()
+    wait(app, lambda: not view.busy)
+    assert not view.startup_sync.isChecked() and view.background.service is None
     view.remove_login.trigger()
     wait(app, lambda: not view.busy)
-    assert remembered == ["saved", "removed"] and view._saved_ids == {"a"}
+    assert remembered == ["saved", "startup on", "startup off", "removed"]
+    assert view._saved_ids == {"a"}
+
+
+def test_startup_sync_retries_offline_and_honors_withdrawal(dialog):
+    from paper_daily.desktop.saved_list_sync import resume_on_open
+
+    app, view, setup = dialog
+    runner = view.background
+    owner = runner.parent()
+    stamp = [None]
+    attempts = []
+    exchanges = []
+    setup.library_startup_record = lambda: stamp[0]
+
+    def reconnect(ticket, progress, *, startup_record):
+        attempts.append(startup_record)
+        if len(attempts) == 1:
+            raise ConnectionError("offline")
+        setup.files = object()
+        return {"library": {"items": [{"selected": True}]}}
+
+    def exchange(ticket, progress):
+        exchanges.append(1)
+        return {"items": [{"selected": True}], "reviews": {}}
+
+    setup.reconnect_library = reconnect
+    setup.sync_saved_library = exchange
+
+    def open_again():
+        return resume_on_open(owner, "unused", current_path=lambda: "unused",
+                              factory=lambda *a, **kw: setup)
+
+    assert not open_again() and not runner.timer.isActive()
+    stamp[0] = "saved"
+    assert open_again() and not open_again()
+    view.hide()
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert runner.state == "offline" and not exchanges
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert attempts == ["saved", "saved"] and runner.state == "waiting" and not exchanges
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert exchanges == [1]
+    stamp[0] = None
+    runner.tick()
+    assert not runner.timer.isActive() and runner.service is None and exchanges == [1]

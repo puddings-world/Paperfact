@@ -59,6 +59,8 @@ class DriveSetup:
 
     def sign_in(self, ticket, progress):
         self.check(ticket)
+        if self.library_startup_record():
+            self.disable_library_startup(ticket)
         self.files = self.account = self._library_view = None
         self._pdf_review_titles.clear()
         self._list_target = None
@@ -77,7 +79,7 @@ class DriveSetup:
             files.close()
             raise
 
-    def remember_library(self, ticket):
+    def remember_library(self, ticket, *, startup=False):
         """Save the reviewed ordinary library grant after explicit device opt-in."""
         self.check(ticket)
         if self._library_view is None or self.files is None:
@@ -87,18 +89,41 @@ class DriveSetup:
                 or store.owner_id != self.account["id"] or store.load() != selected):
             raise ValueError("Save the current list selection before remembering this library")
         vault = DriveVault(self.workspace, library=True, **self.vault_options)
-        vault.remember(files, directory.folder, directory.head, directory.key, ticket,
-                       owner_id=store.owner_id)
+        grant = vault.remember(files, directory.folder, directory.head, directory.key, ticket,
+                               owner_id=store.owner_id)
+        if startup:
+            vault.library_startup(grant, ticket)
 
-    def reconnect_library(self, ticket, progress):
+    def library_startup_record(self):
+        import sqlite3
+
+        try:
+            vault = DriveVault(self.workspace, library=True, **self.vault_options)
+            return vault.binding.startup_record()
+        except (OSError, ValueError, sqlite3.Error):
+            return None
+
+    def disable_library_startup(self, ticket):
+        self.check(ticket)
+        vault = DriveVault(self.workspace, library=True, **self.vault_options)
+        vault.binding.startup_path.unlink(missing_ok=True)
+
+    def reconnect_library(self, ticket, progress, *, startup_record=None):
         """Restore a device grant without opening a browser or transferring research."""
         self.check(ticket)
         if self.files is not None:
             raise ValueError("Close the active Google session before restoring a saved library")
         vault = DriveVault(self.workspace, library=True, **self.vault_options)
+        if startup_record is not None and vault.binding.startup_record() != startup_record:
+            raise PermissionError("Automatic library reconnect is disabled")
         grant = vault.load(ticket)
         if grant is None:
             raise PermissionError("Sign in and remember this library on this device first")
+        if startup_record is not None and (
+            hashlib.sha256(grant.encoded().encode()).hexdigest() != startup_record
+            or vault.binding.startup_record() != startup_record
+        ):
+            raise PermissionError("The saved library startup authorization changed")
         files = DriveFiles(grant.session(), cancelled=lambda: ticket.cancelled)
         try:
             owner = files.account()
@@ -108,6 +133,8 @@ class DriveSetup:
             self._list_target = grant.folder_id, grant.head_id
             self.files, self.account = files, owner
             result = self.overview(ticket, progress)
+            if startup_record is not None and vault.binding.startup_record() != startup_record:
+                raise PermissionError("Automatic library reconnect is disabled")
             self.check(ticket)
             return result
         except Exception:
