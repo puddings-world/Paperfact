@@ -2,16 +2,20 @@
 
 ## Start here on Apple Silicon
 
-Use build **1c3baea** on both devices for a paired installation test. In sync settings, choose a marked list and keep or remove the affected paper. A restored entry can exchange reading progress in both directions. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **db3342a** on both devices for a paired installation test. In sync settings, choose a marked list and keep or remove the affected paper. A restored entry can exchange reading progress in both directions. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44908077217/artifacts/14709066683) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44908077217/artifacts/14708796987) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44909709531/artifacts/14709506878) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44909709531/artifacts/14709631052) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44908077217) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44909709531) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
+
+## Check a partial analysis result
+
+Open a paper with a saved guide and an incomplete analysis. After the analysis job ends, check which steps the announcement lists as missing. Choose **View result** and compare the displayed content with the saved guide. If the view is empty, record the build ID, announcement text and first failing action. Click the bottom-right version, open **Diagnostics and support**, and preview the report before exporting it. See [diagnostic reports](../../SUPPORT.md#create-a-diagnostic-report).
 
 ## Check a removal across two installed desktops
 
