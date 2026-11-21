@@ -1,5 +1,30 @@
 # Mac v0.5 acceptance
 
+## Sync saved lists on Apple Silicon
+
+[Download the 3ab306e Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44864991557/artifacts/14691935547).
+DMG SHA-256: `bbc7d0586e025ac1d3d6ff82a1405055e241ca1a1148be96d20c47cca42bf449`.
+The native runner opened the reader three times from the copied app after detaching
+the image. Gatekeeper quarantine, notarization and upgrading an installed app
+remain physical-device checks.
+Download the `build-macos` artifact, unzip it, open its DMG and copy Paperfact.app to Applications.
+Use a disposable workspace on each desktop and the same test Google account.
+
+1. On Windows, create a test list with one paper. Sign in to personal Drive sync
+   and save the list selection. On the Mac, select that list and save once.
+2. Create a second, private list on Windows. While offline, add a different paper
+   to the original list on each desktop. Reconnect both devices.
+3. Click **Sync saved lists now** on Windows, then Mac, then Windows. Both readers
+   should show the three original-list papers. Sync once more to check the count
+   stays at three. The new private list name should be absent from the Mac directory.
+4. On the Mac, change a checkbox. Immediate sync should remain disabled until
+   you restore the saved selection or save the new choice. Deselect and save;
+   the Mac should keep the papers it already received.
+
+Record both commit IDs and the first failed step. Notes, analysis and PDF transfer
+through this checklist, continuous background exchange, and physical-device
+acceptance are still open. To take these materials offline now, use a list package.
+
 ## Add papers on both desktops
 
 [Download the Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44863450300/artifacts/14690692504).

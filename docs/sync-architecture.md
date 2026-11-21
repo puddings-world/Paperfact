@@ -140,9 +140,34 @@ separate collapsible section. In ordinary databases, the checklist can exchange
 list names and descriptions using independent per-list history and device-local
 receipts. Divergent edits are retained on their originating devices for review.
 The cloud directory carries list history pointers, never list descriptions.
-Reading list B does not fetch list A's operations. This path accepts list details and initial paper/membership pairs.
-Subsequent membership edits, annotations, attachments, background
-transfer and adoption of existing enrolled workspaces remain open.
+Reading list B does not fetch list A's operations. Both desktops can append papers
+to a selected list offline. **Sync saved lists now** exchanges list details and
+new paper memberships using the saved selection revision. It never publishes a
+new local list name. Concurrent additions converge as a set; each device keeps
+its local reading order. Removing a paper, reordering an existing membership,
+and editing a paper's existing metadata still need reconciliation.
+
+### Background sync for ordinary lists (planned)
+
+- The main window should own a single worker across settings and reader views.
+  A pass must use the same saved-selection operation as **Sync saved lists now**.
+  Account switches, changing the workspace, and disabling sync must cancel or drain
+  the worker before another session takes ownership.
+- A session-only opt-in may reuse the current Google login while the app is open.
+  Reconnecting after restart requires separate device-local consent and a native
+  grant bound to the Google owner, library folder, directory head and local database.
+  The existing Drive vault requires an enrolled workspace. An ordinary reader needs
+  its own binding before it can reconnect unattended.
+- On idle, check at a bounded interval. Coalesce local changes, back off offline
+  and pause conflicting lists for review. Disabling sync should disarm its timer.
+- Verify on two installed devices that a private list created between passes stays
+  private, both devices receive independent offline additions after reconnecting,
+  and closing settings allows the worker to finish. Verify that revoking the
+  grant or switching accounts stops transfers with the old identity.
+
+Notes, verified attachments and migration of existing enrolled workspaces still
+need to reach this ordinary-list path.
+
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.
