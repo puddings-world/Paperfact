@@ -130,12 +130,7 @@ def _restore_removed(conn, store, list_id, member, creation, local):
 def receive_membership_changes(history, revision, ticket, *, accept_removal=None):
     """Watch current memberships before retirement; commit each batch with its receipts."""
     store, list_id = history.store, history.list_id
-    from paper_daily.drive_membership_history import DriveMembershipRestores
-
-    if isinstance(history, DriveMembershipRestores):
-        _, creations, retiring = history.versions(revision)
-    else:
-        creations, retiring = history.creations, history.retirements(revision)
+    _, creations, retiring = history.versions(revision)
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(revision)
@@ -298,23 +293,24 @@ def receive_membership_changes(history, revision, ticket, *, accept_removal=None
     return applied
 
 
-def applied_retirements(directory, store, list_id, revision, head):
+def received_membership_versions(directory, store, list_id, revision, head):
     """Exclude only matching Drive retirements already committed on this device."""
-    from paper_daily.drive_membership_history import DriveMembershipChanges
+    from paper_daily.drive_membership_history import membership_history
     from paper_daily.drive_paper_baseline import BibliographyAdvanced
     from paper_daily.workspace_service import _read
 
-    history = DriveMembershipChanges(directory, store, list_id, revision=revision)
+    history = membership_history(directory, store, list_id, revision=revision)
     if history.paper_head != head:
         raise BibliographyAdvanced("Bibliography advanced while checking removals")
-    retired = history.retirements(revision)
+    _, versions, retired = history.versions(revision)
     if not retired:
-        return set()
+        return versions, set()
     with _read(store.workspace.path) as conn:
         if "drive_membership_watches" not in _tables(conn):
-            return set()
+            return versions, set()
         receipts = dict(conn.execute("SELECT member,applied FROM drive_membership_watches "
                                      "WHERE context=? AND list_id=? AND applied IS NOT NULL",
                                      (store.context, list_id)))
-    return {history.creations[member]["payload"]["paper_id"] for member, op in retired.items()
-            if receipts.get(member) == op["operation_id"]}
+    applied = {versions[member]["payload"]["paper_id"] for member, op in retired.items()
+               if receipts.get(member) == op["operation_id"]}
+    return versions, applied

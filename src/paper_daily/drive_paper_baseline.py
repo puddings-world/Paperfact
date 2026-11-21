@@ -177,17 +177,19 @@ def publish_initial(
     if append_new and received_head is not _UNOBSERVED and head != received_head:
         raise BibliographyAdvanced("Another device added papers; receive its new revision")
     if append_new and received:
-        remote_dates = {op["payload"]["paper_id"]: op["payload"]["added_at"]
-                        for op in received[1::2]}
-        local_ids = {identity for identity, _, _ in bindings}
-        missing = remote_dates.keys() - local_ids
+        members = received[1::2]
+        applied = set()
         if directory.membership_changes:
-            from paper_daily.drive_membership_apply import applied_retirements
+            from paper_daily.drive_membership_apply import received_membership_versions
 
-            applied = applied_retirements(directory, store, list_id, revision, head)
-            if applied & local_ids:
-                raise ListReviewRequired("Re-added membership requires a new lifetime; review")
-            missing -= applied
+            versions, applied = received_membership_versions(
+                directory, store, list_id, revision, head)
+            members = [versions[op["entity_id"]] for op in members]
+        remote_dates = {op["payload"]["paper_id"]: op["payload"]["added_at"] for op in members}
+        local_ids = {identity for identity, _, _ in bindings}
+        if applied & local_ids:
+            raise ListReviewRequired("Re-added membership requires a new lifetime; review")
+        missing = remote_dates.keys() - local_ids - applied
         if missing:
             from paper_daily.drive_membership_intent import (
                 MembershipRemovalReview,
@@ -197,9 +199,9 @@ def publish_initial(
             # Only a unique creation already present at the observed boundary can be removed.
             if len(remote_dates) * 2 != len(received):
                 raise ListReviewRequired("Ambiguous bibliography membership; review")
-            candidates = {op["payload"]["paper_id"]: (index, op)
-                          for index, op in enumerate(received) if op["entity_type"] == "membership"
-                          and op["payload"]["paper_id"] in missing}
+            candidates = {op["payload"]["paper_id"]: (2 * index + 1, op)
+                          for index, op in enumerate(members)
+                          if op["payload"]["paper_id"] in missing}
             explicit = observed_removals(store, list_id, boundaries, candidates)
             if explicit:
                 raise MembershipRemovalReview(len(missing), explicit)

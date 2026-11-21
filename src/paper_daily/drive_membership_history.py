@@ -61,6 +61,11 @@ def membership_versions(creations, changes):
     return active_versions, retired
 
 
+def membership_history(directory, store, list_id, *, revision):
+    reader = DriveMembershipRestores if directory.membership_restores else DriveMembershipChanges
+    return reader(directory, store, list_id, revision=revision)
+
+
 class DriveMembershipChanges(DriveListHistory):
     format = "paperfact.membership-changes.v1"
     head_field = "membership_changes_head"
@@ -88,9 +93,13 @@ class DriveMembershipChanges(DriveListHistory):
             if not member or op != removal_operation(member, op["device_id"]):
                 raise ValueError("Removal does not match the observed membership creation")
 
+    def versions(self, revision):
+        head, records = self.changes(None, revision=revision)
+        latest, retired = membership_versions(self.creations, records)
+        return head, latest, retired
+
     def retirements(self, revision):
-        _, changes = self.changes(None, revision=revision)
-        _, retired = membership_versions(self.creations, changes)
+        _, _, retired = self.versions(revision)
         return retired
 
     def append(self, expected, records, *, revision):
@@ -138,11 +147,6 @@ class DriveMembershipRestores(DriveMembershipChanges):
             if (not original or op["entity_type"] != "membership"
                     or op["parents"] != original["parents"]):
                 raise ValueError("Membership change belongs to a different list or paper")
-
-    def versions(self, revision):
-        head, records = self.changes(None, revision=revision)
-        latest, retired = membership_versions(self.creations, records)
-        return head, latest, retired
 
     def append(self, expected, records, *, revision):
         raise ValueError("Restoration requires a reviewed local membership")

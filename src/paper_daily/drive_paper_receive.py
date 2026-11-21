@@ -82,15 +82,16 @@ def receive_initial(directory, store, list_id, revision, ticket):
     if len({paper["entity_id"] for paper, _ in pairs}) != len(pairs):
         raise ListReviewRequired("Subsequent bibliography revisions need reconciliation")
     retired = {}
+    versions = {}
     if directory.membership_changes:
-        from paper_daily.drive_membership_history import DriveMembershipChanges
+        from paper_daily.drive_membership_history import membership_history
 
-        changes = DriveMembershipChanges(directory, store, list_id, revision=revision)
+        changes = membership_history(directory, store, list_id, revision=revision)
         if changes.paper_head != head:
             from paper_daily.drive_paper_baseline import BibliographyAdvanced
 
             raise BibliographyAdvanced("Bibliography changed before receiving memberships")
-        retired = changes.retirements(revision)
+        _, versions, retired = changes.versions(revision)
     marker = encode(head.record())
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
@@ -173,6 +174,8 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     ).fetchone():
                         raise ListReviewRequired("Published membership was removed locally")
                     continue
+                if versions:
+                    member = versions[member["entity_id"]]
                 local_id = _local_paper(conn, store, paper, published)
                 if conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
@@ -223,9 +226,9 @@ def exchange_bibliography(directory, store, list_id, revision, ticket):
         head = receive_initial(directory, store, list_id, revision, ticket)
         if head and directory.membership_changes:
             from paper_daily.drive_membership_apply import receive_membership_changes
-            from paper_daily.drive_membership_history import DriveMembershipChanges
+            from paper_daily.drive_membership_history import membership_history
 
-            history = DriveMembershipChanges(directory, store, list_id, revision=revision)
+            history = membership_history(directory, store, list_id, revision=revision)
             receive_membership_changes(history, revision, ticket)
         def publish():
             return publish_initial(directory, store, list_id, revision, ticket,

@@ -425,7 +425,17 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(ListReviewRequired, match="Local entry changed"):
         keep_reviewed_membership(changes, peer_revision, observed, Ticket())
     assert transport.read() == before_restore
+    # A restored entry can have different metadata from its original bibliography record.
+    revised = {"citation": "Revised citation", "added_at": "2026-11-21T08:30:00+00:00"}
+    restored = restoration_operation(original, operations[0], reader.store.context, **revised)
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("UPDATE list_papers SET citation=?,added_at=? WHERE list_id='return' "
+                     "AND paper_id=?", (revised["citation"], revised["added_at"], peer_id))
     after = keep_reviewed_membership(changes, peer_revision, current_review(), Ticket())
+    # The remaining v9 scenarios use their original local snapshot.
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("UPDATE list_papers SET citation=?,added_at=? WHERE list_id='return' "
+                     "AND paper_id=?", (fields["citation"], fields["added_at"], peer_id))
     uploaded = dict(restore_cloud.objects)
     replayed = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
     assert replayed == after
@@ -501,6 +511,25 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                             "ON w.local_id=m.paper_id AND w.list_id=m.list_id WHERE w.member=?",
                             (original["entity_id"],)).fetchall() == [
                                 ("Desktop discovery", "pending", restored["operation_id"], None)]
+
+    joined_db = tmp_path / "joining-device" / "papers.db"
+    joined_db.parent.mkdir()
+    with closing(sqlite3.connect(joined_db)) as conn, conn:
+        conn.executescript(db.SCHEMA)
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('return','Return',?)", (STAMP,))
+    joining = selection(joined_db, tmp_path / "joining-settings", device_id="joining",
+                        library_id=reader.store.library_id, owner_id=reader.store.owner_id)
+    joining.save(transport.read().directory, ["return"], expected_revision=0)
+    for _ in range(2):
+        exchange_bibliography(transport, joining, "return", 1, Ticket())
+        with closing(sqlite3.connect(joined_db)) as conn:
+            assert conn.execute("SELECT m.state,m.citation,m.added_at,w.creation "
+                                "FROM list_papers m JOIN drive_membership_watches w "
+                                "ON w.local_id=m.paper_id "
+                                "AND w.list_id=m.list_id WHERE w.member=?",
+                                (original["entity_id"],)).fetchall() == [
+                                    ("pending", restored["payload"]["citation"],
+                                     restored["payload"]["added_at"], restored["operation_id"])]
 
     # The originating device may lose the reply after Drive accepts its deletion.
     from paper_daily.drive_membership_intent import remove_selected
