@@ -44,6 +44,7 @@ class DeviceSelection:
                 separators=(",", ":"),
             ).encode()
         ).hexdigest()
+        self.owner_id = owner_id
         self.library_id = library_id
         base = Path(root or user_data_dir().with_name("Paperfact-settings") / "library-sync")
         self.path = base.absolute() / (self.context + ".sqlite")
@@ -99,7 +100,7 @@ class DeviceSelection:
         self._check()
         return result
 
-    def save(self, directory, selected, *, expected_revision, ticket=None):
+    def save(self, directory, selected, *, expected_revision, ticket=None, intermediate=False):
         """CAS-save intent. Deselect retains research; callers schedule transfer separately."""
         if not isinstance(directory, Directory) or directory.library_id != self.library_id:
             raise ValueError("Selection belongs to another library")
@@ -171,7 +172,10 @@ class DeviceSelection:
                     self._check()
                     conn.commit()
 
-                ticket.publish(commit)
+                if intermediate:
+                    ticket.checkpoint(commit)
+                else:
+                    ticket.publish(commit)
             except BaseException:
                 conn.rollback()
                 raise

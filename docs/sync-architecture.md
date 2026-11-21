@@ -108,8 +108,26 @@ owner research or create a new public release to test this correction.
 a desktop A/B directory visible to a Mac with only A; separate device selections
 and deselection retaining research; actual concurrent/idempotent saves and stale
 revision refusal; cancellation, late workspace switching, retry and replacement.
-These contracts are not connected to the current Drive dialog/replication path.
-Remote directory publication, scoped byte/history transport, original-library
+The desktop sign-in flow reads the private directory and overlays local list
+names. Saving the reviewed checklist publishes new local names after confirmation
+and stores selection on this device. The existing workspace transfer is a
+separate collapsible section. In ordinary databases, the checklist can exchange
+list names and descriptions using independent per-list history and device-local
+receipts. Divergent edits are retained on their originating devices for review.
+The cloud directory carries list history pointers, never list descriptions.
+Reading list B does not fetch list A's operations. This path currently accepts
+list operations only. Paper membership, annotations, attachments, background
+transfer and adoption of existing enrolled workspaces remain open.
+The Drive directory adapter can now initialize and discover a private directory,
+read its current catalog and publish explicit list additions or renames with a
+conditional write. A device with a partial library retains all other entries.
+The directory contains no paper bodies or attachments. Unchanged publications
+allocate no file. Each changed publication currently stores a directory snapshot;
+a competing write can leave an unreferenced snapshot. Storage reclamation and
+real-device acceptance remain open. Directory folders use a distinct Drive role
+so installed pilot readers ignore them.
+
+Scoped byte/history transport, original-library
 adoption and pilot migration remain required before a new installer can satisfy
 the whole-library selection journey. No owner data were uploaded to test them.
 

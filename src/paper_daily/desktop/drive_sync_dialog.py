@@ -71,6 +71,21 @@ class DriveSyncDialog(QDialog):
         )
         self.login.clicked.connect(self.sign_in)
         layout.addWidget(self.login)
+        self.directory_lists = QListWidget()
+        self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
+        self.directory_lists.setVisible(False)
+        layout.addWidget(self.directory_lists)
+        self.save_selection = QPushButton(
+            self.tr("Save this device's list selection", "儲存這台裝置的清單選擇")
+        )
+        self.save_selection.setVisible(False)
+        self.save_selection.clicked.connect(self._save_selection)
+        layout.addWidget(self.save_selection)
+        self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
+        self.pilot.setCheckable(True)
+        self.pilot.hide()
+        self.pilot.toggled.connect(self._show_pilot)
+        layout.addWidget(self.pilot)
         self.name = QLineEdit(self.tr("My research", "我的研究"))
         self.name.setMaxLength(200)
         layout.addWidget(self.name)
@@ -157,6 +172,8 @@ class DriveSyncDialog(QDialog):
         self.name.setEnabled(idle)
         self.workspaces.setEnabled(idle)
         self.lists.setEnabled(idle)
+        self.directory_lists.setEnabled(idle)
+        self.save_selection.setEnabled(idle and self.service.files is not None)
         self.stop.setEnabled(self.busy)
         self.progress.setVisible(self.busy)
         self.progress.setRange(0, 0 if self.busy else 1)
@@ -170,7 +187,7 @@ class DriveSyncDialog(QDialog):
             self.service.binding._check()
         except (OSError, ValueError):
             return False
-        if kind not in {"login", "toggle"}:
+        if kind not in {"login", "toggle", "selection"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -215,6 +232,53 @@ class DriveSyncDialog(QDialog):
                     "正在連接或準備已儲存的研究與檔案…",
                 )
             )
+
+    def _show_pilot(self, expanded):
+        for widget in (self.name, self.create, self.workspaces, self.join):
+            widget.setVisible(expanded)
+        show_scope = expanded and self.lists.count() > 0
+        self.scope_label.setVisible(show_scope)
+        self.lists.setVisible(show_scope)
+
+    def _show_directory(self, library):
+        self.directory_lists.clear()
+        for row in library["items"]:
+            item = QListWidgetItem(row["name"])
+            item.setData(Qt.ItemDataRole.UserRole, row["id"])
+            item.setCheckState(
+                Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked
+            )
+            self.directory_lists.addItem(item)
+        self.directory_lists.setVisible(True)
+        self.save_selection.setVisible(True)
+
+    def _save_selection(self):
+        if self.busy or self.service.files is None or not self.directory_lists.isVisible():
+            return False
+        selected = [
+            self.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.directory_lists.count())
+            if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
+        ]
+        consent = QMessageBox.question(
+            self,
+            self.windowTitle(),
+            self.tr(
+                "Publish local list names to your private Drive directory and save this "
+                "device's selection? Selected lists also exchange their names "
+                "and descriptions in ordinary workspaces.",
+                "將本機清單名稱加入你的私人 Drive 目錄，並儲存這台裝置的勾選？"
+                "一般工作區也會交換已選清單的名稱與說明。",
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if consent != QMessageBox.StandardButton.Yes:
+            return False
+        return self._start(
+            "selection",
+            lambda ticket, progress: self.service.apply_library(selected, ticket, progress),
+        )
 
     def sign_in(self):
         return self._start("login", self.service.sign_in)
@@ -284,6 +348,8 @@ class DriveSyncDialog(QDialog):
             result = worker.result
             if kind == "login":
                 self.account.setText(result["account"]["email"])
+                if "library" in result:
+                    self._show_directory(result["library"])
                 self.workspaces.clear()
                 self.lists.clear()
                 available = result.get("lists", [])
@@ -306,10 +372,20 @@ class DriveSyncDialog(QDialog):
                     self.lists.clear()
                 for spec in result["workspaces"]:
                     self.workspaces.addItem(spec["name"], spec)
+                if "library" in result:
+                    self.pilot.show()
+                    self._show_pilot(self.pilot.isChecked())
                 self.status.setText(
                     self.tr(
                         "Choose this workspace or open one from Drive.",
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
+                    )
+                )
+            elif kind == "selection":
+                self._show_directory(result)
+                self.status.setText(
+                    self.tr(
+                        "List names and device selection saved.", "已儲存清單名稱與這台裝置的勾選。"
                     )
                 )
             elif kind == "toggle":
@@ -360,6 +436,18 @@ class DriveSyncDialog(QDialog):
                     )
                 )
         else:
+            if kind == "login":
+                self.pilot.setChecked(False)
+                self.pilot.hide()
+                self._show_pilot(True)
+                self.directory_lists.clear()
+                self.directory_lists.hide()
+                self.save_selection.hide()
+                self.lists.clear()
+                self.lists.hide()
+                self.scope_label.hide()
+                self.workspaces.clear()
+                self.account.setText(self.tr("Not connected to Google", "尚未連接 Google"))
             self.service.rollback_consent()
             self.status.setText(
                 self.tr("Stopped or could not finish: ", "停止")
