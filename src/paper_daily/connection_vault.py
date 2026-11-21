@@ -125,15 +125,22 @@ class ConnectionVault:
             self.account + ".json"
         )
 
-    def _context(self):
+    def _context(self, research=None):
         workspace = self.workspace
         if Path(workspace.current_path()).resolve() != workspace.path:
             raise WorkspaceChanged("The active workspace changed")
         info = workspace.path.stat()
         if (info.st_dev, info.st_ino) != workspace.identity:
             raise WorkspaceChanged("The workspace database was replaced")
-        with _read(workspace.path) as conn:
-            binding = _binding(conn, _tables(conn))
+        if research is None:
+            with _read(workspace.path) as conn:
+                binding = _binding(conn, _tables(conn))
+        else:
+            main = next(row[2] for row in research.execute("PRAGMA database_list")
+                        if row[1] == "main")
+            if Path(main).resolve() != workspace.path:
+                raise WorkspaceChanged("The transaction belongs to a different workspace")
+            binding = _binding(research, _tables(research))
         after = workspace.path.stat()
         if (after.st_dev, after.st_ino) != workspace.identity:
             raise WorkspaceChanged("The workspace database was replaced")
@@ -142,8 +149,8 @@ class ConnectionVault:
             separators=(",", ":"), ensure_ascii=True,
         ).encode()
 
-    def _check(self):
-        if self._context() != self._baseline:
+    def _check(self, research=None):
+        if self._context(research) != self._baseline:
             raise WorkspaceChanged("The workspace binding changed")
 
     def current(self):

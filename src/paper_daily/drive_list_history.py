@@ -17,6 +17,9 @@ class DriveListHistory:
 
     format = FORMAT
     head_field = "head"
+    max_operations = 100
+    max_pages = 100
+    max_bytes = 8 * 1024**2
 
     def __init__(self, directory, store, list_id):
         if store.library_id != directory.library_id:
@@ -34,7 +37,7 @@ class DriveListHistory:
         return next((item for item in observation.directory.lists if item.id == self.list_id), None)
 
     def _operations(self, records):
-        if not isinstance(records, list) or not 1 <= len(records) <= 100:
+        if not isinstance(records, list) or not 1 <= len(records) <= self.max_operations:
             raise ValueError("Invalid scoped operation batch")
         seen = set()
         for op in records:
@@ -159,8 +162,8 @@ class DriveListHistory:
             if (
                 current is None
                 or (anchor and current.generation <= anchor.generation)
-                or len(result) >= 100
-                or used + current.size > 8 * 1024**2
+                or len(result) >= self.max_pages
+                or used + current.size > self.max_bytes
             ):
                 raise SyncHistoryUnavailable("Cannot prove the selected list history prefix")
             parent, operations = self._read_entry(current)
@@ -176,6 +179,10 @@ class DriveListPapers(DriveListHistory):
 
     format = "paperfact.list-paper-history.v1"
     head_field = "papers_head"
+    max_operations = 500
+    max_pages = 256
+    max_bytes = 64 * 1024**2
+    extended = False
 
     def members(self, revision):
         head, members, _ = self.membership_snapshot(revision)
@@ -234,7 +241,8 @@ class DriveListPapers(DriveListHistory):
             seen.add(paper["entity_id"])
 
     def _advance(self, entry, head, records):
-        return replace(entry, papers_head=head)
+        return replace(entry, papers_head=head,
+                       extended_papers=entry.extended_papers or self.extended)
 
 
 class DriveListNotes(DriveListHistory):

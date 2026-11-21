@@ -183,7 +183,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
                 "DO UPDATE SET head=excluded.head",
                 (store.context, list_id, marker),
             )
-            store._check()
+            store._check(conn)
             ticket.checkpoint(conn.commit)
     return head
 

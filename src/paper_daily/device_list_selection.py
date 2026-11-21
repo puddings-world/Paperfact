@@ -52,8 +52,8 @@ class DeviceSelection:
         if self.path.is_relative_to(self.workspace.path.parent):
             raise ValueError("Keep device selection settings outside the research workspace")
 
-    def _check(self):
-        self.binding._check()
+    def _check(self, research=None):
+        self.binding._check(research)
         for entry in (self.path, *self.path.parents):
             _no_link(entry)
         if self.path.exists() and (

@@ -47,7 +47,7 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
     )
     batches, batch = [], []
     used = batch_bytes = 0
-    with _read(store.workspace.path) as conn:
+    with _read(store.workspace.path, budget=30) as conn:
         conn.row_factory = sqlite3.Row
         if conn.execute(
             "SELECT 1 FROM sqlite_master WHERE name='research_capture_binding'"
@@ -70,6 +70,10 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
             "ORDER BY m.position,m.paper_id",
             params,
         )
+        count = conn.execute(
+            "SELECT count(*) FROM list_papers WHERE list_id=?", (list_id,)
+        ).fetchone()[0]
+        batch_limit = DriveListPapers.max_operations if count > 1000 else 100
         for row in rows:
             ticket.check()
             if row["id"] is None:
@@ -94,13 +98,16 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
             )
             size = len(encode([paper, link]))
             # Leave room for the envelope and prior head in each Drive record.
-            if len(batch) == 100 or batch_bytes + size > MAX_INLINE - 2048:
+            if size > MAX_INLINE - 2048:
+                raise ListReviewRequired("One paper exceeds the supported Drive page size")
+            if len(batch) == batch_limit or batch_bytes + size > MAX_INLINE - 2048:
                 batches.append(batch)
                 batch, batch_bytes = [], 0
             batch.extend((paper, link))
             batch_bytes += size
             used += size
-            if len(batches) >= 100 or used + (len(batches) + 1) * 2048 > 8 * 1024**2:
+            estimate = used + (len(batches) + 1) * 2048
+            if len(batches) >= DriveListPapers.max_pages or estimate > DriveListPapers.max_bytes:
                 raise ListReviewRequired("Selected bibliography exceeds the current history budget")
     if batch:
         batches.append(batch)
@@ -192,11 +199,14 @@ def publish_initial(
             if remaining:
                 pending.append(remaining)
             offset += len(batch)
-    if head and pending:
-        generations = head.generation + len(pending)
+    if pending:
+        generations = (head.generation if head else 0) + len(pending)
         payload_bytes = sum(len(encode(op)) + 1 for op in received)
         payload_bytes += sum(len(encode(batch, MAX_INLINE)) for batch in pending)
-        if generations > 100 or payload_bytes + generations * 2048 > 8 * 1024**2:
+        estimated_bytes = payload_bytes + generations * 2048
+        history.extended = (generations > 100 or estimated_bytes > 8 * 1024**2
+                            or any(len(page) > 100 for page in pending))
+        if generations > history.max_pages or estimated_bytes > history.max_bytes:
             raise ListReviewRequired("New papers exceed the readable history budget")
     # Bind local IDs before the first remote write so a lost acknowledgement
     # cannot turn the source paper into an unknown duplicate on a return trip.

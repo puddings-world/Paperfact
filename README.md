@@ -144,6 +144,8 @@ count does not certify original-source coverage. [Evidence scope](docs/analysis-
 
 ## Sync a desktop and laptop (v0.5 preview)
 
+Install the same current build on both devices before syncing a large bibliography. Paperfact publishes large bibliographies in verified pages and marks the private directory as v8 when the extended format is needed. Earlier builds cannot open a v8 directory. Each bibliography history supports up to 256 pages and 64 MiB of serialized metadata. PDFs use a separate transfer.
+
 Use the same preview on both computers. [Apple Silicon download and offline acceptance steps](docs/testing/mac-acceptance-0.5.md#start-here-on-apple-silicon).
 
 1. On Windows, open **Sync**, sign in to Google, check the lists to exchange and choose **Save this device's list selection**. This publishes your local list names to your private directory. Save again when you want a newly created list to appear on the Mac.
