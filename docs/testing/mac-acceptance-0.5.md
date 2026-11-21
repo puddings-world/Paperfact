@@ -2,14 +2,14 @@
 
 ## Start here on Apple Silicon
 
-Use build **211f117** on both devices for a paired installation test. This candidate can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **d579b1b** on both devices for a paired installation test. This candidate lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44891577834/artifacts/14701919276) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44891577834/artifacts/14702307897) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44894281218/artifacts/14702779069) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44894281218/artifacts/14703107797) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44891577834) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44894281218) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
@@ -80,6 +80,23 @@ Use disposable workspaces and a test list with two different papers.
 4. Record both commit IDs, the platform versions and the step that failed if you
    need to export a diagnostic report. Private Drive, real sleep/wake and installed
    hardware remain separate from the automated two-window transfer check.
+
+## Compare a list name or description after offline edits
+
+Use build d579b1b or later on both devices and a disposable list selected on both.
+Start with the same name and description. Turn off background sync for this check.
+
+1. Offline, rename the list on Windows and change only its description on Mac.
+   Reconnect and sync Mac, Windows, then Mac. Both should show both edits.
+2. Offline again, give the list different names on each device. Sync Mac, then
+   Windows. In Windows Drive settings select the list and open **Compare list
+   details**. Check the common name, the Windows name and the Drive name.
+3. Choose **Decide later**. Reopen the comparison on Windows. With it still
+   open, change the name again on Mac and sync the Mac. Try the old choice on
+   Windows. The app should ask you to compare again. Check the new Mac name.
+4. Choose the Windows or Drive version and sync both devices. Reopen the list
+   on both and check that its name matches the choice and its description still
+   matches step 1. Record the build IDs and the first differing step.
 
 ## Resolve conflicting edits on a selected list
 

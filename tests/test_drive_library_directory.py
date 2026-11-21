@@ -366,6 +366,32 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
         assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
             ("Independent desktop rename", "Remote candidate")]
     assert review() == []
+    # The other device can edit again while the comparison dialog is open.
+    db(win_path, "UPDATE lists SET name='Desktop',note='Desktop description' WHERE id='b'")
+    db(mac_path, "UPDATE lists SET name='Laptop',note='Laptop description' WHERE id='b'")
+    sync(mac)
+    stale, = review()
+    assert stale["fields"] == ["name", "note"]
+    db(mac_path, "UPDATE lists SET name='Revised laptop name' WHERE id='b'")
+    sync(mac)
+    with pytest.raises(ValueError, match="compare again"):
+        review((stale, "local"))
+    assert db(mac_path, "SELECT name,note FROM lists WHERE id='b'") == [
+        ("Revised laptop name", "Laptop description")]
+    latest, = review()
+    assert latest["remote"]["name"] == "Revised laptop name"
+    # Losing the response to an explicit decision must preserve the next offline edit.
+    with monkeypatch.context() as patch:
+        patch.setattr(DriveListHistory, "append", lose_reply)
+        with pytest.raises(ConnectionError, match="lost reply"):
+            review((latest, "local"))
+    db(win_path, "UPDATE lists SET note='After the choice' WHERE id='b'")
+    sync(win)
+    sync(mac)
+    for path in (win_path, mac_path):
+        assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
+            ("Desktop", "After the choice")]
+    assert review() == []
 
 
 def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monkeypatch):
