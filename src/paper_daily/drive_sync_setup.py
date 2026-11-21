@@ -122,6 +122,7 @@ class DriveSetup:
             "ordinary": local_binding(self.workspace.path) is None,
             "note_lists": store.note_lists(),
             "pdf_lists": store.pdf_lists(),
+            "dive_lists": store.dive_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
             ),
@@ -141,19 +142,23 @@ class DriveSetup:
         return review(remote, store, list_id, saved.revision, ticket, decision)
 
     def choose_note_sync(self, list_id, enabled, ticket, progress):
-        return self._choose_list_content(list_id, enabled, ticket, pdf=False)
+        return self._choose_list_content(list_id, enabled, ticket, kind="notes")
 
     def choose_pdf_sync(self, list_id, enabled, ticket, progress):
-        return self._choose_list_content(list_id, enabled, ticket, pdf=True)
+        return self._choose_list_content(list_id, enabled, ticket, kind="pdfs")
 
-    def _choose_list_content(self, list_id, enabled, ticket, *, pdf):
+    def choose_dive_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, kind="dives")
+
+    def _choose_list_content(self, list_id, enabled, ticket, *, kind):
         self.check(ticket)
         if self._library_view is None or local_binding(self.workspace.path):
             raise ValueError("Review the ordinary library first")
         files, store, saved, *_ = self._library_view
         if files is not self.files or store.owner_id != self.account["id"]:
             raise ValueError("The reviewed account changed")
-        save = store.set_pdf_sync if pdf else store.set_note_sync
+        save = {"notes": store.set_note_sync, "pdfs": store.set_pdf_sync,
+                "dives": store.set_dive_sync}[kind]
         save(list_id, enabled, revision=saved.revision, ticket=ticket)
         return self.read_library(ticket)
 
@@ -251,6 +256,10 @@ class DriveSetup:
 
                         exchange_originals(directory, self.cache, store, list_id,
                                            selection.revision, ticket, self._pdf_versions)
+                    if list_id in result.get("dive_lists", ()):
+                        from paper_daily.drive_reader_dives import exchange_dives
+
+                        exchange_dives(directory, store, list_id, selection.revision, ticket)
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except NoteEditConflict as exc:

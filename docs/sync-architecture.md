@@ -220,6 +220,14 @@ checks the digest and opens the staged PDF before installing it under its local
 paper ID. Installation cannot replace an existing file. Ambiguous legacy file
 names require review, and enrolled workspaces use their existing document path.
 
+Saved deep explanations have their own per-list device grant and v6 history head.
+The exchanged native research-content row carries the guide body, timestamp and
+specification. It carries no claim of verified PDF provenance. A receipt identifies
+the last accepted operation per device, list and paper. Divergent edits and missing
+previously received guides require review. The stream enforces the same bounded
+history budget as other selected-list streams. Related figures, source links,
+citations and slides still travel separately in research packages.
+
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.

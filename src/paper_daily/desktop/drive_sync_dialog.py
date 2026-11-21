@@ -108,7 +108,14 @@ class DriveSyncDialog(QDialog):
                                               "允許同步這份清單的 PDF"))
         self.pdf_toggle.setCheckable(True)
         self.pdf_toggle.clicked.connect(self._choose_pdfs)
-        layout.addWidget(self.pdf_toggle)
+        self._dive_lists = set()
+        self.dive_toggle = QPushButton(self.tr("Sync saved explanations", "同步已儲存的深度講解"))
+        self.dive_toggle.setCheckable(True)
+        self.dive_toggle.clicked.connect(self._choose_dives)
+        content_row = QHBoxLayout()
+        content_row.addWidget(self.pdf_toggle)
+        content_row.addWidget(self.dive_toggle)
+        layout.addLayout(content_row)
         self.compare_notes = QPushButton(self.tr("Compare conflicting notes", "比較衝突筆記"))
         self.compare_notes.clicked.connect(self._review_notes)
         layout.addWidget(self.compare_notes)
@@ -246,7 +253,7 @@ class DriveSyncDialog(QDialog):
         if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
             self.background.stop()
         if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes",
-                        "compare", "resolve", "pdfs"}:
+                        "compare", "resolve", "pdfs", "dives"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -305,6 +312,7 @@ class DriveSyncDialog(QDialog):
         self._ordinary_library = library.get("ordinary", False)
         self._note_lists = set(library.get("note_lists", ()))
         self._pdf_lists = set(library.get("pdf_lists", ()))
+        self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
@@ -350,6 +358,9 @@ class DriveSyncDialog(QDialog):
         self.pdf_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.pdf_toggle.setChecked(list_id in self._pdf_lists)
         self.pdf_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.dive_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.dive_toggle.setChecked(list_id in self._dive_lists)
+        self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
         self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists)
         self.compare_notes.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
@@ -384,6 +395,26 @@ class DriveSyncDialog(QDialog):
                 self.status.setText(self.tr("Both versions retained.", "已保留兩個版本。"))
         finally:
             dialog.deleteLater()
+
+    def _choose_dives(self, checked):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.dive_toggle.isEnabled():
+            self._list_buttons()
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        if checked and QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr("Exchange saved explanation text through private Drive? Update all devices "
+                    "before the first transfer upgrades the directory to v6.",
+                    "透過私人 Drive 同步這份清單已儲存的深度講解文字？"
+                    "首次傳送會升級目錄至 v6，請先更新所有裝置。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            self._list_buttons()
+            return
+        self._start("dives", lambda ticket, progress:
+                    self.service.choose_dive_sync(key, checked, ticket, progress))
 
     def _choose_pdfs(self, checked):
         item = self.directory_lists.currentItem()
@@ -587,6 +618,10 @@ class DriveSyncDialog(QDialog):
             elif kind == "resolve":
                 self.status.setText(self.tr("Choice saved. Sync to exchange the selected version.",
                                             "已儲存選擇，下次同步時會交換選定的版本。"))
+            elif kind == "dives":
+                self._show_directory(result)
+                self.status.setText(self.tr("Explanation sync preference saved.",
+                                            "已儲存深度講解同步設定。"))
             elif kind == "pdfs":
                 self._show_directory(result)
                 self.status.setText(self.tr("PDF preference saved for the next list sync.",

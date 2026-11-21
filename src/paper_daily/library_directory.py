@@ -48,6 +48,7 @@ class ListEntry:
     papers_head: ScopeHead | None = None
     notes_head: ScopeHead | None = None
     originals_head: ScopeHead | None = None
+    dives_head: ScopeHead | None = None
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,8 @@ class Directory:
                 raise ValueError("Invalid library directory entry")
             _identifier(item.id)
             if any(h is not None and not isinstance(h, ScopeHead)
-                   for h in (item.head, item.papers_head, item.notes_head, item.originals_head)):
+                   for h in (item.head, item.papers_head, item.notes_head,
+                             item.originals_head, item.dives_head)):
                 raise ValueError("Invalid published list history")
             if item.id in seen:
                 raise ValueError("Duplicate library list identity")
@@ -88,7 +90,8 @@ class Directory:
     def to_bytes(self):
         return encode(
             dict(
-                format="paperfact.library-directory.v5" if any(e.originals_head for e in self.lists)
+                format="paperfact.library-directory.v6" if any(e.dives_head for e in self.lists)
+                else "paperfact.library-directory.v5" if any(e.originals_head for e in self.lists)
                 else "paperfact.library-directory.v4" if any(e.notes_head for e in self.lists)
                 else "paperfact.library-directory.v3" if any(e.papers_head for e in self.lists)
                 else "paperfact.library-directory.v2"
@@ -103,6 +106,7 @@ class Directory:
                     | ({"notes_head": item.notes_head.record()} if item.notes_head else {})
                     | ({"originals_head": item.originals_head.record()}
                        if item.originals_head else {})
+                    | ({"dives_head": item.dives_head.record()} if item.dives_head else {})
                     for item in self.lists
                 ],
             ),
@@ -122,7 +126,8 @@ class Directory:
             or value["format"] not in (FORMAT, "paperfact.library-directory.v2",
                                         "paperfact.library-directory.v3",
                                         "paperfact.library-directory.v4",
-                                        "paperfact.library-directory.v5")
+                                        "paperfact.library-directory.v5",
+                                        "paperfact.library-directory.v6")
             or value["library_id"] != library_id
             or not isinstance(value["lists"], list)
             or len(value["lists"]) > MAX_LISTS
@@ -131,7 +136,7 @@ class Directory:
         entries = []
         for item in value["lists"]:
             required = {"id", "name", "published"}
-            heads = ("head", "papers_head", "notes_head", "originals_head")
+            heads = ("head", "papers_head", "notes_head", "originals_head", "dives_head")
             if not isinstance(item, dict) or not required <= item.keys() <= required.union(heads):
                 raise ValueError("Directory entries contain unsupported fields")
             for key in heads:

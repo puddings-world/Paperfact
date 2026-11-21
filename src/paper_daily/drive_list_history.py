@@ -95,6 +95,7 @@ class DriveListHistory:
         directory.upsert(
             observed,
             [self._advance(entry, head, records)],
+            check=lambda: self._check(revision),
         )
         return head
 

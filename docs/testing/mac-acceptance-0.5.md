@@ -1,5 +1,19 @@
 # Mac v0.5 acceptance
 
+## Exchange saved deep explanations
+
+Use disposable workspaces on both machines and the same v6-capable build.
+The first published explanation upgrades the shared directory to v6.
+
+1. Select the same test list on Windows and Mac and enable explanation sync on
+   both. Use two different papers with existing saved explanations, one per device.
+2. Sync Windows, Mac, then Windows. Open each paper offline and compare its saved
+   explanation with the original. Reading a received explanation needs no AI call.
+3. Edit one explanation on one device, sync both and confirm the edit arrives.
+   Then edit the same explanation differently on both devices before syncing.
+   Confirm both local versions survive and sync reports the conflict.
+4. Deselect the list and confirm subsequent edits do not transfer.
+
 ## Exchange original PDFs between readers
 
 [Download the 9d995e8 Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44872907556/artifacts/14695051678).

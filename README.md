@@ -184,8 +184,11 @@ on on each device to grant permission for edits. **Allow PDF sync for this list*
 a separate preference for that device. Deselecting a list clears its PDF permission.
 Enable PDF sync on both devices to transfer missing originals into the reader.
 The first PDF upgrades the private directory to v5. Update every device first.
-If two local originals differ, Paperfact keeps both and requests review. Use a
-research package to transfer deep analyses. Use **Existing workspace sync** for the pilot research transfer.
+If two local originals differ, Paperfact keeps both and requests review.
+Enable **Sync saved explanations** on both devices to exchange the stored deep-guide
+text without another AI call. The first shared guide upgrades the directory to v6.
+Update every device first. Concurrent edits require review. Use a research package
+for additional analysis assets such as figures, highlights and slides. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 This is a test candidate; installed Windows/Mac acceptance is still required.

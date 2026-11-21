@@ -284,6 +284,14 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             view.pdf_toggle.click()
             wait(app, lambda v=view: not v.busy)
             assert view.pdf_toggle.isChecked() and not view.notes_toggle.isChecked()
+            assert view.dive_toggle.isVisible() and not view.dive_toggle.isChecked()
+            with monkeypatch.context() as cancel:
+                cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+                view.dive_toggle.click()
+                assert not view.dive_toggle.isChecked()
+            view.dive_toggle.click()
+            wait(app, lambda v=view: not v.busy)
+            assert view.dive_toggle.isChecked()
             view.notes_toggle.click()
             wait(app, lambda v=view: not v.busy)
             assert view.notes_toggle.isChecked()
@@ -317,6 +325,9 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
         from paper_daily.desktop.main import _legacy_pdf_name
 
         for path, key in ((source, "paper"), (laptop, "laptop-add")):
+            with closing(sqlite3.connect(path)) as conn, conn:
+                conn.execute("INSERT INTO dives(paper_id,body,written_at,spec) VALUES(?,?,?,?)",
+                             (key, "Saved explanation " + key, STAMP, "test-spec"))
             folder = path.parent / "pdf"
             folder.mkdir()
             with pymupdf.open() as document:
@@ -342,6 +353,9 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     (local,) = conn.execute(
                         "SELECT id FROM papers WHERE title=?", (title,)
                     ).fetchone()
+                    assert conn.execute(
+                        "SELECT body,written_at,spec FROM dives WHERE paper_id=?", (local,)
+                    ).fetchone() == ("Saved explanation " + original, STAMP, "test-spec")
                     with pymupdf.open(path.parent / "pdf" / _legacy_pdf_name(local)) as document:
                         assert document[0].get_text().strip() == original
                 received = conn.execute(
@@ -499,6 +513,27 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 (local,) = conn.execute(
                     "SELECT id FROM papers WHERE title='Research paper'"
                 ).fetchone()
+            def rewrite(path, key, body):
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute("UPDATE dives SET body=? WHERE paper_id=?", (body, key))
+
+            def saved(path, key):
+                with closing(sqlite3.connect(path)) as conn:
+                    return conn.execute(
+                        "SELECT body FROM dives WHERE paper_id=?", (key,)
+                    ).fetchone()
+
+            rewrite(laptop, local, "Revised explanation")
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert saved(source, "paper") == ("Revised explanation",)
+            rewrite(source, "paper", "Windows interpretation")
+            rewrite(laptop, local, "Mac interpretation")
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            report = devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert "explanations differ" in report["reviews"]["list"]
+            assert saved(laptop, local) == ("Mac interpretation",)
+            assert saved(source, "paper") == ("Windows interpretation",)
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
             mac_pdf.write_bytes(other_pdf)
@@ -519,6 +554,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert reopened._saved_ids == set()
             assert not setup._library_view[1].load().selected
             assert setup._library_view[1].pdf_lists() == []
+            assert setup._library_view[1].dive_lists() == []
             with closing(sqlite3.connect(laptop)) as conn:
                 assert conn.execute(
                     "SELECT count(*) FROM list_papers WHERE list_id='list'"
