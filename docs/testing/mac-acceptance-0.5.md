@@ -2,16 +2,40 @@
 
 ## Start here on Apple Silicon
 
-Use build **0fdc567** on both devices for a paired installation test. This candidate receives previously retired memberships when subscribing or reopening. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **bf3a9b8** on both devices for a paired installation test. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44899387884/artifacts/14705911807) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44899387884/artifacts/14705582291) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44901217420/artifacts/14705544180) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44901217420/artifacts/14706346365) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44899387884) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44901217420) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
+
+## Check a removal across two installed desktops
+
+Use the same disposable Google account on both devices. The first confirmed
+removal upgrades its entire Paperfact Drive directory, including other lists.
+A separate local data folder alone does not isolate the remote directory.
+
+1. On Windows, create a test list with papers A, B and C. Put B in a second list
+   and add a note to B. Select both lists and sync twice. Leave reading-progress
+   sync off for this check. Keep the Mac workspace empty until step 3.
+2. Remove A from the first list and sync Windows. Select that list in sync
+   settings, choose **Sync paper removals**, then cancel. Sync again and confirm
+   that the proposal is still available. Open it again and confirm the upgrade.
+3. On Mac, sign in, select both lists, and sync. The first list should contain B
+   and C. B should also appear in the second list. Enable note sync for the test
+   lists on both devices and verify the note before continuing.
+4. On the Mac remove B from the first list only. Sync Mac, Windows, then Mac.
+   Both readers should show only C in the first list. Open B from the second
+   list on each device and verify its note. Quit and reopen both applications,
+   sync again and confirm the counts stay the same.
+5. If a previously installed device retained an edited or unverified membership,
+   record the review message and check that its local research is intact. A
+   retained conflict is a separate outcome from a converged list. Record both
+   build IDs, the sync order and the first unexpected result in the report.
 
 ## Reopen a library with a saved Google sign-in
 
