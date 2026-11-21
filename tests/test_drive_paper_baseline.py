@@ -608,6 +608,27 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         view.sync_lists.click()
         wait(app, lambda: not view.busy)
         assert not view.upgrade_removals.isVisible()
+        from paper_daily import store as db
+
+        peers = []
+        for label in ("unchanged", "replaced"):
+            root = tmp_path / label
+            root.mkdir()
+            path = root / "research" / "papers.db"
+            path.parent.mkdir()
+            with closing(sqlite3.connect(path)) as conn:
+                conn.executescript(db.SCHEMA)
+            peer = drive_sync_setup.DriveSetup(
+                path, profiles=root / "settings" / "profiles", cache=root / "cache",
+                authorize=lambda **kw: files.session,
+            )
+            peer.sign_in(Ticket(), lambda _: None)
+            assert not peer.apply_library(["list"], Ticket(), lambda _: None)["reviews"]
+            peers.append((peer, path))
+        with closing(sqlite3.connect(peers[1][1])) as conn, conn:
+            row = conn.execute("SELECT * FROM list_papers WHERE list_id='list'").fetchone()
+            conn.execute("DELETE FROM list_papers WHERE list_id='list'")
+            conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})", row)
         with closing(sqlite3.connect(source)) as conn, conn:
             assert remove_selected(conn, "list", ["paper"]) == 1
         view.sync_lists.click()
@@ -624,6 +645,15 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         assert not view.upgrade_removals.isVisible(), view.status.text()
         directory = setup._library_view[3]
         assert directory.read().directory.lists[0].membership_changes_head.generation == 1
+        for index, (peer, path) in enumerate(peers):
+            report = peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            if index:
+                assert "replacement membership" in report["list"]
+            else:
+                assert not report
+            with closing(sqlite3.connect(path)) as conn:
+                assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (index,)
+                assert conn.execute("SELECT COUNT(*) FROM papers").fetchone() == (1,)
         with closing(sqlite3.connect(source)) as conn:
             assert not conn.execute("SELECT 1 FROM list_papers").fetchone()
             assert conn.execute("SELECT 1 FROM notes WHERE paper_id='paper'").fetchone()

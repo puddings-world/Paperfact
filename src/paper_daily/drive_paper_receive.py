@@ -138,10 +138,9 @@ def receive_initial(directory, store, list_id, revision, ticket):
             has_published = settings.execute(
                 "SELECT 1 FROM sqlite_master WHERE name='published_paper_ids'"
             ).fetchone()
-            if retired:
-                from paper_daily.drive_membership_apply import _schema
+            from paper_daily.drive_membership_apply import _schema
 
-                _schema(conn)
+            _schema(conn)
             originals = None
             for paper, member in pairs:
                 ticket.check()
@@ -198,6 +197,12 @@ def receive_initial(directory, store, list_id, revision, ticket):
                         member["payload"]["added_at"],
                     ),
                 )
+                # Observe the received lifetime even before the directory adopts removals.
+                conn.execute("INSERT INTO drive_membership_watches "
+                             "(context,list_id,member,creation,local_id,position) "
+                             "VALUES(?,?,?,?,?,?)",
+                             (store.context, list_id, member["entity_id"],
+                              member["operation_id"], local_id, first))
                 first += 1
             conn.execute(
                 "INSERT INTO drive_library_bibliographies VALUES(?,?,?) "
