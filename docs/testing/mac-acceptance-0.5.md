@@ -2,8 +2,14 @@
 
 ## Start here on Apple Silicon
 
-[Download the 70dae2c Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44878707587/artifacts/14696264526).
-[Packaged workflow verification](https://github.com/puddings-world/Paperfact/actions/runs/44878707587) passed on an arm64 runner. The older downloads below record earlier checks. Use the build above for the combined list, notes, PDF and offline explanation checks.
+Use build **5a7c8bc** on both devices for a paired installation test.
+
+| Device | Download |
+|---|---|
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44879419382/artifacts/14697239521) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44879419382/artifacts/14696938768) |
+
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44879419382) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
