@@ -376,7 +376,46 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(SyncFormatUnsupported):
         legacy.read()
 
+    from paper_daily.drive_membership_history import DriveMembershipRestores
     from paper_daily.drive_paper_receive import exchange_bibliography
+
+    restore_cloud = copy.deepcopy(fork)
+    restore_files = authority(restore_cloud, tmp_path / "v10").files
+    transport = DriveDirectory(restore_files, reader.directory.folder, reader.directory.head,
+                               reader.directory.library_id, membership_restores=True)
+    changes = DriveMembershipRestores(transport, reader.store, "return", revision=peer_revision)
+    def review_changed():
+        raise ListReviewRequired("review changed")
+    before_restore = transport.read()
+    with pytest.raises(ListReviewRequired, match="review changed"):
+        changes.restore(commit, restored, revision=peer_revision, check_review=review_changed)
+    assert transport.read() == before_restore
+
+    with monkeypatch.context() as limited:
+        limited.setattr(changes, "max_bytes", commit.size)
+        stored = dict(restore_cloud.objects)
+        with pytest.raises(ValueError, match="readable history budget"):
+            changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+        assert restore_cloud.objects == stored
+
+    def changed_after_upload():
+        if len(restore_cloud.objects) > len(stored):
+            raise ListReviewRequired("local entry edited during upload")
+
+    with pytest.raises(ListReviewRequired, match="edited during upload"):
+        changes.restore(commit, restored, revision=peer_revision, check_review=changed_after_upload)
+    assert transport.read() == before_restore
+    after = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+    uploaded = dict(restore_cloud.objects)
+    replayed = changes.restore(commit, restored, revision=peer_revision, check_review=lambda: None)
+    assert replayed == after
+    assert restore_cloud.objects == uploaded
+    other = DriveMembershipRestores(transport, writer.store, "return", revision=revision)
+    seen, latest, retired = other.versions(revision)
+    assert seen == after and latest[original["entity_id"]] == restored and not retired
+    with pytest.raises(SyncFormatUnsupported):
+        DriveDirectory(restore_files, transport.folder, transport.head, transport.library_id,
+                       membership_changes=True).read()
 
     fresh_db = tmp_path / "fresh-research" / "papers.db"
     fresh_db.parent.mkdir()

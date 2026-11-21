@@ -19,8 +19,10 @@ class Observation:
 class DriveDirectory:
     """One dedicated directory head, shared by devices in the same library."""
 
-    def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False):
-        self.membership_changes = membership_changes
+    def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False,
+                 membership_restores=False):
+        self.membership_restores = membership_restores
+        self.membership_changes = membership_changes or membership_restores
         _identifier(library_id)
         self.key = PREFIX + library_id
         _identifier(self.key)
@@ -64,7 +66,8 @@ class DriveDirectory:
                 raise ValueError("Drive directory exceeds its byte budget")
             raw = self.files.read_small(ref, self.folder, self.key)
             directory = Directory.from_bytes(raw, library_id=self.library_id,
-                                             membership_changes=self.membership_changes)
+                                             membership_changes=self.membership_changes,
+                                             membership_restores=self.membership_restores)
             if directory.generation != generation:
                 raise ValueError("Drive directory generation differs from its head")
         return Observation(head, directory)
@@ -89,6 +92,10 @@ class DriveDirectory:
         updates = Directory(self.library_id, before.generation, tuple(entries))
         if not self.membership_changes and any(e.membership_changes_head for e in updates.lists):
             raise ValueError("Enable membership change support before updating this directory")
+        if not self.membership_restores and any(
+            e.restored_memberships for e in (*updates.lists, *before.lists)
+        ):
+            raise ValueError("Enable membership restoration before updating this directory")
         merged = {item.id: item for item in before.lists}
         for item in updates.lists:
             previous = merged.get(item.id)
@@ -101,6 +108,8 @@ class DriveDirectory:
                         item = replace(item, **{field: prior})
                     elif current.generation != prior.generation + 1:
                         raise DriveChanged("List history must advance from its observed head")
+            if previous and previous.restored_memberships:
+                item = replace(item, restored_memberships=True)
             if previous and previous.extended_papers:
                 item = replace(item, extended_papers=True)
             merged[item.id] = item

@@ -50,9 +50,13 @@ An isolated operation-chain check now restores a retired membership against its
 exact deletion and assigns a fresh lifetime while preserving both parent identities.
 Replaying the same decision produces the same operation. An old delete cannot
 retire the restored lifetime, and an old restore cannot undo a later delete.
-The v9 Drive stream still accepts deletions only. The next integration must
-advertise restoration support before publishing a restore, project the new
-lifetime into each selected reader, and bind future reading progress to it.
+The v9 Drive stream still accepts deletions only. In a synthetic transport test,
+an explicit v10 writer advertised the first restoration with the directory's
+conditional head update. A second device verified the ordered chain, a retry
+created no second object, and a v9 client rejected the upgraded directory.
+Desktop publication still needs a locally verified review decision. Receiving
+readers and their reading-progress histories must adopt the new lifetime before
+ordinary desktops can enable the format.
 
 ## Release goal
 

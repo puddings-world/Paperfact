@@ -122,3 +122,51 @@ class DriveMembershipChanges(DriveListHistory):
 
     def _advance(self, entry, head, records):
         return replace(entry, membership_changes_head=head)
+
+
+class DriveMembershipRestores(DriveMembershipChanges):
+    """Explicit restoration writer and full-chain reader for capable devices."""
+
+    def __init__(self, directory, store, list_id, *, revision):
+        if not directory.membership_restores:
+            raise ValueError("Enable membership restoration before using this history")
+        super().__init__(directory, store, list_id, revision=revision)
+
+    def _validate_scope(self, records):
+        for op in records:
+            original = self.creations.get(op["entity_id"])
+            if (not original or op["entity_type"] != "membership"
+                    or op["parents"] != original["parents"]):
+                raise ValueError("Membership change belongs to a different list or paper")
+
+    def versions(self, revision):
+        head, records = self.changes(None, revision=revision)
+        latest, retired = membership_versions(self.creations, records)
+        return head, latest, retired
+
+    def append(self, expected, records, *, revision):
+        raise ValueError("Restoration requires a reviewed local membership")
+
+    def restore(self, expected, operation, *, revision, check_review):
+        records = self._operations([operation])
+        if operation["action"] != "put" or operation["device_id"] != self.store.context:
+            raise ValueError("Restore only an entry reviewed by this device")
+        self._check(revision)
+        head = self._current_head()
+        pages = list(self._pages_since(head, None, revision))
+        prior = [op for _, batch in pages for op in batch]
+        remaining = self.max_bytes - sum(page.size for page, _ in pages)
+        membership_versions(self.creations, prior)
+        if head == expected:
+            membership_versions(self.creations, [*prior, operation])
+            if head is None or head.generation >= self.max_pages:
+                raise ValueError("Restoration exceeds the readable history budget")
+
+        def check():
+            self._check(revision)
+            check_review()
+
+        return self._append(expected, records, revision, check, remaining_bytes=remaining)
+
+    def _advance(self, entry, head, records):
+        return replace(entry, membership_changes_head=head, restored_memberships=True)

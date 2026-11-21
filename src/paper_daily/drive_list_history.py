@@ -59,6 +59,10 @@ class DriveListHistory:
         self._check(revision)
 
     def append(self, expected, records, *, revision):
+        return self._append(expected, records, revision,
+                            lambda: self._check_publication(revision, records))
+
+    def _append(self, expected, records, revision, check, *, remaining_bytes=None):
         self._check(revision)
         records = self._operations(records)
         if expected is not None and not isinstance(expected, ScopeHead):
@@ -91,8 +95,10 @@ class DriveListHistory:
             ):
                 return current
             raise DriveChanged("List history changed; reload before publishing")
+        if remaining_bytes is not None and len(raw) > remaining_bytes:
+            raise ValueError("New page exceeds the readable history budget")
         (identity,) = directory.files.new_ids()
-        self._check_publication(revision, records)
+        check()
         directory.files.put_small(
             identity, directory.folder, directory.key, "commit", raw, folder_role="directory"
         )
@@ -101,7 +107,7 @@ class DriveListHistory:
         directory.upsert(
             observed,
             [self._advance(entry, head, records)],
-            check=lambda: self._check_publication(revision, records),
+            check=check,
         )
         return head
 
