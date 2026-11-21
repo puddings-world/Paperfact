@@ -203,3 +203,38 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
     with pytest.raises(ValueError, match="both versions"):
         sync(win)
     assert db(win_path, "SELECT note FROM lists WHERE id='b'") == [("Local candidate",)]
+
+
+def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from paper_daily import drive_list_records, drive_sync_setup
+    from paper_daily.workspace_service import Ticket
+
+    result = {"items": []}
+    setup = SimpleNamespace(
+        workspace=SimpleNamespace(path=tmp_path / "research"),
+        save_library=lambda *args, **kwargs: result,
+        read_library=lambda ticket: result,
+        _library_view=(None, object(), SimpleNamespace(selected={"a", "b"}, revision=2), object()),
+    )
+    monkeypatch.setattr(drive_sync_setup, "local_binding", lambda path: None)
+    seen = []
+
+    def exchange(directory, store, list_id, revision, ticket):
+        seen.append(list_id)
+        if list_id == "a":
+            raise drive_list_records.ListReviewRequired("Conflicting list name")
+
+    monkeypatch.setattr(drive_list_records, "exchange_list", exchange)
+    apply = drive_sync_setup.DriveSetup.apply_library
+    report = apply(setup, ["a", "b"], Ticket(), lambda _: None)
+    assert seen == ["a", "b"]
+    assert report["reviews"] == {"a": "Conflicting list name"}
+
+    def account_changed(*args):
+        raise PermissionError("Google account changed")
+
+    monkeypatch.setattr(drive_list_records, "exchange_list", account_changed)
+    with pytest.raises(PermissionError, match="account changed"):
+        apply(setup, ["a", "b"], Ticket(), lambda _: None)

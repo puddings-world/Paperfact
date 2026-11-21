@@ -1,5 +1,29 @@
 # Mac v0.5 acceptance
 
+## Per-device list selection candidate
+
+Source **fe82ae9**, [Mac build 44860029456](https://github.com/puddings-world/Paperfact/actions/runs/44860029456).
+Use a separate test workspace on each device. Check the source revision in both apps.
+
+1. In an ordinary desktop workspace create two disposable named lists. Open Drive
+   settings, sign in, select both lists, and save the device selection.
+2. On the Mac, sign in to the same Google account. Verify that both names appear.
+   Select only the second list and save. Verify its name and description in the
+   Mac reader and confirm the first list was not imported.
+3. Rename the selected list on the desktop and edit its description on the Mac.
+   Save the Mac selection, then the desktop selection, then the Mac selection.
+   Both devices should show the new name and description.
+4. Change the same description to different text on both devices. Save on the
+   first device, then on the second. Verify the conflict is reported and that
+   each device retains its version. Record the app revision and operation order.
+5. Uncheck the list on the Mac, save, and verify that its existing local data
+   and the desktop's selection are retained.
+
+This checklist exercises list details when the device selection is saved.
+Paper membership, notes and PDFs in the ordinary library still need scoped
+replication. Use a research package for an offline copy of those materials.
+The separate-workspace pilot below has its own enrollment and content checks.
+
 ## Personal Drive candidate: desktop to Mac
 
 Drive candidate source: **052d9abff145317014c8321ac6eb454f70823160**.

@@ -243,7 +243,14 @@ class DriveSyncDialog(QDialog):
     def _show_directory(self, library):
         self.directory_lists.clear()
         for row in library["items"]:
-            item = QListWidgetItem(row["name"])
+            reason = library.get("reviews", {}).get(row["id"])
+            label = row["name"]
+            if reason:
+                label += self.tr(" — needs review", " — 需核對")
+            item = QListWidgetItem(label)
+            if reason:
+                item.setToolTip(reason)
+                item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, reason)
             item.setData(Qt.ItemDataRole.UserRole, row["id"])
             item.setCheckState(
                 Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked
@@ -388,6 +395,11 @@ class DriveSyncDialog(QDialog):
                         "List names and device selection saved.", "已儲存清單名稱與這台裝置的勾選。"
                     )
                 )
+                if result.get("reviews"):
+                    self.status.setText(self.tr(
+                        "Selection saved. Review the marked lists.",
+                        "已儲存勾選。請核對標示的清單。",
+                    ))
             elif kind == "toggle":
                 enabled = result["enabled"]
                 if enabled:

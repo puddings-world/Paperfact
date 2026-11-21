@@ -153,17 +153,21 @@ class DriveSetup:
         return self.read_library(ticket)
 
     def apply_library(self, selected, ticket, progress):
-        from paper_daily.drive_list_records import exchange_list
+        from paper_daily.drive_list_records import ListReviewRequired, exchange_list
 
         result = self.save_library(selected, ticket, progress, intermediate=True)
         if local_binding(self.workspace.path):
             return result
         _, store, selection, directory, *_ = self._library_view
+        reviews = {}
         for index, list_id in enumerate(sorted(selection.selected)):
             ticket.check()
             progress({"stage": "selected_lists", "completed": index, "total": len(selected)})
-            exchange_list(directory, store, list_id, selection.revision, ticket)
-        return self.read_library(ticket)
+            try:
+                exchange_list(directory, store, list_id, selection.revision, ticket)
+            except ListReviewRequired as exc:
+                reviews[list_id] = str(exc)
+        return {**self.read_library(ticket), "reviews": reviews}
 
     def _receipt(self, kind, spec=None):
         if self.files is None:

@@ -125,8 +125,10 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
 
     def save(selected, ticket, progress):
         saved.append(selected)
-        return {"items": [{**item, "selected": item["id"] in selected}
-                          for item in library["items"]]}
+        return {
+            "items": [{**item, "selected": item["id"] in selected} for item in library["items"]],
+            "reviews": {"b": "Conflicting description"},
+        }
 
     setup.sign_in = sign_in
     setup.apply_library = save
@@ -145,3 +147,6 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     wait(app, lambda: not view.busy)
     assert saved == [["b"]]
     assert view.directory_lists.item(1).checkState() == Qt.CheckState.Checked
+    assert "needs review" in view.directory_lists.item(1).text()
+    assert view.directory_lists.item(1).toolTip() == "Conflicting description"
+    assert "Review" in view.status.text()

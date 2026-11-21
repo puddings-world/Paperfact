@@ -11,6 +11,10 @@ from paper_daily.library_directory import ScopeHead
 from paper_daily.workspace_service import _read
 
 
+class ListReviewRequired(ValueError):
+    """An individual list needs review before its exchange can continue."""
+
+
 def _digest(payload):
     return hashlib.sha256(encode(payload)).hexdigest()
 
@@ -47,21 +51,21 @@ def exchange_list(directory, store, list_id, revision, ticket):
         local = _payload(research, list_id)
     head, changes = history.changes(anchor, revision=revision)
     if any(op["action"] != "put" for op in changes):
-        raise ValueError("List retirement requires review")
+        raise ListReviewRequired("List retirement requires review")
     remote = changes[-1]["payload"] if changes else None
     if local is None and base is not None:
-        raise ValueError("A retained list was removed locally; review before restoring")
+        raise ListReviewRequired("A retained list was removed locally; review before restoring")
     target = remote if remote is not None else local
     if remote is not None and local is not None and remote != local and _digest(local) != base:
         original = history.applied_payload(anchor, revision=revision) if anchor else None
         if original is None or _digest(original) != base:
-            raise ValueError("No verified common list details; both versions were retained")
+            raise ListReviewRequired("No verified common list details; both versions were retained")
         target = dict(remote)
         for field in ("name", "note"):
             if local[field] == original[field]:
                 continue
             if remote[field] != original[field] and remote[field] != local[field]:
-                raise ValueError(f"Conflicting list {field}; both versions were retained")
+                raise ListReviewRequired(f"Conflicting list {field}; both versions were retained")
             target[field] = local[field]
     if target is None:
         return "waiting_source"
