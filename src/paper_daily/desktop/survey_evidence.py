@@ -449,11 +449,22 @@ class SavedSurveyPane(QWidget):
             verified=result["originals_verified"], total=result["originals_total"],
             quotes=result["verified_located_passages"], unlocated=result["unlocated_passages"]))
 
+    def _clear_report(self):
+        self.saved = self.selection = None
+        self._retained = []
+        self.result_selector.hide()
+        self.source_panel.hide()
+        self.image.clear()
+        self.view.clear()
+
     def load_results(self):
+        if self.future is not None or self.closing or self.disposed or self._review is not None:
+            return
         if not self.current():
             self._stale()
             self._controls()
             return
+        self._clear_report()
         database, list_id, cancel = self.database, self.list_id, self.cancelled.is_set
         self._start(
             lambda: survey_jobs.list_retained(database, list_id, cancelled=cancel),
@@ -584,11 +595,7 @@ class SavedSurveyPane(QWidget):
             return
         if self.future is not None or self.closing or self.disposed:
             return
-        self.saved = self.selection = None
-        self._retained = []
-        self.result_selector.hide()
-        self.source_panel.hide()
-        self.view.clear()
+        self._clear_report()
         database, list_id, cancel = self.database, self.list_id, self.cancelled.is_set
         self._start(
             lambda: survey_reader.read(database, list_id, cancelled=cancel),

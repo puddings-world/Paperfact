@@ -856,6 +856,9 @@ fail visibly; today's primary PDF is never a substitute. This does not establish
 scientific support or grant publication rights. Regeneration is disabled in this
 archive view; choose **Current report** first.
 
+Opening **Completed AI results** clears the previous preview while the list loads.
+If the list is empty, **Current report** returns to the saved report.
+
 To reuse a completed result, choose **Use this report...**. The app verifies the
 retained originals and prepares the current receiver target in the background,
 then asks for confirmation (Cancel is the default). Its captured research goal,

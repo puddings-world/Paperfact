@@ -43,6 +43,24 @@ A separate local data folder alone does not isolate the remote directory.
    the Mac reflects the change. Record both build IDs and the first step whose
    result differs.
 
+## Review a saved AI report while offline
+
+On each installed desktop, use a disposable list with a previously generated
+source-aware report and a retained result. A list package can transfer the
+current report; the private completed-job history belongs to its original
+workspace. Record the build ID and which workspace contains the retained result.
+
+1. Disconnect the network. From the list overview report, open **Report & sources**
+   and **Completed AI results**. Select a result and inspect a quoted passage.
+2. Choose **Use this report...**, cancel the confirmation and open **Current report**.
+   Verify the original current report and the list reading goal are unchanged.
+3. Select the retained result again, confirm, close the dialog and reopen it.
+   Verify the current report contains the selected result's text and quotation.
+   Check the list goal again. These operations should work offline.
+4. In an enrolled test workspace with a pending report whose files are already
+   local, choose **Finish saved report**. Reopen the report and inspect a passage.
+   Record this step as untested if the workspace has no pending report.
+
 ## Reopen a library with a saved Google sign-in
 
 Run this check independently on Windows and macOS in a disposable workspace.

@@ -60,6 +60,27 @@ def finish(dialog, pane):
     dialog.deleteLater()
 
 
+def test_refreshing_empty_retained_history_clears_the_previous_action(retained, app, monkeypatch):
+    from paper_daily import survey_jobs
+
+    database, list_id, _, calls, _ = retained
+    dialog, pane = open_retained(retained, monkeypatch)
+    try:
+        before = snapshot(database)
+        monkeypatch.setattr(survey_jobs, "list_retained", lambda *a, **kw: [])
+        pane.results.click()
+        wait_until(lambda: pane.future is None)
+        assert pane.status.text() == pane.words["results_empty"]
+        assert not pane.apply_result.isVisible() and not pane.result_selector.isVisible()
+        assert pane.saved is None and not pane.view.toPlainText()
+        pane.refresh.click()
+        wait_until(lambda: pane.future is None)
+        assert pane.saved.data["kind"] == survey_reader.read(database, list_id).data["kind"]
+        assert snapshot(database) == before and len(calls) == 1
+    finally:
+        finish(dialog, pane)
+
+
 def test_confirmation_cancel_then_apply_updates_current_report_without_ai(
     retained, app, monkeypatch
 ):
