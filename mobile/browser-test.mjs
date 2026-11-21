@@ -25,13 +25,13 @@ async function check(name, run) {
     await run();
     results.push('PASS ' + name);
   } catch(error) {
-    results.push('FAIL ' + name + ': ' + error.message);
+    results.push('FAIL ' + name + ': ' + (error.stack || error.message));
   }
   result.textContent = results.join('\n');
 }
 async function until(predicate) {
   for(let i = 0; i < 100; i++) {
-    if(predicate()) return;
+    if(await predicate()) return;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error('Timed out');
@@ -278,10 +278,17 @@ await check('Lineage exact IndexedDB reopen, real read-only cards and source-lif
     const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
     frame.contentWindow.location.reload();await loaded;
     await until(()=>frame.contentDocument.querySelector('.paper-card')||frame.contentDocument.querySelector('#tab-overview'));
-    const doc=frame.contentDocument;doc.querySelector('.paper-card')?.click();doc.querySelector('#tab-overview').click();return doc;
+    const doc=frame.contentDocument;
+    await until(()=>doc.querySelector('#tab-overview') || doc.querySelector('.paper-card:not(:disabled)'));
+    doc.querySelector('.paper-card:not(:disabled)')?.click();
+    await until(()=>doc.querySelector('#tab-overview:not(:disabled)'));
+    doc.querySelector('#tab-overview').click();return doc;
   }
   const doc=await overview();
   const {SOURCE_COPY}=await import('./lineage-source-view.mjs');
+  // Navigation saves its selection asynchronously. Inspect only after that write settles.
+  await until(async()=>!doc.querySelector('.status[data-busy="true"]') &&
+    (await store.read()).selection?.paper===PAPER);
   const beforeInspect=JSON.stringify(await store.read());
   await until(()=>doc.querySelector('.lineage-card button:not([disabled])'));
   const card=doc.querySelector('.lineage-card'),summary=card.querySelector('.lineage-corpus>summary');

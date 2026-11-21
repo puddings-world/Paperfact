@@ -172,6 +172,10 @@ flowchart LR
     A -. "List research package" .-> C["Colleague: independent copy"]
 ```
 
+### Read and edit on a phone
+
+The mobile web app pairs with a desktop workspace on a Paperfact sync service. Open the web app on the same HTTPS origin as that service and use the desktop's device-pairing details. After pairing, a saved note can be edited offline and sent back after reconnecting. The Windows/Mac personal Drive directory has no mobile connector in this preview. A portable reading export is available for viewing papers on a phone. [Mobile pairing and offline reconnection](docs/mobile-0.5.md#browser-pairing-and-offline-reconnection).
+
 ## Share the research, not your account
 
 ```mermaid

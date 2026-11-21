@@ -109,7 +109,10 @@ const server = createServer(async(request, response) => {
     response.end(new Uint8Array(await upstream.arrayBuffer()));return;
   }
   const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname),
-  selectedRoot=pairingMode&&['/browser-pairing-browser-test.html','/browser-pairing-browser-test.mjs'].includes(name)?root:assetRoot,
+  isPairingFixture=pairingMode&&['/browser-pairing-browser-test.html','/browser-pairing-browser-test.mjs'].includes(name),
+  isNoteFixture=plainNoteMode&&['/browser-test.html','/browser-test.mjs','/artifact-fixture.mjs',
+    '/tests/fixtures/lineage-data.mjs'].includes(name),
+  selectedRoot=isPairingFixture||isNoteFixture?root:assetRoot,
   path = resolve(selectedRoot, '.' +(name === '/' ? '/index.html': name));
   const local = relative(selectedRoot, path);
   if(local.startsWith('..') || isAbsolute(local)) {
@@ -351,7 +354,9 @@ async function plainNoteMainHook() {
   const config={workspace:positionReady.workspace,device:positionReady.device,origin,token:positionReady.token};
   const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs'),s=await IndexedStore.open(${JSON.stringify(config.workspace)},${JSON.stringify(config.device)});try{return await s.read();}finally{s.close();}})()`;
   const connect=async(token)=>{
-    await evaluate('[...document.querySelectorAll("header button")].find(b=>["Connection","連線"].includes(b.textContent)).click()');
+    await wait('!!document.querySelector("#connection-trigger:not(:disabled)")','connection action ready');
+    await evaluate('document.querySelector("#connection-trigger").click()');
+    await wait('!!document.querySelector("dialog.connection-dialog[open]")','connection settings open');
     await evaluate(`(()=>{const c=${JSON.stringify({...config,token})},d=document.querySelector('dialog'),inputs=d.querySelectorAll('.fields input');[c.workspace,c.device,c.origin,c.token].forEach((v,i)=>inputs[i].value=v);d.querySelector('.connection-fields').closest('details').open=true;d.querySelector('.connection-fields button.primary').click();})()`);
     await wait(`document.querySelector('.workspace')?.textContent===${JSON.stringify(config.workspace)} && !document.querySelector('.status[data-busy="true"]') && !!(document.querySelector('.paper-card') || document.querySelector('#tab-notes'))`,'open fixture workspace');
     await evaluate('document.querySelector(".paper-card")?.click();document.querySelector("#tab-notes").click()');
