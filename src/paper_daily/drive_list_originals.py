@@ -24,8 +24,7 @@ class DriveListOriginals:
             raise PermissionError("Enable PDF sync for this list on this device")
         self.check()
         papers = DriveListPapers(directory, store, list_id)
-        self.paper_head, records = papers.changes(None, revision=revision)
-        self.members = {op["entity_id"]: op["incarnation"] for op in records[::2]}
+        self.paper_head, self.members = papers.members(revision)
         self.check()
         self.objects = DriveObjects(directory.files, directory.folder, directory.key,
                                     Path(cache) / directory.folder, folder_role="directory",

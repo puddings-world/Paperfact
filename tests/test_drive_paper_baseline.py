@@ -597,3 +597,65 @@ def test_ordinary_note_publication_keeps_anchor_scope_and_identity(source, tmp_p
         assert conn.execute("SELECT body FROM notes WHERE paper_id='paper'").fetchone() == (
             "Offline edit",
         )
+
+
+
+def test_idle_pdf_poll_skips_history_and_missing_paths_but_discovers_later_pdf(
+    source, tmp_path, monkeypatch,
+):
+    from pathlib import Path
+
+    from test_workspace_enrollment import pdf
+
+    from paper_daily.drive_reader_originals import exchange_originals
+
+    with closing(sqlite3.connect(source)) as conn, conn:
+        for number in range(40):
+            key = f"missing-{number}"
+            conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source) "
+                         "VALUES(?,?,?,'Fixture',2026,'fixture')", (key, key, key))
+            conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                         "VALUES('list',?,?,?)", (key, number + 1, STAMP))
+    cloud = Cloud()
+    files = authority(cloud, tmp_path / "authority").files
+    folder, head = files.new_ids(2)
+    directory = DriveDirectory(files, folder, head, "library")
+    catalog = directory.upsert(directory.initialize("Library"), [
+        ListEntry("list", "Reading", False)
+    ]).directory
+    store = selection(source, tmp_path / "settings")
+    store.save(catalog, ["list"], expected_revision=0)
+    publish_initial(directory, store, "list", 1, Ticket())
+    store.set_pdf_sync("list", True, revision=1, ticket=Ticket())
+    (source.parent / "pdf").mkdir()
+    memory = {}
+
+    def poll():
+        exchange_originals(directory, tmp_path / "cache", store, "list", 1, Ticket(), memory)
+
+    history_reads, misses = [], []
+    read, exists = files.read_small, Path.exists
+
+    def observe_read(*args, **kwargs):
+        raw = read(*args, **kwargs)
+        if b'"format":"paperfact.list-paper-history.v1"' in raw:
+            history_reads.append(len(raw))
+        return raw
+
+    def observe_path(path):
+        if path.parent == source.parent / "pdf" and path.name.startswith("missing-"):
+            misses.append(path.name)
+        return exists(path)
+
+    monkeypatch.setattr(files, "read_small", observe_read)
+    monkeypatch.setattr(Path, "exists", observe_path)
+    poll()
+    assert len(history_reads) == 1
+    history_reads.clear()
+    count = len(cloud.objects)
+    poll()
+    assert not history_reads and not misses and len(cloud.objects) == count
+    pdf(source)
+    poll()
+    assert not history_reads and not misses
+    assert directory.read().directory.lists[0].originals_head is not None

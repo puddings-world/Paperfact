@@ -2,6 +2,8 @@
 
 ## Exchange original PDFs between readers
 
+[Download the 9d995e8 Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44872907556/artifacts/14695051678).
+The [macOS build and packaged acceptance](https://github.com/puddings-world/Paperfact/actions/runs/44872907556) passed.
 Use the same original-sync candidate on every device that opens the private
 Drive directory. Publishing the first PDF upgrades that directory to v5.
 Use disposable workspaces and a test list with two different papers.

@@ -95,28 +95,42 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
         selected = {row[0] for row in conn.execute(
             "SELECT paper_id FROM list_papers WHERE list_id=?", (list_id,)
         )}
-        ids = conn.execute("SELECT id FROM papers")
-        names = Counter(_safe_name(row[0]).casefold() for row in ids)
         with _read(store.path) as settings:
             bindings = {local: paper for paper, local in settings.execute(
                 "SELECT remote_id,local_id FROM published_paper_ids"
             ) if local in selected} if index.members else {}
         if set(bindings) != selected or set(bindings.values()) != set(index.members):
             raise ListReviewRequired("Refresh the bibliography before synchronizing originals")
+        # A single enumeration avoids one failed filesystem lookup per missing original.
+        present = None
+        if len(bindings) > 32:
+            try:
+                with os.scandir(root) as entries:
+                    present = {entry.name.casefold() for entry in entries
+                               if entry.name.lower().endswith(".pdf")}
+            except FileNotFoundError:
+                present = set()
+        names = None
         blobs = None
         for local, paper in bindings.items():
             ticket.check()
             name = _safe_name(local)
             path = root / (name + ".pdf")
             item = remote.get(paper)
-            if not item and not path.exists():
+            if not item and present is not None and path.name.casefold() not in present:
                 continue
+            exists = path.exists()
+            if not item and not exists:
+                continue
+            if names is None:
+                ids = conn.execute("SELECT id FROM papers")
+                names = Counter(_safe_name(row[0]).casefold() for row in ids)
             if names[name.casefold()] != 1 or PureWindowsPath(path.name).is_reserved():
                 raise ListReviewRequired("Review papers with an ambiguous PDF filename")
             _owned_path(path)
             expected = (BlobManifest(item["manifest"]["sha256"], item["manifest"]["size"])
                         if item else None)
-            if path.exists():
+            if exists:
                 found = _document(path, memory)
                 if expected and found != expected:
                     raise ListReviewRequired("The local PDF differs from its Drive original")

@@ -2,6 +2,7 @@
 
 import hashlib
 from dataclasses import replace
+from types import MappingProxyType
 
 from paper_daily.drive_sync_files import MAX_INLINE, DriveChanged, decode, encode
 from paper_daily.drive_sync_log import reference
@@ -137,14 +138,20 @@ class DriveListHistory:
         self._check(revision)
         if anchor is not None and not isinstance(anchor, ScopeHead):
             raise ValueError("Invalid observed list history")
+        head = self._current_head()
+        return head, self._since(head, anchor, revision)
+
+    def _current_head(self):
         directory = self.directory
         if directory.files.account()["id"] != self.store.owner_id:
             raise PermissionError("The selected Google account changed")
-        observed = directory.read()
-        entry = self._entry(observed)
+        entry = self._entry(directory.read())
         if entry is None:
             raise SyncHistoryUnavailable("Selected list is missing from this directory")
-        head = current = getattr(entry, self.head_field)
+        return getattr(entry, self.head_field)
+
+    def _since(self, head, anchor, revision):
+        current = head
         result, used = [], 0
         while current != anchor:
             self._check(revision)
@@ -160,7 +167,7 @@ class DriveListHistory:
             result.append(operations)
             current = parent
         self._check(revision)
-        return head, [op for batch in reversed(result) for op in batch]
+        return [op for batch in reversed(result) for op in batch]
 
 
 class DriveListPapers(DriveListHistory):
@@ -168,6 +175,29 @@ class DriveListPapers(DriveListHistory):
 
     format = "paperfact.list-paper-history.v1"
     head_field = "papers_head"
+
+    def members(self, revision):
+        """Reuse only a verified membership projection for the exact observed paper head."""
+        self._check(revision)
+        head = self._current_head()
+        key = (self.store.context, self.directory.folder, self.directory.head, self.list_id)
+        cache = self.directory.files.membership_cache
+        with self.directory.files.membership_lock:
+            previous = cache.get(key)
+        if previous is not None and previous[0] == head:
+            self._check(revision)
+            return previous
+        records = self._since(head, None, revision)
+        members = MappingProxyType({op["entity_id"]: op["incarnation"] for op in records[::2]})
+        snapshot = head, members
+        with self.directory.files.membership_lock:
+            cache.pop(key, None)
+            if members and len(members) <= 10000:
+                while (len(cache) >= 16
+                       or sum(len(v[1]) for v in cache.values()) + len(members) > 10000):
+                    del cache[next(iter(cache))]
+                cache[key] = snapshot
+        return snapshot
 
     def _validate_scope(self, records):
         if len(records) % 2:
@@ -205,8 +235,7 @@ class DriveListNotes(DriveListHistory):
         if self.grant is None:
             raise PermissionError("Enable note sync on this device before transferring notes")
         papers = DriveListPapers(directory, store, list_id)
-        _, operations = papers.changes(None, revision=revision)
-        self._members = {p["entity_id"]: p["incarnation"] for p in operations[::2]}
+        _, self._members = papers.members(revision)
 
     def paper_parent(self, identity):
         if identity not in self._members:

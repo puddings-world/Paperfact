@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from threading import Lock
 
 import httpx
 
@@ -120,8 +121,12 @@ class DriveFiles:
         self.client = client or httpx.Client(timeout=20, trust_env=False, follow_redirects=False)
         self._owned = client is None
         self._heads = {}
+        self.membership_cache = {}
+        self.membership_lock = Lock()
 
     def close(self):
+        with self.membership_lock:
+            self.membership_cache.clear()
         if self._owned:
             self.client.close()
 
