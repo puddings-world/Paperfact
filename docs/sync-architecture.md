@@ -201,6 +201,13 @@ verified attachments and pilot migration remain open. Outstanding acceptance
 includes lost acknowledgements with subsequent offline edits, deletion versus
 editing, shared-card changes across lists, live Drive and installed devices.
 
+Directory attachment transport uses verified private-folder chunks. Uploads bound
+to an original's SHA-256 and size reject mismatches before allocating Drive
+objects. After a full verified download, the receiving device can reuse the
+same remote chunks when publishing the same bytes from another list. This is
+transport support; ordinary list sync still needs a scoped paper-to-PDF manifest,
+per-device permission, and verified installation in the reader.
+
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.

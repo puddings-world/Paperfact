@@ -337,8 +337,9 @@ class DriveAuthority:
             if state != "committed" or digest in payload["blobs"]:
                 continue
             store = self._store(service, workspace, digest, size)
-            path = store.verified_path(BlobManifest(digest, size))
-            payload["blobs"][digest] = self.objects.put(path)
+            owner = BlobManifest(digest, size)
+            path = store.verified_path(owner)
+            payload["blobs"][digest] = self.objects.put(path, expected=owner)
 
     def invoke(self, method, *args, control=None, **kwargs):
         if method not in METHODS:

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
+from contextlib import suppress
 from pathlib import Path
 
-from paper_daily.drive_sync_files import MAX_INLINE, DriveMissing, decode, identifier
+from paper_daily.drive_sync_files import MAX_INLINE, DriveMissing, decode, encode, identifier
 from paper_daily.drive_sync_log import reference
 from paper_daily.presentations import _atomic_json
 from paper_daily.sync_blobs import BlobManifest, _no_link
@@ -15,48 +18,77 @@ FORMAT = "paperfact.drive-bytes.v1"
 
 
 class DriveObjects:
-    def __init__(self, files, folder, workspace, cache):
+    def __init__(self, files, folder, workspace, cache, *, folder_role="workspace"):
+        if folder_role not in {"workspace", "directory"}:
+            raise ValueError("Unknown Drive attachment folder role")
+        self.folder_role = folder_role
         self.files, self.folder, self.workspace = files, identifier(folder), workspace
         self.cache = Path(cache)
         for entry in (self.cache, *self.cache.parents):
             _no_link(entry)
         self.cache.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-    def put(self, path):
+    def _remember(self, receipt, chunks):
+        """The first complete receipt wins even if two readers transfer the same original."""
+        record = dict(workspace=self.workspace, folder=self.folder, chunks=chunks)
+        if self.folder_role == "workspace":
+            _atomic_json(receipt, record)
+            return
+        value = encode(record)
+        with tempfile.TemporaryDirectory(dir=self.cache) as staging:
+            temp = Path(staging) / "receipt"
+            with temp.open("xb") as stream:
+                stream.write(value)
+                stream.flush()
+                os.fsync(stream.fileno())
+            with suppress(FileExistsError):
+                os.link(temp, receipt)
+
+    def put(self, path, *, expected: BlobManifest | None = None):
         path = Path(path)
         _no_link(path)
         size = path.stat().st_size
         if not 0 < size <= MAX_OBJECT:
             raise ValueError("Drive object is empty or exceeds the transfer limit")
+        if expected is not None and expected.size != size:
+            raise ValueError("Source size differs from the selected attachment")
         full = hashlib.sha256()
+        seen = 0
         parts = []
         with path.open("rb") as source:
             while raw := source.read(MAX_INLINE):
                 self.files.check()
+                seen += len(raw)
+                if seen > size:
+                    raise ValueError("Source grew during Drive upload preparation")
                 full.update(raw)
                 parts.append((hashlib.sha256(raw).hexdigest(), len(raw)))
         digest = full.hexdigest()
+        if seen != size or (expected is not None and digest != expected.sha256):
+            raise ValueError("Source bytes differ from the selected attachment")
+        if self.folder_role == "directory":
+            self.files.owned(self.folder, self.workspace, self.folder_role)
         receipt = self.cache / (digest + ".upload.json")
         _no_link(receipt)
-        if receipt.exists():
-            saved = decode(receipt.read_bytes())
-            if (
-                not isinstance(saved, dict)
-                or set(saved) != {"workspace", "folder", "chunks"}
-                or saved["workspace"] != self.workspace
-                or saved["folder"] != self.folder
-                or not isinstance(saved["chunks"], list)
-                or len(saved["chunks"]) != len(parts)
-            ):
-                raise ValueError("Drive upload receipt belongs to another transfer")
-            chunks = saved["chunks"]
-        else:
+        if not receipt.exists():
             chunks = [
                 reference(identity, b"placeholder") for identity in self.files.new_ids(len(parts))
             ]
             for ref, (part_hash, length) in zip(chunks, parts, strict=True):
                 ref.update(sha256=part_hash, size=length)
-            _atomic_json(receipt, dict(workspace=self.workspace, folder=self.folder, chunks=chunks))
+            self._remember(receipt, chunks)
+        _no_link(receipt)
+        saved = decode(receipt.read_bytes())
+        if (
+            not isinstance(saved, dict)
+            or set(saved) != {"workspace", "folder", "chunks"}
+            or saved["workspace"] != self.workspace
+            or saved["folder"] != self.folder
+            or not isinstance(saved["chunks"], list)
+            or len(saved["chunks"]) != len(parts)
+        ):
+            raise ValueError("Drive upload receipt belongs to another transfer")
+        chunks = saved["chunks"]
         with path.open("rb") as source:
             for ref, (part_hash, length) in zip(chunks, parts, strict=True):
                 self.files.check()
@@ -77,7 +109,8 @@ class DriveObjects:
                         ref["id"], self.workspace, "blob", parent=self.folder
                     )
                 except DriveMissing:
-                    self.files.put_small(ref["id"], self.folder, self.workspace, "blob", raw)
+                    self.files.put_small(ref["id"], self.folder, self.workspace, "blob", raw,
+                                         folder_role=self.folder_role)
                 else:
                     if (
                         existing.get("size") != str(length)
@@ -88,7 +121,7 @@ class DriveObjects:
                 raise ValueError("Source bytes grew during Drive upload")
         return dict(format=FORMAT, sha256=digest, size=size, chunks=chunks)
 
-    def get(self, manifest, store):
+    def get(self, manifest, store, *, expected: BlobManifest | None = None):
         if (
             not isinstance(manifest, dict)
             or set(manifest) != {"format", "sha256", "size", "chunks"}
@@ -96,6 +129,10 @@ class DriveObjects:
         ):
             raise ValueError("Unsupported Drive byte manifest")
         blob = BlobManifest(manifest["sha256"], manifest["size"])
+        if expected is not None and expected != blob:
+            raise ValueError("Drive manifest differs from the selected attachment")
+        if self.folder_role == "directory":
+            self.files.owned(self.folder, self.workspace, self.folder_role)
         chunks = manifest["chunks"]
         if (
             blob.size > MAX_OBJECT
@@ -103,7 +140,7 @@ class DriveObjects:
             or len(chunks) != (blob.size + MAX_INLINE - 1) // MAX_INLINE
         ):
             raise ValueError("Invalid Drive chunk count")
-        expected = []
+        boundaries = []
         for index, ref in enumerate(chunks):
             length = min(MAX_INLINE, blob.size - index * MAX_INLINE)
             if (
@@ -114,13 +151,14 @@ class DriveObjects:
                 raise ValueError("Invalid Drive chunk boundary")
             identifier(ref["id"])
             BlobManifest(ref["sha256"], ref["size"])
-            expected.append((ref, length))
+            boundaries.append((ref, length))
         if store.available(blob):
             return store.verified_path(blob)
         status = store.begin(blob)
         offset = status["offset"]
         start = 0
-        for ref, length in expected:
+        fetched_all = offset == 0
+        for ref, length in boundaries:
             self.files.check()
             if offset < start + length:
                 raw = self.files.read_small(ref, self.folder, self.workspace, "blob")
@@ -129,4 +167,10 @@ class DriveObjects:
                     piece, pending = pending[: store.chunk_bytes], pending[store.chunk_bytes :]
                     offset = store.append(blob, offset, piece)
             start += length
-        return store.finalize(blob)
+        path = store.finalize(blob)
+        if fetched_all and self.folder_role == "directory":
+            receipt = self.cache / (blob.sha256 + ".upload.json")
+            _no_link(receipt)
+            if not receipt.exists():
+                self._remember(receipt, chunks)
+        return path

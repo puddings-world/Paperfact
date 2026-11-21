@@ -1,5 +1,26 @@
 # Mac v0.5 acceptance
 
+## Resolve conflicting edits on a selected list
+
+[Download the 01143a3 Apple Silicon candidate](https://github.com/puddings-world/Paperfact/actions/runs/44870894800/artifacts/14693348238).
+Use this build or later on both devices. The Mac build and packaged workflow
+passed in [run 44870894800](https://github.com/puddings-world/Paperfact/actions/runs/44870894800).
+A physical two-device test with Google Drive is still pending.
+
+1. Select the same test list on Windows and Mac. Enable notes for that list on
+   both devices. If the previous grant covered new cards only, switch it off
+   and on to enable edits. Sync a test card and confirm both devices see it.
+2. Go offline on both devices and edit the same card differently. Add an
+   unrelated card. Reconnect and sync Windows, Mac, then Windows. Verify the
+   unrelated card travels and the conflicting copies keep their own text.
+3. On the device reporting the conflict, open personal Drive settings, select
+   the list and choose **Compare conflicting notes**. Check the paper title,
+   card number, original shared text and both edits. **Decide later** keeps the
+   conflict. Choose a version and sync again on both devices to verify it
+   appears on both. A changed version requires a fresh comparison.
+4. Transfer original PDFs and deep analyses with a research package for this
+   candidate. Capture both build IDs and any failing step in a diagnostic report.
+
 ## New notes on a selected list
 
 [Download the 566b8af Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44868532304/artifacts/14692799162).

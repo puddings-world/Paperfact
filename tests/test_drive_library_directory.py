@@ -39,6 +39,44 @@ def test_partial_device_updates_shared_directory_without_losing_other_lists(tmp_
     assert right.read().directory.lists == (changed, new_second)
 
 
+def test_private_directory_attachment_roundtrip_and_retry(tmp_path):
+    import hashlib
+
+    from paper_daily.drive_sync_files import MAX_INLINE
+    from paper_daily.sync_blobs import BlobManifest, BlobStore
+
+    cloud = Cloud()
+    left, right = (authority(cloud, tmp_path / device).files for device in ("win", "mac"))
+    folder, head = left.new_ids(2)
+    directory = DriveDirectory(left, folder, head, "personal")
+    directory.initialize("Private library")
+    sender = directory.attachment_objects(tmp_path / "left-receipts")
+    receiver = DriveDirectory(right, folder, head, "personal").attachment_objects(
+        tmp_path / "right-receipts"
+    )
+    pdf = tmp_path / "synthetic.pdf"
+    data = b"%PDF-1.7" + bytes(MAX_INLINE) + b"%%EOF"
+    pdf.write_bytes(data)
+    owner = BlobManifest(hashlib.sha256(data).hexdigest(), len(data))
+    different = BlobManifest("0" * 64, owner.size)
+    count = len(cloud.objects)
+    with pytest.raises(ValueError, match="selected attachment"):
+        sender.put(pdf, expected=different)
+    assert len(cloud.objects) == count
+    manifest = sender.put(pdf, expected=owner)
+    assert len(manifest["chunks"]) == 2
+    assert sender.put(pdf, expected=owner) == manifest
+    assert len(cloud.objects) == count + 2
+    store = BlobStore(tmp_path / "verified-originals")
+    with pytest.raises(ValueError, match="selected attachment"):
+        receiver.get(manifest, store, expected=different)
+    assert not store.available(owner)
+    restored = receiver.get(manifest, store, expected=owner)
+    assert restored.read_bytes() == data
+    assert receiver.put(restored, expected=owner) == manifest
+    assert len(cloud.objects) == count + 2
+
+
 def test_login_and_device_choices_do_not_transfer_papers(tmp_path, monkeypatch):
     from test_library_selection import database
 

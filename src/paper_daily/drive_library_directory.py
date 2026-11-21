@@ -28,6 +28,15 @@ class DriveDirectory:
         self.folder = identifier(folder_id)
         self.head = identifier(head_id)
 
+    def attachment_objects(self, cache):
+        """Share immutable bytes across lists under this one private directory."""
+        from pathlib import Path
+
+        from paper_daily.drive_sync_objects import DriveObjects
+
+        return DriveObjects(self.files, self.folder, self.key, Path(cache) / self.folder,
+                            folder_role="directory")
+
     def initialize(self, name):
         """Reuse caller-retained object IDs after interrupted explicit setup."""
         self.files.create_folder(self.folder, self.key, name, directory=True)
