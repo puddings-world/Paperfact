@@ -121,7 +121,7 @@ def _local_turns(conn, list_id, papers, *, historical, enroll=False):
     return result
 
 
-def _receive(conn, paper, payload, local):
+def _receive(conn, paper, payload, local, *, restore=False):
     data = payload["data"]
     fields = dict(data, anchor=json.dumps(data["anchor"], ensure_ascii=False)
                   if data["anchor"] is not None else None)
@@ -129,11 +129,27 @@ def _receive(conn, paper, payload, local):
         if payload["source_document_hash"] is not None:
             raise ListReviewRequired("Historical message has unsupported document provenance")
         conn.execute(LEGACY_TABLE)
-        idx = conn.execute("INSERT INTO chat(paper_id,role,body,created_at,page,anchor) "
-                           "VALUES(:paper,:role,:body,:created_at,:page,:anchor)",
-                           dict(fields, paper=paper)).lastrowid
-        conn.execute("INSERT INTO drive_chat_legacy_ids VALUES(?,?,?)",
-                     (payload["scope"]["id"], idx, payload["key"]))
+        identity = payload["scope"]["id"], payload["key"]
+        mapped = conn.execute("SELECT local_id FROM drive_chat_legacy_ids WHERE paper=? "
+                              "AND message=?", identity).fetchone()
+        tables = _tables(conn)
+        if restore and not mapped:
+            raise ListReviewRequired("Historical message position is missing; review both copies")
+        if mapped:
+            occupied = conn.execute("SELECT 1 FROM chat WHERE id=?", mapped).fetchone()
+            linked = "research_chat_links" in tables and conn.execute(
+                "SELECT 1 FROM research_chat_links WHERE local_id=?", mapped).fetchone()
+            if not restore or occupied or linked:
+                raise ListReviewRequired("Historical message position changed; review both copies")
+        idx = conn.execute("INSERT INTO chat(id,paper_id,role,body,created_at,page,anchor) "
+                           "VALUES(:id,:paper,:role,:body,:created_at,:page,:anchor)",
+                           dict(fields, id=mapped[0] if mapped else None, paper=paper)).lastrowid
+        if not mapped:
+            conn.execute("INSERT INTO drive_chat_legacy_ids VALUES(?,?,?)",
+                         (identity[0], idx, identity[1]))
+        if restore and "drive_chat_delete_actions" in tables:
+            conn.execute("DELETE FROM drive_chat_delete_actions WHERE paper=? AND message=?",
+                         (paper, identity[1]))
     elif local is None:
         research_chat.import_shared_turn(conn, dict(fields, paper_id=paper,
                                          message_id=payload["key"],
@@ -157,11 +173,7 @@ def _restore_reviewed(conn, paper, payload):
             "(SELECT 1 FROM chat WHERE chat.id=research_chat_links.local_id)",
             (payload["key"], data.get("exchange_id"), data.get("reply_to"),
              payload["source_document_hash"]))
-    if "exchange_id" not in payload["data"] and "drive_chat_legacy_ids" in _tables(conn):
-        conn.execute("DELETE FROM drive_chat_legacy_ids WHERE paper=? AND message=? "
-                     "AND NOT EXISTS (SELECT 1 FROM chat WHERE id=local_id)",
-                     (payload["scope"]["id"], payload["key"]))
-    _receive(conn, paper, payload, None)
+    _receive(conn, paper, payload, None, restore=True)
 
 
 def has_local_messages(store, list_id):

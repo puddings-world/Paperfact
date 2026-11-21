@@ -210,6 +210,32 @@ def test_historical_chat_survives_peer_copy_retry_and_edit(source, tmp_path, mon
                 "Question", "Repeated", "Edited on Mac", "Follow up"]
             assert conn.execute("SELECT count(*) FROM drive_chat_legacy_ids").fetchone() == (4,)
 
+    from paper_daily.desktop.main import Data
+
+    with closing(sqlite3.connect(mac_db)) as conn:
+        before = conn.execute("SELECT id,body FROM chat ORDER BY id").fetchall()
+    idx = before[1][0]
+    with monkeypatch.context() as reader:
+        reader.setattr(store, "DB_PATH", mac_db)
+        Data().delete_chat([idx])
+    card, = mac.review_notes("list", Ticket(), lambda _: None, feature="chat")
+    assert card["removal_action"][:2] == ("paper", card["base_id"])
+    mac.review_notes("list", Ticket(), lambda _: None, feature="chat", decision=(card, "remote"))
+    assert not mac.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        assert conn.execute("SELECT id,body FROM chat ORDER BY id").fetchall() == before
+        conn.execute("DELETE FROM chat WHERE id=?", (idx,))
+    missing, = mac.review_notes("list", Ticket(), lambda _: None, feature="chat")
+    assert missing["removal_action"] is None
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        conn.execute("DELETE FROM drive_chat_legacy_ids WHERE local_id=?", (idx,))
+    with pytest.raises(ListReviewRequired, match="position is missing"):
+        mac.review_notes("list", Ticket(), lambda _: None, feature="chat",
+                         decision=(missing, "remote"))
+    with closing(sqlite3.connect(mac_db)) as conn:
+        assert conn.execute("SELECT id,body FROM chat ORDER BY id").fetchall() == [
+            row for row in before if row[0] != idx]
+
 
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):
     from paper_daily import drive_sync_setup

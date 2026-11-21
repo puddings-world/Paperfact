@@ -75,7 +75,8 @@ to reload externally changed Q&A. Previously enabled Q&A keeps its linked-only s
 until the user selects **Include older Q&A** for that list on that device. Historical rows receive stable per-paper IDs
 without inferred reply links. The in-app comparison can resolve divergent text edits on either side and
 rejects stale choices. A reader can restore a locally deleted message with its
-original reply link, or keep that version deleted only on this device. A later
+original reply link, or keep that version deleted only on this device. Restoring a
+historical message with a saved local identity preserves its place in the conversation. A later
 remote revision reopens review. Reader deletion and its observed Drive revision are
 recorded in one local transaction. Restoring the message withdraws the deletion
 record. A missing row alone is identified as missing in the comparison. Propagation of confirmed deletions remains open. Continuing a conversation in the installed Windows and

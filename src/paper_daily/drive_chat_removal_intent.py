@@ -7,17 +7,22 @@ from paper_daily.workspace_service import _tables
 
 def record_reader_deletions(conn, paper, snapshots):
     """Called in the validated reader transaction, before its commit."""
-    if "drive_chat_bases" not in _tables(conn):
+    tables = _tables(conn)
+    if "drive_chat_bases" not in tables:
         return
     for snapshot in snapshots:
-        message = snapshot["row"].get("message_id")
-        if not message:
-            continue
-        scopes = conn.execute(
-            "SELECT b.context,b.list_id,b.op FROM drive_chat_bases b JOIN list_papers m "
-            "ON m.list_id=b.list_id WHERE m.paper_id=? AND b.message=? AND b.op IS NOT NULL",
-            (paper, message)
-        ).fetchall()
+        row = snapshot["row"]
+        messages = [row["message_id"]] if row.get("message_id") else []
+        if not messages and "drive_chat_legacy_ids" in tables:
+            messages = [key for key, in conn.execute(
+                "SELECT message FROM drive_chat_legacy_ids WHERE local_id=?", (row["id"],))]
+        scopes = []
+        for message in messages:
+            scopes.extend(conn.execute(
+                "SELECT b.context,b.list_id,b.message,b.op FROM drive_chat_bases b "
+                "JOIN list_papers m ON m.list_id=b.list_id "
+                "WHERE m.paper_id=? AND b.message=? AND b.op IS NOT NULL",
+                (paper, message)))
         if not scopes:
             continue
         conn.execute("CREATE TABLE IF NOT EXISTS drive_chat_delete_actions(context,list_id,message,"
@@ -35,7 +40,7 @@ def record_reader_deletions(conn, paper, snapshots):
         action = str(uuid4())
         conn.executemany("INSERT OR REPLACE INTO drive_chat_delete_actions VALUES(?,?,?,?,?,?)",
                          ((context, list_id, message, paper, base, action)
-                          for context, list_id, base in scopes))
+                          for context, list_id, message, base in scopes))
 
 
 def reviewed_deletions(conn, context, list_id):
