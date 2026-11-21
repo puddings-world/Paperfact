@@ -129,9 +129,14 @@ def test_installer_preserves_data_and_records_exact_failure(ci_build, fault, mon
         assert env == {"isolated": "yes"}
         return dict(retry_preserved=True, restart_recovery=True)
 
+    def check_report(executable):
+        assert executable == installed / "paperfact-cli.exe" and executable.is_file()
+        assert seen[-1][0] == "windows-installed-reader"
+        return dict(private_handoff=True, retained_read=True)
+
     def perform():
         return verify._windows_install(
-            plan, out, recipient, {"isolated": "yes"}, run, acceptance, integration,
+            plan, out, recipient, {"isolated": "yes"}, run, acceptance, integration, check_report,
         )
 
     if fault:
@@ -158,6 +163,7 @@ def test_installer_preserves_data_and_records_exact_failure(ci_build, fault, mon
     with monkeypatch.context() as patch:
         patch.setattr(verify, "_file_hash", hash_without_cache_lock)
         result = perform()
+    assert result["source_report"] == dict(private_handoff=True, retained_read=True)
     assert result["installed"] and result["reinstalled"] and result["uninstalled"]
     assert result["research_preserved"] and result["integration"]["restart_recovery"]
     assert result["installer_sha256"] == hashlib.sha256(installer.read_bytes()).hexdigest()

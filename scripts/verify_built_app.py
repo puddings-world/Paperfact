@@ -625,7 +625,7 @@ def _wait_for_idle(data, *, seconds=30, now=time.monotonic, pause=time.sleep):
             pause(min(.25, remaining))
 
 
-def _windows_install(plan, out, recipient, empty, run, acceptance, integration_check):
+def _windows_install(plan, out, recipient, empty, run, acceptance, integration_check, check_report):
     installed, installer = plan["installed"], plan["installer"]
     data = Path(recipient["PAPERFACT_DATA"])
     if acceptance.report["build"]["version"] != plan["version"]:
@@ -685,11 +685,14 @@ def _windows_install(plan, out, recipient, empty, run, acceptance, integration_c
         lambda: integration_check([installed / "paperfact-cli.exe"],
                                   out / "installed-integration", empty),
     )
+    source_report = acceptance.call("source-aware-report", lambda: check_report(
+        installed / "paperfact-cli.exe"))
     mutate("windows-reinstall", setup)
     uninstaller = installed / "unins000.exe"
     mutate("windows-uninstall", [uninstaller, *flags], uninstall=True)
     return dict(installed=True, reinstalled=True, uninstalled=True, research_preserved=True,
                 installer_sha256=plan["sha256"], integration=integration,
+                source_report=source_report,
                 acceptance_mode=True, older_release_upgrade_checked=False,
                 registry_shortcuts_checked=False)
 
@@ -932,9 +935,11 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None, dmg=N
     )
     from verify_source_report import verify as verify_report
 
-    source_report = acceptance.call(
-        "source-aware-report", lambda: verify_report([cli], out / "source-report", empty, original),
-    )
+    def check_report(executable):
+        return verify_report([executable], out / "source-report", empty, original)
+
+    source_report = (acceptance.call("source-aware-report", lambda: check_report(cli))
+                     if installation is None else None)
     from verify_sync_protocol import verify as verify_sync
 
     sync_protocol = acceptance.call(
@@ -1004,8 +1009,9 @@ def _verify(built, out, acceptance, *, installer=None, legacy_source=None, dmg=N
         result["checks"].append("mac-dmg-copy-and-detach")
     if installation is not None:
         result["windows_installer"] = _windows_install(
-            installation, out, recipient, empty, run, acceptance, integration_check,
+            installation, out, recipient, empty, run, acceptance, integration_check, check_report,
         )
+        result["source_report"] = result["windows_installer"]["source_report"]
         result["checks"].append("windows-install-reinstall-uninstall")
         result["limitations"] += (
             " Isolated CI install and same-version reinstall only; no older-release upgrade "
