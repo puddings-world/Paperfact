@@ -886,7 +886,10 @@ def answer_record(request):
 
 def delete_messages(conn, paper_id, snapshots, *, expected):
     conn.execute("BEGIN IMMEDIATE")
+    from paper_daily.drive_chat_removal_intent import record_reader_deletions
+
     with _delete_messages(conn, paper_id, snapshots, expected=expected):
+        record_reader_deletions(conn, paper_id, snapshots)
         conn.commit()
 
 

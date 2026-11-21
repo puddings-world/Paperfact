@@ -6,6 +6,7 @@ import sqlite3
 from contextlib import closing
 
 from paper_daily import research_chat
+from paper_daily.drive_chat_removal_intent import reviewed_deletions
 from paper_daily.drive_list_history import DriveListChat
 from paper_daily.drive_list_records import ListReviewRequired
 from paper_daily.drive_paper_baseline import published_bindings
@@ -95,6 +96,20 @@ def _receive(conn, paper, payload, local):
                      (data["body"], local[0], paper))
 
 
+def _restore_reviewed(conn, paper, payload):
+    # Old or interrupted writers can leave the portable identity without a chat row.
+    # Release only a matching orphan, in the same transaction as its new projection.
+    if "research_chat_links" in _tables(conn):
+        data = payload["data"]
+        conn.execute(
+            "DELETE FROM research_chat_links WHERE message_id=? AND exchange_id=? "
+            "AND reply_to IS ? AND source_hash IS ? AND NOT EXISTS "
+            "(SELECT 1 FROM chat WHERE chat.id=research_chat_links.local_id)",
+            (payload["key"], data.get("exchange_id"), data.get("reply_to"),
+             payload["source_document_hash"]))
+    _receive(conn, paper, payload, None)
+
+
 def has_local_messages(store, list_id):
     from paper_daily.workspace_service import _read
 
@@ -146,6 +161,7 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
                                        "context=? AND list_id=?", (store.context, list_id)))
                      if "drive_chat_bases" in _tables(conn) else {})
             kept = _kept_deletions(conn, (store.context, list_id))
+            actions = reviewed_deletions(conn, store.context, list_id)
             for key, remote in latest.items():
                 ticket.check()
                 if decision and key != decision[0]["identity"]:
@@ -176,7 +192,9 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
                     (other["data"]["reply_to"] or key, paper)
                 ).fetchone()
                 excerpt = " ".join((prompt[0] if prompt else other["data"]["body"][:100]).split())
-                cards.append(dict(feature="chat", title=title, question=excerpt,
+                action = actions.get(key) if value is None else None
+                cards.append(dict(removal_action=action if action and action[0] == paper else None,
+                                  feature="chat", title=title, question=excerpt,
                                   identity=key, key=idx,
                                   context=store.context, grant=history.grant, list_id=list_id,
                                   revision=revision, base_id=bases.get(key),
@@ -193,7 +211,7 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
             conn.execute(BASE_TABLE)
             if card["local"] is None:
                 if decision[1] == "remote":
-                    _receive(conn, card["paper"], latest[card["identity"]]["payload"], None)
+                    _restore_reviewed(conn, card["paper"], latest[card["identity"]]["payload"])
                     if card["identity"] in kept:
                         conn.execute("DELETE FROM drive_chat_local_removals WHERE context=? "
                                      "AND list_id=? AND message=?",

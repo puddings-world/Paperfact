@@ -470,12 +470,12 @@ def test_deleted_answer_comparison_labels_only_the_selected_card(dialog):
     _, parent, _ = dialog
     edited = dict(feature="chat", title="Study", question="Which sample?",
                   base={"body": "Initial"}, local={"body": "Local"}, remote={"body": "Updated"})
-    missing = dict(edited, local=None)
+    missing = dict(edited, local=None, removal_action=("paper", "revision", "action"))
     view = NoteComparison([edited, missing], parent)
     picker = view.findChild(QComboBox)
     picker.setCurrentIndex(1)
     assert [box.toPlainText() for box in view.findChildren(QPlainTextEdit)] == [
-        "Initial", "Deleted on this device", "Updated"]
+        "Initial", "Deleted in the reader on this device", "Updated"]
     button = next(b for b in view.findChildren(QPushButton)
                   if b.text() == "Keep deleted on this device")
     picker.setCurrentIndex(0)

@@ -61,9 +61,13 @@ class NoteComparison(QDialog):
             for key, view in views.items():
                 payload = card[key]
                 if payload is None:
-                    view.setPlainText(tr("Deleted on this device", "這則問答已在本機刪除")
-                                      if chat and key == "local" else
-                                      tr("No common version", "尚無共同版本"))
+                    if chat and key == "local":
+                        label = (tr("Deleted in the reader on this device", "已在本機閱讀器刪除")
+                                 if card.get("removal_action") else
+                                 tr("Missing on this device", "本機缺少這則問答"))
+                    else:
+                        label = tr("No common version", "尚無共同版本")
+                    view.setPlainText(label)
                     continue
                 if details:
                     labels = {"name": tr("Name", "名稱"), "note": tr("Description", "說明")}

@@ -101,11 +101,27 @@ def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypat
         reader.setattr(store, "DB_PATH", mac_db)
         data = Data()
         local_id = next(row["id"] for row in data.chat(paper) if row["message_id"] == key)
-        data.delete_chat([local_id], expected=data.chat_snapshot(paper, [local_id]))
+        expected = data.chat_snapshot(paper, [local_id])
+        from paper_daily import drive_chat_removal_intent
+
+        record = drive_chat_removal_intent.record_reader_deletions
+
+        def interrupt(conn, deleted_paper, snapshots):
+            record(conn, deleted_paper, snapshots)
+            raise RuntimeError("interrupted before commit")
+
+        with monkeypatch.context() as interrupted:
+            interrupted.setattr(drive_chat_removal_intent, "record_reader_deletions", interrupt)
+            with pytest.raises(RuntimeError, match="before commit"):
+                data.delete_chat([local_id], expected=expected)
+        assert read(mac_db)[key] == "Reviewed desktop answer"
+        assert review() == []
+        data.delete_chat([local_id], expected=expected)
     assert "review" in poll(mac)["list"]
     assert key not in read(mac_db) and read(source)[key] == "Reviewed desktop answer"
     removed, = review()
     assert removed["local"] is None and removed["remote"]["body"] == "Reviewed desktop answer"
+    assert removed["removal_action"][:2] == (paper, removed["base_id"])
     review((removed, "local"))
     assert not poll(mac) and review() == []
     assert key not in read(mac_db) and read(source)[key] == "Reviewed desktop answer"
@@ -120,6 +136,15 @@ def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypat
         assert conn.execute("SELECT c.body,l.reply_to FROM chat c JOIN research_chat_links l "
                             "ON c.id=l.local_id WHERE message_id=?", (key,)).fetchall() == [
             ("Updated after Mac deletion", question["message_id"])]
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        assert not conn.execute("SELECT 1 FROM drive_chat_delete_actions WHERE message=?",
+                                (key,)).fetchone()
+        conn.execute("DELETE FROM chat WHERE id=(SELECT local_id FROM research_chat_links "
+                     "WHERE message_id=?)", (key,))
+    missing, = review()
+    assert missing["local"] is None and missing["removal_action"] is None
+    review((missing, "remote"))
+    assert not poll(mac) and read(mac_db)[key] == "Updated after Mac deletion"
 
 
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):
