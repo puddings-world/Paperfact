@@ -26,7 +26,7 @@ def control(service):
     parent.show()
     clock = [100.0]
     controller = ContinuousSync(service[0], parent, clock=lambda: clock[0])
-    controller.timer.stop()
+    assert not controller.timer.isActive()
     yield app, parent, controller, clock
     controller.stop()
     wait(app, lambda: not controller.busy)
@@ -54,7 +54,7 @@ def test_default_off_and_verified_login_never_upload_without_consent(control, se
 def test_opt_in_syncs_actual_saved_research_and_repeat_calls_do_not_duplicate(control, service):
     _, _, controller, clock = control
     connect(service)
-    assert controller.enable()
+    assert controller.enable() and controller.timer.isActive()
     run(control)
     published = service[1].pull(service[2])
     assert published and controller.summary()["result"]["pending"] == 0
@@ -141,6 +141,7 @@ def test_nontransient_failures_pause_and_require_explicit_retry(
     controller.enable()
     run(control)
     assert not controller.enabled and controller.state == "paused"
+    assert not controller.timer.isActive()
     clock[0] += 1000
     controller.local_changed()
     controller.tick()

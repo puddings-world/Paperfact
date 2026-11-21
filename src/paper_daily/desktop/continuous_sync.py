@@ -91,7 +91,6 @@ class ContinuousSync(QObject):
         self.timer = QTimer(self)
         self.timer.setInterval(500)
         self.timer.timeout.connect(self.tick)
-        self.timer.start()
         if parent is not None:
             parent.installEventFilter(self)
 
@@ -129,6 +128,7 @@ class ContinuousSync(QObject):
         return True
 
     def stop(self):
+        self.timer.stop()
         self._startup_vault = self._startup_stamp = None
         self.enabled = False
         self._epoch = None
@@ -144,6 +144,7 @@ class ContinuousSync(QObject):
         if stamp is None:
             return False
         self._startup_vault, self._startup_stamp = vault, stamp
+        self.timer.start()
         self._next, self._failures = self.clock(), 0
         self._report("waiting")
         return True
@@ -236,7 +237,7 @@ class ContinuousSync(QObject):
         current = (self.enabled and self._epoch == self.session.generation
                    and self.session.summary()["authenticated"] and not worker.ticket.cancelled)
         if self.enabled and worker.error == "authorization" and not worker.ticket.cancelled:
-            self.enabled = False
+            self.stop()
             self._report("paused")
         elif current:
             if worker.error == "offline":
@@ -244,7 +245,7 @@ class ContinuousSync(QObject):
                 self._next = self.clock() + min(300, 10 * 2 ** min(self._failures - 1, 5))
                 self._report("offline")
             elif worker.error:
-                self.enabled = False
+                self.stop()
                 self._report(worker.error if worker.error in {"history", "format"} else "paused")
             else:
                 result = worker.result
