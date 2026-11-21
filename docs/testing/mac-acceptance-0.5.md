@@ -19,6 +19,30 @@ If Sync opens a linked workspace, export any edits unique to it and choose **Ope
 
 Record the OS and build on each device, the first failing step, the expected and observed result, and the visible sync status. The [cross-platform workflow](https://github.com/puddings-world/Paperfact/actions/runs/44925871585) passed the packaged research checks. Personal Drive round-trip, sleep/wake and native credential restore on physical devices still need tester results. See [desktop and laptop sync](../../README.md#sync-a-desktop-and-laptop-v05-preview) for individual content settings.
 
+## Continue a reader conversation on the other desktop
+
+Use build `993461c` or later on both computers and sign in to the same Google
+account. Newly checked lists include Q&A. For a list that was already synced,
+open its **Sync contents** once on each computer and enable **Sync Q&A**.
+
+1. On Windows, open a paper and find a saved question and answer created in a
+   recent reader. Record a short distinctive phrase from the answer. Leave
+   Paperfact running until the next automatic exchange.
+2. On the Mac, open the same paper's Q&A. If it was already open, use the saved
+   content update notice. Verify that the question has the right answer and
+   that the phrase appears once. Disconnect the Mac and reopen the paper to
+   verify the saved conversation is available offline.
+3. Reconnect the Mac. If you want to exercise a real follow-up, use your own
+   configured agent and choose to include the previous exchange. Send one
+   follow-up and wait for its answer. The Windows reader should receive both
+   saved messages without running a second AI request. Record the result before
+   trying a manual sync.
+
+Older unlinked conversations currently travel in a list package. A simultaneous
+edit or a local deletion can pause sync for review. Record the displayed
+status before changing either copy. These steps are physical-device acceptance
+criteria; a successful installer build alone does not exercise them.
+
 ## Resume a PDF from the other device
 
 1. Use the same multi-page PDF on both devices. Select the list and turn on

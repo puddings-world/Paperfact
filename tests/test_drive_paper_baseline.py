@@ -1176,7 +1176,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert not view.notes_toggle.isVisible()
             view.content_options.click()
             for toggle in (view.notes_toggle, view.position_toggle, view.reading_toggle,
-                           view.pdf_toggle, view.dive_toggle):
+                           view.pdf_toggle, view.dive_toggle, view.chat_toggle):
                 assert toggle.isVisible() and toggle.isChecked()
                 toggle.click()
                 wait(app, lambda v=view: not v.busy)
@@ -1242,7 +1242,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     "VALUES('list',?,1,?)", (key, STAMP),
                 )
         with closing(sqlite3.connect(source)) as conn, conn:
-            conn.execute("INSERT INTO lists VALUES('private','Keep local',NULL,?)", (STAMP,))
+            conn.execute("INSERT INTO lists VALUES('next','Later reading',NULL,?)", (STAMP,))
 
         anchor = {"p0": 4, "o0": 2, "p1": 4, "o1": 11, "document_hash": "a" * 64}
         with closing(sqlite3.connect(laptop)) as conn, conn:
@@ -1298,7 +1298,13 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     "WHERE list_id='list'"
                 )) == ["Research paper", "desktop-add", "laptop-add"]
         visible = windows[1][1].service.read_library(Ticket())
-        assert all(item["id"] != "private" for item in visible["items"])
+        assert next(item["state"] for item in visible["items"] if item["id"] == "next") == (
+            "selected_local")
+        for device in windows:
+            device[1].service.save_library(["list"], Ticket(), lambda _: None)
+        visible = windows[1][1].service.sync_saved_library(Ticket(), lambda _: None)
+        assert next(item["state"] for item in visible["items"] if item["id"] == "next") == (
+            "retained_local")
         owner, closed = windows[1]
         setup = closed.service
         monkeypatch.setattr(setup, "authorize", lambda **kwargs: pytest.fail("Repeated OAuth"))

@@ -245,7 +245,7 @@ def checklist(directory, selected, *, local_ids=()):
             selected=item.id in chosen,
             state=(
                 "waiting_source"
-                if item.id in chosen and not item.published
+                if item.id in chosen and not (item.published or item.head)
                 else "selected_local"
                 if item.id in chosen and item.id in local
                 else "pending_download"
