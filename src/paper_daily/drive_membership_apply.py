@@ -111,10 +111,31 @@ def _schema(conn):
                      "WHERE list_id=OLD.list_id AND local_id=OLD.paper_id AND live=1; END")
 
 
+def _restore_removed(conn, store, list_id, member, creation, local):
+    payload = creation["payload"]
+    existing = conn.execute("SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?",
+                            (list_id, local)).fetchone()
+    if existing:
+        raise ListReviewRequired("Local entry was added again; review before restoring")
+    position, = conn.execute("SELECT COALESCE(MAX(position),-1)+1 FROM list_papers "
+                             "WHERE list_id=?", (list_id,)).fetchone()
+    conn.execute("INSERT INTO list_papers(list_id,paper_id,position,citation,added_at) "
+                 "VALUES(?,?,?,?,?)",
+                 (list_id, local, position, payload["citation"], payload["added_at"]))
+    conn.execute("UPDATE drive_membership_watches SET creation=?,position=?,live=1,"
+                 "applied=NULL WHERE context=? AND list_id=? AND member=?",
+                 (creation["operation_id"], position, store.context, list_id, member))
+
+
 def receive_membership_changes(history, revision, ticket, *, accept_removal=None):
     """Watch current memberships before retirement; commit each batch with its receipts."""
     store, list_id = history.store, history.list_id
-    retiring = history.retirements(revision)
+    from paper_daily.drive_membership_history import DriveMembershipRestores
+
+    if isinstance(history, DriveMembershipRestores):
+        _, creations, retiring = history.versions(revision)
+    else:
+        creations, retiring = history.creations, history.retirements(revision)
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(revision)
@@ -148,13 +169,19 @@ def receive_membership_changes(history, revision, ticket, *, accept_removal=None
                 "WHERE context=? AND list_id=?", (store.context, list_id))}
             applied = 0
             already_confirmed = False
-            for index, (member, creation) in enumerate(history.creations.items()):
+            for index, (member, creation) in enumerate(creations.items()):
                 ticket.check()
                 payload = creation["payload"]
                 local = bindings.get(payload["paper_id"])
                 watch = watches.get(member)
                 removal = retiring.get(member)
                 if accept_removal and member != accept_removal["member"]:
+                    continue
+                if (local and watch and watch[1] == local and watch[4]
+                        and watch[4] == creation["depends_on"] and not removal
+                        and not accept_removal):
+                    _restore_removed(conn, store, list_id, member, creation, local)
+                    applied += 1
                     continue
                 if not local or (watch and watch[:2] != (creation["operation_id"], local)):
                     raise ListReviewRequired("Membership identity changed; review before applying")

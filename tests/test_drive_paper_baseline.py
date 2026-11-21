@@ -469,6 +469,39 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                                     (operations[0]["operation_id"],)]
     assert fork.objects == before_fresh
 
+    # An already-retired membership returns on a device which has the matching receipt.
+    restored_db = tmp_path / "restoring-device" / "papers.db"
+    restored_db.parent.mkdir()
+    with closing(sqlite3.connect(restored_db)) as conn, conn:
+        conn.executescript(db.SCHEMA)
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('return','Return',?)", (STAMP,))
+    returning = selection(restored_db, tmp_path / "restoring-settings", device_id="restoring",
+                          library_id=reader.store.library_id, owner_id=reader.store.owner_id)
+    returning.save(reader.directory.read().directory, ["return"], expected_revision=0)
+    receive_initial(reader.directory, returning, "return", 1, Ticket())
+    capable = DriveMembershipRestores(transport, returning, "return", revision=1)
+    with closing(sqlite3.connect(restored_db)) as conn, conn:
+        local_id, = conn.execute("SELECT id FROM papers WHERE title='Desktop discovery'").fetchone()
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('keep','Keep',?)", (STAMP,))
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,state,added_at) "
+                     "VALUES('keep',?,0,'read',?)", (local_id, STAMP))
+        conn.execute("CREATE TRIGGER stop_restore BEFORE UPDATE OF creation ON "
+                     "drive_membership_watches BEGIN SELECT RAISE(ABORT,'receipt failed'); END")
+    with pytest.raises(sqlite3.IntegrityError, match="receipt failed"):
+        receive_membership_changes(capable, 1, Ticket())
+    with closing(sqlite3.connect(restored_db)) as conn, conn:
+        assert conn.execute("SELECT list_id,state FROM list_papers WHERE paper_id=?",
+                            (local_id,)).fetchall() == [("keep", "read")]
+        conn.execute("DROP TRIGGER stop_restore")
+    assert receive_membership_changes(capable, 1, Ticket()) == 1
+    assert receive_membership_changes(capable, 1, Ticket()) == 0
+    with closing(sqlite3.connect(restored_db)) as conn:
+        assert conn.execute("SELECT p.title,m.state,w.creation,w.applied FROM list_papers m "
+                            "JOIN papers p ON p.id=m.paper_id JOIN drive_membership_watches w "
+                            "ON w.local_id=m.paper_id AND w.list_id=m.list_id WHERE w.member=?",
+                            (original["entity_id"],)).fetchall() == [
+                                ("Desktop discovery", "pending", restored["operation_id"], None)]
+
     # The originating device may lose the reply after Drive accepts its deletion.
     from paper_daily.drive_membership_intent import remove_selected
 

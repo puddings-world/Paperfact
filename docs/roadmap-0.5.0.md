@@ -55,9 +55,10 @@ an explicit v10 writer advertised the first restoration with the directory's
 conditional head update. A second device verified the ordered chain, a retry
 created no second object, and a v9 client rejected the upgraded directory.
 The keep decision now rechecks the local entry, pin, paper binding and review token
-before publication. Desktop UI delivery remains pending. Receiving
-readers and their reading-progress histories must adopt the new lifetime before
-ordinary desktops can enable the format.
+before publication. A capable receiver can restore an absent row after the
+matching removal was acknowledged, reusing the paper ID and updating its receipt
+in one transaction. Fresh-device installation, adoption of a still-present local
+entry, reading progress across lifetimes and the desktop UI remain pending.
 
 ## Release goal
 
