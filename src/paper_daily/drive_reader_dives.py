@@ -176,7 +176,7 @@ def _reconcile(history, records, revision, ticket, sent=()):
 def exchange_dives(directory, store, list_id, revision, ticket):
     history = DiveHistory(directory, store, list_id, revision)
     if not history.members:
-        return
+        return 0
     head, records = history.changes(None, revision=revision)
     pending, conflicts = _reconcile(history, records, revision, ticket)
     batches, batch, size = [], [], 0
@@ -199,5 +199,4 @@ def exchange_dives(directory, store, list_id, revision, ticket):
         head = history.publish_batch(head, batch, revision, ticket)
         records.extend(batch)
         _reconcile(history, records, revision, ticket, {op["operation_id"] for op in batch})
-    if conflicts:
-        raise ListReviewRequired("Saved explanations differ; review both versions")
+    return conflicts

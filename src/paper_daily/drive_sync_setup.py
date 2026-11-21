@@ -241,6 +241,7 @@ class DriveSetup:
 
         reviews = {}
         note_conflicts = []
+        dive_conflicts = set()
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
@@ -259,15 +260,19 @@ class DriveSetup:
                     if list_id in result.get("dive_lists", ()):
                         from paper_daily.drive_reader_dives import exchange_dives
 
-                        exchange_dives(directory, store, list_id, selection.revision, ticket)
+                        if exchange_dives(directory, store, list_id, selection.revision, ticket):
+                            dive_conflicts.add(list_id)
+                            reviews[list_id] = "Saved explanations differ; review both versions"
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except NoteEditConflict as exc:
-                reviews[list_id] = str(exc)
+                reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id), str(exc))))
                 note_conflicts.append(list_id)
             except ListReviewRequired as exc:
+                dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
-        return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts}
+        return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
+                "dive_conflicts": sorted(dive_conflicts)}
 
     def _receipt(self, kind, spec=None):
         if self.files is None:

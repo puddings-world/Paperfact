@@ -534,6 +534,22 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert "explanations differ" in report["reviews"]["list"]
             assert saved(laptop, local) == ("Mac interpretation",)
             assert saved(source, "paper") == ("Windows interpretation",)
+            assert report["dive_conflicts"] == ["list"]
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Offline note after conflict' WHERE page=5")
+            reopened.hide()
+            runner.timer.start(1)
+            wait(app, lambda: runner.state == "working")
+            wait(app, lambda: runner.worker is None)
+            assert runner.state == "dive_conflict" and runner.timer.isActive()
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            with closing(sqlite3.connect(source)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Offline note after conflict",
+                )
+            assert saved(laptop, local) == ("Mac interpretation",)
+            assert saved(source, "paper") == ("Windows interpretation",)
+            reopened.show()
             mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
             other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
             mac_pdf.write_bytes(other_pdf)

@@ -470,6 +470,9 @@ class DriveSyncDialog(QDialog):
             if self.background.state == "note_conflict":
                 self.status.setText(self.tr("Some notes need review. Other notes continue syncing.",
                                             "部分筆記需核對，其他筆記會繼續同步。"))
+            elif self.background.state == "dive_conflict":
+                self.status.setText(self.tr("Guides differ. Other content keeps syncing.",
+                                            "講解版本需核對，其他內容持續同步。"))
             elif self.background.state == "review":
                 self.status.setText(self.tr(
                     "Sync paused. Check the connection and sync saved lists to review.",
