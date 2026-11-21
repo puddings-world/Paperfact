@@ -2,16 +2,16 @@
 
 ## Start here on Apple Silicon
 
-Use build **39f1b63** on both devices. Allow a few minutes to check that a new Windows list appears on the Mac and that a note edited offline makes the return trip.
+Use build **98a0722** on both devices. Allow a few minutes to check that a new Windows list appears on the Mac and that a note edited offline makes the return trip.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14710670934) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14710376327) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14712576157) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14711857757) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44911679764) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44916837960) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
-1. On Windows, extract the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14709893121). Import the enclosed `original.zip` into a disposable workspace. In Sync, select the imported list and save the selection.
+1. On Windows, extract the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14712432298). Import the enclosed `original.zip` into a disposable workspace. In Sync, select the imported list and save the selection.
 2. On the Mac, open Sync with the same test Google account. Choose **Refresh list names**. The Windows list should appear unchecked. Select it, save, then enable note sync for this list on both devices.
 3. Sync Windows, then Mac. Disconnect the Mac, add a note to the received paper and reconnect. Sync Mac, then Windows. Edit the same note on Windows and sync in reverse order. Confirm each device shows the last edit once.
 
@@ -20,6 +20,17 @@ Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v
 ## Check a partial analysis result
 
 Open a paper with a saved guide and an incomplete analysis. After the analysis job ends, check which steps the announcement lists as missing. Choose **View result** and compare the displayed content with the saved guide. If the view is empty, record the build ID, announcement text and first failing action. Click the bottom-right version, open **Diagnostics and support**, and preview the report before exporting it. See [diagnostic reports](../../SUPPORT.md#create-a-diagnostic-report).
+
+## Check the saved guide on first open
+
+Use a paper with a known sentence in its saved guide. Quit Paperfact, disconnect
+the network, reopen the app and select the paper. Verify the sentence appears
+in **Deep explanation** without starting an analysis. Switch to a second paper
+while the first guide is loading. Verify the second title and its own guide
+appear together. Return to the first paper and check the original sentence.
+If the pane stays blank, capture the build ID, the selected tab and whether
+switching papers restored it. A completed analysis badge alone does not verify
+that the guide appeared.
 
 ## Check a removal across two installed desktops
 
