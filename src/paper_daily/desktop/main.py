@@ -3531,8 +3531,13 @@ class MainWindow(QWidget):
         notify_document = getattr(reader, "_check_document_update", None)
         if notify_document is not None:
             notify_document()
-        self.refresh_lists()
+        active = self.refresh_lists()
         self.lists_page.refresh(preserve_state=True)
+        if reader is not None and self.stack.currentWidget() is reader and reader.paper is not None:
+            self._refresh_open_read_state(reader.paper)
+            if active:
+                read = active["read"]
+                self.progress.setText(f"已讀 {read} · 未讀 {active['count'] - read}")
         if self.stack.currentWidget() is self.queue_page:
             current = self.queue_page._current_paper()
             scroll = self.queue_page.view.verticalScrollBar().value()
@@ -3914,6 +3919,8 @@ class MainWindow(QWidget):
                 mode_index = pane.mode.findData(state.get("mode", "guide"))
                 if mode_index >= 0:
                     pane.mode.setCurrentIndex(mode_index)
+                self._reader_list_id = self.active_list
+                self.read_btn.setEnabled(True)
                 reader.load(paper)
                 selection = getattr(reader.pdf, "selection", None)
                 page = state.get("pdf_page", 0)
@@ -4399,7 +4406,7 @@ class MainWindow(QWidget):
             ).fetchone()
         )
 
-    def refresh_lists(self) -> None:
+    def refresh_lists(self) -> dict | None:
         """All desktop lists are peers; retain only the current selection."""
         from paper_daily import lists as lists_mod
 
@@ -4420,6 +4427,7 @@ class MainWindow(QWidget):
             self.active_list = self.list_picker.itemData(index) if index >= 0 else None
         self.list_picker.setCurrentIndex(index)
         self._switching = False
+        return entries[index] if index >= 0 else None
 
     def _import_list(self) -> None:
         list_id = run_import(self.pal, ROOT, self, on_analysis=self._analyze_created_list)
@@ -4650,6 +4658,8 @@ class MainWindow(QWidget):
                 self._save_state(paper, "delivered")
             paper.opened_at = now()
             ui_state.save(f"ui.paper.opened:{paper.id}", paper.opened_at)
+        self._reader_list_id = self.active_list
+        self.read_btn.setEnabled(True)
         self.reader_page.load(paper)
         self._last_paper = paper.id
         if not recorded:
@@ -4925,11 +4935,37 @@ class MainWindow(QWidget):
             self.reload()
             self.top_up_dives()
 
+    def _refresh_open_read_state(self, paper):
+        list_id = self._reader_list_id
+        row = None
+        if list_id == self.active_list:
+            with connect() as conn:
+                if list_id is None:
+                    row = conn.execute("SELECT state,read_at,delivered_at FROM queue "
+                                       "WHERE paper_id=?", (paper.id,)).fetchone()
+                else:
+                    row = conn.execute("SELECT state,read_at,delivered_at FROM list_papers "
+                                       "WHERE list_id=? AND paper_id=?",
+                                       (list_id, paper.id)).fetchone()
+        self.read_btn.setEnabled(row is not None)
+        if row is None:
+            self.read_btn.setText("已移出原清單")
+            return False
+        paper.state, read_at, delivered_at = row
+        paper.touched_at = read_at or delivered_at
+        paper.read_at = read_at if paper.read else None
+        self.read_btn.setText("已讀 ✓" if paper.read else "標記已讀")
+        return True
+
     def _toggle_read(self) -> None:
         paper = self.reader_page.paper
         if not paper:
             return
-        self._save_state(paper, "delivered" if paper.read else "read")
+        # A remote edit may arrive between the last observation and this click.
+        displayed_read = paper.read
+        if not self._refresh_open_read_state(paper) or paper.read != displayed_read:
+            return
+        self._save_state(paper, "delivered" if displayed_read else "read")
         self.read_btn.setText("已讀 ✓" if paper.read else "標記已讀")
         self._show_progress()
         self.top_up_dives()

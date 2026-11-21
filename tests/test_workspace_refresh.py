@@ -173,6 +173,51 @@ def test_open_queue_refresh_preserves_checked_papers_filter_selection_and_reader
     window.deleteLater()
 
 
+def test_open_reader_tracks_remote_progress_without_reloading_drafts(workspace, monkeypatch):
+    from paper_daily.desktop.main import MainWindow
+
+    window = MainWindow()
+    try:
+        monkeypatch.setattr(window, "top_up_dives", lambda: None)
+        monkeypatch.setattr(window.queue_page, "enqueue_pdfs", lambda: None)
+        window.active_list = "a"
+        window.show_queue()
+        window.open_paper("p1")
+        reader = window.reader_page
+        reader.note_edit.setPlainText("Local draft")
+        reader.ask_box.setText("Local question")
+        paper = reader.paper
+        monkeypatch.setattr(reader, "load", lambda *_: pytest.fail("Reader reloaded"))
+        external("UPDATE list_papers SET state='read',read_at='synced' WHERE list_id='a'")
+        window._poll_external_lists()
+        assert reader.paper is paper and paper.read_at == "synced"
+        assert window.read_btn.text() == "已讀 ✓" and "已讀 1" in window.progress.text()
+        assert reader.note_edit.toPlainText() == "Local draft"
+        assert reader.ask_box.text() == "Local question"
+        external("UPDATE list_papers SET state='skipped' WHERE list_id='a'")
+        window.read_btn.click()
+        assert paper.state == "skipped"
+        with sqlite3.connect(store.DB_PATH) as conn:
+            assert conn.execute("SELECT state FROM list_papers WHERE list_id='a'").fetchone() == (
+                "skipped",
+            )
+        external("INSERT INTO lists(id,name,created_at) VALUES('b','Beta','now')")
+        external("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                 "VALUES('b','p1',0,'now')")
+        external("DELETE FROM list_papers WHERE list_id='a'")
+        external("DELETE FROM lists WHERE id='a'")
+        window._poll_external_lists()
+        assert window.active_list == "b" and not window.read_btn.isEnabled()
+        window._toggle_read()
+        with sqlite3.connect(store.DB_PATH) as conn:
+            assert conn.execute("SELECT state FROM list_papers WHERE list_id='b'").fetchone() == (
+                "pending",
+            )
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_modal_defers_refresh_and_storage_failure_retries_without_another_write(
     workspace, monkeypatch
 ):
