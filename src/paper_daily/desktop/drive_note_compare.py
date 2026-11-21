@@ -23,7 +23,7 @@ class NoteComparison(QDialog):
                             else tr("Compare note versions", "比較筆記版本"))
         reading = cards[0].get("feature") == "reading"
         if reading:
-            self.setWindowTitle(tr("Compare reading progress", "比較閱讀進度"))
+            self.setWindowTitle(tr("Compare reading status", "比較閱讀狀態"))
         details = cards[0].get("feature") == "list"
         if details:
             self.setWindowTitle(tr("Compare list details", "比較清單名稱與說明"))

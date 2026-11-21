@@ -163,7 +163,7 @@ class DriveSyncDialog(QDialog):
         self.pdf_toggle.setCheckable(True)
         self.pdf_toggle.clicked.connect(self._choose_pdfs)
         self._reading_lists = set()
-        self.reading_toggle = QPushButton(self.tr("Sync reading progress", "同步閱讀進度"))
+        self.reading_toggle = QPushButton(self.tr("Sync reading status", "同步閱讀狀態"))
         self.reading_toggle.setCheckable(True)
         self.reading_toggle.clicked.connect(self._choose_reading)
         self._dive_lists = set()
@@ -188,7 +188,7 @@ class DriveSyncDialog(QDialog):
         self.compare_dives = QPushButton(self.tr("Compare conflicting guides", "比較衝突講解"))
         self.compare_dives.clicked.connect(lambda: self._review_notes(feature="dive"))
         layout.addWidget(self.compare_dives)
-        self.compare_reading = QPushButton(self.tr("Compare reading progress", "比較閱讀進度"))
+        self.compare_reading = QPushButton(self.tr("Compare reading status", "比較閱讀狀態"))
         self.compare_reading.clicked.connect(lambda: self._review_notes(feature="reading"))
         layout.addWidget(self.compare_reading)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
@@ -880,8 +880,8 @@ class DriveSyncDialog(QDialog):
                                             "已儲存選擇，下次同步時會交換選定的版本。"))
             elif kind == "reading":
                 self._show_directory(result)
-                self.status.setText(self.tr("Reading progress preference saved.",
-                                            "已儲存閱讀進度同步設定。"))
+                self.status.setText(self.tr("Reading status preference saved.",
+                                            "已儲存閱讀狀態同步設定。"))
             elif kind == "dives":
                 self._show_directory(result)
                 self.status.setText(self.tr("Explanation sync preference saved.",
