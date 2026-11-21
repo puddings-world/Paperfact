@@ -109,6 +109,28 @@ def test_close_cancels_worker_and_keeps_widgets_until_it_drains(dialog):
     assert setup.rollback
     assert not view.session.summary()["authenticated"]
 
+def test_first_directory_read_offline_can_retry_without_another_login(dialog):
+    app, view, setup = dialog
+    setup.files = object()
+    attempts = []
+
+    def overview(ticket, progress):
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise ConnectionError("offline")
+        return {"account": {"email": "researcher@example.test"}, "lists": [], "workspaces": [],
+                "library": {"ordinary": True, "items": []}}
+
+    setup.overview = overview
+    assert not view.refresh_lists.isVisible()
+    assert view._start("refresh", setup.overview)
+    wait(app, lambda: not view.busy)
+    assert view.refresh_lists.isVisible() and view.refresh_lists.isEnabled()
+    view.refresh_lists.click()
+    wait(app, lambda: not view.busy)
+    assert view.directory_lists.isVisible() and setup.calls == 0 and len(attempts) == 2
+
+
 def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, monkeypatch):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QMessageBox
@@ -139,6 +161,8 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     refreshes = []
     def overview(ticket, progress):
         refreshes.append(True)
+        if len(refreshes) == 1:
+            raise ConnectionError("synthetic network failure")
         return {"account": {"email": "researcher@example.test"}, "lists": [],
                 "workspaces": [], "library": library}
     setup.overview = overview
@@ -146,7 +170,11 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     view.refresh_lists.click()
     view.refresh_lists.click()
     wait(app, lambda: not view.busy)
-    assert refreshes == [True] and not saved
+    assert refreshes == [True] and view.directory_lists.count() == 2
+    assert view.refresh_lists.isEnabled() and "When online" in view.status.text()
+    view.refresh_lists.click()
+    wait(app, lambda: not view.busy)
+    assert refreshes == [True, True] and not saved
     assert view.directory_lists.item(2).text() == "New on desktop"
     assert view.directory_lists.item(2).checkState() == Qt.CheckState.Unchecked
     assert not view.create.isVisible()

@@ -989,6 +989,12 @@ class DriveSyncDialog(QDialog):
                     "。已保留資料與準備進度，可確認連線後重試。",
                 )
             )
+        if current and kind == "refresh" and worker.error == "offline":
+            self.refresh_lists.show()
+            self.status.setText(self.tr(
+                "Could not reach Drive. When online, choose Refresh list names.",
+                "目前無法連上 Drive。恢復連線後，請按「重新讀取清單」。",
+            ))
         if current and worker.error == "format":
             self.status.setText(self.tr("Update Paperfact on this device, then reconnect.",
                                         "請更新這台裝置的 Paperfact，再重新連線。"))
