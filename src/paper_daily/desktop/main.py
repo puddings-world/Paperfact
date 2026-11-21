@@ -1797,6 +1797,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             source = next((s for s in found.sentences if s["text"] == item["text"]
                            and s.get("page") == item.get("page")), item)
             self._jump_to_source(dict(source, kind="sentence"))
+        elif url.scheme() == "paperfact-reader" and url.path() == "retry" and self.paper:
+            self._load_dive()
         elif url.scheme() == "paperfact-analyze" and self.paper:
             self.start_analysis()
         elif url.scheme() in ("https", "http"):

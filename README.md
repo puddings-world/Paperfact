@@ -187,7 +187,9 @@ The first PDF upgrades the private directory to v5. Update every device first.
 If two local originals differ, Paperfact keeps both and requests review.
 Enable **Sync saved explanations** on both devices to exchange the stored deep-guide
 text without another AI call. The first shared guide upgrades the directory to v6.
-Update every device first. Concurrent edits require review. Use a research package
+Update every device first. You can open a received guide before its PDF is available.
+If the guide fails to load, use the retry link on the explanation tab to read the local copy.
+Concurrent edits require review. Use a research package
 for additional analysis assets such as figures, highlights and slides. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).

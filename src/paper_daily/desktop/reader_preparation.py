@@ -279,7 +279,11 @@ class ReaderPreparation(QObject):
                 or mark_view.document is not reader._active_document
                 or mark_view.owner is not reader._highlight_owner
             ):
-                return False
+                # A missing annotation frame must not suppress saved text.
+                mark_view = None
+                self._want_marks = False
+                if not (self._enabled or self._want_dive):
+                    return False
             request = saved.capture(
                 reader._highlight_owner,
                 document=reader._active_document,
@@ -400,7 +404,14 @@ class ReaderPreparation(QObject):
 
     def _error(self):
         reader = self._reader()
-        if reader is not None and isValid(reader) and not reader.runner.busy:
+        if reader is None or not isValid(reader) or self._disposed:
+            return
+        if self._want_dive and not reader.dive_view._body:
+            reader.dive_view.setHtml(
+                '<p>無法載入已儲存的講解。'
+                '<a href="paperfact-reader:retry">重新讀取</a></p>'
+            )
+        if not reader.runner.busy:
             reader.ask_status.setText(
                 "Saved reading content could not be checked; reopen to retry."
             )

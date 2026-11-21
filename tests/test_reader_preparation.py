@@ -215,6 +215,33 @@ def test_failure_then_explicit_retry_preserves_drafts_and_ids(ready, monkeypatch
     assert len(messages()) == 1 and view.ask_box.text() == "Question"
 
 
+def test_saved_dive_opens_without_pdf_marks_and_can_retry_offline(ready, monkeypatch):
+    from PySide6.QtCore import QUrl
+
+    app, _, view = ready
+    view.paper.abstract = ""
+    with store.connect() as conn:
+        conn.execute(
+            "INSERT INTO dives(paper_id,body,written_at,spec) VALUES(?,?,?,?)",
+            ("local-paper", "Offline explanation from the other device", "2026-11-21", "test"),
+        )
+    original = preparation._prepare
+
+    def fail_read(*args):
+        raise ValueError("private fixture error")
+
+    monkeypatch.setattr(preparation, "_prepare", fail_read)
+    assert view.preparation.request(dive=True, marks=True)
+    settle(app, lambda: not view.preparation.busy)
+    assert "paperfact-reader:retry" in view.dive_view._body
+    assert "private fixture error" not in view.dive_view._body
+    monkeypatch.setattr(preparation, "_prepare", original)
+    view.dive_view.anchorClicked.emit(QUrl("paperfact-reader:retry"))
+    settle(app, lambda: not view.preparation.busy)
+    assert "Offline explanation from the other device" in view.dive_view._body
+    assert "paperfact-reader:retry" not in view.dive_view._body
+
+
 def test_close_veto_retains_busy_until_actual_drain_and_discard(ready, monkeypatch):
     app, _, view = ready
     pending_turn()
