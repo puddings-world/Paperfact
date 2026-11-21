@@ -485,3 +485,42 @@ def test_newer_library_prompts_upgrade_and_stops_background_retry(dialog):
     runner.tick()
     wait(app, lambda: runner.worker is None)
     assert runner.state == "format" and not runner.timer.isActive()
+
+
+def test_first_enrollment_remembers_only_confirmed_lists(dialog, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox
+
+    app, view, setup = dialog
+    setup.files = object()
+    rows = [{"id": name, "name": name, "selected": False} for name in ("one", "two")]
+    setup.overview = lambda ticket, progress: {
+        "account": {"email": "test@example.test"}, "workspaces": [], "lists": rows,
+        "library": {"ordinary": True, "first_selection": True, "items": rows},
+    }
+    assert view._start("refresh", setup.overview)
+    wait(app, lambda: not view.busy)
+    first, second = (view.directory_lists.item(i) for i in range(2))
+    assert first.checkState() == second.checkState() == Qt.CheckState.Checked
+    second.setCheckState(Qt.CheckState.Unchecked)
+    events = []
+
+    def apply(selected, ticket, progress):
+        events.append(selected)
+        return {"ordinary": True, "items": [dict(row, selected=row["id"] in selected)
+                                             for row in rows]}
+
+    setup.apply_library = apply
+    setup.remember_library = lambda ticket, *, startup: events.append(startup)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No)
+    view.save_selection.click()
+    assert not events and view.background.service is None
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
+    view.save_selection.click()
+    wait(app, lambda: view.startup_sync.isChecked() and not view.busy)
+    assert events == [["one"], True] and view.background.service is setup
+    assert view.directory_lists.item(1).checkState() == Qt.CheckState.Unchecked
+    view.pilot.setChecked(True)
+    assert view.create.isVisible() and not view.directory_lists.isVisible()
+    view.pilot.setChecked(False)
+    assert view.directory_lists.isVisible() and not view.create.isVisible()

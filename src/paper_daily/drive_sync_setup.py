@@ -226,6 +226,7 @@ class DriveSetup:
         }
         return {
             "ordinary": local_binding(self.workspace.path) is None,
+            "first_selection": selection.revision == 0,
             "membership_conflicts": {k[2]: v for k, v in self._membership_conflicts.items()},
             "reading_lists": store.reading_lists(),
             "position_lists": store.position_lists(),

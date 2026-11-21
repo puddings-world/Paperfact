@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QToolButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from paper_daily.drive_sync_setup import DriveSetup
@@ -99,6 +100,12 @@ class DriveSyncDialog(QDialog):
         self.login.setMenu(menu)
         self.login.clicked.connect(self.sign_in)
         layout.addWidget(self.login)
+        outer = layout
+        self.personal_panel = QWidget()
+        outer.addWidget(self.personal_panel)
+        layout = QVBoxLayout(self.personal_panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._first_selection = False
         self.directory_lists = QListWidget()
         self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
         self.directory_lists.setVisible(False)
@@ -198,11 +205,14 @@ class DriveSyncDialog(QDialog):
         layout.addWidget(self.compare_reading)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
-        self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
+        layout = outer
+        options = QMenu(self)
+        self.pilot = options.addAction(self.tr("Legacy workspace sync", "舊版工作區同步"))
         self.pilot.setCheckable(True)
-        self.pilot.hide()
+        self.pilot.setVisible(False)
         self.pilot.toggled.connect(self._show_pilot)
-        layout.addWidget(self.pilot)
+        host = options.addAction(self.tr("Self-hosted service", "自架服務"))
+        host.triggered.connect(self.open_advanced)
         self.name = QLineEdit(self.tr("My research", "我的研究"))
         self.name.setMaxLength(200)
         layout.addWidget(self.name)
@@ -245,8 +255,10 @@ class DriveSyncDialog(QDialog):
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
         row = QHBoxLayout()
-        self.advanced = QPushButton(self.tr("Advanced: self-hosted service", "進階：自架服務"))
-        self.advanced.clicked.connect(self.open_advanced)
+        self.advanced = QToolButton()
+        self.advanced.setText(self.tr("Other sync methods", "其他同步方式"))
+        self.advanced.setMenu(options)
+        self.advanced.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         row.addWidget(self.advanced)
         self.stop = QPushButton(self.tr("Stop", "停止"))
         self.stop.clicked.connect(self.cancel)
@@ -273,6 +285,7 @@ class DriveSyncDialog(QDialog):
             QTimer.singleShot(0, self._resume_directory)
         if self.automatic is not None:
             self.automatic.changed.connect(self._automatic_changed)
+        self._show_pilot(False)
         self._buttons()
 
     def _resume_directory(self):
@@ -333,7 +346,7 @@ class DriveSyncDialog(QDialog):
         if kind in {"login", "restore", "create", "join", "toggle"} and self.background.service:
             self.background.stop()
         if kind not in {"login", "restore", "remember", "forget", "refresh", "toggle", "selection",
-                        "sync_saved", "notes", "startup_on", "startup_off",
+                        "enroll_selection", "sync_saved", "notes", "startup_on", "startup_off",
                         "compare", "resolve", "pdfs", "dives", "reading", "positions"}:
             if self.writers_busy():
                 self.status.setText(
@@ -390,7 +403,8 @@ class DriveSyncDialog(QDialog):
             )
 
     def _show_pilot(self, expanded):
-        for widget in (self.name, self.create, self.workspaces, self.join):
+        self.personal_panel.setVisible(not expanded)
+        for widget in (self.name, self.create, self.workspaces, self.join, self.auto):
             widget.setVisible(expanded)
         show_scope = expanded and self.lists.count() > 0
         self.scope_label.setVisible(show_scope)
@@ -401,6 +415,10 @@ class DriveSyncDialog(QDialog):
         previous = self.directory_lists.currentItem()
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)
+        self._first_selection = self._ordinary_library and library.get("first_selection", False)
+        self.save_selection.setText(self.tr("Enable automatic sync", "啟用自動同步")
+                                    if self._first_selection else self.tr(
+                                        "Save list selection", "儲存清單選擇"))
         self._membership_conflicts = library.get("membership_conflicts", {})
         self._membership_upgrades = library.get("membership_upgrades", {})
         self._note_lists = set(library.get("note_lists", ()))
@@ -423,7 +441,8 @@ class DriveSyncDialog(QDialog):
                 item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, reason)
             item.setData(Qt.ItemDataRole.UserRole, row["id"])
             item.setCheckState(
-                Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked
+                Qt.CheckState.Checked if self._first_selection or row["selected"]
+                else Qt.CheckState.Unchecked
             )
             self.directory_lists.addItem(item)
             if row["id"] == current_id:
@@ -770,6 +789,7 @@ class DriveSyncDialog(QDialog):
             for i in range(self.directory_lists.count())
             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
         ]
+        enroll = bool(selected) and self._first_selection
         consent = QMessageBox.question(
             self,
             self.windowTitle(),
@@ -777,6 +797,10 @@ class DriveSyncDialog(QDialog):
                 "Publish local list names to your private Drive and save this device's selection?",
                 "要將本機清單名稱發佈到私人 Drive，並儲存這台裝置的勾選嗎？",
             ) + ("\n\n" + self.tr(
+                "Remember this account on this device and sync selected lists automatically "
+                "when Paperfact is open, including after restart.",
+                "在這台裝置記住帳號。每次開啟 Paperfact，都會自動同步勾選的清單。",
+            ) if enroll else "") + ("\n\n" + self.tr(
                 "Selected lists exchange their bibliography and list details. For notes, PDFs "
                 "and saved explanations, enable each type for the list on both devices.",
                 "已勾選的清單會交換書目與清單資訊。若要同步筆記、PDF 或深度講解，"
@@ -788,7 +812,7 @@ class DriveSyncDialog(QDialog):
         if consent != QMessageBox.StandardButton.Yes:
             return False
         return self._start(
-            "selection",
+            "enroll_selection" if enroll else "selection",
             lambda ticket, progress: self.service.apply_library(selected, ticket, progress),
         )
 
@@ -885,8 +909,10 @@ class DriveSyncDialog(QDialog):
                 for spec in result["workspaces"]:
                     self.workspaces.addItem(spec["name"], spec)
                 if "library" in result:
-                    self.pilot.show()
+                    self.pilot.setVisible(True)
                     self._show_pilot(self.pilot.isChecked())
+                else:
+                    self._show_pilot(True)
                 self.status.setText(
                     self.tr(
                         "Select the lists for this device and save your selection.",
@@ -944,7 +970,7 @@ class DriveSyncDialog(QDialog):
                     if result.get("reviews")
                     else self.tr("Saved lists synced.", "已同步勾選的清單。")
                 )
-            elif kind == "selection":
+            elif kind in {"selection", "enroll_selection"}:
                 self._show_directory(result)
                 if not self._saved_ids and self.background.service is self.service:
                     self.background.stop()
@@ -1008,8 +1034,8 @@ class DriveSyncDialog(QDialog):
         else:
             if kind == "login":
                 self.pilot.setChecked(False)
-                self.pilot.hide()
-                self._show_pilot(True)
+                self.pilot.setVisible(False)
+                self._show_pilot(False)
                 self.directory_lists.clear()
                 self._ordinary_library = False
                 self.directory_lists.hide()
@@ -1049,6 +1075,8 @@ class DriveSyncDialog(QDialog):
                                         "版本或同步設定已變更，請重新比較。"))
         worker.deleteLater()
         self._buttons()
+        if current and not worker.error and kind == "enroll_selection" and self._saved_ids:
+            self._start("startup_on", lambda t, _: self.service.remember_library(t, startup=True))
         if self._closing:
             QTimer.singleShot(0, self.close)
 
