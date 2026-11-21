@@ -112,7 +112,7 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                 present = set()
         names = None
         blobs = None
-        conflicts = 0
+        conflicts = []
         for local, paper in bindings.items():
             ticket.check()
             name = _safe_name(local)
@@ -134,7 +134,8 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
             if exists:
                 found = _document(path, memory)
                 if expected and found != expected:
-                    conflicts += 1
+                    title = conn.execute("SELECT title FROM papers WHERE id=?", (local,)).fetchone()
+                    conflicts.append(title[0] if title and title[0] else local)
                     continue
                 if not expected:
                     index.publish(paper, index.members[paper], path, found)

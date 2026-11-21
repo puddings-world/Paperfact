@@ -594,6 +594,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             report = devices[1].sync_saved_library(Ticket(), lambda _: None)
             assert "local PDF differs" in report["reviews"]["list"]
             assert report["pdf_conflicts"] == ["list"]
+            assert report["pdf_review_titles"] == {"list": ["Research paper"]}
             assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
             assert saved(source, "paper") == ("Guide edited beside a divergent PDF",)
             reopened.hide()
@@ -612,7 +613,12 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert runner.state == "mixed_conflict" and runner.timer.isActive()
             assert saved(laptop, local) == ("Competing laptop guide",)
             assert saved(source, "paper") == ("Competing desktop guide",)
+            assert reopened.close()
+            reopened = DriveSyncDialog(closed.session, owner, owner=owner)
             reopened.show()
+            wait(app, lambda: reopened.directory_lists.count() > 0 and not reopened.busy)
+            assert reopened.pdf_reviews.isVisible()
+            assert reopened.pdf_reviews.item(0).text() == "Research paper"
             assert mac_pdf.read_bytes() == other_pdf
             with pymupdf.open(source.parent / "pdf" / "paper.pdf") as document:
                 assert document[0].get_text().strip() == "paper"
@@ -626,6 +632,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert not reopened.keep_syncing.isChecked()
             assert not reopened.background.timer.isActive()
             assert reopened._saved_ids == set()
+            assert not reopened.pdf_reviews.isVisible()
             assert not setup._library_view[1].load().selected
             assert setup._library_view[1].pdf_lists() == []
             assert setup._library_view[1].dive_lists() == []

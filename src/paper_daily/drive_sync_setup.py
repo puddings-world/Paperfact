@@ -50,6 +50,7 @@ class DriveSetup:
         self._library_view = None
         self._consent = None
         self._pdf_versions = {}
+        self._pdf_review_titles = {}
 
     def check(self, ticket):
         ticket.check()
@@ -58,6 +59,7 @@ class DriveSetup:
     def sign_in(self, ticket, progress):
         self.check(ticket)
         self.files = self.account = self._library_view = None
+        self._pdf_review_titles.clear()
         progress({"stage": "google_login"})
         session = self.authorize(cancelled=lambda: ticket.cancelled)
         self.check(ticket)
@@ -118,10 +120,13 @@ class DriveSetup:
         selection = store.load()
         self.check(ticket)
         self._library_view = (files, store, selection, remote, observation, local, visible)
+        pdf_lists = store.pdf_lists()
         return {
             "ordinary": local_binding(self.workspace.path) is None,
             "note_lists": store.note_lists(),
-            "pdf_lists": store.pdf_lists(),
+            "pdf_lists": pdf_lists,
+            "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
+                                  if key in selection.selected and key in self._pdf_review_titles},
             "dive_lists": store.dive_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
@@ -165,6 +170,8 @@ class DriveSetup:
         save = {"notes": store.set_note_sync, "pdfs": store.set_pdf_sync,
                 "dives": store.set_dive_sync}[kind]
         save(list_id, enabled, revision=saved.revision, ticket=ticket)
+        if kind == "pdfs" and not enabled:
+            self._pdf_review_titles.pop(list_id, None)
         return self.read_library(ticket)
 
     def save_library(self, selected, ticket, progress, *, intermediate=False):
@@ -248,6 +255,7 @@ class DriveSetup:
         note_conflicts = []
         dive_conflicts = set()
         pdf_conflicts = set()
+        pdf_titles = {}
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
@@ -267,7 +275,9 @@ class DriveSetup:
                         )
                         if differing:
                             pdf_conflicts.add(list_id)
-                            reviews[list_id] = f"The local PDF differs from Drive ({differing})"
+                            pdf_titles[list_id] = sorted(differing, key=str.casefold)
+                            count = len(differing)
+                            reviews[list_id] = f"The local PDF differs from Drive ({count})"
                     if list_id in result.get("dive_lists", ()):
                         from paper_daily.drive_reader_dives import exchange_dives
 
@@ -285,6 +295,8 @@ class DriveSetup:
                 pdf_conflicts.discard(list_id)
                 dive_conflicts.discard(list_id)
                 reviews[list_id] = str(exc)
+        self.check(ticket)
+        self._pdf_review_titles = pdf_titles
         return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 

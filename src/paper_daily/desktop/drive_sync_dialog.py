@@ -104,6 +104,16 @@ class DriveSyncDialog(QDialog):
         self.notes_toggle.clicked.connect(self._choose_notes)
         layout.addWidget(self.notes_toggle)
         self._pdf_lists = set()
+        self._pdf_review_titles = {}
+        self.pdf_review_label = QLabel(self.tr(
+            "Different PDFs at last sync (both originals retained)",
+            "上次同步發現以下論文的 PDF 不同，兩邊均已保留原檔",
+        ))
+        self.pdf_reviews = QListWidget()
+        self.pdf_reviews.setAccessibleName(self.pdf_review_label.text())
+        self.pdf_reviews.setMaximumHeight(100)
+        layout.addWidget(self.pdf_review_label)
+        layout.addWidget(self.pdf_reviews)
         self.pdf_toggle = QPushButton(self.tr("Allow PDF sync for this list",
                                               "允許同步這份清單的 PDF"))
         self.pdf_toggle.setCheckable(True)
@@ -269,6 +279,8 @@ class DriveSyncDialog(QDialog):
                 self.automatic.stop()
                 if self.automatic.busy:
                     return False
+        if kind == "login":
+            self._pdf_review_titles = {}
         worker = SyncWorker(task, self)
         self._worker = worker
         worker.progress.connect(self._progress)
@@ -319,12 +331,14 @@ class DriveSyncDialog(QDialog):
         self._ordinary_library = library.get("ordinary", False)
         self._note_lists = set(library.get("note_lists", ()))
         self._pdf_lists = set(library.get("pdf_lists", ()))
+        self._pdf_review_titles = library.get("pdf_review_titles", {})
+        self._shown_pdf_titles = None
         self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
             label = row["name"]
-            if reason:
+            if reason or row["id"] in self._pdf_review_titles:
                 label += self.tr(" — needs review", " — 需核對")
             item = QListWidgetItem(label)
             if reason:
@@ -362,6 +376,13 @@ class DriveSyncDialog(QDialog):
         self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.notes_toggle.setChecked(list_id in self._note_lists)
         self.notes_toggle.setEnabled(self.sync_lists.isEnabled())
+        titles = self._pdf_review_titles.get(list_id, ())
+        if titles is not getattr(self, "_shown_pdf_titles", None):
+            self.pdf_reviews.clear()
+            self.pdf_reviews.addItems(titles)
+            self._shown_pdf_titles = titles
+        self.pdf_review_label.setVisible(bool(titles))
+        self.pdf_reviews.setVisible(bool(titles))
         self.pdf_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.pdf_toggle.setChecked(list_id in self._pdf_lists)
         self.pdf_toggle.setEnabled(self.sync_lists.isEnabled())
