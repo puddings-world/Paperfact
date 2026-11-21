@@ -31,7 +31,24 @@ def remove_selected(conn, list_id, paper_ids):
                 "local_id TEXT NOT NULL,added_at TEXT NOT NULL,observed_head BLOB NOT NULL,"
                 "PRIMARY KEY(context,list_id,action_id))"
             )
-        action_id = str(uuid4())
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS drive_removal_local "
+                "ON drive_membership_removals(list_id,local_id)"
+            )
+            # Restoring a row by UI, import or another writer withdraws any still-local
+            # removal for that pair. SQLite rolls this back if the re-addition fails.
+            for event, suffix, condition in (
+                ("INSERT", "insert", ""),
+                ("UPDATE OF list_id,paper_id", "move",
+                 " WHEN NEW.list_id IS NOT OLD.list_id OR NEW.paper_id IS NOT OLD.paper_id"),
+            ):
+                conn.execute(
+                    f"CREATE TRIGGER IF NOT EXISTS drive_withdraw_removal_{suffix} AFTER {event} "
+                    f"ON list_papers{condition} BEGIN DELETE FROM drive_membership_removals "
+                    "WHERE list_id=NEW.list_id AND local_id=NEW.paper_id; END"
+                )
+        # Legacy UUID-only actions have no continuous evidence of non-restoration.
+        action_id = f"v2-{uuid4()}"
         conn.executemany(
             "INSERT INTO drive_membership_removals VALUES(?,?,?,?,?,?)",
             ((context, list_id, action_id, key, row[0], head) for context, head in scopes),
@@ -50,7 +67,7 @@ def observed_removals(store, list_id, head, missing_dates):
             return 0
         requested = {tuple(row) for row in conn.execute(
             "SELECT local_id,added_at FROM drive_membership_removals "
-            "WHERE context=? AND list_id=? AND observed_head=?",
+            "WHERE context=? AND list_id=? AND observed_head=? AND action_id GLOB 'v2-*'",
             (store.context, list_id, encode(head.record())),
         )}
     if not requested:

@@ -280,6 +280,11 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with closing(sqlite3.connect(source)) as conn:
         assert conn.execute("SELECT list_id,local_id,observed_head FROM drive_membership_removals"
                             ).fetchall() == [("return", "Desktop discovery", anchor)]
+    # A rolled-back re-add must leave the pending request intact.
+    with closing(sqlite3.connect(source)) as conn:
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return','Desktop discovery',1,?)", (STAMP,))
+        conn.rollback()
     # An unrelated raw deletion does not create a second user intent.
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id='paper'")
@@ -295,6 +300,22 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             ).fetchone() == (count,)
     with closing(sqlite3.connect(source)) as conn, conn:
         assert conn.execute("SELECT COUNT(*) FROM drive_membership_removals").fetchone() == (1,)
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return','Desktop discovery',1,?)", (STAMP,))
+    # Re-adding with the exact same timestamp revokes the request, even if a later
+    # unobserved removal reproduces the same missing set and Drive head.
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("DELETE FROM list_papers WHERE list_id='return' "
+                     "AND paper_id='Desktop discovery'")
+    # Prior builds could not observe re-additions, so their old actions need review.
+    with closing(sqlite3.connect(source)) as conn, conn:
+        assert conn.execute("SELECT COUNT(*) FROM drive_membership_removals").fetchone() == (0,)
+        conn.execute("INSERT INTO drive_membership_removals VALUES(?,?,?,?,?,?)",
+                     (win._library_view[1].context, "return", "legacy-action",
+                      "Desktop discovery", STAMP, anchor))
+    review = win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
+    assert "removed papers" in review and "explicitly removed" not in review
+    with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
                      "VALUES('return','Desktop discovery',1,?)", (STAMP,))
     # The same paper added back later must not inherit the retired membership's reading state.
