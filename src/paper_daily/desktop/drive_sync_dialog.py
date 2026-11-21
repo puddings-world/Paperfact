@@ -46,6 +46,7 @@ class DriveSyncDialog(QDialog):
         )
         self.disposed = self._closing = False
         self._worker = None
+        self._resume_pending = False
         self.zh = language == "zh-TW"
         self.language = language
         self.setWindowTitle(self.tr("Personal Drive sync", "個人 Drive 同步"))
@@ -161,9 +162,28 @@ class DriveSyncDialog(QDialog):
             self.service.files = authority.files
             self.service.account = authority.account
             self.account.setText(authority.account["email"])
+        active = self.background.service
+        if (authority is None and active is not None
+                and active.workspace.path == session.workspace.path
+                and active.workspace.identity == session.workspace.identity
+                and active.binding.current() and active.files is self.background.files):
+            self.service = active
+            self.account.setText(active.account["email"])
+            self._resume_pending = True
+            QTimer.singleShot(0, self._resume_directory)
         if self.automatic is not None:
             self.automatic.changed.connect(self._automatic_changed)
         self._buttons()
+
+    def _resume_directory(self):
+        if not self._resume_pending or self.disposed or self._closing:
+            return
+        if self.background.worker is not None:
+            return
+        self._resume_pending = False
+        if (self.background.service is self.service and self.service.binding.current()
+                and self.background.files is self.service.files):
+            self._start("refresh", self.service.overview)
 
     def _automatic_changed(self, value):
         if self.disposed or self._closing or self.busy:
@@ -207,9 +227,10 @@ class DriveSyncDialog(QDialog):
             return False
         if self.background.worker is not None:
             return False
+        self._resume_pending = False
         if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
             self.background.stop()
-        if kind not in {"login", "toggle", "selection", "sync_saved"}:
+        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -311,6 +332,7 @@ class DriveSyncDialog(QDialog):
 
     def _background_changed(self):
         if not self.disposed:
+            self._resume_directory()
             self._buttons()
             if self.background.state == "review":
                 self.status.setText(self.tr(
@@ -419,7 +441,7 @@ class DriveSyncDialog(QDialog):
         )
         if current and not worker.error:
             result = worker.result
-            if kind == "login":
+            if kind in {"login", "refresh"}:
                 self.account.setText(result["account"]["email"])
                 if "library" in result:
                     self._show_directory(result["library"])
@@ -463,6 +485,8 @@ class DriveSyncDialog(QDialog):
                 )
             elif kind == "selection":
                 self._show_directory(result)
+                if not self._saved_ids and self.background.service is self.service:
+                    self.background.stop()
                 self.status.setText(
                     self.tr(
                         "Device selection saved.", "已儲存這台裝置的清單選擇。"
@@ -534,7 +558,8 @@ class DriveSyncDialog(QDialog):
                 self.scope_label.hide()
                 self.workspaces.clear()
                 self.account.setText(self.tr("Not connected to Google", "尚未連接 Google"))
-            self.service.rollback_consent()
+            if kind != "refresh":
+                self.service.rollback_consent()
             self.status.setText(
                 self.tr("Stopped or could not finish: ", "停止")
                 + str(worker.error or "cancelled")

@@ -302,6 +302,49 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 )) == ["Research paper", "desktop-add", "laptop-add"]
         visible = windows[1][1].service.read_library(Ticket())
         assert all(item["id"] != "private" for item in visible["items"])
+        owner, closed = windows[1]
+        setup = closed.service
+        monkeypatch.setattr(setup, "authorize", lambda **kwargs: pytest.fail("Repeated OAuth"))
+        import threading
+
+        entered, release = threading.Event(), threading.Event()
+        exchange = setup.sync_saved_library
+
+        def held(ticket, progress):
+            entered.set()
+            assert release.wait(8)
+            return exchange(ticket, progress)
+
+        monkeypatch.setattr(setup, "sync_saved_library", held)
+        closed.background.tick()
+        wait(app, entered.is_set)
+        reopened = DriveSyncDialog(closed.session, owner, owner=owner)
+        try:
+            reopened.show()
+            app.processEvents()
+            assert reopened.directory_lists.count() == 0 and not reopened.login.isEnabled()
+            release.set()
+            wait(app, lambda: reopened.directory_lists.count() > 0 and not reopened.busy)
+            assert reopened.account.text() == setup.account["email"]
+            assert reopened.keep_syncing.isChecked()
+            for i in range(reopened.directory_lists.count()):
+                row = reopened.directory_lists.item(i)
+                if row.data(Qt.ItemDataRole.UserRole) == "list":
+                    assert row.checkState() == Qt.CheckState.Checked
+                    row.setCheckState(Qt.CheckState.Unchecked)
+            reopened.save_selection.click()
+            wait(app, lambda: not reopened.busy)
+            assert not reopened.keep_syncing.isChecked()
+            assert not reopened.background.timer.isActive()
+            assert reopened._saved_ids == set()
+            assert not setup._library_view[1].load().selected
+            with closing(sqlite3.connect(laptop)) as conn:
+                assert conn.execute(
+                    "SELECT count(*) FROM list_papers WHERE list_id='list'"
+                ).fetchone() == (3,)
+        finally:
+            release.set()
+            reopened.close()
     finally:
         for owner, view in windows:
             view.background.stop()

@@ -671,6 +671,14 @@ class WorkspaceDialog(QDialog):
             existing.raise_()
             return
         owner = self.parent() or self
+        existing = getattr(owner, "_connection_dialog", None)
+        if (existing is not None and not existing.disposed
+                and existing.session.workspace.path == self.service.path
+                and existing.session.workspace.identity == self.service.identity):
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            return
         session = getattr(owner, "_workspace_sync_session", None)
         if (session is None or session.workspace.path != self.service.path
                 or session.workspace.identity != self.service.identity):

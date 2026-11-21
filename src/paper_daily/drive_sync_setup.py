@@ -62,18 +62,26 @@ class DriveSetup:
         self.check(ticket)
         files = DriveFiles(session, cancelled=lambda: ticket.cancelled)
         account = files.account()
-        rows = files.workspaces()
         self.check(ticket)
         self.files, self.account = files, account
         self._library_view = None
         try:
-            library = self.read_library(ticket)
+            return self.overview(ticket, progress)
         except Exception:
             self.files = self.account = self._library_view = None
             files.close()
             raise
+
+    def overview(self, ticket, progress):
+        """Read settings for the current Drive session without requesting authorization."""
+        self.check(ticket)
+        if self.files is None or self.account is None:
+            raise PermissionError("Sign in to Google Drive first")
+        self.files.cancelled = lambda: ticket.cancelled
+        rows = self.files.workspaces()
+        library = self.read_library(ticket)
         return {
-            "account": account,
+            "account": self.account,
             "workspaces": rows,
             "lists": library["local"],
             "library": library,
