@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 from contextlib import closing
+from uuid import UUID, uuid5
 
 from paper_daily import research_chat
 from paper_daily.drive_chat_removal_intent import reviewed_deletions
@@ -51,7 +52,32 @@ def _operation(history, payload, previous):
     return op
 
 
-def _local_turns(conn, list_id, papers):
+LEGACY_TABLE = ("CREATE TABLE IF NOT EXISTS drive_chat_legacy_ids("
+                "paper TEXT NOT NULL, local_id INTEGER NOT NULL, message TEXT NOT NULL,"
+                "PRIMARY KEY(paper,local_id), UNIQUE(paper,message))")
+
+
+def _legacy_key(conn, paper, idx, data, ordinals, *, enroll):
+    known = conn.execute("SELECT message FROM drive_chat_legacy_ids WHERE paper=? AND local_id=?",
+                         (paper, idx)).fetchone()
+    if known:
+        return known[0]
+    if not enroll:
+        return None
+    digest = hashlib.sha256(encode(data, MAX_INLINE)).hexdigest()
+    occurrence = ordinals.get((paper, digest), 0)
+    while True:
+        key = str(uuid5(UUID(paper), f"historical-chat:{digest}:{occurrence}"))
+        occurrence += 1
+        if not conn.execute("SELECT 1 FROM drive_chat_legacy_ids WHERE paper=? AND message=?",
+                            (paper, key)).fetchone():
+            break
+    ordinals[paper, digest] = occurrence
+    conn.execute("INSERT INTO drive_chat_legacy_ids VALUES(?,?,?)", (paper, idx, key))
+    return key
+
+
+def _local_turns(conn, list_id, papers, *, historical, enroll=False):
     selection = (" FROM chat c JOIN list_papers m ON c.paper_id=m.paper_id "
                  "WHERE m.list_id=?")
     size, count = conn.execute("SELECT sum(length(CAST(c.body AS BLOB)) + "
@@ -60,12 +86,17 @@ def _local_turns(conn, list_id, papers):
     if (size or 0) > 8 * 1024**2 or count > 10000:
         raise ListReviewRequired("Conversation exceeds the supported history budget")
     result = {}
-    if not count or "research_chat_links" not in _tables(conn):
+    if not count:
         return result
+    tables = _tables(conn)
+    linked = "research_chat_links" in tables
+    columns = ("l.exchange_id,l.reply_to,l.source_hash,l.message_id" if linked
+               else "NULL,NULL,NULL,NULL")
+    join = "LEFT JOIN research_chat_links l ON l.local_id=c.id" if linked else ""
+    ordinals = {}
     for row in conn.execute(
-        "SELECT c.id,c.paper_id,c.role,c.body,c.created_at,c.page,c.anchor,l.exchange_id,"
-        "l.reply_to,l.source_hash,l.message_id FROM chat c JOIN research_chat_links l "
-        "ON l.local_id=c.id JOIN list_papers m ON c.paper_id=m.paper_id "
+        f"SELECT c.id,c.paper_id,c.role,c.body,c.created_at,c.page,c.anchor,{columns} "
+        f"FROM chat c {join} JOIN list_papers m ON c.paper_id=m.paper_id "
         "WHERE m.list_id=? ORDER BY c.id", (list_id,)
     ):
         idx, paper, *fields, source, key = row
@@ -73,6 +104,18 @@ def _local_turns(conn, list_id, papers):
             raise ListReviewRequired("Refresh the bibliography before syncing conversations")
         data = dict(zip(FIELDS, fields, strict=True))
         data["anchor"] = json.loads(data["anchor"]) if data["anchor"] is not None else None
+        if key is None:
+            if not historical:
+                continue
+            if "drive_chat_legacy_ids" not in tables:
+                if not enroll:
+                    continue
+                conn.execute(LEGACY_TABLE)
+                tables.add("drive_chat_legacy_ids")
+            del data["exchange_id"], data["reply_to"]
+            key = _legacy_key(conn, papers[paper], idx, data, ordinals, enroll=enroll)
+            if key is None:
+                continue
         result[key] = idx, dict(scope=dict(kind="paper", id=papers[paper]), feature="chat",
                                 key=key, source_document_hash=source, data=data)
     return result
@@ -80,11 +123,18 @@ def _local_turns(conn, list_id, papers):
 
 def _receive(conn, paper, payload, local):
     data = payload["data"]
-    if "exchange_id" not in data:
-        raise ListReviewRequired("Conversation message has no portable exchange identity")
     fields = dict(data, anchor=json.dumps(data["anchor"], ensure_ascii=False)
                   if data["anchor"] is not None else None)
-    if local is None:
+    if local is None and "exchange_id" not in data:
+        if payload["source_document_hash"] is not None:
+            raise ListReviewRequired("Historical message has unsupported document provenance")
+        conn.execute(LEGACY_TABLE)
+        idx = conn.execute("INSERT INTO chat(paper_id,role,body,created_at,page,anchor) "
+                           "VALUES(:paper,:role,:body,:created_at,:page,:anchor)",
+                           dict(fields, paper=paper)).lastrowid
+        conn.execute("INSERT INTO drive_chat_legacy_ids VALUES(?,?,?)",
+                     (payload["scope"]["id"], idx, payload["key"]))
+    elif local is None:
         research_chat.import_shared_turn(conn, dict(fields, paper_id=paper,
                                          message_id=payload["key"],
                                          source_hash=payload["source_document_hash"]))
@@ -107,6 +157,10 @@ def _restore_reviewed(conn, paper, payload):
             "(SELECT 1 FROM chat WHERE chat.id=research_chat_links.local_id)",
             (payload["key"], data.get("exchange_id"), data.get("reply_to"),
              payload["source_document_hash"]))
+    if "exchange_id" not in payload["data"] and "drive_chat_legacy_ids" in _tables(conn):
+        conn.execute("DELETE FROM drive_chat_legacy_ids WHERE paper=? AND message=? "
+                     "AND NOT EXISTS (SELECT 1 FROM chat WHERE id=local_id)",
+                     (payload["scope"]["id"], payload["key"]))
     _receive(conn, paper, payload, None)
 
 
@@ -114,11 +168,9 @@ def has_local_messages(store, list_id):
     from paper_daily.workspace_service import _read
 
     with _read(store.workspace.path) as conn:
-        if "research_chat_links" not in _tables(conn):
-            return False
         return conn.execute(
             "SELECT 1 FROM list_papers m JOIN chat c ON c.paper_id=m.paper_id "
-            "JOIN research_chat_links l ON l.local_id=c.id WHERE m.list_id=? LIMIT 1", (list_id,)
+            "WHERE m.list_id=? LIMIT 1", (list_id,)
         ).fetchone() is not None
 
 
@@ -156,7 +208,9 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
             if _tables(conn) & _WORKSPACE_MARKERS:
                 raise ListReviewRequired("Workspace changed before conversation review")
             mapping = published_bindings(settings, history.active_papers)
-            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()})
+            historical = history.grant.startswith("chat-v2:")
+            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()},
+                                 historical=historical)
             bases = (dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE "
                                        "context=? AND list_id=?", (store.context, list_id)))
                      if "drive_chat_bases" in _tables(conn) else {})
@@ -167,6 +221,8 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
                 if decision and key != decision[0]["identity"]:
                     continue
                 other = remote["payload"]
+                if not historical and "exchange_id" not in other["data"]:
+                    continue
                 paper = mapping.get(other["scope"]["id"])
                 if not paper or not conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, paper)
@@ -189,8 +245,8 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
                 prompt = conn.execute(
                     "SELECT substr(c.body,1,100) FROM research_chat_links l JOIN chat c "
                     "ON c.id=l.local_id WHERE l.message_id=? AND c.paper_id=? AND c.role='user'",
-                    (other["data"]["reply_to"] or key, paper)
-                ).fetchone()
+                    (other["data"].get("reply_to") or key, paper)
+                ).fetchone() if other["data"].get("exchange_id") and value is not None else None
                 excerpt = " ".join((prompt[0] if prompt else other["data"]["body"][:100]).split())
                 action = actions.get(key) if value is None else None
                 cards.append(dict(removal_action=action if action and action[0] == paper else None,
@@ -229,6 +285,32 @@ def review_chat(directory, store, list_id, revision, ticket, decision=None):
             ticket.checkpoint(conn.commit)
 
 
+def _check_initial_order(local, latest, bases):
+    """An unversioned copy can only be extended when its existing prefix agrees."""
+    def sequences(payloads):
+        by_paper = {}
+        for value in payloads:
+            paper = value["scope"]["id"]
+            by_paper.setdefault(paper, []).append(value["key"])
+        return by_paper
+
+    historical = {v["scope"]["id"] for _, v in local.values() if "exchange_id" not in v["data"]}
+    historical.update(op["payload"]["scope"]["id"] for op in latest.values()
+                      if "exchange_id" not in op["payload"]["data"])
+    if not historical:
+        return
+    device = sequences(v for _, v in local.values())
+    cloud = sequences(op["payload"] for op in latest.values())
+    for paper in historical & device.keys() & cloud.keys():
+        left, right = device[paper], cloud[paper]
+        if any(key in bases for key in (*left, *right)
+               if key in local and "exchange_id" not in local[key][1]["data"]):
+            continue
+        shared = min(len(left), len(right))
+        if left[:shared] != right[:shared]:
+            raise ListReviewRequired("Historical conversation copies differ before first sync")
+
+
 def exchange_chat(directory, store, list_id, revision, ticket):
     history = DriveListChat(directory, store, list_id, revision=revision)
     head, records = history.changes(None, revision=revision)
@@ -243,17 +325,23 @@ def exchange_chat(directory, store, list_id, revision, ticket):
             if _tables(conn) & _WORKSPACE_MARKERS:
                 raise ListReviewRequired("Use the enrolled workspace for these conversations")
             mapping = published_bindings(settings, history.active_papers)
-            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()})
+            historical = history.grant.startswith("chat-v2:")
+            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()},
+                                 historical=historical, enroll=historical)
             if not local and not latest:
                 return 0
             conn.execute(BASE_TABLE)
             scope = (store.context, list_id)
             bases = dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE context=? "
                                       "AND list_id=?", scope))
+            if historical:
+                _check_initial_order(local, latest, bases)
             kept = _kept_deletions(conn, scope)
             for key in dict.fromkeys([*latest, *local, *bases]):
                 ticket.check()
                 turn, remote = local.get(key), latest.get(key)
+                if remote and not historical and "exchange_id" not in remote["payload"]["data"]:
+                    continue
                 common = versions.get(bases.get(key))
                 if bases.get(key) and (not common or common["payload"]["key"] != key):
                     raise ListReviewRequired("Accepted conversation version is missing")

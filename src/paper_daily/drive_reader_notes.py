@@ -18,8 +18,9 @@ class NoteEditConflict(ListReviewRequired):
     """A mapped card diverged from a verified base on this device and Drive."""
 
 
-def _identity(store, key, paper, created):
-    namespace = uuid5(NAMESPACE_URL, f"paperfact:{store.library_id}:{store.context}:notes")
+def _identity(store, key, paper, created, *, origin=None):
+    author = origin or store.context
+    namespace = uuid5(NAMESPACE_URL, f"paperfact:{store.library_id}:{author}:notes")
     return str(uuid5(namespace, f"{key}:{paper}:{created}"))
 
 
@@ -272,6 +273,10 @@ def _receive_one(history, settings, conn, op, base, published):
             "SELECT 1 FROM drive_library_note_ids WHERE context=? AND local_id=?",
             (store.context, candidate)
         ).fetchone():
+            if _identity(store, candidate, local_paper, payload["created_at"],
+                         origin=op["device_id"]) == identity:
+                key = candidate
+                break
             raise ListReviewRequired("Possible existing local note; review before joining")
     if key is None:
         if op["device_id"] == store.context:

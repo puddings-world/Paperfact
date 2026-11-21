@@ -18,7 +18,7 @@ from paper_daily.sync_journal import _identifier
 from paper_daily.workspace_service import Ticket, WorkspaceChanged, WorkspaceService
 
 CONTENT_GRANTS = {
-    "chat_grants": "chat-v1:",
+    "chat_grants": "chat-v2:",
     "note_grants": "edits-v1:", "pdf_grants": "pdf-v1:", "dive_grants": "dives-v1:",
     "reading_grants": "reading-v1:", "position_grants": "position-v1:",
 }

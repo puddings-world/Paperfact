@@ -65,14 +65,15 @@ head is published. Older readers stop on this format. A concurrent rename must
 refresh before retrying and preserves the latest message-history head.
 An explicit v13 transport capability permits historical messages without reply
 links. A directory advances to v13 when one is published and preserves this
-requirement across list renames. Desktop historical-message migration is pending.
+requirement across list renames. Newly enabled desktop Q&A sync includes these messages.
 
 The ordinary desktop sync cycle transfers linked reader questions, answers and
 one-sided text edits. A two-database test on Windows uses the real reader schema
 and simulated Drive. It verifies a reply from the second database, a later edit,
 conflicting offline edits and preservation of a local removal. The reader offers
-to reload externally changed Q&A. Older unlinked history still needs a list
-package. The in-app comparison can resolve divergent text edits on either side and
+to reload externally changed Q&A. Previously enabled Q&A keeps its linked-only scope
+until the user turns it off and back on. Historical rows receive stable per-paper IDs
+without inferred reply links. The in-app comparison can resolve divergent text edits on either side and
 rejects stale choices. A reader can restore a locally deleted message with its
 original reply link, or keep that version deleted only on this device. A later
 remote revision reopens review. Reader deletion and its observed Drive revision are

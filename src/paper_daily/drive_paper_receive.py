@@ -60,6 +60,33 @@ def _local_paper(conn, store, paper, published):
     return local_id
 
 
+def _exact_existing_members(conn, store, list_id, pairs, ticket):
+    from paper_daily.sync_capture import PAPER_COLUMNS, _payload
+
+    columns = ",".join("p." + key for key in sorted(PAPER_COLUMNS))
+    cursor = conn.execute(
+        f"SELECT {columns},m.citation,m.added_at,m.position FROM list_papers m "
+        "JOIN papers p ON p.id=m.paper_id WHERE m.list_id=? ORDER BY m.position,m.paper_id",
+        (list_id,))
+    cursor.row_factory = sqlite3.Row
+    result = {}
+    for row, (paper, member) in zip(cursor, pairs, strict=False):
+        ticket.check()
+        source = paper["device_id"]
+        namespace = uuid5(NAMESPACE_URL, f"paperfact:{store.library_id}:{source}:papers")
+        identity = paper["entity_id"]
+        if (str(uuid5(namespace, row["id"])) != identity
+                or _payload(conn, "papers", row) != paper["payload"]
+                or member["payload"]["citation"] != row["citation"]
+                or member["payload"]["added_at"] != row["added_at"]):
+            break
+        result[identity] = row["id"], row["position"]
+    count, = conn.execute("SELECT count(*) FROM list_papers WHERE list_id=?", (list_id,)).fetchone()
+    if len(result) != count or len(result) != len(pairs):
+        raise ListReviewRequired("Keep existing local bibliography; review incoming changes")
+    return result
+
+
 def receive_initial(directory, store, list_id, revision, ticket):
     history = DriveListPapers(directory, store, list_id)
     history._check(revision)
@@ -123,6 +150,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
             ).fetchone()
             if current != prior:
                 raise ValueError("Bibliography changed while receiving; retry")
+            exact = {}
             if (
                 not prior
                 and not any(p["device_id"] == store.context for p, _ in pairs)
@@ -130,9 +158,9 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     "SELECT 1 FROM list_papers WHERE list_id=? LIMIT 1", (list_id,)
                 ).fetchone()
             ):
-                raise ListReviewRequired(
-                    "Keep existing local bibliography; review incoming changes"
-                )
+                if retired or versions:
+                    raise ListReviewRequired("Review existing bibliography membership changes")
+                exact = _exact_existing_members(conn, store, list_id, pairs, ticket)
             first = conn.execute(
                 "SELECT COALESCE(MAX(position),-1)+1 FROM list_papers WHERE list_id=?", (list_id,)
             ).fetchone()[0]
@@ -153,6 +181,20 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     if has_published
                     else None
                 )
+                if paper["entity_id"] in exact:
+                    local, position = exact[paper["entity_id"]]
+                    if published and published != (local,):
+                        raise ListReviewRequired("Existing bibliography identity changed")
+                    conn.execute("INSERT OR IGNORE INTO drive_library_papers VALUES(?,?,?)",
+                                 (store.context, paper["entity_id"], local))
+                    if _local_paper(conn, store, paper, published) != local:
+                        raise ListReviewRequired("Existing bibliography identity changed")
+                    conn.execute("INSERT INTO drive_membership_watches "
+                                 "(context,list_id,member,creation,local_id,position) "
+                                 "VALUES(?,?,?,?,?,?)",
+                                 (store.context, list_id, member["entity_id"],
+                                  member["operation_id"], local, position))
+                    continue
                 if member["device_id"] == paper["device_id"] == store.context:
                     if not published:
                         # Older source builds generated the same UUID but stored no receipt.

@@ -203,7 +203,8 @@ class DriveSetup:
         if directories:
             spec = directories[0]
             args = files, spec["folder_id"], spec["head_id"], library_id
-            remote = DriveDirectory(*args, membership_restores=True, positions=True, chat=True)
+            remote = DriveDirectory(*args, membership_restores=True, positions=True,
+                                    chat=True, unlinked_chat=True)
             observation = remote.read()
             entries = observation.directory.lists
             has_positions = any(entry.positions_head for entry in entries)
@@ -211,6 +212,7 @@ class DriveSetup:
             # A concurrent upgrade will invalidate a legacy snapshot on its next read.
             remote = DriveDirectory(
                 *args, positions=has_positions, chat=any(entry.chat_head for entry in entries),
+                unlinked_chat=True,
                 membership_changes=any(entry.membership_changes_head for entry in entries),
                 membership_restores=any(entry.restored_memberships for entry in entries),
             )
@@ -419,7 +421,7 @@ class DriveSetup:
         if keep:
             remote = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
                                     membership_restores=True, positions=remote.positions,
-                                    chat=remote.chat)
+                                    chat=remote.chat, unlinked_chat=True)
         history = membership_history(remote, store, list_id, revision=saved.revision)
         if keep:
             keep_reviewed_membership(history, saved.revision, detail["observation"], ticket)
@@ -444,7 +446,7 @@ class DriveSetup:
         files.cancelled = lambda: ticket.cancelled
         upgraded = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
                                   membership_changes=True, positions=remote.positions,
-                                  chat=remote.chat)
+                                  chat=remote.chat, unlinked_chat=True)
         history = DriveMembershipChanges(upgraded, store, list_id, revision=saved.revision)
         operations = [removal_operation(history.creations[key], store.context)
                       for key in proposal["members"] if key in history.creations]
@@ -532,7 +534,8 @@ class DriveSetup:
                         if not directory.chat:
                             directory = DriveDirectory(
                                 directory.files, directory.folder, directory.head,
-                                directory.library_id, chat=True, positions=directory.positions,
+                                directory.library_id, chat=True, unlinked_chat=True,
+                                positions=directory.positions,
                                 membership_changes=directory.membership_changes,
                                 membership_restores=directory.membership_restores,
                             )
@@ -551,6 +554,7 @@ class DriveSetup:
                             directory = DriveDirectory(
                                 directory.files, directory.folder, directory.head,
                                 directory.library_id, positions=True, chat=directory.chat,
+                                unlinked_chat=True,
                                 membership_changes=directory.membership_changes,
                                 membership_restores=directory.membership_restores,
                             )

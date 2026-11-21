@@ -147,6 +147,70 @@ def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypat
     assert not poll(mac) and read(mac_db)[key] == "Updated after Mac deletion"
 
 
+def test_historical_chat_survives_peer_copy_retry_and_edit(source, tmp_path, monkeypatch):
+    from shutil import copyfile
+
+    from paper_daily import bundle, drive_sync_setup, store
+
+    mac_db = tmp_path / "imported-workspace" / "papers.db"
+    mac_db.parent.mkdir()
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.executemany("INSERT INTO chat(paper_id,role,body,created_at) VALUES('paper',?,?,?)",
+                         [("user", "Question", STAMP), ("assistant", "Repeated", STAMP),
+                          ("assistant", "Repeated", STAMP)])
+    with monkeypatch.context() as package:
+        package.setattr(store, "DB_PATH", source)
+        package.setattr(bundle, "DATA_DIR", source.parent)
+        package.setattr(bundle, "PDF_DIR", source.parent / "pdf")
+        exported = bundle.export("list", tmp_path / "copy.zip")
+        package.setattr(store, "DB_PATH", mac_db)
+        package.setattr(bundle, "DATA_DIR", mac_db.parent)
+        package.setattr(bundle, "PDF_DIR", mac_db.parent / "pdf")
+        store.init_db()
+        assert bundle.import_(exported["out"])["chat"] == 3
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        conn.execute("UPDATE chat SET id=id+100")
+    other = tmp_path / "different-workspace" / "papers.db"
+    other.parent.mkdir()
+    copyfile(mac_db, other)
+    with closing(sqlite3.connect(other)) as conn, conn:
+        conn.execute("UPDATE chat SET body='Independent edit' WHERE role='user'")
+    cloud = Cloud()
+
+    def enroll(path, label):
+        files = authority(cloud, tmp_path / label / "auth").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **kw: files)
+        service = drive_sync_setup.DriveSetup(
+            path, profiles=tmp_path / label / "profiles", cache=tmp_path / label / "cache",
+            authorize=lambda **kw: files.session)
+        service.sign_in(Ticket(), lambda _: None)
+        result = service.apply_library(["list"], Ticket(), lambda _: None, include_new_content=True)
+        if label == "different":
+            assert "differ before first sync" in result["reviews"]["list"]
+        else:
+            assert not result["reviews"]
+        return service
+
+    desktop = enroll(source, "desktop")
+    mac = enroll(mac_db, "mac")
+    enroll(other, "different")
+    with closing(sqlite3.connect(other)) as conn:
+        assert conn.execute("SELECT count(*) FROM chat").fetchone() == (3,)
+        assert conn.execute("SELECT body FROM chat WHERE role='user'").fetchone() == (
+            "Independent edit",)
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        conn.execute("UPDATE chat SET body='Edited on Mac' WHERE id=(SELECT max(id) FROM chat)")
+        conn.execute("INSERT INTO chat(paper_id,role,body,created_at) "
+                     "VALUES('paper','user','Follow up',?)", (STAMP,))
+    for service in (mac, desktop, mac, desktop):
+        assert not service.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    for path in (source, mac_db):
+        with closing(sqlite3.connect(path)) as conn:
+            assert [v for v, in conn.execute("SELECT body FROM chat ORDER BY id")] == [
+                "Question", "Repeated", "Edited on Mac", "Follow up"]
+            assert conn.execute("SELECT count(*) FROM drive_chat_legacy_ids").fetchone() == (4,)
+
+
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):
     from paper_daily import drive_sync_setup
     from paper_daily import store as db

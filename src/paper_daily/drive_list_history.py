@@ -407,7 +407,7 @@ class DriveListChat(_MembershipHistory):
 
     def _check_publication(self, revision, records):
         super()._check_publication(revision, records)
-        if not self.directory.unlinked_chat and any(
+        if (not self.directory.unlinked_chat or not self.grant.startswith("chat-v2:")) and any(
             "exchange_id" not in op["payload"]["data"] for op in records
         ):
             raise ValueError("Enable historical messages before sending them")
