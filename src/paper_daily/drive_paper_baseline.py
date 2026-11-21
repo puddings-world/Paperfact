@@ -177,7 +177,17 @@ def publish_initial(
     if append_new and received:
         remote_dates = {op["payload"]["paper_id"]: op["payload"]["added_at"]
                         for op in received[1::2]}
-        if not remote_dates.keys() <= {identity for identity, _, _ in bindings}:
+        missing = remote_dates.keys() - {identity for identity, _, _ in bindings}
+        if missing:
+            from paper_daily.drive_membership_intent import observed_removals
+
+            dates = {key: remote_dates[key] for key in missing}
+            explicit = observed_removals(store, list_id, head, dates)
+            if explicit:
+                raise ListReviewRequired(
+                    f"List has {len(missing)} removed papers; {explicit} explicitly removed "
+                    "on this device. Drive retains its copy pending review"
+                )
             raise ListReviewRequired("Selected bibliography changed or has removed papers; review")
         list_parent = next(p for p in received[1]["parents"] if p["kind"] == "list")
         pending = []

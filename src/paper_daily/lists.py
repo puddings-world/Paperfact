@@ -341,11 +341,10 @@ def remove_papers(list_id: str, paper_ids: list[str]) -> int:
     """Remove the selected memberships together, keeping paper research and relative order."""
     if not paper_ids:
         return 0
+    from paper_daily.drive_membership_intent import remove_selected
+
     with connect() as conn:
-        removed = conn.executemany(
-            "DELETE FROM list_papers WHERE list_id=? AND paper_id=?",
-            ((list_id, key) for key in dict.fromkeys(paper_ids)),
-        ).rowcount
+        removed = remove_selected(conn, list_id, paper_ids)
         if not removed:
             return 0
         # Positions are what "the order someone chose" means; leaving holes in them

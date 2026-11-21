@@ -258,10 +258,33 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             ).fetchall()
             assert len(titles) == 3
             assert {("Desktop discovery",), ("Laptop discovery",)} <= set(titles)
-    # A real local removal must still require review and keep the shared paper on its peer.
+    # A batch that aborts on its second paper must also roll back its first removal intent.
+    from paper_daily import lists
+
+    monkeypatch.setattr(db, "DB_PATH", source)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        anchor, = conn.execute("SELECT head FROM drive_library_bibliographies "
+                               "WHERE list_id='return'").fetchone()
+        conn.execute("CREATE TRIGGER reject_removal BEFORE DELETE ON list_papers "
+                     "WHEN OLD.paper_id='Desktop discovery' BEGIN SELECT RAISE(ABORT,'busy'); END")
+    with pytest.raises(sqlite3.IntegrityError, match="busy"):
+        lists.remove_papers("return", ["paper", "Desktop discovery"])
+    with closing(sqlite3.connect(source)) as conn, conn:
+        assert conn.execute("SELECT 1 FROM list_papers WHERE list_id='return' AND paper_id='paper'"
+                            ).fetchone()
+        assert not conn.execute("SELECT 1 FROM sqlite_master WHERE "
+                                "name='drive_membership_removals'").fetchone()
+        conn.execute("DROP TRIGGER reject_removal")
+    assert lists.remove_papers("return", ["Desktop discovery", "Desktop discovery"]) == 1
+    assert not lists.remove_paper("return", "Desktop discovery")
+    with closing(sqlite3.connect(source)) as conn:
+        assert conn.execute("SELECT list_id,local_id,observed_head FROM drive_membership_removals"
+                            ).fetchall() == [("return", "Desktop discovery", anchor)]
+    # An unrelated raw deletion does not create a second user intent.
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id='paper'")
-    assert "removed papers" in win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
+    review = win.sync_saved_library(Ticket(), lambda _: None)["reviews"]["return"]
+    assert "2 removed papers; 1 explicitly removed" in review
     assert not mac.sync_saved_library(Ticket(), lambda _: None)["reviews"]
     for path, count in ((source, 0), (laptop, 1)):
         with closing(sqlite3.connect(path)) as conn:
@@ -270,6 +293,10 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                 "ON r.paper_id=original.paper_id WHERE r.list_id='return' "
                 "AND original.list_id='list'"
             ).fetchone() == (count,)
+    with closing(sqlite3.connect(source)) as conn, conn:
+        assert conn.execute("SELECT COUNT(*) FROM drive_membership_removals").fetchone() == (1,)
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return','Desktop discovery',1,?)", (STAMP,))
     # The same paper added back later must not inherit the retired membership's reading state.
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
