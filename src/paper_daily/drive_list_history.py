@@ -453,6 +453,41 @@ class DriveListPositions(_MembershipHistory):
                             lambda: self._check_publication(revision, records),
                             remaining_bytes=self.max_bytes // self.max_pages)
 
+    def publish_page(self, paper, digest, data, original, *, predecessor, revision):
+        """Publish an explicitly observed position against its exact PDF and device tip."""
+        from paper_daily import reading_positions
+        from paper_daily.sync_content import content_id
+        from paper_daily.sync_schema_v2 import membership_id
+
+        self._check(revision)
+        member = membership_id(self.list_id, paper)
+        if member not in self.memberships or member in self.retired:
+            raise ValueError("Position requires a current member of the selected list")
+        reading_positions.validate_data(data)
+        reading_positions.verify_page(dict(paper_id=paper, document_hash=digest, **data), original)
+        refs = self.parents_for(member)
+        scope = {"kind": "paper", "id": paper}
+        identity = content_id(scope, "reading_position", digest)
+        payload = dict(feature="reading_position", scope=scope, source_document_hash=digest,
+                       key=digest, data=dict(data))
+        head, tips = self.suggestions(revision=revision)
+        previous = next((op for op in tips if op["device_id"] == self.store.context
+                         and op["entity_id"] == identity), None)
+        if previous and previous["payload"] == payload and (
+            previous["depends_on"] == predecessor or previous["operation_id"] == predecessor
+        ):
+            return previous
+        if predecessor != (previous["operation_id"] if previous else None):
+            raise DriveChanged("Recorded PDF position changed; review the current device tip")
+        op = dict(version=2, workspace_id=self.store.library_id, device_id=self.store.context,
+                  entity_type="research_content", entity_id=identity, action="put",
+                  parents=[refs["paper"]], incarnation=refs["membership"]["incarnation"],
+                  structure_revision=0, depends_on=predecessor, payload=payload,
+                  base_revision=previous["base_revision"] + 1 if previous else 0)
+        op["operation_id"] = hashlib.sha256(encode(op)).hexdigest()
+        self.append(head, [op], revision=revision)
+        return op
+
     def _member(self, op):
         from paper_daily.sync_schema_v2 import membership_id
 

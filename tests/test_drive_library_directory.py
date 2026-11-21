@@ -697,6 +697,27 @@ def test_devices_exchange_source_bound_positions_only_with_current_grants(tmp_pa
     assert len(cloud.objects) == count
     tip = writers[0].append(latest, [updated], revision=1)
     assert writers[1].suggestions(revision=1) == (tip, [updated, records[1]])
+    import hashlib
+
+    from test_reading_positions import pdf_bytes
+
+    original = pdf_bytes(3, "Portable edition")
+    digest = hashlib.sha256(original).hexdigest()
+    page = dict(page=3, recorded_at=STAMP, method="entered")
+    publish = writers[0].publish_page
+    count = len(cloud.objects)
+    with pytest.raises(ValueError, match="exact hash"):
+        publish(PAPER, digest, page, pdf_bytes(3, "Other PDF"), predecessor=None, revision=1)
+    with pytest.raises(ValueError, match="page count"):
+        publish(PAPER, digest, dict(page, page=4), original, predecessor=None, revision=1)
+    assert len(cloud.objects) == count
+    sent = publish(PAPER, digest, page, original, predecessor=None, revision=1)
+    count = len(cloud.objects)
+    assert publish(PAPER, digest, page, original, predecessor=None, revision=1) == sent
+    with pytest.raises(DriveChanged):
+        publish(PAPER, digest, dict(page, page=2), original, predecessor=None, revision=1)
+    assert len(cloud.objects) == count
+    assert sent in writers[1].suggestions(revision=1)[1]
     stores[1].set_position_sync("a", False, revision=1, ticket=Ticket())
     with pytest.raises(PermissionError):
         writers[1].changes(first, revision=1)
