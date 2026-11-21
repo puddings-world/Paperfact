@@ -2,8 +2,8 @@
 
 ## Start here on Apple Silicon
 
-[Download the 76c3c6f Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44875304568/artifacts/14696180033).
-[Packaged workflow verification](https://github.com/puddings-world/Paperfact/actions/runs/44875304568) passed on an arm64 runner. The older downloads below record earlier checks. Use the build above for the combined list, notes, PDF and offline explanation checks.
+[Download the 70dae2c Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44878707587/artifacts/14696264526).
+[Packaged workflow verification](https://github.com/puddings-world/Paperfact/actions/runs/44878707587) passed on an arm64 runner. The older downloads below record earlier checks. Use the build above for the combined list, notes, PDF and offline explanation checks.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
@@ -18,7 +18,7 @@ The first published explanation upgrades the shared directory to v6.
    explanation with the original. Reading a received explanation needs no AI call.
 3. On a build with the reader editor, open a saved explanation, click **編輯講解**, change a sentence and click **儲存講解**. Sync both devices and confirm the edit arrives.
    Then edit the same explanation differently on both devices before syncing.
-   Confirm both local versions survive and sync reports the conflict.
+   Open **Compare conflicting guides** on the device reporting the conflict. Verify the common text and both edits. Choose **Decide later** and confirm both survive. Reopen the comparison, choose one version, sync that device and then its peer, and check both show your choice.
 4. Deselect the list and confirm subsequent edits do not transfer.
 
 ## Exchange original PDFs between readers
