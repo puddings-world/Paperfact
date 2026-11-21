@@ -232,6 +232,8 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
 def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
     source, tmp_path, monkeypatch
 ):
+    import json
+
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
     from test_sync_connection_dialog import wait
@@ -295,11 +297,12 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
         with closing(sqlite3.connect(source)) as conn, conn:
             conn.execute("INSERT INTO lists VALUES('private','Keep local',NULL,?)", (STAMP,))
 
+        anchor = {"p0": 4, "o0": 2, "p1": 4, "o1": 11, "document_hash": "a" * 64}
         with closing(sqlite3.connect(laptop)) as conn, conn:
             conn.execute(
-                "INSERT INTO notes(paper_id,body,created_at,page) "
-                "SELECT paper_id,'Laptop note',?,5 FROM list_papers "
-                "WHERE list_id='list' AND position=0", (STAMP,)
+                "INSERT INTO notes(paper_id,body,created_at,page,anchor) "
+                "SELECT paper_id,'Laptop note',?,5,? FROM list_papers "
+                "WHERE list_id='list' AND position=0", (STAMP, json.dumps(anchor))
             )
         for index in (0, 1, 0):
             runner = windows[index][1].background
@@ -317,6 +320,10 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     ("Research paper", "A research note", None),
                     ("Research paper", "Laptop note", 5),
                 ]
+                received = conn.execute(
+                    "SELECT anchor FROM notes WHERE body='Laptop note'"
+                ).fetchone()
+                assert json.loads(received[0]) == anchor
                 assert sorted(row[0] for row in conn.execute(
                     "SELECT title FROM papers JOIN list_papers ON papers.id=list_papers.paper_id "
                     "WHERE list_id='list'"
@@ -348,6 +355,16 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             wait(app, lambda: reopened.directory_lists.count() > 0 and not reopened.busy)
             assert reopened.account.text() == setup.account["email"]
             assert reopened.keep_syncing.isChecked()
+            for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute("UPDATE notes SET body=? WHERE body='Laptop note'", (edit,))
+            for owner_view in (windows[0][1], reopened):
+                report = owner_view.service.sync_saved_library(Ticket(), lambda _: None)
+                assert "retain both" in report["reviews"]["list"]
+            for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
+                with closing(sqlite3.connect(path)) as conn:
+                    rows = conn.execute("SELECT body FROM notes WHERE page=5").fetchall()
+                    assert rows == [(edit,)]
             for i in range(reopened.directory_lists.count()):
                 row = reopened.directory_lists.item(i)
                 if row.data(Qt.ItemDataRole.UserRole) == "list":

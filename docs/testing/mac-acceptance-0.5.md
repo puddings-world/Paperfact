@@ -1,5 +1,26 @@
 # Mac v0.5 acceptance
 
+## New notes on a selected list
+
+Use **b1cdf53** or later on both machines. The first shared note upgrades the
+account's private library directory to v4. Use a disposable Google account for
+a trial if another device on your usual account still uses a v3 reader.
+
+1. With bibliography sync already working, open personal Drive settings on each
+   desktop. Highlight the same saved list. Turn on **Sync notes for this list**.
+   Confirm on each device and enable session background sync (or use manual sync).
+2. Close settings. On Windows add a new paper note anchored to a passage. On
+   Mac add another card to the same paper. After a Windows/Mac/Windows exchange,
+   verify both cards appear once on both machines. Verify the page and position
+   with matching original PDFs; transfer the PDF separately with a list package.
+3. Create a note on a paper that belongs only to an unselected list. It should
+   stay local. Sync twice more and confirm that the shared cards stay single.
+4. In this disposable workspace, disconnect both computers and edit the same
+   shared card differently. After reconnecting, expect a review message and
+   verify each local edit survives. This build does not merge those card edits.
+5. Disable notes on the Mac, or deselect and save the list. Existing cards should
+   remain readable there. Reselecting the list requires a fresh note opt-in.
+
 ## Background exchange with settings closed
 
 [Download the 0a06ab1 Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44866074184/artifacts/14692485781).

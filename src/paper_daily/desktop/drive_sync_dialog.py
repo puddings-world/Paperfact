@@ -320,6 +320,8 @@ class DriveSyncDialog(QDialog):
         self._list_buttons()
 
     def _list_buttons(self):
+        if self.disposed or self._closing:
+            return
         checked = {
             self.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
             for i in range(self.directory_lists.count())

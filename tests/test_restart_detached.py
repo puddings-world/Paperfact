@@ -60,3 +60,20 @@ def test_restart_hands_the_reader_to_a_detached_process(monkeypatch):
     monkeypatch.setattr(main, "MainWindow", lambda *a, **k: pytest.fail("built a window here"))
     assert main.run(restart=True) == 0
     assert started == [True]
+
+
+def test_second_launch_forwards_paper_before_primary_initialization(monkeypatch):
+    from paper_daily.desktop import main
+
+    monkeypatch.setattr(main, "ensure_dirs", lambda: None)
+    monkeypatch.setattr(main, "_install_error_log", lambda: None)
+    monkeypatch.setattr(main.rich_view, "prepare", lambda: None)
+    monkeypatch.setattr(main, "init_db", lambda: pytest.fail("secondary initialized the database"))
+    monkeypatch.setattr(main.runtime, "adopt_login_path", lambda: pytest.fail("secondary login"))
+    monkeypatch.setattr("paper_daily.ai_profiles.recheck_claude",
+                        lambda: pytest.fail("secondary started provider detection"))
+    forwarded = []
+    monkeypatch.setattr(main, "_hand_off_to_running_instance",
+                        lambda _next, _restart, paper, *_: forwarded.append(paper) or True)
+    assert main.run(paper="fixture-paper") == 0
+    assert forwarded == ["fixture-paper"]

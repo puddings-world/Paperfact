@@ -333,7 +333,8 @@ def test_actual_cli_missing_bundle_reports_failure_and_preserves_previous_run(tm
 
 
 @pytest.mark.parametrize(
-    "mode", ["success", "not-ready", "second-failed", "second-timeout", "primary-closed"],
+    "mode", ["success", "not-ready", "second-failed", "second-timeout",
+             "exit-timeout", "primary-closed"],
 )
 def test_instance_handoff_requires_live_primary_and_clean_second_launch(
     tmp_path, monkeypatch, mode,
@@ -349,6 +350,8 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
             return self.returncode
 
         def wait(self, timeout):
+            if mode == "exit-timeout" and self.returncode is None:
+                raise subprocess.TimeoutExpired("fixture-app", timeout)
             self.returncode = 0
             calls.append("wait")
             return 0
@@ -381,9 +384,12 @@ def test_instance_handoff_requires_live_primary_and_clean_second_launch(
         result = verify._instance_handoff(["fixture-app"], env, tmp_path)
         assert all(result.values()) and calls == ["second", "wait"]
     else:
-        error = subprocess.TimeoutExpired if mode == "second-timeout" else verify.CheckFailure
-        with pytest.raises(error):
+        with pytest.raises(verify.CheckFailure) as failure:
             verify._instance_handoff(["fixture-app"], env, tmp_path)
+        if mode in {"second-timeout", "exit-timeout"}:
+            expected = {"second-timeout": "secondary_handoff_timeout",
+                        "exit-timeout": "primary_exit_timeout"}[mode]
+            assert failure.value.code == expected
         assert "terminate" in calls or primary.returncode == 0
         if mode == "not-ready":
             assert "second" not in calls

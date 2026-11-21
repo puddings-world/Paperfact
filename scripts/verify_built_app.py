@@ -761,12 +761,15 @@ def _instance_handoff(command, env, out):
                 (out / "instance-secondary.log").write_bytes(
                     (error.stdout or b"") + (error.stderr or b""),
                 )
-                raise
+                raise CheckFailure(label, "secondary_handoff_timeout") from error
             (out / "instance-secondary.log").write_bytes(secondary.stdout + secondary.stderr)
             check_process(secondary, label)
             if primary.poll() is not None:
                 raise CheckFailure(label, "primary_closed_during_handoff", primary.returncode)
-            code = primary.wait(timeout=35)
+            try:
+                code = primary.wait(timeout=35)
+            except subprocess.TimeoutExpired as error:
+                raise CheckFailure(label, "primary_exit_timeout") from error
         finally:
             if primary.poll() is None:
                 primary.terminate()

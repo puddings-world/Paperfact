@@ -4992,22 +4992,11 @@ def run(
     # A first launch may have created the root since module import. Use its
     # physical identity before handoff/listen so later launches use the same key.
     SINGLE_INSTANCE_KEY = instance_key(DATA_DIR)
-    init_db()
     _install_error_log()
     rich_view.prepare()
-    runtime.adopt_login_path()
-    # The window resolves AI settings while it builds; find the CLI meanwhile.
-    from paper_daily.ai_profiles import recheck_claude
-
-    recheck_claude()
     from paper_daily.desktop.application import DesktopApplication
 
     app = QApplication.instance() or DesktopApplication(sys.argv)
-    style(app)
-    fonts.load()
-    # Without it the Dock (macOS) and the taskbar show the Python interpreter's icon.
-    app.setWindowIcon(QIcon(str(ROOT / "assets" / "paper-daily.ico")))
-
     if _hand_off_to_running_instance(open_next, restart, paper, destination, pdf):
         return 0
     if restart:
@@ -5017,6 +5006,17 @@ def run(
 
         relaunch_detached()
         return 0
+
+    init_db()
+    runtime.adopt_login_path()
+    # The window resolves AI settings while it builds; find the CLI meanwhile.
+    from paper_daily.ai_profiles import recheck_claude
+
+    recheck_claude()
+    style(app)
+    fonts.load()
+    # Without it the Dock (macOS) and the taskbar show the Python interpreter's icon.
+    app.setWindowIcon(QIcon(str(ROOT / "assets" / "paper-daily.ico")))
 
     smoke = os.environ.get("PAPERFACT_SMOKE_SECONDS")
     if smoke:
