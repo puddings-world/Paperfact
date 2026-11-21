@@ -492,6 +492,9 @@ the other list stays untouched and revokes the receiving device's grant.
 The ordinary reader uses a separate per-list opt-in on each device. The last
 accepted operation for each membership is recorded with the applied state in
 the local research transaction. Unchanged default markers need no upload.
+The sender records the operation ID and its predecessor before upload. After a lost
+reply it checks the verified history before comparing newer local edits, including
+when the local state has returned to the previous value.
 Single-sided edits travel in either direction; divergent edits retain both values
 and flag the list. The reader compares the common, local and Drive states and
 timestamps. A choice is accepted against the observed versions and device grant.

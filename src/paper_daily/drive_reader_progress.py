@@ -122,12 +122,39 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                 "CREATE TABLE IF NOT EXISTS drive_reading_bases(context TEXT,list_id TEXT,"
                 "member TEXT,op TEXT NOT NULL,PRIMARY KEY(context,list_id,member))"
             )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS drive_reading_sends(context TEXT,list_id TEXT,"
+                "member TEXT,op TEXT,parent TEXT,PRIMARY KEY(context,list_id,member,op))"
+            )
             bases = dict(
                 conn.execute(
                     "SELECT member,op FROM drive_reading_bases WHERE context=? AND list_id=?",
                     (store.context, list_id),
                 )
             )
+            # Recover an acknowledged upload even if the app stopped before saving its receipt.
+            # An operation counts only when the verified chain contains the exact local intent.
+            for member, sent, parent in conn.execute(
+                "SELECT member,op,parent FROM drive_reading_sends WHERE context=? AND list_id=?",
+                (store.context, list_id),
+            ).fetchall():
+                observed = versions.get(sent)
+                if observed is None:
+                    current = latest.get(member)
+                    if current is None or current["operation_id"] == parent:
+                        continue
+                    if parent and parent not in versions:
+                        raise ListReviewRequired("A reading upload predecessor is missing")
+                    # A different operation advanced past the same expected version.
+                elif (observed["entity_id"] != member or observed["device_id"] != store.context
+                      or observed["depends_on"] != parent):
+                    raise ListReviewRequired("Reading upload receipt does not match its operation")
+                elif parent == bases.get(member):
+                    bases[member] = sent
+                    conn.execute("INSERT OR REPLACE INTO drive_reading_bases VALUES(?,?,?,?)",
+                                 (store.context, list_id, member, sent))
+                conn.execute("DELETE FROM drive_reading_sends WHERE context=? AND list_id=? "
+                             "AND member=? AND op=?", (store.context, list_id, member, sent))
             rows = {
                 r[0]: r[1:]
                 for r in conn.execute(
@@ -164,6 +191,10 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     "INSERT OR REPLACE INTO drive_reading_bases VALUES(?,?,?,?)",
                     (store.context, list_id, identity, current["operation_id"]),
                 )
+            conn.executemany("INSERT OR IGNORE INTO drive_reading_sends VALUES(?,?,?,?,?)",
+                             ((store.context, list_id, op["entity_id"], op["operation_id"],
+                               op["depends_on"])
+                              for _, op in pending))
             store._check()
             ticket.checkpoint(conn.commit)
     if not pending:
@@ -219,6 +250,8 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                         "INSERT OR REPLACE INTO drive_reading_bases VALUES(?,?,?,?)",
                         (*key, op["operation_id"]),
                     )
+                conn.execute("DELETE FROM drive_reading_sends WHERE context=? AND list_id=? "
+                             "AND member=? AND op=?", (*key, op["operation_id"]))
             store._check()
             ticket.checkpoint(conn.commit)
     return conflicts

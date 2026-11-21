@@ -605,6 +605,42 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             for device in devices:
                 assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
             assert state_of(laptop, local) == "read"
+            from paper_daily.drive_list_history import DriveListReading
+
+            publish = DriveListReading.append
+            def lose_reply(history, *args, **kwargs):
+                publish(history, *args, **kwargs)
+                raise ConnectionError("Lost the upload confirmation")
+            mark(laptop, local, "skipped")
+            with monkeypatch.context() as disconnect:
+                disconnect.setattr(DriveListReading, "append", lose_reply)
+                with pytest.raises(ConnectionError, match="upload confirmation"):
+                    devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert state_of(source, "paper") == "skipped"
+            mark(laptop, local, "read")
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert state_of(source, "paper") == state_of(laptop, local) == "read"
+            mark(laptop, local, "delivered")
+            with monkeypatch.context() as disconnect:
+                disconnect.setattr(DriveListReading, "append", lose_reply)
+                with pytest.raises(ConnectionError, match="upload confirmation"):
+                    devices[1].sync_saved_library(Ticket(), lambda _: None)
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            mark(source, "paper", "pending")
+            devices[0].sync_saved_library(Ticket(), lambda _: None)
+            mark(laptop, local, "read")
+            assert devices[1].sync_saved_library(Ticket(), lambda _: None)["reading_conflicts"]
+            [after_retry] = devices[1].review_notes(*key, feature="reading")
+            assert [after_retry[k]["state"] for k in ("base", "local", "remote")] == [
+                "delivered", "read", "pending",
+            ]
+            devices[1].review_notes(*key, feature="reading", decision=(after_retry, "local"))
+            for device in reversed(devices):
+                assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(laptop)) as conn:
+                assert conn.execute("SELECT count(*) FROM drive_reading_sends").fetchone() == (0,)
             mark(laptop, local, "skipped")
             for device in reversed(devices):
                 assert not device.sync_saved_library(Ticket(), lambda _: None)["reviews"]
