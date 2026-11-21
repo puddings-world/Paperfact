@@ -409,3 +409,28 @@ def test_completed_queue_job_can_return_to_original_list(workspace, monkeypatch)
         window.close()
         window.deleteLater()
 
+
+def test_partial_manual_result_is_readable_without_a_rich_page(surface, tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from paper_daily.desktop.analysis_result import result_text
+
+    window, hub, board, editor = surface
+    database = tmp_path / "result.db"
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.executescript(
+            "CREATE TABLE papers(id,title); CREATE TABLE dives(paper_id,body,written_at);"
+            "CREATE TABLE kv(key,value); INSERT INTO papers VALUES('p','Paper title');"
+            "INSERT INTO dives VALUES('p','Saved explanation','2026-11-21');"
+        )
+    reports = []
+    handle = begin(editor, "Analysis", key="report", paper_id="p", result=lambda: None,
+                   manual_result=lambda job: reports.append(result_text(database, "p", job)))
+    hub.update(handle.token, {"stage":"Later research missing", "completed":1, "total":1,
+                              "outcome":"partial"})
+    hub.finish(handle.token)
+    QApplication.processEvents()
+    assert not reports and not board.bar.isVisible()
+    hub.goto(handle.token)
+    assert "Saved explanation" in reports[0] and "Later research missing" in reports[0]

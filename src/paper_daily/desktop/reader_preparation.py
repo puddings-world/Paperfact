@@ -147,7 +147,10 @@ class _Worker(QThread):
     def run(self):
         try:
             self.result = _prepare(self.request, self.cancelled)
-        except Exception:
+        except Exception as exc:
+            from paper_daily.diagnostics import record_exception
+
+            record_exception(type(exc), exc.__traceback__, phase="worker")
             self.failed = True
 
 

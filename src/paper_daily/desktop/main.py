@@ -4189,12 +4189,20 @@ class MainWindow(QWidget):
                 self.reader_page.tabs.setCurrentWidget(self.reader_page.dive_view)
                 self.reader_page.dive_view.setFocus()
 
+        def inspect_result(job):
+            if not current_for(self) or Path(store.DB_PATH).resolve() != original_database:
+                return
+            from paper_daily.desktop.analysis_result import show_analysis_result
+
+            show_analysis_result(self, original_database, paper_id, job)
+
         # `_analysis_activity` stays the running job; a waiting one lives only in the hub.
         handle = begin(
             self.reader_page,
             "深入分析" if paper_id else "背景分析",
             key=f"analysis:{paper_id}",
             result=show_result,
+            manual_result=inspect_result if paper_id else None,
             paper_id=paper_id,
             cancel=self.stop_analysis,
             retry=lambda: self._spawn_job(args, paper_id),

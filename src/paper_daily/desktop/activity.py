@@ -65,7 +65,7 @@ def hub_for(owner):
 
 
 def begin(owner, label=None, *, task="ask", key=None, result=None, paper_id=None,
-          cancel=None, retry=None, retry_failed=None, queued=False):
+          cancel=None, retry=None, retry_failed=None, queued=False, manual_result=None):
     """Register slow work. `cancel` offers 停止 and must end the work, then finish it with
     cancelled=True; `retry` offers 重試 after a failure and starts the work as a new job;
     `retry_failed` offers 重試未完成的 after a partial result and redoes only what failed.
@@ -79,7 +79,8 @@ def begin(owner, label=None, *, task="ask", key=None, result=None, paper_id=None
     widget = widget_for(owner)
     label = label or OWNER_LABELS.get(type(widget).__name__, TASKS.get(task, "背景工作"))
     return hub.begin(widget, label, key or f"{id(owner)}:{task}", result, paper_id,
-                     cancel=cancel, retry=retry, retry_failed=retry_failed, queued=queued)
+                     cancel=cancel, retry=retry, retry_failed=retry_failed, queued=queued,
+                     manual_result=manual_result)
 
 
 def when_ready(handle, launch):
@@ -107,6 +108,7 @@ class Job:
     state: str = "running"
     completed: int | None = None
     total: int | None = None
+    manual_result: object = None
     warning: bool = False
     history: deque = field(default_factory=lambda: deque(maxlen=12))
     # Set by the feature that owns the work; no callback means no button for it.
@@ -218,7 +220,7 @@ class ActivityHub(QObject):
         return any(j.queued and j.state in ACTIVE for j in self.jobs.values())
 
     def begin(self, owner, label, key, result=None, paper_id=None, *, cancel=None, retry=None,
-              retry_failed=None, queued=False):
+              retry_failed=None, queued=False, manual_result=None):
         old = next((j for j in self.jobs.values() if j.key == key and j.state in ACTIVE), None)
         if old:
             self.selected = old.token
@@ -227,7 +229,7 @@ class ActivityHub(QObject):
         token = uuid4().hex
         job = Job(token, key, label, weakref.ref(owner) if owner is not None else lambda: None,
                   self.context(), self.epoch, result, paper_id, cancel=cancel, retry=retry,
-                  retry_failed=retry_failed, queued=queued)
+                  retry_failed=retry_failed, queued=queued, manual_result=manual_result)
         if queued and any(j.queued and j.state == "running" for j in self.jobs.values()):
             job.state = "queued"
         job.list_id = _list_of(key)
@@ -334,7 +336,9 @@ class ActivityHub(QObject):
         owner = job.owner()
         if owner is not None and not isValid(owner):
             return
-        if callable(job.result):
+        if not automatic and callable(job.manual_result):
+            job.manual_result(job)
+        elif callable(job.result):
             job.result()
         elif (owner is not None and isValid(owner) and job.context == self.context()
               and owner.isVisible()):
@@ -578,7 +582,7 @@ class ActivityBoard(QWidget):
             self.bar.setRange(0, 100)
             percent = int(job.completed * 100 / job.total) if job.total else 0
             self.bar.setValue(100 if job.state == "done" else min(99, percent))
-        self.bar.setVisible(not waiting and (
+        self.bar.setVisible(not waiting and job.state != "partial" and (
             active or job.total is not None or job.state == "done"))
         self.bar.setToolTip("依實際完成項目計算；不是剩餘時間估計" if job.total else "等待工作回覆")
         color = self.pal["accent"] if active else self.pal["done"] if job.state == "done" else (

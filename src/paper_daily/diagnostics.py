@@ -37,6 +37,8 @@ MODULES = frozenset(
         "paper_daily.runtime",
         "paper_daily.integration_entry",
         "paper_daily.diagnostics",
+        "paper_daily.desktop.reader_preparation",
+        "paper_daily.reader_saved_inputs",
         "paper_daily.store",
         "paper_daily.llm",
         "paper_daily.ai_accounts",

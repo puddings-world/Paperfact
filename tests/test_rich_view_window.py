@@ -37,11 +37,15 @@ handles = []
 
 def open_reader():
     stack.setCurrentWidget(view)
-    view.setHtml("<p>A paper</p>")
+    view.setHtml("<!--" + "x" * 2_200_000 + "--><p>A paper</p>")
     QTimer.singleShot(1500, finish)
 
 def finish():
-    handles.append(int(win.winId()))
+    view.view.page().toPlainText(check_text)
+
+def check_text(text):
+    if text.strip() == "A paper":
+        handles.append(int(win.winId()))
     app.quit()
 
 QTimer.singleShot(500, open_reader)

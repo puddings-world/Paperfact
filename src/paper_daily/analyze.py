@@ -441,7 +441,7 @@ def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
                                      outcome="partial")
                 log(f"[{done}/{len(todo)}] failed {pid}: {e}")
                 continue
-            work_progress.report("已處理論文（含未完成項目）", done, len(todo),
+            work_progress.report(summary(state), done, len(todo),
                                  outcome=None if all(state.values()) else "partial")
             complete += all(state.values())
             with connect() as conn:

@@ -86,6 +86,7 @@ class RichView(QWidget):
         self._shown = None
         # Which loaded document that was: a change sent to any other is refused there.
         self._page_id = 0
+        self._large_page_script = None
 
     def markdown(self, text: str) -> str:
         return rich_html.markdown(text) if self.rich else md.to_html(text, self.palette_)
@@ -153,6 +154,27 @@ class RichView(QWidget):
             return
         self._page_id += 1
         page = rich_html.page(body, self.palette_, at_end=at_end, at=at, ident=self._page_id)
+        # setHtml transports the page as a percent-encoded data URL. Keep large
+        # inline figures out of that URL while preserving the normal asset base.
+        if self._large_page_script is not None:
+            self.view.page().scripts().remove(self._large_page_script)
+            self._large_page_script = None
+        if len(page.encode("utf-8")) > 600_000:
+            from PySide6.QtWebEngineCore import QWebEngineScript
+
+            script = QWebEngineScript()
+            script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+            script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+            script.setRunsOnSubFrames(False)
+            script.setSourceCode(
+                "document.addEventListener('DOMContentLoaded', () => {"
+                f"if (window.PAGE_ID === {self._page_id}) "
+                f"document.querySelector('main').innerHTML = {json.dumps(body)};"
+                "}, {once:true, capture:true});"
+            )
+            self.view.page().scripts().insert(script)
+            self._large_page_script = script
+            page = rich_html.page("", self.palette_, at_end=at_end, at=at, ident=self._page_id)
         self.view.setHtml(page, QUrl.fromLocalFile(str(WEB_DIR) + "/"))
 
     def find(self, text: str) -> bool:
