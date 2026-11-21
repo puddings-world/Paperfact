@@ -2,20 +2,37 @@
 
 ## Start here on Apple Silicon
 
-Use build **98a0722** on both devices. Allow a few minutes to check that a new Windows list appears on the Mac and that a note edited offline makes the return trip.
+Use build **c55c5d4** on both devices. Allow a few minutes to check that a new Windows list appears on the Mac and that a note edited offline makes the return trip.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14712576157) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14711857757) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44918946864/artifacts/14713206831) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44918946864/artifacts/14713336928) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44916837960) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44918946864) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
-1. On Windows, extract the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44916837960/artifacts/14712432298). Import the enclosed `original.zip` into a disposable workspace. In Sync, select the imported list and save the selection.
+1. On Windows, extract the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44918946864/artifacts/14712563011). Import the enclosed `original.zip` into a disposable workspace. In Sync, select the imported list and save the selection.
 2. On the Mac, open Sync with the same test Google account. Choose **Refresh list names**. The Windows list should appear unchecked. Select it, save, then enable note sync for this list on both devices.
 3. Sync Windows, then Mac. Disconnect the Mac, add a note to the received paper and reconnect. Sync Mac, then Windows. Edit the same note on Windows and sync in reverse order. Confirm each device shows the last edit once.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
+
+## Resume a PDF from the other device
+
+1. Use the same multi-page PDF on both devices. Select the list and turn on
+   **Sync PDF page numbers** on both. In each Sync window enable **Sync saved
+   lists while Paperfact is open**, then choose **Continue reading**.
+2. On Windows, open the paper, go to page 3 and choose **Remember page**.
+   Allow a background exchange on Windows and then on Mac. For an immediate
+   exchange, choose **Sync saved lists now** in that order, then close settings.
+3. On Mac, open the paper at another page. Open **Pages from other devices…**.
+   The PDF should stay at the current page until you select the Windows entry.
+   Select page 3 and confirm the visible page. Then record page 2 on Mac and
+   repeat the exchange in reverse. Windows should offer page 2.
+4. While the same Mac reading session remains open, disconnect its network and
+   repeat the jump to the previously received Windows page. Record the two build
+   IDs, pages and first failing action. Opening a different PDF edition must
+   never offer a jump using the original edition's page.
 
 ## Check a partial analysis result
 
