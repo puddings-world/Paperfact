@@ -117,7 +117,27 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         ).fetchall() == [("Research paper", 0)]
         conn.execute("UPDATE list_papers SET state='read'")
         conn.execute("UPDATE papers SET title='Offline local title'")
-    assert sync(mac) == {}
+    # The confirmed head still gets checked. Re-saving a membership set already
+    # published by this device must read neither old Drive batches nor paper payloads.
+    from paper_daily import drive_paper_baseline
+
+    read = mac.files.read_small
+    history_reads = []
+
+    def count_history(*args, **kwargs):
+        raw = read(*args, **kwargs)
+        if b'"format":"paperfact.list-paper-history.v1"' in raw:
+            history_reads.append(len(raw))
+        return raw
+
+    def unexpected_snapshot(*args, **kwargs):
+        pytest.fail("An unchanged bibliography was serialized again")
+
+    with monkeypatch.context() as checks:
+        checks.setattr(mac.files, "read_small", count_history)
+        checks.setattr(drive_paper_baseline, "initial_batches", unexpected_snapshot)
+        assert sync(mac) == {}
+    assert history_reads == []
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute(
             "INSERT INTO papers(id,title,title_key,venue,year,source) "

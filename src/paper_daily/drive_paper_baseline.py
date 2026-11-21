@@ -108,9 +108,51 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
     return batches
 
 
-def publish_initial(directory, store, list_id, revision, ticket, *, append_new=False):
+def _membership_digest(ids):
+    digest = hashlib.sha256()
+    for identity in ids:
+        if identity is None:
+            raise ListReviewRequired("Restore the missing paper before publishing its list")
+        raw = identity.encode("utf-8")
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.digest()
+
+
+def _unchanged(store, list_id, head, ticket):
+    with _read(store.path) as settings:
+        if not settings.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='bibliography_publish_cache'"
+        ).fetchone():
+            return False
+        row = settings.execute(
+            "SELECT members FROM bibliography_publish_cache WHERE list_id=? AND head=?",
+            (list_id, encode(head.record())),
+        ).fetchone()
+    if row is None:
+        return False
+    with _read(store.workspace.path) as conn:
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='research_capture_binding'"
+        ).fetchone():
+            raise ListReviewRequired("Use the existing enrolled workspace for this library")
+        ids = conn.execute(
+            "SELECT p.id FROM list_papers m LEFT JOIN papers p ON p.id=m.paper_id "
+            "WHERE m.list_id=? ORDER BY m.paper_id", (list_id,)
+        )
+        digest = _membership_digest(identity for (identity,) in ids)
+    ticket.check()
+    return digest == row[0]
+
+
+def publish_initial(
+    directory, store, list_id, revision, ticket, *, append_new=False, received_head=None
+):
     """Publish a first bibliography or resume its exact acknowledged prefix after interruption."""
     history = DriveListPapers(directory, store, list_id)
+    if append_new and received_head and _unchanged(store, list_id, received_head, ticket):
+        history._check(revision)
+        return received_head
     bindings = []
     batches = initial_batches(store, list_id, revision, ticket, bindings=bindings)
     head, received = history.changes(None, revision=revision)
@@ -194,4 +236,24 @@ def publish_initial(directory, store, list_id, revision, ticket, *, append_new=F
     for batch in pending:
         ticket.check()
         head = history.append(head, batch, revision=revision)
+    if append_new and head:
+        # Cache the exact source snapshot, including when a local edit raced the upload.
+        # This is a disposable optimization. Authority and receive receipts stay separate.
+        digest = _membership_digest(sorted(local for _, local in bindings))
+        with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+            settings.execute("BEGIN IMMEDIATE")
+            store._check()
+            selected = store._load(settings)
+            if selected.revision != revision or list_id not in selected.selected:
+                raise ValueError("This device changed its list selection")
+            settings.execute(
+                "CREATE TABLE IF NOT EXISTS bibliography_publish_cache("
+                "list_id TEXT PRIMARY KEY, head BLOB NOT NULL, members BLOB NOT NULL)"
+            )
+            settings.execute(
+                "INSERT INTO bibliography_publish_cache VALUES(?,?,?) ON CONFLICT(list_id) "
+                "DO UPDATE SET head=excluded.head,members=excluded.members",
+                (list_id, encode(head.record()), digest),
+            )
+            ticket.checkpoint(settings.commit)
     return head

@@ -75,9 +75,9 @@ def receive_initial(directory, store, list_id, revision, ticket):
     anchor = ScopeHead(**decode(prior[0])) if prior else None
     head, records = history.changes(anchor, revision=revision)
     if anchor is not None and head == anchor:
-        return "current"
+        return head
     if head is None:
-        return "waiting_source"
+        return None
     pairs = list(zip(records[::2], records[1::2], strict=True))
     if len({paper["entity_id"] for paper, _ in pairs}) != len(pairs):
         raise ListReviewRequired("Subsequent bibliography revisions need reconciliation")
@@ -185,19 +185,13 @@ def receive_initial(directory, store, list_id, revision, ticket):
             )
             store._check()
             ticket.checkpoint(conn.commit)
-    return "received"
+    return head
 
 
 def exchange_bibliography(directory, store, list_id, revision, ticket):
     from paper_daily.drive_paper_baseline import publish_initial
 
-    history = DriveListPapers(directory, store, list_id)
-    history._check(revision)
-    if directory.files.account()["id"] != store.owner_id:
-        raise PermissionError("The selected Google account changed")
-    entry = history._entry(directory.read())
-    if entry is None:
-        raise ListReviewRequired("The selected list is missing from the directory")
-    if entry.papers_head:
-        receive_initial(directory, store, list_id, revision, ticket)
-    return publish_initial(directory, store, list_id, revision, ticket, append_new=True)
+    head = receive_initial(directory, store, list_id, revision, ticket)
+    return publish_initial(
+        directory, store, list_id, revision, ticket, append_new=True, received_head=head
+    )
