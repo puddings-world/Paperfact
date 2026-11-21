@@ -109,10 +109,10 @@ class DriveSyncDialog(QDialog):
         self.membership_detail.setWordWrap(True)
         self.membership_detail.hide()
         layout.addWidget(self.membership_detail)
-        self.accept_absent = QPushButton(self.tr("Confirm removal from this list",
+        self.accept_removal = QPushButton(self.tr("Confirm removal from this list",
                                                  "確認此篇已從清單移除"))
-        self.accept_absent.clicked.connect(self._accept_absent)
-        layout.addWidget(self.accept_absent)
+        self.accept_removal.clicked.connect(self._accept_removal)
+        layout.addWidget(self.accept_removal)
         self.save_selection = QPushButton(
             self.tr("Save this device's list selection", "儲存這台裝置的清單選擇")
         )
@@ -457,8 +457,12 @@ class DriveSyncDialog(QDialog):
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
         conflict = self._membership_conflicts.get(list_id) if self._ordinary_library else None
         self.membership_detail.setVisible(bool(conflict))
-        self.accept_absent.setVisible(bool(conflict and conflict.get("observation")))
-        self.accept_absent.setEnabled(self.sync_lists.isEnabled())
+        self.accept_removal.setVisible(bool(conflict and conflict.get("observation")))
+        present = conflict and conflict["kind"] != "absent"
+        self.accept_removal.setText(
+            self.tr("Remove from this list…", "從此清單移除…") if present
+            else self.tr("Confirm removal from this list", "確認此篇已從清單移除"))
+        self.accept_removal.setEnabled(self.sync_lists.isEnabled())
         if conflict:
             explanations = {
                 "replaced": self.tr("This paper was added again on this device.",
@@ -495,15 +499,25 @@ class DriveSyncDialog(QDialog):
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
 
-    def _accept_absent(self):
+    def _accept_removal(self):
         item = self.directory_lists.currentItem()
         if not item or not self.sync_lists.isEnabled():
             return
         key = item.data(Qt.ItemDataRole.UserRole)
         detail = self._membership_conflicts.get(key)
         if detail and detail.get("observation"):
+            if detail["kind"] != "absent" and QMessageBox.question(
+                self, self.windowTitle(), self.tr(
+                    f"Remove {detail['title']} from this list on this device? Its list position, "
+                    "pin and reading status will be removed. The paper, PDF and notes stay.",
+                    f"要在這台裝置從此清單移除《{detail['title']}》嗎？此清單中的排序、釘選與閱讀狀態"
+                    "將會移除。論文、PDF 和筆記會保留。"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            ) != QMessageBox.StandardButton.Yes:
+                return
             self._start("sync_saved", lambda ticket, progress:
-                        self.service.accept_absent_membership(key, detail, ticket, progress))
+                        self.service.accept_membership_removal(key, detail, ticket, progress))
 
     def _adopt_removals(self):
         item = self.directory_lists.currentItem()

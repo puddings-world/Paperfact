@@ -681,7 +681,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                     conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})",
                                  row)
                 with pytest.raises(ListReviewRequired, match="review again"):
-                    peer.accept_absent_membership("list", detail, Ticket(), lambda _: None)
+                    peer.accept_membership_removal("list", detail, Ticket(), lambda _: None)
                 with closing(sqlite3.connect(path)) as conn, conn:
                     local, = conn.execute("SELECT paper_id FROM list_papers").fetchone()
                     assert remove_selected(conn, "list", [local]) == 1
@@ -693,7 +693,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                 with monkeypatch.context() as interrupted:
                     interrupted.setattr(peer, "sync_saved_library", unavailable)
                     with pytest.raises(ConnectionError, match="offline after local confirmation"):
-                        peer.accept_absent_membership(
+                        peer.accept_membership_removal(
                             "list", confirmation, Ticket(), lambda _: None)
                 with closing(sqlite3.connect(path)) as conn:
                     query = "SELECT applied FROM drive_membership_watches"
@@ -702,19 +702,37 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
                         confirmation["observation"]["removal"],)
                 view.service = peer
                 view._show_directory(updated)
-                assert view.accept_absent.isVisible()
-                view.accept_absent.click()
+                assert view.accept_removal.isVisible()
+                view.accept_removal.click()
                 wait(app, lambda: not view.busy)
                 assert not view.membership_detail.isVisible(), view.status.text()
                 assert not peer.sync_saved_library(Ticket(), lambda _: None)["reviews"]
                 assert cloud.objects == before_retry
             elif index == 1:
                 assert "replacement membership" in report["list"]
+                detail = refreshed["membership_conflicts"]["list"]
+                with closing(sqlite3.connect(path)) as conn, conn:
+                    conn.execute("DELETE FROM list_papers WHERE list_id='list'")
+                    conn.execute(f"INSERT INTO list_papers VALUES({','.join('?' for _ in row)})",
+                                 row)
+                with pytest.raises(ListReviewRequired, match="review again"):
+                    peer.accept_membership_removal("list", detail, Ticket(), lambda _: None)
+                view.service = peer
+                view._show_directory(peer.sync_saved_library(Ticket(), lambda _: None))
+                with monkeypatch.context() as cancel:
+                    cancel.setattr(QMessageBox, "question",
+                                   lambda *a: QMessageBox.StandardButton.No)
+                    view.accept_removal.click()
+                assert view.membership_detail.isVisible() and not view.busy
+                with closing(sqlite3.connect(path)) as conn:
+                    assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (1,)
+                view.accept_removal.click()
+                wait(app, lambda: not view.busy)
+                assert not view.membership_detail.isVisible(), view.status.text()
             else:
                 assert not report
             with closing(sqlite3.connect(path)) as conn:
-                count = int(index == 1)
-                assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (count,)
+                assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (0,)
                 if index == 2:
                     assert not conn.execute("SELECT 1 FROM drive_membership_removals").fetchone()
                     assert conn.execute("SELECT 1 FROM drive_membership_watches "

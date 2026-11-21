@@ -16,6 +16,34 @@ class MembershipConflict(ListReviewRequired):
         super().__init__(reason)
 
 
+def arm_present_review(store, list_id, detail, ticket):
+    """Invalidate a displayed decision even after an identical delete/reinsert."""
+    from uuid import uuid4
+
+    with closing(sqlite3.connect(store.workspace.path.as_uri() + "?mode=rw", uri=True,
+                                 timeout=0.5)) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        store._check(conn)
+        if _tables(conn) & _WORKSPACE_MARKERS:
+            raise ListReviewRequired("Use enrolled workspace sync for this library")
+        local = detail["observation"]["local"]
+        conn.execute("CREATE TABLE IF NOT EXISTS drive_member_reviews(list_id,local_id,token, "
+                     "PRIMARY KEY(list_id,local_id))")
+        for table, scope in (("list_papers", "list_id"), ("pins", "scope")):
+            for event, refs in (("INSERT", ["NEW"]), ("DELETE", ["OLD"]),
+                                ("UPDATE", ["OLD", "NEW"])):
+                conditions = " OR ".join(f"(list_id={ref}.{scope} AND local_id={ref}.paper_id)"
+                                         for ref in refs)
+                conn.execute(f"CREATE TRIGGER IF NOT EXISTS drive_review_{table}_{event} AFTER "
+                             f"{event} ON {table} BEGIN DELETE FROM drive_member_reviews WHERE "
+                             f"{conditions}; END")
+        token = uuid4().hex
+        conn.execute("INSERT OR REPLACE INTO drive_member_reviews VALUES(?,?,?)",
+                     (list_id, local, token))
+        ticket.checkpoint(conn.commit)
+        detail["observation"]["token"] = token
+
+
 def _schema(conn):
     conn.execute(
         "CREATE TABLE IF NOT EXISTS drive_membership_watches("
@@ -39,7 +67,7 @@ def _schema(conn):
                      "WHERE list_id=OLD.list_id AND local_id=OLD.paper_id AND live=1; END")
 
 
-def receive_membership_changes(history, revision, ticket, *, accept_absent=None):
+def receive_membership_changes(history, revision, ticket, *, accept_removal=None):
     """Watch current memberships before retirement; commit each batch with its receipts."""
     store, list_id = history.store, history.list_id
     retiring = history.retirements(revision)
@@ -82,21 +110,21 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                 local = bindings.get(payload["paper_id"])
                 watch = watches.get(member)
                 removal = retiring.get(member)
-                if accept_absent and member != accept_absent["member"]:
+                if accept_removal and member != accept_removal["member"]:
                     continue
                 if not local or (watch and watch[:2] != (creation["operation_id"], local)):
                     raise ListReviewRequired("Membership identity changed; review before applying")
                 if watch and watch[4] is not None:
                     if not removal or watch[4] != removal["operation_id"]:
                         raise ListReviewRequired("Membership receipt differs from Drive")
-                    if accept_absent:
+                    if accept_removal:
                         # A previous confirmation can commit before the follow-up sync fails.
                         restored = conn.execute("SELECT 1 FROM list_papers WHERE list_id=? "
                                                 "AND paper_id=?", (list_id, local)).fetchone()
                         already_confirmed = (
-                            not restored and accept_absent["revision"] == revision
-                            and accept_absent["removal"] == watch[4]
-                            and accept_absent["local"] == local
+                            not restored and accept_removal["revision"] == revision
+                            and accept_removal["removal"] == watch[4]
+                            and accept_removal["local"] == local
                         )
                     continue
                 if watch and not removal:
@@ -115,11 +143,24 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                 observed = {"member": member, "removal": removal["operation_id"],
                             "local": local, "intents": sorted(i[0] for i in intents),
                             "revision": revision} if removal and not row else None
-                if accept_absent and accept_absent != observed:
+                present = None
+                if row and removal:
+                    present = {"member": member, "removal": removal["operation_id"],
+                               "local": local, "revision": revision, "row": row,
+                               "pin": conn.execute("SELECT pinned_at FROM pins WHERE scope=? "
+                                                   "AND paper_id=?", (list_id, local)).fetchone()}
+                if accept_removal and present and "token" in accept_removal:
+                    token = conn.execute("SELECT token FROM drive_member_reviews WHERE list_id=? "
+                                         "AND local_id=?", (list_id, local)).fetchone()
+                    if token and accept_removal == dict(present, token=token[0]):
+                        conn.execute("DELETE FROM list_papers WHERE list_id=? AND paper_id=?",
+                                     (list_id, local))
+                        observed = accept_removal
+                if accept_removal and accept_removal != observed:
                     raise ListReviewRequired("List entry changed; review again")
                 if observed:
                     end = history.boundaries.get(intents[0][1], 0) if len(intents) == 1 else 0
-                    if accept_absent or end > 2 * index + 1 and (
+                    if accept_removal or end > 2 * index + 1 and (
                         removal["device_id"] == store.context
                         or intents[0][0].endswith("-" + creation["operation_id"])
                     ):
@@ -145,8 +186,7 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                         conflict = MembershipConflict(
                             conn, local, "changed" if row else "absent",
                             "Local membership differs; both versions retained")
-                        if observed:
-                            conflict.detail["observation"] = observed
+                        conflict.detail["observation"] = observed or present
                         raise conflict
                     raise ListReviewRequired("Local membership differs; both versions retained")
                 if not removal:
@@ -168,8 +208,10 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                 if (not watch or not watch[3] or row[0] != watch[2] or pinned or reading_history
                         or row[3:] != ("pending", None, None)):
                     kind = "unverified" if not watch else "replaced" if not watch[3] else "edited"
-                    raise MembershipConflict(conn, local, kind,
-                                             "Review local reading edits or replacement membership")
+                    conflict = MembershipConflict(
+                        conn, local, kind, "Review local reading edits or replacement membership")
+                    conflict.detail["observation"] = present
+                    raise conflict
                 deleted = conn.execute("DELETE FROM list_papers WHERE list_id=? AND paper_id=?",
                                        (list_id, local))
                 if deleted.rowcount != 1:
@@ -178,7 +220,7 @@ def receive_membership_changes(history, revision, ticket, *, accept_absent=None)
                              "WHERE context=? AND list_id=? AND member=?",
                              (removal["operation_id"], store.context, list_id, member))
                 applied += 1
-            if accept_absent and not (applied or already_confirmed):
+            if accept_removal and not (applied or already_confirmed):
                 raise ListReviewRequired("List entry changed; review again")
             store._check(conn)
             ticket.checkpoint(conn.commit)

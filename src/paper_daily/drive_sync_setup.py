@@ -349,7 +349,7 @@ class DriveSetup:
         )
         return self._exchange_saved(result, ticket, progress, selection=accepted)
 
-    def accept_absent_membership(self, list_id, detail, ticket, progress):
+    def accept_membership_removal(self, list_id, detail, ticket, progress):
         from paper_daily.drive_membership_apply import receive_membership_changes
         from paper_daily.drive_membership_history import DriveMembershipChanges
 
@@ -359,13 +359,13 @@ class DriveSetup:
         files, store, saved, remote, *_ = self._library_view
         if (not remote or not remote.membership_changes or files is not self.files
                 or store.owner_id != self.account["id"] or list_id not in saved.selected
-                or detail.get("kind") != "absent" or not detail.get("observation")
+                or not detail.get("observation")
                 or self._membership_conflicts.get((files, store.context, list_id)) != detail):
             raise ValueError("The reviewed membership changed; sync again")
         files.cancelled = lambda: ticket.cancelled
         history = DriveMembershipChanges(remote, store, list_id, revision=saved.revision)
         receive_membership_changes(history, saved.revision, ticket,
-                                   accept_absent=detail["observation"])
+                                   accept_removal=detail["observation"])
         return self.sync_saved_library(ticket, progress)
 
     def adopt_membership_sync(self, list_id, proposal, ticket, progress):
@@ -400,7 +400,7 @@ class DriveSetup:
             ListReviewRequired,
             exchange_list,
         )
-        from paper_daily.drive_membership_apply import MembershipConflict
+        from paper_daily.drive_membership_apply import MembershipConflict, arm_present_review
         from paper_daily.drive_membership_intent import MembershipRemovalReview
 
         _, store, saved, directory, *_ = self._library_view
@@ -461,6 +461,8 @@ class DriveSetup:
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except MembershipConflict as exc:
+                if exc.detail["kind"] != "absent":
+                    arm_present_review(store, list_id, exc.detail, ticket)
                 reviews[list_id] = str(exc)
                 membership_conflicts[list_id] = exc.detail
             except MembershipRemovalReview as exc:
