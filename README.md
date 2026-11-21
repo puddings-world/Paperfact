@@ -144,60 +144,30 @@ count does not certify original-source coverage. [Evidence scope](docs/analysis-
 
 ## Sync a desktop and laptop (v0.5 preview)
 
-1. Click the bottom-right **Sync** button and sign in to Google.
-2. On your desktop, select the lists you want and choose **Sync this workspace**.
-   Unrelated catalog papers stay local. Selected research gets a
-   separate verified copy and backup when first enrollment is needed. The new
-   window reconnects automatically; keep it open until pending changes/files finish.
-3. On your Mac, install the matching preview, sign in to the **same Google account**
-   and choose **Open selected Drive workspace**. Its data stays in a new local folder.
-4. Installed builds remember the opened sync workspace on restart. Keep automatic
-   sync on. Offline notes are saved locally and sent after reconnect.
-   Before a trip, use offline preparation/verification for the papers you need.
+Use the same preview on both computers. [Apple Silicon download and offline acceptance steps](docs/testing/mac-acceptance-0.5.md#start-here-on-apple-silicon).
+
+1. On Windows, open **Sync**, sign in to Google, check the lists to exchange and choose **Save this device's list selection**. This publishes your local list names to your private directory. Save again when you want a newly created list to appear on the Mac.
+2. On the Mac, open **Sync** and sign in to the same Google account. Check the lists you want on this device and save its selection. Each computer remembers its own choices. For a two-way transfer, select the list on both.
+3. Highlight a saved list on each device and enable the content you want from the table below. Update both devices before granting transfers. The first published PDF upgrades the private directory to v5 and the first published explanation upgrades it to v6.
+4. Choose **Sync saved lists now** on Windows, then on the Mac. After editing on the Mac, sync the Mac and then Windows to receive the change. For automatic exchange while reading, enable **Sync saved lists while Paperfact is open** on both. It checks every 30 seconds during that session. After restarting, sign in and enable it again.
+
+| To bring along | Control on each device | What to check offline |
+|---|---|---|
+| Paper list | Save the list selection | Open the list and find a paper added on the other computer. |
+| Paper notes | **Sync notes for this list** | Open a note and check its text and page. Conflicting edits can be reviewed under **Compare conflicting notes**. For older grants covering only new cards, toggle note sync off and on to allow edits. |
+| Original PDFs | **Allow PDF sync for this list** | Open a received original and turn a page. Different local originals are preserved for review. |
+| Saved deep guides | **Sync saved explanations** | Open a received guide before its PDF arrives. The retry link reloads saved text locally. Concurrent edits require review. |
+
+For figures, highlights, slides or handing a colleague an independent copy, export a research package.
+**Existing workspace sync** opens the earlier workflow for a separate workspace copy.
+[Sync architecture and coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 
 ```mermaid
 flowchart LR
-    A["Desktop: local research + pending edits"] <--> D["Your private Google Drive"]
-    D <--> B["Mac: local research + pending edits"]
-    A -. "Reviewed list package / sharing link" .-> C["Colleague: independent copy"]
+    A["Windows: selected lists"] <--> D["Your private Google Drive"]
+    D <--> B["Mac: selected lists"]
+    A -. "List research package" .-> C["Colleague: independent copy"]
 ```
-
-Sync runs while Paperfact is open (local edits debounce; remote polling is every
-30 seconds). Google and AI authorizations stay on each device. Normal edits send
-row differences; PDFs use verified, retryable immutable chunks. Private workspace
-folders must remain unshared; share selected lists through research packages instead.
-The development build can publish list names to your private Drive directory and
-remember a different selection on each device. Save the selection on the source desktop,
-then save it on the laptop to receive the bibliography into an empty list. Choose **Sync saved lists now** on either device to
-exchange new papers. Enable **Sync saved lists while Paperfact is open** for background
-exchange every 30 seconds during this session. You can close settings and continue
-reading. Reopen Drive settings to see the connected account and change your saved
-selection. Sign in and enable it again after restarting Paperfact. Newly created local list names stay private until you save the selection again. Both readers need
-bibliography support. To exchange new and edited note cards, highlight a saved list and turn on
-**Sync notes for this list** on both devices. The first note upgrades the directory
-format; update all devices before enabling it. New cards carry their page and source
-anchor. Edits on one device propagate to the other. When both devices edit a card,
-each keeps its version for review and other cards continue syncing. Select that list,
-open **Compare conflicting notes**, then choose the local or Drive version. The next
-sync exchanges your choice. You can also close the comparison to keep both versions. Removals require review. For a list enabled before edit support, turn note sync off and back
-on on each device to grant permission for edits. **Allow PDF sync for this list** saves
-a separate preference for that device. Deselecting a list clears its PDF permission.
-Enable PDF sync on both devices to transfer missing originals into the reader.
-The first PDF upgrades the private directory to v5. Update every device first.
-If two local originals differ, Paperfact keeps both and requests review.
-Enable **Sync saved explanations** on both devices to exchange the stored deep-guide
-text without another AI call. The first shared guide upgrades the directory to v6.
-Update every device first. You can open a received guide before its PDF is available.
-If the guide fails to load, use the retry link on the explanation tab to read the local copy.
-Concurrent edits require review. Use a research package
-for additional analysis assets such as figures, highlights and slides. Use **Existing workspace sync** for the pilot research transfer.
-
-[Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
-This is a test candidate; installed Windows/Mac acceptance is still required.
-**Known limit:** selection currently creates a separate workspace copy. A complete
-library directory with independent per-device list subscriptions is
-[under development](docs/sync-architecture.md#whole-library-list-selection-required-correction-2026-11-18);
-the current Mac picker does not list unpublished desktop lists.
 
 ## Share the research, not your account
 

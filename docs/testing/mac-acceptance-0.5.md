@@ -1,5 +1,12 @@
 # Mac v0.5 acceptance
 
+## Start here on Apple Silicon
+
+[Download the 76c3c6f Apple Silicon test package](https://github.com/puddings-world/Paperfact/actions/runs/44875304568/artifacts/14696180033).
+[Packaged workflow verification](https://github.com/puddings-world/Paperfact/actions/runs/44875304568) passed on an arm64 runner. The older downloads below record earlier checks. Use the build above for the combined list, notes, PDF and offline explanation checks.
+
+Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
+
 ## Exchange saved deep explanations
 
 Use disposable workspaces on both machines and the same v6-capable build.

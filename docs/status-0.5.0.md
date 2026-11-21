@@ -1,6 +1,8 @@
 # v0.5.0 current status
 
-Updated 2026-11-18. **Development candidate; v0.5.0 is not release-approved.**
+Updated 2026-11-21. **Development candidate; v0.5.0 is not release-approved.**
+The [76c3c6f Apple Silicon candidate and acceptance instructions](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) cover selected lists, paper notes, PDFs and saved guide text. A local guide opens without PDF highlights, with an offline retry on read failure. Windows reader checks passed 24 cases and the critical gate passed 14. The macOS packaged workflow passed. Personal Drive on physical devices remains pending.
+
 The full target remains the [release scope](roadmap-0.5.0.md), including desktop
 and mobile offline research, safe synchronization, recovery and private access.
 This page separates current evidence from unfinished implementation and external
