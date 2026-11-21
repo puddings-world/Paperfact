@@ -40,8 +40,11 @@ membership-history field under v8. This verifies the format boundary only.
 An opt-in v9 transport fixture now publishes a native membership delete tied to
 the verified creation, receives it on a second device, and retries the original
 upload without a second Drive record. Normal desktop clients still reject v9.
-Desktop adoption, transactional receipt application, and installed-device
-removal remain open.
+The gated receiver applies a verified removal and records its operation ID in
+the same SQLite transaction. A two-device fixture retained an edited reading
+state for review, rolled back a failed receipt write, preserved shared paper
+research, and ignored redelivery after a local re-add. Desktop adoption, fresh
+device replay, conflict resolution, and installed-device removal remain open.
 
 ## Release goal
 

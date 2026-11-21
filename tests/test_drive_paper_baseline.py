@@ -326,6 +326,18 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     peer_revision = reader.store.load().revision
     with pytest.raises(ValueError, match="creation"):
         writer.append(None, [dict(operations[0], incarnation="wrong")], revision=revision)
+    from paper_daily.drive_membership_apply import receive_membership_changes
+    from paper_daily.drive_paper_receive import receive_initial
+
+    receive_initial(reader.directory, reader.store, "return", peer_revision, Ticket())
+    assert receive_membership_changes(reader, peer_revision, Ticket()) == 0
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        peer_id, = conn.execute("SELECT id FROM papers WHERE title='Desktop discovery'").fetchone()
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('preserve','Other',?)", (STAMP,))
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('preserve',?,0,?)", (peer_id, STAMP))
+        conn.execute("UPDATE list_papers SET state='read' WHERE list_id='return' AND paper_id=?",
+                     (peer_id,))
     commit = writer.append(None, operations, revision=revision)
     count = len(fork.objects)
     assert writer.append(None, operations, revision=revision) == commit
@@ -388,6 +400,51 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
         assert conn.execute("SELECT state,added_at FROM list_papers WHERE list_id='return' "
                             "AND paper_id='paper'").fetchone() == (
                                 "pending", "2026-12-01T14:00:00+00:00")
+
+
+    # Switch the laptop to the forked v9 history after the legacy-client checks.
+    peer_revision = reader.store.load().revision
+    with pytest.raises(ListReviewRequired, match="local reading edits"):
+        receive_membership_changes(reader, peer_revision, Ticket())
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        assert conn.execute("SELECT state FROM list_papers WHERE list_id='return' AND paper_id=?",
+                            (peer_id,)).fetchone() == ("read",)
+        conn.execute("UPDATE list_papers SET state='pending' WHERE list_id='return' AND paper_id=?",
+                     (peer_id,))
+        conn.execute("CREATE TRIGGER fail_ack BEFORE UPDATE OF applied ON drive_membership_watches "
+                     "BEGIN SELECT RAISE(ABORT,'receipt interrupted'); END")
+    with pytest.raises(sqlite3.IntegrityError, match="receipt interrupted"):
+        receive_membership_changes(reader, peer_revision, Ticket())
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        assert conn.execute("SELECT COUNT(*) FROM list_papers WHERE paper_id=?",
+                            (peer_id,)).fetchone() == (2,)
+        conn.execute("DROP TRIGGER fail_ack")
+        conn.execute("INSERT INTO notes(paper_id,body,created_at) VALUES(?,?,?)",
+                     (peer_id, "Keep this note", STAMP))
+    from paper_daily.desktop.main import _legacy_pdf_name
+
+    pdf = laptop.parent / "pdf" / _legacy_pdf_name(peer_id)
+    pdf.parent.mkdir(exist_ok=True)
+    pdf.write_bytes(b"%PDF-1.4 synthetic original")
+    assert receive_membership_changes(reader, peer_revision, Ticket()) == 1
+    assert receive_membership_changes(reader, peer_revision, Ticket()) == 0
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute("SELECT list_id FROM list_papers WHERE paper_id=?",
+                            (peer_id,)).fetchall() == [("preserve",)]
+        assert conn.execute("SELECT title FROM papers WHERE id=?", (peer_id,)).fetchone() == (
+            "Desktop discovery",)
+        assert conn.execute("SELECT body FROM notes WHERE paper_id=?", (peer_id,)).fetchone() == (
+            "Keep this note",)
+    assert pdf.read_bytes() == b"%PDF-1.4 synthetic original"
+    # An already-applied removal must not replay against a subsequent local re-add.
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('return',?,4,?)", (peer_id, STAMP))
+    assert receive_membership_changes(reader, peer_revision, Ticket()) == 0
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute(
+            "SELECT position FROM list_papers WHERE list_id='return' AND paper_id=?",
+                            (peer_id,)).fetchone() == (4,)
 
 
 def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
