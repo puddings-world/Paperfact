@@ -81,6 +81,12 @@ class DriveSyncDialog(QDialog):
         self.save_selection.setVisible(False)
         self.save_selection.clicked.connect(self._save_selection)
         layout.addWidget(self.save_selection)
+        self._saved_ids = set()
+        self.sync_lists = QPushButton(self.tr("Sync saved lists now", "立即同步已勾選清單"))
+        self.sync_lists.hide()
+        self.sync_lists.clicked.connect(self._sync_saved)
+        self.directory_lists.itemChanged.connect(self._list_buttons)
+        layout.addWidget(self.sync_lists)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
         self.pilot.setCheckable(True)
         self.pilot.hide()
@@ -174,6 +180,7 @@ class DriveSyncDialog(QDialog):
         self.lists.setEnabled(idle)
         self.directory_lists.setEnabled(idle)
         self.save_selection.setEnabled(idle and self.service.files is not None)
+        self._list_buttons()
         self.stop.setEnabled(self.busy)
         self.progress.setVisible(self.busy)
         self.progress.setRange(0, 0 if self.busy else 1)
@@ -187,7 +194,7 @@ class DriveSyncDialog(QDialog):
             self.service.binding._check()
         except (OSError, ValueError):
             return False
-        if kind not in {"login", "toggle", "selection"}:
+        if kind not in {"login", "toggle", "selection", "sync_saved"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -258,6 +265,24 @@ class DriveSyncDialog(QDialog):
             self.directory_lists.addItem(item)
         self.directory_lists.setVisible(True)
         self.save_selection.setVisible(True)
+        self._saved_ids = {row["id"] for row in library["items"] if row["selected"]}
+        self.sync_lists.setVisible(True)
+        self._list_buttons()
+
+    def _list_buttons(self):
+        checked = {
+            self.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.directory_lists.count())
+            if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
+        }
+        self.sync_lists.setEnabled(
+            bool(self._saved_ids) and checked == self._saved_ids and self.service.files is not None
+            and not self._closing and not self.busy
+        )
+
+    def _sync_saved(self):
+        if self.sync_lists.isEnabled() and self.sync_lists.isVisible():
+            self._start("sync_saved", self.service.sync_saved_library)
 
     def _save_selection(self):
         if self.busy or self.service.files is None or not self.directory_lists.isVisible():
@@ -390,6 +415,13 @@ class DriveSyncDialog(QDialog):
                         "Choose this workspace or open one from Drive.",
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
+                )
+            elif kind == "sync_saved":
+                self._show_directory(result)
+                self.status.setText(
+                    self.tr("Review the marked lists.", "請核對標示的清單。")
+                    if result.get("reviews")
+                    else self.tr("Saved lists synced.", "已同步勾選的清單。")
                 )
             elif kind == "selection":
                 self._show_directory(result)

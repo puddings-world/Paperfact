@@ -212,12 +212,13 @@ def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monke
     from paper_daily.workspace_service import Ticket
 
     result = {"items": []}
-    setup = SimpleNamespace(
-        workspace=SimpleNamespace(path=tmp_path / "research"),
-        save_library=lambda *args, **kwargs: result,
-        read_library=lambda ticket: result,
-        _library_view=(None, object(), SimpleNamespace(selected={"a", "b"}, revision=2), object()),
-    )
+    from test_library_selection import database
+
+    setup = drive_sync_setup.DriveSetup(database(tmp_path / "research"))
+    setup.save_library = lambda *args, **kwargs: result
+    setup.read_library = lambda ticket: result
+    selected = SimpleNamespace(selected={"a", "b"}, revision=2)
+    setup._library_view = (None, object(), selected, object())
     monkeypatch.setattr(drive_sync_setup, "local_binding", lambda path: None)
     seen = []
 

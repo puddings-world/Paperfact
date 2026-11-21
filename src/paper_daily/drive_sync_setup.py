@@ -161,14 +161,39 @@ class DriveSetup:
         return self.read_library(ticket)
 
     def apply_library(self, selected, ticket, progress):
+        result = self.save_library(selected, ticket, progress, intermediate=True)
+        return self._exchange_saved(result, ticket, progress)
+
+    def sync_saved_library(self, ticket, progress):
+        """Exchange only previously saved subscriptions under the current sign-in."""
+        self.check(ticket)
+        if self.files is None or self.account is None:
+            raise PermissionError("Sign in to Google Drive first")
+        result = self.read_library(ticket)
+        _, store, selection, _, observed, *_ = self._library_view
+        if not selection.selected or local_binding(self.workspace.path):
+            return {**result, "reviews": {}}
+        if observed is None or not selection.selected.issubset(
+            item.id for item in observed.directory.lists
+        ):
+            raise ValueError("The saved list directory changed; review your selection")
+        # Validate the directory checkpoint using the same revision guard as manual setup.
+        accepted = store.save(
+            observed.directory, sorted(selection.selected), expected_revision=selection.revision,
+            ticket=ticket, intermediate=True,
+        )
+        return self._exchange_saved(result, ticket, progress, selection=accepted)
+
+    def _exchange_saved(self, result, ticket, progress, *, selection=None):
         from paper_daily.drive_list_records import ListReviewRequired, exchange_list
 
-        result = self.save_library(selected, ticket, progress, intermediate=True)
-        if local_binding(self.workspace.path):
-            return result
-        _, store, selection, directory, *_ = self._library_view
+        _, store, saved, directory, *_ = self._library_view
+        selection = saved if selection is None else selection
+        if local_binding(self.workspace.path) or not selection.selected:
+            return {**result, "reviews": {}}
         reviews = {}
-        for index, list_id in enumerate(sorted(selection.selected)):
+        selected = sorted(selection.selected)
+        for index, list_id in enumerate(selected):
             ticket.check()
             progress({"stage": "selected_lists", "completed": index, "total": len(selected)})
             try:

@@ -150,3 +150,19 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     assert "needs review" in view.directory_lists.item(1).text()
     assert view.directory_lists.item(1).toolTip() == "Conflicting description"
     assert "Review" in view.status.text()
+    assert view.sync_lists.isEnabled()
+    view.directory_lists.item(0).setCheckState(Qt.CheckState.Checked)
+    assert not view.sync_lists.isEnabled()
+    view.directory_lists.item(0).setCheckState(Qt.CheckState.Unchecked)
+    calls = []
+
+    def sync_saved(ticket, progress):
+        calls.append(True)
+        return {"items": [{**item, "selected": item["id"] == "b"} for item in library["items"]]}
+
+    setup.sync_saved_library = sync_saved
+    view.sync_lists.click()
+    view.sync_lists.click()
+    wait(app, lambda: not view.busy)
+    assert calls == [True] and saved == [["b"]]
+    assert view.status.text() == "Saved lists synced."

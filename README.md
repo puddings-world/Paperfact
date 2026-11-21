@@ -168,8 +168,8 @@ row differences; PDFs use verified, retryable immutable chunks. Private workspac
 folders must remain unshared; share selected lists through research packages instead.
 The development build can publish list names to your private Drive directory and
 remember a different selection on each device. Save the selection on the source desktop,
-then save it on the laptop to receive the bibliography into an empty list. Later saves
-exchange papers added on either device while retaining local edits to existing papers. Both readers need
+then save it on the laptop to receive the bibliography into an empty list. Choose **Sync saved lists now** on either device to
+exchange new papers. Newly created local list names stay private until you save the selection again. Both readers need
 bibliography support. Use a research package for notes, analysis and PDFs. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).

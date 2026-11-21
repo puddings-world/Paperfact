@@ -148,8 +148,12 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "VALUES('list','extra',1,?)",
             (STAMP,),
         )
-    sync(win)
-    assert sync(mac) == {}
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO lists VALUES('private','Unreviewed local list',NULL,?)", (STAMP,))
+    assert win.sync_saved_library(Ticket(), lambda _: None)["reviews"] == {}
+    result = mac.sync_saved_library(Ticket(), lambda _: None)
+    assert result["reviews"] == {}
+    assert "private" not in {item["id"] for item in result["items"]}
     with closing(sqlite3.connect(laptop)) as conn:
         assert conn.execute(
             "SELECT title,state FROM papers JOIN list_papers "
