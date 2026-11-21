@@ -512,3 +512,38 @@ bibliography and reading heads, device context, directory, grant and selection
 revision. The session retains at most 16 reading snapshots against a 2 MiB
 serialized-operation budget. Polls still verify the account, current heads and
 local changes. A cold session reconstructs these projections from Drive.
+
+### Personal Drive PDF resume suggestions
+
+Proposed for ordinary selected lists. Today a full list package can carry a
+recorded page with its matching original. Drive exchanges list reading status.
+The implementation below is still open.
+
+1. **Authorize and identify.** Add an explicit page-sharing grant per selected
+   list on each device. Publish a versioned optional directory head only on the
+   first authorized write. Preserve the existing directory encoding until then.
+   Bind every exchange to the account, directory, device, selection revision
+   and verified list membership. Carry the portable paper identity, paper
+   lifetime and exact PDF SHA-256. Local paths and database row IDs stay local.
+2. **Exchange small records.** Keep a latest suggestion per originating device,
+   paper lifetime and PDF hash. Use the existing one-based page, timestamp and
+   capture method validated by `reading_positions.validate_data`. Retain the
+   operation ID and predecessor before upload. A lost reply must be reconciled
+   with verified cloud history before publishing a later offline edit. When a
+   paper appears in two selected lists, deduplicate received suggestions by
+   origin and operation ID. Revoking one list stops exchange through that grant.
+3. **Verify and resume.** A received suggestion is separate from the local
+   reader's chosen page. Show the source device and page when useful. Enable
+   resume only after verifying local ownership of the same paper and original,
+   its digest and real page count. Recheck the loaded document before jumping.
+   If the original is missing, keep the suggestion pending and respect the
+   separate PDF-download preference. Preserve the current view and drafts until
+   the reader explicitly chooses a suggestion. Concurrent device suggestions
+   remain selectable regardless of clock skew.
+4. **Prove the round trip.** Use one PDF in two lists and a different edition
+   of the same paper. Record different pages offline on Windows and Mac, then
+   reconnect in both orders. Verify both suggestions, zero duplicate entries
+   after a lost reply, and no jump on a changed edition. Disable PDF transfer
+   on one device, receive metadata, then restore the matching PDF and resume.
+   Repeat after removing one membership and after withdrawing the final grant.
+   Record the installed build IDs and personal Drive result separately.
