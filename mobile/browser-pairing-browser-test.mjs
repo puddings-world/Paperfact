@@ -91,6 +91,16 @@ await check('saved note survives page reload without auto-auth and reconnect use
  const report=await inspect();assert(report.devices===2&&report.notes.includes('A durable browser pairing note'),'reconnect lost note or minted device');
 });
 await check('Traditional Chinese forget confirmation preserves cached research and reconnect reports missing session',async()=>{
+ await openApp();
+ await until(()=>doc.querySelector('.paper-card') || doc.querySelector('#tab-notes'),'cached reader');
+ doc.querySelector('.paper-card')?.click();
+ doc.querySelector('#tab-notes').click();
+ const t=translator(doc.documentElement.lang);named(doc,'+ '+t('newNote')).click();
+ const body='Keep this unsent note after forgetting the session';
+ const editor=doc.querySelector('#note-editor');editor.value=body;
+ editor.dispatchEvent(new frame.contentWindow.Event('input',{bubbles:true}));named(doc,t('save')).click();
+ await until(async()=>(await scoped()).outbox.some(row=>row.operation?.payload?.body===body),'queued note before forget');
+ await until(()=>!doc.querySelector('#connection-trigger').disabled,'note save finished');
  let dialog=connection();const select=dialog.querySelector('select');select.value='zh-TW';
  select.dispatchEvent(new frame.contentWindow.Event('change',{bubbles:true}));
  await until(()=>!dialog.isConnected,'old language dialog close');dialog=connection();
@@ -105,6 +115,7 @@ await check('Traditional Chinese forget confirmation preserves cached research a
  dialog.querySelector('[data-pairing=resume]').click();
  await until(()=>dialog.querySelector('.pairing-status').textContent===PAIRING_COPY['zh-TW'].denied,'missing cookie notice');
  assert((await inspect()).devices===2&&JSON.stringify(await scoped())===before,'missing cookie changed local state');
+ assert(!(await inspect()).notes.includes(body),'forget or denied reconnect uploaded the pending note');
  assert(errors.length===0,'browser errors: '+errors.join(';'));
 });
 output.textContent=results.join('\n');document.body.dataset.result=results.some(line=>line.startsWith('FAIL'))?'fail':'pass';
