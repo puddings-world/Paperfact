@@ -245,6 +245,12 @@ class DriveSetup:
             "linked_only_chat": {key: grant for key, grant in chat.items()
                                  if grant.startswith("chat-v1:")},
             "remote_chat_lists": [entry.id for entry in base.lists if entry.chat_head],
+            "drive_content": {
+                entry.id: [kind for kind in ("papers", "notes", "chat", "originals", "dives",
+                                             "reading", "positions")
+                           if getattr(entry, kind + "_head")]
+                for entry in base.lists
+            },
             "dive_lists": store.dive_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]

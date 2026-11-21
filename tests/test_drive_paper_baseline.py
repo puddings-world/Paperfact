@@ -1303,6 +1303,9 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             view.save_selection.click()
             wait(app, lambda v=view: not v.busy)
             assert not view.notes_toggle.isVisible()
+            assert view.drive_content.isVisible()
+            assert view.tr("paper list", "論文目錄") in view.drive_content.text()
+            assert view.drive_content.text() in view.directory_lists.currentItem().toolTip()
             view.content_options.click()
             assert not view.include_old_chat.isVisible()
             if label == "win":

@@ -152,6 +152,10 @@ class DriveSyncDialog(QDialog):
         self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
         self.directory_lists.setVisible(False)
         layout.addWidget(self.directory_lists)
+        self.drive_content = QLabel()
+        self.drive_content.setWordWrap(True)
+        self.drive_content.hide()
+        layout.addWidget(self.drive_content)
         self._membership_conflicts = {}
         self.membership_detail = QLabel()
         self.membership_detail.setTextFormat(Qt.TextFormat.PlainText)
@@ -492,6 +496,12 @@ class DriveSyncDialog(QDialog):
         self._chat_lists = set(library.get("chat_lists", ()))
         self._linked_only_chat = library.get("linked_only_chat", {})
         self._dive_lists = set(library.get("dive_lists", ()))
+        sources = library.get("drive_content")
+        kinds = {"papers": self.tr("paper list", "論文目錄"), "notes": self.tr("notes", "筆記"),
+                 "chat": self.tr("Q&A", "問答"), "originals": "PDF",
+                 "dives": self.tr("explanations", "深入分析"),
+                 "reading": self.tr("reading status", "閱讀狀態"),
+                 "positions": self.tr("page positions", "閱讀頁碼")}
         self.directory_lists.clear()
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
@@ -500,9 +510,22 @@ class DriveSyncDialog(QDialog):
                     or row["id"] in self._membership_conflicts):
                 label += self.tr(" — needs review", " — 需核對")
             item = QListWidgetItem(label)
-            if reason:
-                item.setToolTip(reason)
-                item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, reason)
+            summary = ""
+            if sources is not None:
+                if row["id"] not in sources:
+                    summary = self.tr("This list is only on this device.", "這份清單只在本機。")
+                else:
+                    published = [kinds[k] for k in sources[row["id"]] if k in kinds]
+                    if published:
+                        prefix = self.tr("Drive records · ", "Drive 已記錄 · ")
+                        summary = prefix + " · ".join(published)
+                    else:
+                        summary = self.tr("Drive lists this name only.",
+                                          "Drive 已列出名稱，尚無內容紀錄。")
+            detail = "\n".join(filter(None, (summary, reason)))
+            item.setToolTip(detail)
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail)
+            item.setData(Qt.ItemDataRole.UserRole + 1, summary)
             item.setData(Qt.ItemDataRole.UserRole, row["id"])
             item.setCheckState(
                 Qt.CheckState.Checked if self._first_selection or row["selected"]
@@ -548,6 +571,9 @@ class DriveSyncDialog(QDialog):
         self.save_selection.setText(label)
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
+        summary = current.data(Qt.ItemDataRole.UserRole + 1) if current else ""
+        self.drive_content.setText(summary or "")
+        self.drive_content.setVisible(bool(summary))
         selected_list = self._ordinary_library and list_id in self._saved_ids
         self.content_options.setVisible(selected_list)
         if selected_list:

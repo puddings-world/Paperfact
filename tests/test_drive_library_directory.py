@@ -301,7 +301,9 @@ def test_login_and_device_choices_do_not_transfer_papers(tmp_path, monkeypatch):
 
     left, initial = setup(desktop, 0)
     assert choices(initial) == {"a": False, "b": False} and not cloud.objects
-    left.save_library(["a", "b"], Ticket(), lambda _: None)
+    assert left.read_library(Ticket())["drive_content"] == {}
+    published = left.save_library(["a", "b"], Ticket(), lambda _: None)
+    assert published["drive_content"] == {"a": [], "b": []}
     right, rows = setup(mac, 1)
     assert choices(rows) == {"a": False, "b": False}
     assert choices(right.save_library(["b"], Ticket(), lambda _: None)["items"]) == {
