@@ -1797,12 +1797,74 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             source = next((s for s in found.sentences if s["text"] == item["text"]
                            and s.get("page") == item.get("page")), item)
             self._jump_to_source(dict(source, kind="sentence"))
+        elif url.scheme() == "paperfact-reader" and url.path() == "edit" and self.paper:
+            self._edit_saved_dive()
         elif url.scheme() == "paperfact-reader" and url.path() == "retry" and self.paper:
             self._load_dive()
         elif url.scheme() == "paperfact-analyze" and self.paper:
             self.start_analysis()
         elif url.scheme() in ("https", "http"):
             QDesktopServices.openUrl(url)
+
+    def _edit_saved_dive(self):
+        from paper_daily import store
+        from paper_daily.sync_capture import StaleCaptureError
+
+        paper = self.paper
+        if not paper or not current_for(self.win):
+            return
+        try:
+            original = self.win.data.dive_for_edit(paper.id)
+        except (OSError, ValueError, sqlite3.Error):
+            QMessageBox.warning(self, "編輯講解", "暫時無法讀取講解，請重新開啟後再試。")
+            return
+        body = (original.target or {}).get("body")
+        if not body:
+            self._load_dive()
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("編輯講解")
+        dialog.resize(780, 560)
+        layout = QVBoxLayout(dialog)
+        editor = QPlainTextEdit(dialog)
+        editor.setPlainText(body)
+        layout.addWidget(editor)
+        status = QLabel()
+        layout.addWidget(status)
+        buttons = QHBoxLayout()
+        layout.addLayout(buttons)
+        cancel = QPushButton("取消")
+        cancel.clicked.connect(dialog.reject)
+        buttons.addWidget(cancel)
+        save = QPushButton("儲存講解")
+        save.setEnabled(False)
+        buttons.addWidget(save)
+        editor.textChanged.connect(lambda: save.setEnabled(
+            bool(editor.toPlainText().strip()) and editor.toPlainText() != body))
+
+        def apply():
+            if (self.paper is not paper or not current_for(self.win)
+                    or Path(store.DB_PATH).resolve() != original.db_path):
+                status.setText("閱讀中的論文或工作區已變更。請複製草稿後重新開啟。")
+                return
+            try:
+                self.win.data.save_dive(paper.id, editor.toPlainText(), expected=original)
+            except StaleCaptureError:
+                status.setText("講解已有其他修改。請複製草稿後重新開啟比對。")
+                save.setEnabled(False)
+                editor.setReadOnly(True)
+                return
+            except (OSError, ValueError, sqlite3.Error):
+                status.setText("儲存失敗，草稿仍在此處。")
+                return
+            dialog.accept()
+
+        save.clicked.connect(apply)
+        try:
+            if dialog.exec() and self.paper is paper and current_for(self.win):
+                self._load_dive()
+        finally:
+            dialog.deleteLater()
 
     def start_analysis(self) -> None:
         """深入分析 for the paper on screen (the tab corner button, the dive's empty

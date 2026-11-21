@@ -16,7 +16,7 @@ The first published explanation upgrades the shared directory to v6.
    both. Use two different papers with existing saved explanations, one per device.
 2. Sync Windows, Mac, then Windows. Open each paper offline and compare its saved
    explanation with the original. Reading a received explanation needs no AI call.
-3. Edit one explanation on one device, sync both and confirm the edit arrives.
+3. On a build with the reader editor, open a saved explanation, click **編輯講解**, change a sentence and click **儲存講解**. Sync both devices and confirm the edit arrives.
    Then edit the same explanation differently on both devices before syncing.
    Confirm both local versions survive and sync reports the conflict.
 4. Deselect the list and confirm subsequent edits do not transfer.

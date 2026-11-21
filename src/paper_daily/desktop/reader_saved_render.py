@@ -168,6 +168,8 @@ def render(snapshot, palette, *, rich=False, dive_rich=None, figures=(), empty_d
             dive, close, [], pal, highlights=analysis, links=links, rich=target_rich
         )
         page += "<p>Cached figure previews exceed the display budget; saved text is unchanged.</p>"
+    if dive:
+        page = '<p><a href="paperfact-reader:edit">編輯講解</a></p>' + page
     if len(chat.encode()) + len(page.encode()) > MAX_BYTES * 8:
         raise ValueError("Rendered saved content exceeds its supported budget")
     navigation = (

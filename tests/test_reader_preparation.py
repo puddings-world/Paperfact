@@ -240,6 +240,47 @@ def test_saved_dive_opens_without_pdf_marks_and_can_retry_offline(ready, monkeyp
     settle(app, lambda: not view.preparation.busy)
     assert "Offline explanation from the other device" in view.dive_view._body
     assert "paperfact-reader:retry" not in view.dive_view._body
+    assert "paperfact-reader:edit" in view.dive_view._body
+    from PySide6.QtWidgets import QDialog, QPlainTextEdit, QPushButton
+
+    def edit_then_cancel(dialog):
+        dialog.findChild(QPlainTextEdit).setPlainText("Discarded draft")
+        dialog.reject()
+        return dialog.result()
+
+    monkeypatch.setattr(QDialog, "exec", edit_then_cancel)
+    view.dive_view.anchorClicked.emit(QUrl("paperfact-reader:edit"))
+    assert view.win.data.dive_for_edit(view.paper.id).target["body"].startswith("Offline")
+
+    def edit_then_save(dialog):
+        editor = dialog.findChild(QPlainTextEdit)
+        button = next(b for b in dialog.findChildren(QPushButton) if b.text() == "儲存講解")
+        editor.setPlainText(" ")
+        assert not button.isEnabled()
+        editor.setPlainText("Edited locally while offline")
+        button.click()
+        return dialog.result()
+
+    monkeypatch.setattr(QDialog, "exec", edit_then_save)
+    view.dive_view.anchorClicked.emit(QUrl("paperfact-reader:edit"))
+    settle(app, lambda: not view.preparation.busy)
+    assert "Edited locally while offline" in view.dive_view._body
+    updated = view.win.data.dive_for_edit(view.paper.id)
+    assert updated.target["body"] == "Edited locally while offline"
+
+    def concurrent_edit(dialog):
+        editor = dialog.findChild(QPlainTextEdit)
+        editor.setPlainText("My unsaved draft")
+        view.win.data.save_dive(view.paper.id, "Another saved revision", expected=updated)
+        button = next(b for b in dialog.findChildren(QPushButton) if b.text() == "儲存講解")
+        button.click()
+        assert not button.isEnabled() and editor.toPlainText() == "My unsaved draft"
+        dialog.reject()
+        return dialog.result()
+
+    monkeypatch.setattr(QDialog, "exec", concurrent_edit)
+    view.dive_view.anchorClicked.emit(QUrl("paperfact-reader:edit"))
+    assert view.win.data.dive_for_edit(view.paper.id).target["body"] == "Another saved revision"
 
 
 def test_close_veto_retains_busy_until_actual_drain_and_discard(ready, monkeypatch):
