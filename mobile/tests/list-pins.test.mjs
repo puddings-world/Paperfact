@@ -128,3 +128,21 @@ for(const bad of [{pinned:'true',pinned_at:STAMP},{pinned:true},{pinned:true,pin
 });
 
 test('pin badge module is available on offline shell restart',()=>{ assert.ok(SHELL.includes('./list-pins.mjs')); });
+
+test('list projection respects current membership incarnations without opening PDF caches',async()=>{
+  const {store}=await fixture(),state=await store.read();
+  const member=state.entities[keyOf('membership',MEMBER)];
+  for(const id of ['second','third']){
+    const op={...member.operation,entity_id:id,incarnation:id};
+    state.entities[keyOf('membership',id)]={...member,created:member.created+1,operation:op};
+    state.graph[keyOf('membership',id)]={...state.graph[keyOf('membership',MEMBER)],incarnation:id};
+  }
+  const id=keyOf('list_order',LIST);
+  state.graph[id]={active:true,parents:[],incarnation:'order'};
+  state.entities[id]={created:20,operation:operation('list_order',LIST,{items:[
+    {id:'third',incarnation:'removed'}, {id:'second',incarnation:'second'}
+  ]})};
+  for(const field of ['files','artifactFiles'])
+    Object.defineProperty(state,field,{get(){throw Error('list projection accessed file cache');}});
+  assert.deepEqual(projection(state).lists[0].members.map(row=>row.id),['second',MEMBER,'third']);
+});

@@ -632,41 +632,50 @@ export function validateProjection(value, workspace) {
   return result;
 }
 export function projection(state) {
-  const view = optimistic(state),
-  rows = kind => Object.values(view.entities).filter(row => row.operation.entity_type === kind && row.operation.action === 'put' &&(row.operation.version === 1 || active(view,
-  kind, row.operation.entity_id))).sort((a, b) => a.created - b.created || a.operation.entity_id.localeCompare(b.operation.entity_id));
+  const view = optimistic({entities:state.entities, graph:state.graph, outbox:state.outbox});
+  const entities = Object.values(view.entities);
+  const rows = kind => entities.filter(row => row.operation.entity_type === kind &&
+    row.operation.action === 'put' && (row.operation.version === 1 ||
+    active(view, kind, row.operation.entity_id))).sort((a, b) =>
+    a.created - b.created || a.operation.entity_id.localeCompare(b.operation.entity_id));
   const supplementary = state.readProjection;
+  const supplementalPapers = new Map();
+  for (const paper of supplementary?.papers ?? []) {
+    if (!supplementalPapers.has(paper.id)) supplementalPapers.set(paper.id, paper);
+  }
   const papers = rows('paper').map(({
     operation: op,
     revision
   }) =>({
-    ...(supplementary?.papers.find(p => p.id === op.entity_id) ?? {}),
+    ...(supplementalPapers.get(op.entity_id) ?? {}),
     ...op.payload,
     id: op.entity_id,
     revision
   }));
-  const lists = rows('list').map(({
-    operation: op
-  }) =>({
-    ...op.payload,
-    id: op.entity_id,
-    members: rows('membership').filter(row => row.operation.payload.list_id === op.entity_id).map(row => {
-      const p = row.operation,
-      reading = view.entities[keyOf('reading_state', p.entity_id)];
-      return {
-        id: p.entity_id,
-        paper_id: p.payload.paper_id,
-        state: active(view, 'reading_state', p.entity_id) ? reading.operation.payload.state: 'pending'
-      };
-    })
+  const membersByList = new Map();
+  for (const {operation: member} of rows('membership')) {
+    const {list_id, paper_id} = member.payload;
+    if (!membersByList.has(list_id)) membersByList.set(list_id, []);
+    const reading = view.entities[keyOf('reading_state', member.entity_id)];
+    membersByList.get(list_id).push({
+      id: member.entity_id, paper_id,
+      state: active(view, 'reading_state', member.entity_id) ? reading.operation.payload.state : 'pending'
+    });
+  }
+  const lists = rows('list').map(({operation: op}) => ({
+    ...op.payload, id: op.entity_id, members: membersByList.get(op.entity_id) ?? []
   }));
   const reorder =(items, kind, id) => {
     const order = view.entities[keyOf(kind, id)];
     if(! order || ! active(view, kind, id)) return items;
-    const requested = order.operation.payload.items;
-    const rank = item => requested.findIndex(ref => ref.id === item.id && view.graph[keyOf(kind === 'list_order' ? 'membership': 'list',
-    item.id)]?.incarnation === ref.incarnation);
-    return [...items].sort((a, b) =>(rank(a) < 0 ? Infinity: rank(a)) -(rank(b) < 0 ? Infinity: rank(b)));
+    const childKind = kind === 'list_order' ? 'membership' : 'list';
+    const ranks = new Map();
+    for (const [index, ref] of order.operation.payload.items.entries()) {
+      if (!ranks.has(ref.id) && view.graph[keyOf(childKind, ref.id)]?.incarnation === ref.incarnation)
+        ranks.set(ref.id, index);
+    }
+    // Stable sort keeps newly added and recreated entries in their existing order.
+    return [...items].sort((a, b) => (ranks.get(a.id) ?? Infinity) - (ranks.get(b.id) ?? Infinity));
   };
   lists.forEach(list => {
     list.members = reorder(list.members, 'list_order', list.id);
