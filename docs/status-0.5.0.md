@@ -1,7 +1,7 @@
 # v0.5.0 current status
 
 Updated 2026-11-21. **Development candidate; v0.5.0 is not release-approved.**
-The [7211313 desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) include the desktop keep and remove actions, restoration on another device and reading progress for restored entries. The [paired build](https://github.com/puddings-world/Paperfact/actions/runs/44906699841) passed packaged research checks on Apple Silicon, Windows x64 and Linux. A local two-device fixture also retained a subsequent offline edit after the response to a conflict resolution was lost. The installed personal Drive round trip is still pending.
+The [1c3baea desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) include the desktop keep and remove actions, restoration on another device and reading progress for restored entries. The [paired build](https://github.com/puddings-world/Paperfact/actions/runs/44908077217) passed packaged research checks on Apple Silicon, Windows x64 and Linux. A local two-device fixture also retained a subsequent offline edit after the response to a conflict resolution was lost. The installed personal Drive round trip is still pending.
 
 The [211f117 paired desktop installers](testing/mac-acceptance-0.5.md#start-here-on-apple-silicon) include per-list reading progress, conflict comparison and offline guide editing. Both installers include device-local saved Google sign-in and opt-in startup sync for ordinary lists. Native credential storage and restore still require physical acceptance on each OS. A synthetic 5,010-paper round trip passed with a lost acknowledgment and an offline addition from the second device. This build also recovers interrupted uploads when Drive saved a change but its reply did not reach the device. The [same-source candidate run](https://github.com/puddings-world/Paperfact/actions/runs/44891577834) passed the packaged research workflow on Windows x64, Apple Silicon and Linux. Its [verified mobile web build](https://github.com/puddings-world/Paperfact/actions/runs/44891577834/artifacts/14702192506) is available for staging. On Windows Chrome, the downloaded PWA artifact (35119ed1584a) reopened one verified PDF offline. The paper metadata digest and empty outbox persisted. English and Traditional Chinese fit a 390-pixel viewport. Chrome declined persistent storage, and the app showed best-effort storage without requesting permission again on reopen. Physical Windows/Mac exchange through personal Drive, mobile HTTPS deployment, and iOS/Android offline acceptance remain pending.
 
@@ -150,8 +150,12 @@ account still require acceptance. See the [device checklist](testing/mac-accepta
    [enrollment contract](workspace-enrollment.md),
    [recovery contract](recovery-adoption-ui.md) and
    [analysis contract](analysis-audit.md), not historical snapshot descriptions.
-3. **Desktop completion:** verify the private AI handoff and retained-report
-   review/finish flows in frozen/installed apps; source/widget tests alone do not
+3. **Desktop completion:** candidate 1c3baea passed a synthetic private survey
+   handoff into the installed Windows CLI and the CLI copied from the Mac DMG.
+   Both saved the intended model and verified quotation, reopened the retained
+   report and served the cached retry with one loopback completion. The parent
+   ran the Qt handoff harness. Verify the installed desktop account switch and
+   the retained-report review/finish buttons end to end; source/widget tests alone do not
    close them. Finish the remaining recovery/attachment lifecycle UX and coverage.
 4. **Personal Drive integration:** the owner prefers their existing Drive to a
    separately billed VM. Reuse app-scoped Google login and implement safe native
