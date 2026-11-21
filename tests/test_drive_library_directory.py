@@ -344,7 +344,9 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
     db(win_path, "UPDATE lists SET note='Local candidate' WHERE id='b'")
     db(mac_path, "UPDATE lists SET note='Remote candidate' WHERE id='b'")
     sync(mac)
-    with pytest.raises(ValueError, match="both versions"):
+    from paper_daily.drive_list_records import ListDetailsConflict
+
+    with pytest.raises(ListDetailsConflict, match="both versions"):
         sync(win)
     assert db(win_path, "SELECT note FROM lists WHERE id='b'") == [("Local candidate",)]
     from paper_daily.drive_list_records import review_list
@@ -421,6 +423,17 @@ def test_one_list_conflict_allows_other_selected_lists_to_finish(tmp_path, monke
     report = apply(setup, ["a", "b"], Ticket(), lambda _: None)
     assert seen == ["a", "b"]
     assert report["reviews"] == {"a": "Conflicting list name"}
+    assert not report["list_conflicts"]
+
+    def details_conflict(directory, store, list_id, revision, ticket):
+        seen.append(list_id)
+        if list_id == "a":
+            raise drive_list_records.ListDetailsConflict("Conflicting list name")
+
+    seen.clear()
+    monkeypatch.setattr(drive_list_records, "exchange_list", details_conflict)
+    report = apply(setup, ["a", "b"], Ticket(), lambda _: None)
+    assert seen == ["a", "b"] and report["list_conflicts"] == ["a"]
 
     def account_changed(*args):
         raise PermissionError("Google account changed")

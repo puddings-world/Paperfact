@@ -388,3 +388,23 @@ def test_list_comparison_displays_versions_and_requires_a_choice(dialog):
         next(button for button in view.findChildren(QPushButton) if button.text() == label).click()
         assert view.decision == expected
         view.deleteLater()
+
+
+def test_background_keeps_polling_after_list_details_conflict(dialog):
+    app, view, setup = dialog
+    setup.files = object()
+    reports = iter([
+        {"reviews": {"a": "Compare list details"}, "list_conflicts": ["a"]},
+        {"reviews": {}},
+        {"reviews": {"a": "Compare list details", "b": "Unknown history"}, "list_conflicts": ["a"]},
+    ])
+    setup.sync_saved_library = lambda ticket, progress: {
+        "items": [{"selected": True}, {"selected": True}], **next(reports)}
+    runner = view.background
+    assert runner.enable(setup)
+    view.hide()
+    for expected in ("list_conflict", "waiting", "review"):
+        runner.tick()
+        wait(app, lambda: runner.worker is None)
+        assert runner.state == expected
+        assert runner.timer.isActive() == (expected != "review")

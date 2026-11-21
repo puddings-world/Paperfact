@@ -15,6 +15,10 @@ class ListReviewRequired(ValueError):
     """An individual list needs review before its exchange can continue."""
 
 
+class ListDetailsConflict(ListReviewRequired):
+    """The verified name or description differs and can be compared on this device."""
+
+
 def _digest(payload):
     return hashlib.sha256(encode(payload)).hexdigest()
 
@@ -121,7 +125,7 @@ def exchange_list(directory, store, list_id, revision, ticket, *, preview=False,
             return [card]
         if decision is None:
             fields = ", ".join(conflicts)
-            raise ListReviewRequired(f"Conflicting list {fields}; both versions were retained")
+            raise ListDetailsConflict(f"Conflicting list {fields}; both versions were retained")
         shown, choice = decision
         if shown != card or choice not in ("local", "remote"):
             raise ListReviewRequired("List versions changed; compare again")

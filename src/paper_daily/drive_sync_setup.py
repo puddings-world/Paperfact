@@ -338,7 +338,11 @@ class DriveSetup:
         return self._exchange_saved(result, ticket, progress, selection=accepted)
 
     def _exchange_saved(self, result, ticket, progress, *, selection=None):
-        from paper_daily.drive_list_records import ListReviewRequired, exchange_list
+        from paper_daily.drive_list_records import (
+            ListDetailsConflict,
+            ListReviewRequired,
+            exchange_list,
+        )
 
         _, store, saved, directory, *_ = self._library_view
         selection = saved if selection is None else selection
@@ -347,6 +351,7 @@ class DriveSetup:
         from paper_daily.drive_reader_notes import NoteEditConflict, exchange_reader_notes
 
         reviews = {}
+        list_conflicts = []
         reading_conflicts = set()
         note_conflicts = []
         dive_conflicts = set()
@@ -394,6 +399,9 @@ class DriveSetup:
                             reviews[list_id] = " · ".join(filter(None, reasons))
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
+            except ListDetailsConflict as exc:
+                reviews[list_id] = str(exc)
+                list_conflicts.append(list_id)
             except NoteEditConflict as exc:
                 reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id), str(exc))))
                 note_conflicts.append(list_id)
@@ -405,7 +413,7 @@ class DriveSetup:
         self.check(ticket)
         self._pdf_review_titles = pdf_titles
         return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts,
-                "reading_conflicts": sorted(reading_conflicts),
+                "list_conflicts": list_conflicts, "reading_conflicts": sorted(reading_conflicts),
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}
 
     def _receipt(self, kind, spec=None):
