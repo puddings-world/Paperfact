@@ -172,7 +172,13 @@ If a device reports that the Drive library uses a newer format, update Paperfact
 Selected lists exchange their names and descriptions independently. A rename on one device can merge with a description edit on the other, including after an interrupted upload. Competing edits to the same field pause that list for review.
 
 For figures, highlights, slides or handing a colleague an independent copy, export a research package.
-**Existing workspace sync** opens the earlier workflow for a separate workspace copy.
+A window already linked to a workspace opens its workspace sync controls. To use
+per-device list selection there, export any list with edits unique to that copy,
+then choose **Open my local library** and select the original folder containing
+`papers.db`. Import the research package there if needed. The original reader
+keeps its workspace and drafts. Opening a folder does not merge databases or
+change the default workspace. In an ordinary library, **Other sync methods**
+provides access to the legacy workspace controls.
 [Sync architecture and coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 
 ```mermaid

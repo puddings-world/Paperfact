@@ -1,11 +1,13 @@
 """Simple personal Drive enrollment, with the existing server dialog under Advanced."""
 
+import sqlite3
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -247,6 +249,10 @@ class DriveSyncDialog(QDialog):
         self.auto.setChecked(bool(automatic and automatic.enabled))
         self.auto.clicked.connect(self.toggle_automatic)
         layout.addWidget(self.auto)
+        self.open_library = QPushButton(self.tr("Open my local library…", "開啟本機清單資料庫…"))
+        self.open_library.hide()
+        self.open_library.clicked.connect(self._open_local_library)
+        layout.addWidget(self.open_library)
         self.status = QLabel(
             self.tr(
                 "Sign in to create or open a workspace.",
@@ -326,6 +332,7 @@ class DriveSyncDialog(QDialog):
         self.join.setEnabled(idle and self.workspaces.count() > 0)
         self.auto.setEnabled(idle and self.session.summary()["authenticated"])
         self.advanced.setEnabled(idle)
+        self.open_library.setEnabled(idle)
         self.name.setEnabled(idle)
         self.workspaces.setEnabled(idle)
         self.lists.setEnabled(idle)
@@ -366,6 +373,7 @@ class DriveSyncDialog(QDialog):
                 if self.automatic.busy:
                     return False
         if kind == "login":
+            self.open_library.hide()
             self.startup_sync.setChecked(False)
             self._pdf_review_titles = {}
         if kind in {"login", "restore", "create", "join", "toggle", "forget"}:
@@ -841,6 +849,29 @@ class DriveSyncDialog(QDialog):
     def sign_in(self):
         return self._start("login", self.service.sign_in)
 
+    def _open_local_library(self):
+        from paper_daily.workspace_sync import local_binding
+
+        folder = QFileDialog.getExistingDirectory(
+            self, self.tr("Choose the folder containing papers.db", "選取含 papers.db 的資料夾"))
+        if not folder or self._closing or self.disposed or self.busy:
+            return
+        try:
+            root = Path(folder)
+            target = WorkspaceDestination(root, root / "papers.db").checked()
+            if local_binding(target.database_path) is not None:
+                self.status.setText(self.tr(
+                    "This folder is also a linked workspace. Choose your local library folder.",
+                    "這個資料夾也是已綁定的工作區。請選擇原來的本機清單資料夾。",
+                ))
+                return
+            self.open_workspace(target)
+        except (OSError, ValueError, sqlite3.Error):
+            self.status.setText(self.tr("Could not open this library. Check the folder and retry.",
+                                        "無法開啟資料庫。請確認資料夾後重試。"))
+            return
+        self.close()
+
     def _confirm(self):
         return (
             QMessageBox.question(
@@ -930,10 +961,13 @@ class DriveSyncDialog(QDialog):
                     self.lists.clear()
                 for spec in result["workspaces"]:
                     self.workspaces.addItem(spec["name"], spec)
+                bound = result.get("bound", False)
+                self.open_library.setVisible(bound)
                 if "library" in result:
                     self.pilot.setVisible(True)
                     self._show_pilot(self.pilot.isChecked())
                 else:
+                    self.pilot.setVisible(False)
                     self._show_pilot(True)
                 self.status.setText(
                     self.tr(
@@ -944,6 +978,14 @@ class DriveSyncDialog(QDialog):
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
                 )
+                if bound:
+                    self.status.setText(self.tr(
+                        "This window uses a linked workspace. Open your original local library "
+                        "to select lists for this device. To take notes edited only here, "
+                        "export the list as a research package first.",
+                        "這個視窗使用已綁定的工作區。開啟原來的本機清單資料庫，即可勾選"
+                        "這台裝置要同步的清單。若有只在此處編輯的筆記，請先匯出清單研究包。",
+                    ))
             elif kind in {"startup_on", "startup_off"}:
                 self._retry_startup = False
                 enabled = kind == "startup_on"

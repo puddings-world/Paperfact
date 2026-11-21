@@ -113,6 +113,8 @@ class DriveSetup:
     def reconnect_library(self, ticket, progress, *, startup_record=None):
         """Restore a device grant without opening a browser or transferring research."""
         self.check(ticket)
+        if local_binding(self.workspace.path) is not None:
+            raise PermissionError("Open the original local library to reconnect its saved lists")
         if self.files is not None:
             raise ValueError("Close the active Google session before restoring a saved library")
         vault = DriveVault(self.workspace, library=True, **self.vault_options)
@@ -163,6 +165,8 @@ class DriveSetup:
             raise PermissionError("Sign in to Google Drive first")
         self.files.cancelled = lambda: ticket.cancelled
         rows = self.files.workspaces()
+        if local_binding(self.workspace.path) is not None:
+            return {"account": self.account, "workspaces": rows, "lists": [], "bound": True}
         library = self.read_library(ticket)
         return {
             "account": self.account,

@@ -536,3 +536,45 @@ def test_first_enrollment_remembers_only_confirmed_lists(dialog, monkeypatch):
     assert view.create.isVisible() and not view.directory_lists.isVisible()
     view.pilot.setChecked(False)
     assert view.directory_lists.isVisible() and not view.create.isVisible()
+
+
+def test_linked_workspace_opens_original_library_without_exchanging_research(
+    dialog, tmp_path, monkeypatch
+):
+    import sqlite3
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from paper_daily.drive_sync_setup import DriveSetup
+
+    app, view, _ = dialog
+    linked = view.session.workspace.path
+    setup = DriveSetup(linked)
+    from paper_daily.workspace_service import Ticket
+
+    with pytest.raises(PermissionError, match="original local library"):
+        setup.reconnect_library(Ticket(), lambda _: None)
+    setup.account = {"email": "fixture@example.test"}
+    setup.files = SimpleNamespace(workspaces=lambda: [])
+    view.service = setup
+    assert view._start("refresh", setup.overview)
+    wait(app, lambda: not view.busy)
+    assert view.open_library.isVisible() and not view.directory_lists.isVisible()
+    assert not view.sync_lists.isVisible() and "linked workspace" in view.status.text()
+    opened = []
+    view.open_workspace = opened.append
+    original = tmp_path / "original"
+    original.mkdir()
+    with sqlite3.connect(original / "papers.db") as conn:
+        conn.execute("CREATE TABLE papers(id TEXT PRIMARY KEY)")
+    paths = iter(["", str(tmp_path / "missing"), str(linked.parent), str(original)])
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: next(paths))
+    view.open_library.click()
+    assert not opened and not view.disposed
+    view.open_library.click()
+    assert not opened and "Check the folder" in view.status.text()
+    view.open_library.click()
+    assert not opened and "also a linked workspace" in view.status.text()
+    view.open_library.click()
+    assert [target.database_path for target in opened] == [original / "papers.db"]
+    assert view.disposed and view.session.workspace.path == linked
