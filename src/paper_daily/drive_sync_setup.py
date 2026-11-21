@@ -190,14 +190,17 @@ class DriveSetup:
         if directories:
             spec = directories[0]
             args = files, spec["folder_id"], spec["head_id"], library_id
-            remote = DriveDirectory(*args, membership_restores=True)
+            remote = DriveDirectory(*args, membership_restores=True, positions=True)
             observation = remote.read()
+            entries = observation.directory.lists
+            has_positions = any(entry.positions_head for entry in entries)
             # Ordinary directories keep their inexpensive unchanged-bibliography path.
             # A concurrent upgrade will invalidate a legacy snapshot on its next read.
-            if not any(entry.restored_memberships for entry in observation.directory.lists):
-                remote = DriveDirectory(*args, membership_changes=True)
-            if not any(entry.membership_changes_head for entry in observation.directory.lists):
-                remote = DriveDirectory(*args)
+            remote = DriveDirectory(
+                *args, positions=has_positions,
+                membership_changes=any(entry.membership_changes_head for entry in entries),
+                membership_restores=any(entry.restored_memberships for entry in entries),
+            )
         base = observation.directory if observation else Directory(library_id, 0, ())
         merged = {item.id: item for item in local.lists}
         merged.update((item.id, item) for item in base.lists)
@@ -374,7 +377,7 @@ class DriveSetup:
         files.cancelled = lambda: ticket.cancelled
         if keep:
             remote = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
-                                    membership_restores=True)
+                                    membership_restores=True, positions=remote.positions)
         history = membership_history(remote, store, list_id, revision=saved.revision)
         if keep:
             keep_reviewed_membership(history, saved.revision, detail["observation"], ticket)
@@ -398,7 +401,7 @@ class DriveSetup:
             raise ValueError("The reviewed library changed; sync again")
         files.cancelled = lambda: ticket.cancelled
         upgraded = DriveDirectory(files, remote.folder, remote.head, remote.library_id,
-                                  membership_changes=True)
+                                  membership_changes=True, positions=remote.positions)
         history = DriveMembershipChanges(upgraded, store, list_id, revision=saved.revision)
         operations = [removal_operation(history.creations[key], store.context)
                       for key in proposal["members"] if key in history.creations]
@@ -433,6 +436,8 @@ class DriveSetup:
         dive_conflicts = set()
         pdf_conflicts = set()
         pdf_titles = {}
+        position_suggestions = {}
+        position_grants = {}
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
@@ -473,6 +478,17 @@ class DriveSetup:
                             reason = f"Reading progress differs on {len(differing)} papers"
                             reasons = (reviews.get(list_id), reason)
                             reviews[list_id] = " · ".join(filter(None, reasons))
+                    if directory.positions and list_id in result.get("position_lists", ()):
+                        from paper_daily.drive_list_history import DriveListPositions
+
+                        history = DriveListPositions(directory, store, list_id,
+                                                     revision=selection.revision)
+                        history.check_source = ticket.check
+                        _, tips = history.suggestions(revision=selection.revision)
+                        position_grants[list_id] = history.grant
+                        position_suggestions[list_id] = [
+                            op for op in tips if op["device_id"] != store.context
+                        ]
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except MembershipConflict as exc:
@@ -504,7 +520,13 @@ class DriveSetup:
         self._membership_conflicts = {(self.files, store.context, key): detail
                                       for key, detail in membership_conflicts.items()}
         self._pdf_review_titles = pdf_titles
-        return {**self.read_library(ticket), "reviews": reviews, "membership_upgrades": upgrades,
+        refreshed = self.read_library(ticket)
+        for key in list(position_suggestions):
+            if (key not in refreshed["position_lists"]
+                    or store.position_grant(key, selection.revision) != position_grants[key]):
+                del position_suggestions[key]
+        return {**refreshed, "position_suggestions": position_suggestions,
+                "reviews": reviews, "membership_upgrades": upgrades,
                 "note_conflicts": note_conflicts,
                 "list_conflicts": list_conflicts, "reading_conflicts": sorted(reading_conflicts),
                 "dive_conflicts": sorted(dive_conflicts), "pdf_conflicts": sorted(pdf_conflicts)}

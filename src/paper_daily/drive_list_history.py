@@ -412,6 +412,13 @@ class DriveListPositions(_MembershipHistory):
             raise PermissionError("Enable directory support for PDF positions")
         return self.store.position_grant(self.list_id, revision)
 
+    def _entry(self, observation):
+        entry = super()._entry(observation)
+        if (not entry or entry.papers_head != self.paper_head
+                or entry.membership_changes_head != self.removal_head):
+            raise DriveChanged("List membership changed; refresh PDF positions")
+        return entry
+
     def _latest(self, records):
         tips, seen = {}, set()
         for op in records:

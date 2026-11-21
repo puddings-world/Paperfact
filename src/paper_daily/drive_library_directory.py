@@ -22,7 +22,7 @@ class DriveDirectory:
     def __init__(self, files, folder_id, head_id, library_id, *, membership_changes=False,
                  membership_restores=False, positions=False):
         self.positions = positions
-        self.membership_restores = membership_restores or positions
+        self.membership_restores = membership_restores
         self.membership_changes = membership_changes or self.membership_restores
         _identifier(library_id)
         self.key = PREFIX + library_id

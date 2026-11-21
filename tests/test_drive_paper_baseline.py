@@ -1811,3 +1811,48 @@ def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
     with pytest.raises(PermissionError, match="Sign in"):
         third.reconnect_library(Ticket(), progress)
     assert not native.rows and before == source.read_bytes() and objects == cloud.objects
+
+def test_saved_library_receives_peer_position_only_after_separate_grant(source, tmp_path):
+    import hashlib
+
+    from test_reading_positions import pdf_bytes
+
+    from paper_daily.drive_list_history import DriveListPositions
+    from paper_daily.drive_sync_setup import DriveSetup
+
+    cloud = Cloud()
+    def service(label):
+        path = source
+        if label == "laptop":
+            from paper_daily.store import SCHEMA
+            path = tmp_path / "laptop-research" / "papers.db"
+            path.parent.mkdir()
+            with closing(sqlite3.connect(path)) as conn:
+                conn.executescript(SCHEMA)
+        instance = DriveSetup(path, profiles=tmp_path / label / "profiles",
+                              cache=tmp_path / label / "cache")
+        instance.files = authority(cloud, tmp_path / label / "authority").files
+        instance.account = instance.files.account()
+        instance.read_library(Ticket())
+        instance.apply_library(["list"], Ticket(), lambda _: None)
+        return instance
+
+    desktop = service("desktop")
+    desktop.choose_position_sync("list", True, Ticket(), lambda _: None)
+    files, store, saved, remote, *_ = desktop._library_view
+    sender = DriveDirectory(files, remote.folder, remote.head, remote.library_id, positions=True)
+    history = DriveListPositions(sender, store, "list", revision=saved.revision)
+    paper = next(iter(history.memberships.values()))[0]
+    original = pdf_bytes(3)
+    sent = history.publish_page(paper, hashlib.sha256(original).hexdigest(),
+                                dict(page=2, recorded_at=STAMP, method="entered"), original,
+                                predecessor=None, revision=saved.revision)
+    laptop = service("laptop")
+
+    def sync():
+        return laptop.sync_saved_library(Ticket(), lambda _: None)
+    assert not sync()["position_suggestions"]
+    laptop.choose_position_sync("list", True, Ticket(), lambda _: None)
+    assert sync()["position_suggestions"] == {"list": [sent]}
+    laptop.choose_position_sync("list", False, Ticket(), lambda _: None)
+    assert not sync()["position_suggestions"]
