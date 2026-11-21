@@ -317,6 +317,33 @@ class DriveListReading(DriveListHistory):
         if self.memberships is None:
             raise ValueError("Ambiguous membership history for reading progress")
 
+        self.retired = {}
+        self.removal_head = None
+        if directory.membership_changes:
+            from paper_daily.drive_membership_history import DriveMembershipChanges
+
+            changes = DriveMembershipChanges(directory, store, list_id, revision=revision)
+            if changes.paper_head != self.paper_head:
+                raise DriveChanged("Bibliography changed before reading progress")
+            self.removal_head, removals = changes.changes(None, revision=revision)
+            self.retired = {op["entity_id"]: op["operation_id"] for op in removals}
+            if len(self.retired) != len(removals):
+                raise ValueError("Duplicate membership removal in reading history")
+
+    def _entry(self, observation):
+        entry = super()._entry(observation)
+        if self.directory.membership_changes and (
+            not entry or entry.papers_head != self.paper_head
+            or entry.membership_changes_head != self.removal_head
+        ):
+            raise DriveChanged("List membership changed; retry reading progress")
+        return entry
+
+    def _check_publication(self, revision, records):
+        super()._check_publication(revision, records)
+        if any(op["entity_id"] in self.retired for op in records):
+            raise ValueError("Cannot publish reading progress for a retired membership")
+
     def parents_for(self, identity):
         paper, paper_inc, list_inc, member_inc = self.memberships[identity]
         return {

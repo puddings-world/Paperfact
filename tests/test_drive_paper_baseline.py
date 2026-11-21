@@ -460,6 +460,11 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "Offline local title", "Laptop discovery"}
     assert origin_cloud.objects == accepted
 
+    fresh.set_reading_sync("return", True, revision=1, ticket=Ticket())
+    from paper_daily.drive_reader_progress import exchange_reading
+
+    assert exchange_reading(origin_dir, fresh, "return", 1, Ticket()) == []
+
     # A removal on an upgraded library uses the normal saved desktop subscription.
     with closing(sqlite3.connect(device_db)) as conn, conn:
         target, = conn.execute("SELECT id FROM papers WHERE title='Laptop discovery'").fetchone()
@@ -486,6 +491,19 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                                 ("Offline local title",)]
         assert conn.execute("SELECT 1 FROM papers WHERE title='Laptop discovery'").fetchone()
     assert origin_cloud.objects == after_removal
+
+    reopened.choose_reading_sync("return", True, Ticket(), lambda _: None)
+    with closing(sqlite3.connect(device_db)) as conn, conn:
+        conn.execute("UPDATE list_papers SET state='read',read_at=? WHERE list_id='return'",
+                     (STAMP,))
+    assert not reopened.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+
+
+    assert exchange_reading(origin_dir, fresh, "return", 1, Ticket()) == []
+    with closing(sqlite3.connect(fresh_db)) as conn:
+        assert conn.execute("SELECT state,read_at FROM list_papers WHERE list_id='return'"
+                            ).fetchall() == [("read", STAMP)]
+
 
     from paper_daily.drive_sync_files import decode, encode
 

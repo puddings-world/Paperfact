@@ -197,11 +197,30 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     (list_id,),
                 )
             }
+            active = history.memberships
+            if history.retired:
+                tables = _tables(conn)
+                receipts = {m: (op, local) for m, op, local in conn.execute(
+                    "SELECT member,applied,local_id FROM drive_membership_watches WHERE context=? "
+                    "AND list_id=? AND applied IS NOT NULL", (store.context, list_id),
+                )} if "drive_membership_watches" in tables else {}
+                for member, removal in history.retired.items():
+                    receipt, local = receipts.get(member, (None, None))
+                    mapped = local_ids.get(history.memberships[member][0], local)
+                    if receipt != removal or mapped != local or local in rows:
+                        raise ListReviewRequired("Review membership before reading progress")
+                if "drive_reading_members" in tables:
+                    conn.executemany(
+                        "DELETE FROM drive_reading_members WHERE context=? AND list_id=? "
+                        "AND paper_id=? AND retired=1",
+                        ((store.context, list_id, receipts[m][1]) for m in history.retired),
+                    )
+                active = {m: v for m, v in active.items() if m not in history.retired}
             _track_members(conn, store.context, list_id, (
-                local_ids[member[0]] for member in history.memberships.values()
+                local_ids[member[0]] for member in active.values()
                 if member[0] in local_ids
             ))
-            for identity, membership in history.memberships.items():
+            for identity, membership in active.items():
                 ticket.check()
                 local = local_ids.get(membership[0])
                 if local not in rows:
@@ -319,6 +338,8 @@ def review_reading(directory, store, list_id, revision, ticket, decision=None):
             if "drive_reading_bases" in tables:
                 for identity, op in latest.items():
                     ticket.check()
+                    if identity in history.retired:
+                        continue
                     if decision and decision[0]["identity"] != identity:
                         continue
                     mapped = settings.execute(
