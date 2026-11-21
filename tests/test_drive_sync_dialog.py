@@ -285,3 +285,29 @@ def test_saved_list_background_serializes_foreground_and_drains_on_close(dialog)
     released.set()
     wait(app, lambda: runner.worker is None)
     assert len(seen) == 1 and runner.service is None and not runner.timer.isActive()
+
+
+def test_saved_login_menu_reconnects_without_enabling_transfer(dialog):
+    app, view, setup = dialog
+    library = {"ordinary": True, "items": [{"id": "a", "name": "Example", "selected": True}]}
+    remembered = []
+    setup.remember_library = lambda ticket: remembered.append("saved")
+    setup.forget_library = lambda ticket: remembered.append("removed")
+
+    def restore(ticket, progress):
+        setup.files = object()
+        return {"account": {"email": "saved@example.test"}, "library": library,
+                "workspaces": [], "lists": []}
+
+    setup.reconnect_library = restore
+    assert view.restore_login.isEnabled() and not view.save_login.isEnabled()
+    view.restore_login.trigger()
+    wait(app, lambda: not view.busy)
+    assert view.account.text() == "saved@example.test" and setup.calls == 0
+    assert not view.keep_syncing.isChecked() and view._saved_ids == {"a"}
+    view.save_login.trigger()
+    wait(app, lambda: not view.busy)
+    assert remembered == ["saved"] and "credential store" in view.status.text()
+    view.remove_login.trigger()
+    wait(app, lambda: not view.busy)
+    assert remembered == ["saved", "removed"] and view._saved_ids == {"a"}

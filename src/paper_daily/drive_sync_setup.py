@@ -77,6 +77,47 @@ class DriveSetup:
             files.close()
             raise
 
+    def remember_library(self, ticket):
+        """Save the reviewed ordinary library grant after explicit device opt-in."""
+        self.check(ticket)
+        if self._library_view is None or self.files is None:
+            raise ValueError("Review the library before remembering Google authorization")
+        files, store, selected, directory, *_ = self._library_view
+        if (files is not self.files or directory is None or not selected.selected
+                or store.owner_id != self.account["id"] or store.load() != selected):
+            raise ValueError("Save the current list selection before remembering this library")
+        vault = DriveVault(self.workspace, library=True, **self.vault_options)
+        vault.remember(files, directory.folder, directory.head, directory.key, ticket,
+                       owner_id=store.owner_id)
+
+    def reconnect_library(self, ticket, progress):
+        """Restore a device grant without opening a browser or transferring research."""
+        self.check(ticket)
+        if self.files is not None:
+            raise ValueError("Close the active Google session before restoring a saved library")
+        vault = DriveVault(self.workspace, library=True, **self.vault_options)
+        grant = vault.load(ticket)
+        if grant is None:
+            raise PermissionError("Sign in and remember this library on this device first")
+        files = DriveFiles(grant.session(), cancelled=lambda: ticket.cancelled)
+        try:
+            owner = files.account()
+            if owner["id"] != grant.owner_id:
+                raise PermissionError("The saved Google account changed; sign in again")
+            self.check(ticket)
+            self._list_target = grant.folder_id, grant.head_id
+            self.files, self.account = files, owner
+            result = self.overview(ticket, progress)
+            self.check(ticket)
+            return result
+        except Exception:
+            self.files = self.account = self._library_view = self._list_target = None
+            files.close()
+            raise
+
+    def forget_library(self, ticket):
+        DriveVault(self.workspace, library=True, **self.vault_options).forget(ticket)
+
     def overview(self, ticket, progress):
         """Read settings for the current Drive session without requesting authorization."""
         self.check(ticket)

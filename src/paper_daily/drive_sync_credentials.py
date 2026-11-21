@@ -71,10 +71,19 @@ class DriveVault:
     store at startup. The desktop must retain its separate local opt-in guard.
     """
 
-    def __init__(self, workspace, **options):
+    def __init__(self, workspace, *, library=False, **options):
         # Reuse exactly the existing database-lifetime and platform-vault boundary.
         self.binding = ConnectionVault(workspace, **options)
         bindings = json.loads(self.binding._baseline)[2]
+        self.service = SERVICE
+        self.folder_role = "workspace"
+        if library:
+            if bindings:
+                raise ValueError("Use workspace authorization for an enrolled workspace")
+            self.workspace_id = "directory.personal"
+            self.service = SERVICE + ".library"
+            self.folder_role = "directory"
+            return
         if not bindings:
             raise ValueError("Enroll the local workspace before remembering Drive")
         self.workspace_id = bindings[0][1][0]
@@ -85,7 +94,7 @@ class DriveVault:
             self.binding._check()
             ticket.check()
             try:
-                body = self.binding._backend().get_password(SERVICE, self.binding.account)
+                body = self.binding._backend().get_password(self.service, self.binding.account)
             except Exception:
                 raise VaultUnavailable("Native Drive credential storage is unavailable") from None
             self.binding._check()
@@ -95,7 +104,8 @@ class DriveVault:
                 raise PermissionError("Saved Drive grant belongs to another workspace")
             return grant
 
-    def remember(self, files: DriveFiles, folder_id, head_id, workspace_id, ticket=None):
+    def remember(self, files: DriveFiles, folder_id, head_id, workspace_id, ticket=None,
+                 *, owner_id=None):
         ticket = ticket or Ticket()
         self.binding._check()
         ticket.check()
@@ -103,7 +113,9 @@ class DriveVault:
             raise PermissionError("Drive grant belongs to another local workspace")
         session = files.session
         owner = files.account()
-        files.read_head(head_id, folder_id, workspace_id)
+        if owner_id is not None and owner["id"] != owner_id:
+            raise PermissionError("The reviewed Google account changed")
+        files.read_head(head_id, folder_id, workspace_id, folder_role=self.folder_role)
         if files.session is not session:
             raise PermissionError("Google account changed while remembering Drive")
         scopes = session.token.get("scope")
@@ -117,8 +129,8 @@ class DriveVault:
             ticket.check()
             try:
                 backend = self.binding._backend()
-                previous = backend.get_password(SERVICE, self.binding.account)
-                backend.set_password(SERVICE, self.binding.account, body)
+                previous = backend.get_password(self.service, self.binding.account)
+                backend.set_password(self.service, self.binding.account, body)
             except Exception:
                 raise VaultUnavailable("Native Drive credential storage is unavailable") from None
             try:
@@ -128,11 +140,11 @@ class DriveVault:
                     raise PermissionError("Google account changed while remembering Drive")
             except Exception:
                 try:
-                    if backend.get_password(SERVICE, self.binding.account) == body:
+                    if backend.get_password(self.service, self.binding.account) == body:
                         if previous is None:
-                            backend.delete_password(SERVICE, self.binding.account)
+                            backend.delete_password(self.service, self.binding.account)
                         else:
-                            backend.set_password(SERVICE, self.binding.account, previous)
+                            backend.set_password(self.service, self.binding.account, previous)
                 except Exception:
                     raise VaultUnavailable("Review Drive in the system credential store") from None
                 raise
@@ -145,8 +157,8 @@ class DriveVault:
             ticket.check()
             try:
                 backend = self.binding._backend()
-                if backend.get_password(SERVICE, self.binding.account) is not None:
-                    backend.delete_password(SERVICE, self.binding.account)
+                if backend.get_password(self.service, self.binding.account) is not None:
+                    backend.delete_password(self.service, self.binding.account)
             except Exception:
                 raise VaultUnavailable("Native Drive credential storage is unavailable") from None
             self.binding._check()

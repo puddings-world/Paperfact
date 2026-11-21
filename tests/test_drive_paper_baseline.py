@@ -949,3 +949,59 @@ def test_idle_pdf_poll_skips_history_and_missing_paths_but_discovers_later_pdf(
     poll()
     assert not history_reads and not misses
     assert directory.read().directory.lists[0].originals_head is not None
+
+
+def test_restore_ordinary_library_grant_without_browser_or_research_transfer(
+    source, tmp_path, monkeypatch
+):
+    from test_drive_sync_files import GrantStore
+
+    from paper_daily import drive_sync_setup
+    from paper_daily.drive_sync_credentials import DriveGrant
+    from paper_daily.workspace_service import Cancelled
+
+    cloud, native = Cloud(), GrantStore()
+    files = authority(cloud, tmp_path / "device").files
+    files.session.client = {"client_id": "fixture.apps.googleusercontent.com"}
+    files.session.token = {"refresh_token": "fixture-refresh"}
+    monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *args, **kwargs: files)
+    monkeypatch.setattr(DriveGrant, "session", lambda self: files.session)
+    options = dict(backend=lambda: native, profiles=tmp_path / "profiles",
+                   cache=tmp_path / "cache")
+
+    def progress(_):
+        pass
+
+    first = drive_sync_setup.DriveSetup(source, **options, authorize=lambda **kw: files.session)
+    first.sign_in(Ticket(), progress)
+    with pytest.raises(ValueError, match="selection"):
+        first.remember_library(Ticket())
+    first.apply_library(["list"], Ticket(), progress)
+    cancelled = Ticket()
+    cancelled.cancel()
+    with pytest.raises(Cancelled):
+        first.remember_library(cancelled)
+    assert not native.rows
+    first.remember_library(Ticket())
+    assert len(native.rows) == 1
+    before, objects = source.read_bytes(), dict(cloud.objects)
+
+    def unexpected(**kwargs):
+        pytest.fail("Restoring a saved grant opened a browser")
+
+    second = drive_sync_setup.DriveSetup(source, **options, authorize=unexpected)
+    assert second.files is None
+    overview = second.reconnect_library(Ticket(), progress)
+    assert [row["id"] for row in overview["library"]["items"] if row["selected"]] == ["list"]
+    assert before == source.read_bytes() and objects == cloud.objects
+
+    third = drive_sync_setup.DriveSetup(source, **options, authorize=unexpected)
+    with monkeypatch.context() as patch:
+        patch.setattr(files, "account", lambda: {"id": "another-owner"})
+        with pytest.raises(PermissionError, match="account changed"):
+            third.reconnect_library(Ticket(), progress)
+    assert third.files is None and third.account is None
+    third.forget_library(Ticket())
+    with pytest.raises(PermissionError, match="Sign in"):
+        third.reconnect_library(Ticket(), progress)
+    assert not native.rows and before == source.read_bytes() and objects == cloud.objects

@@ -11,9 +11,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
 )
 
@@ -67,12 +69,28 @@ class DriveSyncDialog(QDialog):
         layout.addWidget(intro)
         self.account = QLabel(self.tr("Not connected to Google", "尚未連接 Google"))
         layout.addWidget(self.account)
-        self.login = QPushButton(
+        self.login = QToolButton()
+        self.login.setText(
             self.tr(
                 "Sign in / switch Google account",
                 "登入／切換 Google 帳號",
             )
         )
+        self.login.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        menu = QMenu(self.login)
+        self.restore_login = menu.addAction(
+            self.tr("Reconnect saved library", "重新連接已記住的清單帳號"))
+        self.save_login = menu.addAction(self.tr("Remember list sign-in on this device",
+                                                 "在這台裝置記住清單登入"))
+        self.remove_login = menu.addAction(self.tr("Forget saved list sign-in on this device",
+                                                   "移除這台裝置記住的清單登入"))
+        self.restore_login.triggered.connect(
+            lambda: self._start("restore", self.service.reconnect_library))
+        self.save_login.triggered.connect(lambda: self._start(
+            "remember", lambda ticket, progress: self.service.remember_library(ticket)))
+        self.remove_login.triggered.connect(lambda: self._start(
+            "forget", lambda ticket, progress: self.service.forget_library(ticket)))
+        self.login.setMenu(menu)
         self.login.clicked.connect(self.sign_in)
         layout.addWidget(self.login)
         self.directory_lists = QListWidget()
@@ -245,6 +263,8 @@ class DriveSyncDialog(QDialog):
     def _buttons(self):
         idle = not self.busy and not self._closing and self.background.worker is None
         self.login.setEnabled(idle)
+        self.restore_login.setEnabled(idle and self.service.files is None)
+        self.remove_login.setEnabled(idle)
         self.create.setEnabled(idle and self.service.files is not None)
         self.join.setEnabled(idle and self.workspaces.count() > 0)
         self.auto.setEnabled(idle and self.session.summary()["authenticated"])
@@ -271,9 +291,10 @@ class DriveSyncDialog(QDialog):
         if self.background.worker is not None:
             return False
         self._resume_pending = False
-        if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
+        if kind in {"login", "restore", "create", "join", "toggle"} and self.background.service:
             self.background.stop()
-        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes",
+        if kind not in {"login", "restore", "remember", "forget", "refresh", "toggle", "selection",
+                        "sync_saved", "notes",
                         "compare", "resolve", "pdfs", "dives", "reading"}:
             if self.writers_busy():
                 self.status.setText(
@@ -380,6 +401,7 @@ class DriveSyncDialog(QDialog):
             bool(self._saved_ids) and checked == self._saved_ids and self.service.files is not None
             and not self._closing and not self.busy and self.background.worker is None
         )
+        self.save_login.setEnabled(self._ordinary_library and self.sync_lists.isEnabled())
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
@@ -649,7 +671,7 @@ class DriveSyncDialog(QDialog):
         )
         if current and not worker.error:
             result = worker.result
-            if kind in {"login", "refresh"}:
+            if kind in {"login", "restore", "refresh"}:
                 self.account.setText(result["account"]["email"])
                 if "library" in result:
                     self._show_directory(result["library"])
@@ -687,6 +709,12 @@ class DriveSyncDialog(QDialog):
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
                 )
+            elif kind == "remember":
+                self.status.setText(self.tr("Saved list sign-in in the system credential store.",
+                                            "已將清單登入儲存在系統憑證庫。"))
+            elif kind == "forget":
+                self.status.setText(self.tr("Removed the saved list sign-in from this device.",
+                                            "已移除這台裝置記住的清單登入。"))
             elif kind == "compare":
                 self._show_note_review(result)
             elif kind == "resolve":
@@ -790,7 +818,7 @@ class DriveSyncDialog(QDialog):
                 self.scope_label.hide()
                 self.workspaces.clear()
                 self.account.setText(self.tr("Not connected to Google", "尚未連接 Google"))
-            if kind not in {"refresh", "compare", "resolve"}:
+            if kind not in {"restore", "remember", "forget", "refresh", "compare", "resolve"}:
                 self.service.rollback_consent()
             self.status.setText(
                 self.tr("Stopped or could not finish: ", "停止")
@@ -801,6 +829,9 @@ class DriveSyncDialog(QDialog):
                     "。已保留資料與準備進度，可確認連線後重試。",
                 )
             )
+        if current and kind == "restore" and worker.error == "authorization":
+            self.status.setText(self.tr("Sign in to Google to reconnect this library.",
+                                        "請登入 Google 以重新連接清單。"))
         if current and kind == "resolve" and worker.error == "incompatible":
             self.status.setText(self.tr("The review is out of date. Compare the versions again.",
                                         "版本或同步設定已變更，請重新比較。"))
