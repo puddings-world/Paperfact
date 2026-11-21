@@ -518,8 +518,9 @@ local changes. A cold session reconstructs these projections from Drive.
 Proposed for ordinary selected lists. Today a full list package can carry a
 recorded page with its matching original. Drive exchanges list reading status.
 The optional v11 positions head is implemented in the directory codec and Drive
-transport. The ordinary desktop keeps this capability disabled. Grants, record
-exchange and resume controls below remain open.
+transport. The setup service stores a separate position grant for each selected
+list on this device and revokes it on deselection. The desktop does not offer
+the switch yet. Record exchange and resume controls below remain open.
 
 1. **Authorize and identify.** Add an explicit page-sharing grant per selected
    list on each device. Publish a versioned optional directory head only on the

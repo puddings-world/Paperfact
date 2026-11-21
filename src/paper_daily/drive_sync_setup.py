@@ -216,6 +216,7 @@ class DriveSetup:
             "ordinary": local_binding(self.workspace.path) is None,
             "membership_conflicts": {k[2]: v for k, v in self._membership_conflicts.items()},
             "reading_lists": store.reading_lists(),
+            "position_lists": store.position_lists(),
             "note_lists": store.note_lists(),
             "pdf_lists": pdf_lists,
             "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
@@ -248,6 +249,9 @@ class DriveSetup:
         files.cancelled = lambda: ticket.cancelled
         return review(remote, store, list_id, saved.revision, ticket, decision)
 
+    def choose_position_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, kind="positions")
+
     def choose_reading_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="reading")
 
@@ -268,7 +272,7 @@ class DriveSetup:
         if files is not self.files or store.owner_id != self.account["id"]:
             raise ValueError("The reviewed account changed")
         save = {"reading": store.set_reading_sync, "notes": store.set_note_sync,
-                "pdfs": store.set_pdf_sync,
+                "positions": store.set_position_sync, "pdfs": store.set_pdf_sync,
                 "dives": store.set_dive_sync}[kind]
         save(list_id, enabled, revision=saved.revision, ticket=ticket)
         if kind == "pdfs" and not enabled:

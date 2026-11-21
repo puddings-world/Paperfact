@@ -111,6 +111,32 @@ def test_each_device_selects_independently_and_deselect_keeps_research(tmp_path)
     assert list(_inventory_entries(path.parent, Ticket())) == [path]
 
 
+def test_pdf_position_grant_follows_device_list_and_selection_lifetime(tmp_path):
+    db = database(tmp_path / "research")
+    directory = inspect_lists(db, "library")
+    root = tmp_path / "settings"
+    desktop, mac = (selection(db, root, device_id=device) for device in ("desktop", "mac"))
+    for device in (desktop, mac):
+        device.save(directory, ["a", "b"], expected_revision=0)
+    desktop.set_reading_sync("a", True, revision=1, ticket=Ticket())
+    assert not desktop.position_lists()
+    desktop.set_position_sync("a", True, revision=1, ticket=Ticket())
+    first = desktop.position_grant("a", 1)
+    assert first and desktop.position_lists() == ["a"]
+    assert not mac.position_lists() and not desktop.pdf_grant("a", 1)
+    desktop.set_position_sync("a", True, revision=1, ticket=Ticket())
+    assert selection(db, root, device_id="desktop").position_grant("a", 1) == first
+    desktop.save(directory, ["b"], expected_revision=1)
+    with pytest.raises(SelectionChanged):
+        desktop.position_grant("a", 1)
+    desktop.save(directory, ["a", "b"], expected_revision=2)
+    assert not desktop.position_grant("a", 3)
+    desktop.set_position_sync("a", True, revision=3, ticket=Ticket())
+    assert desktop.position_grant("a", 3) != first
+    desktop.set_position_sync("a", False, revision=3, ticket=Ticket())
+    assert desktop.position_lists() == []
+
+
 def test_duplicate_activation_is_idempotent_and_stale_intent_cannot_overwrite(tmp_path):
     path = database(tmp_path / "research")
     root = tmp_path / "settings"
