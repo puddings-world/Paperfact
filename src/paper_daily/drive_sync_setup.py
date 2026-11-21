@@ -126,6 +126,18 @@ class DriveSetup:
             "local": [{"id": item.id, "name": item.name} for item in local.lists],
         }
 
+    def review_notes(self, list_id, ticket, progress, *, decision=None):
+        from paper_daily.drive_note_review import review
+
+        self.check(ticket)
+        if self._library_view is None:
+            raise ValueError("Open your library directory first")
+        files, store, saved, remote, *_ = self._library_view
+        if files is not self.files or store.owner_id != self.account["id"] or remote is None:
+            raise ValueError("The reviewed account or directory changed")
+        files.cancelled = lambda: ticket.cancelled
+        return review(remote, store, list_id, saved.revision, ticket, decision)
+
     def choose_note_sync(self, list_id, enabled, ticket, progress):
         self.check(ticket)
         if self._library_view is None or local_binding(self.workspace.path):

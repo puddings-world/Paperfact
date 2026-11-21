@@ -177,7 +177,9 @@ bibliography support. To exchange new and edited note cards, highlight a saved l
 **Sync notes for this list** on both devices. The first note upgrades the directory
 format; update all devices before enabling it. New cards carry their page and source
 anchor. Edits on one device propagate to the other. When both devices edit a card,
-each keeps its version for review and other cards continue syncing. Removals require review. For a list enabled before edit support, turn note sync off and back
+each keeps its version for review and other cards continue syncing. Select that list,
+open **Compare conflicting notes**, then choose the local or Drive version. The next
+sync exchanges your choice. You can also close the comparison to keep both versions. Removals require review. For a list enabled before edit support, turn note sync off and back
 on on each device to grant permission for edits. Use a research package for PDFs
 and deep analyses. Use **Existing workspace sync** for the pilot research transfer.
 

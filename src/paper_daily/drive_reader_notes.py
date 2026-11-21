@@ -137,12 +137,7 @@ def _publish(history, head, records, ticket, bases=None, conflicts=None):
     return head
 
 
-def receive_reader_notes(history, records, ticket, *, published=(), conflicts=None):
-    """Install a checked batch atomically, keeping a paper-wide mapping across lists."""
-    bases = {}
-    if not records:
-        return bases
-    store = history.store
+def note_chains(history, records):
     chains = {}
     edits = history.grant.startswith("edits-v1:")
     for op in records:
@@ -156,6 +151,17 @@ def receive_reader_notes(history, records, ticket, *, published=(), conflicts=No
                                  or previous["incarnation"] != op["incarnation"])):
             raise ListReviewRequired("Revised note history needs reconciliation")
         chain.append(op)
+    return chains
+
+
+def receive_reader_notes(history, records, ticket, *, published=(), conflicts=None):
+    """Install a checked batch atomically, keeping a paper-wide mapping across lists."""
+    bases = {}
+    if not records:
+        return bases
+    store = history.store
+    edits = history.grant.startswith("edits-v1:")
+    chains = note_chains(history, records)
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(history.revision)

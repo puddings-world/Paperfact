@@ -424,6 +424,53 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     ).fetchall() == [
                         ("Unrelated desktop edit",), (edit,), ("Unrelated laptop card",)
                     ]
+            from PySide6.QtWidgets import QPlainTextEdit, QPushButton
+
+            from paper_daily.desktop.drive_note_compare import NoteComparison
+
+            index = next(i for i in range(reopened.directory_lists.count())
+                         if reopened.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
+                         == "list")
+            reopened.directory_lists.setCurrentRow(index)
+            assert reopened.compare_notes.isVisible()
+            shown = devices[1].review_notes("list", Ticket(), lambda _: None)
+            assert len(shown) == 1 and shown[0]["title"] == "Research paper"
+            for label in ("稍後決定", "採用本機版本"):
+                observed = []
+
+                def inspect(dialog, observed=observed, label=label):
+                    observed.extend(view.toPlainText() for view in
+                                    dialog.findChildren(QPlainTextEdit))
+                    next(btn for btn in dialog.findChildren(QPushButton)
+                         if btn.text() == label).click()
+                    return dialog.result()
+
+                with monkeypatch.context() as interaction:
+                    interaction.setattr(NoteComparison, "exec", inspect)
+                    reopened.compare_notes.click()
+                    wait(app, lambda seen=observed: seen and not reopened.busy)
+                assert observed == ["Edited on desktop", "Laptop revision", "Desktop revision"]
+            assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(source)) as conn, conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Laptop revision",
+                )
+                conn.execute("UPDATE notes SET body='Second desktop edit' WHERE page=5")
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Second laptop edit' WHERE page=5")
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with pytest.raises(ValueError, match="changed after review"):
+                devices[1].review_notes("list", Ticket(), lambda _: None,
+                                        decision=(shown[0], "remote"))
+            [fresh] = devices[1].review_notes("list", Ticket(), lambda _: None)
+            assert fresh["local"]["body"] == "Second laptop edit"
+            devices[1].review_notes("list", Ticket(), lambda _: None, decision=(fresh, "remote"))
+            assert not devices[1].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            with closing(sqlite3.connect(laptop)) as conn:
+                assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
+                    "Second desktop edit",
+                )
             for i in range(reopened.directory_lists.count()):
                 row = reopened.directory_lists.item(i)
                 if row.data(Qt.ItemDataRole.UserRole) == "list":

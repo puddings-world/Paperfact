@@ -103,6 +103,9 @@ class DriveSyncDialog(QDialog):
         self.notes_toggle.setCheckable(True)
         self.notes_toggle.clicked.connect(self._choose_notes)
         layout.addWidget(self.notes_toggle)
+        self.compare_notes = QPushButton(self.tr("Compare conflicting notes", "比較衝突筆記"))
+        self.compare_notes.clicked.connect(self._review_notes)
+        layout.addWidget(self.compare_notes)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
@@ -236,7 +239,8 @@ class DriveSyncDialog(QDialog):
         self._resume_pending = False
         if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
             self.background.stop()
-        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes"}:
+        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes",
+                        "compare", "resolve"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -336,12 +340,40 @@ class DriveSyncDialog(QDialog):
         self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
         self.notes_toggle.setChecked(list_id in self._note_lists)
         self.notes_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists)
+        self.compare_notes.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
         self.keep_syncing.setVisible(active or self._ordinary_library)
         self.keep_syncing.setChecked(active)
         self.keep_syncing.setEnabled(
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
+
+    def _review_notes(self):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.compare_notes.isEnabled():
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        self._start("compare", lambda ticket, progress: self.service.review_notes(
+            key, ticket, progress))
+
+    def _show_note_review(self, cards):
+        if not cards:
+            self.status.setText(self.tr("No conflicting edits in this list.",
+                                        "這份清單目前沒有雙方修改的筆記。"))
+            return
+        from paper_daily.desktop.drive_note_compare import NoteComparison
+
+        dialog = NoteComparison(cards, self)
+        try:
+            if dialog.exec() and dialog.decision:
+                card, choice = dialog.decision
+                self._start("resolve", lambda ticket, progress: self.service.review_notes(
+                    card["list_id"], ticket, progress, decision=(card, choice)))
+            else:
+                self.status.setText(self.tr("Both versions retained.", "已保留兩個版本。"))
+        finally:
+            dialog.deleteLater()
 
     def _choose_notes(self, checked):
         item = self.directory_lists.currentItem()
@@ -520,6 +552,11 @@ class DriveSyncDialog(QDialog):
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
                 )
+            elif kind == "compare":
+                self._show_note_review(result)
+            elif kind == "resolve":
+                self.status.setText(self.tr("Choice saved. Sync to exchange the selected version.",
+                                            "已儲存選擇，下次同步時會交換選定的版本。"))
             elif kind == "notes":
                 self._show_directory(result)
                 self.status.setText(self.tr("Note preference saved for the next sync.",
@@ -606,7 +643,7 @@ class DriveSyncDialog(QDialog):
                 self.scope_label.hide()
                 self.workspaces.clear()
                 self.account.setText(self.tr("Not connected to Google", "尚未連接 Google"))
-            if kind != "refresh":
+            if kind not in {"refresh", "compare", "resolve"}:
                 self.service.rollback_consent()
             self.status.setText(
                 self.tr("Stopped or could not finish: ", "停止")
@@ -617,6 +654,9 @@ class DriveSyncDialog(QDialog):
                     "。已保留資料與準備進度，可確認連線後重試。",
                 )
             )
+        if current and kind == "resolve" and worker.error == "incompatible":
+            self.status.setText(self.tr("The review is out of date. Compare the versions again.",
+                                        "版本或同步設定已變更，請重新比較。"))
         worker.deleteLater()
         self._buttons()
         if self._closing:

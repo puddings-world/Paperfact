@@ -193,7 +193,10 @@ list's permission on each device to exchange edits.
 When two devices edit the same mapped card from a known common revision, each
 retains its version. Other cards continue to upload and download during background
 polling. A missing mapping, ambiguous match or invalid history still requires
-list-level review. A version comparison and resolution UI, deletion,
+list-level review. The ordinary reader can compare the common, local and Drive
+versions. Applying a choice rechecks the local payload, grant, accepted revision
+and observed remote operation. A later competing Drive update uses the usual
+conflict rules. Choices are local until exchanged. Deletion,
 verified attachments and pilot migration remain open. Outstanding acceptance
 includes lost acknowledgements with subsequent offline edits, deletion versus
 editing, shared-card changes across lists, live Drive and installed devices.
