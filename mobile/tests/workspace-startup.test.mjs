@@ -88,3 +88,16 @@ test('explicit empty selection made before initial refresh is retained',()=>{
   view.refresh({drafts:{},selection:{list:'cached-list',paper:'cached-paper'}});
   assert.equal(view.list,null);assert.equal(view.paper,null);
 });
+
+test('restore the paper row in its original list or library after an offline restart',()=>{
+  for(const [selection,expected] of [
+    [{list:'owner',paper:'paper',fromList:null},null],
+    [{list:'owner',paper:'paper',fromList:'source'},'source'],
+    [{list:'owner',paper:'paper'},'owner'],
+    [{list:'owner',paper:'paper',fromList:42},'owner']
+  ]) {
+    const view=new ReaderView();
+    view.refresh({drafts:{},selection});
+    assert.deepEqual(view.listOrigin,{list:expected,paper:'paper'});
+  }
+});

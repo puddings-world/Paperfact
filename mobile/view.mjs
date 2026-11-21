@@ -61,6 +61,11 @@ export class ReaderView {
       if(this.list === null && this.paper === null && state.selection) {
         this.list = state.selection.list ?? null;
         this.paper = state.selection.paper ?? null;
+        if (this.paper) {
+          const from = state.selection.fromList;
+          this.listOrigin = {paper:this.paper, list:from === null || typeof from === 'string'
+            ? from : this.list};
+        }
       }
       this.selectionLoaded = true;
     }

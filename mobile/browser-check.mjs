@@ -158,7 +158,7 @@ executable,
 let socket;
 const browserErrors=[];
 const pending = new Map();
-let nextId = 0, session;
+let nextId = 0, pageLoads = 0, session;
 const send =(method, params = {}, sessionId = session) => new Promise((resolve, reject) => {
   const id =++ nextId;
   const timeout = setTimeout(() => {
@@ -196,11 +196,25 @@ async function offlineReadingMainHook() {
   };
   const wait=async(expression,label)=>{
     for(let tick=0;tick<100;tick++){
-      if(await evaluate(expression))return;
+      try {
+        if(await evaluate(expression))return;
+      } catch(error) {
+        if(!/Execution context was destroyed|Cannot find context with specified id/.test(error.message))
+          throw error;
+      }
       await new Promise(resolve=>setTimeout(resolve,80));
     }
     const status=await evaluate('document.querySelector("#notice-text")?.textContent');
     throw Error('Offline reading timed out: '+label+'; status='+status);
+  };
+  const reload = async () => {
+    const before = pageLoads;
+    await send('Page.reload');
+    for (let i=0; i<100; i++) {
+      if (pageLoads > before) return;
+      await new Promise(resolve=>setTimeout(resolve,80));
+    }
+    throw Error('Offline reading reload did not finish');
   };
   const stateExpression=`(async()=>{const {IndexedStore}=await import('./store.mjs');const s=await IndexedStore.open('demo-workspace','demo-phone');try{const v=await s.read(),meta={...v};delete meta.files;delete meta.artifactFiles;delete meta.selection;const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(meta)));return {files:Object.keys(v.files).length,outbox:v.outbox.length,metadata_sha256:[...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('')};}finally{s.close();}})()`;
   await send('Network.enable');
@@ -256,11 +270,11 @@ async function offlineReadingMainHook() {
   }
   await evaluate('navigator.serviceWorker.ready.then(()=>true)');
   // A new worker controls the next document; do not force-claim a live reader.
-  await send('Page.reload');
+  await reload();
   await wait('!!navigator.serviceWorker.controller && !!document.querySelector("#tab-pdf")','activated shell control');
   const previousDocument=await evaluate('performance.timeOrigin');
   await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
-  await send('Page.reload');
+  await reload();
   await wait(`performance.timeOrigin!==${previousDocument} && !!document.querySelector('#tab-pdf')`,'new offline document');
   await evaluate('document.querySelector("#tab-pdf").click()');
   await wait(`(async()=>{const {translator}=await import('./i18n.mjs');return document.body.textContent.includes(translator(document.documentElement.lang)('localFile'));})()`,'cached PDF card');
@@ -287,7 +301,7 @@ async function offlineReadingMainHook() {
       s.selection={list:null,paper:null};
     });} finally {db.close();}
   })()`);
-  await send('Page.reload');
+  await reload();
   await wait("document.querySelector('[data-offline-summary]')?.textContent.includes('1/5000')",
     'large offline catalog');
   await evaluate("document.querySelector('#next-papers-bottom').click()");
@@ -298,6 +312,17 @@ async function offlineReadingMainHook() {
     const row=cards[24];row.scrollIntoView();row.click();return row.id;
   })()`);
   await wait("!!document.querySelector('#back-to-list')",'paper from second page');
+  await wait(`(async()=>{
+    const {IndexedStore}=await import('./store.mjs');
+    const db=await IndexedStore.open('demo-workspace','demo-phone');
+    try {const {selection}=await db.read();
+      return 'paper-row-'+selection.paper===${JSON.stringify(selectedRow)} && selection.fromList===null;
+    } finally {db.close();}
+  })()`, 'saved offline reader location');
+  const paperDocument=await evaluate('performance.timeOrigin');
+  await reload();
+  await wait(`performance.timeOrigin!==${paperDocument} && !!document.querySelector('#back-to-list')`,
+    'same reader after offline restart');
   await evaluate("document.querySelector('#back-to-list').click()");
   await wait('document.activeElement.id==='+JSON.stringify(selectedRow),'original paper row');
   await evaluate("document.querySelector('#previous-papers').click()");
@@ -531,6 +556,8 @@ try {
       pending.delete(value.id);
       if(value.error) promise.reject(new Error(value.error.message));
       else promise.resolve(value.result);
+    } else if(value.method === 'Page.loadEventFired' && value.sessionId === session) {
+      pageLoads++;
     } else if(value.method === 'Runtime.exceptionThrown') {browserErrors.push(value.params.exceptionDetails.text);process.stderr.write('Browser exception: ' + JSON.stringify(value.params.exceptionDetails) + '\n');}
   };
   const target = await send('Target.createTarget', {

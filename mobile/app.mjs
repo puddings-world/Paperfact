@@ -471,10 +471,8 @@ function select(list, paper = null, origin = null) {
   clearPdf();
   view.select(list, paper);
   void store.update(s => {
-    s.selection = {
-      list,
-      paper
-    };
+    s.selection = {list, paper};
+    if (origin) s.selection.fromList = origin.list;
   });
   render();
   window.scrollTo({
