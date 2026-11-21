@@ -422,6 +422,7 @@ def test_partial_manual_result_is_readable_without_a_rich_page(surface, tmp_path
         conn.executescript(
             "CREATE TABLE papers(id,title); CREATE TABLE dives(paper_id,body,written_at);"
             "CREATE TABLE kv(key,value); INSERT INTO papers VALUES('p','Paper title');"
+            "INSERT INTO kv VALUES('analyze.failed.highlights.p','null');"
             "INSERT INTO dives VALUES('p','Saved explanation','2026-11-21');"
         )
     reports = []

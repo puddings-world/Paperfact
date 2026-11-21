@@ -11,6 +11,7 @@ from paper_daily.workspace_service import _read
 def result_text(database, paper_id, job):
     stages = "\n".join(job.history) or job.stage
     with _read(database) as conn:
+        conn.row_factory = sqlite3.Row
         paper = conn.execute("SELECT title FROM papers WHERE id=?", (paper_id,)).fetchone()
         if paper is None:
             return f"這篇論文已不在此工作區。\n\n{stages}"
