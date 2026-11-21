@@ -2,14 +2,18 @@
 
 ## Start here on Apple Silicon
 
-Use build **db3342a** on both devices for a paired installation test. In sync settings, choose a marked list and keep or remove the affected paper. A restored entry can exchange reading progress in both directions. This candidate can upgrade a private Drive library and publish explicitly reviewed paper removals. It lets you compare conflicting list names and descriptions. It can resume syncing selected lists on startup after explicit consent on each device. It also recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
+Use build **39f1b63** on both devices. Allow a few minutes to check that a new Windows list appears on the Mac and that a note edited offline makes the return trip.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44909709531/artifacts/14709506878) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44909709531/artifacts/14709631052) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14710670934) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14710376327) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44909709531) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44911679764) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+
+1. On Windows, extract the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44911679764/artifacts/14709893121). Import the enclosed `original.zip` into a disposable workspace. In Sync, select the imported list and save the selection.
+2. On the Mac, open Sync with the same test Google account. Choose **Refresh list names**. The Windows list should appear unchecked. Select it, save, then enable note sync for this list on both devices.
+3. Sync Windows, then Mac. Disconnect the Mac, add a note to the received paper and reconnect. Sync Mac, then Windows. Edit the same note on Windows and sync in reverse order. Confirm each device shows the last edit once.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
