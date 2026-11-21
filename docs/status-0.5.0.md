@@ -47,11 +47,18 @@ clean052d9ab/arm64, actual DMG copy/detach, foreground activation, three reader
 launches, package preservation and all15 named protocol outcomes. Source phases
 pass14/1/54/24 cases (five warnings each); no historical full run was performed.
 [Exact download and physical acceptance steps](testing/mac-acceptance-0.5.md#personal-drive-candidate-desktop-to-mac).
-Older downloads below do not contain personal Drive sync. The approved synthetic
-workspace test stopped at browser authorization timeout before any Drive file was
-created; full live round-trip acceptance remains pending authentication. Real native-vault prompts, the user's
-Google account, installed Windows/Mac journeys and the wider v0.5/mobile release
-scope remain acceptance gates. No owner research was uploaded or migrated by tests.
+Older downloads below do not contain personal Drive sync. The scoped live Drive
+check completed on November 22 using two isolated desktop databases on Windows.
+It created 14 synthetic objects, wrote 17,783 bytes, verified the received PDF
+by hash and received the laptop fixture's offline note edit back on the desktop.
+Cleanup completed. Discovery was restricted to the test folder. Opening the
+installed apps on two physical devices, discovering the same account directory,
+and resuming after restart with the native credential stores still need acceptance.
+
+The personal Drive path exchanges list membership, original PDFs, saved notes,
+explanations, reading status and page suggestions. The reader's chat history is
+stored separately. Resuming that conversation through personal Drive still needs
+implementation and two-device testing.
 
 ## Previous native deliverable (before personal Drive)
 

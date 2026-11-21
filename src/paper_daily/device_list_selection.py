@@ -106,8 +106,22 @@ class DeviceSelection:
         self._check()
         return result
 
+    def new_subscriptions(self, visible_ids, revision):
+        """Only devices enrolled in following future lists expand their selection."""
+        self._check()
+        if not self.path.exists():
+            return set()
+        with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as conn:
+            conn.execute("BEGIN")
+            if self._load(conn).revision != revision:
+                raise SelectionChanged("Device selection changed; refresh before syncing")
+            if not self._has_grants(conn, "followed_directory"):
+                return set()
+            known = {key for key, in conn.execute("SELECT list_id FROM followed_directory")}
+            return set(visible_ids) - known
+
     def save(self, directory, selected, *, expected_revision, ticket=None, intermediate=False,
-             include_new_content=False):
+             include_new_content=False, reviewed_ids=None, follow_new=False):
         """CAS-save intent. Deselect retains research; callers schedule transfer separately."""
         if not isinstance(directory, Directory) or directory.library_id != self.library_id:
             raise ValueError("Selection belongs to another library")
@@ -174,6 +188,16 @@ class DeviceSelection:
                             directory.digest,
                         ),
                     )
+
+                if reviewed_ids is not None:
+                    if not set(reviewed_ids) <= {item.id for item in directory.lists}:
+                        raise SelectionChanged("Reviewed list is missing from the directory")
+                    if follow_new or (previous.revision == 0 and include_new_content):
+                        conn.execute("CREATE TABLE IF NOT EXISTS followed_directory("
+                                     "list_id TEXT PRIMARY KEY)")
+                    if self._has_grants(conn, "followed_directory"):
+                        conn.executemany("INSERT OR IGNORE INTO followed_directory VALUES(?)",
+                                         ((key,) for key in reviewed_ids))
 
                 if include_new_content:
                     for table in CONTENT_GRANTS:

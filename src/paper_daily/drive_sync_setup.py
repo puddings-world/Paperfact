@@ -297,7 +297,7 @@ class DriveSetup:
         return self.read_library(ticket)
 
     def save_library(self, selected, ticket, progress, *, intermediate=False,
-                     include_new_content=False):
+                     include_new_content=False, follow_new=False):
         """Publish the reviewed local names and persist this device's selection."""
         self.check(ticket)
         if self._library_view is None:
@@ -338,12 +338,23 @@ class DriveSetup:
                 raise ValueError("Directory history changed; review before syncing")
         self.check(ticket)
         store.save(updated.directory, selected, expected_revision=selection.revision, ticket=ticket,
-                   intermediate=intermediate, include_new_content=include_new_content)
+                   intermediate=intermediate, include_new_content=include_new_content,
+                   reviewed_ids=[item.id for item in visible.lists], follow_new=follow_new)
         return self.read_library(ticket, expected_directory=(remote.folder, remote.head))
 
     def apply_library(self, selected, ticket, progress, *, include_new_content=False):
         result = self.save_library(selected, ticket, progress, intermediate=True,
                                    include_new_content=include_new_content)
+        return self._exchange_saved(result, ticket, progress)
+
+    def follow_future_lists(self, ticket, progress):
+        """Upgrade a previously saved selection after explicit startup sign-in."""
+        self.check(ticket)
+        if not self._library_view:
+            raise ValueError("Review the directory before enabling automatic sync")
+        selected = self._library_view[2].selected
+        result = self.save_library(sorted(selected), ticket, progress,
+                                   intermediate=True, follow_new=True)
         return self._exchange_saved(result, ticket, progress)
 
     def sync_saved_library(self, ticket, progress):
@@ -360,8 +371,15 @@ class DriveSetup:
                 raise ValueError("Drive directory missing; reopen the list settings")
             return {**self.read_library(ticket), "reviews": {}}
         result = self.read_library(ticket)
-        _, store, selection, _, observed, *_ = self._library_view
-        if not selection.selected or local_binding(self.workspace.path):
+        _, store, selection, _, observed, _, visible = self._library_view
+        if local_binding(self.workspace.path):
+            return {**result, "reviews": {}}
+        if observed is not None:
+            fresh = store.new_subscriptions((item.id for item in visible.lists), selection.revision)
+            if fresh:
+                return self.apply_library(sorted(selection.selected | fresh), ticket, progress,
+                                          include_new_content=True)
+        if not selection.selected:
             return {**result, "reviews": {}}
         if observed is None or not selection.selected.issubset(
             item.id for item in observed.directory.lists

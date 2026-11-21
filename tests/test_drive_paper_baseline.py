@@ -19,6 +19,53 @@ from paper_daily.workspace_service import Ticket
 source = source_fixture
 
 
+def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):
+    from paper_daily import drive_sync_setup
+    from paper_daily import store as db
+
+    laptop = tmp_path / "laptop-data" / "papers.db"
+    laptop.parent.mkdir()
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.executescript(db.SCHEMA)
+    cloud = Cloud()
+
+    def connect(path, name):
+        files = authority(cloud, tmp_path / name / "authority").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **k: files)
+        service = drive_sync_setup.DriveSetup(
+            path, profiles=tmp_path / name / "profiles", cache=tmp_path / name / "cache",
+            authorize=lambda **kwargs: files.session)
+        service.sign_in(Ticket(), lambda _: None)
+        return service
+
+    def add(path, key):
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute("INSERT INTO lists VALUES(?,?,NULL,?)", (key, key, STAMP))
+
+    def keys(path):
+        with closing(sqlite3.connect(path)) as conn:
+            return {key for key, in conn.execute("SELECT id FROM lists")}
+
+    def poll(service):
+        result = service.sync_saved_library(Ticket(), lambda _: None)
+        assert not result["reviews"]
+
+    add(source, "excluded")
+    desktop = connect(source, "desktop")
+    desktop.apply_library(["list", "excluded"], Ticket(), lambda _: None, include_new_content=True)
+    mac = connect(laptop, "mac")
+    mac.apply_library(["list"], Ticket(), lambda _: None)
+    mac.follow_future_lists(Ticket(), lambda _: None)
+    add(source, "from-desktop")
+    add(laptop, "from-mac")
+    for service in (desktop, mac, desktop, mac):
+        poll(service)
+    assert {"from-desktop", "from-mac", "list"} <= keys(source) & keys(laptop)
+    assert "excluded" not in keys(laptop)
+    assert "excluded" in keys(source)
+    assert "from-desktop" in mac._library_view[1].note_lists()
+
+
 def test_shared_paper_identity_and_interrupted_source_publication(source, tmp_path, monkeypatch):
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("INSERT INTO lists VALUES('other','Other',NULL,?)", (STAMP,))

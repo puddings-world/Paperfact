@@ -606,3 +606,29 @@ def test_minimized_sync_keeps_polling_and_restore_brings_next_exchange_forward(d
     wait(app, lambda: runner.worker is None)
     assert len(calls) == 2 and runner.timer.interval() == 30000
     runner.stop()
+
+
+@pytest.mark.parametrize("first,expected", [(True, ["one", "two"]), (False, [])])
+def test_startup_login_enrolls_only_a_new_selection(dialog, first, expected):
+    app, view, setup = dialog
+    rows = [{"id": n, "name": n, "selected": False} for n in ("one", "two")]
+    result = {"account": {"email": "test@example.test"}, "workspaces": [], "lists": rows,
+              "library": {"ordinary": True, "first_selection": first, "items": rows}}
+    events = []
+
+    def login(ticket, progress):
+        setup.files = object()
+        return result
+
+    def apply(selected, ticket, progress, *, include_new_content):
+        assert include_new_content
+        events.extend(selected)
+        return {"ordinary": True, "items": [dict(row, selected=True) for row in rows]}
+
+    setup.sign_in = login
+    setup.apply_library = apply
+    setup.remember_library = lambda ticket, *, startup: None
+    view.sign_in_for_sync()
+    wait(app, lambda: not view.busy)
+    assert events == expected
+    assert view.startup_sync.isChecked() == first

@@ -3348,7 +3348,7 @@ class MainWindow(QWidget):
         if not self._workspace_owner.current():
             self._workspace_changed_notice()
             return
-        open_offline_connection(self, self, store.DB_PATH,
+        return open_offline_connection(self, self, store.DB_PATH,
                                 current_path=lambda: store.DB_PATH, language="zh-TW")
 
     def _workspace_settings(self):
@@ -5236,6 +5236,10 @@ def run(
     from paper_daily.desktop.feedback_dialog import FeedbackInvitation
 
     window.feedback_invitation = FeedbackInvitation(window)
+    if not smoke and destination is None:
+        from paper_daily.desktop.drive_sync_dialog import offer_drive_sign_in
+
+        QTimer.singleShot(0, window, lambda: offer_drive_sign_in(window, store.DB_PATH))
     window._refresh_ai_summary(check=True)
     _force_visible(window)
     # The build's smoke test: the whole app, web views included, starts and quits

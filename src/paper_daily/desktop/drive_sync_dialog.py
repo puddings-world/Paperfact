@@ -26,6 +26,44 @@ from paper_daily.drive_sync_setup import DriveSetup
 from paper_daily.workspace_open import WorkspaceDestination, open_workspace
 
 
+def offer_drive_sign_in(window, database):
+    """Offer a one-step connection once per device on an ordinary library."""
+    from PySide6.QtCore import QSettings
+
+    from paper_daily.workspace_sync import local_binding
+
+    settings = QSettings("Paperfact", "Paperfact")
+    key = "drive/offeredAutomaticSync"
+    if settings.contains(key) or local_binding(database) is not None:
+        return
+    if DriveSetup(database).library_startup_record():
+        return
+    settings.setValue(key, True)
+    prompt = QMessageBox(window)
+    prompt.setWindowTitle("跨裝置同步")
+    prompt.setText("登入 Google，在這台電腦自動同步清單？")
+    prompt.setInformativeText(
+        "之後新增的清單也會自動同步。"
+        "首次設定會將本機清單與私人 Drive 中的清單雙向同步，包"
+        "含 PDF、筆記與已儲存的講解。之後開啟 Paperfact"
+        " 會自動連線。你可以在同步設定排除個別清單。"
+    )
+    login = prompt.addButton("登入並同步", QMessageBox.ButtonRole.AcceptRole)
+    offline = prompt.addButton("先在本機使用", QMessageBox.ButtonRole.RejectRole)
+    prompt.setDefaultButton(offline)
+    prompt.setEscapeButton(offline)
+
+    def finished(_):
+        if prompt.clickedButton() == login:
+            dialog = window._sync_settings()
+            if dialog and not dialog.busy:
+                dialog.sign_in_for_sync()
+        prompt.deleteLater()
+
+    prompt.finished.connect(finished)
+    prompt.open()
+
+
 class DriveSyncDialog(QDialog):
     def __init__(
         self,
@@ -107,6 +145,7 @@ class DriveSyncDialog(QDialog):
         outer.addWidget(self.personal_panel)
         layout = QVBoxLayout(self.personal_panel)
         layout.setContentsMargins(0, 0, 0, 0)
+        self._enroll_after_login = False
         self._first_selection = False
         self._retry_startup = False
         self.directory_lists = QListWidget()
@@ -826,8 +865,8 @@ class DriveSyncDialog(QDialog):
                 "要將本機清單名稱發佈到私人 Drive，並儲存這台裝置的勾選嗎？",
             ) + ("\n\n" + self.tr(
                 "Remember this account on this device and sync selected lists automatically "
-                "when Paperfact is open, including after restart.",
-                "在這台裝置記住帳號。每次開啟 Paperfact，都會自動同步勾選的清單。",
+                "when Paperfact is open, including after restart. Future lists sync automatically.",
+                "在這台裝置記住帳號。每次開啟會同步勾選的清單，後來新增的清單也會自動同步。",
             ) if enroll else "") + ("\n\n" + self.tr(
                 "Newly checked lists will sync papers, notes, original PDFs, saved explanations, "
                 "reading status and page numbers. Update Paperfact on both devices before syncing "
@@ -845,6 +884,9 @@ class DriveSyncDialog(QDialog):
             lambda ticket, progress: self.service.apply_library(
                 selected, ticket, progress, include_new_content=with_content),
         )
+
+    def sign_in_for_sync(self):
+        self._enroll_after_login = bool(self.sign_in())
 
     def sign_in(self):
         return self._start("login", self.service.sign_in)
@@ -1147,6 +1189,18 @@ class DriveSyncDialog(QDialog):
                                         "版本或同步設定已變更，請重新比較。"))
         worker.deleteLater()
         self._buttons()
+        if kind == "login" and self._enroll_after_login:
+            self._enroll_after_login = False
+            if current and not worker.error and self._first_selection:
+                selected = [self.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
+                            for i in range(self.directory_lists.count())
+                            if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked]
+                if selected:
+                    self._start(
+                        "enroll_selection", lambda ticket, progress: self.service.apply_library(
+                        selected, ticket, progress, include_new_content=True))
+            elif current and not worker.error and self._ordinary_library and self._saved_ids:
+                self._start("enroll_selection", self.service.follow_future_lists)
         if current and not worker.error and kind == "enroll_selection" and self._saved_ids:
             self._start("startup_on", lambda t, _: self.service.remember_library(t, startup=True))
         if self._closing:
