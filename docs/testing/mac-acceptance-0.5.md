@@ -1,5 +1,17 @@
 # Mac v0.5 acceptance
 
+## Add papers on both desktops
+
+[Download the Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44863450300/artifacts/14690692504).
+The arm64 runner launched the copied app three times. Use **05cdd9b** on both devices. First receive a disposable list with one paper
+using the setup below. Disconnect both devices. Add a different paper to that
+same list on each device, and mark the original paper read on the Mac.
+Reconnect and save the device selection on Windows, then Mac, then Windows.
+Each list should now have the same three papers. Save again on both; the count
+should stay at three and the Mac read mark should remain. Concurrent appends
+can retain different local order. Existing paper metadata edits, removals,
+paper notes and PDFs remain outside this specific exchange.
+
 ## Selected bibliographies in the ordinary reader
 
 [Download the Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44862445247/artifacts/14690378158).
