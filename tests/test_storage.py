@@ -91,11 +91,27 @@ def test_a_paper_claimed_after_planning_is_not_deleted(workspace):
     assert (root / "pdf" / "ref_stray.pdf").exists()
 
 
-def test_disk_use_is_reported_per_list(workspace):
+def test_disk_use_is_reported_per_list(workspace, monkeypatch):
     conn, root = workspace
     rows = {name: (papers, size) for name, papers, size in storage.by_list(conn)}
     assert rows["Cataract"][0] == 1 and rows["Cataract"][1] > 400
     assert rows["main queue"][0] == 1
+    conn.execute("INSERT INTO lists(id,name,created_at) VALUES ('news','News','now')")
+    conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                 "VALUES ('news','ref:listed',0,'now')")
+    scanned = []
+    enumerate_files = bundle._paper_files
+
+    def measured(paper_id):
+        scanned.append(paper_id)
+        return enumerate_files(paper_id)
+
+    monkeypatch.setattr(bundle, "_paper_files", measured)
+    pdf = root / "pdf" / "ref_listed.pdf"
+    pdf.write_bytes(pdf.read_bytes() + b"extra")
+    refreshed = {name: (papers, size) for name, papers, size in storage.by_list(conn)}
+    assert refreshed["News"] == refreshed["Cataract"] == (1, rows["Cataract"][1] + 5)
+    assert scanned.count("ref:listed") == 1
     assert storage.human(1536) == "1.5 KB" and storage.human(12) == "12 B"
 
 

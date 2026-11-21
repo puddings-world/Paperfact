@@ -19,6 +19,7 @@ import shutil
 import sqlite3
 import time
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 from paper_daily import bundle
@@ -153,10 +154,11 @@ def by_list(conn: sqlite3.Connection) -> list[tuple[str, int, int]]:
     groups = [("main queue", "SELECT paper_id FROM queue WHERE state != 'skipped'", ())]
     for row in conn.execute("SELECT id, name FROM lists ORDER BY created_at"):
         groups.append((row[1], "SELECT paper_id FROM list_papers WHERE list_id = ?", (row[0],)))
+    size_for_report = cache(_paper_bytes)
     out = []
     for name, query, params in groups:
         ids = [r[0] for r in conn.execute(query, params)]
-        out.append((name, len(ids), sum(_paper_bytes(i) for i in ids)))
+        out.append((name, len(ids), sum(size_for_report(i) for i in ids)))
     return out
 
 
