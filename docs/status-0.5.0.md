@@ -129,7 +129,7 @@ revision-checked selection services now exist with bounded fixture coverage,
 including cancellation/concurrency and no research mutation. The development dialog now discovers the
 private directory, saves device choices and exchanges list names/descriptions
 in ordinary local databases. Saving the selection also publishes an initial bibliography
-or receives it into an empty list, then accepts source appends. Subsequent metadata
+or receives it into an empty list, then exchanges additions from either device on save. Subsequent metadata
 edits, research notes, attachments, background replication and reviewed pilot
 migration remain unfinished; Mac052d9ab does not contain
 this directory flow. No owner database/cloud data

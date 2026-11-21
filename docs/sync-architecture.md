@@ -51,7 +51,8 @@ transaction, preserving order and previously received local papers. Device-priva
 paper ID before upload. When a receiving device includes that paper in a new
 list, the original device reuses its paper and notes on the return trip.
 Independent lookalikes still require review. Source appends resume from the checkpoint. Pre-existing overlapping bibliographies need review.
-Offline edits remain local. Saving the selection triggers this exchange.
+Offline edits remain local. Saving the selection receives then publishes new memberships. Each device keeps
+its local order for independently added papers. Existing metadata edits remain local.
 
 The owner expects one logical research database with a complete list directory,
 visible on every paired device, and selectable list synchronization. The current

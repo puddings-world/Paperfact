@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from uuid import NAMESPACE_URL, uuid5
 
 from paper_daily.drive_list_history import DriveListPapers
 from paper_daily.drive_list_records import ListReviewRequired
@@ -113,6 +114,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
                 raise ValueError("Bibliography changed while receiving; retry")
             if (
                 not prior
+                and not any(p["device_id"] == store.context for p, _ in pairs)
                 and conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? LIMIT 1", (list_id,)
                 ).fetchone()
@@ -126,7 +128,8 @@ def receive_initial(directory, store, list_id, revision, ticket):
             has_published = settings.execute(
                 "SELECT 1 FROM sqlite_master WHERE name='published_paper_ids'"
             ).fetchone()
-            for position, (paper, member) in enumerate(pairs, first):
+            originals = None
+            for paper, member in pairs:
                 ticket.check()
                 published = (
                     settings.execute(
@@ -136,6 +139,27 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     if has_published
                     else None
                 )
+                if member["device_id"] == paper["device_id"] == store.context:
+                    if not published:
+                        # Older source builds generated the same UUID but stored no receipt.
+                        if originals is None:
+                            namespace = uuid5(
+                                NAMESPACE_URL,
+                                f"paperfact:{store.library_id}:{store.context}:papers",
+                            )
+                            originals = {
+                                str(uuid5(namespace, key)): key
+                                for (key,) in conn.execute(
+                                    "SELECT paper_id FROM list_papers WHERE list_id=?", (list_id,)
+                                )
+                            }
+                        published = (originals.get(paper["entity_id"]),)
+                    if not conn.execute(
+                        "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?",
+                        (list_id, published[0]),
+                    ).fetchone():
+                        raise ListReviewRequired("Published membership was removed locally")
+                    continue
                 local_id = _local_paper(conn, store, paper, published)
                 if conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
@@ -147,11 +171,12 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     (
                         list_id,
                         local_id,
-                        position,
+                        first,
                         member["payload"]["citation"],
                         member["payload"]["added_at"],
                     ),
                 )
+                first += 1
             conn.execute(
                 "INSERT INTO drive_library_bibliographies VALUES(?,?,?) "
                 "ON CONFLICT(context,list_id) "
@@ -174,7 +199,5 @@ def exchange_bibliography(directory, store, list_id, revision, ticket):
     if entry is None:
         raise ListReviewRequired("The selected list is missing from the directory")
     if entry.papers_head:
-        _, last = history._read_entry(entry.papers_head)
-        if last[0]["device_id"] != store.context:
-            return receive_initial(directory, store, list_id, revision, ticket)
-    return publish_initial(directory, store, list_id, revision, ticket)
+        receive_initial(directory, store, list_id, revision, ticket)
+    return publish_initial(directory, store, list_id, revision, ticket, append_new=True)

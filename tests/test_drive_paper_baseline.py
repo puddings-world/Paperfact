@@ -180,3 +180,26 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "WHERE m.list_id='return'"
         ).fetchall() == [("paper", "Research paper")]
         assert conn.execute("SELECT COUNT(*) FROM notes WHERE paper_id='paper'").fetchone() == (1,)
+    # Both devices independently extend the same selected list while disconnected.
+    for path, title in ((source, "Desktop discovery"), (laptop, "Laptop discovery")):
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute(
+                "INSERT INTO papers(id,title,title_key,venue,year,source) "
+                "VALUES(?,?,?,'Fixture',2026,'fixture')",
+                (title, title, db.title_key(title)),
+            )
+            conn.execute(
+                "INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                "VALUES('return',?,1,?)",
+                (title, STAMP),
+            )
+    for device in (win, mac, win, mac):
+        assert device.apply_library(["return"], Ticket(), lambda _: None)["reviews"] == {}
+    for path in (source, laptop):
+        with closing(sqlite3.connect(path)) as conn:
+            titles = conn.execute(
+                "SELECT title FROM papers p JOIN list_papers m ON p.id=m.paper_id "
+                "WHERE m.list_id='return'"
+            ).fetchall()
+            assert len(titles) == 3
+            assert {("Desktop discovery",), ("Laptop discovery",)} <= set(titles)

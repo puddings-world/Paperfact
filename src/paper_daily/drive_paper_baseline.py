@@ -108,17 +108,54 @@ def initial_batches(store, list_id, revision, ticket, *, bindings=None):
     return batches
 
 
-def publish_initial(directory, store, list_id, revision, ticket):
+def publish_initial(directory, store, list_id, revision, ticket, *, append_new=False):
     """Publish a first bibliography or resume its exact acknowledged prefix after interruption."""
     history = DriveListPapers(directory, store, list_id)
     bindings = []
     batches = initial_batches(store, list_id, revision, ticket, bindings=bindings)
     head, received = history.changes(None, revision=revision)
-    expected = [op for batch in batches for op in batch]
-    if received != expected[: len(received)]:
-        raise ListReviewRequired(
-            "Existing bibliography has other edits; reconcile before publishing"
-        )
+    if append_new and received:
+        remote_ids = {op["entity_id"] for op in received[::2]}
+        if not remote_ids <= {identity for identity, _ in bindings}:
+            raise ListReviewRequired("Selected bibliography changed or has removed papers; review")
+        list_parent = next(p for p in received[1]["parents"] if p["kind"] == "list")
+        pending = []
+        for batch in batches:
+            additions = []
+            for paper, member in zip(batch[::2], batch[1::2], strict=True):
+                if paper["entity_id"] in remote_ids:
+                    continue
+                parents = [list_parent if p["kind"] == "list" else p for p in member["parents"]]
+                member = _put(
+                    store,
+                    "membership",
+                    member["entity_id"],
+                    member["incarnation"],
+                    member["payload"],
+                    parents,
+                )
+                additions.extend((paper, member))
+            if additions:
+                pending.append(additions)
+    else:
+        expected = [op for batch in batches for op in batch]
+        if received != expected[: len(received)]:
+            raise ListReviewRequired(
+                "Existing bibliography has other edits; reconcile before publishing"
+            )
+        pending = []
+        offset = 0
+        for batch in batches:
+            remaining = batch[max(0, len(received) - offset) :]
+            if remaining:
+                pending.append(remaining)
+            offset += len(batch)
+    if head and pending:
+        generations = head.generation + len(pending)
+        payload_bytes = sum(len(encode(op)) + 1 for op in received)
+        payload_bytes += sum(len(encode(batch, MAX_INLINE)) for batch in pending)
+        if generations > 100 or payload_bytes + generations * 2048 > 8 * 1024**2:
+            raise ListReviewRequired("New papers exceed the readable history budget")
     # Bind local IDs before the first remote write so a lost acknowledgement
     # cannot turn the source paper into an unknown duplicate on a return trip.
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
@@ -154,11 +191,7 @@ def publish_initial(directory, store, list_id, revision, ticket):
                     "Local paper already has a different published ID"
                 ) from exc
         ticket.checkpoint(settings.commit)
-    offset = 0
-    for batch in batches:
+    for batch in pending:
         ticket.check()
-        end = offset + len(batch)
-        if end > len(received):
-            head = history.append(head, batch[max(0, len(received) - offset) :], revision=revision)
-        offset = end
+        head = history.append(head, batch, revision=revision)
     return head

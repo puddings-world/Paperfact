@@ -169,7 +169,7 @@ folders must remain unshared; share selected lists through research packages ins
 The development build can publish list names to your private Drive directory and
 remember a different selection on each device. Save the selection on the source desktop,
 then save it on the laptop to receive the bibliography into an empty list. Later saves
-can append new source papers while retaining local reader edits. Both readers need
+exchange papers added on either device while retaining local edits to existing papers. Both readers need
 bibliography support. Use a research package for notes, analysis and PDFs. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
