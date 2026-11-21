@@ -136,11 +136,13 @@ class DriveFiles:
         self._owned = client is None
         self._heads = {}
         self.membership_cache = {}
+        self.reading_cache = {}
         self.membership_lock = Lock()
 
     def close(self):
         with self.membership_lock:
             self.membership_cache.clear()
+            self.reading_cache.clear()
         if self._owned:
             self.client.close()
 

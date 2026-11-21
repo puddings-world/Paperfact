@@ -3,6 +3,7 @@
 import hashlib
 import sqlite3
 from contextlib import closing
+from dataclasses import dataclass
 
 from paper_daily.drive_list_history import DriveListReading
 from paper_daily.drive_list_records import ListReviewRequired
@@ -20,7 +21,7 @@ def _values(op):
 
 
 def _operation(history, identity, values, previous):
-    refs = history.parents[identity]
+    refs = history.parents_for(identity)
     payload = dict(
         list_id=history.list_id,
         paper_id=refs["paper"]["id"],
@@ -61,6 +62,39 @@ def _versions(records):
     return latest, versions
 
 
+@dataclass(frozen=True)
+class _ObservedReading:
+    latest: dict
+    versions: dict
+    size: int
+
+
+def _observe(history, revision):
+    history._check(revision)
+    head = history._current_head()
+    files = history.directory.files
+    key = (history.store.context, history.directory.folder, history.directory.head,
+           history.list_id, history.paper_head, history.grant, revision, head)
+    with files.membership_lock:
+        snapshot = files.reading_cache.get(key)
+    if snapshot is None:
+        records = history._since(head, None, revision)
+        latest, versions = _versions(records)
+        size = sum(len(encode(op)) + 1 for op in records)
+        snapshot = _ObservedReading(latest, versions, size)
+        if records and size <= 2 * 1024**2:
+            with files.membership_lock:
+                cache = files.reading_cache
+                for stale in list(cache):
+                    if stale[:4] == key[:4]:
+                        del cache[stale]
+                while len(cache) >= 16 or sum(v.size for v in cache.values()) + size > 2 * 1024**2:
+                    del cache[next(iter(cache))]
+                cache[key] = snapshot
+    history._check(revision)
+    return head, snapshot
+
+
 def _divergent(values, current, base, context):
     if current is None or current is base or values == _values(current):
         return False
@@ -70,9 +104,9 @@ def _divergent(values, current, base, context):
 
 def exchange_reading(directory, store, list_id, revision, ticket):
     history = DriveListReading(directory, store, list_id, revision=revision)
-    head, records = history.changes(None, revision=revision)
-    latest, versions = _versions(records)
-    if not history.parents:
+    head, snapshot = _observe(history, revision)
+    latest, versions = snapshot.latest, snapshot.versions
+    if not history.memberships:
         return []
     pending, conflicts = [], []
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
@@ -101,9 +135,9 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     (list_id,),
                 )
             }
-            for identity, refs in history.parents.items():
+            for identity, membership in history.memberships.items():
                 ticket.check()
-                local = local_ids.get(refs["paper"]["id"])
+                local = local_ids.get(membership[0])
                 if local not in rows:
                     raise ListReviewRequired("Refresh the bibliography before reading progress")
                 values, current, base = (
@@ -135,7 +169,7 @@ def exchange_reading(directory, store, list_id, revision, ticket):
     if not pending:
         return conflicts
     batches = (len(pending) + 99) // 100
-    size = sum(len(encode(op)) + 1 for op in records) + sum(
+    size = snapshot.size + sum(
         len(encode(op)) + 1 for _, op in pending
     )
     if (head.generation if head else 0) + batches > 100 or size + (
@@ -194,8 +228,8 @@ def review_reading(directory, store, list_id, revision, ticket, decision=None):
     if decision is not None and decision[1] not in ("local", "remote"):
         raise ValueError("Choose an observed reading progress version")
     history = DriveListReading(directory, store, list_id, revision=revision)
-    _, records = history.changes(None, revision=revision)
-    latest, versions = _versions(records)
+    _, snapshot = _observe(history, revision)
+    latest, versions = snapshot.latest, snapshot.versions
     cards = []
     uri = store.workspace.path.as_uri() + ("?mode=rw" if decision else "?mode=ro")
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:

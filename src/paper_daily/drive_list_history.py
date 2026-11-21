@@ -178,7 +178,11 @@ class DriveListPapers(DriveListHistory):
     head_field = "papers_head"
 
     def members(self, revision):
-        """Reuse only a verified membership projection for the exact observed paper head."""
+        head, members, _ = self.membership_snapshot(revision)
+        return head, members
+
+    def membership_snapshot(self, revision):
+        """Verified paper and membership lifetimes for the exact observed paper head."""
         self._check(revision)
         head = self._current_head()
         key = (self.store.context, self.directory.folder, self.directory.head, self.list_id)
@@ -190,7 +194,17 @@ class DriveListPapers(DriveListHistory):
             return previous
         records = self._since(head, None, revision)
         members = MappingProxyType({op["entity_id"]: op["incarnation"] for op in records[::2]})
-        snapshot = head, members
+        lifetimes = {}
+        for member in records[1::2]:
+            identity = member["entity_id"]
+            if identity in lifetimes:
+                lifetimes = None
+                break
+            parents = {p["kind"]: p for p in member["parents"]}
+            paper = parents["paper"]
+            lifetimes[identity] = (paper["id"], paper["incarnation"],
+                                   parents["list"]["incarnation"], member["incarnation"])
+        snapshot = head, members, MappingProxyType(lifetimes) if lifetimes is not None else None
         with self.directory.files.membership_lock:
             cache.pop(key, None)
             if members and len(members) <= 10000:
@@ -273,17 +287,19 @@ class DriveListReading(DriveListHistory):
         self.revision = revision
         self.grant = store.reading_grant(list_id, revision)
         self._check(revision)
-        _, records = DriveListPapers(directory, store, list_id).changes(None, revision=revision)
-        self.parents = {}
-        for member in records[1::2]:
-            identity = member["entity_id"]
-            if identity in self.parents:
-                raise ValueError("Ambiguous membership history for reading progress")
-            self.parents[identity] = {
-                **{p["kind"]: p for p in member["parents"]},
-                "membership": {"kind": "membership", "id": identity,
-                               "incarnation": member["incarnation"]},
-            }
+        papers = DriveListPapers(directory, store, list_id)
+        self.paper_head, _, self.memberships = papers.membership_snapshot(revision)
+        self._check(revision)
+        if self.memberships is None:
+            raise ValueError("Ambiguous membership history for reading progress")
+
+    def parents_for(self, identity):
+        paper, paper_inc, list_inc, member_inc = self.memberships[identity]
+        return {
+            "list": dict(kind="list", id=self.list_id, incarnation=list_inc),
+            "paper": dict(kind="paper", id=paper, incarnation=paper_inc),
+            "membership": dict(kind="membership", id=identity, incarnation=member_inc),
+        }
 
     def _check(self, revision):
         if self.check_source:
@@ -295,7 +311,8 @@ class DriveListReading(DriveListHistory):
     def _validate_scope(self, records):
         for op in records:
             if (op["version"] != 2 or op["entity_type"] != "reading_state"
-                    or op["action"] != "put" or self.parents.get(op["entity_id"])
+                    or op["action"] != "put" or op["entity_id"] not in self.memberships
+                    or self.parents_for(op["entity_id"])
                     != {p["kind"]: p for p in op["parents"]}):
                 raise ValueError("Reading progress requires the selected membership parents")
 

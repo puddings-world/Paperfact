@@ -454,7 +454,7 @@ def test_note_history_uses_verified_members_and_preserves_other_streams(tmp_path
     assert stores[1].note_grant("a", current.revision) is None
 
 
-def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path):
+def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path, monkeypatch):
     from test_library_selection import database, selection
     from test_sync_graph_research import PAPER, STAMP, membership, metadata, operation, parent
 
@@ -480,6 +480,24 @@ def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path):
     for store in stores:
         store.set_reading_sync("a", True, revision=1, ticket=Ticket())
     win, mac = [DriveListReading(d, s, "a", revision=1) for d, s in zip(dirs, stores, strict=True)]
+    reads = []
+    read_entry = DriveListPapers._read_entry
+    def counted(history, head):
+        reads.append(head)
+        return read_entry(history, head)
+    with monkeypatch.context() as watch:
+        watch.setattr(DriveListPapers, "_read_entry", counted)
+        mac = DriveListReading(dirs[1], stores[1], "a", revision=1)
+        assert not reads
+        assert len(mac.memberships) == 1
+        new_id = "b9a1b8aa-d396-49ee-b4dc-58e877820049"
+        added = dict(operation("paper", new_id, metadata()), workspace_id="personal")
+        link = dict(membership("a", new_id), workspace_id="personal")
+        snapshot = dirs[0].read().directory.lists[0].papers_head
+        DriveListPapers(dirs[0], stores[0], "a").append(snapshot, [added, link], revision=1)
+        mac = DriveListReading(dirs[1], stores[1], "a", revision=1)
+        assert len(reads) == 2 and len(mac.memberships) == 2
+        win = DriveListReading(dirs[0], stores[0], "a", revision=1)
     member = membership("a")
     progress = dict(operation(
         "reading_state", member["entity_id"],
@@ -488,12 +506,22 @@ def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path):
     ), workspace_id="personal")
     observed = win.append(None, [progress], revision=1)
     assert mac.changes(None, revision=1) == (observed, [progress])
+    from paper_daily.drive_reader_progress import _observe
+    with monkeypatch.context() as watch:
+        watch.setattr(DriveListReading, "_read_entry", counted)
+        reads.clear()
+        assert _observe(mac, 1)[1].latest[progress["entity_id"]] == progress
+        assert reads == [observed]
+        assert _observe(mac, 1)[1].latest[progress["entity_id"]] == progress
+        assert reads == [observed]
     stores[1].set_reading_sync("b", True, revision=1, ticket=Ticket())
     other = DriveListReading(dirs[1], stores[1], "b", revision=1)
     assert other.changes(None, revision=1) == (None, [])
     with pytest.raises(ValueError, match="selected membership"):
         other.append(None, [progress], revision=1)
     stores[1].set_reading_sync("a", False, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError):
+        _observe(mac, 1)
     with pytest.raises(PermissionError):
         mac.changes(None, revision=1)
     assert win.changes(None, revision=1) == (observed, [progress])

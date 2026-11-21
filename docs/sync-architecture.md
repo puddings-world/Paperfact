@@ -497,3 +497,10 @@ and flag the list. The reader compares the common, local and Drive states and
 timestamps. A choice is accepted against the observed versions and device grant.
 Installed two-device acceptance remains open.
 List recency and PDF page position are separate from this state.
+
+While an account session stays open, unchanged polls reuse verified bibliography
+and reading history projections. Reading entries are keyed by the observed
+bibliography and reading heads, device context, directory, grant and selection
+revision. The session retains at most 16 reading snapshots against a 2 MiB
+serialized-operation budget. Polls still verify the account, current heads and
+local changes. A cold session reconstructs these projections from Drive.
