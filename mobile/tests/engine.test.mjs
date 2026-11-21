@@ -5,7 +5,7 @@ import {
 } from '../store.mjs';
 import {
   Engine,
-  documentTarget,
+  documentTarget, hasLocalPdf,
   sha256,historySeed,historyStep
 } from '../engine.mjs';
 import {
@@ -224,6 +224,19 @@ async() => {
   assert.deepEqual((await store.read()).files, {});
 }
 );
+test('a saved original cannot mark its replacement as available offline', async () => {
+  const {engine, store} = await setup();
+  await engine.download(PAPER);
+  const state = await store.read();
+  assert.equal(hasLocalPdf(state, PAPER), true);
+  const previous = documentTarget(state, PAPER);
+  const replacement = {...previous, operation_id:'new-original',
+    payload:{...previous.payload, sha256:'a'.repeat(64)}};
+  receive(state, [{sequence:7, outcome:'accepted', operation:replacement,
+    head:{revision:7, operation:replacement}}]);
+  assert.equal(state.files[previous.payload.sha256].verified, true);
+  assert.equal(hasLocalPdf(state, PAPER), false);
+});
 test(
 'sign-out during PDF transfer cannot publish bytes under another session',
 async() => {

@@ -6,6 +6,7 @@ import {demoTransport, demoProjection, operation, ref, PAPER, MEMBER} from '../f
 import {MemoryStore} from '../store.mjs';
 import {active,keyOf,projection,receive,validateOperation} from '../domain.mjs';
 import {contentId} from '../ids.mjs';
+import {readingListRows} from '../view.mjs';
 import {pinBadge} from '../list-pins.mjs';
 import {translator} from '../i18n.mjs';
 const LIST='demo-list', STAMP='2026-10-30T00:00:00+00:00';
@@ -13,6 +14,22 @@ const payload=()=>({scope:{kind:'list',id:LIST},feature:'list_pin',key:PAPER,
   data:{pinned_at:STAMP},source_document_hash:null});
 const pin=(options={})=>operation('research_content',contentId({kind:'list',id:LIST},'list_pin',PAPER),payload(),
  {device:'demo-phone',parents:[ref('list',LIST),ref('paper',PAPER),ref('membership',MEMBER)],...options});
+test('overlapping lists keep their own order and reading flags', () => {
+  const papers = ['a', 'b', 'unlisted'].map(id => ({id}));
+  const first = {id:'one', members:[{paper_id:'a', state:'read'}]};
+  const second = {id:'two', members:[
+    {paper_id:'b'}, {paper_id:'absent'}, {paper_id:'a', pinned:true, state:'pending'}
+  ]};
+  const all = [first, second];
+  const selected = readingListRows(papers, all, second);
+  assert.deepEqual(selected.map(row => row.entry.id), ['b','a']);
+  assert.equal(selected[1].member, second.members[2]);
+  const overview = readingListRows(papers, all, null);
+  assert.equal(overview[0].member, first.members[0]);
+  assert.equal(overview[1].owner, second);
+  assert.deepEqual(overview[2], {entry:papers[2]});
+});
+
 async function fixture() {
   const transport=await demoTransport(),store=new MemoryStore('demo-workspace','reader');
   const op=pin(); await transport.push('fixture-token',op);

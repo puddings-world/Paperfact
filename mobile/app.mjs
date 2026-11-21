@@ -21,7 +21,7 @@ import {
 } from './store.mjs';
 import {
   Engine,
-  documentTarget
+  documentTarget, hasLocalPdf
 } from './engine.mjs';
 import {
   active,
@@ -44,6 +44,7 @@ import {
 } from './i18n.mjs';
 import {
   ReaderView,
+  readingListRows,
   flushDrafts,
   trackNoteObservation
 } from './view.mjs';
@@ -384,22 +385,19 @@ function render() {
     renderSurveys(main,collection,data.surveys,el,{language,canDownload:connected&&!busy,
       read:id=>surveyOwner.survey(id),download:id=>surveyOwner.downloadArtifact(id),
       current:()=>serial===renderSerial&&surveyOwner===engine&&view.list===collection?.id&&!view.paper});
-    const selected = collection ? collection.members.map(m => data.papers.find(p => p.id === m.paper_id)).filter(Boolean): data.papers;
+    const selected = readingListRows(data.papers, data.lists, collection);
     if(! selected.length) main.append(el('div', {
       class: 'empty'
     }, el('div', {
       class: 'empty-symbol'
     }, '◇'), t('empty')));
     const localPdfs = new Set();
-    for (const entry of selected) {
-      const original = documentTarget(state, entry.id);
-      if (original && state.files[original.payload.sha256]?.verified) localPdfs.add(entry.id);
+    for (const {entry} of selected) {
+      if (hasLocalPdf(state, entry.id)) localPdfs.add(entry.id);
     }
     if (selected.length) main.append(el('p', {class:'subtitle', 'data-offline-summary':''},
       t('pdfsOnDevice') + ' · ' + localPdfs.size + '/' + selected.length));
-    selected.forEach((entry, index) => {
-      const owner = collection ?? data.lists.find(l => l.members.some(m => m.paper_id === entry.id));
-      const member = owner?.members.find(m => m.paper_id === entry.id);
+    selected.forEach(({entry, owner, member}, index) => {
       main.append(button(
       [el('span', {
         class: 'paper-number'

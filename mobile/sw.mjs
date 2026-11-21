@@ -2,7 +2,7 @@ import {
   SHELL,
   cacheable
 } from './sw-policy.mjs';
-const CACHE = 'paperfact-mobile-shell-v37';
+const CACHE = 'paperfact-mobile-shell-v38';
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
 });

@@ -113,6 +113,11 @@ export function documentTarget(state, paperId) {
   const item = state.entities[keyOf('paper_document', paperId)];
   return item && active(state, 'paper_document', paperId) ? copy(item.operation): null;
 }
+export function hasLocalPdf(state, paperId) {
+  const row = state.entities[keyOf('paper_document', paperId)];
+  return !!row && active(state, 'paper_document', paperId) &&
+    state.files[row.operation.payload.sha256]?.verified === true;
+}
 export class Engine {
   #token = null;
   constructor(store, {

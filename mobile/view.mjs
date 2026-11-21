@@ -3,6 +3,24 @@ import {
   put,
   copy
 } from './store.mjs';
+/** Preserve the chosen list's order and membership, or the first owner in the library. */
+export function readingListRows(papers, lists, collection) {
+  if (collection) {
+    const byId = new Map(papers.map(paper => [paper.id, paper]));
+    return collection.members.flatMap(member => {
+      const entry = byId.get(member.paper_id);
+      return entry ? [{entry, owner: collection, member}] : [];
+    });
+  }
+  const first = new Map();
+  for (const owner of lists) {
+    for (const member of owner.members) {
+      if (!first.has(member.paper_id)) first.set(member.paper_id, {owner, member});
+    }
+  }
+  return papers.map(entry => ({entry, ...first.get(entry.id)}));
+}
+
 export class ReaderView {
   constructor() {
     this.list = null;
