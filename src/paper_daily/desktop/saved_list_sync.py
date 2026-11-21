@@ -12,6 +12,7 @@ class SavedListSync(QObject):
         super().__init__(owner)
         self.service = self.files = self.worker = None
         self.startup_stamp = None
+        self.position_scopes = {}
         self.state = "off"
         self.failures = 0
         self.closing = False
@@ -20,6 +21,21 @@ class SavedListSync(QObject):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.tick)
         owner.installEventFilter(self)
+
+    def update_position_scopes(self, service, library):
+        """Keep only local reader bindings after a manual or background exchange."""
+        self.position_scopes.clear()
+        allowed = library.get("position_lists")
+        if not allowed or not library.get("ordinary"):
+            return
+        files, store, selection, directory, *_ = service._library_view
+        if (directory is None or files is not service.files or not service.account
+                or store.owner_id != service.account["id"]):
+            return
+        self.position_scopes = {
+            key: (store, directory.folder, directory.head, key, selection.revision)
+            for key in allowed if key in selection.selected
+        }
 
     def _display(self):
         button = getattr(self.parent(), "sync_status_btn", None)
@@ -67,6 +83,8 @@ class SavedListSync(QObject):
         if self.worker:
             self.worker.ticket.cancel()
         self.state = state
+        if state != "off":
+            self.position_scopes.clear()
         self.changed.emit()
 
     def tick(self):
@@ -109,6 +127,7 @@ class SavedListSync(QObject):
                 if self.files and any(row["selected"] for row in worker.result["library"]["items"]):
                     self.failures = 0
                     self.state = "waiting"
+                    self.update_position_scopes(self.service, worker.result["library"])
                     self.timer.start(1000)
                 else:
                     self.stop()
@@ -128,9 +147,11 @@ class SavedListSync(QObject):
                                   - set(worker.result.get("pdf_conflicts", ()))):
                 self.stop("review")
             elif not any(item["selected"] for item in worker.result["items"]):
+                self.position_scopes.clear()
                 self.stop()
             else:
                 self.failures = 0
+                self.update_position_scopes(self.service, worker.result)
                 conflicts = [kind for kind in ("list", "note", "dive", "pdf", "reading")
                              if worker.result.get(kind + "_conflicts")]
                 self.state = "waiting"

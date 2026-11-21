@@ -1077,6 +1077,8 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 view.position_toggle.click()
                 wait(app, lambda v=view: not v.busy)
                 assert view.position_toggle.isChecked() == enabled
+                assert ("list" in view.background.position_scopes) == enabled
+                assert view.background.service is None
             assert view.reading_toggle.isVisible() and not view.reading_toggle.isChecked()
             with monkeypatch.context() as cancel:
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)

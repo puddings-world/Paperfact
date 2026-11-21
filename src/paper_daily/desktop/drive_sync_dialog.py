@@ -350,6 +350,8 @@ class DriveSyncDialog(QDialog):
         if kind == "login":
             self.startup_sync.setChecked(False)
             self._pdf_review_titles = {}
+        if kind in {"login", "restore", "create", "join", "toggle", "forget"}:
+            self.background.position_scopes.clear()
         worker = SyncWorker(task, self)
         self._worker = worker
         worker.progress.connect(self._progress)
@@ -395,6 +397,7 @@ class DriveSyncDialog(QDialog):
         self.lists.setVisible(show_scope)
 
     def _show_directory(self, library):
+        self.background.update_position_scopes(self.service, library)
         previous = self.directory_lists.currentItem()
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)

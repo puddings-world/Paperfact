@@ -63,7 +63,9 @@ def dialog(service):
 
 def test_login_is_one_visible_job_and_discovery_does_not_enable_sync(dialog):
     app, view, setup = dialog
+    view.background.position_scopes["old-list"] = object()
     assert view.sign_in()
+    assert not view.background.position_scopes
     assert not view.sign_in()
     wait(app, lambda: setup.calls == 1)
     assert not view.login.isEnabled()

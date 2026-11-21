@@ -450,15 +450,10 @@ class ReadingPositionController(QObject):
     def _peer_scope(self):
         win = getattr(self.reader, "win", None)
         background = getattr(win, "_saved_list_sync", None)
-        service = getattr(background, "service", None)
-        library = getattr(service, "_library_view", None)
-        if not library or service.files is not background.files:
-            return None
-        files, store, selection, directory, *_ = library
         list_id = getattr(win, "_reader_list_id", None) or getattr(win, "active_list", None)
-        if not directory or files is not service.files or list_id not in selection.selected:
-            return None
-        return store, directory.folder, directory.head, list_id, selection.revision
+        scope = getattr(background, "position_scopes", {}).get(list_id)
+        owner = getattr(getattr(self.reader, "_highlight_view", None), "owner", None)
+        return scope if scope and owner and scope[0].workspace.path == owner.database else None
 
     def _check_peers(self):
         scope = self._peer_scope()

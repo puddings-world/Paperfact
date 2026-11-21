@@ -591,8 +591,11 @@ def test_peer_choice_waits_for_explicit_action_and_preserves_local_record(reader
     from paper_daily import drive_position_cache
 
     app, widget, controller, database, _, _ = reader
-    scope = object(), "folder", "head", "list", 1
-    monkeypatch.setattr(controller, "_peer_scope", lambda: scope)
+    store = SimpleNamespace(workspace=SimpleNamespace(path=database))
+    scope = store, "folder", "head", "list", 1
+    scopes = {"list": scope}
+    widget.win = SimpleNamespace(active_list="list",
+                                 _saved_list_sync=SimpleNamespace(position_scopes=scopes))
     op = dict(device_id="abcdef012345", payload=dict(data=dict(page=3)))
     monkeypatch.setattr(drive_position_cache, "for_original", lambda *args: [op])
     monkeypatch.setattr(drive_position_cache, "navigate",
@@ -607,6 +610,10 @@ def test_peer_choice_waits_for_explicit_action_and_preserves_local_record(reader
     action.trigger()
     assert widget.pdf.current_page() == 0 and not controller.busy
     widget.ask_box.clear()
+    scopes.clear()
+    action.trigger()
+    assert widget.pdf.current_page() == 0 and not controller.busy
+    scopes["list"] = scope
     controller.peer_menu.close()
     action.trigger()
     idle(app, controller)
