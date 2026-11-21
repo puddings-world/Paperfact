@@ -349,6 +349,40 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(SyncFormatUnsupported):
         legacy.read()
 
+    from paper_daily.drive_paper_receive import exchange_bibliography
+
+    fresh_db = tmp_path / "fresh-research" / "papers.db"
+    fresh_db.parent.mkdir()
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        conn.executescript(db.SCHEMA)
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('return','Return',?)", (STAMP,))
+        conn.execute("CREATE TRIGGER fail_install BEFORE INSERT ON list_papers "
+                     "BEGIN SELECT RAISE(ABORT,'interrupted import'); END")
+    fresh = selection(fresh_db, tmp_path / "fresh-settings", device_id="fresh-device",
+                      library_id=reader.store.library_id, owner_id=reader.store.owner_id)
+    fresh.save(reader.directory.read().directory, ["return"], expected_revision=0)
+    with pytest.raises(sqlite3.IntegrityError, match="interrupted import"):
+        exchange_bibliography(reader.directory, fresh, "return", 1, Ticket())
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        assert not conn.execute("SELECT 1 FROM papers").fetchone()
+        assert not conn.execute("SELECT 1 FROM sqlite_master "
+                                "WHERE name='drive_library_bibliographies'").fetchone()
+        conn.execute("DROP TRIGGER fail_install")
+        conn.execute("CREATE TRIGGER forbid_resurrection BEFORE INSERT ON list_papers "
+                     "WHEN (SELECT title FROM papers WHERE id=NEW.paper_id)='Desktop discovery' "
+                     "BEGIN SELECT RAISE(ABORT,'resurrected membership'); END")
+    before_fresh = dict(fork.objects)
+    for _ in range(2):
+        exchange_bibliography(reader.directory, fresh, "return", 1, Ticket())
+        with closing(sqlite3.connect(fresh_db)) as conn:
+            titles = {r[0] for r in conn.execute("SELECT title FROM papers JOIN list_papers "
+                                                 "ON papers.id=list_papers.paper_id")}
+            assert titles == {"Offline local title", "Laptop discovery", "Peer new"}
+            assert conn.execute("SELECT applied FROM drive_membership_watches "
+                                "WHERE applied IS NOT NULL").fetchall() == [
+                                    (operations[0]["operation_id"],)]
+    assert fork.objects == before_fresh
+
     from paper_daily.drive_sync_files import decode, encode
 
     unrelated_head = encode({**decode(anchor), "sha256": "0" * 64})

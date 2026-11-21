@@ -47,6 +47,15 @@ class DriveMembershipChanges(DriveListHistory):
             if not member or op != removal_operation(member, op["device_id"]):
                 raise ValueError("Removal does not match the observed membership creation")
 
+    def retirements(self, revision):
+        from paper_daily.drive_list_records import ListReviewRequired
+
+        _, changes = self.changes(None, revision=revision)
+        retired = {op["entity_id"]: op for op in changes}
+        if len(retired) != len(changes):
+            raise ListReviewRequired("Duplicate membership retirement; review the history")
+        return retired
+
     def append(self, expected, records, *, revision):
         records = self._operations(records)
         if any(op["device_id"] != self.store.context for op in records):

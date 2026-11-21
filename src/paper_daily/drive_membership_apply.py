@@ -35,14 +35,12 @@ def _schema(conn):
 def receive_membership_changes(history, revision, ticket):
     """Watch current memberships before retirement; commit each batch with its receipts."""
     store, list_id = history.store, history.list_id
-    _, changes = history.changes(None, revision=revision)
-    retiring = {op["entity_id"]: op for op in changes}
-    if len(retiring) != len(changes):
-        raise ListReviewRequired("Duplicate membership retirement; review the history")
+    retiring = history.retirements(revision)
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         history._check(revision)
-        bindings = dict(settings.execute("SELECT remote_id,local_id FROM published_paper_ids"))
+        bindings = dict(settings.execute("SELECT remote_id,local_id FROM published_paper_ids")
+                        ) if "published_paper_ids" in _tables(settings) else {}
         uri = store.workspace.path.as_uri() + "?mode=rw"
         with closing(sqlite3.connect(uri, uri=True, timeout=0.5)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -57,6 +55,13 @@ def receive_membership_changes(history, revision, ticket):
             ).fetchone() if "drive_library_bibliographies" in tables else None
             if head is None or prior != (encode(head.record()),):
                 raise ListReviewRequired("Receive the bibliography before membership changes")
+            if "drive_library_papers" in tables:
+                for remote, local in conn.execute(
+                    "SELECT remote_id,local_id FROM drive_library_papers WHERE context=?",
+                    (store.context,),
+                ):
+                    if bindings.setdefault(remote, local) != local:
+                        raise ListReviewRequired("Conflicting local paper bindings")
             _schema(conn)
             watches = {row[0]: row[1:] for row in conn.execute(
                 "SELECT member,creation,local_id,position,live,applied "
@@ -112,3 +117,25 @@ def receive_membership_changes(history, revision, ticket):
             store._check(conn)
             ticket.checkpoint(conn.commit)
     return applied
+
+
+def applied_retirements(directory, store, list_id, revision, head):
+    """Exclude only matching Drive retirements already committed on this device."""
+    from paper_daily.drive_membership_history import DriveMembershipChanges
+    from paper_daily.drive_paper_baseline import BibliographyAdvanced
+    from paper_daily.workspace_service import _read
+
+    history = DriveMembershipChanges(directory, store, list_id, revision=revision)
+    if history.paper_head != head:
+        raise BibliographyAdvanced("Bibliography advanced while checking removals")
+    retired = history.retirements(revision)
+    if not retired:
+        return set()
+    with _read(store.workspace.path) as conn:
+        if "drive_membership_watches" not in _tables(conn):
+            return set()
+        receipts = dict(conn.execute("SELECT member,applied FROM drive_membership_watches "
+                                     "WHERE context=? AND list_id=? AND applied IS NOT NULL",
+                                     (store.context, list_id)))
+    return {history.creations[member]["payload"]["paper_id"] for member, op in retired.items()
+            if receipts.get(member) == op["operation_id"]}

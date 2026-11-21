@@ -43,8 +43,8 @@ upload without a second Drive record. Normal desktop clients still reject v9.
 The gated receiver applies a verified removal and records its operation ID in
 the same SQLite transaction. A two-device fixture retained an edited reading
 state for review, rolled back a failed receipt write, preserved shared paper
-research, and ignored redelivery after a local re-add. Desktop adoption, fresh
-device replay, conflict resolution, and installed-device removal remain open.
+research, and ignored redelivery after a local re-add. A fresh device can replay a list with existing removals without inserting the retired membership.
+The first-import transaction and retry are covered with a third isolated database. Desktop adoption, conflict resolution, and installed-device acceptance remain open.
 
 ## Release goal
 

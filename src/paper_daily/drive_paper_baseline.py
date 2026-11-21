@@ -164,7 +164,9 @@ def publish_initial(
 ):
     """Publish a first bibliography or resume its exact acknowledged prefix after interruption."""
     history = DriveListPapers(directory, store, list_id)
-    if append_new and received_head not in (_UNOBSERVED, None) and _unchanged(
+    if append_new and not directory.membership_changes and received_head not in (
+        _UNOBSERVED, None
+    ) and _unchanged(
         store, list_id, received_head, ticket
     ):
         history._check(revision)
@@ -177,7 +179,15 @@ def publish_initial(
     if append_new and received:
         remote_dates = {op["payload"]["paper_id"]: op["payload"]["added_at"]
                         for op in received[1::2]}
-        missing = remote_dates.keys() - {identity for identity, _, _ in bindings}
+        local_ids = {identity for identity, _, _ in bindings}
+        missing = remote_dates.keys() - local_ids
+        if directory.membership_changes:
+            from paper_daily.drive_membership_apply import applied_retirements
+
+            applied = applied_retirements(directory, store, list_id, revision, head)
+            if applied & local_ids:
+                raise ListReviewRequired("Re-added membership requires a new lifetime; review")
+            missing -= applied
         if missing:
             from paper_daily.drive_membership_intent import (
                 MembershipRemovalReview,

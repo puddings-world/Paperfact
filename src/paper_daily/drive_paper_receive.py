@@ -81,6 +81,16 @@ def receive_initial(directory, store, list_id, revision, ticket):
     pairs = list(zip(records[::2], records[1::2], strict=True))
     if len({paper["entity_id"] for paper, _ in pairs}) != len(pairs):
         raise ListReviewRequired("Subsequent bibliography revisions need reconciliation")
+    retired = {}
+    if directory.membership_changes:
+        from paper_daily.drive_membership_history import DriveMembershipChanges
+
+        changes = DriveMembershipChanges(directory, store, list_id, revision=revision)
+        if changes.paper_head != head:
+            from paper_daily.drive_paper_baseline import BibliographyAdvanced
+
+            raise BibliographyAdvanced("Bibliography changed before receiving memberships")
+        retired = changes.retirements(revision)
     marker = encode(head.record())
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
@@ -128,6 +138,10 @@ def receive_initial(directory, store, list_id, revision, ticket):
             has_published = settings.execute(
                 "SELECT 1 FROM sqlite_master WHERE name='published_paper_ids'"
             ).fetchone()
+            if retired:
+                from paper_daily.drive_membership_apply import _schema
+
+                _schema(conn)
             originals = None
             for paper, member in pairs:
                 ticket.check()
@@ -165,6 +179,14 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
                 ).fetchone():
                     raise ListReviewRequired("Existing membership changed; review before applying")
+                removal = retired.get(member["entity_id"])
+                if removal:
+                    # This incoming membership never existed on this device. Preserve the
+                    # paper binding and install the retirement with the bibliography receipt.
+                    conn.execute("INSERT INTO drive_membership_watches VALUES(?,?,?,?,?,?,0,?)",
+                                 (store.context, list_id, member["entity_id"],
+                                  member["operation_id"], local_id, first, removal["operation_id"]))
+                    continue
                 conn.execute(
                     "INSERT INTO list_papers(list_id,paper_id,position,citation,added_at) "
                     "VALUES(?,?,?,?,?)",
@@ -193,6 +215,12 @@ def exchange_bibliography(directory, store, list_id, revision, ticket):
 
     def exchange():
         head = receive_initial(directory, store, list_id, revision, ticket)
+        if head and directory.membership_changes:
+            from paper_daily.drive_membership_apply import receive_membership_changes
+            from paper_daily.drive_membership_history import DriveMembershipChanges
+
+            history = DriveMembershipChanges(directory, store, list_id, revision=revision)
+            receive_membership_changes(history, revision, ticket)
         return publish_initial(
             directory, store, list_id, revision, ticket, append_new=True, received_head=head
         )
