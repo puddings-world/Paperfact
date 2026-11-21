@@ -40,9 +40,14 @@ the unfamiliar format before writing. Each paper batch carries shared-operation
 v2 paper and membership pairs. Both ends validate the selected list, paper UUID
 and incarnation, and the local selection revision. Updating a list name leaves
 its paper history intact. Retrying an identical acknowledged batch reuses the
-same head. This transport has synthetic two-device coverage. The ordinary
-reader database still needs publication, conflict-aware application, and
-separate verified file transfer before this becomes an end-user sync path.
+same head. The first-publication adapter reads one ordinary reader database in a
+read-only transaction. It serializes selected memberships in reading order and
+uses the native paper payload. A paper shared by two source lists has one UUID
+and separate memberships. The publisher validates the entire bounded baseline
+before uploading and resumes only a matching acknowledged prefix. A divergent
+history requires reconciliation. These checks have synthetic Drive coverage.
+Receiver-side projection, later edits and verified files still need to be
+connected before enabling this path in the ordinary desktop reader.
 
 The owner expects one logical research database with a complete list directory,
 visible on every paired device, and selectable list synchronization. The current
