@@ -58,8 +58,10 @@ The keep decision now rechecks the local entry, pin, paper binding and review to
 before publication. A capable receiver can restore an absent row after the
 matching removal was acknowledged, reusing the paper ID and updating its receipt
 in one transaction. A new receiver installs the latest verified membership and citation
-directly, including its creation receipt. Adoption of a still-present local
-entry, reading progress across lifetimes and the desktop UI remain pending.
+directly, including its creation receipt. The device that chose to keep its entry
+records the decision before upload and adopts the confirmed membership on receipt
+without changing its local reading state or position. Exchanging reading progress
+across lifetimes and the desktop UI remain pending.
 
 ## Release goal
 

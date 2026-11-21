@@ -431,7 +431,28 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with closing(sqlite3.connect(laptop)) as conn, conn:
         conn.execute("UPDATE list_papers SET citation=?,added_at=? WHERE list_id='return' "
                      "AND paper_id=?", (revised["citation"], revised["added_at"], peer_id))
-    after = keep_reviewed_membership(changes, peer_revision, current_review(), Ticket())
+    snapshot = tmp_path / "before-laptop-keep.db"
+    with closing(sqlite3.connect(laptop)) as conn, closing(sqlite3.connect(snapshot)) as backup:
+        conn.backup(backup)
+    original_restore = changes.restore
+    def lose_reply(*args, **kwargs):
+        original_restore(*args, **kwargs)
+        raise TimeoutError("lost confirmation")
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(changes, "restore", lose_reply)
+        with pytest.raises(TimeoutError, match="lost confirmation"):
+            keep_reviewed_membership(changes, peer_revision, current_review(), Ticket())
+    changes = DriveMembershipRestores(transport, reader.store, "return", revision=peer_revision)
+    after, _, _ = changes.versions(peer_revision)
+    assert receive_membership_changes(changes, peer_revision, Ticket()) == 1
+    assert receive_membership_changes(changes, peer_revision, Ticket()) == 0
+    with closing(sqlite3.connect(laptop)) as conn, closing(sqlite3.connect(snapshot)) as backup:
+        assert conn.execute("SELECT m.state,m.position,w.creation FROM list_papers m "
+                            "JOIN drive_membership_watches w ON w.local_id=m.paper_id "
+                            "AND w.list_id=m.list_id WHERE w.member=?",
+                            (original["entity_id"],)).fetchall() == [
+                                ("read", observed["row"][0], restored["operation_id"])]
+        backup.backup(conn)
     # The remaining v9 scenarios use their original local snapshot.
     with closing(sqlite3.connect(laptop)) as conn, conn:
         conn.execute("UPDATE list_papers SET citation=?,added_at=? WHERE list_id='return' "

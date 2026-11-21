@@ -63,13 +63,18 @@ def keep_reviewed_membership(history, revision, observation, ticket):
     def check_review():
         ticket.check()
         with _read(store.path) as settings:
-            binding = settings.execute("SELECT local_id FROM published_paper_ids WHERE remote_id=?",
-                                       (creation["payload"]["paper_id"],)).fetchone()
+            paper = creation["payload"]["paper_id"]
+            published = settings.execute(
+                "SELECT local_id FROM published_paper_ids WHERE remote_id=?",
+                (paper,)).fetchone() if "published_paper_ids" in _tables(settings) else None
         with _read(store.workspace.path) as conn:
             store._check(conn)
             tables = _tables(conn)
             if tables & _WORKSPACE_MARKERS or "drive_member_reviews" not in tables:
                 raise ListReviewRequired("The reviewed workspace changed")
+            received = conn.execute(
+                "SELECT local_id FROM drive_library_papers WHERE context=? AND remote_id=?",
+                (store.context, paper)).fetchone() if "drive_library_papers" in tables else None
             token = conn.execute("SELECT token FROM drive_member_reviews WHERE list_id=? "
                                  "AND local_id=?", (list_id, local)).fetchone()
             row = conn.execute("SELECT position,citation,added_at,state,read_at,delivered_at "
@@ -77,7 +82,8 @@ def keep_reviewed_membership(history, revision, observation, ticket):
                                (list_id, local)).fetchone()
             pin = conn.execute("SELECT pinned_at FROM pins WHERE scope=? AND paper_id=?",
                                (list_id, local)).fetchone()
-        if (binding != (local,) or token != (observation["token"],) or not row
+        bindings = {entry for entry in (received, published) if entry}
+        if (bindings != {(local,)} or token != (observation["token"],) or not row
                 or row != observation["row"] or pin != observation["pin"]):
             raise ListReviewRequired("Local entry changed; review again")
 
@@ -85,6 +91,17 @@ def keep_reviewed_membership(history, revision, observation, ticket):
     row = observation["row"]
     operation = restoration_operation(creation, removal, store.context,
                                       citation=row[1], added_at=row[2])
+    uri = store.workspace.path.as_uri() + "?mode=rw"
+    with closing(sqlite3.connect(uri, uri=True, timeout=0.5)) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        check_review()
+        conn.execute("CREATE TABLE IF NOT EXISTS drive_membership_keeps("
+                     "context TEXT,list_id TEXT,member TEXT,operation TEXT,token TEXT,"
+                     "PRIMARY KEY(context,list_id,member))")
+        conn.execute("INSERT OR REPLACE INTO drive_membership_keeps VALUES(?,?,?,?,?)",
+                     (store.context, list_id, member, operation["operation_id"],
+                      observation["token"]))
+        ticket.checkpoint(conn.commit)
     return history.restore(head, operation, revision=revision, check_review=check_review)
 
 
@@ -109,6 +126,28 @@ def _schema(conn):
         conn.execute(f"CREATE TRIGGER IF NOT EXISTS drive_member_watch_{suffix} AFTER {event} "
                      f"ON list_papers{condition} BEGIN UPDATE drive_membership_watches SET live=0 "
                      "WHERE list_id=OLD.list_id AND local_id=OLD.paper_id AND live=1; END")
+
+
+def _adopt_kept(conn, store, list_id, creation, local):
+    key = (store.context, list_id, creation["entity_id"])
+    approved = conn.execute(
+        "SELECT 1 FROM drive_membership_keeps k JOIN drive_member_reviews r "
+        "ON r.list_id=k.list_id AND r.token=k.token WHERE k.context=? AND k.list_id=? "
+        "AND k.member=? AND k.operation=? AND r.local_id=?", (*key, creation["operation_id"], local)
+    ).fetchone()
+    if not approved:
+        return False
+    row = conn.execute("SELECT position,citation,added_at FROM list_papers "
+                       "WHERE list_id=? AND paper_id=?", (list_id, local)).fetchone()
+    payload = creation["payload"]
+    if not row or row[1:] != (payload["citation"], payload["added_at"]):
+        raise ListReviewRequired("Local entry changed after keeping it; review again")
+    conn.execute("INSERT OR REPLACE INTO drive_membership_watches "
+                 "(context,list_id,member,creation,local_id,position) VALUES(?,?,?,?,?,?)",
+                 (*key, creation["operation_id"], local, row[0]))
+    conn.execute("DELETE FROM drive_membership_keeps WHERE context=? AND list_id=? AND member=?",
+                 key)
+    return True
 
 
 def _restore_removed(conn, store, list_id, member, creation, local):
@@ -171,6 +210,12 @@ def receive_membership_changes(history, revision, ticket, *, accept_removal=None
                 watch = watches.get(member)
                 removal = retiring.get(member)
                 if accept_removal and member != accept_removal["member"]:
+                    continue
+                if (local and not removal and not accept_removal
+                        and "drive_membership_keeps" in tables
+                        and creation["device_id"] == store.context
+                        and _adopt_kept(conn, store, list_id, creation, local)):
+                    applied += 1
                     continue
                 if (local and watch and watch[1] == local and watch[4]
                         and watch[4] == creation["depends_on"] and not removal
