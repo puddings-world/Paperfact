@@ -335,6 +335,17 @@ def test_batch_reports_real_counts_and_partial_failure(workspace, monkeypatch):
         assert analyze.analyse_many(["a", "b", "c"], log=lambda _: None) == 1
     assert [(e["completed"], e["total"]) for e in events] == [(0, 3), (1, 3), (2, 3), (3, 3)]
     assert sum(e.get("outcome") == "partial" for e in events) == 2
+    warnings = [event["stage"] for event in events if event.get("outcome") == "partial"]
+    assert warnings[-1] == "2 篇未完成"
+    entry = json.loads((store.DB_PATH.parent / "diagnostics.jsonl").read_text().splitlines()[-1])
+    assert entry["phase"] == "worker" and "fixture" not in json.dumps(entry)
+
+    monkeypatch.setattr(analyze, "pending", lambda *a: [])
+    monkeypatch.setattr(analyze, "status", lambda *a, **kw: dict(pdf=True, dive=False))
+    with work_progress.observe(events.append):
+        assert analyze.analyse_many(["a"], log=lambda _: None) == 0
+    assert events[-1] == dict(stage="尚缺：講解", completed=1, total=2,
+                              paper_id="a", outcome="partial")
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -433,5 +444,6 @@ def test_partial_manual_result_is_readable_without_a_rich_page(surface, tmp_path
     hub.finish(handle.token)
     QApplication.processEvents()
     assert not reports and not board.bar.isVisible()
+    assert "Later research missing" in board.text.text()
     hub.goto(handle.token)
     assert "Saved explanation" in reports[0] and "Later research missing" in reports[0]

@@ -110,6 +110,7 @@ class Job:
     total: int | None = None
     manual_result: object = None
     warning: bool = False
+    warning_stage: str = ""
     history: deque = field(default_factory=lambda: deque(maxlen=12))
     # Set by the feature that owns the work; no callback means no button for it.
     cancel: object = None
@@ -275,7 +276,10 @@ class ActivityHub(QObject):
         if (type(done) is int and type(total) is int and 0 <= done <= total and total > 0
                 and (not scope or scope == job.paper_id)):
             job.completed, job.total = done, total
-        job.warning |= event.get("outcome") in ("partial", "error")
+        if event.get("outcome") in ("partial", "error"):
+            job.warning = True
+            if isinstance(stage, str) and stage.strip() and (not scope or scope == job.paper_id):
+                job.warning_stage = job.stage
 
     def tick(self):
         if not self.busy and self.events.empty() and not self._processes:
@@ -314,7 +318,8 @@ class ActivityHub(QObject):
             job.kind = failure_kind(reason)
             known = FAILURES.get(job.kind)
             message = f"未完成：{known[0] if known else ' '.join(reason.split())[:120]}"
-        job.stage = message or {"done": "內容已更新", "partial": "部分完成，請查看尚缺項目",
+        job.stage = message or {"done": "內容已更新", "partial": (
+            f"部分完成 · {job.warning_stage}" if job.warning_stage else "部分完成，請查看尚缺項目"),
                                 "error": "未完成，請查看原操作區的原因後重試",
                                 "cancelled": "已取消排隊" if waited else "工作已停止"}[job.state]
         if job.queued:

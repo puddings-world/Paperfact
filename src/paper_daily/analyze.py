@@ -415,6 +415,10 @@ def summary(state: dict[str, bool]) -> str:
     return " ".join(f"{STEPS[s]}{'✓' if ok else '✗'}" for s, ok in state.items())
 
 
+def _missing(state):
+    return "尚缺：" + "、".join(STEPS[key] for key, complete in state.items() if not complete)
+
+
 def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
                  retry: bool = False) -> int:
     """Analyse several papers at once. Returns how many came out complete.
@@ -422,8 +426,16 @@ def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
     Each worker takes a whole paper, so one paper's steps stay in order (its dive
     and reference analysis read the PDF its first step fetched).
     """
+    from paper_daily import diagnostics, store
+
+    diagnostic_directory = store.DB_PATH.parent
     with connect() as conn:
         todo = pending(conn, paper_ids, retry)
+        if not todo and len(paper_ids) == 1:
+            state = status(conn, paper_ids[0], verify_sources=True)
+            if not all(state.values()):
+                work_progress.report(_missing(state), sum(state.values()), len(state),
+                                     paper_id=paper_ids[0], outcome="partial")
     if not todo:
         log("nothing to analyse: every paper has all it can get")
         return 0
@@ -437,11 +449,18 @@ def analyse_many(paper_ids: list[str], jobs: int = 3, log: Log = print,
             try:
                 state = future.result()
             except Exception as e:  # one paper's failure must not stop the rest
-                work_progress.report("此篇未完成，繼續其他論文", done, len(todo),
+                diagnostics.record_exception(type(e), e.__traceback__, phase="worker",
+                                             directory=diagnostic_directory)
+                stage = ("此篇處理時發生錯誤" if len(todo) == 1
+                         else f"{done - complete} 篇未完成")
+                work_progress.report(stage, done, len(todo),
                                      outcome="partial")
                 log(f"[{done}/{len(todo)}] failed {pid}: {e}")
                 continue
-            work_progress.report(summary(state), done, len(todo),
+            stage = summary(state)
+            if not all(state.values()):
+                stage = _missing(state) if len(todo) == 1 else f"{done - complete} 篇未完成"
+            work_progress.report(stage, done, len(todo),
                                  outcome=None if all(state.values()) else "partial")
             complete += all(state.values())
             with connect() as conn:
