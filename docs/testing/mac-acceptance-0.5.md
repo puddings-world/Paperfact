@@ -2,31 +2,31 @@
 
 ## Start here on Apple Silicon
 
-Install build **933e64e** on both devices. Extract each downloaded ZIP and install the enclosed app.
+Install build **f489005** on both devices. Extract each downloaded ZIP and install the enclosed app.
 
 | Device | Download |
 |---|---|
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44937128216/artifacts/14720008002) |
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44937128216/artifacts/14720076967) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44938896885/artifacts/14720818848) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44938896885/artifacts/14721256484) |
 
 If Sync opens a linked workspace, export any edits unique to it and choose **Open my local library** to switch to the original library folder. If the list selection saves but startup authorization fails, choose **Retry automatic sync**.
 
-1. **Publish from Windows.** In a disposable workspace, import `original.zip` from the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44937128216/artifacts/14720990579). Open **Sync** and sign in. On first setup, the available lists start checked. Keep the fixture checked and uncheck other lists. Choose **Enable automatic sync** and confirm. For a previously configured device, choose **Save list selection**. Choose **Sync saved lists now** and wait for completion.
+1. **Publish from Windows.** In a disposable workspace, import `original.zip` from the [synthetic research fixture](https://github.com/puddings-world/Paperfact/actions/runs/44938896885/artifacts/14721560017). Open **Sync** and sign in. On first setup, the available lists start checked. Keep the fixture checked and uncheck other lists. Choose **Enable automatic sync** and confirm. For a previously configured device, choose **Save list selection**. Choose **Sync saved lists now** and wait for completion.
 2. **Receive on Mac.** Sign in to Sync with the same account. If the fixture name is missing, choose **Refresh list names**. Confirm the selection on this device, then sync. Newly checked lists include notes, linked Q&A, original PDFs, guides, reading status and PDF page numbers. For an already saved list, expand **Sync contents** and verify those settings on both devices. Choose **Continue reading** to leave settings.
 3. **Read and edit offline.** Disconnect the Mac. Open a received PDF, turn a page and read a saved guide. Add a short, recognizable note. Close and reopen the paper while offline and confirm the note persists.
 4. **Verify the return trip.** Reconnect the Mac. With background sync enabled, keep both apps open outside settings. Record how long it takes for the Windows reader to show the Mac note exactly once. Edit it on Windows and check that the Mac receives the edit. If a manual sync is needed to receive it, record the automatic check as incomplete.
 5. **Exercise a conflict.** After both devices show the same note, disconnect both and edit that note differently on each. Reconnect and sync. Open **Compare conflicting notes** and verify both edits are available. Choose one version, sync again, and confirm both readers converge.
 
-Record the OS and build on each device, the first failing step, the expected and observed result, and the visible sync status. The [cross-platform workflow](https://github.com/puddings-world/Paperfact/actions/runs/44937128216) passed the packaged research checks. Personal Drive round-trip, sleep/wake and native credential restore on physical devices still need tester results. See [desktop and laptop sync](../../README.md#sync-a-desktop-and-laptop-v05-preview) for individual content settings.
+Record the OS and build on each device, the first failing step, the expected and observed result, and the visible sync status. The [cross-platform workflow](https://github.com/puddings-world/Paperfact/actions/runs/44938896885) passed the packaged research checks. Personal Drive round-trip, sleep/wake and native credential restore on physical devices still need tester results. See [desktop and laptop sync](../../README.md#sync-a-desktop-and-laptop-v05-preview) for individual content settings.
 
 ## Continue a reader conversation on the other desktop
 
 Use build `993461c` or later on both computers and sign in to the same Google
 account. Newly checked lists include Q&A. For a list that was already synced,
 open its **Sync contents** once on each computer and enable **Sync Q&A**.
-To test historical conversations on build `933e64e`, switch a previously enabled
-**Sync Q&A** off and back on once on each device. In later builds with the
-**Include older Q&A** action, use that action instead.
+On build `f489005`, select **Include older Q&A** if it appears. Check the Drive
+content summary for the list after its next sync. A Q&A history confirms that
+the source published messages. Verify receipt on the second device below.
 
 1. On Windows, open a paper and find a saved question and answer created in a
    recent reader. Record a short distinctive phrase from the answer. Leave
