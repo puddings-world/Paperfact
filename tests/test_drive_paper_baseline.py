@@ -451,6 +451,33 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "Offline local title", "Laptop discovery"}
     assert origin_cloud.objects == accepted
 
+    # A removal on an upgraded library uses the normal saved desktop subscription.
+    with closing(sqlite3.connect(device_db)) as conn, conn:
+        target, = conn.execute("SELECT id FROM papers WHERE title='Laptop discovery'").fetchone()
+        assert remove_selected(conn, "return", [target]) == 1
+    # A second missing row without explicit intent blocks the entire outgoing batch.
+    with closing(sqlite3.connect(device_db)) as conn, conn:
+        other = conn.execute("SELECT r.* FROM list_papers r JOIN papers p ON p.id=r.paper_id "
+                             "WHERE r.list_id='return' AND title='Offline local title'").fetchone()
+        conn.execute("DELETE FROM list_papers WHERE list_id='return' AND paper_id="
+                     "(SELECT id FROM papers WHERE title='Offline local title')")
+    mixed = reopened.sync_saved_library(Ticket(), lambda _: None)
+    assert "2 removed papers; 1 explicitly removed" in mixed["reviews"]["return"]
+    assert origin_cloud.objects == accepted
+    with closing(sqlite3.connect(device_db)) as conn, conn:
+        slots = ",".join("?" for _ in other)
+        conn.execute(f"INSERT INTO list_papers VALUES({slots})", other)
+    assert not reopened.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    after_removal = dict(origin_cloud.objects)
+    assert not reopened.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    exchange_bibliography(origin_dir, fresh, "return", 1, Ticket())
+    with closing(sqlite3.connect(fresh_db)) as conn:
+        assert conn.execute("SELECT title FROM papers JOIN list_papers "
+                            "ON papers.id=list_papers.paper_id").fetchall() == [
+                                ("Offline local title",)]
+        assert conn.execute("SELECT 1 FROM papers WHERE title='Laptop discovery'").fetchone()
+    assert origin_cloud.objects == after_removal
+
     from paper_daily.drive_sync_files import decode, encode
 
     unrelated_head = encode({**decode(anchor), "sha256": "0" * 64})

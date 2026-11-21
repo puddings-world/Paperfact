@@ -211,6 +211,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
 
 
 def exchange_bibliography(directory, store, list_id, revision, ticket):
+    from paper_daily.drive_membership_intent import MembershipRemovalReview
     from paper_daily.drive_paper_baseline import BibliographyAdvanced, publish_initial
 
     def exchange():
@@ -221,9 +222,24 @@ def exchange_bibliography(directory, store, list_id, revision, ticket):
 
             history = DriveMembershipChanges(directory, store, list_id, revision=revision)
             receive_membership_changes(history, revision, ticket)
-        return publish_initial(
-            directory, store, list_id, revision, ticket, append_new=True, received_head=head
-        )
+        def publish():
+            return publish_initial(directory, store, list_id, revision, ticket,
+                                   append_new=True, received_head=head)
+
+        try:
+            return publish()
+        except MembershipRemovalReview as review:
+            if not (head and directory.membership_changes
+                    and review.missing == len(review.operations)):
+                raise
+            operations = review.operations
+        current, _ = history.changes(None, revision=revision)
+        for start in range(0, len(operations), history.max_operations):
+            ticket.check()
+            batch = operations[start:start + history.max_operations]
+            current = history.append(current, batch, revision=revision)
+        receive_membership_changes(history, revision, ticket)
+        return publish()
 
     try:
         return exchange()

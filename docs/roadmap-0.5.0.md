@@ -44,7 +44,7 @@ The gated receiver applies a verified removal and records its operation ID in
 the same SQLite transaction. A two-device fixture retained an edited reading
 state for review, rolled back a failed receipt write, preserved shared paper
 research, and ignored redelivery after a local re-add. A fresh device can replay a list with existing removals without inserting the retired membership.
-The first-import transaction and retry are covered with a third isolated database. The desktop checklist and saved-selection sync now receive existing v9 histories, including after reopening. The originating device can recover an accepted deletion after a lost reply. Publishing explicit removals from the desktop, resolving conflicting membership edits, and installed-device acceptance remain open.
+The first-import transaction and retry are covered with a third isolated database. The desktop checklist and saved-selection sync now receive existing v9 histories, including after reopening. The originating device can recover an accepted deletion after a lost reply. In an upgraded library the desktop also publishes explicit removals when every missing membership has matching local evidence. Adoption for older directories, conflicting membership edits, and installed-device acceptance remain open.
 
 ## Release goal
 

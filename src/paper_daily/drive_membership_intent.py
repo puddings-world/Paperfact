@@ -60,6 +60,7 @@ def remove_selected(conn, list_id, paper_ids):
 
 class MembershipRemovalReview(ListReviewRequired):
     def __init__(self, missing, operations):
+        self.missing = missing
         self.operations = operations
         super().__init__(
             f"List has {missing} removed papers; {len(operations)} explicitly removed "

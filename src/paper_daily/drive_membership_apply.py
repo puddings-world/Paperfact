@@ -107,6 +107,9 @@ def receive_membership_changes(history, revision, ticket):
                                      "AND list_id=? AND action_id=?",
                                      (store.context, list_id, intents[0][0]))
                         continue
+                if not row and not removal:
+                    # Publication checks the local intent against the observed bibliography.
+                    continue
                 if not row or row[1:3] != (payload["citation"], payload["added_at"]):
                     raise ListReviewRequired("Local membership differs; both versions retained")
                 if not removal:
