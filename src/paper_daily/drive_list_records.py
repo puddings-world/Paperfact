@@ -29,12 +29,40 @@ def _receipt(conn, list_id):
         "CREATE TABLE IF NOT EXISTS list_record_receipts("
         "list_id TEXT PRIMARY KEY,head BLOB NOT NULL,digest TEXT NOT NULL)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS list_record_sends("
+        "list_id TEXT,op TEXT,parent BLOB,generation INTEGER,name_hash TEXT,note_hash TEXT,"
+        "PRIMARY KEY(list_id,op))"
+    )
     row = conn.execute(
         "SELECT head,digest FROM list_record_receipts WHERE list_id=?", (list_id,)
     ).fetchone()
     if row is None:
         return None, None
     return ScopeHead(**decode(row[0])), row[1]
+
+
+def _acknowledged(conn, changes, store, list_id, local):
+    for op in reversed(changes):
+        sent = conn.execute(
+            "SELECT parent,generation,name_hash,note_hash FROM list_record_sends "
+            "WHERE list_id=? AND op=?", (list_id, op["operation_id"])
+        ).fetchone()
+        if sent is None:
+            continue
+        parent = decode(sent[0])
+        accepted = op["payload"]
+        token = _digest([store.context, list_id, parent, _digest(accepted)])
+        if (op["operation_id"] != token or op["device_id"] != store.context
+                or op["base_revision"] != sent[1]):
+            raise ListReviewRequired("The list upload does not match its local receipt")
+        if local is None:
+            raise ListReviewRequired("Published list removed locally; review before restoring")
+        # A remote field merged into our upload may never have reached the local database.
+        effective = {key: accepted[key] if _digest(local[key]) == old_hash else local[key]
+                     for key, old_hash in zip(("name", "note"), sent[2:], strict=True)}
+        return accepted, effective
+    return None, local
 
 
 def exchange_list(directory, store, list_id, revision, ticket):
@@ -53,20 +81,27 @@ def exchange_list(directory, store, list_id, revision, ticket):
     if any(op["action"] != "put" for op in changes):
         raise ListReviewRequired("List retirement requires review")
     remote = changes[-1]["payload"] if changes else None
+    original, effective = None, local
+    if changes:
+        with closing(sqlite3.connect(store.path, timeout=0.5)) as private:
+            original, effective = _acknowledged(private, changes, store, list_id, local)
+    merge_base = _digest(original) if original is not None else base
     if local is None and base is not None:
         raise ListReviewRequired("A retained list was removed locally; review before restoring")
     target = remote if remote is not None else local
-    if remote is not None and local is not None and remote != local and _digest(local) != base:
-        original = history.applied_payload(anchor, revision=revision) if anchor else None
-        if original is None or _digest(original) != base:
+    if (remote is not None and effective is not None
+            and remote != effective and _digest(effective) != merge_base):
+        if original is None and anchor:
+            original = history.applied_payload(anchor, revision=revision)
+        if original is None or _digest(original) != merge_base:
             raise ListReviewRequired("No verified common list details; both versions were retained")
         target = dict(remote)
         for field in ("name", "note"):
-            if local[field] == original[field]:
+            if effective[field] == original[field]:
                 continue
-            if remote[field] != original[field] and remote[field] != local[field]:
+            if remote[field] != original[field] and remote[field] != effective[field]:
                 raise ListReviewRequired(f"Conflicting list {field}; both versions were retained")
-            target[field] = local[field]
+            target[field] = effective[field]
     if target is None:
         return "waiting_source"
     digest = _digest(target)
@@ -84,6 +119,23 @@ def exchange_list(directory, store, list_id, revision, ticket):
             depends_on=None,
             payload=target,
         )
+        with closing(sqlite3.connect(store.path, timeout=0.5)) as private, private:
+            private.execute("BEGIN IMMEDIATE")
+            ticket.check()
+            store._check()
+            if store._load(private).revision != revision or _receipt(private, list_id) != (
+                anchor, base
+            ):
+                raise ValueError("List sync context changed before upload; retry")
+            parent = encode(head.record() if head else None)
+            row = (parent, op["base_revision"], _digest(local["name"]), _digest(local["note"]))
+            private.execute("INSERT OR IGNORE INTO list_record_sends VALUES(?,?,?,?,?,?)",
+                            (list_id, token, *row))
+            if private.execute(
+                "SELECT parent,generation,name_hash,note_hash FROM list_record_sends "
+                "WHERE list_id=? AND op=?", (list_id, token)
+            ).fetchone() != row:
+                raise ListReviewRequired("Concurrent list edits require review")
         head = history.append(head, [op], revision=revision)
     if head == anchor and digest == base:
         return "current"
@@ -130,4 +182,6 @@ def exchange_list(directory, store, list_id, revision, ticket):
             "DO UPDATE SET head=excluded.head,digest=excluded.digest",
             (list_id, encode(head.record()), digest),
         )
+        private.execute("DELETE FROM list_record_sends WHERE list_id=? AND generation<?",
+                        (list_id, head.generation))
     return "updated"

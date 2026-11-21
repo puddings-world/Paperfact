@@ -252,7 +252,7 @@ def test_each_device_receives_only_its_selected_list_history(tmp_path):
     assert read == before
 
 
-def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp_path):
+def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp_path, monkeypatch):
     import sqlite3
     from contextlib import closing
 
@@ -309,6 +309,38 @@ def test_selected_list_records_arrive_in_original_reader_database_and_return(tmp
         assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
             ("Renamed on desktop", "Description from laptop")
         ]
+    # Drive accepts a field merge but its reply never reaches the desktop.
+    from paper_daily.drive_list_history import DriveListHistory
+
+    append = DriveListHistory.append
+
+    def lose_reply(history, expected, records, *, revision):
+        append(history, expected, records, revision=revision)
+        raise ConnectionError("lost reply")
+
+    db(win_path, "UPDATE lists SET name='First desktop edit' WHERE id='b'")
+    db(mac_path, "UPDATE lists SET note='Independent laptop edit' WHERE id='b'")
+    sync(mac)
+    with monkeypatch.context() as patch:
+        patch.setattr(DriveListHistory, "append", lose_reply)
+        with pytest.raises(ConnectionError, match="lost reply"):
+            sync(win)
+    # Revert the name before retry; the local description still predates the merge.
+    db(win_path, "UPDATE lists SET name='Renamed on desktop' WHERE id='b'")
+    sync(win)
+    sync(mac)
+    for path in (win_path, mac_path):
+        assert db(path, "SELECT name,note FROM lists WHERE id='b'") == [
+            ("Renamed on desktop", "Independent laptop edit")
+        ]
+    assert db(win.path, "SELECT COUNT(*) FROM list_record_sends") == [(0,)]
+    # A competing edit after the lost reply must still require an explicit decision.
+    db(win_path, "UPDATE lists SET note='Base accepted by Drive' WHERE id='b'")
+    with monkeypatch.context() as patch:
+        patch.setattr(DriveListHistory, "append", lose_reply)
+        with pytest.raises(ConnectionError):
+            sync(win)
+    sync(mac)
     db(win_path, "UPDATE lists SET note='Local candidate' WHERE id='b'")
     db(mac_path, "UPDATE lists SET note='Remote candidate' WHERE id='b'")
     sync(mac)

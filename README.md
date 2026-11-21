@@ -161,6 +161,8 @@ Use the same preview on both computers. [Apple Silicon download and offline acce
 | Original PDFs | **Allow PDF sync for this list** | Open a received original and turn a page. Select a list in Sync to see which papers had different PDFs at the last exchange. Both originals are retained while other PDFs, notes and guides continue syncing. |
 | Saved deep guides | **Sync saved explanations** | Open a received guide before its PDF arrives. The retry link reloads saved text locally. Use **編輯講解** on the guide to edit its Markdown offline. Open **Compare conflicting guides** to read both edits and their common version. Keep either version or decide later while other papers continue syncing. |
 
+Selected lists exchange their names and descriptions independently. A rename on one device can merge with a description edit on the other, including after an interrupted upload. Competing edits to the same field pause that list for review.
+
 For figures, highlights, slides or handing a colleague an independent copy, export a research package.
 **Existing workspace sync** opens the earlier workflow for a separate workspace copy.
 [Sync architecture and coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
