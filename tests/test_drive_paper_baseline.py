@@ -19,6 +19,69 @@ from paper_daily.workspace_service import Ticket
 source = source_fixture
 
 
+def test_reader_chat_round_trip_and_concurrent_edits(source, tmp_path, monkeypatch):
+    from test_chat_portability import linked_rows
+
+    from paper_daily import drive_sync_setup, research_chat, store
+
+    mac_db = tmp_path / "mac-library" / "papers.db"
+    mac_db.parent.mkdir()
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        conn.executescript(store.SCHEMA)
+    cloud = Cloud()
+
+    def enroll(path, label):
+        files = authority(cloud, tmp_path / label / "authority").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, **k: files)
+        service = drive_sync_setup.DriveSetup(
+            path, profiles=tmp_path / label / "profiles", cache=tmp_path / label / "cache",
+            authorize=lambda **kwargs: files.session)
+        service.sign_in(Ticket(), lambda _: None)
+        assert not service.apply_library(["list"], Ticket(), lambda _: None,
+                                         include_new_content=True)["reviews"]
+        return service
+
+    def poll(service):
+        return service.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+
+    def edit(path, key, body):
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute("UPDATE chat SET body=? WHERE id=(SELECT local_id FROM research_chat_links"
+                         " WHERE message_id=?)", (body, key))
+
+    def read(path):
+        with closing(sqlite3.connect(path)) as conn:
+            return dict(conn.execute("SELECT l.message_id,c.body FROM chat c "
+                                     "JOIN research_chat_links l ON l.local_id=c.id"))
+
+    question, _, answer, _ = linked_rows()
+    with closing(sqlite3.connect(source)) as conn, conn:
+        research_chat.import_shared_turn(conn, dict(question, paper_id="paper"))
+    desktop = enroll(source, "desktop")
+    mac = enroll(mac_db, "mac")
+    assert read(mac_db)[question["message_id"]] == question["body"]
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        paper, = conn.execute("SELECT paper_id FROM chat WHERE body=?", (question["body"],)
+                              ).fetchone()
+        research_chat.import_shared_turn(conn, dict(answer, paper_id=paper))
+    assert not poll(mac) and not poll(desktop)
+    key = answer["message_id"]
+    assert read(source)[key] == answer["body"]
+    edit(mac_db, key, "Updated while away")
+    assert not poll(mac) and not poll(desktop)
+    assert read(source)[key] == "Updated while away"
+    edit(source, key, "Desktop revision")
+    edit(mac_db, key, "Laptop revision")
+    assert not poll(desktop)
+    assert "review" in poll(mac)["list"]
+    assert read(source)[key] == "Desktop revision" and read(mac_db)[key] == "Laptop revision"
+    with closing(sqlite3.connect(mac_db)) as conn, conn:
+        conn.execute("DELETE FROM chat WHERE id=(SELECT local_id FROM research_chat_links "
+                     "WHERE message_id=?)", (key,))
+    assert "review" in poll(mac)["list"]
+    assert key not in read(mac_db) and read(source)[key] == "Desktop revision"
+
+
 def test_new_lists_follow_both_devices_and_exclusions_survive(source, tmp_path, monkeypatch):
     from paper_daily import drive_sync_setup
     from paper_daily import store as db

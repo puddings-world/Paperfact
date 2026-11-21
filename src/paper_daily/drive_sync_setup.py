@@ -238,6 +238,7 @@ class DriveSetup:
             "pdf_lists": pdf_lists,
             "pdf_review_titles": {key: self._pdf_review_titles[key] for key in pdf_lists
                                   if key in selection.selected and key in self._pdf_review_titles},
+            "chat_lists": store.chat_lists(),
             "dive_lists": store.dive_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
@@ -278,6 +279,9 @@ class DriveSetup:
     def choose_pdf_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="pdfs")
 
+    def choose_chat_sync(self, list_id, enabled, ticket, progress):
+        return self._choose_list_content(list_id, enabled, ticket, kind="chat")
+
     def choose_dive_sync(self, list_id, enabled, ticket, progress):
         return self._choose_list_content(list_id, enabled, ticket, kind="dives")
 
@@ -290,7 +294,7 @@ class DriveSetup:
             raise ValueError("The reviewed account changed")
         save = {"reading": store.set_reading_sync, "notes": store.set_note_sync,
                 "positions": store.set_position_sync, "pdfs": store.set_pdf_sync,
-                "dives": store.set_dive_sync}[kind]
+                "chat": store.set_chat_sync, "dives": store.set_dive_sync}[kind]
         save(list_id, enabled, revision=saved.revision, ticket=ticket)
         if kind == "pdfs" and not enabled:
             self._pdf_review_titles.pop(list_id, None)
@@ -457,7 +461,8 @@ class DriveSetup:
         from paper_daily.drive_membership_apply import MembershipConflict, arm_present_review
         from paper_daily.drive_membership_intent import MembershipRemovalReview
 
-        _, store, saved, directory, *_ = self._library_view
+        _, store, saved, directory, observed, *_ = self._library_view
+        remote_chats = {entry.id for entry in observed.directory.lists if entry.chat_head}
         selection = saved if selection is None else selection
         if local_binding(self.workspace.path) or not selection.selected:
             return {**result, "reviews": {}}
@@ -514,6 +519,24 @@ class DriveSetup:
                             reason = f"Reading progress differs on {len(differing)} papers"
                             reasons = (reviews.get(list_id), reason)
                             reviews[list_id] = " · ".join(filter(None, reasons))
+                    from paper_daily.drive_reader_chat import exchange_chat, has_local_messages
+
+                    if list_id in result.get("chat_lists", ()) and (
+                        list_id in remote_chats or has_local_messages(store, list_id)
+                    ):
+
+                        if not directory.chat:
+                            directory = DriveDirectory(
+                                directory.files, directory.folder, directory.head,
+                                directory.library_id, chat=True, positions=directory.positions,
+                                membership_changes=directory.membership_changes,
+                                membership_restores=directory.membership_restores,
+                            )
+                        count = exchange_chat(directory, store, list_id, selection.revision, ticket)
+                        if count:
+                            reason = f"Conversation edits or removals need review ({count})"
+                            reviews[list_id] = " · ".join(filter(None, (reviews.get(list_id),
+                                                                       reason)))
                     if list_id in result.get("position_lists", ()):
                         from paper_daily.drive_list_history import DriveListPositions
                         from paper_daily.drive_position_cache import retain

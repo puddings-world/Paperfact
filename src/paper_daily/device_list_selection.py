@@ -18,11 +18,12 @@ from paper_daily.sync_journal import _identifier
 from paper_daily.workspace_service import Ticket, WorkspaceChanged, WorkspaceService
 
 CONTENT_GRANTS = {
+    "chat_grants": "chat-v1:",
     "note_grants": "edits-v1:", "pdf_grants": "pdf-v1:", "dive_grants": "dives-v1:",
     "reading_grants": "reading-v1:", "position_grants": "position-v1:",
 }
 
-GRANT_PREFIXES = {**CONTENT_GRANTS, "chat_grants": "chat-v1:"}
+
 
 MAX_FILE_BYTES = 8 * 1024 * 1024
 
@@ -207,7 +208,7 @@ class DeviceSelection:
                             self._enable_grant(conn, table, list_id)
 
                 removed = previous.selected - chosen
-                for table in GRANT_PREFIXES:
+                for table in CONTENT_GRANTS:
                     if removed and self._has_grants(conn, table):
                         conn.executemany(f"DELETE FROM {table} WHERE list_id=?",
                                          ((identity,) for identity in removed))
@@ -276,6 +277,9 @@ class DeviceSelection:
     def set_position_sync(self, list_id, enabled, *, revision, ticket):
         self._set_grant("position_grants", list_id, enabled, revision, ticket)
 
+    def chat_lists(self):
+        return self._grant_lists("chat_grants")
+
     def chat_grant(self, list_id, revision):
         return self._grant("chat_grants", list_id, revision)
 
@@ -314,7 +318,7 @@ class DeviceSelection:
         conn.execute(f"CREATE TABLE IF NOT EXISTS {table}("
                      "list_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL)")
         conn.execute(f"INSERT OR IGNORE INTO {table} VALUES(?,?)",
-                     (list_id, GRANT_PREFIXES[table] + str(uuid4())))
+                     (list_id, CONTENT_GRANTS[table] + str(uuid4())))
 
     def _set_grant(self, table, list_id, enabled, revision, ticket):
         """Choices are local to one account, device, database, list and content type."""

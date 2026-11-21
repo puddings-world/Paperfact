@@ -45,7 +45,7 @@ def offer_drive_sign_in(window, database):
     prompt.setInformativeText(
         "之後新增的清單也會自動同步。"
         "首次設定會將本機清單與私人 Drive 中的清單雙向同步，包"
-        "含 PDF、筆記與已儲存的講解。之後開啟 Paperfact"
+        "含 PDF、筆記、問答與已儲存的講解。之後開啟 Paperfact"
         " 會自動連線。你可以在同步設定排除個別清單。"
     )
     login = prompt.addButton("登入並同步", QMessageBox.ButtonRole.AcceptRole)
@@ -223,6 +223,11 @@ class DriveSyncDialog(QDialog):
         self.reading_toggle = QPushButton(self.tr("Sync reading status", "同步閱讀狀態"))
         self.reading_toggle.setCheckable(True)
         self.reading_toggle.clicked.connect(self._choose_reading)
+        self._chat_lists = set()
+        self.chat_toggle = QPushButton(self.tr("Sync Q&A", "同步問答"))
+        self.chat_toggle.setCheckable(True)
+        self.chat_toggle.clicked.connect(self._choose_chat)
+        layout.addWidget(self.chat_toggle)
         self._dive_lists = set()
         self.dive_toggle = QPushButton(self.tr("Sync saved explanations", "同步已儲存的深度講解"))
         self.dive_toggle.setCheckable(True)
@@ -398,7 +403,7 @@ class DriveSyncDialog(QDialog):
             self.background.stop()
         if kind not in {"login", "restore", "remember", "forget", "refresh", "toggle", "selection",
                         "enroll_selection", "sync_saved", "notes", "startup_on", "startup_off",
-                        "compare", "resolve", "pdfs", "dives", "reading", "positions"}:
+                        "compare", "resolve", "pdfs", "dives", "chat", "reading", "positions"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -477,6 +482,7 @@ class DriveSyncDialog(QDialog):
         self._shown_pdf_titles = None
         self._position_lists = set(library.get("position_lists", ()))
         self._reading_lists = set(library.get("reading_lists", ()))
+        self._chat_lists = set(library.get("chat_lists", ()))
         self._dive_lists = set(library.get("dive_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
@@ -559,6 +565,9 @@ class DriveSyncDialog(QDialog):
         self.reading_toggle.setVisible(expanded)
         self.reading_toggle.setChecked(list_id in self._reading_lists)
         self.reading_toggle.setEnabled(self.sync_lists.isEnabled())
+        self.chat_toggle.setVisible(expanded)
+        self.chat_toggle.setChecked(list_id in self._chat_lists)
+        self.chat_toggle.setEnabled(self.sync_lists.isEnabled())
         self.dive_toggle.setVisible(expanded)
         self.dive_toggle.setChecked(list_id in self._dive_lists)
         self.dive_toggle.setEnabled(self.sync_lists.isEnabled())
@@ -731,6 +740,25 @@ class DriveSyncDialog(QDialog):
         self._start("reading", lambda ticket, progress:
                     self.service.choose_reading_sync(key, checked, ticket, progress))
 
+    def _choose_chat(self, checked):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.chat_toggle.isEnabled():
+            self._list_buttons()
+            return
+        key = item.data(Qt.ItemDataRole.UserRole)
+        if checked and QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr("Sync saved questions and answers to your private Drive? "
+                    "Update both devices before exchanging messages.",
+                    "將此清單的問答同步到私人 Drive？請先更新兩台裝置。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            self._list_buttons()
+            return
+        self._start("chat", lambda ticket, progress:
+                    self.service.choose_chat_sync(key, checked, ticket, progress))
+
     def _choose_dives(self, checked):
         item = self.directory_lists.currentItem()
         if item is None or not self.dive_toggle.isEnabled():
@@ -868,10 +896,10 @@ class DriveSyncDialog(QDialog):
                 "when Paperfact is open, including after restart. Future lists sync automatically.",
                 "在這台裝置記住帳號。每次開啟會同步勾選的清單，後來新增的清單也會自動同步。",
             ) if enroll else "") + ("\n\n" + self.tr(
-                "Newly checked lists will sync papers, notes, original PDFs, saved explanations, "
+                "Newly checked lists will sync papers, notes, Q&A, PDFs, saved explanations, "
                 "reading status and page numbers. Update Paperfact on both devices before syncing "
                 "because older versions may not read the upgraded Drive library.",
-                "新勾選的清單會同步書目、筆記、原文 PDF、深度講解、閱讀狀態與頁碼。"
+                "新勾選的清單會同步書目、筆記、問答、PDF、深度講解、閱讀狀態與頁碼。"
                 "請先更新兩台裝置的 Paperfact，舊版可能無法讀取升級後的 Drive 清單。",
             ) if with_content else ""),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -1058,6 +1086,10 @@ class DriveSyncDialog(QDialog):
                 self._show_directory(result)
                 self.status.setText(self.tr("Reading status preference saved.",
                                             "已儲存閱讀狀態同步設定。"))
+            elif kind == "chat":
+                self._show_directory(result)
+                self.status.setText(self.tr("Conversation sync preference saved.",
+                                            "已儲存問答同步選擇。"))
             elif kind == "dives":
                 self._show_directory(result)
                 self.status.setText(self.tr("Explanation sync preference saved.",

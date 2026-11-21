@@ -1,0 +1,197 @@
+"""Exchange saved reader turns through the selected personal Drive bibliography."""
+
+import hashlib
+import json
+import sqlite3
+from contextlib import closing
+
+from paper_daily import research_chat
+from paper_daily.drive_list_history import DriveListChat
+from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_paper_baseline import published_bindings
+from paper_daily.drive_sync_files import MAX_INLINE, encode
+from paper_daily.native_primary_publication import _WORKSPACE_MARKERS
+from paper_daily.sync_content import content_id
+from paper_daily.workspace_service import _tables
+
+FIELDS = ("role", "body", "created_at", "page", "anchor", "exchange_id", "reply_to")
+
+
+def _versions(records):
+    latest, versions = {}, {}
+    for op in records:
+        data = op["payload"]
+        key = data["key"]
+        previous = latest.get(key)
+        if (op["structure_revision"] or op["base_revision"] !=
+                (previous["base_revision"] + 1 if previous else 0)
+                or op["depends_on"] != (previous["operation_id"] if previous else None)
+                or op["operation_id"] in versions or previous and (
+                    previous["parents"] != op["parents"]
+                    or previous["incarnation"] != op["incarnation"])):
+            raise ListReviewRequired("Conversation history needs reconciliation")
+        latest[key] = op
+        versions[op["operation_id"]] = op
+    return latest, versions
+
+
+def _operation(history, payload, previous):
+    scope, key = payload["scope"], payload["key"]
+    identity = content_id(scope, "chat", key)
+    op = dict(version=2, workspace_id=history.store.library_id, device_id=history.store.context,
+              entity_type="research_content", entity_id=identity, incarnation=identity,
+              action="put", structure_revision=0, depends_on=previous and previous["operation_id"],
+              base_revision=previous["base_revision"] + 1 if previous else 0, payload=payload,
+              parents=[dict(**scope, incarnation=history.paper_parents[scope["id"]])])
+    op["operation_id"] = hashlib.sha256(encode(op, MAX_INLINE)).hexdigest()
+    return op
+
+
+def _local_turns(conn, list_id, papers):
+    selection = (" FROM chat c JOIN list_papers m ON c.paper_id=m.paper_id "
+                 "WHERE m.list_id=?")
+    size, count = conn.execute("SELECT sum(length(CAST(c.body AS BLOB)) + "
+                               "coalesce(length(CAST(c.anchor AS BLOB)),0)),count(*)" + selection,
+                               (list_id,)).fetchone()
+    if (size or 0) > 8 * 1024**2 or count > 10000:
+        raise ListReviewRequired("Conversation exceeds the supported history budget")
+    result = {}
+    if not count or "research_chat_links" not in _tables(conn):
+        return result
+    for row in conn.execute(
+        "SELECT c.id,c.paper_id,c.role,c.body,c.created_at,c.page,c.anchor,l.exchange_id,"
+        "l.reply_to,l.source_hash,l.message_id FROM chat c JOIN research_chat_links l "
+        "ON l.local_id=c.id JOIN list_papers m ON c.paper_id=m.paper_id "
+        "WHERE m.list_id=? ORDER BY c.id", (list_id,)
+    ):
+        idx, paper, *fields, source, key = row
+        if paper not in papers:
+            raise ListReviewRequired("Refresh the bibliography before syncing conversations")
+        data = dict(zip(FIELDS, fields, strict=True))
+        data["anchor"] = json.loads(data["anchor"]) if data["anchor"] is not None else None
+        result[key] = idx, dict(scope=dict(kind="paper", id=papers[paper]), feature="chat",
+                                key=key, source_document_hash=source, data=data)
+    return result
+
+
+def _receive(conn, paper, payload, local):
+    data = payload["data"]
+    if "exchange_id" not in data:
+        raise ListReviewRequired("Conversation message has no portable exchange identity")
+    fields = dict(data, anchor=json.dumps(data["anchor"], ensure_ascii=False)
+                  if data["anchor"] is not None else None)
+    if local is None:
+        research_chat.import_shared_turn(conn, dict(fields, paper_id=paper,
+                                         message_id=payload["key"],
+                                         source_hash=payload["source_document_hash"]))
+    else:
+        prior = local[1]
+        if prior != dict(payload, data=dict(data, body=prior["data"]["body"])):
+            raise ListReviewRequired("Conversation identity or source changed; review both copies")
+        conn.execute("UPDATE chat SET body=? WHERE id=? AND paper_id=?",
+                     (data["body"], local[0], paper))
+
+
+def has_local_messages(store, list_id):
+    from paper_daily.workspace_service import _read
+
+    with _read(store.workspace.path) as conn:
+        if "research_chat_links" not in _tables(conn):
+            return False
+        return conn.execute(
+            "SELECT 1 FROM list_papers m JOIN chat c ON c.paper_id=m.paper_id "
+            "JOIN research_chat_links l ON l.local_id=c.id WHERE m.list_id=? LIMIT 1", (list_id,)
+        ).fetchone() is not None
+
+
+def exchange_chat(directory, store, list_id, revision, ticket):
+    history = DriveListChat(directory, store, list_id, revision=revision)
+    head, records = history.changes(None, revision=revision)
+    latest, versions = _versions(records)
+    pending, conflicts = [], 0
+    with closing(sqlite3.connect(store.workspace.path.as_uri() + "?mode=rw", uri=True,
+                                 timeout=0.5)) as conn, conn:
+        with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+            settings.execute("BEGIN IMMEDIATE")
+            conn.execute("BEGIN IMMEDIATE")
+            history._check(revision)
+            if _tables(conn) & _WORKSPACE_MARKERS:
+                raise ListReviewRequired("Use the enrolled workspace for these conversations")
+            mapping = published_bindings(settings, history.active_papers)
+            local = _local_turns(conn, list_id, {v: k for k, v in mapping.items()})
+            if not local and not latest:
+                return 0
+            conn.execute("CREATE TABLE IF NOT EXISTS drive_chat_bases(context,list_id,message,"
+                         "op,PRIMARY KEY(context,list_id,message))")
+            scope = (store.context, list_id)
+            bases = dict(conn.execute("SELECT message,op FROM drive_chat_bases WHERE context=? "
+                                      "AND list_id=?", scope))
+            for key in dict.fromkeys([*latest, *local, *bases]):
+                ticket.check()
+                turn, remote = local.get(key), latest.get(key)
+                common = versions.get(bases.get(key))
+                if bases.get(key) and (not common or common["payload"]["key"] != key):
+                    raise ListReviewRequired("Accepted conversation version is missing")
+                value = turn[1] if turn else None
+                if remote and remote["payload"]["scope"]["id"] not in history.active_papers:
+                    continue
+                if remote and remote["payload"] != value:
+                    if not turn and conn.execute("SELECT 1 FROM drive_chat_bases WHERE context=? "
+                                                 "AND message=? LIMIT 1",
+                                                 (store.context, key)).fetchone():
+                        conflicts += 1
+                        continue
+                    if turn and (not common or value != common["payload"]):
+                        if not common or remote != common:
+                            conflicts += 1
+                            continue
+                    else:
+                        paper = mapping.get(remote["payload"]["scope"]["id"])
+                        if not paper or not conn.execute(
+                            "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?",
+                            (list_id, paper)
+                        ).fetchone():
+                            raise ListReviewRequired("Conversation paper is missing")
+                        _receive(conn, paper, remote["payload"], turn)
+                        value = remote["payload"]
+                if value is not None and (not remote or remote["payload"] != value):
+                    pending.append(_operation(history, value, remote))
+                if remote or turn:
+                    anchor = remote["operation_id"] if remote else None
+                    if key not in bases or bases[key] != anchor:
+                        conn.execute("INSERT OR REPLACE INTO drive_chat_bases VALUES(?,?,?,?)",
+                                     (*scope, key, anchor))
+            version = conn.execute("PRAGMA data_version").fetchone()
+            ticket.checkpoint(conn.commit)
+
+        def check_source():
+            ticket.check()
+            if conn.execute("PRAGMA data_version").fetchone() != version:
+                raise ListReviewRequired("Conversation changed during upload; retry")
+
+        history.check_source = check_source
+        batches, batch, size = [], [], 0
+        for op in pending:
+            length = len(encode(op, MAX_INLINE)) + 1
+            if batch and (size + length > MAX_INLINE - 2048
+                          or len(batch) >= history.max_operations):
+                batches.append(batch)
+                batch, size = [], 0
+            batch.append(op)
+            size += length
+        if batch:
+            batches.append(batch)
+        pages = (head.generation if head else 0) + len(batches)
+        if batches and (pages > history.max_pages or
+                        sum(len(encode(op, MAX_INLINE)) + 1 for op in records + pending)
+                        + pages * 2048 > history.max_bytes):
+            raise ListReviewRequired("Conversation exceeds the readable Drive history budget")
+        for batch in batches:
+            head = history.append(head, batch, revision=revision)
+            conn.execute("BEGIN IMMEDIATE")
+            history._check(revision)
+            conn.executemany("UPDATE drive_chat_bases SET op=? WHERE context=? AND list_id=? "
+                             "AND message=?", [(op["operation_id"], *scope, op["payload"]["key"])
+                                               for op in batch])
+            ticket.checkpoint(conn.commit)
+    return conflicts

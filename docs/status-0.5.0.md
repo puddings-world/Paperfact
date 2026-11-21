@@ -64,10 +64,14 @@ the reply from another. Directory format v12 appears only when a conversation
 head is published. Older readers stop on this format. A concurrent rename must
 refresh before retrying and preserves the latest message-history head.
 
-The ordinary desktop sync cycle still needs to capture and project reader chat,
-reconcile offline edits and deletions, and refresh the open conversation. The
-transport test uses synthetic operations and a simulated Drive. Continuing a
-question in the installed Windows and Mac apps remains an acceptance gate.
+The ordinary desktop sync cycle transfers linked reader questions, answers and
+one-sided text edits. A two-database test on Windows uses the real reader schema
+and simulated Drive. It verifies a reply from the second database, a later edit,
+conflicting offline edits and preservation of a local removal. The reader offers
+to reload externally changed Q&A. Older unlinked history still needs a list
+package. In-app resolution of divergent edits and propagation of confirmed
+deletions remain open. Continuing a conversation in the installed Windows and
+Mac apps through the user's Drive remains an acceptance gate.
 
 ## Previous native deliverable (before personal Drive)
 
