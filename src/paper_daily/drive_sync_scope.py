@@ -60,6 +60,7 @@ def prepare_selected(database, list_ids, destination, ticket, progress):
         or any(not isinstance(value, str) or not value or len(value) > 128 for value in ids)
     ):
         raise ValueError("Choose between one and 100 research lists")
+    ids.sort()  # Cached package indexes follow the same order as the selection receipt.
     database, destination = Path(database), Path(destination)
     if database.name != "papers.db":
         raise ValueError("Select a Paperfact papers.db workspace")
@@ -88,7 +89,25 @@ def prepare_selected(database, list_ids, destination, ticket, progress):
     # Peer packages deliberately omit personal queue/history. Keep those local
     # personal records for the selected papers before first-sync enrollment.
     with _read(database) as source, closing(sqlite3.connect(intake)) as target:
-        papers = {row[0] for row in target.execute("SELECT id FROM papers")}
+        if {row[0] for row in target.execute("SELECT id FROM lists")} != set(ids):
+            raise ValueError("Staged lists differ from this selection; prepare a fresh copy")
+        marks = ",".join("?" for _ in ids)
+        members = source.execute(
+            "SELECT state,delivered_at,read_at,list_id,paper_id FROM list_papers "
+            f"WHERE list_id IN ({marks}) ORDER BY list_id,paper_id", ids
+        ).fetchall()
+        staged = target.execute(
+            "SELECT list_id,paper_id FROM list_papers ORDER BY list_id,paper_id"
+        ).fetchall()
+        if staged != [row[3:] for row in members]:
+            raise ValueError("Selected membership changed; prepare a fresh copy")
+        ticket.check()
+        target.executemany(
+            "UPDATE list_papers SET state=?,delivered_at=?,read_at=? "
+            "WHERE list_id=? AND paper_id=?",
+            members,
+        )
+        papers = sorted({row[4] for row in members})
         for table in ("queue", "reading_log"):
             if table not in _tables(source):
                 continue
@@ -96,14 +115,20 @@ def prepare_selected(database, list_ids, destination, ticket, progress):
             received = [row[1] for row in target.execute(f"PRAGMA table_info({table})")]
             if columns != received or "paper_id" not in columns:
                 raise ValueError("Selected reading state needs a compatible workspace schema")
+            if target.execute(
+                f"SELECT 1 FROM {table} r WHERE NOT EXISTS (SELECT 1 FROM list_papers lp "
+                "WHERE lp.paper_id=r.paper_id) LIMIT 1"
+            ).fetchone():
+                raise ValueError("Out-of-scope staged history; prepare a fresh copy")
             for offset in range(0, len(papers), 400):
-                batch = sorted(papers)[offset : offset + 400]
+                ticket.check()
+                batch = papers[offset : offset + 400]
                 slots = ",".join("?" for _ in batch)
                 rows = source.execute(f"SELECT * FROM {table} WHERE paper_id IN ({slots})", batch)
                 values = ",".join("?" for _ in columns)
                 target.executemany(
                     f"INSERT OR IGNORE INTO {table} VALUES({values})", [tuple(row) for row in rows]
                 )
-        target.commit()
+        ticket.checkpoint(target.commit)
     progress(dict(stage="selected_lists", completed=len(ids), total=len(ids)))
     return intake

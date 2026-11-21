@@ -151,7 +151,9 @@ Public v0.5 release and installed-device acceptance are separate gates.
 
 The desktop checklist scopes first enrollment to selected lists, using the existing
 offline package exporter/importer in separately bound child processes. Selected
-originals and personal reading history are retained; unrelated catalog rows and
+originals, per-list read status and timestamps travel with the selected memberships.
+Citation endpoints carry bibliographic metadata. Only selected member papers carry
+personal queue entries and reading history. Unrelated catalog rows and
 credentials are excluded. Selection creates a separate workspace; it is not a
 live filter on the original database. Installed builds remember that workspace
 in device-local `active-workspace.json`, pinned to the database file identity.
