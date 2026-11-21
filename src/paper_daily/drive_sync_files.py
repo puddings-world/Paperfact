@@ -22,9 +22,12 @@ FORMAT = "paperfact.drive-head.v1"
 MAX_JSON = 1024 * 1024
 MAX_HEAD = 8192
 MAX_INLINE = 4 * 1024**2
+CACHE_ENTRY_BYTES = 256 * 1024
+CACHE_ENTRIES = 16
 _ID = re.compile(r"[A-Za-z0-9_-]{1,256}")
 _HASH = re.compile(r"[0-9a-f]{64}")
-_FIELDS = "id,name,mimeType,parents,ownedByMe,shared,appProperties,size,sha256Checksum,version"
+_FIELDS = ("id,name,mimeType,parents,ownedByMe,shared,trashed,"
+           "appProperties,size,sha256Checksum,version")
 
 
 class DriveChanged(ConnectionError):
@@ -135,11 +138,15 @@ class DriveFiles:
         self.client = client or httpx.Client(timeout=20, trust_env=False, follow_redirects=False)
         self._owned = client is None
         self._heads = {}
+        self._verified_bytes = {}
+        self._bytes_lock = Lock()
         self.membership_cache = {}
         self.reading_cache = {}
         self.membership_lock = Lock()
 
     def close(self):
+        with self._bytes_lock:
+            self._verified_bytes.clear()
         with self.membership_lock:
             self.membership_cache.clear()
             self.reading_cache.clear()
@@ -237,6 +244,8 @@ class DriveFiles:
                                       params={"fields": _FIELDS}))
         if value.get("id") != file_id or value.get("ownedByMe") is not True:
             raise PermissionError("This is not the selected account's Drive file")
+        if value.get("trashed") is True:
+            raise DriveMissing("Drive file was moved to trash")
         if value.get("shared") is not False:
             raise PermissionError("Personal sync requires private Drive files")
         return value
@@ -371,9 +380,20 @@ class DriveFiles:
         value = self.owned(file_id, workspace_id, role, parent=parent)
         if value.get("sha256Checksum") != digest or value.get("size") != str(size):
             raise ValueError("Drive object metadata differs from its captured reference")
+        key = (workspace_id, parent, role, file_id, digest, size)
+        if size <= CACHE_ENTRY_BYTES:
+            with self._bytes_lock:
+                cached = self._verified_bytes.get(key)
+            if cached is not None:
+                return cached
         raw = self.request("GET", FILES + "/" + file_id, params={"alt": "media"}).content
         if len(raw) != size or hashlib.sha256(raw).hexdigest() != digest:
             raise ValueError("Drive object bytes failed verification")
+        if size <= CACHE_ENTRY_BYTES:
+            with self._bytes_lock:
+                if key not in self._verified_bytes and len(self._verified_bytes) >= CACHE_ENTRIES:
+                    del self._verified_bytes[next(iter(self._verified_bytes))]
+                self._verified_bytes[key] = raw
         return raw
 
 

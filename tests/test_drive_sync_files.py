@@ -26,7 +26,7 @@ class Cloud:
         self.description = head_body(dict(format=FORMAT, workspace_id="workspace",
                                           generation=0, commit=None)).decode()
         self.revision = 1
-        self.shared = False
+        self.shared = self.trashed = False
         self.media = b"research operation"
         self.requests = []
 
@@ -49,6 +49,7 @@ class Cloud:
             return httpx.Response(200, content=self.media)
         role = {"folder": "workspace", "head": "head", "object": "commit"}[file_id]
         metadata = {"id": file_id, "ownedByMe": True, "shared": self.shared,
+                    "trashed": self.trashed,
                     "appProperties": {"pfWorkspace": "workspace", "pfRole": role, "pfVersion": "1"}}
         if role != "workspace":
             metadata["parents"] = ["folder"]
@@ -115,6 +116,39 @@ def test_immutable_download_checks_location_metadata_and_actual_bytes():
                 transport=httpx.MockTransport(corrupt))) as bad,
               pytest.raises(ValueError, match="verification")):
             bad.read_small(captured, "folder", "workspace")
+
+
+def test_repeated_immutable_reads_check_live_access_without_downloading_again():
+    cloud = Cloud()
+    captured = reference()
+    with files(cloud) as drive:
+        for _ in range(2):
+            assert drive.read_small(captured, "folder", "workspace") == cloud.media
+        assert [r.url.params.get("alt") for r in cloud.requests] == [None, "media", None]
+        cloud.shared = True
+        with pytest.raises(PermissionError):
+            drive.read_small(captured, "folder", "workspace")
+        cloud.shared, cloud.trashed = False, True
+        with pytest.raises(DriveMissing):
+            drive.read_small(captured, "folder", "workspace")
+        cloud.trashed = False
+        cloud.media = b"modified"
+        with pytest.raises(ValueError, match="metadata"):
+            drive.read_small(captured, "folder", "workspace")
+        assert drive.read_small(reference(cloud.media), "folder", "workspace") == cloud.media
+
+
+def test_verified_bytes_bound_eviction_and_large_objects(monkeypatch):
+    from paper_daily import drive_sync_files
+
+    monkeypatch.setattr(drive_sync_files, "CACHE_ENTRIES", 2)
+    monkeypatch.setattr(drive_sync_files, "CACHE_ENTRY_BYTES", 16)
+    cloud = Cloud()
+    with files(cloud) as drive:
+        for raw in (b"a", b"b", b"c", b"b", b"a", b"x" * 17, b"x" * 17):
+            cloud.media = raw
+            assert drive.read_small(reference(raw), "folder", "workspace") == raw
+        assert sum(r.url.params.get("alt") == "media" for r in cloud.requests) == 6
 
 
 def test_drive_rate_limits_retry_without_treating_access_denials_as_transient():
