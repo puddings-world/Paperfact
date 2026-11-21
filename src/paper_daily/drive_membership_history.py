@@ -29,7 +29,8 @@ class DriveMembershipChanges(DriveListHistory):
         super().__init__(directory, store, list_id)
         if not directory.membership_changes:
             raise ValueError("Enable membership change support before reading this history")
-        self.paper_head, records, _ = DriveListPapers(directory, store, list_id).bibliography(
+        papers = DriveListPapers(directory, store, list_id)
+        self.paper_head, records, self.boundaries = papers.bibliography(
             revision)
         self.creations = {op["entity_id"]: op for op in records[1::2]}
         if len(self.creations) * 2 != len(records):

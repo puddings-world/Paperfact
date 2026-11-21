@@ -383,6 +383,42 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                                     (operations[0]["operation_id"],)]
     assert fork.objects == before_fresh
 
+    # The originating device may lose the reply after Drive accepts its deletion.
+    from paper_daily.drive_membership_intent import remove_selected
+
+    origin_cloud = copy.deepcopy(fork)
+    origin_dir = DriveDirectory(authority(origin_cloud, tmp_path / "v9-origin").files,
+                                reader.directory.folder, reader.directory.head,
+                                reader.directory.library_id, membership_changes=True)
+    origin_history = DriveMembershipChanges(origin_dir, fresh, "return", revision=1)
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        local, = conn.execute("SELECT id FROM papers WHERE title='Peer new'").fetchone()
+        assert remove_selected(conn, "return", [local]) == 1
+    with pytest.raises(MembershipRemovalReview) as prepared:
+        publish_initial(origin_dir, fresh, "return", 1, Ticket(), append_new=True)
+    [own_removal] = prepared.value.operations
+    origin_history.append(commit, [own_removal], revision=1)
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        saved_head, = conn.execute("SELECT observed_head FROM drive_membership_removals").fetchone()
+        conn.execute("UPDATE drive_membership_removals SET observed_head=?", (b"unrelated",))
+    with pytest.raises(ListReviewRequired, match="both versions retained"):
+        exchange_bibliography(origin_dir, fresh, "return", 1, Ticket())
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        assert not conn.execute("SELECT applied FROM drive_membership_watches WHERE member=? "
+                                "AND applied IS NOT NULL", (own_removal["entity_id"],)).fetchone()
+        conn.execute("UPDATE drive_membership_removals SET observed_head=?", (saved_head,))
+    accepted = dict(origin_cloud.objects)
+    for _ in range(2):
+        exchange_bibliography(origin_dir, fresh, "return", 1, Ticket())
+        with closing(sqlite3.connect(fresh_db)) as conn:
+            assert not conn.execute("SELECT 1 FROM drive_membership_removals").fetchone()
+            assert not conn.execute("SELECT 1 FROM list_papers WHERE list_id='return' "
+                                    "AND paper_id=?", (local,)).fetchone()
+            assert conn.execute("SELECT applied FROM drive_membership_watches WHERE "
+                                "member=?", (own_removal["entity_id"],)).fetchone() == (
+                                    own_removal["operation_id"],)
+    assert origin_cloud.objects == accepted
+
     from paper_daily.drive_sync_files import decode, encode
 
     unrelated_head = encode({**decode(anchor), "sha256": "0" * 64})

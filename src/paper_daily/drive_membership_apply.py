@@ -68,7 +68,7 @@ def receive_membership_changes(history, revision, ticket):
                 "FROM drive_membership_watches "
                 "WHERE context=? AND list_id=?", (store.context, list_id))}
             applied = 0
-            for member, creation in history.creations.items():
+            for index, (member, creation) in enumerate(history.creations.items()):
                 ticket.check()
                 payload = creation["payload"]
                 local = bindings.get(payload["paper_id"])
@@ -85,6 +85,28 @@ def receive_membership_changes(history, revision, ticket):
                 row = conn.execute(
                     "SELECT position,citation,added_at,state,read_at,delivered_at FROM list_papers "
                     "WHERE list_id=? AND paper_id=?", (list_id, local)).fetchone()
+                if (not row and removal and removal["device_id"] == store.context
+                        and "drive_membership_removals" in tables):
+                    intents = conn.execute(
+                        "SELECT action_id,observed_head FROM drive_membership_removals "
+                        "WHERE context=? AND list_id=? AND local_id=? AND added_at=? "
+                        "AND action_id GLOB 'v2-*'",
+                        (store.context, list_id, local, payload["added_at"]),
+                    ).fetchall()
+                    end = history.boundaries.get(intents[0][1], 0) if len(intents) == 1 else 0
+                    if end > 2 * index + 1:
+                        conn.execute(
+                            "INSERT INTO drive_membership_watches "
+                            "(context,list_id,member,creation,local_id,position,live,applied) "
+                            "VALUES(?,?,?,?,?,-1,0,?) ON CONFLICT(context,list_id,member) "
+                            "DO UPDATE SET live=0,applied=excluded.applied",
+                            (store.context, list_id, member, creation["operation_id"], local,
+                             removal["operation_id"]),
+                        )
+                        conn.execute("DELETE FROM drive_membership_removals WHERE context=? "
+                                     "AND list_id=? AND action_id=?",
+                                     (store.context, list_id, intents[0][0]))
+                        continue
                 if not row or row[1:3] != (payload["citation"], payload["added_at"]):
                     raise ListReviewRequired("Local membership differs; both versions retained")
                 if not removal:
