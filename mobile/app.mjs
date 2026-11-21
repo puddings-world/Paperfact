@@ -282,7 +282,7 @@ function render() {
   });
   if(paper) {
     main.append(
-    button('← ' + t('back'), () => select(view.list), {
+    button('← ' + t('back'), returnToList, {
       id: 'back-to-list',
       class: 'quiet'
     }),
@@ -397,11 +397,35 @@ function render() {
     }
     if (selected.length) main.append(el('p', {class:'subtitle', 'data-offline-summary':''},
       t('pdfsOnDevice') + ' · ' + localPdfs.size + '/' + selected.length));
-    selected.forEach(({entry, owner, member}, index) => {
+    const listKey = collection?.id ?? null;
+    const pageSize = 50;
+    const lastPage = Math.max(0, Math.ceil(selected.length / pageSize) - 1);
+    if (view.returnPaper) {
+      const row = selected.findIndex(item => item.entry.id === view.returnPaper);
+      if (row >= 0) view.listPages.set(listKey, Math.floor(row / pageSize));
+      view.returnPaper = null;
+    }
+    const page = Math.min(view.listPages.get(listKey) ?? 0, lastPage);
+    view.listPages.set(listKey, page);
+    const start = page * pageSize;
+    function changePage(next) {
+      view.listPages.set(listKey, next);
+      render();
+      document.querySelector('.paper-card')?.focus();
+    }
+    const pageControls = suffix => el('nav', {class:'toolbar', 'aria-label':t('paperPages')},
+      button(t('previousPapers'), () => changePage(page - 1),
+        {id:'previous-papers' + suffix, disabled:page === 0 ? '' : null}),
+      el('span', {'aria-live':'polite'}, (start + 1) + '–' +
+        Math.min(start + pageSize, selected.length) + ' / ' + selected.length),
+      button(t('nextPapers'), () => changePage(page + 1),
+        {id:'next-papers' + suffix, disabled:page === lastPage ? '' : null}));
+    if (lastPage > 0) main.append(pageControls(''));
+    selected.slice(start, start + pageSize).forEach(({entry, owner, member}, index) => {
       main.append(button(
       [el('span', {
         class: 'paper-number'
-      }, String(index + 1).padStart(2, '0')), el(
+      }, String(start + index + 1).padStart(2, '0')), el(
       'div',
       {},
       el('div', {
@@ -413,12 +437,13 @@ function render() {
       ), el('span', {
         class: 'pill'
       }, t(member?.state === 'read' ? 'read': 'pendingLabel'))],
-      () => select(owner?.id ?? null, entry.id),
+      () => select(owner?.id ?? null, entry.id, {list:listKey, paper:entry.id}),
       {
-        class: 'paper-card', 'data-pdf-local': String(localPdfs.has(entry.id))
+        class: 'paper-card', id:'paper-row-' + entry.id, 'data-pdf-local': String(localPdfs.has(entry.id))
       }
       ));
     });
+    if (lastPage > 0) main.append(pageControls('-bottom'));
     main.append(el('footer', {}, demo ? t('demoHelp'): t('lastLocal')));
   }
   app.replaceChildren(header, status, el('div', {
@@ -435,7 +460,14 @@ function render() {
     }
   }
 }
-function select(list, paper = null) {
+function returnToList() {
+  const origin = view.listOrigin;
+  view.returnPaper = origin?.paper;
+  select(origin ? origin.list : view.list);
+  if (origin) document.getElementById('paper-row-' + origin.paper)?.focus();
+}
+function select(list, paper = null, origin = null) {
+  view.listOrigin = origin;
   clearPdf();
   view.select(list, paper);
   void store.update(s => {

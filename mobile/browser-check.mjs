@@ -272,6 +272,36 @@ async function offlineReadingMainHook() {
       document.querySelector('[data-offline-summary]')?.textContent.includes('1/')`,
       'saved PDF on the offline list');
   const reopenStorageRequests=await evaluate('window.__storageRequests');
+  // Populate the isolated reader with a large offline catalog, preserving its original PDF.
+  await evaluate(`(async()=>{
+    const {IndexedStore}=await import('./store.mjs');
+    const db=await IndexedStore.open('demo-workspace','demo-phone');
+    try {await db.update(s=>{
+      const original=Object.values(s.entities).find(row=>row.operation.entity_type==='paper');
+      for(let i=1;i<5000;i++) {
+        const id='catalog-'+i,key='paper/'+id;
+        s.entities[key]={...original,created:i+100,operation:{...original.operation,
+          entity_id:id,operation_id:id,incarnation:id,payload:{...original.operation.payload,title:id}}};
+        s.graph[key]={active:true,incarnation:id,parents:[],structure_revision:0};
+      }
+      s.selection={list:null,paper:null};
+    });} finally {db.close();}
+  })()`);
+  await send('Page.reload');
+  await wait("document.querySelector('[data-offline-summary]')?.textContent.includes('1/5000')",
+    'large offline catalog');
+  await evaluate("document.querySelector('#next-papers-bottom').click()");
+  const selectedRow=await evaluate(`(()=>{
+    const cards=document.querySelectorAll('.paper-card');
+    if(cards.length!==50||cards[0].querySelector('.paper-number').textContent!=='51')
+      throw Error('Unbounded or unordered mobile list');
+    const row=cards[24];row.scrollIntoView();row.click();return row.id;
+  })()`);
+  await wait("!!document.querySelector('#back-to-list')",'paper from second page');
+  await evaluate("document.querySelector('#back-to-list').click()");
+  await wait('document.activeElement.id==='+JSON.stringify(selectedRow),'original paper row');
+  await evaluate("document.querySelector('#previous-papers').click()");
+  await wait("document.querySelector('#previous-papers')?.disabled === true",'first page boundary');
   if(reopenStorageRequests!==0)throw Error('Offline reopening requested storage permission');
   const result={status:'passed',journey:'offline-reading',artifact:process.env.PAPERFACT_TEST_ARTIFACT_ID??null,before,persisted,after,storageProtection,reopenStorageRequests,viewports,errors:browserErrors,physical_device_verified:false};
   if(output)await writeFile(join(output,'offline-reading-result.json'),JSON.stringify(result,null,2)+'\n');

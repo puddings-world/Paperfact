@@ -24,6 +24,8 @@ export function readingListRows(papers, lists, collection) {
 export class ReaderView {
   constructor() {
     this.list = null;
+    this.listPages = new Map();
+    this.listOrigin = null;
     this.paper = null;
     this.tab = 'overview';
     this.note = null;
