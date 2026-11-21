@@ -88,7 +88,8 @@ class DriveDirectory:
         merged = {item.id: item for item in before.lists}
         for item in updates.lists:
             previous = merged.get(item.id)
-            for field in ("head", "papers_head", "notes_head", "originals_head", "dives_head"):
+            for field in ("head", "papers_head", "notes_head", "originals_head", "dives_head",
+                     "reading_head"):
                 prior = getattr(previous, field) if previous else None
                 current = getattr(item, field)
                 if prior and current != prior:

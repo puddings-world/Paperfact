@@ -477,3 +477,19 @@ copies it already downloaded; describe revocation accordingly.
 
 These are architecture candidates, not harvested/validated skill rules. Recheck
 external API support when selecting implementations and record real-device results.
+
+
+### Selected-list reading progress
+
+The native Drive transport accepts version-2 reading-state puts in a separate
+history for each selected list. Each record must match the verified list, paper
+and membership incarnations. Each device must grant reading progress separately.
+A directory first uses v7 when it publishes a reading head. Directories without
+one keep their existing canonical format. Older clients cannot open a v7 directory.
+
+The transport fixture exchanges a read marker for a paper in two lists, checks
+the other list stays untouched and revokes the receiving device's grant.
+The ordinary reader does not yet publish or apply these records. Connecting
+the reader requires a common per-membership receipt, safe handling of divergent
+offline edits, a visible device opt-in and installed two-device acceptance.
+List recency and PDF page position are separate from this state.

@@ -259,3 +259,42 @@ class DriveListNotes(DriveListHistory):
 
     def _advance(self, entry, head, records):
         return replace(entry, notes_head=head)
+
+
+class DriveListReading(DriveListHistory):
+    """Reading progress belongs to the observed membership, including its lifetime."""
+
+    format = "paperfact.list-reading-history.v1"
+    head_field = "reading_head"
+
+    def __init__(self, directory, store, list_id, *, revision):
+        super().__init__(directory, store, list_id)
+        self.revision = revision
+        self.grant = store.reading_grant(list_id, revision)
+        self._check(revision)
+        _, records = DriveListPapers(directory, store, list_id).changes(None, revision=revision)
+        self.parents = {}
+        for member in records[1::2]:
+            identity = member["entity_id"]
+            if identity in self.parents:
+                raise ValueError("Ambiguous membership history for reading progress")
+            self.parents[identity] = {
+                **{p["kind"]: p for p in member["parents"]},
+                "membership": {"kind": "membership", "id": identity,
+                               "incarnation": member["incarnation"]},
+            }
+
+    def _check(self, revision):
+        if (not self.grant or revision != self.revision
+                or self.store.reading_grant(self.list_id, revision) != self.grant):
+            raise PermissionError("Enable reading progress sync for this list on this device")
+
+    def _validate_scope(self, records):
+        for op in records:
+            if (op["version"] != 2 or op["entity_type"] != "reading_state"
+                    or op["action"] != "put" or self.parents.get(op["entity_id"])
+                    != {p["kind"]: p for p in op["parents"]}):
+                raise ValueError("Reading progress requires the selected membership parents")
+
+    def _advance(self, entry, head, records):
+        return replace(entry, reading_head=head)

@@ -452,3 +452,48 @@ def test_note_history_uses_verified_members_and_preserves_other_streams(tmp_path
         receiver.changes(accepted, revision=1)
     current = stores[1].save(renamed, ["a"], expected_revision=2)
     assert stores[1].note_grant("a", current.revision) is None
+
+
+def test_reading_progress_is_separate_for_each_membership_and_device(tmp_path):
+    from test_library_selection import database, selection
+    from test_sync_graph_research import PAPER, STAMP, membership, metadata, operation, parent
+
+    from paper_daily.drive_list_history import DriveListPapers, DriveListReading
+    from paper_daily.workspace_service import Ticket
+
+    cloud = Cloud()
+    devices = [authority(cloud, tmp_path / label).files for label in ("win", "mac")]
+    folder, head = devices[0].new_ids(2)
+    dirs = [DriveDirectory(files, folder, head, "personal") for files in devices]
+    first = dirs[0].initialize("Personal library")
+    catalog = dirs[0].upsert(first, [ListEntry(k, k, True) for k in ("a", "b")]).directory
+    stores = [selection(database(tmp_path / label), tmp_path / (label + "-settings"),
+                        library_id="personal") for label in ("desktop", "laptop")]
+    for store in stores:
+        store.save(catalog, ["a", "b"], expected_revision=0)
+    for key in ("a", "b"):
+        paper = dict(operation("paper", PAPER, metadata()), workspace_id="personal")
+        member = dict(membership(key), workspace_id="personal")
+        DriveListPapers(dirs[0], stores[0], key).append(None, [paper, member], revision=1)
+    with pytest.raises(PermissionError):
+        DriveListReading(dirs[1], stores[1], "a", revision=1)
+    for store in stores:
+        store.set_reading_sync("a", True, revision=1, ticket=Ticket())
+    win, mac = [DriveListReading(d, s, "a", revision=1) for d, s in zip(dirs, stores, strict=True)]
+    member = membership("a")
+    progress = dict(operation(
+        "reading_state", member["entity_id"],
+        dict(list_id="a", paper_id=PAPER, state="read", delivered_at=None, read_at=STAMP),
+        parents=[*member["parents"], parent("membership", member["entity_id"])],
+    ), workspace_id="personal")
+    observed = win.append(None, [progress], revision=1)
+    assert mac.changes(None, revision=1) == (observed, [progress])
+    stores[1].set_reading_sync("b", True, revision=1, ticket=Ticket())
+    other = DriveListReading(dirs[1], stores[1], "b", revision=1)
+    assert other.changes(None, revision=1) == (None, [])
+    with pytest.raises(ValueError, match="selected membership"):
+        other.append(None, [progress], revision=1)
+    stores[1].set_reading_sync("a", False, revision=1, ticket=Ticket())
+    with pytest.raises(PermissionError):
+        mac.changes(None, revision=1)
+    assert win.changes(None, revision=1) == (observed, [progress])

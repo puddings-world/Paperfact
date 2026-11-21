@@ -170,7 +170,7 @@ class DeviceSelection:
                     )
 
                 removed = previous.selected - chosen
-                for table in ("note_grants", "pdf_grants", "dive_grants"):
+                for table in ("note_grants", "pdf_grants", "dive_grants", "reading_grants"):
                     if removed and self._has_grants(conn, table):
                         conn.executemany(f"DELETE FROM {table} WHERE list_id=?",
                                          ((identity,) for identity in removed))
@@ -220,6 +220,12 @@ class DeviceSelection:
 
     def dive_grant(self, list_id, revision):
         return self._grant("dive_grants", list_id, revision)
+
+    def reading_grant(self, list_id, revision):
+        return self._grant("reading_grants", list_id, revision)
+
+    def set_reading_sync(self, list_id, enabled, *, revision, ticket):
+        self._set_grant("reading_grants", "reading-v1:", list_id, enabled, revision, ticket)
 
     def pdf_grant(self, list_id, revision):
         return self._grant("pdf_grants", list_id, revision)
