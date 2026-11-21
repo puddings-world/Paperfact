@@ -270,19 +270,24 @@ await check('Lineage exact IndexedDB reopen, real read-only cards and source-lif
   assert(rejected,'stale original was accepted');
   assert(JSON.stringify(await store.read())===JSON.stringify(saved),'failed page changed durable state');
   const frame=document.querySelector('#reader');
-  const live=frame.contentDocument;live.querySelector('#tab-overview').click();
+  async function openOverview(){
+    const doc=frame.contentDocument;
+    const row=()=>doc.getElementById('paper-row-'+PAPER);
+    await until(()=>doc.querySelector('#tab-overview:not(:disabled)') || (row() && !row().disabled))
+      .catch(error=>{throw Error(error.message+' selecting fixture paper: '+doc.readyState+'; paper rows='+doc.querySelectorAll('.paper-card').length);});
+    if(!doc.querySelector('#tab-overview')) row().click();
+    await until(()=>doc.querySelector('#tab-overview:not(:disabled)'));
+    doc.querySelector('#tab-overview').click();
+    return doc;
+  }
+  const live=await openOverview();
   [...live.querySelectorAll('header button')][0].click();
   await until(()=>live.querySelector('.lineage-card'));
   assert(live.querySelector('.lineage-card').textContent.includes(row.body.report.statements[0].text),'foreground refresh omitted new science');
   async function overview(){
     const loaded=new Promise(resolve=>frame.addEventListener('load',resolve,{once:true}));
     frame.contentWindow.location.reload();await loaded;
-    await until(()=>frame.contentDocument.querySelector('.paper-card')||frame.contentDocument.querySelector('#tab-overview'));
-    const doc=frame.contentDocument;
-    await until(()=>doc.querySelector('#tab-overview') || doc.querySelector('.paper-card:not(:disabled)'));
-    doc.querySelector('.paper-card:not(:disabled)')?.click();
-    await until(()=>doc.querySelector('#tab-overview:not(:disabled)'));
-    doc.querySelector('#tab-overview').click();return doc;
+    return openOverview();
   }
   const doc=await overview();
   const {SOURCE_COPY}=await import('./lineage-source-view.mjs');
