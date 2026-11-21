@@ -2,14 +2,14 @@
 
 ## Start here on Apple Silicon
 
-Use build **ece1f6d** on both devices for a paired installation test. This candidate exchanges reading progress and can resolve competing edits.
+Use build **dfe8102** on both devices for a paired installation test. This candidate recovers interrupted uploads of reading progress, notes and guides. An open reader also reflects progress changes received from another device.
 
 | Device | Download |
 |---|---|
-| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44884578826/artifacts/14699506815) |
-| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44884578826/artifacts/14700005781) |
+| Windows x64 | [Windows installer](https://github.com/puddings-world/Paperfact/actions/runs/44886869301/artifacts/14700541662) |
+| Apple Silicon Mac | [Mac disk image](https://github.com/puddings-world/Paperfact/actions/runs/44886869301/artifacts/14700159655) |
 
-Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44884578826) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
+Extract the downloaded ZIP on each device, install the enclosed app and compare the build IDs before syncing. [The workflow](https://github.com/puddings-world/Paperfact/actions/runs/44886869301) passed packaged research checks on Windows, macOS and Linux. Real account and physical device checks follow below.
 
 Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v05-preview) in disposable workspaces. Open a received guide on the Mac with PDF sync disabled, disconnect, then reopen the guide. Enable PDF sync on both devices and reconnect to test original transfer separately. Record both build IDs and the first failing step when reporting a difference. Installed Windows/Mac round-trip and sleep/wake with personal Drive still need physical acceptance.
 
@@ -17,7 +17,7 @@ Follow [the desktop-to-laptop setup](../../README.md#sync-a-desktop-and-laptop-v
 
 1. Install this build on both devices before publishing progress. The first upload upgrades the shared directory to v7, which older builds cannot open.
 2. Select the same disposable list and enable **Sync reading progress** on each device. Mark a paper read on Windows, sync Windows then Mac, and verify its state on Mac.
-3. Disconnect the Mac and change that paper's state. Reconnect, sync Mac then Windows, and verify the change arrived.
+3. Disconnect the Mac and change that paper's state. Reconnect, sync Mac then Windows, with that paper open on Windows. Verify the read button updates without reopening the paper and that any unsaved note draft stays intact.
 4. Choose different states on the two devices while offline. Reconnect and sync each. On the device reporting the conflict, open **Compare reading progress**, inspect all three versions, and choose **Decide later**. Verify both edits survive. Then choose a version, sync both devices and confirm they converge.
 
 ## Exchange saved deep explanations
