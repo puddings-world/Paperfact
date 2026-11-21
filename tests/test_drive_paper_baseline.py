@@ -397,6 +397,23 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
     with pytest.raises(MembershipRemovalReview) as prepared:
         publish_initial(origin_dir, fresh, "return", 1, Ticket(), append_new=True)
     [own_removal] = prepared.value.operations
+    # Withdrawing a removal while its immutable blob uploads must leave the head intact.
+    original_put = origin_dir.files.put_small
+    def restore_during_upload(*args, **kwargs):
+        result = original_put(*args, **kwargs)
+        if b"paperfact.membership-changes.v1" not in args[4]:
+            return result
+        with closing(sqlite3.connect(fresh_db)) as conn, conn:
+            conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                         "VALUES('return',?,9,?)", (local, STAMP))
+        return result
+    with monkeypatch.context() as patch:
+        patch.setattr(origin_dir.files, "put_small", restore_during_upload)
+        with pytest.raises(ListReviewRequired, match="Local removal changed"):
+            origin_history.append(commit, [own_removal], revision=1)
+    assert origin_history.changes(commit, revision=1) == (commit, [])
+    with closing(sqlite3.connect(fresh_db)) as conn, conn:
+        assert remove_selected(conn, "return", [local]) == 1
     origin_history.append(commit, [own_removal], revision=1)
     with closing(sqlite3.connect(fresh_db)) as conn, conn:
         saved_head, = conn.execute("SELECT observed_head FROM drive_membership_removals").fetchone()

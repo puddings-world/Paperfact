@@ -55,6 +55,9 @@ class DriveListHistory:
     def _advance(self, entry, head, records):
         return replace(entry, head=head, name=records[-1]["payload"].get("name", entry.name))
 
+    def _check_publication(self, revision, records):
+        self._check(revision)
+
     def append(self, expected, records, *, revision):
         self._check(revision)
         records = self._operations(records)
@@ -89,7 +92,7 @@ class DriveListHistory:
                 return current
             raise DriveChanged("List history changed; reload before publishing")
         (identity,) = directory.files.new_ids()
-        self._check(revision)
+        self._check_publication(revision, records)
         directory.files.put_small(
             identity, directory.folder, directory.key, "commit", raw, folder_role="directory"
         )
@@ -98,7 +101,7 @@ class DriveListHistory:
         directory.upsert(
             observed,
             [self._advance(entry, head, records)],
-            check=lambda: self._check(revision),
+            check=lambda: self._check_publication(revision, records),
         )
         return head
 

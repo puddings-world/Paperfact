@@ -71,5 +71,18 @@ class DriveMembershipChanges(DriveListHistory):
                 raise ValueError("Membership change history exceeds its readable budget")
         return super().append(expected, records, revision=revision)
 
+    def _check_publication(self, revision, records):
+        from paper_daily.drive_list_records import ListReviewRequired
+        from paper_daily.drive_membership_intent import observed_removals
+
+        super()._check_publication(revision, records)
+        members = {op["entity_id"] for op in records}
+        candidates = {member["payload"]["paper_id"]: (index * 2 + 1, member)
+                      for index, member in enumerate(self.creations.values())
+                      if member["entity_id"] in members}
+        pending = observed_removals(self.store, self.list_id, self.boundaries, candidates)
+        if {op["operation_id"] for op in pending} != {op["operation_id"] for op in records}:
+            raise ListReviewRequired("Local removal changed; refresh before publishing")
+
     def _advance(self, entry, head, records):
         return replace(entry, membership_changes_head=head)
