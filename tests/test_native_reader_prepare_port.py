@@ -120,3 +120,26 @@ def test_saved_real_chat_yields_without_another_model_call_or_discarding_drafts(
     ]
     assert reader.ask_box.text() == "Unsent next question"
     assert reader.note_edit.toPlainText() == "Unsent note"
+
+
+def test_saved_guide_recovers_when_display_context_changes_during_render(window, monkeypatch):
+    win, app = window
+    reader = win.reader_page
+    entered, release = threading.Event(), threading.Event()
+    original = reading.render
+
+    def render(body, *args, **kwargs):
+        if "Method A" in body:
+            entered.set()
+            assert release.wait(10)
+        return original(body, *args, **kwargs)
+
+    monkeypatch.setattr(reading, "render", render)
+    win.open_paper("a")
+    try:
+        assert entered.wait(5)
+        reader.win.pal = dict(reader.win.pal, ground="#fffefe")
+    finally:
+        release.set()
+    _settle_owned(reader.preparation, app)
+    assert "Dive of the first paper." in reader.dive_view._body

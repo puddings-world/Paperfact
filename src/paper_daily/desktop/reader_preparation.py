@@ -511,6 +511,13 @@ class ReaderPreparation(QObject):
                         return True
 
                     reader.dive_view.setHtml(publication.dive_html, current=dive_current)
+        elif (not self._disposed and not worker.cancelled.is_set()
+              and request.token == self._token and self._pending is None):
+            reader = self._reader()
+            if (reader is not None and isValid(reader) and self._outer(reader)
+                    and getattr(reader.paper, "id", None) == request.scope.paper_id
+                    and self._want_dive and not reader.dive_view._body and not self._retry_later()):
+                self._error()
         # Ownership includes the entire install/discard above.
         self._thread = None
         self._active_key = None
