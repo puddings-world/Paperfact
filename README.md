@@ -153,6 +153,8 @@ Use the same preview on both computers. [Apple Silicon download and offline acce
 3. Newly checked lists include notes, original PDFs, saved explanations, reading status and PDF page numbers when you confirm. Previously saved lists keep their individual settings. Select a saved list and expand **Sync contents** to adjust its content types. Choose **Continue reading**. While reading, Paperfact checks every 30 seconds and retries temporary connection failures with increasing delays up to five minutes.
 4. To see newly published names while settings are open, choose **Refresh list names**. Use **Sync saved lists now** for an immediate exchange. For a previously configured device, startup sync is available in the sign-in menu. **Other sync methods** contains the legacy workspace and self-hosted options.
 
+If saving the automatic sync sign-in fails after list selection, choose **Retry automatic sync**. Paperfact keeps the saved selection and retries the sign-in setup without exchanging the lists again.
+
 If a device reports that the Drive library uses a newer format, update Paperfact on that device and reconnect. Background sync pauses until a compatible client can read the directory.
 
 | To bring along | Control on each device | What to check offline |

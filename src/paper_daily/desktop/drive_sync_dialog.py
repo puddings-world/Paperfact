@@ -106,6 +106,7 @@ class DriveSyncDialog(QDialog):
         layout = QVBoxLayout(self.personal_panel)
         layout.setContentsMargins(0, 0, 0, 0)
         self._first_selection = False
+        self._retry_startup = False
         self.directory_lists = QListWidget()
         self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
         self.directory_lists.setVisible(False)
@@ -368,6 +369,7 @@ class DriveSyncDialog(QDialog):
             self.startup_sync.setChecked(False)
             self._pdf_review_titles = {}
         if kind in {"login", "restore", "create", "join", "toggle", "forget"}:
+            self._retry_startup = False
             self.background.position_scopes.clear()
         worker = SyncWorker(task, self)
         self._worker = worker
@@ -420,9 +422,6 @@ class DriveSyncDialog(QDialog):
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)
         self._first_selection = self._ordinary_library and library.get("first_selection", False)
-        self.save_selection.setText(self.tr("Enable automatic sync", "啟用自動同步")
-                                    if self._first_selection else self.tr(
-                                        "Save list selection", "儲存清單選擇"))
         self._membership_conflicts = library.get("membership_conflicts", {})
         self._membership_upgrades = library.get("membership_upgrades", {})
         self._note_lists = set(library.get("note_lists", ()))
@@ -479,6 +478,13 @@ class DriveSyncDialog(QDialog):
             self.login.isEnabled()
             and (self.startup_sync.isChecked() or self.save_login.isEnabled())
         )
+        if self._retry_startup and self.sync_lists.isEnabled():
+            label = self.tr("Retry automatic sync", "重試自動同步")
+        elif self._first_selection:
+            label = self.tr("Enable automatic sync", "啟用自動同步")
+        else:
+            label = self.tr("Save list selection", "儲存清單選擇")
+        self.save_selection.setText(label)
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         selected_list = self._ordinary_library and list_id in self._saved_ids
@@ -799,6 +805,9 @@ class DriveSyncDialog(QDialog):
             for i in range(self.directory_lists.count())
             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
         ]
+        if self._retry_startup and self.sync_lists.isEnabled():
+            return self._start("startup_on", lambda t, _: self.service.remember_library(
+                t, startup=True))
         with_content = self._ordinary_library and bool(set(selected) - self._saved_ids)
         enroll = bool(selected) and self._first_selection
         consent = QMessageBox.question(
@@ -936,6 +945,7 @@ class DriveSyncDialog(QDialog):
                     )
                 )
             elif kind in {"startup_on", "startup_off"}:
+                self._retry_startup = False
                 enabled = kind == "startup_on"
                 self.startup_sync.setChecked(enabled)
                 if enabled:
@@ -1071,6 +1081,13 @@ class DriveSyncDialog(QDialog):
                     "。已保留資料與準備進度，可確認連線後重試。",
                 )
             )
+        if current and kind == "startup_on" and worker.error:
+            self._retry_startup = True
+            self.status.setText(self.tr(
+                "List selection saved. Automatic sync setup failed ({reason}). "
+                "Choose Retry automatic sync to finish setting up this device.",
+                "清單選擇已儲存。自動同步設定失敗（{reason}）。按「重試自動同步」完成裝置設定。",
+            ).format(reason=worker.error))
         if current and kind == "refresh" and worker.error == "offline":
             self.refresh_lists.show()
             self.status.setText(self.tr(

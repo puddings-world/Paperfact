@@ -513,14 +513,24 @@ def test_first_enrollment_remembers_only_confirmed_lists(dialog, monkeypatch):
                                              for row in rows]}
 
     setup.apply_library = apply
-    setup.remember_library = lambda ticket, *, startup: events.append(startup)
+    def remember(ticket, *, startup):
+        events.append(startup)
+        if events.count(True) == 1:
+            raise ConnectionError("offline")
+
+    setup.remember_library = remember
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No)
     view.save_selection.click()
     assert not events and view.background.service is None
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
     view.save_selection.click()
+    wait(app, lambda: "Retry automatic sync" in view.status.text() and not view.busy)
+    assert "List selection saved" in view.status.text() and not view.startup_sync.isChecked()
+    assert view.save_selection.text() == "Retry automatic sync" and view.background.service is None
+    view.save_selection.click()
+    view.save_selection.click()
     wait(app, lambda: view.startup_sync.isChecked() and not view.busy)
-    assert events == [["one"], True] and view.background.service is setup
+    assert events == [["one"], True, True] and view.background.service is setup
     assert view.directory_lists.item(1).checkState() == Qt.CheckState.Unchecked
     view.pilot.setChecked(True)
     assert view.create.isVisible() and not view.directory_lists.isVisible()
