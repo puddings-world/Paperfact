@@ -188,6 +188,15 @@ cards, conflict-resolution UI, verified attachments and pilot migration remain
 open. Synthetic desktop tests exercise both devices; installed-device acceptance
 and live Google Drive remain separate gates.
 
+For the next revision, track an accepted operation ID and payload digest for each
+portable note in each selected list. A device that still has the accepted payload
+can apply a remote edit; a device that alone changed it can publish against that
+operation. When both sides changed the same card, retain the common base and
+both candidates for review. A resolution must name the versions it reviewed,
+and an unrelated note should continue syncing. Test a lost acknowledgement, two
+offline edits, a delete versus an edit, and the same note shared by two lists
+before enabling updates or deletion in the ordinary reader.
+
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a
 conditional write. A device with a partial library retains all other entries.

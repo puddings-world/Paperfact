@@ -2,7 +2,10 @@
 
 ## New notes on a selected list
 
-Use **b1cdf53** or later on both machines. The first shared note upgrades the
+[Download the 566b8af Apple Silicon DMG artifact ZIP](https://github.com/puddings-world/Paperfact/actions/runs/44868532304/artifacts/14692799162).
+DMG SHA-256: `390cd9a20a2c38583098006ec254215c2ebde074aa0522f6eb8078d4c21b7c81`.
+The copied app passed three reader launches, second-launch handoff and clean exit.
+Use **566b8af** or later on both machines. The first shared note upgrades the
 account's private library directory to v4. Use a disposable Google account for
 a trial if another device on your usual account still uses a v3 reader.
 
