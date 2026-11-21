@@ -119,11 +119,22 @@ class DriveSetup:
         self._library_view = (files, store, selection, remote, observation, local, visible)
         return {
             "ordinary": local_binding(self.workspace.path) is None,
+            "note_lists": store.note_lists(),
             "items": checklist(
                 visible, selection.selected, local_ids=[item.id for item in local.lists]
             ),
             "local": [{"id": item.id, "name": item.name} for item in local.lists],
         }
+
+    def choose_note_sync(self, list_id, enabled, ticket, progress):
+        self.check(ticket)
+        if self._library_view is None or local_binding(self.workspace.path):
+            raise ValueError("Review the ordinary library first")
+        files, store, saved, *_ = self._library_view
+        if files is not self.files or store.owner_id != self.account["id"]:
+            raise ValueError("The reviewed account changed")
+        store.set_note_sync(list_id, enabled, revision=saved.revision, ticket=ticket)
+        return self.read_library(ticket)
 
     def save_library(self, selected, ticket, progress, *, intermediate=False):
         """Publish the reviewed local names and persist this device's selection."""
@@ -211,6 +222,10 @@ class DriveSetup:
                     from paper_daily.drive_paper_receive import exchange_bibliography
 
                     exchange_bibliography(directory, store, list_id, selection.revision, ticket)
+                    if list_id in result.get("note_lists", ()):
+                        from paper_daily.drive_reader_notes import exchange_reader_notes
+
+                        exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except ListReviewRequired as exc:
                 reviews[list_id] = str(exc)
         return {**self.read_library(ticket), "reviews": reviews}

@@ -1,0 +1,207 @@
+"""Publish ordinary reader notes using their verified paper and device-local identity."""
+
+import hashlib
+import json
+import sqlite3
+from contextlib import closing
+from uuid import NAMESPACE_URL, uuid5
+
+from paper_daily.drive_list_history import DriveListNotes
+from paper_daily.drive_list_records import ListReviewRequired
+from paper_daily.drive_sync_files import MAX_INLINE, encode
+from paper_daily.sync_content import validate_rich_note
+from paper_daily.workspace_service import _read, _tables
+
+
+def _identity(store, key, paper, created):
+    namespace = uuid5(NAMESPACE_URL, f"paperfact:{store.library_id}:{store.context}:notes")
+    return str(uuid5(namespace, f"{key}:{paper}:{created}"))
+
+
+def _payload(paper, row):
+    body, kind, created, page, anchor = row
+    payload = dict(body=body, kind=kind, created_at=created, page=page,
+                   anchor=json.loads(anchor) if anchor is not None else None, paper_id=paper)
+    validate_rich_note(payload)
+    return payload
+
+
+def reader_notes(history, ticket):
+    ticket.check()
+    history._check(history.revision)
+    store = history.store
+    notes = {}
+    used = 0
+    with _read(store.path) as settings, _read(store.workspace.path) as conn:
+        tables = _tables(conn)
+        if "research_capture_binding" in tables:
+            raise ListReviewRequired("Use the enrolled workspace to synchronize its notes")
+        # Sizes are checked before fetching a potentially malformed large body into Python.
+        for row in conn.execute(
+            "SELECT n.id,n.paper_id,length(CAST(n.body AS BLOB)),length(CAST(n.anchor AS BLOB)) "
+            "FROM list_papers m JOIN notes n ON n.paper_id=m.paper_id "
+            "WHERE m.list_id=? ORDER BY n.id", (history.list_id,)
+        ):
+            ticket.check()
+            key, local_paper, body_size, anchor_size = row
+            if body_size is None or body_size > 200 * 1024 or (anchor_size or 0) > 200 * 1024:
+                raise ListReviewRequired("A note exceeds the supported size")
+            paper = settings.execute(
+                "SELECT remote_id FROM published_paper_ids WHERE local_id=?", (local_paper,)
+            ).fetchone()
+            if paper is None:
+                raise ListReviewRequired("Exchange the bibliography before its notes")
+            parent = history.paper_parent(paper[0])
+            fields = conn.execute(
+                "SELECT body,kind,created_at,page,anchor FROM notes WHERE id=?", (key,)
+            ).fetchone()
+            payload = _payload(paper[0], fields)
+            mapped = None
+            if "drive_library_note_ids" in tables:
+                mapped = conn.execute(
+                    "SELECT remote_id,incarnation,paper FROM drive_library_note_ids "
+                    "WHERE context=? AND local_id=?", (store.context, key)
+                ).fetchone()
+            identity = mapped[0] if mapped else _identity(store, key, local_paper, fields[2])
+            if mapped and mapped[2] != paper[0]:
+                raise ListReviewRequired("Mapped note now belongs to a different paper")
+            op = dict(version=2, workspace_id=store.library_id, device_id=store.context,
+                      entity_type="note", entity_id=identity,
+                      incarnation=mapped[1] if mapped else identity, action="put",
+                      base_revision=0, structure_revision=0, depends_on=None, parents=[parent],
+                      payload=payload)
+            raw = encode(op, MAX_INLINE)
+            used += len(raw) + 128
+            if used > 8 * 1024**2 or len(notes) >= 10000:
+                raise ListReviewRequired("Selected notes exceed the current history budget")
+            op["operation_id"] = hashlib.sha256(raw).hexdigest()
+            notes[identity] = op
+    history._check(history.revision)
+    return notes
+
+
+def publish_reader_notes(directory, store, list_id, revision, ticket):
+    """Add new cards; require review before publishing a divergent existing card."""
+    ticket.check()
+    history = DriveListNotes(directory, store, list_id, revision=revision)
+    head, records = history.changes(None, revision=revision)
+    return _publish(history, head, records, ticket)
+
+
+def _publish(history, head, records, ticket):
+    local = reader_notes(history, ticket)
+    remote = {op["entity_id"]: op for op in records}
+    batches, batch, batch_size = [], [], 0
+    size = 0
+    for identity, op in local.items():
+        existing = remote.get(identity)
+        if existing is not None:
+            fields = ("action", "parents", "incarnation", "payload")
+            if any(existing[key] != op[key] for key in fields):
+                raise ListReviewRequired("Existing note changed; retain both copies for review")
+            continue
+        length = len(encode(op, MAX_INLINE)) + 1
+        size += length
+        if len(batch) == 100 or batch_size + length > MAX_INLINE - 2048:
+            batches.append(batch)
+            batch, batch_size = [], 0
+        batch.append(op)
+        batch_size += length
+    if batch:
+        batches.append(batch)
+    generations = (head.generation if head else 0) + len(batches)
+    size += sum(len(encode(op, MAX_INLINE)) + 1 for op in records)
+    if batches and (generations > 100 or size + generations * 2048 > 8 * 1024**2):
+        raise ListReviewRequired("Adding these notes would exceed the readable history budget")
+    for batch in batches:
+        ticket.check()
+        head = history.append(head, batch, revision=history.revision)
+    return head
+
+
+def receive_reader_notes(history, records, ticket):
+    """Install a checked batch atomically, keeping a paper-wide mapping across lists."""
+    if not records:
+        return
+    store = history.store
+    if len({op["entity_id"] for op in records}) != len(records):
+        raise ListReviewRequired("Revised note history needs reconciliation")
+    with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
+        settings.execute("BEGIN IMMEDIATE")
+        history._check(history.revision)
+        with closing(sqlite3.connect(store.workspace.path.as_uri() + "?mode=rw",
+                                     uri=True, timeout=0.5)) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if "research_capture_binding" in _tables(conn):
+                raise ListReviewRequired("Use the enrolled workspace to synchronize its notes")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS drive_library_note_ids(context TEXT,remote_id TEXT,"
+                "incarnation TEXT NOT NULL,paper TEXT NOT NULL,local_id INTEGER NOT NULL,"
+                "PRIMARY KEY(context,remote_id),UNIQUE(context,local_id))"
+            )
+            for op in records:
+                ticket.check()
+                _receive_one(history, settings, conn, op)
+            store._check()
+            ticket.checkpoint(conn.commit)
+
+
+def _receive_one(history, settings, conn, op):
+    store, payload = history.store, op["payload"]
+    if op["action"] != "put":
+        raise ListReviewRequired("Note removal requires review")
+    validate_rich_note(payload)
+    paper, identity = payload["paper_id"], op["entity_id"]
+    local = settings.execute(
+        "SELECT local_id FROM published_paper_ids WHERE remote_id=?", (paper,)
+    ).fetchone()
+    if local is None or not conn.execute(
+        "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (history.list_id, local[0])
+    ).fetchone():
+        raise ListReviewRequired("Receive the note's paper in this list first")
+    local_paper = local[0]
+    mapped = conn.execute(
+        "SELECT local_id,paper,incarnation FROM drive_library_note_ids "
+        "WHERE context=? AND remote_id=?", (store.context, identity)
+    ).fetchone()
+    if mapped:
+        row = conn.execute("SELECT body,kind,created_at,page,anchor FROM notes "
+                           "WHERE id=? AND paper_id=?", (mapped[0], local_paper)).fetchone()
+        if (mapped[1:] != (paper, op["incarnation"]) or row is None
+                or _payload(paper, row) != payload):
+            raise ListReviewRequired("Existing note changed; retain both copies for review")
+        return
+    key = None
+    for candidate, body, kind, page, anchor in conn.execute(
+        "SELECT id,body,kind,page,anchor FROM notes WHERE paper_id=? AND created_at=?",
+        (local_paper, payload["created_at"]),
+    ):
+        same = _payload(paper, (body, kind, payload["created_at"], page, anchor)) == payload
+        if _identity(store, candidate, local_paper, payload["created_at"]) == identity:
+            if not same:
+                raise ListReviewRequired("Published note was edited; retain both versions")
+            key = candidate
+            break
+        if same and not conn.execute(
+            "SELECT 1 FROM drive_library_note_ids WHERE context=? AND local_id=?",
+            (store.context, candidate)
+        ).fetchone():
+            raise ListReviewRequired("Possible existing local note; review before joining")
+    if key is None:
+        if op["device_id"] == store.context:
+            raise ListReviewRequired("Published note is missing locally; review before restoring")
+        cursor = conn.execute(
+            "INSERT INTO notes(paper_id,body,kind,created_at,page,anchor) VALUES(?,?,?,?,?,?)",
+            (local_paper, payload["body"], payload["kind"], payload["created_at"], payload["page"],
+             json.dumps(payload["anchor"]) if payload["anchor"] is not None else None),
+        )
+        key = cursor.lastrowid
+    conn.execute("INSERT INTO drive_library_note_ids VALUES(?,?,?,?,?)",
+                 (store.context, identity, op["incarnation"], paper, key))
+
+
+def exchange_reader_notes(directory, store, list_id, revision, ticket):
+    history = DriveListNotes(directory, store, list_id, revision=revision)
+    head, records = history.changes(None, revision=revision)
+    receive_reader_notes(history, records, ticket)
+    return _publish(history, head, records, ticket)

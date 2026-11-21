@@ -269,6 +269,14 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     row.setCheckState(Qt.CheckState.Checked)
             view.save_selection.click()
             wait(app, lambda v=view: not v.busy)
+            assert view.notes_toggle.isVisible() and not view.notes_toggle.isChecked()
+            with monkeypatch.context() as cancel:
+                cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
+                view.notes_toggle.click()
+                assert not view.notes_toggle.isChecked()
+            view.notes_toggle.click()
+            wait(app, lambda v=view: not v.busy)
+            assert view.notes_toggle.isChecked()
             view.keep_syncing.click()
             assert view.background.service is setup, (label, view.status.text())
             assert view.close()
@@ -287,6 +295,12 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
         with closing(sqlite3.connect(source)) as conn, conn:
             conn.execute("INSERT INTO lists VALUES('private','Keep local',NULL,?)", (STAMP,))
 
+        with closing(sqlite3.connect(laptop)) as conn, conn:
+            conn.execute(
+                "INSERT INTO notes(paper_id,body,created_at,page) "
+                "SELECT paper_id,'Laptop note',?,5 FROM list_papers "
+                "WHERE list_id='list' AND position=0", (STAMP,)
+            )
         for index in (0, 1, 0):
             runner = windows[index][1].background
             # Deliver a real timer event now instead of waiting half a minute.
@@ -296,6 +310,13 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert runner.state == "waiting" and runner.timer.interval() == 30000
         for path in (source, laptop):
             with closing(sqlite3.connect(path)) as conn:
+                assert conn.execute(
+                    "SELECT title,body,page FROM notes JOIN papers ON paper_id=papers.id "
+                    "ORDER BY body"
+                ).fetchall() == [
+                    ("Research paper", "A research note", None),
+                    ("Research paper", "Laptop note", 5),
+                ]
                 assert sorted(row[0] for row in conn.execute(
                     "SELECT title FROM papers JOIN list_papers ON papers.id=list_papers.paper_id "
                     "WHERE list_id='list'"
@@ -351,3 +372,60 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             wait(app, lambda v=view: v.background.worker is None)
             view.close()
             owner.close()
+
+
+def test_ordinary_note_publication_keeps_anchor_scope_and_identity(source, tmp_path):
+    import json
+
+    from paper_daily.drive_list_history import DriveListNotes
+    from paper_daily.drive_reader_notes import publish_reader_notes
+
+    anchor = {"p0": 2, "o0": 4, "p1": 2, "o1": 9, "document_hash": "1" * 64}
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("UPDATE notes SET page=3,anchor=?", (json.dumps(anchor),))
+        conn.execute("INSERT INTO lists VALUES('other','Other',NULL,?)", (STAMP,))
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('other','paper',0,?)", (STAMP,))
+        conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source) "
+                     "VALUES('private','Private','private','Fixture',2026,'fixture')")
+        conn.execute("INSERT INTO notes(paper_id,body,created_at) VALUES('private','Private',?)",
+                     (STAMP,))
+    store = selection(source, tmp_path / "settings")
+    cloud = Cloud()
+    files = authority(cloud, tmp_path / "authority").files
+    folder, root = files.new_ids(2)
+    directory = DriveDirectory(files, folder, root, "library")
+    keys = ["list", "other"]
+    catalog = directory.upsert(directory.initialize("Research"), [
+        ListEntry(key, key, False) for key in keys
+    ]).directory
+    store.save(catalog, keys, expected_revision=0)
+    ids = []
+    for key in keys:
+        publish_initial(directory, store, key, 1, Ticket())
+        with pytest.raises(PermissionError):
+            publish_reader_notes(directory, store, key, 1, Ticket())
+        store.set_note_sync(key, True, revision=1, ticket=Ticket())
+        head = publish_reader_notes(directory, store, key, 1, Ticket())
+        count = len(cloud.objects)
+        assert publish_reader_notes(directory, store, key, 1, Ticket()) == head
+        assert len(cloud.objects) == count
+        history = DriveListNotes(directory, store, key, revision=1)
+        _, records = history.changes(None, revision=1)
+        assert len(records) == 1
+        payload = records[0]["payload"]
+        assert (payload["body"], payload["anchor"], payload["page"]) == (
+            "A research note", anchor, 3
+        )
+        ids.append(records[0]["entity_id"])
+    assert ids[0] == ids[1]
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("UPDATE notes SET body='Offline edit' WHERE paper_id='paper'")
+    count = len(cloud.objects)
+    with pytest.raises(ListReviewRequired, match="retain both"):
+        publish_reader_notes(directory, store, "list", 1, Ticket())
+    assert len(cloud.objects) == count
+    with closing(sqlite3.connect(source)) as conn:
+        assert conn.execute("SELECT body FROM notes WHERE paper_id='paper'").fetchone() == (
+            "Offline edit",
+        )

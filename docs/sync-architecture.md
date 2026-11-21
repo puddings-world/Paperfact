@@ -178,13 +178,15 @@ v4. Note bodies stay in the scoped history records. Readers retain v1-v3
 compatibility; an older app can refuse a v4 directory. Directory updates for
 names or papers preserve the other streams.
 
-This transport is exercised with synthetic native operations. Desktop note
-capture, mapping received notes back to local rows, per-note conflict review
-and the user-facing opt-in remain open. Ordinary-list polling sends no notes
-until these paths are connected. Use list packages for notes in the meantime.
-
-Notes, verified attachments and migration of existing enrolled workspaces still
-need to reach this ordinary-list path.
+The ordinary reader exchanges new cards after bibliography exchange. Each device
+can opt in for a highlighted saved list. Native card identity survives delivery
+and cross-list reuse; body, creation time, kind, page and validated anchor travel
+with the card. Receivers install incoming records transactionally against a
+verified paper binding. A divergent or missing previously mapped card, or an
+ambiguous pre-existing card, requires review. Editing and deleting existing
+cards, conflict-resolution UI, verified attachments and pilot migration remain
+open. Synthetic desktop tests exercise both devices; installed-device acceptance
+and live Google Drive remain separate gates.
 
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a

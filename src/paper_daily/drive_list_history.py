@@ -206,7 +206,12 @@ class DriveListNotes(DriveListHistory):
             raise PermissionError("Enable note sync on this device before transferring notes")
         papers = DriveListPapers(directory, store, list_id)
         _, operations = papers.changes(None, revision=revision)
-        self._members = {(p["entity_id"], p["incarnation"]) for p in operations[::2]}
+        self._members = {p["entity_id"]: p["incarnation"] for p in operations[::2]}
+
+    def paper_parent(self, identity):
+        if identity not in self._members:
+            raise ValueError("Note parent is outside the selected bibliography")
+        return {"kind": "paper", "id": identity, "incarnation": self._members[identity]}
 
     def _check(self, revision):
         if revision != self.revision:
@@ -219,8 +224,7 @@ class DriveListNotes(DriveListHistory):
             if op["version"] != 2 or op["entity_type"] != "note" or len(op["parents"]) != 1:
                 raise ValueError("Expected a native paper note")
             parent = op["parents"][0]
-            identity = (parent["id"], parent["incarnation"])
-            if parent["kind"] != "paper" or identity not in self._members:
+            if parent != self.paper_parent(parent["id"]):
                 raise ValueError("Note parent is outside the selected bibliography")
 
     def _advance(self, entry, head, records):

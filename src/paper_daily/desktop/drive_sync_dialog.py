@@ -98,6 +98,12 @@ class DriveSyncDialog(QDialog):
         self.keep_syncing.clicked.connect(self._background_clicked)
         layout.addWidget(self.keep_syncing)
         self._ordinary_library = False
+        self._note_lists = set()
+        self.notes_toggle = QPushButton(self.tr("Sync notes for this list", "同步這份清單的筆記"))
+        self.notes_toggle.setCheckable(True)
+        self.notes_toggle.clicked.connect(self._choose_notes)
+        layout.addWidget(self.notes_toggle)
+        self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
         self.pilot = QPushButton(self.tr("Existing workspace sync", "既有工作區同步"))
         self.pilot.setCheckable(True)
@@ -230,7 +236,7 @@ class DriveSyncDialog(QDialog):
         self._resume_pending = False
         if kind in {"login", "create", "join", "toggle"} and self.background.service is not None:
             self.background.stop()
-        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved"}:
+        if kind not in {"login", "refresh", "toggle", "selection", "sync_saved", "notes"}:
             if self.writers_busy():
                 self.status.setText(
                     self.tr(
@@ -284,7 +290,10 @@ class DriveSyncDialog(QDialog):
         self.lists.setVisible(show_scope)
 
     def _show_directory(self, library):
+        previous = self.directory_lists.currentItem()
+        current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
         self._ordinary_library = library.get("ordinary", False)
+        self._note_lists = set(library.get("note_lists", ()))
         self.directory_lists.clear()
         for row in library["items"]:
             reason = library.get("reviews", {}).get(row["id"])
@@ -300,6 +309,10 @@ class DriveSyncDialog(QDialog):
                 Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked
             )
             self.directory_lists.addItem(item)
+            if row["id"] == current_id:
+                self.directory_lists.setCurrentItem(item)
+        if self.directory_lists.currentRow() < 0 and self.directory_lists.count():
+            self.directory_lists.setCurrentRow(0)
         self.directory_lists.setVisible(True)
         self.save_selection.setVisible(True)
         self._saved_ids = {row["id"] for row in library["items"] if row["selected"]}
@@ -316,12 +329,37 @@ class DriveSyncDialog(QDialog):
             bool(self._saved_ids) and checked == self._saved_ids and self.service.files is not None
             and not self._closing and not self.busy and self.background.worker is None
         )
+        current = self.directory_lists.currentItem()
+        list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
+        self.notes_toggle.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.notes_toggle.setChecked(list_id in self._note_lists)
+        self.notes_toggle.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
         self.keep_syncing.setVisible(active or self._ordinary_library)
         self.keep_syncing.setChecked(active)
         self.keep_syncing.setEnabled(
             active or (self._ordinary_library and self.sync_lists.isEnabled())
         )
+
+    def _choose_notes(self, checked):
+        item = self.directory_lists.currentItem()
+        if item is None or not self.notes_toggle.isEnabled():
+            self._list_buttons()
+            return
+        list_id = item.data(Qt.ItemDataRole.UserRole)
+        if checked and QMessageBox.question(
+            self, self.windowTitle(),
+            self.tr("Sync new paper notes for this list through your private Drive? Enable it "
+                    "on both devices. Older builds cannot read the upgraded directory.",
+                    "透過私人 Drive 同步這份清單新增的論文筆記？請在兩台裝置啟用。"
+                    "首次傳送筆記後，舊版無法讀取升級後的清單目錄。"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            self._list_buttons()
+            return
+        self._start("notes", lambda ticket, progress:
+                    self.service.choose_note_sync(list_id, checked, ticket, progress))
 
     def _background_clicked(self, checked):
         if checked:
@@ -359,11 +397,12 @@ class DriveSyncDialog(QDialog):
                 "Publish local list names to your private Drive directory and save this "
                 "device's selection? Selected lists also exchange their names "
                 "and descriptions, plus bibliography metadata and membership. Both devices need "
-                "bibliography sync support. Save to exchange new papers. Use a package "
-                "for notes and PDFs.",
+                "bibliography sync support. Notes have a separate per-list switch. "
+                "Use a package for PDFs.",
                 "將本機清單名稱加入你的私人 Drive 目錄，並儲存這台裝置的勾選？"
                 "一般工作區會交換清單名稱、說明、書目及論文順序。"
-                "兩台裝置都需要支援書目同步的版本。儲存時交換新增論文。PDF 與筆記請用研究包傳送。",
+                "兩台裝置都需要支援書目同步的版本。儲存時交換新增論文。"
+                "筆記另有清單開關，PDF 請用研究包傳送。",
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -476,6 +515,10 @@ class DriveSyncDialog(QDialog):
                         "可同步目前工作區，或開啟 Drive 上的工作區。",
                     )
                 )
+            elif kind == "notes":
+                self._show_directory(result)
+                self.status.setText(self.tr("Note preference saved for the next sync.",
+                                            "已儲存筆記設定，下次同步時生效。"))
             elif kind == "sync_saved":
                 self._show_directory(result)
                 self.status.setText(

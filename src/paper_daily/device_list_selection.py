@@ -193,6 +193,18 @@ class DeviceSelection:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_grants'"
         ).fetchone() is not None
 
+    def note_lists(self):
+        self._check()
+        if not self.path.exists():
+            return []
+        with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True)) as conn:
+            conn.execute("BEGIN")
+            selected = self._load(conn).selected
+            if not self._has_note_grants(conn):
+                return []
+            return sorted(key for (key,) in conn.execute("SELECT list_id FROM note_grants")
+                          if key in selected)
+
     def note_grant(self, list_id, revision):
         self._check()
         if not self.path.exists():
