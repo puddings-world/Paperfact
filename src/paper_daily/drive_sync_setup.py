@@ -49,6 +49,7 @@ class DriveSetup:
         self.files = self.account = None
         self._library_view = None
         self._consent = None
+        self._pdf_versions = {}
 
     def check(self, ticket):
         ticket.check()
@@ -245,6 +246,11 @@ class DriveSetup:
                     from paper_daily.drive_paper_receive import exchange_bibliography
 
                     exchange_bibliography(directory, store, list_id, selection.revision, ticket)
+                    if list_id in result.get("pdf_lists", ()):
+                        from paper_daily.drive_reader_originals import exchange_originals
+
+                        exchange_originals(directory, self.cache, store, list_id,
+                                           selection.revision, ticket, self._pdf_versions)
                     if list_id in result.get("note_lists", ()):
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except NoteEditConflict as exc:

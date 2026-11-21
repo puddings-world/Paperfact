@@ -182,8 +182,10 @@ open **Compare conflicting notes**, then choose the local or Drive version. The 
 sync exchanges your choice. You can also close the comparison to keep both versions. Removals require review. For a list enabled before edit support, turn note sync off and back
 on on each device to grant permission for edits. **Allow PDF sync for this list** saves
 a separate preference for that device. Deselecting a list clears its PDF permission.
-Use research packages to move originals until automatic PDF exchange ships. Use a research package for PDFs
-and deep analyses. Use **Existing workspace sync** for the pilot research transfer.
+Enable PDF sync on both devices to transfer missing originals into the reader.
+The first PDF upgrades the private directory to v5. Update every device first.
+If two local originals differ, Paperfact keeps both and requests review. Use a
+research package to transfer deep analyses. Use **Existing workspace sync** for the pilot research transfer.
 
 [Implementation, limits and test coverage](docs/sync-architecture.md#desktop-drive-pilot-2026-11-18).
 This is a test candidate; installed Windows/Mac acceptance is still required.

@@ -394,8 +394,9 @@ class DriveSyncDialog(QDialog):
         if checked and QMessageBox.question(
             self, self.windowTitle(),
             self.tr("Allow this device to upload and download originals for this list through "
-                    "your private Drive when PDF exchange is available?",
-                    "允許這台裝置在 PDF 同步功能可用時，透過私人 Drive 上傳及下載這份清單的原文？"),
+                    "your private Drive? Update both devices before enabling PDF sync.",
+                    "允許透過私人 Drive 同步這份清單的原文？"
+                    "請先將兩台裝置更新到支援 PDF 同步的版本。"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         ) != QMessageBox.StandardButton.Yes:
@@ -588,9 +589,8 @@ class DriveSyncDialog(QDialog):
                                             "已儲存選擇，下次同步時會交換選定的版本。"))
             elif kind == "pdfs":
                 self._show_directory(result)
-                self.status.setText(self.tr("PDF preference saved. Use a research package to "
-                                            "transfer originals in this build.",
-                                            "已儲存 PDF 設定。本版請使用研究資料包傳送原文。"))
+                self.status.setText(self.tr("PDF preference saved for the next list sync.",
+                                            "已儲存 PDF 設定，下次同步清單時生效。"))
             elif kind == "notes":
                 self._show_directory(result)
                 self.status.setText(self.tr("Note preference saved for the next sync.",

@@ -1,5 +1,23 @@
 # Mac v0.5 acceptance
 
+## Exchange original PDFs between readers
+
+Use the same original-sync candidate on every device that opens the private
+Drive directory. Publishing the first PDF upgrades that directory to v5.
+Use disposable workspaces and a test list with two different papers.
+
+1. Add a readable PDF to the first paper on Windows and a different PDF to the
+   second paper on Mac. Select the same list on both devices. Highlight it and
+   enable **Allow PDF sync for this list** on each device.
+2. Sync Windows, Mac, then Windows. Open both papers in each reader and compare
+   the first pages. Disconnect the network, reopen the readers and check again.
+3. In the disposable workspace only, replace a local PDF with a different valid
+   PDF. Sync that device. Expect a review message and confirm each device still
+   opens its own version. Deselect the list and confirm downloaded PDFs remain.
+4. Record both commit IDs, the platform versions and the step that failed if you
+   need to export a diagnostic report. Private Drive, real sleep/wake and installed
+   hardware remain separate from the automated two-window transfer check.
+
 ## Resolve conflicting edits on a selected list
 
 [Download the 01143a3 Apple Silicon candidate](https://github.com/puddings-world/Paperfact/actions/runs/44870894800/artifacts/14693348238).

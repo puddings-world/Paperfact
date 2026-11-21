@@ -281,10 +281,9 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 cancel.setattr(QMessageBox, "question", lambda *a: QMessageBox.StandardButton.No)
                 view.pdf_toggle.click()
                 assert not view.pdf_toggle.isChecked()
-            if label == "mac":
-                view.pdf_toggle.click()
-                wait(app, lambda v=view: not v.busy)
-                assert view.pdf_toggle.isChecked() and not view.notes_toggle.isChecked()
+            view.pdf_toggle.click()
+            wait(app, lambda v=view: not v.busy)
+            assert view.pdf_toggle.isChecked() and not view.notes_toggle.isChecked()
             view.notes_toggle.click()
             wait(app, lambda v=view: not v.busy)
             assert view.notes_toggle.isChecked()
@@ -313,6 +312,16 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 "SELECT paper_id,'Laptop note',?,5,? FROM list_papers "
                 "WHERE list_id='list' AND position=0", (STAMP, json.dumps(anchor))
             )
+        import pymupdf
+
+        from paper_daily.desktop.main import _legacy_pdf_name
+
+        for path, key in ((source, "paper"), (laptop, "laptop-add")):
+            folder = path.parent / "pdf"
+            folder.mkdir()
+            with pymupdf.open() as document:
+                document.new_page().insert_text((50, 50), key)
+                document.save(folder / _legacy_pdf_name(key))
         for index in (0, 1, 0):
             runner = windows[index][1].background
             # Deliver a real timer event now instead of waiting half a minute.
@@ -329,6 +338,12 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                     ("Research paper", "A research note", None),
                     ("Research paper", "Laptop note", 5),
                 ]
+                for title, original in (("Research paper", "paper"), ("laptop-add", "laptop-add")):
+                    (local,) = conn.execute(
+                        "SELECT id FROM papers WHERE title=?", (title,)
+                    ).fetchone()
+                    with pymupdf.open(path.parent / "pdf" / _legacy_pdf_name(local)) as document:
+                        assert document[0].get_text().strip() == original
                 received = conn.execute(
                     "SELECT anchor FROM notes WHERE body='Laptop note'"
                 ).fetchone()
@@ -480,6 +495,18 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                 assert conn.execute("SELECT body FROM notes WHERE page=5").fetchone() == (
                     "Second desktop edit",
                 )
+            with closing(sqlite3.connect(laptop)) as conn:
+                (local,) = conn.execute(
+                    "SELECT id FROM papers WHERE title='Research paper'"
+                ).fetchone()
+            mac_pdf = laptop.parent / "pdf" / _legacy_pdf_name(local)
+            other_pdf = (laptop.parent / "pdf" / "laptop-add.pdf").read_bytes()
+            mac_pdf.write_bytes(other_pdf)
+            report = devices[1].sync_saved_library(Ticket(), lambda _: None)
+            assert "local PDF differs" in report["reviews"]["list"]
+            assert mac_pdf.read_bytes() == other_pdf
+            with pymupdf.open(source.parent / "pdf" / "paper.pdf") as document:
+                assert document[0].get_text().strip() == "paper"
             for i in range(reopened.directory_lists.count()):
                 row = reopened.directory_lists.item(i)
                 if row.data(Qt.ItemDataRole.UserRole) == "list":

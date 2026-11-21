@@ -214,9 +214,11 @@ and verified original manifests. The first publication upgrades the directory
 to v5. Its directory entry exposes only an immutable index reference. Discovery
 and downloads verify the bibliography and grant, and conditional publication
 preserves concurrent catalog changes. Publishing a different digest for an
-existing original requires review. The ordinary reader still needs to discover
-eligible local originals and install received bytes before this exchange runs
-from its saved preference.
+existing original requires review. Manual and session background exchanges now
+transfer ordinary-reader originals for explicitly enabled lists. The receiver
+checks the digest and opens the staged PDF before installing it under its local
+paper ID. Installation cannot replace an existing file. Ambiguous legacy file
+names require review, and enrolled workspaces use their existing document path.
 
 The Drive directory adapter can now initialize and discover a private directory,
 read its current catalog and publish explicit list additions or renames with a

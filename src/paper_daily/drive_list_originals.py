@@ -15,9 +15,10 @@ FORMAT = "paperfact.list-originals.v1"
 
 
 class DriveListOriginals:
-    def __init__(self, directory, cache, store, list_id, revision, ticket):
+    def __init__(self, directory, cache, store, list_id, revision, ticket, *, check_local=None):
         self.directory, self.store, self.list_id = directory, store, list_id
         self.revision, self.ticket = revision, ticket
+        self.check_local = check_local
         self.grant = store.pdf_grant(list_id, revision)
         if not self.grant:
             raise PermissionError("Enable PDF sync for this list on this device")
@@ -32,6 +33,8 @@ class DriveListOriginals:
 
     def check(self):
         self.ticket.check()
+        if self.check_local:
+            self.check_local()
         if self.store.pdf_grant(self.list_id, self.revision) != self.grant:
             raise PermissionError("This device changed its PDF sync permission")
 
