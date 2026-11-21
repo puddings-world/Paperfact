@@ -122,7 +122,13 @@ class DriveSyncDialog(QDialog):
         )
         self.save_selection.setVisible(False)
         self.save_selection.clicked.connect(self._save_selection)
-        layout.addWidget(self.save_selection)
+        self.refresh_lists = QPushButton(self.tr("Refresh list names", "重新讀取清單"))
+        self.refresh_lists.hide()
+        self.refresh_lists.clicked.connect(lambda: self._start("refresh", self.service.overview))
+        selection_row = QHBoxLayout()
+        selection_row.addWidget(self.save_selection)
+        selection_row.addWidget(self.refresh_lists)
+        layout.addLayout(selection_row)
         self._saved_ids = set()
         self.sync_lists = QPushButton(self.tr("Sync saved lists now", "立即同步已勾選清單"))
         self.sync_lists.hide()
@@ -417,6 +423,7 @@ class DriveSyncDialog(QDialog):
             self.directory_lists.setCurrentRow(0)
         self.directory_lists.setVisible(True)
         self.save_selection.setVisible(True)
+        self.refresh_lists.show()
         self._saved_ids = {row["id"] for row in library["items"] if row["selected"]}
         self.sync_lists.setVisible(True)
         self._list_buttons()
@@ -429,6 +436,8 @@ class DriveSyncDialog(QDialog):
             for i in range(self.directory_lists.count())
             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
         }
+        self.refresh_lists.setEnabled(checked == self._saved_ids and self.service.files is not None
+                                      and not self.busy and self.background.worker is None)
         self.sync_lists.setEnabled(
             bool(self._saved_ids) and checked == self._saved_ids and self.service.files is not None
             and not self._closing and not self.busy and self.background.worker is None
@@ -962,6 +971,7 @@ class DriveSyncDialog(QDialog):
                 self._ordinary_library = False
                 self.directory_lists.hide()
                 self.save_selection.hide()
+                self.refresh_lists.hide()
                 self.lists.clear()
                 self.lists.hide()
                 self.scope_label.hide()

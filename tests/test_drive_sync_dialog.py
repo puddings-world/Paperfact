@@ -136,11 +136,25 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     view.sign_in()
     wait(app, lambda: not view.busy)
     assert view.directory_lists.count() == 2 and view.directory_lists.isVisible()
+    refreshes = []
+    def overview(ticket, progress):
+        refreshes.append(True)
+        return {"account": {"email": "researcher@example.test"}, "lists": [],
+                "workspaces": [], "library": library}
+    setup.overview = overview
+    library["items"].append({"id": "c", "name": "New on desktop", "selected": False})
+    view.refresh_lists.click()
+    view.refresh_lists.click()
+    wait(app, lambda: not view.busy)
+    assert refreshes == [True] and not saved
+    assert view.directory_lists.item(2).text() == "New on desktop"
+    assert view.directory_lists.item(2).checkState() == Qt.CheckState.Unchecked
     assert not view.create.isVisible()
     assert "Select the lists" in view.status.text()
     view._progress({"stage": "selected_lists", "completed": 1, "total": 3})
     assert "list 2 of 3" in view.status.text()
     view.directory_lists.item(1).setCheckState(Qt.CheckState.Checked)
+    assert not view.refresh_lists.isEnabled()
     prompts = []
 
     def decline(parent, title, message, *args):
