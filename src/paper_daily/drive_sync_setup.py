@@ -211,7 +211,10 @@ class DriveSetup:
         selection = saved if selection is None else selection
         if local_binding(self.workspace.path) or not selection.selected:
             return {**result, "reviews": {}}
+        from paper_daily.drive_reader_notes import NoteEditConflict, exchange_reader_notes
+
         reviews = {}
+        note_conflicts = []
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
@@ -223,12 +226,13 @@ class DriveSetup:
 
                     exchange_bibliography(directory, store, list_id, selection.revision, ticket)
                     if list_id in result.get("note_lists", ()):
-                        from paper_daily.drive_reader_notes import exchange_reader_notes
-
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
+            except NoteEditConflict as exc:
+                reviews[list_id] = str(exc)
+                note_conflicts.append(list_id)
             except ListReviewRequired as exc:
                 reviews[list_id] = str(exc)
-        return {**self.read_library(ticket), "reviews": reviews}
+        return {**self.read_library(ticket), "reviews": reviews, "note_conflicts": note_conflicts}
 
     def _receipt(self, kind, spec=None):
         if self.files is None:

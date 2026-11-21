@@ -374,7 +374,10 @@ class DriveSyncDialog(QDialog):
         if not self.disposed:
             self._resume_directory()
             self._buttons()
-            if self.background.state == "review":
+            if self.background.state == "note_conflict":
+                self.status.setText(self.tr("Some notes need review. Other notes continue syncing.",
+                                            "部分筆記需核對，其他筆記會繼續同步。"))
+            elif self.background.state == "review":
                 self.status.setText(self.tr(
                     "Sync paused. Check the connection and sync saved lists to review.",
                     "同步已暫停。請檢查連線並立即同步以核對清單。",

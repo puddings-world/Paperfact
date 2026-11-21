@@ -29,6 +29,7 @@ class SavedListSync(QObject):
             "working": "正在同步已勾選清單", "offline": "離線，稍後重試",
             "changed": "工作區已切換，請重新啟用同步", "review": "清單同步已暫停，請核對",
         }
+        labels["note_conflict"] = "部分筆記需核對，其他內容持續同步"
         button.setText(labels[self.state])
         button.setToolTip(labels[self.state])
 
@@ -80,13 +81,14 @@ class SavedListSync(QObject):
                 self.failures += 1
                 self.state = "offline"
                 self.timer.start(min(300, 10 * 2 ** min(5, self.failures - 1)) * 1000)
-            elif worker.error or worker.result.get("reviews"):
+            elif worker.error or (worker.result.get("reviews", {}).keys()
+                                  - set(worker.result.get("note_conflicts", ()))):
                 self.stop("review")
             elif not any(item["selected"] for item in worker.result["items"]):
                 self.stop()
             else:
                 self.failures = 0
-                self.state = "waiting"
+                self.state = "note_conflict" if worker.result.get("note_conflicts") else "waiting"
                 self.timer.start(30000)
         worker.deleteLater()
         self.changed.emit()

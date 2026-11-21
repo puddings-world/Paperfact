@@ -397,13 +397,33 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
                 with closing(sqlite3.connect(path)) as conn, conn:
                     conn.execute("UPDATE notes SET body=? WHERE page=5", (edit,))
+            with closing(sqlite3.connect(source)) as conn, conn:
+                conn.execute("UPDATE notes SET body='Unrelated desktop edit' WHERE page IS NULL")
+            with closing(sqlite3.connect(laptop)) as conn, conn:
+                conn.execute(
+                    "INSERT INTO notes(paper_id,body,page,created_at) "
+                    "SELECT paper_id,'Unrelated laptop card',6,? FROM notes WHERE page=5", (STAMP,)
+                )
             assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
             report = devices[1].sync_saved_library(Ticket(), lambda _: None)
             assert "retain both" in report["reviews"]["list"]
+            assert report["note_conflicts"] == ["list"]
+            assert not devices[0].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+            reopened.hide()
+            runner = reopened.background
+            runner.timer.start(1)
+            wait(app, lambda: runner.state == "working")
+            wait(app, lambda: runner.worker is None)
+            assert runner.state == "note_conflict" and runner.timer.isActive()
+            assert runner.timer.interval() == 30000
+            reopened.show()
             for path, edit in ((source, "Desktop revision"), (laptop, "Laptop revision")):
                 with closing(sqlite3.connect(path)) as conn:
-                    rows = conn.execute("SELECT body FROM notes WHERE page=5").fetchall()
-                    assert rows == [(edit,)]
+                    assert conn.execute(
+                        "SELECT body FROM notes ORDER BY page"
+                    ).fetchall() == [
+                        ("Unrelated desktop edit",), (edit,), ("Unrelated laptop card",)
+                    ]
             for i in range(reopened.directory_lists.count()):
                 row = reopened.directory_lists.item(i)
                 if row.data(Qt.ItemDataRole.UserRole) == "list":

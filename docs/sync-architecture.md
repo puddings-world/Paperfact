@@ -190,9 +190,10 @@ acknowledges the uploaded snapshot without replacing subsequent typing.
 Previously issued new-card permissions retain their original scope. Renew the
 list's permission on each device to exchange edits.
 
-Divergent changes remain on their respective devices and stop the list's note
-exchange for review. Missing mapped cards and ambiguous matches also require
-review. Independent per-card conflict handling, resolution UI, deletion,
+When two devices edit the same mapped card from a known common revision, each
+retains its version. Other cards continue to upload and download during background
+polling. A missing mapping, ambiguous match or invalid history still requires
+list-level review. A version comparison and resolution UI, deletion,
 verified attachments and pilot migration remain open. Outstanding acceptance
 includes lost acknowledgements with subsequent offline edits, deletion versus
 editing, shared-card changes across lists, live Drive and installed devices.

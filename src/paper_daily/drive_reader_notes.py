@@ -13,6 +13,10 @@ from paper_daily.sync_content import validate_rich_note
 from paper_daily.workspace_service import _read, _tables
 
 
+class NoteEditConflict(ListReviewRequired):
+    """A mapped card diverged from a verified base on this device and Drive."""
+
+
 def _identity(store, key, paper, created):
     namespace = uuid5(NAMESPACE_URL, f"paperfact:{store.library_id}:{store.context}:notes")
     return str(uuid5(namespace, f"{key}:{paper}:{created}"))
@@ -88,12 +92,14 @@ def publish_reader_notes(directory, store, list_id, revision, ticket):
     return _publish(history, head, records, ticket)
 
 
-def _publish(history, head, records, ticket, bases=None):
+def _publish(history, head, records, ticket, bases=None, conflicts=None):
     local = reader_notes(history, ticket)
     remote = {op["entity_id"]: op for op in records}
     batches, batch, batch_size = [], [], 0
     size = 0
     for identity, op in local.items():
+        if conflicts and identity in conflicts:
+            continue
         existing = remote.get(identity)
         if existing is not None:
             fields = ("action", "parents", "incarnation")
@@ -126,11 +132,12 @@ def _publish(history, head, records, ticket, bases=None):
         if bases is not None:
             records = [*records, *batch]
             receive_reader_notes(history, records, ticket,
-                                 published={op["operation_id"] for op in batch})
+                                 published={op["operation_id"] for op in batch},
+                                 conflicts=conflicts)
     return head
 
 
-def receive_reader_notes(history, records, ticket, *, published=()):
+def receive_reader_notes(history, records, ticket, *, published=(), conflicts=None):
     """Install a checked batch atomically, keeping a paper-wide mapping across lists."""
     bases = {}
     if not records:
@@ -178,8 +185,14 @@ def receive_reader_notes(history, records, ticket, *, published=()):
                 if receipt and base is None:
                     raise ListReviewRequired("Note history lost its previously accepted revision")
                 latest = chain[-1]
-                _receive_one(history, settings, conn, latest, base if edits else None,
-                             latest["operation_id"] in published)
+                try:
+                    _receive_one(history, settings, conn, latest, base if edits else None,
+                                 latest["operation_id"] in published)
+                except NoteEditConflict:
+                    if conflicts is None:
+                        raise
+                    conflicts.add(identity)
+                    continue
                 if edits:
                     bases[identity] = latest["operation_id"]
                     if not receipt or receipt[0] != latest["operation_id"]:
@@ -219,8 +232,10 @@ def _receive_one(history, settings, conn, op, base, published):
         local_payload = _payload(paper, row)
         if local_payload == payload or base and base["operation_id"] == op["operation_id"]:
             return
-        if not base or local_payload != base["payload"]:
+        if not base:
             raise ListReviewRequired("Existing note changed; retain both copies for review")
+        if local_payload != base["payload"]:
+            raise NoteEditConflict("Existing note changed; retain both copies for review")
         conn.execute("UPDATE notes SET body=?,kind=?,created_at=?,page=?,anchor=? WHERE id=?",
                      (payload["body"], payload["kind"], payload["created_at"], payload["page"],
                       json.dumps(payload["anchor"]) if payload["anchor"] is not None else None,
@@ -258,5 +273,10 @@ def _receive_one(history, settings, conn, op, base, published):
 def exchange_reader_notes(directory, store, list_id, revision, ticket):
     history = DriveListNotes(directory, store, list_id, revision=revision)
     head, records = history.changes(None, revision=revision)
-    bases = receive_reader_notes(history, records, ticket)
-    return _publish(history, head, records, ticket, bases)
+    conflicts = set()
+    bases = receive_reader_notes(history, records, ticket, conflicts=conflicts)
+    head = _publish(history, head, records, ticket, bases, conflicts)
+    if conflicts:
+        raise NoteEditConflict(f"{len(conflicts)} note(s) changed on both devices; "
+                               "retain both copies for review. Other notes can sync.")
+    return head
