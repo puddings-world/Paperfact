@@ -75,18 +75,30 @@ class DriveListOriginals:
 
     def publish(self, paper, incarnation, path, expected: BlobManifest):
         """Publish a first original. A different digest requires explicit review."""
-        self.member(paper, incarnation)
+        return self.publish_many([(paper, incarnation, path, expected)])[paper]
+
+    def publish_many(self, batch):
+        """Commit one compatible index after this batch's original bytes are verified."""
         observation, entry, originals = self._read()
-        if not isinstance(expected, BlobManifest):
-            raise ValueError("Select an exact original before publishing")
-        prior = originals.get(paper)
-        if prior is not None:
-            if checked_manifest(prior["manifest"])[0] != expected:
-                raise ListReviewRequired("This paper already has a different original on Drive")
-            return prior["manifest"]
-        manifest = self.objects.put(path, expected=expected)
+        manifests = {}
+        changed = False
+        for paper, incarnation, path, expected in batch:
+            self.member(paper, incarnation)
+            if not isinstance(expected, BlobManifest):
+                raise ValueError("Select an exact original before publishing")
+            prior = originals.get(paper)
+            if prior is not None:
+                if checked_manifest(prior["manifest"])[0] != expected:
+                    raise ListReviewRequired("This paper already has a different original on Drive")
+                manifests[paper] = prior["manifest"]
+                continue
+            manifest = self.objects.put(path, expected=expected)
+            originals[paper] = dict(incarnation=incarnation, manifest=manifest)
+            manifests[paper] = manifest
+            changed = True
+        if not changed:
+            return manifests
         generation = entry.originals_head.generation + 1 if entry.originals_head else 1
-        originals[paper] = dict(incarnation=incarnation, manifest=manifest)
         raw = encode(self._record(generation, originals), MAX_INLINE)
         directory = self.directory
         self.check()
@@ -96,7 +108,7 @@ class DriveListOriginals:
         head = ScopeHead(generation, **reference(identity, raw))
         self.check()
         directory.upsert(observation, [replace(entry, originals_head=head)], check=self.check)
-        return manifest
+        return manifests
 
     def download(self, paper, incarnation, blobs):
         self.member(paper, incarnation)

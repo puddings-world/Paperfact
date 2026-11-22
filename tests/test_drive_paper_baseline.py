@@ -2061,7 +2061,23 @@ def test_idle_pdf_poll_skips_history_and_missing_paths_but_discovers_later_pdf(
     pdf(source)
     poll()
     assert not history_reads and not misses
-    assert directory.read().directory.lists[0].originals_head is not None
+    first = directory.read().directory.lists[0].originals_head
+    assert first is not None
+    original = (source.parent / "pdf" / "paper.pdf").read_bytes()
+    for number in range(17):
+        (source.parent / "pdf" / f"missing-{number}.pdf").write_bytes(original)
+    poll()
+    latest = directory.read().directory.lists[0].originals_head
+    assert latest.generation == first.generation + 2
+    from paper_daily.drive_list_originals import DriveListOriginals
+
+    index = DriveListOriginals(directory, tmp_path / "cache", store, "list", 1, Ticket())
+    _, _, originals = index._read()
+    assert len(originals) == 18
+    assert len({v["manifest"]["chunks"][0]["id"] for v in originals.values()}) == 1
+    count = len(cloud.objects)
+    poll()
+    assert len(cloud.objects) == count
 
 
 def test_restore_ordinary_library_grant_without_browser_or_research_transfer(

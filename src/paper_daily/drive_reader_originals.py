@@ -113,6 +113,7 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
         names = None
         blobs = None
         conflicts = []
+        pending = []
         for local, paper in bindings.items():
             ticket.check()
             name = _safe_name(local)
@@ -138,10 +139,15 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                     conflicts.append(title[0] if title and title[0] else local)
                     continue
                 if not expected:
-                    index.publish(paper, index.members[paper], path, found)
+                    pending.append((paper, index.members[paper], path, found))
+                    if len(pending) == 16:
+                        index.publish_many(pending)
+                        pending.clear()
             else:
                 if blobs is None:
                     blobs = BlobStore(cache / directory.folder / "verified")
                 _install(index, path, blobs, item["manifest"], expected)
         index.check()
+        if pending:
+            index.publish_many(pending)
         return conflicts
