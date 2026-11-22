@@ -257,6 +257,9 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                     if _divergent(values, current, base, store.context):
                         conflicts.append(local)
                         continue
+                    from paper_daily.drive_transfer_progress import report
+
+                    report("download", paper=current["payload"]["paper_id"])
                     conn.execute(
                         "UPDATE list_papers SET state=?,delivered_at=?,read_at=? "
                         "WHERE list_id=? AND paper_id=?",
@@ -304,7 +307,11 @@ def exchange_reading(directory, store, list_id, revision, ticket):
                 ).fetchone()
                 if row != _values(op):
                     raise ListReviewRequired("Reading progress changed before upload; retry")
-            head = history.append(head, [op for _, op in batch], revision=revision)
+            from paper_daily.drive_transfer_progress import batch_upload
+
+            operations = [op for _, op in batch]
+            batch_upload(operations)
+            head = history.append(head, operations, revision=revision)
         check_source()
     # Record our publication before another local edit can be mistaken for a remote conflict.
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:

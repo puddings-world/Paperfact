@@ -54,6 +54,10 @@ def retain(history, head, tips, revision, ticket):
         ):
             raise DriveChanged("Cached PDF suggestions have a different directory history")
         if old != current:
+            if peers and (not old or old[3] != encoded):
+                from paper_daily.drive_transfer_progress import report
+
+                report("download", paper=peers[0]["payload"]["scope"]["id"], count=len(peers))
             conn.execute(f"INSERT OR REPLACE INTO {_TABLE} VALUES(?,?,?,?,?,?,?,?)",
                          (*scope, *current))
         ticket.checkpoint(conn.commit)

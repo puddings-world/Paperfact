@@ -92,6 +92,9 @@ class DriveListOriginals:
                     raise ListReviewRequired("This paper already has a different original on Drive")
                 manifests[paper] = prior["manifest"]
                 continue
+            from paper_daily.drive_transfer_progress import report
+
+            report("upload", paper=paper)
             manifest = self.objects.put(path, expected=expected)
             originals[paper] = dict(incarnation=incarnation, manifest=manifest)
             manifests[paper] = manifest
@@ -107,6 +110,9 @@ class DriveListOriginals:
                                   folder_role="directory")
         head = ScopeHead(generation, **reference(identity, raw))
         self.check()
+        from paper_daily.drive_transfer_progress import report
+
+        report("index", count=len(batch))
         directory.upsert(observation, [replace(entry, originals_head=head)], check=self.check)
         return manifests
 

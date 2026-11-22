@@ -89,6 +89,9 @@ def publish_recorded(history, tips, revision, ticket):
                 verified = local_source_owners._read_pdf(path, digest, receipt["size"],
                                                          lambda: ticket.cancelled)
                 check()
+                from paper_daily.drive_transfer_progress import report
+
+                report("upload", paper=paper)
                 history.publish_page(paper, digest, data, verified[0], revision=revision,
                                      predecessor=previous["operation_id"] if previous else None)
                 wrote = True

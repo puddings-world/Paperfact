@@ -188,6 +188,10 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     assert "Select the lists" in view.status.text()
     view._progress({"stage": "selected_lists", "completed": 1, "total": 3})
     assert "list 2 of 3" in view.status.text()
+    view._progress(dict(stage="transfer", kind="pdf", direction="download", title="My paper",
+                        index=2, total=3, name="Reading", coverage=(2, 5, 5), done=50, size=100))
+    assert "download pdf" in view.status.text() and "My paper" in view.status.text()
+    assert view.progress.value() == 50 and "Drive 5/5" in view.status.text()
     view.directory_lists.item(1).setCheckState(Qt.CheckState.Checked)
     assert view.save_selection.isVisible()
     assert not view.refresh_lists.isEnabled()
@@ -323,6 +327,8 @@ def test_saved_list_background_serializes_foreground_and_drains_on_close(dialog)
 
     def exchange(ticket, progress):
         seen.append(ticket)
+        progress(dict(stage="transfer", kind="notes", direction="upload", title="Research paper",
+                      index=1, total=2, name="Selected"))
         entered.set()
         released.wait(5)
         ticket.check()
@@ -333,7 +339,8 @@ def test_saved_list_background_serializes_foreground_and_drains_on_close(dialog)
     assert runner.enable(setup)
     view.hide()
     runner.tick()
-    wait(app, entered.is_set)
+    wait(app, lambda: entered.is_set() and runner.detail is not None)
+    assert runner.detail["direction"] == "upload" and "Research paper" in view.status.text()
     runner.tick()
     assert not view.sign_in() and setup.calls == 0
     assert not view.owner.close() and seen[0].cancelled

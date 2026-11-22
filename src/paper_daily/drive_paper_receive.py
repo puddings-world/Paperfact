@@ -40,6 +40,9 @@ def _local_paper(conn, store, paper, published):
         ),
     ).fetchone():
         raise ListReviewRequired("Possible existing paper; review before joining this bibliography")
+    from paper_daily.drive_transfer_progress import report
+
+    report("download", title=payload["title"])
     conn.execute(
         "INSERT INTO papers(id,title,title_key,authors_json,venue,year,source,abstract,"
         "doi,arxiv_id,s2_id,page_url,pdf_url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",

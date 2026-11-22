@@ -1,6 +1,6 @@
 """Window-owned polling of an explicitly selected, signed-in personal library."""
 
-from PySide6.QtCore import QEvent, QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 
 from paper_daily.desktop.sync_connection_dialog import SyncWorker, _background_busy
 
@@ -10,6 +10,7 @@ MINIMIZED_INTERVAL_MS = 120_000
 
 class SavedListSync(QObject):
     changed = Signal()
+    activity = Signal(object)
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -17,6 +18,8 @@ class SavedListSync(QObject):
         self.startup_stamp = None
         self.position_scopes = {}
         self.state = "off"
+        self.detail = None
+        self.coverage = {}
         self.failures = 0
         self.closing = False
         self.changed.connect(self._display)
@@ -57,13 +60,20 @@ class SavedListSync(QObject):
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
         labels["pdf_conflict"] = "PDF 版本不同，已保留原檔；其他內容持續同步"
         labels["mixed_conflict"] = "多種內容版本不同，請查看清單；其他內容持續同步"
-        button.setText(labels[self.state])
-        button.setToolTip(labels[self.state])
+        from paper_daily.drive_transfer_progress import describe
+
+        detail = describe(self.detail) if self.state == "working" else ""
+        compact = button.fontMetrics().elidedText(detail, Qt.TextElideMode.ElideMiddle, 520)
+        button.setText(compact or labels[self.state])
+        button.setToolTip(detail or labels[self.state])
+        button.setAccessibleName(detail or labels[self.state])
 
     def enable(self, service):
         if self.worker or self.closing or service.files is None or not service.binding.current():
             return False
         self.startup_stamp = None
+        self.detail = None
+        self.coverage.clear()
         self.service, self.files = service, service.files
         self.failures = 0
         self.state = "waiting"
@@ -83,7 +93,8 @@ class SavedListSync(QObject):
     def stop(self, state="off"):
         self.timer.stop()
         self.startup_stamp = None
-        self.service = self.files = None
+        self.service = self.files = self.detail = None
+        self.coverage.clear()
         if self.worker:
             self.worker.ticket.cancel()
         self.state = state
@@ -117,12 +128,25 @@ class SavedListSync(QObject):
         else:
             task = service.sync_saved_library
         self.worker = SyncWorker(task, self)
+        self.detail = None
+        self.worker.progress.connect(self._progress)
         if stamp and self.files is None:
             self.worker.progress.connect(self._startup_progress)
         self.worker.finished.connect(self._finished)
         self.state = "working"
         self.changed.emit()
         self.worker.start()
+
+    @Slot(object)
+    def _progress(self, value):
+        if (self.sender() is self.worker and self.worker and self.state == "working"
+                and not self.worker.ticket.cancelled and isinstance(value, dict)
+                and value.get("stage") == "transfer"):
+            self.detail = value
+            if value.get("coverage") and value.get("list_id"):
+                self.coverage[value["list_id"]] = value["coverage"]
+            self._display()
+            self.activity.emit(value)
 
     @Slot(object)
     def _startup_progress(self, update):

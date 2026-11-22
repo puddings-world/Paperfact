@@ -2037,8 +2037,15 @@ def test_idle_pdf_poll_skips_history_and_missing_paths_but_discovers_later_pdf(
     (source.parent / "pdf").mkdir()
     memory = {}
 
+    from paper_daily.drive_transfer_progress import observe, stage
+
+    events = []
+
     def poll():
-        exchange_originals(directory, tmp_path / "cache", store, "list", 1, Ticket(), memory)
+        with observe(events.append, store):
+            stage("list", index=1, total=1, name="Reading")
+            stage("pdf")
+            exchange_originals(directory, tmp_path / "cache", store, "list", 1, Ticket(), memory)
 
     history_reads, misses = [], []
     read, exists = files.read_small, Path.exists
@@ -2078,10 +2085,20 @@ def test_idle_pdf_poll_skips_history_and_missing_paths_but_discovers_later_pdf(
     index = DriveListOriginals(directory, tmp_path / "cache", store, "list", 1, Ticket())
     _, _, originals = index._read()
     assert len(originals) == 18
+    assert events[-1]["coverage"] == (18, 18, 18)
+    assert any(e.get("title") == "Research paper" and e["direction"] == "upload"
+               and e.get("done") == len(original) for e in events)
     assert len({v["manifest"]["chunks"][0]["id"] for v in originals.values()}) == 1
     count = len(cloud.objects)
     poll()
     assert len(cloud.objects) == count
+    (source.parent / "pdf" / "paper.pdf").unlink()
+    events.clear()
+    poll()
+    assert (source.parent / "pdf" / "paper.pdf").read_bytes() == original
+    assert any(e["direction"] == "download" and e.get("title") == "Research paper"
+               for e in events)
+    assert events[-1]["coverage"] == (18, 18, 18)
 
 
 def test_restore_ordinary_library_grant_without_browser_or_research_transfer(

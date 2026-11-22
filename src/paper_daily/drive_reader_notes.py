@@ -132,6 +132,9 @@ def _publish(history, head, records, ticket, bases=None, conflicts=None):
         ticket.check()
         if bases is not None:
             remember_batch(history, batch, history.revision, ticket)
+        from paper_daily.drive_transfer_progress import batch_upload
+
+        batch_upload(batch)
         head = history.append(head, batch, revision=history.revision)
         if bases is not None:
             records = [*records, *batch]
@@ -253,6 +256,9 @@ def _receive_one(history, settings, conn, op, base, published):
             raise ListReviewRequired("Existing note changed; retain both copies for review")
         if local_payload != base["payload"]:
             raise NoteEditConflict("Existing note changed; retain both copies for review")
+        from paper_daily.drive_transfer_progress import report
+
+        report("download", paper=paper)
         conn.execute("UPDATE notes SET body=?,kind=?,created_at=?,page=?,anchor=? WHERE id=?",
                      (payload["body"], payload["kind"], payload["created_at"], payload["page"],
                       json.dumps(payload["anchor"]) if payload["anchor"] is not None else None,
@@ -281,6 +287,9 @@ def _receive_one(history, settings, conn, op, base, published):
     if key is None:
         if op["device_id"] == store.context:
             raise ListReviewRequired("Published note is missing locally; review before restoring")
+        from paper_daily.drive_transfer_progress import report
+
+        report("download", paper=paper)
         cursor = conn.execute(
             "INSERT INTO notes(paper_id,body,kind,created_at,page,anchor) VALUES(?,?,?,?,?,?)",
             (local_paper, payload["body"], payload["kind"], payload["created_at"], payload["page"],

@@ -110,6 +110,14 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                                if entry.name.lower().endswith(".pdf")}
             except FileNotFoundError:
                 present = set()
+        from paper_daily.drive_transfer_progress import originals_count
+
+        available = {paper for local, paper in bindings.items()
+                     if ((_safe_name(local) + ".pdf").casefold() in present if present is not None
+                         else (root / (_safe_name(local) + ".pdf")).is_file())}
+        total = len(available | remote.keys())
+        device_count, drive_count = len(available), len(remote)
+        originals_count(device_count, drive_count, total)
         names = None
         blobs = None
         conflicts = []
@@ -142,12 +150,20 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                     pending.append((paper, index.members[paper], path, found))
                     if len(pending) == 16:
                         index.publish_many(pending)
+                        drive_count += len(pending)
+                        originals_count(device_count, drive_count, total)
                         pending.clear()
             else:
                 if blobs is None:
                     blobs = BlobStore(cache / directory.folder / "verified")
+                from paper_daily.drive_transfer_progress import report
+
+                report("download", paper=paper)
                 _install(index, path, blobs, item["manifest"], expected)
+                device_count += 1
+                originals_count(device_count, drive_count, total)
         index.check()
         if pending:
             index.publish_many(pending)
+            originals_count(device_count, drive_count + len(pending), total)
         return conflicts

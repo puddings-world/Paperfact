@@ -296,6 +296,11 @@ def publish_initial(
         ticket.checkpoint(settings.commit)
     for batch in pending:
         ticket.check()
+        from paper_daily.drive_transfer_progress import report
+
+        titles = [op["payload"]["title"] for op in batch if op["entity_type"] == "paper"]
+        if titles:
+            report("upload", title=titles[0], count=len(titles))
         head = history.append(head, batch, revision=revision)
     if append_new and head:
         # Cache the exact source snapshot, including when a local edit raced the upload.

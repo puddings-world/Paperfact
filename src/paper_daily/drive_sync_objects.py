@@ -10,6 +10,7 @@ from pathlib import Path
 
 from paper_daily.drive_sync_files import MAX_INLINE, DriveMissing, decode, encode, identifier
 from paper_daily.drive_sync_log import reference
+from paper_daily.drive_transfer_progress import byte_progress
 from paper_daily.presentations import _atomic_json
 from paper_daily.sync_blobs import BlobManifest, _no_link
 
@@ -127,6 +128,7 @@ class DriveObjects:
             raise ValueError("Drive upload receipt belongs to another transfer")
         chunks = saved["chunks"]
         with path.open("rb") as source:
+            confirmed = 0
             for ref, (part_hash, length) in zip(chunks, parts, strict=True):
                 self._check()
                 if (
@@ -155,6 +157,8 @@ class DriveObjects:
                         or existing.get("sha256Checksum") != part_hash
                     ):
                         raise ValueError("Drive retry object differs from the captured chunk")
+                confirmed += length
+                byte_progress(confirmed, size)
             if source.read(1):
                 raise ValueError("Source bytes grew during Drive upload")
         self._check()
@@ -183,6 +187,7 @@ class DriveObjects:
                     piece, pending = pending[: store.chunk_bytes], pending[store.chunk_bytes :]
                     offset = store.append(blob, offset, piece)
             start += length
+            byte_progress(start, blob.size)
         self._check()
         path = store.finalize(blob)
         if fetched_all and self.folder_role == "directory":

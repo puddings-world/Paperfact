@@ -263,6 +263,7 @@ class DriveSyncDialog(QDialog):
         layout.addWidget(self.compare_reading)
         self.directory_lists.currentRowChanged.connect(self._list_buttons)
         self.background.changed.connect(self._background_changed)
+        self.background.activity.connect(self._progress)
         layout = outer
         options = QMenu(self)
         self.details = options.addAction(self.tr("Show manual sync controls", "顯示手動同步工具"))
@@ -352,6 +353,8 @@ class DriveSyncDialog(QDialog):
             self.automatic.changed.connect(self._automatic_changed)
         self._show_pilot(False)
         self._buttons()
+        if self.background.state == "working" and self.background.detail:
+            self._progress(self.background.detail)
 
     def _resume_directory(self):
         if not self._resume_pending or self.disposed or self._closing:
@@ -450,6 +453,18 @@ class DriveSyncDialog(QDialog):
 
     def _progress(self, value):
         if self._closing:
+            return
+        from paper_daily.drive_transfer_progress import describe
+
+        detail = describe(value, self.zh)
+        if detail:
+            self.status.setText(detail)
+            self.status.setTextFormat(Qt.TextFormat.PlainText)
+            self.progress.show()
+            size = value.get("size", 0)
+            self.progress.setRange(0, 100 if size else 0)
+            if size:
+                self.progress.setValue(value["done"] * 100 // size)
             return
         if isinstance(value, dict) and value.get("stage") == "selected_lists":
             current, total = value["completed"] + 1, value["total"]
@@ -585,6 +600,13 @@ class DriveSyncDialog(QDialog):
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         summary = current.data(Qt.ItemDataRole.UserRole + 1) if current else ""
+        if self.background.service is self.service and list_id in self._saved_ids:
+            coverage = self.background.coverage.get(list_id)
+            if coverage:
+                device, drive, total = coverage
+                counts = self.tr(f"Last PDF check: device {device}/{total}, Drive {drive}/{total}",
+                                 f"最近一次 PDF 核對：本機 {device}/{total}，Drive {drive}/{total}")
+                summary = "\n".join(filter(None, (summary, counts)))
         self.drive_content.setText(summary or "")
         self.drive_content.setVisible(bool(summary))
         selected_list = self._ordinary_library and list_id in self._saved_ids
@@ -903,7 +925,13 @@ class DriveSyncDialog(QDialog):
         if not self.disposed:
             self._resume_directory()
             self._buttons()
-            if self.background.state == "note_conflict":
+            if self.background.state == "waiting" and self.background.detail and not self.busy:
+                self.status.setText(self.tr("Sync pass finished. Waiting for changes.",
+                                            "本輪同步已完成，等待下次變更。"))
+            elif self.background.state == "offline":
+                self.status.setText(self.tr("Offline. Sync will retry automatically.",
+                                            "離線，恢復連線後會自動重試。"))
+            elif self.background.state == "note_conflict":
                 self.status.setText(self.tr("Some notes need review. Other notes continue syncing.",
                                             "部分筆記需核對，其他筆記會繼續同步。"))
             elif self.background.state == "list_conflict":

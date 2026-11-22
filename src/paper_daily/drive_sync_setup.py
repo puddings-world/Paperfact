@@ -468,6 +468,12 @@ class DriveSetup:
         return self.sync_saved_library(ticket, progress)
 
     def _exchange_saved(self, result, ticket, progress, *, selection=None):
+        from paper_daily.drive_transfer_progress import observe
+
+        with observe(progress, self._library_view[1]):
+            return self._exchange_selected(result, ticket, progress, selection=selection)
+
+    def _exchange_selected(self, result, ticket, progress, *, selection):
         from paper_daily.drive_list_records import (
             ListDetailsConflict,
             ListReviewRequired,
@@ -475,6 +481,7 @@ class DriveSetup:
         )
         from paper_daily.drive_membership_apply import MembershipConflict, arm_present_review
         from paper_daily.drive_membership_intent import MembershipRemovalReview
+        from paper_daily.drive_transfer_progress import stage
 
         _, store, saved, directory, *_ = self._library_view
         remote_chats = set(result.get("remote_chat_lists", ()))
@@ -495,19 +502,24 @@ class DriveSetup:
         pdf_titles = {}
         position_suggestions = {}
         position_grants = {}
+        names = {item["id"]: item["name"] for item in result["items"]}
         selected = sorted(selection.selected)
         for index, list_id in enumerate(selected):
             ticket.check()
             progress({"stage": "selected_lists", "completed": index, "total": len(selected)})
+            stage("list", index=index + 1, total=len(selected), list_id=list_id,
+                  name=names.get(list_id, list_id))
             try:
                 state = exchange_list(directory, store, list_id, selection.revision, ticket)
                 if state in ("updated", "current"):
                     from paper_daily.drive_paper_receive import exchange_bibliography
 
+                    stage("papers")
                     exchange_bibliography(directory, store, list_id, selection.revision, ticket)
                     if list_id in result.get("pdf_lists", ()):
                         from paper_daily.drive_reader_originals import exchange_originals
 
+                        stage("pdf")
                         differing = exchange_originals(
                             directory, self.cache, store, list_id, selection.revision, ticket,
                             self._pdf_versions,
@@ -520,6 +532,7 @@ class DriveSetup:
                     if list_id in result.get("dive_lists", ()):
                         from paper_daily.drive_reader_dives import exchange_dives
 
+                        stage("dives")
                         if exchange_dives(directory, store, list_id, selection.revision, ticket):
                             dive_conflicts.add(list_id)
                             reason = "Saved explanations differ; review both versions"
@@ -528,6 +541,7 @@ class DriveSetup:
                     if list_id in result.get("reading_lists", ()):
                         from paper_daily.drive_reader_progress import exchange_reading
 
+                        stage("reading")
                         differing = exchange_reading(directory, store, list_id, selection.revision,
                                                      ticket)
                         if differing:
@@ -549,6 +563,7 @@ class DriveSetup:
                                 membership_changes=directory.membership_changes,
                                 membership_restores=directory.membership_restores,
                             )
+                        stage("chat")
                         count = exchange_chat(directory, store, list_id, selection.revision, ticket)
                         if count:
                             chat_conflicts.add(list_id)
@@ -568,6 +583,7 @@ class DriveSetup:
                                 membership_changes=directory.membership_changes,
                                 membership_restores=directory.membership_restores,
                             )
+                        stage("positions")
                         history = DriveListPositions(directory, store, list_id,
                                                      revision=selection.revision)
                         history.check_source = ticket.check
@@ -579,6 +595,7 @@ class DriveSetup:
                             history, head, tips, selection.revision, ticket
                         )
                     if list_id in result.get("note_lists", ()):
+                        stage("notes")
                         exchange_reader_notes(directory, store, list_id, selection.revision, ticket)
             except MembershipConflict as exc:
                 if exc.detail["kind"] != "absent":

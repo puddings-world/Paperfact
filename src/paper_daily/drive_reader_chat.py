@@ -375,6 +375,9 @@ def exchange_chat(directory, store, list_id, revision, ticket):
                             (list_id, paper)
                         ).fetchone():
                             raise ListReviewRequired("Conversation paper is missing")
+                        from paper_daily.drive_transfer_progress import report
+
+                        report("download", paper=remote["payload"]["scope"]["id"])
                         _receive(conn, paper, remote["payload"], turn)
                         value = remote["payload"]
                 if value is not None and (not remote or remote["payload"] != value):
@@ -413,6 +416,9 @@ def exchange_chat(directory, store, list_id, revision, ticket):
                         + pages * 2048 > history.max_bytes):
             raise ListReviewRequired("Conversation exceeds the readable Drive history budget")
         for batch in batches:
+            from paper_daily.drive_transfer_progress import batch_upload
+
+            batch_upload(batch)
             head = history.append(head, batch, revision=revision)
             conn.execute("BEGIN IMMEDIATE")
             history._check(revision)

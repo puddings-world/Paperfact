@@ -172,6 +172,9 @@ def _reconcile(history, records, revision, ticket, sent=()):
                         if not incoming and not (base and data == base["payload"]["data"]):
                             conflicts += 1
                             continue
+                        from paper_daily.drive_transfer_progress import report
+
+                        report("download", paper=paper)
                         conn.execute("INSERT INTO dives(paper_id,body,written_at,spec) "
                                      "VALUES(?,?,?,?) ON CONFLICT(paper_id) DO UPDATE SET "
                                      "body=excluded.body,written_at=excluded.written_at,"
@@ -275,6 +278,9 @@ def exchange_dives(directory, store, list_id, revision, ticket):
     for batch in batches:
         ticket.check()
         remember_batch(history, batch, revision, ticket)
+        from paper_daily.drive_transfer_progress import batch_upload
+
+        batch_upload(batch)
         head = history.publish_batch(head, batch, revision, ticket)
         records.extend(batch)
         _reconcile(history, records, revision, ticket, {op["operation_id"] for op in batch})
