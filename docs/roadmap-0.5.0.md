@@ -9,6 +9,28 @@ mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
 See the implementation ledger for exact coverage rather than inferring release readiness.
 
+## Personal Drive library layout
+
+The private directory has three logical layers. Its mutable head identifies the
+current catalog. Each list has separate histories for its bibliography and
+research content, including an originals index. That index maps a portable
+paper and its lifetime to a PDF digest, byte length and ordered Drive chunk
+references. Renaming or reordering a list should change metadata only.
+
+Keep this layout readable by the installed desktop candidates. Publishing a
+batch of originals advances one list index only after its chunks are verified.
+The same uploader can reuse a digest receipt across lists in the same library.
+Independent devices can still upload duplicate bytes before discovering each
+other's manifests. A future library-wide digest index should handle concurrent
+first uploads and interrupted publication before claiming global deduplication.
+
+For a future browsable Drive view, expose per-list paper titles as shortcuts to
+one verified original per digest. Keep readable exports separate from internal
+history. The current chunk files are not standalone PDFs. A browsable single-file
+view requires a storage-format migration or an explicitly requested export.
+Gate migration on older-client detection, interrupted-upgrade recovery, and a
+Windows-to-Mac hash-verified round trip before changing existing Drive folders.
+
 ## Personal Drive membership removal
 
 **Planned for ordinary selected lists.** The current bibliography exchanges additions.
