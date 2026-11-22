@@ -1,0 +1,10 @@
+{
+  "progress": [
+    { "title": "v0.4: desktop reader with AI commentary, citation maps, notes and shareable research bundles", "status": "done", "note": "Windows and Mac releases" },
+    { "title": "v0.5: research across devices", "status": "doing", "note": "Desktop, Mac and a private mobile reader; offline-first sync with recoverable conflicts and version history" },
+    { "title": "Reports with sources", "status": "doing", "note": "Every claim links to the exact passage and original PDF it came from, or says no source was found" },
+    { "title": "Reading goals per list", "status": "next", "note": "Each paper opens at the depth and with the background its list's goal needs" },
+    { "title": "Why a paper exists", "status": "next", "note": "The gap it fills and how later work built on it, quoted from the papers themselves" },
+    { "title": "Installed-device acceptance and the public v0.5 release", "status": "next" }
+  ]
+}
