@@ -1126,6 +1126,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
         view.show()
         view.login.click()
         wait(app, lambda: not view.busy)
+        view.details.setChecked(True)
         view.directory_lists.item(0).setCheckState(Qt.CheckState.Checked)
         view.save_selection.click()
         wait(app, lambda: not view.busy)
@@ -1332,6 +1333,8 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert view.drive_content.isVisible()
             assert view.tr("paper list", "論文目錄") in view.drive_content.text()
             assert view.drive_content.text() in view.directory_lists.currentItem().toolTip()
+            assert view.content_options.isHidden()
+            view.details.setChecked(True)
             view.content_options.click()
             assert not view.include_old_chat.isVisible()
             if label == "win":
@@ -1508,6 +1511,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
             assert reopened.directory_lists.count() == 0 and not reopened.login.isEnabled()
             release.set()
             wait(app, lambda: reopened.directory_lists.count() > 0 and not reopened.busy)
+            reopened.details.setChecked(True)
             assert reopened.account.text() == setup.account["email"]
             assert reopened.keep_syncing.isChecked()
             devices = (windows[0][1].service, reopened.service)

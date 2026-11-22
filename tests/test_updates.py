@@ -11,6 +11,14 @@ import pytest
 from paper_daily import runtime, store, updates
 
 
+def test_installed_preview_can_update_to_published_version(monkeypatch):
+    monkeypatch.setattr(updates.runtime, "FROZEN", True)
+    assert updates.newest([_release("v0.5.0")], "0.5.0.dev").version == "0.5.0"
+    assert updates.newest([_release("v0.4.9")], "0.5.0.dev") is None
+    monkeypatch.setattr(updates.runtime, "FROZEN", False)
+    assert updates.newest([_release("v0.5.0")], "0.5.0.dev") is None
+
+
 def _release(tag, *, draft=False, prerelease=False, body="", assets=()):
     return {
         "tag_name": tag,

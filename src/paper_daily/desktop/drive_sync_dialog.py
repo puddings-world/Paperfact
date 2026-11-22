@@ -97,13 +97,8 @@ class DriveSyncDialog(QDialog):
         layout = QVBoxLayout(self)
         intro = QLabel(
             self.tr(
-                "Use the same Google account on your desktop and laptop. "
-                "Research stays on each device; "
-                "Enable sync to keep a private copy in your own Drive. "
-                "Sharing lists is separate.",
-                "桌機與筆電登入同一個 Google 帳號。啟用同步"
-                "後，研究資料會保存在各裝置與你自己的私人 Driv"
-                "e；分享清單是另一個操作。",
+                "Use the same Google account on both devices. Checked lists sync while you read.",
+                "兩台裝置登入同一個 Google 帳號。閱讀時，勾選的清單會透過私人 Drive 自動同步。",
             )
         )
         intro.setWordWrap(True)
@@ -148,6 +143,7 @@ class DriveSyncDialog(QDialog):
         self._enroll_after_login = False
         self._first_selection = False
         self._retry_startup = False
+        self._refresh_failed = False
         self.directory_lists = QListWidget()
         self.directory_lists.setAccessibleName(self.tr("Lists on this device", "這台裝置的清單"))
         self.directory_lists.setVisible(False)
@@ -269,6 +265,9 @@ class DriveSyncDialog(QDialog):
         self.background.changed.connect(self._background_changed)
         layout = outer
         options = QMenu(self)
+        self.details = options.addAction(self.tr("Show manual sync controls", "顯示手動同步工具"))
+        self.details.setCheckable(True)
+        self.details.toggled.connect(self._list_buttons)
         self.pilot = options.addAction(self.tr("Legacy workspace sync", "舊版工作區同步"))
         self.pilot.setCheckable(True)
         self.pilot.setVisible(False)
@@ -310,8 +309,8 @@ class DriveSyncDialog(QDialog):
         layout.addWidget(self.open_library)
         self.status = QLabel(
             self.tr(
-                "Sign in to create or open a workspace.",
-                "登入後即可建立或開啟同步工作區。",
+                "Sign in to sync your research lists.",
+                "登入 Google 即可設定清單自動同步。",
             )
         )
         self.status.setWordWrap(True)
@@ -322,7 +321,7 @@ class DriveSyncDialog(QDialog):
         layout.addWidget(self.progress)
         row = QHBoxLayout()
         self.advanced = QToolButton()
-        self.advanced.setText(self.tr("Other sync methods", "其他同步方式"))
+        self.advanced.setText(self.tr("Advanced settings", "進階設定"))
         self.advanced.setMenu(options)
         self.advanced.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         row.addWidget(self.advanced)
@@ -394,6 +393,7 @@ class DriveSyncDialog(QDialog):
         self.directory_lists.setEnabled(idle)
         self.save_selection.setEnabled(idle and self.service.files is not None)
         self._list_buttons()
+        self.stop.setVisible(self.busy)
         self.stop.setEnabled(self.busy)
         self.progress.setVisible(self.busy)
         self.progress.setRange(0, 0 if self.busy else 1)
@@ -480,6 +480,7 @@ class DriveSyncDialog(QDialog):
         self.lists.setVisible(show_scope)
 
     def _show_directory(self, library):
+        self._refresh_failed = False
         self.background.update_position_scopes(self.service, library)
         previous = self.directory_lists.currentItem()
         current_id = previous.data(Qt.ItemDataRole.UserRole) if previous else None
@@ -564,22 +565,34 @@ class DriveSyncDialog(QDialog):
         )
         if self._retry_startup and self.sync_lists.isEnabled():
             label = self.tr("Retry automatic sync", "重試自動同步")
-        elif self._first_selection:
+        elif self._first_selection or self._can_resume_saved():
             label = self.tr("Enable automatic sync", "啟用自動同步")
         else:
             label = self.tr("Save list selection", "儲存清單選擇")
         self.save_selection.setText(label)
+        directory = not self.directory_lists.isHidden()
+        manual = self.details.isChecked()
+        state = self.background.state
+        self.login.setVisible(manual or not directory or self.service.files is None)
+        review_all = manual or state == "mixed_conflict"
+        self.save_selection.setVisible(directory and (
+            self._first_selection or self._retry_startup or self._can_resume_saved()
+            or checked != self._saved_ids))
+        if directory:
+            self.refresh_lists.setVisible(manual or self._refresh_failed or state == "review")
+        self.sync_lists.setVisible(directory and (manual or self.background.state in {
+            "review", "pdf_conflict", "mixed_conflict", "reading_conflict"}))
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         summary = current.data(Qt.ItemDataRole.UserRole + 1) if current else ""
         self.drive_content.setText(summary or "")
         self.drive_content.setVisible(bool(summary))
         selected_list = self._ordinary_library and list_id in self._saved_ids
-        self.content_options.setVisible(selected_list)
+        self.content_options.setVisible(selected_list and manual)
         if selected_list:
             self.content_options.setText(
                 self.tr("Sync contents", "同步內容") + " · " + current.text())
-        expanded = selected_list and self.content_options.isChecked()
+        expanded = selected_list and manual and self.content_options.isChecked()
         self.notes_toggle.setVisible(expanded)
         self.notes_toggle.setChecked(list_id in self._note_lists)
         self.notes_toggle.setEnabled(self.sync_lists.isEnabled())
@@ -637,20 +650,25 @@ class DriveSyncDialog(QDialog):
         else:
             self.membership_detail.clear()
         self.upgrade_removals.setVisible(
-            self._ordinary_library and list_id in self._membership_upgrades)
+            manual and self._ordinary_library and list_id in self._membership_upgrades)
         self.upgrade_removals.setEnabled(self.sync_lists.isEnabled())
-        self.compare_list.setVisible(self._ordinary_library and list_id in self._saved_ids)
+        self.compare_list.setVisible(self._ordinary_library and list_id in self._saved_ids
+                                     and (review_all or state == "list_conflict"))
         self.compare_list.setEnabled(self.sync_lists.isEnabled())
-        self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists)
+        self.compare_notes.setVisible(self._ordinary_library and list_id in self._note_lists
+                                     and (review_all or state == "note_conflict"))
         self.compare_notes.setEnabled(self.sync_lists.isEnabled())
-        self.compare_chat.setVisible(expanded and list_id in self._chat_lists)
+        self.compare_chat.setVisible(selected_list and list_id in self._chat_lists
+                                     and (review_all or state == "chat_conflict"))
         self.compare_chat.setEnabled(self.sync_lists.isEnabled())
-        self.compare_dives.setVisible(self._ordinary_library and list_id in self._dive_lists)
+        self.compare_dives.setVisible(self._ordinary_library and list_id in self._dive_lists
+                                     and (review_all or state == "dive_conflict"))
         self.compare_dives.setEnabled(self.sync_lists.isEnabled())
-        self.compare_reading.setVisible(self._ordinary_library and list_id in self._reading_lists)
+        self.compare_reading.setVisible(self._ordinary_library and list_id in self._reading_lists
+                                     and (review_all or state == "reading_conflict"))
         self.compare_reading.setEnabled(self.sync_lists.isEnabled())
         active = self.background.service is not None
-        self.keep_syncing.setVisible(active or self._ordinary_library)
+        self.keep_syncing.setVisible(manual and (active or self._ordinary_library))
         self.keep_syncing.setChecked(active)
         self.keep_syncing.setEnabled(
             active or (self._ordinary_library and self.sync_lists.isEnabled())
@@ -914,6 +932,10 @@ class DriveSyncDialog(QDialog):
         if self.sync_lists.isEnabled() and self.sync_lists.isVisible():
             self._start("sync_saved", self.service.sync_saved_library)
 
+    def _can_resume_saved(self):
+        return (self._ordinary_library and self.sync_lists.isEnabled()
+                and not self.startup_sync.isChecked() and self.background.service is None)
+
     def _save_selection(self):
         if self.busy or self.service.files is None or not self.directory_lists.isVisible():
             return False
@@ -922,7 +944,7 @@ class DriveSyncDialog(QDialog):
             for i in range(self.directory_lists.count())
             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked
         ]
-        if self._retry_startup and self.sync_lists.isEnabled():
+        if self._can_resume_saved() or (self._retry_startup and self.sync_lists.isEnabled()):
             return self._start("startup_on", lambda t, _: self.service.remember_library(
                 t, startup=True))
         with_content = self._ordinary_library and bool(set(selected) - self._saved_ids)
@@ -1082,6 +1104,9 @@ class DriveSyncDialog(QDialog):
                     self.pilot.setVisible(False)
                     self._show_pilot(True)
                 self.status.setText(
+                    self.tr("Automatic sync is on. You can continue reading.",
+                            "自動同步已開啟，可以繼續閱讀。")
+                    if self._ordinary_library and self.startup_sync.isChecked() else
                     self.tr(
                         "Select the lists for this device and save your selection.",
                         "勾選要在這台裝置同步的清單，再儲存選擇。",
@@ -1247,6 +1272,7 @@ class DriveSyncDialog(QDialog):
                 "清單選擇已儲存。自動同步設定失敗（{reason}）。按「重試自動同步」完成裝置設定。",
             ).format(reason=worker.error))
         if current and kind == "refresh" and worker.error == "offline":
+            self._refresh_failed = True
             self.refresh_lists.show()
             self.status.setText(self.tr(
                 "Could not reach Drive. When online, choose Refresh list names.",

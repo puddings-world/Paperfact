@@ -82,8 +82,9 @@ def newest(
     releases: list[dict], current: str, *, include_prerelease: bool = False
 ) -> Release | None:
     """The highest published version above `current`, if there is one."""
-    if re.fullmatch(r"v?\d+\.\d+\.\d+\.dev\d*", current):
-        return None  # Development copies follow Git, never a released installer.
+    preview = bool(re.fullmatch(r"v?\d+\.\d+\.\d+\.dev\d*", current))
+    if preview and not runtime.FROZEN:
+        return None  # Source checkouts follow Git.
     have = parse_version(current) or (0, 0, 0)
     best: tuple[tuple[int, int, int], dict] | None = None
     for item in releases:
@@ -95,7 +96,7 @@ def newest(
         if not isinstance(tag, str) or VERSION_TAG.fullmatch(tag) is None:
             continue
         version = parse_version(tag)
-        if version is None or version <= have:
+        if version is None or version < have or (version == have and not preview):
             continue
         if best is None or version > best[0]:
             best = (version, item)
@@ -196,7 +197,7 @@ def check(
     """
     if channel not in ("stable", "beta"):
         raise ValueError("Unknown update channel")
-    if re.fullmatch(r"v?\d+\.\d+\.\d+\.dev\d*", current):
+    if not runtime.FROZEN and re.fullmatch(r"v?\d+\.\d+\.\d+\.dev\d*", current):
         return None
     stamp = (
         now

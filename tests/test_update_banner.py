@@ -80,6 +80,44 @@ def test_a_finished_download_hands_over_to_the_installer_and_quits(banner, monke
     assert started == [tmp_path / "setup.exe"] and quit_asked == [True]
 
 
+def test_installed_update_stages_without_interrupting_reading(banner, monkeypatch, tmp_path):
+    from dataclasses import replace
+
+    name, url = next(iter(RELEASE.assets.items()))
+    import hashlib
+
+    data = b"synthetic installer"
+    release = replace(RELEASE, digests={name: "sha256:" + hashlib.sha256(data).hexdigest()})
+    monkeypatch.setattr(update_banner.runtime, "FROZEN", True)
+    monkeypatch.setattr(updates, "can_install", lambda: True)
+    monkeypatch.setattr(updates, "asset_for", lambda _: (name, url))
+    monkeypatch.setattr(updates, "download_dir", lambda: tmp_path)
+    downloads, installs = [], []
+
+    def download(url, path, progress):
+        downloads.append(url)
+        path.write_bytes(data)
+        return path
+
+    monkeypatch.setattr(updates, "download", download)
+    monkeypatch.setattr(updates, "launch_installer", installs.append)
+    from PySide6.QtTest import QTest
+
+    banner.offer(release)
+    for _ in range(100):
+        QTest.qWait(10)
+        if banner._ready:
+            break
+    assert downloads == [url] and not installs and banner.install.isEnabled()
+    assert banner._ready == tmp_path / name
+    banner.install.click()
+    for _ in range(100):
+        QTest.qWait(10)
+        if installs:
+            break
+    assert installs == [tmp_path / name]
+
+
 def _toolbar():
     QApplication.instance() or QApplication([])
     host = QWidget()

@@ -161,6 +161,10 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     view.sign_in()
     wait(app, lambda: not view.busy)
     assert view.directory_lists.count() == 2 and view.directory_lists.isVisible()
+    assert view.sync_lists.isHidden() and view.refresh_lists.isHidden()
+    assert view.keep_syncing.isHidden() and view.save_selection.isHidden()
+    view.details.setChecked(True)
+    assert view.refresh_lists.isVisible()
     refreshes = []
     def overview(ticket, progress):
         refreshes.append(True)
@@ -185,6 +189,7 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     view._progress({"stage": "selected_lists", "completed": 1, "total": 3})
     assert "list 2 of 3" in view.status.text()
     view.directory_lists.item(1).setCheckState(Qt.CheckState.Checked)
+    assert view.save_selection.isVisible()
     assert not view.refresh_lists.isEnabled()
     prompts = []
 

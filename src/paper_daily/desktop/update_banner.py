@@ -43,6 +43,7 @@ class UpdateBanner(QFrame):
         self._workspace_owner = owner if owner is not None else WindowWorkspace.capture()
         self.release: updates.Release | None = None
         self._checking = self._downloading = self._closed = False
+        self._stage_only = False
         self._dismissed = None
         self._prepare_install = prepare_install
         self._cancel_install = cancel_install
@@ -206,6 +207,10 @@ class UpdateBanner(QFrame):
         self.later.setEnabled(True)
         self.show()
         self._rotate.start()
+        asset = updates.asset_for(release)
+        if runtime.FROZEN and updates.can_install() and asset and release.digests.get(asset[0]):
+            self._stage_only = True
+            self.start_install()
 
     def _cycle(self):
         focused = QApplication.focusWidget()
@@ -251,10 +256,14 @@ class UpdateBanner(QFrame):
                 if not digest:
                     raise ValueError("此版本缺少驗證資訊，請從發布頁下載。")
                 dest = updates.download_dir() / name
-                path = updates.download(
-                    url, dest, lambda done, total: _emit(relay.progress, done, total)
-                )
-                updates.verify_download(path, digest)
+                try:
+                    updates.verify_download(dest, digest)
+                    path = dest
+                except (FileNotFoundError, ValueError):
+                    path = updates.download(
+                        url, dest, lambda done, total: _emit(relay.progress, done, total)
+                    )
+                    updates.verify_download(path, digest)
             except (OSError, ValueError, updates.httpx.HTTPError) as exc:
                 from paper_daily import diagnostics
 
@@ -282,7 +291,14 @@ class UpdateBanner(QFrame):
             return
         self._ready = path
         if self._current():
-            self._verified()
+            if self._stage_only:
+                self._stage_only = False
+                self.label.setText(f"Paperfact {self.release.version} 已備妥，可在方便時重啟。")
+                self.install.setText("更新並重啟")
+                self.install.setEnabled(True)
+                self.later.setEnabled(True)
+            else:
+                self._verified()
 
     def _apply_ready(self):
         if not self._current() or self._installing or self._verifying or self._ready is None:
@@ -332,6 +348,7 @@ class UpdateBanner(QFrame):
         self.quit_for_update.emit()
 
     def _failed(self, reason):
+        self._stage_only = False
         self._downloading = False
         self._verifying = False
         self._ready = None
@@ -360,6 +377,7 @@ class UpdateBanner(QFrame):
             with connect(path=self._workspace_owner.database) as conn:
                 updates.snooze(conn, self.release)
             self._dismissed = (self.release.version, updates.date.today())
+            self._ready = None  # The verified installer remains cached on disk.
         self._rotate.stop()
         self.hide()
 
