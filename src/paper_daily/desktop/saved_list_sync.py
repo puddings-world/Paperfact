@@ -1,5 +1,7 @@
 """Window-owned polling of an explicitly selected, signed-in personal library."""
 
+from datetime import datetime
+
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 
 from paper_daily.desktop.sync_connection_dialog import SyncWorker, _background_busy
@@ -21,6 +23,8 @@ class SavedListSync(QObject):
         self.detail = None
         self.coverage = {}
         self.failures = 0
+        self.last_checked = ""
+        self.deferred = ""
         self.closing = False
         self.changed.connect(self._display)
         self.timer = QTimer(self)
@@ -48,8 +52,9 @@ class SavedListSync(QObject):
         if button is None:
             return
         labels = {
-            "off": "自動同步已關閉", "waiting": "已勾選清單自動同步中",
-            "working": "正在同步已勾選清單", "offline": "離線，稍後重試",
+            "off": "自動同步已關閉", "waiting": "自動同步已開啟，等待檢查 Drive",
+            "working": "正在連接 Google 帳號" if self.files is None else "正在核對 Drive 清單目錄",
+            "offline": f"無法連上 Drive，將自動重試（間隔 {self.timer.interval() // 1000} 秒）",
             "changed": "工作區已切換，請重新啟用同步", "review": "清單同步已暫停，請核對",
         }
         labels["list_conflict"] = "清單名稱或說明需核對，其他清單持續同步"
@@ -62,6 +67,11 @@ class SavedListSync(QObject):
         labels["mixed_conflict"] = "多種內容版本不同，請查看清單；其他內容持續同步"
         from paper_daily.drive_transfer_progress import describe
 
+        if self.state == "waiting":
+            if self.deferred:
+                labels["waiting"] = self.deferred
+            elif self.last_checked:
+                labels["waiting"] = f"{self.last_checked} 已核對 · 等待下次檢查 Drive"
         detail = describe(self.detail) if self.state == "working" else ""
         compact = button.fontMetrics().elidedText(detail, Qt.TextElideMode.ElideMiddle, 520)
         button.setText(compact or labels[self.state])
@@ -72,6 +82,7 @@ class SavedListSync(QObject):
         if self.worker or self.closing or service.files is None or not service.binding.current():
             return False
         self.startup_stamp = None
+        self.last_checked = self.deferred = ""
         self.detail = None
         self.coverage.clear()
         self.service, self.files = service, service.files
@@ -92,6 +103,7 @@ class SavedListSync(QObject):
 
     def stop(self, state="off"):
         self.timer.stop()
+        self.last_checked = self.deferred = ""
         self.startup_stamp = None
         self.service = self.files = self.detail = None
         self.coverage.clear()
@@ -112,11 +124,14 @@ class SavedListSync(QObject):
 
         # Keep the exact directory snapshot that the visible checklist is reviewing.
         owner = self.parent()
-        if any(view.isVisible() for view in owner.findChildren(DriveSyncDialog)) or (
-            _background_busy(owner)
-        ):
+        reviewing = any(view.isVisible() for view in owner.findChildren(DriveSyncDialog))
+        if reviewing or _background_busy(owner):
+            self.deferred = ("等待關閉同步設定，再檢查 Drive" if reviewing
+                             else "等待目前工作完成，再檢查 Drive")
             self.timer.start(5000)
+            self._display()
             return
+        self.deferred = ""
         if self.startup_stamp and self.service.library_startup_record() != self.startup_stamp:
             self.position_scopes.clear()
             self.stop()
@@ -193,6 +208,7 @@ class SavedListSync(QObject):
             else:
                 self.failures = 0
                 self.update_position_scopes(self.service, worker.result)
+                self.last_checked = datetime.now().strftime("%H:%M:%S")
                 conflicts = [kind for kind in ("list", "note", "chat", "dive", "pdf", "reading")
                              if worker.result.get(kind + "_conflicts")]
                 self.state = "waiting"

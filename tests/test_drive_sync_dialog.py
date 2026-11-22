@@ -259,12 +259,20 @@ def test_saved_list_background_survives_dialog_close_and_backs_off(dialog):
     assert runner.service is setup and runner.timer.isActive()
     runner.tick()
     assert not calls and runner.worker is None
+    from PySide6.QtWidgets import QPushButton
+
+    view.owner.sync_status_btn = QPushButton(view.owner)
+    runner._display()
+    assert "等待關閉同步設定" in view.owner.sync_status_btn.text()
     assert view.close()
     runner.tick()
     wait(app, lambda: runner.worker is None)
     assert runner.state == "offline" and runner.timer.interval() == 10000
+    assert "10 秒" in view.owner.sync_status_btn.text()
     runner.tick()
+    assert "核對 Drive 清單目錄" in view.owner.sync_status_btn.text()
     wait(app, lambda: runner.worker is None)
+    assert "已核對" in view.owner.sync_status_btn.text()
     assert len(calls) == 2 and runner.state == "waiting" and runner.timer.interval() == 30000
     setup.files = object()
     runner.tick()

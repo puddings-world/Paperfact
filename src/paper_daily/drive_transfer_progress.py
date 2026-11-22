@@ -94,7 +94,7 @@ def describe(event, zh=True):
     verbs = {"check": "核對", "upload": "上傳", "download": "下載", "index": "登錄雲端索引"}
     kind, verb = event["kind"], event["direction"]
     action = f"{verbs[verb]}{kinds[kind]}" if zh else f"{verb} {kind}"
-    parts = [f"{event['index']}/{event['total']} {event['name']}", action, event.get("title")]
+    parts = [action, f"{event['index']}/{event['total']} {event['name']}", event.get("title")]
     if event.get("count", 0) and event["count"] > 1:
         parts.append(f"本批共 {event['count']} 筆" if zh else f"{event['count']} records in batch")
     if event.get("coverage"):
