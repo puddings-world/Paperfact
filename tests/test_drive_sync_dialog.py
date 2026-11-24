@@ -216,6 +216,10 @@ def test_device_checkboxes_only_save_reviewed_ids_after_confirmation(dialog, mon
     assert view.directory_lists.item(1).checkState() == Qt.CheckState.Checked
     assert "needs review" in view.directory_lists.item(1).text()
     assert view.directory_lists.item(1).toolTip() == "Conflicting description"
+    view.directory_lists.setCurrentRow(1)
+    assert view.drive_content.isVisible() and "Conflicting description" in view.drive_content.text()
+    view.directory_lists.setCurrentRow(0)
+    assert "Conflicting description" not in view.drive_content.text()
     assert "Review" in view.status.text()
     assert view.sync_lists.isEnabled()
     view.directory_lists.item(0).setCheckState(Qt.CheckState.Checked)

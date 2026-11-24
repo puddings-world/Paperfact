@@ -149,6 +149,7 @@ class DriveSyncDialog(QDialog):
         self.directory_lists.setVisible(False)
         layout.addWidget(self.directory_lists)
         self.drive_content = QLabel()
+        self.drive_content.setTextFormat(Qt.TextFormat.PlainText)
         self.drive_content.setWordWrap(True)
         self.drive_content.hide()
         layout.addWidget(self.drive_content)
@@ -541,7 +542,7 @@ class DriveSyncDialog(QDialog):
             detail = "\n".join(filter(None, (summary, reason)))
             item.setToolTip(detail)
             item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail)
-            item.setData(Qt.ItemDataRole.UserRole + 1, summary)
+            item.setData(Qt.ItemDataRole.UserRole + 1, detail)
             item.setData(Qt.ItemDataRole.UserRole, row["id"])
             item.setCheckState(
                 Qt.CheckState.Checked if self._first_selection or row["selected"]

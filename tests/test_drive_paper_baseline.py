@@ -345,6 +345,34 @@ def test_shared_paper_identity_and_interrupted_source_publication(source, tmp_pa
     assert history.changes(accepted, revision=1) == (accepted, [])
 
 
+def test_empty_peer_receives_distinct_papers_with_shared_metadata(source, tmp_path, monkeypatch):
+    from paper_daily import drive_sync_setup, store
+
+    with closing(sqlite3.connect(source)) as conn, conn:
+        conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source,doi) "
+                     "SELECT 'other',title,title_key,venue,year,source,doi FROM papers "
+                     "WHERE id='paper'")
+        conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                     "VALUES('list','other',2,?)", (STAMP,))
+    laptop = tmp_path / "target" / "papers.db"
+    laptop.parent.mkdir()
+    with closing(sqlite3.connect(laptop)) as conn:
+        conn.executescript(store.SCHEMA)
+    cloud = Cloud()
+    for label, path in (("desktop", source), ("laptop", laptop)):
+        files = authority(cloud, tmp_path / label / "authority").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, f=files, **kw: f)
+        service = drive_sync_setup.DriveSetup(
+            path, profiles=tmp_path / label / "profiles", cache=tmp_path / label / "cache",
+            authorize=lambda f=files, **kw: f.session)
+        service.sign_in(Ticket(), lambda _: None)
+        assert not service.apply_library(["list"], Ticket(), lambda _: None)["reviews"]
+    assert not service.sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute("SELECT count(DISTINCT paper_id) FROM list_papers "
+                            "WHERE list_id='list'").fetchone() == (2,)
+
+
 def test_reader_selection_publishes_receives_and_preserves_local_edits(
     source, tmp_path, monkeypatch
 ):

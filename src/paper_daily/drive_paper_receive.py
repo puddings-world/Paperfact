@@ -13,7 +13,7 @@ from paper_daily.store import title_key
 from paper_daily.workspace_service import _read
 
 
-def _local_paper(conn, store, paper, published):
+def _local_paper(conn, store, paper, published, received):
     identity, payload = paper["entity_id"], paper["payload"]
     known = conn.execute(
         "SELECT local_id FROM drive_library_papers WHERE context=? AND remote_id=?",
@@ -28,9 +28,9 @@ def _local_paper(conn, store, paper, published):
         return known[0]
     local_id = "sync:" + identity
     key = title_key(payload["title"])
-    if conn.execute(
-        "SELECT 1 FROM papers WHERE id=? OR (title_key=? AND title_key!='') "
-        "OR doi=? COLLATE NOCASE OR arxiv_id=? OR s2_id=? LIMIT 1",
+    matches = conn.execute(
+        "SELECT id FROM papers WHERE id=? OR (title_key=? AND title_key!='') "
+        "OR doi=? COLLATE NOCASE OR arxiv_id=? OR s2_id=?",
         (
             local_id,
             key,
@@ -38,7 +38,9 @@ def _local_paper(conn, store, paper, published):
             payload["arxiv_id"] or None,
             payload["s2_id"] or None,
         ),
-    ).fetchone():
+    )
+    # Distinct identities published together by one source can share bibliographic metadata.
+    if any(key == local_id or received.get(key) != paper["device_id"] for (key,) in matches):
         raise ListReviewRequired("Possible existing paper; review before joining this bibliography")
     from paper_daily.drive_transfer_progress import report
 
@@ -60,6 +62,7 @@ def _local_paper(conn, store, paper, published):
     conn.execute(
         "INSERT INTO drive_library_papers VALUES(?,?,?)", (store.context, identity, local_id)
     )
+    received[local_id] = paper["device_id"]
     return local_id
 
 
@@ -174,6 +177,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
 
             _schema(conn)
             originals = None
+            received = {}
             for paper, member in pairs:
                 ticket.check()
                 published = (
@@ -190,7 +194,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
                         raise ListReviewRequired("Existing bibliography identity changed")
                     conn.execute("INSERT OR IGNORE INTO drive_library_papers VALUES(?,?,?)",
                                  (store.context, paper["entity_id"], local))
-                    if _local_paper(conn, store, paper, published) != local:
+                    if _local_paper(conn, store, paper, published, received) != local:
                         raise ListReviewRequired("Existing bibliography identity changed")
                     conn.execute("INSERT INTO drive_membership_watches "
                                  "(context,list_id,member,creation,local_id,position) "
@@ -221,7 +225,7 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     continue
                 if versions:
                     member = versions[member["entity_id"]]
-                local_id = _local_paper(conn, store, paper, published)
+                local_id = _local_paper(conn, store, paper, published, received)
                 if conn.execute(
                     "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
                 ).fetchone():
