@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Event
 
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QLabel, QMenu, QPushButton
 from shiboken6 import isValid
 
@@ -215,8 +216,10 @@ class ReadingPositionController(QObject):
             button.setToolTip(message("coverage", locale))
             bar.addWidget(button)
         bar.addWidget(self.status)
-        self.remember_button.setShortcut("Alt+Shift+M")
-        self.resume_button.setShortcut("Alt+Shift+R")
+        # On the reader, not the buttons: a button's own shortcut dies while its row
+        # is folded away.
+        QShortcut(QKeySequence("Alt+Shift+M"), reader, self.remember_button.click)
+        QShortcut(QKeySequence("Alt+Shift+R"), reader, self.resume_button.click)
         self._update()
 
     @property

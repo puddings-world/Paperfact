@@ -130,6 +130,7 @@ DARK = {
 
 # The AI notice line: its 6px top margin plus one line of text in a box.
 AI_ROW_HEIGHT = 34
+TOP_TOGGLE_KEY = "Ctrl+Shift+H"
 CHEVRON = Path(__file__).with_name("chevron-down.svg").as_posix()
 CHECK = Path(__file__).with_name("check.svg").as_posix()
 
@@ -884,7 +885,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             action.toggled.connect(self._layers_changed)
             self.layer_actions[layer] = action
         self.layers_button.setMenu(layers_menu)
-        bar.addWidget(self.layers_button)
+        # Everything used once per paper or less waits on a second row behind 更多工具:
+        # three rows of controls took a fifth of the page's height.
+        tools = FlowLayout()
+        tools.setContentsMargins(10, 6, 10, 6)
+        tools.addWidget(self.layers_button)
         self.focus_button = QPushButton("專注")
         self.focus_button.setToolTip(
             f"只留下論文頁面，全螢幕閱讀（{fonts.key(QKeySequence.StandardKey.FullScreen)}）；"
@@ -904,7 +909,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.auto_highlights.setChecked(True)
         self.auto_highlights.toggled.connect(self._auto_highlights_changed)
         self._highlight_attempts = set()
-        bar.addWidget(self.auto_highlights)
+        tools.addWidget(self.auto_highlights)
         self.find_box = QLineEdit()
         self.find_box.setPlaceholderText(f"搜尋內文 ({fonts.key(QKeySequence.StandardKey.Find)})")
         self.find_box.setClearButtonEnabled(True)
@@ -938,9 +943,17 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         self.ask_page_btn.clicked.connect(self._ask_this_page)
         ai_style.mark(self.ask_page_btn, pal)
         bar.addWidget(self.ask_page_btn)
+        self.more_tools = QPushButton("更多工具")
+        self.more_tools.setCheckable(True)
+        self.more_tools.setToolTip(
+            "顯示或收起標記顯示、自動重點、頁碼記錄、系統檢視器與重點分析。"
+        )
+        self.more_tools.toggled.connect(self._set_tools_shown)
+        bar.addWidget(self.more_tools)
         self.open_external = QPushButton("用系統檢視器開啟")
         self.open_external.clicked.connect(self._open_external)
-        bar.addWidget(self.open_external)
+        tools.addWidget(self.open_external)
+        self.pdf_tools_layout = tools
         # Last, and only where the row has room left: it is a hint, and its width
         # alone kept the divider from moving left.
         bar.addWidget(hint, optional=True)
@@ -956,6 +969,16 @@ class ReaderPage(ManagedDocumentReader, QWidget):
         )
         self.pdf_bar.setMinimumWidth(0)
         left_layout.addWidget(self.pdf_bar)
+        self.pdf_tools = QWidget()
+        self.pdf_tools.setLayout(tools)
+        self.pdf_tools.setObjectName("pdfTools")
+        self.pdf_tools.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.pdf_tools.setStyleSheet(
+            f"#pdfTools{{background:{pal['surface']};border-bottom:1px solid {pal['border']};}}"
+        )
+        self.pdf_tools.setMinimumWidth(0)
+        self.pdf_tools.hide()
+        left_layout.addWidget(self.pdf_tools)
         # The highlights' state and its two actions share one line: as a sentence on
         # its own row with the buttons under it, they pushed the page down two rows.
         highlights = QWidget()
@@ -985,6 +1008,8 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             lambda: self.presentation_pane._cancel_highlights())
         self.stop_highlights.hide()
         highlight_actions.addWidget(self.stop_highlights)
+        self.highlight_row = highlights
+        highlights.hide()
         left_layout.addWidget(highlights)
         left.setMinimumWidth(240)
 
@@ -1229,7 +1254,7 @@ class ReaderPage(ManagedDocumentReader, QWidget):
 
         from paper_daily.desktop.reading_position_controller import ReadingPositionController
 
-        self.reading_positions = ReadingPositionController(self, bar)
+        self.reading_positions = ReadingPositionController(self, self.pdf_tools_layout)
         from paper_daily.desktop.reader_preparation import ReaderPreparation
 
         self.preparation = ReaderPreparation(self)
@@ -1516,6 +1541,11 @@ class ReaderPage(ManagedDocumentReader, QWidget):
             self.tabs.setTabToolTip(
                 index, f"{name}（{badge}）\n{cycle} 下一個分頁" if badge else name
             )
+
+    def _set_tools_shown(self, shown: bool) -> None:
+        self.pdf_tools.setVisible(shown)
+        self.highlight_row.setVisible(shown)
+        self.win.remember("pdf_tools", "1" if shown else "0")
 
     def _auto_highlights_changed(self, checked: bool) -> None:
         self.win.remember("auto_highlights", "1" if checked else "0")
@@ -3087,8 +3117,12 @@ class MainWindow(QWidget):
         bar.addWidget(self.next_btn)
         self.top_toggle = ghost(QPushButton("收合"))
         self.top_toggle.setCheckable(True)
-        self.top_toggle.setToolTip("收起工具列與論文資訊，保留展開按鈕；不更動閱讀或編輯內容。")
+        self.top_toggle.setToolTip(
+            "收起工具列與論文資訊，保留展開按鈕；不更動閱讀或編輯內容。"
+            f"（{fonts.key(TOP_TOGGLE_KEY)}）"
+        )
         self.top_toggle.toggled.connect(self._set_top_collapsed)
+        QShortcut(QKeySequence(TOP_TOGGLE_KEY), self, self.top_toggle.toggle)
         bar.addWidget(self.top_toggle)
         barw = QWidget()
         self.top_toolbar = barw
@@ -3109,6 +3143,7 @@ class MainWindow(QWidget):
         self.compact_title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         compact_bar.addWidget(self.compact_title, 1)
         self.top_expand = ghost(QPushButton("展開頂部"))
+        self.top_expand.setToolTip(fonts.key(TOP_TOGGLE_KEY))
         self.top_expand.setStyleSheet("padding:2px 8px;")
         self.top_expand.clicked.connect(lambda: self.top_toggle.setChecked(False))
         compact_bar.addWidget(self.top_expand)
@@ -3720,7 +3755,9 @@ class MainWindow(QWidget):
             presentation_layout = ui_state.read(conn, "ui.presentation")
             top_collapsed = ui_state.read(conn, "ui.top_collapsed")
             auto_highlights = ui_state.read(conn, "ui.auto_highlights")
+            pdf_tools = ui_state.read(conn, "ui.pdf_tools")
         self.reader_page.auto_highlights.setChecked(auto_highlights == "1")
+        self.reader_page.more_tools.setChecked(pdf_tools == "1")
         self.top_toggle.setChecked(top_collapsed == "1")
         if geometry:
             self.restoreGeometry(QByteArray.fromHex(geometry.encode()))

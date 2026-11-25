@@ -51,6 +51,8 @@ class FocusMode:
             self.win.compact_header,
             reader.paper_header,
             reader.pdf_bar,
+            reader.pdf_tools,
+            reader.highlight_row,
             reader.tabs,
         ]
 

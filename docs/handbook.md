@@ -64,7 +64,10 @@ poorly. Candidate previews, PDF drag-and-drop and resumable import jobs remain
 future work. Switching lists does not automatically run background analysis.
 
 Use **收合** at the right end of the toolbar to hide it and the paper details;
-**展開頂部** restores them.
+**展開頂部** restores them, and Ctrl+Shift+H switches between the two.
+The PDF toolbar keeps zoom, the pen, focus, search and 問這一頁 on one row;
+**更多工具** opens the rest (marker layers, 自動重點, page records, the system
+viewer and highlight analysis) and remembers whether it was open.
 In the PDF, select text and choose **螢光筆**, or enable **螢光筆：開** to mark each
 selection as you drag. Highlights save locally and survive reopening. Turn the pen
 off, click a highlight and choose **移除標記** to remove it. They are app annotations

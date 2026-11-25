@@ -82,3 +82,53 @@ def test_sizes_are_pixels_so_every_platform_draws_the_same():
     m.style(app)
     assert app.font().pixelSize() == fonts.UI_PIXELS
     assert app.font().families()[0] == fonts.SANS[0]
+
+
+def test_the_pdf_side_opens_with_one_toolbar_row_and_more_tools_folded(reader):
+    window, app = reader
+    page = window.reader_page
+    folded = (page.pdf_tools, page.highlight_row, page.open_external, page.layers_button,
+              page.auto_highlights, page.reading_positions.remember_button)
+    assert not any(widget.isVisible() for widget in folded)
+    assert page.find_box.isVisible() and page.ask_page_btn.isVisible()
+    page.more_tools.click()
+    app.processEvents()
+    assert all(widget.isVisible() for widget in folded)
+    with store.connect() as conn:
+        assert m.ui_state.read(conn, "ui.pdf_tools") == "1"
+    page.more_tools.click()
+    app.processEvents()
+    assert not page.pdf_tools.isVisible() and not page.highlight_row.isVisible()
+
+
+def test_page_record_keys_work_while_their_buttons_are_folded(reader):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window, app = reader
+    page = window.reader_page
+    pressed = []
+    page.reading_positions.remember_button.setEnabled(True)
+    page.reading_positions.remember_button.clicked.connect(lambda: pressed.append("remember"))
+    assert not page.reading_positions.remember_button.isVisible()
+    QTest.keyClick(page, Qt.Key.Key_M,
+                   Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ShiftModifier)
+    app.processEvents()
+    assert "remember" in pressed
+
+
+def test_one_key_folds_and_restores_the_toolbar_and_paper_details(reader):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window, app = reader
+    header = window.reader_page.paper_header
+    assert header.isVisible() and m.TOP_TOGGLE_KEY == "Ctrl+Shift+H"
+    keys = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+    QTest.keyClick(window, Qt.Key.Key_H, keys)
+    app.processEvents()
+    assert not header.isVisible() and window.compact_header.isVisible()
+    assert "Ctrl+Shift+H" in window.top_toggle.toolTip() or "⇧" in window.top_toggle.toolTip()
+    QTest.keyClick(window, Qt.Key.Key_H, keys)
+    app.processEvents()
+    assert header.isVisible() and not window.compact_header.isVisible()
