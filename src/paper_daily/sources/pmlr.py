@@ -85,7 +85,11 @@ def crawl_year(year: int) -> list[dict[str, Any]]:
             label = label.strip().lower()
             if label == "abs":
                 page_url = href
-            elif "download pdf" in label or href.endswith(".pdf"):
+            elif "download pdf" in label:
+                pdf_url = href
+            elif href.endswith(".pdf") and "supp" not in label and pdf_url is None:
+                # Volumes up to 2021 list "Supplementary PDF" after the paper, and the
+                # last link won: 3,690 papers pointed at their appendix.
                 pdf_url = href
         slug = re.search(r"/([^/]+)\.html$", page_url or "")
         pid = f"ICML:{year}:{slug.group(1) if slug else title_key(title)[:40]}"

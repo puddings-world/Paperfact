@@ -245,3 +245,20 @@ def test_references_without_a_citing_sentence_still_reach_the_model():
     assert "[2] Listed But Never Resolved (2019)" in packed
     # With the publisher's numbering there is nothing for the model to guess.
     assert "Semantic Scholar" not in packed
+
+
+def test_pmlr_takes_the_paper_not_its_supplement(monkeypatch):
+    volume = """
+<div class="paper">
+  <p class="title">Neural Message Passing for Quantum Chemistry</p>
+  <p class="details"><span class="authors">Justin Gilmer, George E. Dahl</span></p>
+  <p class="links">
+    [<a href="https://proceedings.mlr.press/v70/gilmer17a.html">abs</a>]
+    [<a href="http://proceedings.mlr.press/v70/gilmer17a/gilmer17a.pdf">Download PDF</a>]
+    [<a href="http://proceedings.mlr.press/v70/gilmer17a/gilmer17a-supp.pdf">Supplementary PDF</a>]
+  </p>
+</div>
+"""
+    monkeypatch.setattr(pmlr, "fetch_text", lambda *a, **k: volume)
+    monkeypatch.setattr(pmlr, "volume_for_year", lambda y: "v70")
+    assert pmlr.crawl_year(2017)[0]["pdf_url"].endswith("/gilmer17a.pdf")
