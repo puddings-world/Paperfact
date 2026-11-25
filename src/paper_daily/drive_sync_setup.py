@@ -378,6 +378,19 @@ class DriveSetup:
 
     def sync_saved_library(self, ticket, progress):
         """Exchange only previously saved subscriptions under the current sign-in."""
+        from paper_daily.drive_review_reasons import record
+
+        try:
+            result = self._sync_saved_library(ticket, progress)
+        except Exception as error:
+            if not ticket.cancelled:
+                record(self.workspace.path.parent,
+                       {"*": f"{type(error).__name__}: {error}"})
+            raise
+        record(self.workspace.path.parent, {"*": ""})
+        return result
+
+    def _sync_saved_library(self, ticket, progress):
         self.check(ticket)
         if self.files is None or self.account is None:
             raise PermissionError("Sign in to Google Drive first")
@@ -627,6 +640,10 @@ class DriveSetup:
         self._membership_conflicts = {(self.files, store.context, key): detail
                                       for key, detail in membership_conflicts.items()}
         self._pdf_review_titles = pdf_titles
+        from paper_daily.drive_review_reasons import record
+
+        record(self.workspace.path.parent,
+               {key: reviews.get(key, "") for key in selected}, names=names)
         refreshed = self.read_library(ticket)
         for key in list(position_suggestions):
             if (key not in refreshed["position_lists"]

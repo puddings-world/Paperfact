@@ -524,11 +524,39 @@ def test_background_keeps_polling_after_list_details_conflict(dialog):
     runner = view.background
     assert runner.enable(setup)
     view.hide()
-    for expected in ("list_conflict", "chat_conflict", "waiting", "review"):
+    for expected in ("list_conflict", "chat_conflict", "waiting", "list_review"):
         runner.tick()
         wait(app, lambda: runner.worker is None)
         assert runner.state == expected
-        assert runner.timer.isActive() == (expected != "review")
+        # A list that needs a decision no longer ends background sync for the rest.
+        assert runner.timer.isActive()
+    assert "Unknown history" in runner.problem and "需要核對" in runner.problem
+
+
+def test_background_retries_after_an_unexpected_failure(dialog):
+    import sqlite3
+
+    app, view, setup = dialog
+    setup.files = object()
+    outcomes = iter([sqlite3.OperationalError("database is locked"), {"reviews": {}}])
+
+    def exchange(ticket, progress):
+        outcome = next(outcomes)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return {"items": [{"selected": True}], **outcome}
+
+    setup.sync_saved_library = exchange
+    runner = view.background
+    assert runner.enable(setup)
+    view.hide()
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert runner.state == "error" and runner.timer.isActive()
+    assert "database is locked" in runner.problem and "自動重試" in runner.problem
+    runner.tick()
+    wait(app, lambda: runner.worker is None)
+    assert runner.state == "waiting" and runner.timer.isActive() and not runner.problem
 
 
 def test_newer_library_prompts_upgrade_and_stops_background_retry(dialog):

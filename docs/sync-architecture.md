@@ -50,7 +50,18 @@ The ordinary reader now writes a received bibliography and its checkpoint in one
 transaction, preserving order and previously received local papers. Device-private publication bindings retain the originating
 paper ID before upload. When a receiving device includes that paper in a new
 list, the original device reuses its paper and notes on the return trip.
-Independent lookalikes still require review. Source appends resume from the checkpoint. Pre-existing overlapping bibliographies need review.
+A paper the receiving device already holds (same normalized title, DOI, arXiv or
+Semantic Scholar id, with no disagreeing identifier and years within one) joins the
+incoming one: the local row, its notes and its PDF are kept, and an existing entry
+in the same list takes the shared added date. Several local candidates, or one
+already bound to another shared paper, leave the incoming paper as its own row.
+Source appends resume from the checkpoint. A local list that overlaps an incoming
+one is merged the same way and its extra papers are published as additions.
+A list that still needs a decision no longer stops background sync: the others
+keep exchanging and it is retried with a growing interval, capped at five
+minutes. Only a missing sign-in, an unsupported format or a switched workspace
+stop the timer. Each reason is shown in the status bar and list tooltip and
+appended once to `sync.log` in the data directory when it changes.
 Offline edits remain local. Saving the selection receives then publishes new memberships.
 After a successful publication each device remembers the verified paper-history head
 and a digest of the local member IDs for that list. An unchanged save checks the

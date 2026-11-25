@@ -174,6 +174,8 @@ If a device reports that the Drive library uses a newer format, update Paperfact
 
 Selected lists exchange their names and descriptions independently. A rename on one device can merge with a description edit on the other, including after an interrupted upload. Competing edits to the same field pause that list for review.
 
+A list waiting for review never stops the other lists: the status bar reads **部分清單需核對，其他清單持續同步** with the reason, and hovering shows every waiting list. Unexpected failures (a busy database, a peer writing at the same moment) are retried automatically. If a device receives nothing, open `sync.log` in the data directory: it has one line per list each time its reason changes (`time`, `list id`, `list name`, `reason` or `ok`). A paper already present on the receiving device is joined to the incoming one instead of blocking the list.
+
 For figures, highlights, slides or handing a colleague an independent copy, export a research package.
 A window already linked to a workspace opens its workspace sync controls. To use
 per-device list selection there, export any list with edits unique to that copy,

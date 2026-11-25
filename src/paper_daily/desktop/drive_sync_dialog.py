@@ -539,6 +539,10 @@ class DriveSyncDialog(QDialog):
                     else:
                         summary = self.tr("Drive lists this name only.",
                                           "Drive 已列出名稱，尚無內容紀錄。")
+            if reason:
+                from paper_daily.drive_review_reasons import explain
+
+                reason = self.tr(reason, f"{explain(reason)}（{reason}）")
             detail = "\n".join(filter(None, (summary, reason)))
             item.setToolTip(detail)
             item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail)
@@ -595,9 +599,11 @@ class DriveSyncDialog(QDialog):
             self._first_selection or self._retry_startup or self._can_resume_saved()
             or checked != self._saved_ids))
         if directory:
-            self.refresh_lists.setVisible(manual or self._refresh_failed or state == "review")
+            self.refresh_lists.setVisible(manual or self._refresh_failed or state in (
+                "review", "list_review", "error"))
         self.sync_lists.setVisible(directory and (manual or self.background.state in {
-            "review", "pdf_conflict", "mixed_conflict", "reading_conflict"}))
+            "review", "list_review", "error", "pdf_conflict", "mixed_conflict",
+            "reading_conflict"}))
         current = self.directory_lists.currentItem()
         list_id = current.data(Qt.ItemDataRole.UserRole) if current else None
         summary = current.data(Qt.ItemDataRole.UserRole + 1) if current else ""
@@ -951,6 +957,11 @@ class DriveSyncDialog(QDialog):
             elif self.background.state == "format":
                 self.status.setText(self.tr("Update Paperfact on this device, then reconnect.",
                                             "請更新這台裝置的 Paperfact，再重新連線。"))
+            elif self.background.state in ("list_review", "error"):
+                self.status.setText(self.tr(
+                    "Background sync continues. " + self.background.problem,
+                    "背景同步持續進行。" + self.background.problem,
+                ))
             elif self.background.state == "review":
                 self.status.setText(self.tr(
                     "Sync paused. Check the connection and sync saved lists to review.",

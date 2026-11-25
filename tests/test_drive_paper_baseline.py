@@ -373,6 +373,57 @@ def test_empty_peer_receives_distinct_papers_with_shared_metadata(source, tmp_pa
                             "WHERE list_id='list'").fetchone() == (2,)
 
 
+def test_peer_joins_incoming_papers_to_the_ones_it_already_holds(source, tmp_path, monkeypatch):
+    from paper_daily import drive_sync_setup, store
+
+    with closing(sqlite3.connect(source)) as conn:
+        title, key, year = conn.execute(
+            "SELECT title,title_key,year FROM papers WHERE id='paper'").fetchone()
+    laptop = tmp_path / "target" / "papers.db"
+    laptop.parent.mkdir()
+    with closing(sqlite3.connect(laptop)) as conn, conn:
+        conn.executescript(store.SCHEMA)
+        conn.execute(
+            "INSERT INTO papers(id,title,title_key,venue,year,source,abstract) "
+            "VALUES('mine',?,?,'Fixture',?,'fixture','my own copy')", (title, key, year))
+    cloud, services = Cloud(), {}
+    for label, path in (("desktop", source), ("laptop", laptop)):
+        files = authority(cloud, tmp_path / label / "authority").files
+        monkeypatch.setattr(drive_sync_setup, "DriveFiles", lambda *a, f=files, **kw: f)
+        services[label] = drive_sync_setup.DriveSetup(
+            path, profiles=tmp_path / label / "profiles", cache=tmp_path / label / "cache",
+            authorize=lambda f=files, **kw: f.session)
+        services[label].sign_in(Ticket(), lambda _: None)
+        assert not services[label].apply_library(["list"], Ticket(), lambda _: None)["reviews"]
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute("SELECT id,abstract FROM papers WHERE title_key=?", (key,)
+                            ).fetchall() == [("mine", "my own copy")]
+        assert conn.execute("SELECT 1 FROM list_papers WHERE list_id='list' "
+                            "AND paper_id='mine'").fetchone()
+    # Each device then adds the same new paper on its own, on different days.
+    for path, local, added in ((source, "w-find", STAMP),
+                               (laptop, "m-find", "2026-11-01T00:00:00+00:00")):
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute("INSERT INTO papers(id,title,title_key,venue,year,source) "
+                         "VALUES(?,'Shared find',?,'Fixture',2026,'fixture')",
+                         (local, store.title_key("Shared find")))
+            conn.execute("INSERT INTO list_papers(list_id,paper_id,position,added_at) "
+                         "VALUES('list',?,9,?)", (local, added))
+    for label in ("desktop", "laptop", "desktop", "laptop"):
+        assert not services[label].sync_saved_library(Ticket(), lambda _: None)["reviews"]
+    counts = []
+    for path in (source, laptop):
+        with closing(sqlite3.connect(path)) as conn:
+            assert conn.execute("SELECT count(*) FROM papers WHERE title='Shared find'"
+                                ).fetchone() == (1,)
+            counts.append(conn.execute("SELECT count(*) FROM list_papers WHERE list_id='list'"
+                                       ).fetchone())
+    assert counts[0] == counts[1]
+    with closing(sqlite3.connect(laptop)) as conn:
+        assert conn.execute("SELECT added_at FROM list_papers WHERE paper_id='m-find'"
+                            ).fetchone() == (STAMP,)
+
+
 def test_reader_selection_publishes_receives_and_preserves_local_edits(
     source, tmp_path, monkeypatch
 ):
@@ -468,7 +519,8 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
             "SELECT title,state FROM papers JOIN list_papers "
             "ON papers.id=list_papers.paper_id ORDER BY position"
         ).fetchall() == [("Offline local title", "read"), ("Another", "pending")]
-    # An overlap on the last record must roll back earlier rows and the checkpoint.
+    # A paper this device already holds joins the incoming one instead of stopping
+    # the list: the local row is kept and the records before it still arrive.
     with closing(sqlite3.connect(laptop)) as conn, conn:
         checkpoint = conn.execute("SELECT head FROM drive_library_bibliographies").fetchone()
         conn.execute(
@@ -487,13 +539,20 @@ def test_reader_selection_publishes_receives_and_preserves_local_edits(
                 (str(index), index, STAMP),
             )
     sync(win)
-    assert "Possible existing paper" in sync(mac)["list"]
+    assert sync(mac) == {}
     with closing(sqlite3.connect(laptop)) as conn:
         assert (
-            conn.execute("SELECT head FROM drive_library_bibliographies").fetchone() == checkpoint
+            conn.execute("SELECT head FROM drive_library_bibliographies").fetchone() != checkpoint
         )
-        assert not conn.execute("SELECT 1 FROM papers WHERE title='New record'").fetchone()
-        assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (2,)
+        assert conn.execute("SELECT 1 FROM papers WHERE title='New record'").fetchone()
+        assert conn.execute("SELECT id FROM papers WHERE title='Overlap'").fetchall() == [
+            ("independent",)
+        ]
+        assert conn.execute(
+            "SELECT 1 FROM list_papers WHERE list_id='list' AND paper_id='independent'"
+        ).fetchone()
+        assert conn.execute("SELECT COUNT(*) FROM list_papers").fetchone() == (4,)
+    assert sync(win) == {} and sync(mac) == {}
     # Put a received paper into a new list on the laptop. Its return to the
     # desktop must reuse the original paper even though the titles now differ.
     with closing(sqlite3.connect(laptop)) as conn, conn:

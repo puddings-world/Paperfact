@@ -375,11 +375,13 @@ class SyncWorker(QThread):
         super().__init__(parent)
         self.task, self.ticket = task, Ticket()
         self.result = self.error = None
+        self.reason = ""
 
     def run(self):
         try:
             self.result = self.task(self.ticket, self.progress.emit)
         except Exception as error:
+            self.reason = str(error) or type(error).__name__
             self.error = (
                 "format"
                 if isinstance(error, SyncFormatUnsupported)

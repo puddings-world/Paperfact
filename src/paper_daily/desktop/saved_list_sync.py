@@ -23,6 +23,7 @@ class SavedListSync(QObject):
         self.detail = None
         self.coverage = {}
         self.failures = 0
+        self.problem = ""
         self.last_checked = ""
         self.deferred = ""
         self.closing = False
@@ -65,6 +66,10 @@ class SavedListSync(QObject):
         labels["dive_conflict"] = "講解版本需核對，其他內容持續同步"
         labels["pdf_conflict"] = "PDF 版本不同，已保留原檔；其他內容持續同步"
         labels["mixed_conflict"] = "多種內容版本不同，請查看清單；其他內容持續同步"
+        labels["list_review"] = "部分清單需核對，其他清單持續同步"
+        labels["error"] = f"同步遇到問題，{self.timer.interval() // 1000} 秒後自動重試"
+        if self.state in ("list_review", "error") and self.problem:
+            labels[self.state] += "：" + self.problem.splitlines()[0]
         from paper_daily.drive_transfer_progress import describe
 
         if self.state == "waiting":
@@ -74,8 +79,10 @@ class SavedListSync(QObject):
                 labels["waiting"] = f"{self.last_checked} 已核對 · 等待下次檢查 Drive"
         detail = describe(self.detail) if self.state == "working" else ""
         compact = button.fontMetrics().elidedText(detail, Qt.TextElideMode.ElideMiddle, 520)
-        button.setText(compact or labels[self.state])
-        button.setToolTip(detail or labels[self.state])
+        button.setText(compact or button.fontMetrics().elidedText(
+            labels[self.state], Qt.TextElideMode.ElideRight, 520))
+        button.setToolTip(detail or (
+            self.problem if self.state in ("list_review", "error") else labels[self.state]))
         button.setAccessibleName(detail or labels[self.state])
 
     def enable(self, service):
@@ -87,6 +94,7 @@ class SavedListSync(QObject):
         self.coverage.clear()
         self.service, self.files = service, service.files
         self.failures = 0
+        self.problem = ""
         self.state = "waiting"
         self.timer.start(1000)
         self.changed.emit()
@@ -194,28 +202,50 @@ class SavedListSync(QObject):
                 self.failures += 1
                 self.state = "offline"
                 self.timer.start(min(300, 10 * 2 ** min(5, self.failures - 1)) * 1000)
-            elif worker.error or (worker.result.get("reviews", {}).keys()
-                                  - set(worker.result.get("list_conflicts", ()))
-                                  - set(worker.result.get("note_conflicts", ()))
-                                  - set(worker.result.get("chat_conflicts", ()))
-                                  - set(worker.result.get("dive_conflicts", ()))
-                                  - set(worker.result.get("reading_conflicts", ()))
-                                  - set(worker.result.get("pdf_conflicts", ()))):
+            elif worker.error == "authorization":
                 self.stop("review")
+            elif worker.error:
+                # A locked database or a peer writing at the same moment used to end
+                # background sync for good; nothing here needs the reader to act.
+                from paper_daily.drive_review_reasons import explain
+
+                self.failures += 1
+                self.state = "error"
+                self.problem = f"{explain(worker.reason)}\n{worker.reason}"
+                self.timer.start(min(300, 30 * 2 ** min(4, self.failures - 1)) * 1000)
             elif not any(item["selected"] for item in worker.result["items"]):
                 self.position_scopes.clear()
                 self.stop()
             else:
-                self.failures = 0
                 self.update_position_scopes(self.service, worker.result)
                 self.last_checked = datetime.now().strftime("%H:%M:%S")
                 conflicts = [kind for kind in ("list", "note", "chat", "dive", "pdf", "reading")
                              if worker.result.get(kind + "_conflicts")]
+                reviews = worker.result.get("reviews", {})
+                waiting = sorted(reviews.keys() - {
+                    key for kind in conflicts for key in worker.result[kind + "_conflicts"]})
                 self.state = "waiting"
                 if conflicts:
                     self.state = (conflicts[0] if len(conflicts) == 1 else "mixed") + "_conflict"
-                self.timer.start(MINIMIZED_INTERVAL_MS if self.parent().isMinimized()
-                                 else READING_INTERVAL_MS)
+                interval = (MINIMIZED_INTERVAL_MS if self.parent().isMinimized()
+                            else READING_INTERVAL_MS)
+                if waiting:
+                    # One list waiting for a decision is no reason to stop the others.
+                    # It is retried less often: each try reads that list's history again.
+                    from paper_daily.drive_review_reasons import explain
+
+                    names = {item["id"]: item["name"] for item in worker.result["items"]
+                             if "id" in item}
+                    self.state = "list_review"
+                    self.problem = "\n".join(
+                        f"{names.get(key, key)}：{explain(reviews[key])}（{reviews[key]}）"
+                        for key in waiting)
+                    self.failures += 1
+                    interval = max(interval, min(300, 30 * 2 ** min(4, self.failures - 1)) * 1000)
+                else:
+                    self.failures = 0
+                    self.problem = ""
+                self.timer.start(interval)
         worker.deleteLater()
         self.changed.emit()
         if self.closing:

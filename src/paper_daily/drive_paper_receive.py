@@ -13,7 +13,19 @@ from paper_daily.store import title_key
 from paper_daily.workspace_service import _read
 
 
-def _local_paper(conn, store, paper, published, received):
+def _same_work(conn, local_id, payload):
+    """A shared title is not enough when the identifiers or the years disagree."""
+    year, doi, arxiv = conn.execute(
+        "SELECT year,doi,arxiv_id FROM papers WHERE id=?", (local_id,)
+    ).fetchone()
+    if doi and payload["doi"] and doi.casefold() != payload["doi"].casefold():
+        return False
+    if arxiv and payload["arxiv_id"] and arxiv != payload["arxiv_id"]:
+        return False
+    return not (year and payload["year"] and abs(year - payload["year"]) > 1)
+
+
+def _local_paper(conn, store, paper, published, received, *, taken=None, merged=None):
     identity, payload = paper["entity_id"], paper["payload"]
     known = conn.execute(
         "SELECT local_id FROM drive_library_papers WHERE context=? AND remote_id=?",
@@ -39,12 +51,33 @@ def _local_paper(conn, store, paper, published, received):
             payload["s2_id"] or None,
         ),
     )
-    # Distinct identities published together by one source can share bibliographic metadata.
-    if any(key == local_id or received.get(key) != paper["device_id"] for (key,) in matches):
+    matches = [found for (found,) in matches]
+    if local_id in matches:
         raise ListReviewRequired("Possible existing paper; review before joining this bibliography")
     from paper_daily.drive_transfer_progress import report
 
     report("download", title=payload["title"])
+    # Distinct identities published together by one source can share bibliographic
+    # metadata, so those stay apart. A paper this device already had is the same
+    # work: join it, keeping the local copy and everything written on it. Refusing
+    # here stopped a whole list on any device that already held one of its papers.
+    own = [
+        found for found in matches
+        if received.get(found) != paper["device_id"]
+        and not conn.execute(
+            "SELECT 1 FROM drive_library_papers WHERE context=? AND local_id=?",
+            (store.context, found),
+        ).fetchone()
+        and not (taken and taken(found))
+        and _same_work(conn, found, payload)
+    ]
+    if len(own) == 1:
+        conn.execute(
+            "INSERT INTO drive_library_papers VALUES(?,?,?)", (store.context, identity, own[0])
+        )
+        if merged is not None:
+            merged.add(own[0])
+        return own[0]
     conn.execute(
         "INSERT INTO papers(id,title,title_key,authors_json,venue,year,source,abstract,"
         "doi,arxiv_id,s2_id,page_url,pdf_url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -166,7 +199,12 @@ def receive_initial(directory, store, list_id, revision, ticket):
             ):
                 if retired or versions:
                     raise ListReviewRequired("Review existing bibliography membership changes")
-                exact = _exact_existing_members(conn, store, list_id, pairs, ticket)
+                try:
+                    exact = _exact_existing_members(conn, store, list_id, pairs, ticket)
+                except ListReviewRequired:
+                    # Not the same list paper for paper: join what matches below and
+                    # leave the rest of the local list to be published as additions.
+                    exact = {}
             first = conn.execute(
                 "SELECT COALESCE(MAX(position),-1)+1 FROM list_papers WHERE list_id=?", (list_id,)
             ).fetchone()[0]
@@ -178,6 +216,13 @@ def receive_initial(directory, store, list_id, revision, ticket):
             _schema(conn)
             originals = None
             received = {}
+            merged = set()
+
+            def taken(local):
+                return has_published and settings.execute(
+                    "SELECT 1 FROM published_paper_ids WHERE local_id=?", (local,)
+                ).fetchone()
+
             for paper, member in pairs:
                 ticket.check()
                 published = (
@@ -225,12 +270,27 @@ def receive_initial(directory, store, list_id, revision, ticket):
                     continue
                 if versions:
                     member = versions[member["entity_id"]]
-                local_id = _local_paper(conn, store, paper, published, received)
-                if conn.execute(
-                    "SELECT 1 FROM list_papers WHERE list_id=? AND paper_id=?", (list_id, local_id)
-                ).fetchone():
-                    raise ListReviewRequired("Existing membership changed; review before applying")
+                local_id = _local_paper(conn, store, paper, published, received,
+                                        taken=taken, merged=merged)
+                held = conn.execute(
+                    "SELECT position FROM list_papers WHERE list_id=? AND paper_id=?",
+                    (list_id, local_id),
+                ).fetchone()
                 removal = retired.get(member["entity_id"])
+                if held and local_id in merged and not removal:
+                    # Already in this list on this device: one entry, dated as shared.
+                    conn.execute(
+                        "UPDATE list_papers SET added_at=? WHERE list_id=? AND paper_id=?",
+                        (member["payload"]["added_at"], list_id, local_id),
+                    )
+                    conn.execute("INSERT INTO drive_membership_watches "
+                                 "(context,list_id,member,creation,local_id,position) "
+                                 "VALUES(?,?,?,?,?,?)",
+                                 (store.context, list_id, member["entity_id"],
+                                  member["operation_id"], local_id, held[0]))
+                    continue
+                if held:
+                    raise ListReviewRequired("Existing membership changed; review before applying")
                 if removal:
                     # This incoming membership never existed on this device. Preserve the
                     # paper binding and install the retirement with the bibliography receipt.
