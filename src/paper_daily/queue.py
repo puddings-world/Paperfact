@@ -186,6 +186,54 @@ def next_papers(conn: sqlite3.Connection, n: int = 1) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+OLDER_ROLES = ("companion", "canon")
+
+
+def next_up(conn: sqlite3.Connection, list_id: str | None = None) -> sqlite3.Row | None:
+    """The paper to read next: rank order, but never a run of older papers.
+
+    Companions and canon are pulled to the front in groups, and a backlog of them
+    filled three weeks of nights with papers from 2015-2022 while the new year
+    waited. After an older paper, the next `new_after_older` are newly ranked ones.
+
+    With `list_id` (the list adopted from this queue) the reader's own openings
+    count: a paper already opened there is not offered again, and the recent
+    history is what was opened in that list.
+    """
+    opened = (
+        "SELECT q.role, lp.delivered_at AS at FROM list_papers lp "
+        "JOIN queue q ON q.paper_id=lp.paper_id "
+        "WHERE lp.list_id=? AND lp.delivered_at IS NOT NULL"
+        if list_id else
+        "SELECT role, delivered_at AS at FROM queue WHERE delivered_at IS NOT NULL"
+    )
+    recent = conn.execute(
+        opened + " ORDER BY at DESC LIMIT ?",
+        ((list_id, SETTINGS.new_after_older) if list_id else (SETTINGS.new_after_older,)),
+    ).fetchall()
+    unopened = (
+        " AND EXISTS(SELECT 1 FROM list_papers lp WHERE lp.list_id=? "
+        "AND lp.paper_id=q.paper_id AND lp.state='pending')"
+        if list_id else
+        # The nightly run reads queue state only; what the reader finished in the
+        # adopted list is finished here too.
+        " AND NOT EXISTS(SELECT 1 FROM list_papers lp JOIN kv ON kv.key='lists.legacy_queue' "
+        "AND kv.value=json_quote(lp.list_id) WHERE lp.paper_id=q.paper_id AND lp.state='read')"
+    )
+    select = (
+        "SELECT p.*, q.rank, q.role, q.reason FROM queue q JOIN papers p ON p.id=q.paper_id "
+        "WHERE q.state='pending'" + unopened
+    )
+    args = (list_id,) if list_id else ()
+    if any(row["role"] in OLDER_ROLES for row in recent):
+        row = conn.execute(
+            select + " AND q.role NOT IN ('companion','canon') ORDER BY q.rank LIMIT 1", args
+        ).fetchone()
+        if row is not None:
+            return row
+    return conn.execute(select + " ORDER BY q.rank LIMIT 1", args).fetchone()
+
+
 def mark(conn: sqlite3.Connection, paper_id: str, state: str) -> None:
     col = {"delivered": "delivered_at", "read": "read_at"}.get(state)
     sql = f"UPDATE queue SET state=?{', ' + col + '=?' if col else ''} WHERE paper_id=?"

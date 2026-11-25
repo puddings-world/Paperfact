@@ -66,6 +66,9 @@ class Settings:
     queue_target: int = 5000
     # Companion papers surfaced alongside each main paper (lineage / contrast).
     companions_per_day: int = 2
+    # Newly ranked papers that follow each older one (companion or canon) before
+    # another older one may be next.
+    new_after_older: int = 2
 
 
 SETTINGS = Settings()

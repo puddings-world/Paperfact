@@ -4734,7 +4734,9 @@ class MainWindow(QWidget):
         """
         self.reload()
         current = self.reader_page.paper
-        paper = next_after(self.papers, current.id if current else None)
+        paper = self._next_in_reading_order() or next_after(
+            self.papers, current.id if current else None
+        )
         if not paper:
             QMessageBox.information(
                 self, "目前沒有未讀論文",
@@ -4742,6 +4744,24 @@ class MainWindow(QWidget):
             )
             return
         self.open_paper(paper.id)
+
+    def _next_in_reading_order(self):
+        """For the list adopted from the ranked queue, what the queue would hand out.
+
+        Its positions are the order on the day it was adopted. A reference pulled
+        forward since then still sits in its year's block, so stepping from it by
+        position walked through that whole year.
+        """
+        from paper_daily import queue as ranked
+        from paper_daily.store import get_kv
+
+        with connect() as conn:
+            if not self.active_list or get_kv(conn, "lists.legacy_queue") != self.active_list:
+                return None
+            row = ranked.next_up(conn, self.active_list)
+        if row is None:
+            return None
+        return next((paper for paper in self.papers if paper.id == row["id"]), None)
 
     def marked_ids(self) -> list[str]:
         return self._marked

@@ -66,6 +66,10 @@ Two deliberate distortions sit on top of the score:
   newest work back for as long as it lasted. `lineage` walks ahead of the reading to
   build the graph; leaving it to grow one paper at a time on delivery meant it was
   empty exactly when it was needed.
+  Older papers never arrive as a run: after a companion or canon paper, the next
+  two deliveries (`new_after_older`) are newly ranked ones. The reader's 下一篇 uses
+  the same rule in the list adopted from the queue, whose stored positions are the
+  order on the day of adoption and no longer show what was pulled forward since.
 
 Ordering is **year-block descending, score descending inside the block**: you finish
 what mattered from 2026 before starting 2025. Each year contributes the same quota,

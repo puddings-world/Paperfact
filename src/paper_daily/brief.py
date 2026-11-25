@@ -406,10 +406,9 @@ def build_pack(conn: sqlite3.Connection, row: sqlite3.Row) -> Path:
 
 def deliver_next(conn: sqlite3.Connection) -> tuple[sqlite3.Row, Path] | None:
     """Pop the next paper, build its pack, and mark it delivered."""
-    rows = qmod.next_papers(conn, 1)
-    if not rows:
+    row = qmod.next_up(conn)
+    if row is None:
         return None
-    row = rows[0]
     path = build_pack(conn, row)
     qmod.mark(conn, row["id"], "delivered")
     return row, path
