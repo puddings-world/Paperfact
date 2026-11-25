@@ -54,8 +54,10 @@ def pdf_candidates(row: sqlite3.Row) -> list[str]:
     accepted manuscript, stamped ARTICLE IN PRESS across 44 pages of sixteen sizes,
     where arXiv had the authors' own copy of the same text.
     """
+    from paper_daily.sources.pmlr import paper_pdf
+
     out = []
-    own = row["pdf_url"]
+    own = paper_pdf(row["pdf_url"])
     arxiv = f"https://arxiv.org/pdf/{row['arxiv_id']}" if row["arxiv_id"] else None
     if own and any(host in own for host in PROCEEDINGS_HOSTS):
         out.append(own)

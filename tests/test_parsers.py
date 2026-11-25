@@ -262,3 +262,17 @@ def test_pmlr_takes_the_paper_not_its_supplement(monkeypatch):
     monkeypatch.setattr(pmlr, "fetch_text", lambda *a, **k: volume)
     monkeypatch.setattr(pmlr, "volume_for_year", lambda y: "v70")
     assert pmlr.crawl_year(2017)[0]["pdf_url"].endswith("/gilmer17a.pdf")
+
+
+def test_a_stored_supplement_link_downloads_the_paper():
+    from paper_daily.fetch import pdf_candidates
+
+    stored = "http://proceedings.mlr.press/v70/gilmer17a/gilmer17a-supp.pdf"
+    assert pmlr.paper_pdf(stored) == "http://proceedings.mlr.press/v70/gilmer17a/gilmer17a.pdf"
+    assert pdf_candidates({"pdf_url": stored, "arxiv_id": "1704.01212"}) == [
+        "http://proceedings.mlr.press/v70/gilmer17a/gilmer17a.pdf",
+        "https://arxiv.org/pdf/1704.01212",
+    ]
+    # Only PMLR's own naming: another host may really call its paper "-supp".
+    assert pmlr.paper_pdf("https://example.org/a-supp.pdf") == "https://example.org/a-supp.pdf"
+    assert pmlr.paper_pdf(None) is None

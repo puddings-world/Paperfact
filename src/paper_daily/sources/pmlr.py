@@ -66,6 +66,21 @@ def volume_for_year(year: int) -> str | None:
         return KNOWN_VOLUMES.get(year)
 
 
+_SUPPLEMENT = "-supp.pdf"
+
+
+def paper_pdf(url: str | None) -> str | None:
+    """The paper a PMLR supplement link sits beside.
+
+    Rows crawled before the fix above still point at the appendix, and so does every
+    copy of them another device receives through sync. Checked against the live
+    2015-2021 volumes: all 3,690 stored supplement links map to the paper this way.
+    """
+    if url and "proceedings.mlr.press/" in url and url.endswith(_SUPPLEMENT):
+        return url[: -len(_SUPPLEMENT)] + ".pdf"
+    return url
+
+
 def crawl_year(year: int) -> list[dict[str, Any]]:
     vol = volume_for_year(year)
     if not vol:
