@@ -38,7 +38,6 @@ def offer_drive_sign_in(window, database):
         return
     if DriveSetup(database).library_startup_record():
         return
-    settings.setValue(key, True)
     prompt = QMessageBox(window)
     prompt.setWindowTitle("跨裝置同步")
     prompt.setText("登入 Google，在這台電腦自動同步清單？")
@@ -58,6 +57,8 @@ def offer_drive_sign_in(window, database):
             dialog = window._sync_settings()
             if dialog and not dialog.busy:
                 dialog.sign_in_for_sync()
+        elif prompt.clickedButton() == offline:
+            settings.setValue(key, True)
         prompt.deleteLater()
 
     prompt.finished.connect(finished)
@@ -108,12 +109,15 @@ class DriveSyncDialog(QDialog):
         self.login = QToolButton()
         self.login.setText(
             self.tr(
-                "Sign in / switch Google account",
-                "登入／切換 Google 帳號",
+                "Sign in with Google and sync",
+                "登入 Google 並自動同步",
             )
         )
         self.login.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         menu = QMenu(self.login)
+        self.choose_before_sync = menu.addAction(
+            self.tr("Sign in and choose lists first", "登入並先選擇清單"))
+        self.choose_before_sync.triggered.connect(self.sign_in)
         self.restore_login = menu.addAction(
             self.tr("Reconnect saved library", "重新連接已記住的清單帳號"))
         self.save_login = menu.addAction(self.tr("Remember list sign-in on this device",
@@ -133,7 +137,9 @@ class DriveSyncDialog(QDialog):
         self.startup_sync.setChecked(bool(read_startup()))
         self.startup_sync.triggered.connect(self._toggle_library_startup)
         self.login.setMenu(menu)
-        self.login.clicked.connect(self.sign_in)
+        self.login.clicked.connect(self.sign_in_for_sync)
+        self.login.setToolTip(self.tr("Sync all lists on first sign-in, keeping existing choices.",
+                                      "首次登入會同步所有清單，已設定的裝置沿用原有選擇。"))
         layout.addWidget(self.login)
         outer = layout
         self.personal_panel = QWidget()
@@ -141,6 +147,7 @@ class DriveSyncDialog(QDialog):
         layout = QVBoxLayout(self.personal_panel)
         layout.setContentsMargins(0, 0, 0, 0)
         self._enroll_after_login = False
+        self._return_to_reader = False
         self._first_selection = False
         self._retry_startup = False
         self._refresh_failed = False
@@ -1018,7 +1025,8 @@ class DriveSyncDialog(QDialog):
         )
 
     def sign_in_for_sync(self):
-        self._enroll_after_login = bool(self.sign_in())
+        if self.sign_in():
+            self._enroll_after_login = True
 
     def sign_in(self):
         return self._start("login", self.service.sign_in)
@@ -1331,16 +1339,20 @@ class DriveSyncDialog(QDialog):
         self._buttons()
         if kind == "login" and self._enroll_after_login:
             self._enroll_after_login = False
-            if current and not worker.error and self._first_selection:
+            if current and not worker.error and self._ordinary_library:
                 selected = [self.directory_lists.item(i).data(Qt.ItemDataRole.UserRole)
                             for i in range(self.directory_lists.count())
                             if self.directory_lists.item(i).checkState() == Qt.CheckState.Checked]
                 if selected:
-                    self._start(
-                        "enroll_selection", lambda ticket, progress: self.service.apply_library(
-                        selected, ticket, progress, include_new_content=True))
-            elif current and not worker.error and self._ordinary_library and self._saved_ids:
-                self._start("enroll_selection", self.service.follow_future_lists)
+                    first = self._first_selection
+                    self._return_to_reader = self._start(
+                        "enroll_selection", lambda ticket, progress: self.service.save_library(
+                            selected, ticket, progress, include_new_content=first, follow_new=True))
+        if self._return_to_reader and (worker.error or not current):
+            self._return_to_reader = False
+        if kind == "startup_on" and self._return_to_reader:
+            self._return_to_reader = False
+            self.close()
         if current and not worker.error and kind == "enroll_selection" and self._saved_ids:
             self._start("startup_on", lambda t, _: self.service.remember_library(t, startup=True))
         if self._closing:

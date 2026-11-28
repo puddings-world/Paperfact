@@ -704,10 +704,12 @@ def test_minimized_sync_keeps_polling_and_restore_brings_next_exchange_forward(d
     runner.stop()
 
 
-@pytest.mark.parametrize("first,expected", [(True, ["one", "two"]), (False, [])])
-def test_startup_login_enrolls_only_a_new_selection(dialog, first, expected):
+@pytest.mark.parametrize("first,saved,expected", [
+    (True, [], ["one", "two"]), (False, [], []), (False, ["two"], ["two"]),
+])
+def test_startup_login_enrolls_only_a_new_selection(dialog, first, saved, expected):
     app, view, setup = dialog
-    rows = [{"id": n, "name": n, "selected": False} for n in ("one", "two")]
+    rows = [{"id": n, "name": n, "selected": n in saved} for n in ("one", "two")]
     result = {"account": {"email": "test@example.test"}, "workspaces": [], "lists": rows,
               "library": {"ordinary": True, "first_selection": first, "items": rows}}
     events = []
@@ -716,15 +718,34 @@ def test_startup_login_enrolls_only_a_new_selection(dialog, first, expected):
         setup.files = object()
         return result
 
-    def apply(selected, ticket, progress, *, include_new_content):
-        assert include_new_content
+    def save(selected, ticket, progress, *, include_new_content, follow_new):
+        assert follow_new and include_new_content == first
         events.extend(selected)
-        return {"ordinary": True, "items": [dict(row, selected=True) for row in rows]}
+        return {"ordinary": True, "items": [dict(row, selected=row["id"] in selected)
+                                             for row in rows]}
 
     setup.sign_in = login
-    setup.apply_library = apply
-    setup.remember_library = lambda ticket, *, startup: None
-    view.sign_in_for_sync()
+    setup.save_library = save
+    order = []
+
+    def remember(ticket, *, startup):
+        assert startup
+        order.append("remember")
+
+    def exchange(ticket, progress):
+        order.append("exchange")
+        return {"items": [dict(row, selected=row["id"] in expected) for row in rows]}
+
+    setup.remember_library = remember
+    setup.sync_saved_library = exchange
+    view.login.click()
     wait(app, lambda: not view.busy)
     assert events == expected
-    assert view.startup_sync.isChecked() == first
+    assert view.startup_sync.isChecked() == bool(expected)
+    assert view.isVisible() != bool(expected)
+    if expected:
+        view.background.tick()
+        wait(app, lambda: view.background.worker is None)
+        assert order == ["remember", "exchange"]
+    else:
+        assert not order

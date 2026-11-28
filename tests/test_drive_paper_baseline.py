@@ -1211,7 +1211,7 @@ def test_desktop_explicitly_upgrades_only_reviewed_removals(source, tmp_path, mo
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
     try:
         view.show()
-        view.login.click()
+        view.choose_before_sync.trigger()
         wait(app, lambda: not view.busy)
         view.details.setChecked(True)
         view.directory_lists.item(0).setCheckState(Qt.CheckState.Checked)
@@ -1408,7 +1408,7 @@ def test_two_windows_exchange_offline_additions_after_closing_drive_settings(
                                    service_factory=lambda *a, s=setup, **kw: s)
             windows.append((owner, view))
             view.show()
-            view.login.click()
+            view.choose_before_sync.trigger()
             wait(app, lambda v=view: not v.busy)
             for i in range(view.directory_lists.count()):
                 row = view.directory_lists.item(i)
