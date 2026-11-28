@@ -137,6 +137,8 @@ class DriveFiles:
         self.session, self.cancelled = session, cancelled
         self.client = client or httpx.Client(timeout=20, trust_env=False, follow_redirects=False)
         self._owned = client is None
+        self.lan_pdf = None
+        self._lan_retry = 0
         self._heads = {}
         self._verified_bytes = {}
         self._bytes_lock = Lock()
@@ -144,7 +146,40 @@ class DriveFiles:
         self.reading_cache = {}
         self.membership_lock = Lock()
 
+    def stop_lan(self):
+        lan, self.lan_pdf = self.lan_pdf, None
+        if lan is not None:
+            lan.close()
+
+    def prepare_lan(self, directory, store):
+        import time
+
+        if self.lan_pdf and (self.lan_pdf.closed.is_set() or self.lan_pdf.scope[:2] != (
+                directory.folder, store.context)):
+            self.stop_lan()
+            self._lan_retry = 0
+        if not self._owned or time.monotonic() < self._lan_retry:
+            return
+        self._lan_retry = time.monotonic() + 20
+        try:
+            from paper_daily.lan_pdf import LanPdf, home_interface
+
+            interface = home_interface()
+            scope = (directory.folder, store.context, interface)
+            if self.lan_pdf and self.lan_pdf.scope != scope:
+                self.stop_lan()
+            if interface is None:
+                return
+            if self.lan_pdf is None:
+                self.lan_pdf = LanPdf(interface)
+                self.lan_pdf.scope = scope
+            self.lan_pdf.refresh(directory, store)
+        except (ImportError, OSError, ValueError, RuntimeError, AttributeError):
+            self.stop_lan()
+            self._lan_retry = time.monotonic() + 60
+
     def close(self):
+        self.stop_lan()
         with self._bytes_lock:
             self._verified_bytes.clear()
         with self.membership_lock:

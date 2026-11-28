@@ -60,6 +60,8 @@ class DriveSetup:
 
     def sign_in(self, ticket, progress):
         self.check(ticket)
+        if self.files is not None:
+            self.files.stop_lan()
         if self.library_startup_record():
             self.disable_library_startup(ticket)
         self.files = self.account = self._library_view = None
@@ -156,6 +158,8 @@ class DriveSetup:
             raise
 
     def forget_library(self, ticket):
+        if self.files is not None:
+            self.files.stop_lan()
         DriveVault(self.workspace, library=True, **self.vault_options).forget(ticket)
 
     def overview(self, ticket, progress):
@@ -517,6 +521,10 @@ class DriveSetup:
         position_grants = {}
         names = {item["id"]: item["name"] for item in result["items"]}
         selected = sorted(selection.selected)
+        if result.get("pdf_lists") and directory is not None:
+            prepare_lan = getattr(directory.files, "prepare_lan", None)
+            if prepare_lan:
+                prepare_lan(directory, store)
         for index, list_id in enumerate(selected):
             ticket.check()
             progress({"stage": "selected_lists", "completed": index, "total": len(selected)})

@@ -77,6 +77,12 @@ def originals_count(device, drive, total):
         report()
 
 
+def chunk_route(route):
+    state = _active.get()
+    if state and state["event"].get("kind") == "pdf":
+        state["event"]["route"] = route
+
+
 def byte_progress(done, total):
     state = _active.get()
     if state and state["event"].get("kind") == "pdf":
@@ -102,6 +108,8 @@ def describe(event, zh=True):
     kind, verb = event["kind"], event["direction"]
     action = f"{verbs[verb]}{kinds[kind]}" if zh else f"{verb} {kind}"
     parts = [action, f"{event['index']}/{event['total']} {event['name']}", event.get("title")]
+    if event.get("route"):
+        parts.append(event["route"])
     if "visible" in event:
         n = event["visible"]
         parts.append(f"本機可讀 {n} 篇" if zh else f"{n} papers available on this device")

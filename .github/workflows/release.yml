@@ -159,6 +159,7 @@ jobs:
           tests/test_drive_sync_scope.py
           tests/test_drive_paper_baseline.py
           tests/test_drive_library_directory.py
+          tests/test_lan_pdf.py
           tests/test_workspace_preferences.py
 
       # One shared static artifact; this never deploys or changes a running host.

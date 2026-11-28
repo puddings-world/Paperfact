@@ -9,6 +9,61 @@ mobile client have fixture coverage. Complete writer/file enrollment, production
 identity/hosting, recovery UX and real-device acceptance remain release gates.
 See the implementation ledger for exact coverage rather than inferring release readiness.
 
+## Planned LAN-first personal library sync (Windows and Mac)
+
+The e2c732f candidate checkpoints verified bibliography pages and uses personal Drive.
+The PDF candidate now uses private Drive folder metadata for peer discovery and
+transfers verified chunks directly on reachable local IPv4 networks. Direct delivery
+of unpublished edits remains planned. The existing loopback
+sync service and its manual pairing flow are separate from personal Drive enrollment.
+
+**Reader experience.** Sign in once per device and keep the usual list selections.
+When both apps are awake on a reachable LAN, prefer the authenticated peer. Try
+discovery concurrently with ordinary Drive sync. If discovery is blocked, a peer
+sleeps, or local network permission is declined, continue over Drive as soon as the
+needed revision is published. Keep a durable pending item when neither route can
+supply it. Retry on reconnect, with jitter and bounded background concurrency.
+Distinguish a temporary rate limit, a full Drive and a revoked account grant.
+Keep local edits available in each case.
+
+**Enrollment and routing.** Register each device's public key in the private
+account-bound library at online enrollment. The PDF candidate discovers short-lived peer endpoints and public keys in the private
+Drive folder. A future offline discovery mechanism needs a separate trust policy. Require an encrypted mutually authenticated
+connection and a matching library and current trusted device record before offering
+list titles or content. Respect local network permissions and per-device exclusions.
+Cache trust for a bounded offline interval; check revocation when online and close
+existing transfers on account switch or expiry. Never send OAuth tokens to peers.
+
+**One history, two paths.** Start with PDF chunks referenced by an already
+verified manifest. Fetch missing chunks by digest from the peer or Drive, using one
+in-flight request per digest and the same durable checkpoints for both paths.
+Verify each part and the full PDF before making it openable. Then support records
+and originals that have not reached Drive: add portable operation IDs, parent
+revisions and content digests independent of Drive file IDs. Persist local edits
+and a pending cloud publication together. Apply identical operations once across
+routes; keep concurrent changes to the same note for review. A peer receipt may
+make a record readable but only a verified Drive acknowledgement clears the cloud
+publication backlog. Reconcile with compatible Drive histories and gate any new
+wire format on reader compatibility.
+
+**First copy and progress.** Cycle through selected bibliographies first, then
+notes, Q&A and explanations. Prioritize the open paper's PDF before background
+originals and give other lists fair turns. Refresh the reader after durable batches.
+Show route, direction, active list or paper, readable paper count, available PDFs
+and pending Drive uploads. Display byte totals only for known file sizes.
+
+**Delivery gates.** (1) With a published manifest, transfer a missing original
+between Windows and Apple Silicon over LAN; verify matching SHA-256 and zero
+Drive media downloads for that file. (2) With Drive temporarily unavailable after
+enrollment, deliver a new paper and note to the nearby peer before cloud upload.
+Disconnect mid-file, restart and switch routes; verify readable prefixes survive
+and verified chunks are reused. (3) Edit on both devices and reconnect a third
+device via Drive alone. Verify convergence, conflict preservation and exclusions.
+Test a different account, revoked peer, guest Wi-Fi isolation and denied LAN access.
+Measure time to first readable paper and selected PDF, LAN and Drive bytes and
+idle traffic on the same fixture with LAN enabled and disabled. Publish measured
+results before promising a speedup or enabling the route by default.
+
 ## Personal Drive library layout
 
 The private directory has three logical layers. Its mutable head identifies the

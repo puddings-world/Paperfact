@@ -181,7 +181,18 @@ class DriveObjects:
         for ref, length in boundaries:
             self._check()
             if offset < start + length:
-                raw = self.files.read_small(ref, self.folder, self.workspace, "blob")
+                lan = getattr(self.files, "lan_pdf", None)
+                raw = None
+                if (lan is not None and self.folder_role == "directory"
+                        and lan.scope[0] == self.folder):
+                    raw = lan.fetch(blob.sha256, start, ref)
+                route = "LAN" if raw is not None else "Drive"
+                if raw is None:
+                    raw = self.files.read_small(ref, self.folder, self.workspace, "blob")
+                from paper_daily.drive_transfer_progress import chunk_route
+
+                chunk_route(route)
+                self._check()
                 pending = raw[max(0, offset - start) :]
                 while pending:
                     piece, pending = pending[: store.chunk_bytes], pending[store.chunk_bytes :]

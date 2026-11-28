@@ -834,6 +834,7 @@ dependencies = [
 
 [package.optional-dependencies]
 app = [
+    { name = "cryptography" },
     { name = "keyring" },
     { name = "markdown-it-py" },
     { name = "mdit-py-plugins" },
@@ -856,6 +857,7 @@ gcp = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", marker = "extra == 'app'", specifier = ">=42" },
     { name = "google-cloud-storage", marker = "extra == 'dev'", specifier = ">=3,<4" },
     { name = "google-cloud-storage", marker = "extra == 'gcp'", specifier = ">=3,<4" },
     { name = "google-crc32c", marker = "extra == 'dev'", specifier = ">=1.5,<2" },

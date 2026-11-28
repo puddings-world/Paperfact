@@ -119,6 +119,9 @@ if sys.platform == "darwin":
             # COLLECT inherits console=True from the CLI twin. Override its
             # background-only default for the enclosing GUI bundle, before signing.
             "LSBackgroundOnly": False,
+            "NSLocalNetworkUsageDescription": (
+                "Transfer verified paper PDFs between your signed-in devices on this network."
+            ),
             "LSUIElement": False,
             "CFBundleExecutable": "Paperfact",
             "CFBundleDisplayName": "Paperfact",

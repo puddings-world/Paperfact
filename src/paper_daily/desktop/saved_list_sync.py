@@ -110,6 +110,8 @@ class SavedListSync(QObject):
         return True
 
     def stop(self, state="off"):
+        if getattr(self.files, "lan_pdf", None) is not None:
+            self.files.stop_lan()
         self.timer.stop()
         self.last_checked = self.deferred = ""
         self.startup_stamp = None

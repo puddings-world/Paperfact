@@ -146,6 +146,11 @@ def exchange_originals(directory, cache, store, list_id, revision, ticket, memor
                     title = conn.execute("SELECT title FROM papers WHERE id=?", (local,)).fetchone()
                     conflicts.append(title[0] if title and title[0] else local)
                     continue
+                lan = getattr(directory.files, "lan_pdf", None)
+                if lan is not None:
+                    from paper_daily.lan_pdf import offer_pdf
+
+                    offer_pdf(lan, store, list_id, revision, index.grant, local, path, found.sha256)
                 if not expected:
                     pending.append((paper, index.members[paper], path, found))
                     if len(pending) == 16:
