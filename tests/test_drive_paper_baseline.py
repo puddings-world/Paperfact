@@ -338,6 +338,42 @@ def test_shared_paper_identity_and_interrupted_source_publication(source, tmp_pa
     assert all(op["payload"].get("title") != "extra-50" for op in operations)
     assert publish_initial(directory, store, "list", 1, Ticket()) == accepted
     assert source.read_bytes() == before
+    # A new device can read the committed prefix after interruption, then resume it.
+    from paper_daily import drive_transfer_progress
+    from paper_daily.drive_paper_receive import receive_initial
+    from paper_daily.store import SCHEMA
+    from paper_daily.workspace_service import Cancelled
+
+    peer_db = tmp_path / "peer-library" / "papers.db"
+    peer_db.parent.mkdir()
+    with closing(sqlite3.connect(peer_db)) as conn, conn:
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT INTO lists(id,name,created_at) VALUES('list','Selected',?)", (STAMP,))
+    def peer():
+        return selection(peer_db, tmp_path / "peer-settings", device_id="peer")
+
+    peer().save(directory.read().directory, ["list"], expected_revision=0)
+    ticket = Ticket()
+    visible = []
+
+    def after_commit(count):
+        with closing(sqlite3.connect(peer_db)) as conn:
+            assert conn.execute("SELECT count(*) FROM list_papers").fetchone() == (count,)
+        visible.append(count)
+        ticket.cancel()
+
+    monkeypatch.setattr(drive_transfer_progress, "bibliography_saved", after_commit)
+    with pytest.raises(Cancelled):
+        receive_initial(directory, peer(), "list", 1, ticket)
+    assert visible == [50]
+    with closing(sqlite3.connect(peer_db)) as conn, conn:
+        conn.execute("UPDATE papers SET abstract='Offline annotation'")
+    assert receive_initial(directory, peer(), "list", 1, Ticket()) == accepted
+    assert receive_initial(directory, peer(), "list", 1, Ticket()) == accepted
+    assert visible == [50, 51]
+    with closing(sqlite3.connect(peer_db)) as conn:
+        edited = conn.execute("SELECT count(*) FROM papers WHERE abstract='Offline annotation'")
+        assert edited.fetchone() == (50,)
     with closing(sqlite3.connect(source)) as conn, conn:
         conn.execute("UPDATE papers SET title='Offline edit' WHERE id='paper'")
     with pytest.raises(ListReviewRequired, match="reconcile"):

@@ -63,6 +63,13 @@ def report(direction="check", *, paper=None, title="", count=None):
     state["callback"](event)
 
 
+def bibliography_saved(count):
+    state = _active.get()
+    if state and state.get("kind") == "papers":
+        state["callback"](dict(stage="transfer", **state["context"], kind="papers",
+                               direction="download", visible=count))
+
+
 def originals_count(device, drive, total):
     state = _active.get()
     if state:
@@ -95,6 +102,9 @@ def describe(event, zh=True):
     kind, verb = event["kind"], event["direction"]
     action = f"{verbs[verb]}{kinds[kind]}" if zh else f"{verb} {kind}"
     parts = [action, f"{event['index']}/{event['total']} {event['name']}", event.get("title")]
+    if "visible" in event:
+        n = event["visible"]
+        parts.append(f"本機可讀 {n} 篇" if zh else f"{n} papers available on this device")
     if event.get("count", 0) and event["count"] > 1:
         parts.append(f"本批共 {event['count']} 筆" if zh else f"{event['count']} records in batch")
     if event.get("coverage"):

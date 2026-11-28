@@ -138,12 +138,17 @@ def receive_initial(directory, store, list_id, revision, ticket):
                 "SELECT head FROM drive_library_bibliographies WHERE context=? AND list_id=?",
                 (store.context, list_id),
             ).fetchone()
+        populated = conn.execute(
+            "SELECT 1 FROM list_papers WHERE list_id=? LIMIT 1", (list_id,)
+        ).fetchone()
     anchor = ScopeHead(**decode(prior[0])) if prior else None
-    head, records = history.changes(anchor, revision=revision)
+    head = history._current_head()
+    pages = list(history._pages_since(head, anchor, revision))
     if anchor is not None and head == anchor:
         return head
     if head is None:
         return None
+    records = [op for _, operations in pages for op in operations]
     pairs = list(zip(records[::2], records[1::2], strict=True))
     if len({paper["entity_id"] for paper, _ in pairs}) != len(pairs):
         raise ListReviewRequired("Subsequent bibliography revisions need reconciliation")
@@ -158,7 +163,22 @@ def receive_initial(directory, store, list_id, revision, ticket):
 
             raise BibliographyAdvanced("Bibliography changed before receiving memberships")
         _, versions, retired = changes.versions(revision)
-    marker = encode(head.record())
+    # Compare a pre-existing bibliography against the entire first snapshot.
+    # Fresh readers and previously enrolled readers can advance one immutable page at a time.
+    batches = [(head, records)] if populated and not prior else pages
+    for page, operations in batches:
+        batch = list(zip(operations[::2], operations[1::2], strict=True))
+        marker = encode(page.record())
+        visible = _apply_page(store, list_id, revision, ticket, prior, marker, batch,
+                              versions, retired)
+        prior = (marker,)
+        from paper_daily.drive_transfer_progress import bibliography_saved
+
+        bibliography_saved(visible)
+    return head
+
+
+def _apply_page(store, list_id, revision, ticket, prior, marker, pairs, versions, retired):
     with closing(sqlite3.connect(store.path, timeout=0.5)) as settings, settings:
         settings.execute("BEGIN IMMEDIATE")
         store._check()
@@ -323,8 +343,11 @@ def receive_initial(directory, store, list_id, revision, ticket):
                 (store.context, list_id, marker),
             )
             store._check(conn)
+            visible, = conn.execute(
+                "SELECT count(*) FROM list_papers WHERE list_id=?", (list_id,)
+            ).fetchone()
             ticket.checkpoint(conn.commit)
-    return head
+    return visible
 
 
 def exchange_bibliography(directory, store, list_id, revision, ticket):
